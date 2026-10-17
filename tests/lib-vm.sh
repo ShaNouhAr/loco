@@ -25,7 +25,7 @@ PY
     name=${url##*/}
     cache=${LOCO_VM_IMAGE_CACHE:-$WORK/images}
     mkdir -p "$cache"
-    curl -fsSL --retry 3 "$sums" -o "$WORK/$2.sums"
+    curl --http1.1 -fsSL --retry 4 --retry-all-errors --connect-timeout 30 "$sums" -o "$WORK/$2.sums" || return 1
     # Formats GNU (« empreinte  fichier »), BSD (« SHA256 (fichier) = empreinte ») ou empreinte seule (Alpine).
     expected=$(python3 - "$WORK/$2.sums" "$name" <<'PY'
 import re, sys
@@ -47,8 +47,11 @@ PY
     local tool=sha256sum
     [ "${#expected}" -eq 128 ] && tool=sha512sum
     if [ ! -f "$image" ] || [ "$($tool "$image" | cut -d' ' -f1)" != "$expected" ]; then
-        curl -fsSL --retry 3 "$url" -o "$image.part"
-        mv "$image.part" "$image"
+        # Certains miroirs interrompent leurs gros transferts HTTP/2. Le fichier reste temporaire
+        # jusqu'à validation ; une erreur curl dans $(vm_image ...) doit être propagée explicitement.
+        curl --http1.1 -fsSL --retry 4 --retry-all-errors --connect-timeout 30 "$url" -o "$image.part" || return 1
+        [ "$($tool "$image.part" | cut -d' ' -f1)" = "$expected" ] || { echo "Empreinte de l'image incorrecte : $2" >&2; return 1; }
+        mv "$image.part" "$image" || return 1
     fi
     [ "$($tool "$image" | cut -d' ' -f1)" = "$expected" ] || { echo "Empreinte de l'image incorrecte : $2" >&2; return 1; }
     echo "$image"
