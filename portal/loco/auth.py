@@ -6,8 +6,9 @@ import secrets
 import time
 from functools import wraps
 
-from flask import abort, current_app, flash, g, redirect, render_template, request, session, url_for
+from flask import Response, abort, current_app, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 from . import app, config, permissions, PUBLIC_ENDPOINTS
 from .db import db
@@ -25,6 +26,8 @@ def audit(action, detail="", username=None, commit=True):
     ip = request.remote_addr or ""
     db().execute("INSERT INTO audit (at, username, ip, action, detail) VALUES (?,?,?,?,?)",
                  (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user, ip, action, detail[:500]))
+    if time.time() - _PURGE["last"] > 3600:
+        purge_audit(db())
     if commit:
         db().commit()
     current_app.logger.info("audit user=%s ip=%s action=%s %s", user or "-", ip, action, detail)
@@ -508,11 +511,97 @@ def roles_delete(role_id):
 
 # --------------------------------------------------------------------------- journal
 
+AUDIT_RETENTION_DEFAULT = 30          # jours ; 0 : conservation illimitée
+AUDIT_RETENTION_CHOICES = (7, 14, 30, 60, 90, 180, 365, 730, 0)
+_PURGE = {"last": 0.0}
+
+
+def audit_retention(conn):
+    row = conn.execute("SELECT value FROM settings WHERE key='audit_retention_days'").fetchone()
+    try:
+        days = int(row["value"]) if row else AUDIT_RETENTION_DEFAULT
+    except (TypeError, ValueError):
+        days = AUDIT_RETENTION_DEFAULT
+    return days if 0 <= days <= 3650 else AUDIT_RETENTION_DEFAULT
+
+
+def purge_audit(conn):
+    """Rotation du journal : supprime les événements plus anciens que la durée de conservation."""
+    _PURGE["last"] = time.time()
+    days = audit_retention(conn)
+    if not days:
+        return 0
+    limit = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    return conn.execute("DELETE FROM audit WHERE at < ?", (limit,)).rowcount
+
+
+def _day(value, end=False):
+    """« 2026-10-18 » -> borne incluse de la journée ; vide -> None ; autre -> ValueError."""
+    if not value:
+        return None
+    day = datetime.datetime.strptime(value, "%Y-%m-%d")
+    return day.strftime("%Y-%m-%d") + (" 23:59:59" if end else " 00:00:00")
+
+
 @app.route("/journal")
 @login_required
 def journal():
     rows = db().execute("SELECT * FROM audit ORDER BY id DESC LIMIT 500").fetchall()
-    return render_template("journal.html", rows=rows)
+    stats = db().execute("SELECT COUNT(*) AS n, MIN(at) AS first FROM audit").fetchone()
+    return render_template("journal.html", rows=rows, stats=stats, retention=audit_retention(db()),
+                           choices=AUDIT_RETENTION_CHOICES, today=datetime.date.today().isoformat())
+
+
+@app.route("/journal/export")
+@login_required
+def journal_export():
+    """Journal en JSON, sur une période (dates incluses) ou en entier."""
+    try:
+        start, end = _day(request.args.get("debut", "")), _day(request.args.get("fin", ""), end=True)
+    except ValueError:
+        abort(400, "Dates attendues au format AAAA-MM-JJ.")
+    if start and end and start > end:
+        abort(400, "La date de début doit précéder la date de fin.")
+    where, values = [], []
+    if start:
+        where.append("at >= ?")
+        values.append(start)
+    if end:
+        where.append("at <= ?")
+        values.append(end)
+    sql = "SELECT id, at, username, ip, action, detail FROM audit"
+    rows = db().execute(sql + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id", values).fetchall()
+    period = f"{request.args.get('debut') or 'début'}_{request.args.get('fin') or 'fin'}"
+    audit("journal.export", f"{len(rows)} événement(s), période {period.replace('_', ' → ')}")
+    document = {
+        "server": config.HOST, "loco_version": config.VERSION,
+        "exported_at": datetime.datetime.now().isoformat(timespec="seconds"), "exported_by": g.user["username"],
+        "period": {"from": start, "to": end}, "retention_days": audit_retention(db()), "count": len(rows),
+        "events": [{"id": r["id"], "at": r["at"], "username": r["username"], "ip": r["ip"],
+                    "action": r["action"], "detail": r["detail"]} for r in rows],
+    }
+    name = f"loco-journal-{config.HOST}-{period}.json".replace(":", "-")
+    return Response(json.dumps(document, ensure_ascii=False, indent=2) + "\n", mimetype="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{secure_filename(name) or "loco-journal.json"}"'})
+
+
+@app.route("/journal/conservation", methods=["POST"])
+@login_required
+def journal_retention():
+    try:
+        days = int(request.form.get("days", ""))
+    except ValueError:
+        days = -1
+    if days not in AUDIT_RETENTION_CHOICES:
+        abort(400)
+    db().execute("INSERT INTO settings (key, value) VALUES ('audit_retention_days', ?) "
+                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(days),))
+    removed = purge_audit(db())
+    audit("journal.conservation", f"{days} jour(s)" if days else "illimitée", commit=False)
+    db().commit()
+    flash((f"Journal conservé {days} jours" if days else "Journal conservé sans limite")
+          + (f" ; {removed} événement(s) plus ancien(s) supprimé(s)." if removed else "."), "ok")
+    return back("journal")
 
 
 def bootstrap_admin(conn, secrets_data):

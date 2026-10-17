@@ -308,9 +308,9 @@ Dans **Administration → Comptes**, attribuez un profil à chaque utilisateur. 
 | Lecture seule | Vue d’ensemble, appareils, caches et catalogues locaux. |
 | Technicien du parc | Lecture seule, inventaires, mises à jour individuelles et déploiement de logiciels. Les redémarrages, actions sur tout le parc, retraits d’agents et consoles distantes demandent leurs propres droits. |
 | Gestionnaire des dépôts | Gestion des paquets et installeurs APT, RPM, Flatpak, Windows et du store ; aucun déploiement sur les appareils. |
-| Auditeur | Consultation, système, comptes, profils et journal ; aucune modification. |
+| Auditeur | Consultation, système, comptes, profils, journal et son export JSON ; aucune modification. |
 
-Les **46 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils et lecture du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
+Les **48 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
 
 Les droits de consultation nécessaires sont ajoutés automatiquement à l’enregistrement. Un profil vide laisse l’utilisateur accéder à **Mon compte** et changer son mot de passe. Les profils intégrés restent protégés ; dupliquez-les pour les adapter. Un profil personnalisé ne reçoit aucun nouveau droit automatiquement lors des futures versions.
 
@@ -330,6 +330,17 @@ sudo loco-user passwd admin                  # récupérer l’accès au compte 
 ```
 
 Sur Windows natif, utilisez `loco user …` ; sur l’appliance Alpine, `loco-user …` en root.
+
+## Journal
+
+La page *Administration › Journal* trace les connexions et les actions, avec le compte et l'adresse d'origine.
+
+- **Export JSON** d'une période (dates incluses) ou du journal entier : serveur, période, auteur de l'export et
+  événements (date, compte, adresse, action, détail). Chaque export est lui-même journalisé.
+- **Conservation** réglable (7 jours à 2 ans, ou sans limite), **30 jours par défaut** : les événements plus anciens
+  sont supprimés au démarrage du portail puis au plus une fois par heure. Exportez-les avant de réduire la durée.
+- Droits distincts : *Consulter le journal*, *Exporter le journal* (inclus dans le profil Auditeur) et *Configurer la
+  conservation du journal*.
 
 ## Supervision
 

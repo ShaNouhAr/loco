@@ -12,6 +12,9 @@ import zlib
 ROOT = Path(__file__).resolve().parents[1]
 
 
+CURSORS = []   # formes de curseur décodées (point chaud x, y, largeur, hauteur, RGBA)
+
+
 def decode(frame, width, height, pixels=None):
     pixels = bytearray(width * height * 4) if pixels is None else bytearray(pixels)
     assert frame[:2] == b'\0\0'
@@ -19,6 +22,11 @@ def decode(frame, width, height, pixels=None):
     pos = 4
     for _ in range(count):
         x, y, w, h, encoding = struct.unpack_from('>HHHHi', frame, pos); pos += 12
+        if encoding == 0x574D5664:                      # curseur VMware : type 1 (alpha), octet de bourrage, RGBA
+            assert frame[pos:pos + 2] == b'\x01\x00' and x < w and y < h
+            CURSORS.append((x, y, w, h, frame[pos + 2:pos + 2 + w * h * 4])); pos += 2 + w * h * 4
+            count -= 1
+            continue
         assert x + w <= width and y + h <= height
         if encoding == 7:
             control = frame[pos]; pos += 1
@@ -73,6 +81,19 @@ class TestLinuxDesktopEncoding(unittest.TestCase):
         decoded, _ = decode(self.agent.rfb_frame(image, w, h, tight=False), w, h)
         self.assertEqual(decoded, image)
 
+    def test_cursor_shape_is_sent_with_alpha_and_hotspot(self):
+        # Pixels XFixes ARGB prémultipliés : opaque rouge, blanc à demi transparent, transparent.
+        argb = [0xFFFF0000, 0x80808080, 0x00000000, 0xFF000000]
+        cursor = self.agent.cursor_rect(1, 5, 2, 2, argb)
+        image = b'\0\0\0\0' * 16
+        CURSORS.clear()
+        decoded, count = decode(self.agent.rfb_frame(image, 4, 4, cursor=cursor), 4, 4)
+        self.assertEqual(count, 1)                      # une zone d'image, plus le curseur
+        hotx, hoty, w, h, rgba = CURSORS[0]
+        self.assertEqual((hotx, hoty, w, h), (1, 1, 2, 2))   # point chaud borné à la forme
+        self.assertEqual(rgba, bytes([255, 0, 0, 255, 255, 255, 255, 128, 0, 0, 0, 0, 0, 0, 0, 255]))
+        self.assertEqual(self.agent.rfb_frame(image, 4, 4, image, cursor=cursor)[:4], b'\0\0\0\1')
+
     def test_4k_capture_is_native_and_small_changes_do_not_resend_the_screen(self):
         w, h = 3840, 2160
         image = b'\xff\xff\xff\0' * (w * h)
@@ -101,6 +122,8 @@ class Probe {
   File.WriteAllBytes(Path.Combine(args[0],"empty.bin"),encoder.Update(image,true,true,false));
   File.WriteAllBytes(Path.Combine(args[0],"full.bin"),encoder.Update(image,false,true,false));
   File.WriteAllBytes(Path.Combine(args[0],"raw.bin"),encoder.Update(image,false,false,false));
+  var cursor=RfbFramebuffer.CursorRect(3,4,2,1,new byte[]{1,2,3,4,5,6,7,8});
+  File.WriteAllBytes(Path.Combine(args[0],"cursor.bin"),encoder.Update(image,true,true,false,cursor));
   w=3840; h=2160; image=new byte[w*h*4]; for(int i=0;i<image.Length;i+=4) { image[i]=255; image[i+1]=255; image[i+2]=255; }
   encoder=new RfbFramebuffer(w,h);
   File.WriteAllBytes(Path.Combine(args[0],"4k.bin"),encoder.Update(image,true,true,false));
@@ -123,6 +146,9 @@ class Probe {
             for name in ('full.bin', 'raw.bin'):
                 decoded, count = decode((path / name).read_bytes(), 257, 129)
                 self.assertEqual(decoded, changed); self.assertEqual(count, 6)
+            CURSORS.clear()
+            self.assertEqual(decode((path / 'cursor.bin').read_bytes(), 257, 129, decoded)[1], 0)
+            self.assertEqual(CURSORS, [(1, 0, 2, 1, bytes([1, 2, 3, 4, 5, 6, 7, 8]))])
             image = b'\xff\xff\xff\0' * (3840 * 2160)
             decoded, _ = decode((path / '4k.bin').read_bytes(), 3840, 2160)
             self.assertEqual(decoded, image)

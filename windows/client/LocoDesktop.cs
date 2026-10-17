@@ -40,7 +40,8 @@ namespace Loco
         readonly int width, height;
         readonly Dictionary<uint, Input> pressed = new Dictionary<uint, Input>();
         readonly RfbFramebuffer framebuffer;
-        bool tight, rgbOrder;
+        bool tight, rgbOrder, cursorShape;
+        IntPtr lastCursor = new IntPtr(-1);
         byte mouseMask;
         readonly Stopwatch frameTime = Stopwatch.StartNew();
         public RfbDesktop(Stream stream)
@@ -87,8 +88,14 @@ namespace Loco
                     else if (kind == 2)
                     {
                         int count = I16(Read(3), 1); if (count > 128) throw new InvalidDataException();
-                        var encodings = Read(count * 4); tight = false;
-                        for (int i = 0; i < count; i++) if (I32(encodings, i * 4) == 7) tight = true;
+                        var encodings = Read(count * 4); tight = false; cursorShape = false;
+                        for (int i = 0; i < count; i++)
+                        {
+                            uint encoding = I32(encodings, i * 4);
+                            if (encoding == 7) tight = true;
+                            if (encoding == 0x574d5664) cursorShape = true;
+                        }
+                        lastCursor = new IntPtr(-1);
                     }
                     else if (kind == 3) { var request = Read(9); Frame(request[0] != 0); }
                     else if (kind == 4) { var p = Read(7); Key(I32(p, 3), p[0] != 0); }
@@ -128,7 +135,109 @@ namespace Loco
                     for (int y = 0; y < height; y++) Marshal.Copy(IntPtr.Add(bitmap.Scan0, y * bitmap.Stride), data, y * width * 4, width * 4);
                 }
                 finally { source.UnlockBits(bitmap); }
-                Write(framebuffer.Update(data, incremental, tight, rgbOrder));
+                Write(framebuffer.Update(data, incremental, tight, rgbOrder, cursorShape ? CursorChange() : null));
+            }
+        }
+
+        // Forme du curseur quand elle change (flèche, texte, main, redimensionnement…). Les curseurs monochromes
+        // à inversion (comme le I du texte) sont dessinés en noir bordé de blanc, lisibles sur tous les fonds.
+        byte[] CursorChange()
+        {
+            var info = new CursorInfo { Size = Marshal.SizeOf(typeof(CursorInfo)) };
+            if (!GetCursorInfo(ref info)) return null;
+            IntPtr handle = (info.Flags & 1) != 0 ? info.Cursor : IntPtr.Zero;
+            if (handle == lastCursor) return null;
+            lastCursor = handle;
+            return CursorShape(handle);
+        }
+        internal static byte[] CursorShape(IntPtr handle)
+        {
+            if (handle == IntPtr.Zero) return RfbFramebuffer.CursorRect(0, 0, 1, 1, new byte[4]);
+            IconInfo icon;
+            if (!GetIconInfo(handle, out icon)) return null;
+            int w, h;
+            try
+            {
+                var bm = new BitmapInfo();
+                IntPtr reference = icon.Color != IntPtr.Zero ? icon.Color : icon.Mask;
+                if (GetObject(reference, Marshal.SizeOf(typeof(BitmapInfo)), ref bm) == 0) return null;
+                w = bm.Width; h = icon.Color != IntPtr.Zero ? bm.Height : bm.Height / 2;
+            }
+            finally
+            {
+                if (icon.Mask != IntPtr.Zero) DeleteObject(icon.Mask);
+                if (icon.Color != IntPtr.Zero) DeleteObject(icon.Color);
+            }
+            if (w < 1 || h < 1 || w > 256 || h > 256) return null;
+            byte[] black = Render(handle, w, h, Color.Black), white = Render(handle, w, h, Color.White);
+            var rgba = new byte[w * h * 4];
+            var inverted = new bool[w * h];
+            for (int i = 0; i < w * h; i++)
+            {
+                int p = i * 4;
+                // Écart entre les deux fonds : 0 pour un pixel opaque, 255 pour un pixel transparent.
+                int spread = (white[p] - black[p] + white[p + 1] - black[p + 1] + white[p + 2] - black[p + 2]) / 3;
+                if (black[p] + black[p + 1] + black[p + 2] > 600 && white[p] + white[p + 1] + white[p + 2] < 165) { inverted[i] = true; continue; }
+                int alpha = Math.Max(0, Math.Min(255, 255 - spread));
+                if (alpha == 0) continue;
+                for (int c = 0; c < 3; c++) rgba[p + c] = (byte)Math.Min(255, black[p + 2 - c] * 255 / alpha);
+                rgba[p + 3] = (byte)alpha;
+            }
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * w + x;
+                    if (inverted[i]) { rgba[i * 4 + 3] = 255; continue; }
+                    if (rgba[i * 4 + 3] != 0) continue;
+                    bool edge = false;
+                    for (int dy = -1; dy <= 1 && !edge; dy++)
+                        for (int dx = -1; dx <= 1 && !edge; dx++)
+                        {
+                            int nx = x + dx, ny = y + dy;
+                            edge = nx >= 0 && ny >= 0 && nx < w && ny < h && inverted[ny * w + nx];
+                        }
+                    if (edge) { rgba[i * 4] = rgba[i * 4 + 1] = rgba[i * 4 + 2] = rgba[i * 4 + 3] = 255; }
+                }
+            // Curseur entièrement clair (I du texte selon le thème) : contour noir d'un pixel, lisible sur fond clair.
+            bool light = true, any = false;
+            for (int i = 0; i < w * h && light; i++)
+                if (rgba[i * 4 + 3] >= 128) { any = true; light = rgba[i * 4] + rgba[i * 4 + 1] + rgba[i * 4 + 2] > 600; }
+            if (any && light)
+            {
+                var outline = (byte[])rgba.Clone();
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (rgba[(y * w + x) * 4 + 3] >= 128) continue;
+                        bool edge = false;
+                        for (int dy = -1; dy <= 1 && !edge; dy++)
+                            for (int dx = -1; dx <= 1 && !edge; dx++)
+                            {
+                                int nx = x + dx, ny = y + dy;
+                                edge = nx >= 0 && ny >= 0 && nx < w && ny < h && rgba[(ny * w + nx) * 4 + 3] >= 128;
+                            }
+                        if (edge) { int o = (y * w + x) * 4; outline[o] = outline[o + 1] = outline[o + 2] = 0; outline[o + 3] = 255; }
+                    }
+                rgba = outline;
+            }
+            return RfbFramebuffer.CursorRect(icon.HotX, icon.HotY, w, h, rgba);
+        }
+        static byte[] Render(IntPtr cursor, int w, int h, Color background)
+        {
+            using (var bitmap = new Bitmap(w, h, PixelFormat.Format32bppRgb))
+            {
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.Clear(background);
+                    IntPtr dc = graphics.GetHdc();
+                    try { DrawIconEx(dc, 0, 0, cursor, w, h, 0, IntPtr.Zero, 3); }
+                    finally { graphics.ReleaseHdc(dc); }
+                }
+                var bits = bitmap.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppRgb);
+                var data = new byte[w * h * 4];
+                try { for (int y = 0; y < h; y++) Marshal.Copy(IntPtr.Add(bits.Scan0, y * bits.Stride), data, y * w * 4, w * 4); }
+                finally { bitmap.UnlockBits(bits); }
+                return data;   // ordre BGRX
             }
         }
 
@@ -178,6 +287,14 @@ namespace Loco
         [StructLayout(LayoutKind.Sequential)] struct MouseInput { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }
         [StructLayout(LayoutKind.Sequential)] struct KeyboardInput { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
         [DllImport("user32.dll")] static extern uint SendInput(uint count, Input[] input, int size);
+        [StructLayout(LayoutKind.Sequential)] struct CursorInfo { public int Size, Flags; public IntPtr Cursor; public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] struct IconInfo { public bool Icon; public int HotX, HotY; public IntPtr Mask, Color; }
+        [StructLayout(LayoutKind.Sequential)] struct BitmapInfo { public int Type, Width, Height, WidthBytes; public ushort Planes, BitsPixel; public IntPtr Bits; }
+        [DllImport("user32.dll")] static extern bool GetCursorInfo(ref CursorInfo info);
+        [DllImport("user32.dll")] static extern bool GetIconInfo(IntPtr icon, out IconInfo info);
+        [DllImport("user32.dll")] static extern bool DrawIconEx(IntPtr dc, int x, int y, IntPtr icon, int w, int h, int step, IntPtr brush, int flags);
+        [DllImport("gdi32.dll")] static extern int GetObject(IntPtr handle, int size, ref BitmapInfo info);
+        [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr handle);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern short VkKeyScan(char c);
         [DllImport("user32.dll", SetLastError = true)] static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetUserObjectInformation(IntPtr handle, int index, StringBuilder data, int length, out int needed);

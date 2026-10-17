@@ -8,6 +8,39 @@
   </div>
 </div>
 
+{% if can('audit.export') or can('audit.configure') %}
+<div class="cols journal-tools">
+  {% if can('audit.export') %}
+  <section class="panel">
+    <div class="panel-h"><h2>Exporter en JSON</h2><div class="aside">{{ stats.n }} événement(s){% if stats.first %} depuis le {{ stats.first[:10] }}{% endif %}</div></div>
+    <form method="get" action="{{ url_for('journal_export') }}" class="panel-b">
+      <div class="grid2">
+        <label class="f"><span>Du</span><input type="date" name="debut" max="{{ today }}" value="{{ (stats.first or today)[:10] }}"></label>
+        <label class="f"><span>Au</span><input type="date" name="fin" max="{{ today }}" value="{{ today }}"></label>
+      </div>
+      <div class="row">
+        <button class="btn primary">Exporter la période</button>
+        <a class="btn" href="{{ url_for('journal_export') }}">Tout exporter</a>
+      </div>
+      <p class="hint">Dates incluses. Fichier JSON : serveur, période, auteur de l'export et événements (date, compte, adresse, action, détail). L'export est lui-même journalisé.</p>
+    </form>
+  </section>
+  {% endif %}
+  {% if can('audit.configure') %}
+  <section class="panel">
+    <div class="panel-h"><h2>Conservation</h2><div class="aside">{{ 'illimitée' if not retention else retention ~ ' jours' }}</div></div>
+    <form method="post" action="{{ url_for('journal_retention') }}" class="panel-b" data-ajax data-confirm="Modifier la conservation du journal ?" data-confirm-text="Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d'abord si vous devez les garder." data-confirm-ok="Appliquer">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>Garder les événements</span>
+        <select name="days">{% for d in choices %}<option value="{{ d }}" {{ 'selected' if d == retention }}>{% if d == 0 %}sans limite{% elif d % 365 == 0 %}{{ d // 365 }} an{{ 's' if d > 365 }}{% else %}{{ d }} jours{% endif %}{% if d == 30 %} (par défaut){% endif %}</option>{% endfor %}</select></label>
+      <button class="btn"><span class="spin"></span>Appliquer</button>
+      <p class="hint">Rotation automatique : les événements plus anciens sont supprimés au démarrage du portail puis au plus une fois par heure.</p>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endif %}
+
 <section class="panel">
   <div class="panel-h"><h2>500 derniers événements</h2>
     {% if rows %}<div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#audit tbody tr" data-empty="#audit-none"></div>{% endif %}

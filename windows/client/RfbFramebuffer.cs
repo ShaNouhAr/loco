@@ -1,4 +1,4 @@
-// Images RFB natives : rectangles modifiés et compression Tight sans perte.
+// Images RFB natives : rectangles modifiés et compression Tight sans perte, curseur à transparence.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -42,14 +42,25 @@ namespace Loco
                 U32(memory, (b << 16) | a); return memory.ToArray();
             }
         }
-        bool Changed(byte[] pixels, int x, int y, int w, int h)
+        /// <summary>Pseudo-rectangle « curseur VMware alpha » (0x574d5664) : point chaud et pixels RGBA non prémultipliés.</summary>
+        public static byte[] CursorRect(int hotX, int hotY, int w, int h, byte[] rgba)
+        {
+            if (w < 1 || h < 1 || w > 256 || h > 256 || rgba.Length != w * h * 4) throw new ArgumentException("Curseur invalide");
+            using (var rect = new MemoryStream())
+            {
+                U16(rect, Math.Min(hotX, w - 1)); U16(rect, Math.Min(hotY, h - 1)); U16(rect, w); U16(rect, h); U32(rect, 0x574d5664u);
+                rect.WriteByte(1); rect.WriteByte(0); rect.Write(rgba, 0, rgba.Length);
+                return rect.ToArray();
+            }
+        }
+                bool Changed(byte[] pixels, int x, int y, int w, int h)
         {
             for (int row = y; row < y + h; row++)
                 for (int p = (row * width + x) * 4, end = p + w * 4; p < end; p++)
                     if (pixels[p] != previous[p]) return true;
             return false;
         }
-        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder)
+        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null)
         {
             if (pixels.Length != width * height * 4) throw new ArgumentException("Taille de capture invalide");
             var tiles = new List<int[]>();
@@ -61,7 +72,9 @@ namespace Loco
                 }
             using (var frame = new MemoryStream())
             {
-                frame.WriteByte(0); frame.WriteByte(0); U16(frame, tiles.Count);
+                frame.WriteByte(0); frame.WriteByte(0); U16(frame, tiles.Count + (cursor != null ? 1 : 0));
+                // Forme du curseur (pseudo-rectangle) : affichée localement par le navigateur, sans latence.
+                if (cursor != null) frame.Write(cursor, 0, cursor.Length);
                 foreach (var tile in tiles)
                 {
                     int x = tile[0], y = tile[1], w = tile[2], h = tile[3];

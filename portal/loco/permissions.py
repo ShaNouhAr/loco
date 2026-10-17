@@ -71,6 +71,8 @@ GROUPS = [
         ("roles.view", "Consulter les profils d'accès", "Voir les droits accordés par chaque profil.", (), False),
         ("roles.manage", "Gérer les profils d'accès", "Créer, modifier ou supprimer des profils dans la limite de vos droits.", ("roles.view", "users.view"), True),
         ("audit.view", "Consulter le journal", "Historique des connexions et actions d'administration.", (), False),
+        ("audit.export", "Exporter le journal", "Télécharger le journal en JSON, sur une période ou en entier.", ("audit.view",), True),
+        ("audit.configure", "Configurer la conservation du journal", "Durée de conservation des événements.", ("audit.view",), True),
     ]),
 ]
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],
@@ -84,8 +86,8 @@ DEFAULTS = {
                  VIEWER | {"fleet.scan", "fleet.update", "fleet.install"}),
     "repository_manager": ("Gestionnaire des dépôts", "Gestion des paquets et installeurs. Aucun déploiement sur les postes.",
                            {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
-    "auditor": ("Auditeur", "Consultation, journal, comptes et profils. Aucune modification.",
-                VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view"}),
+    "auditor": ("Auditeur", "Consultation, journal et son export, comptes et profils. Aucune modification.",
+                VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view", "audit.export"}),
 }
 
 # Chaque route privée est déclarée. Une nouvelle route oubliée est refusée par défaut.
@@ -112,6 +114,7 @@ ENDPOINTS = {
     "appliance_settings": "system.configure", "appliance_settings_post": "system.configure",
     "users": "users.view", "users_add": "users.create", "users_update": "users.edit",
     "users_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
+    "journal_export": "audit.export", "journal_retention": "audit.configure",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }
@@ -137,8 +140,11 @@ def role_key(label):
 
 def seed_roles(conn):
     for key, (label, description, grants) in DEFAULTS.items():
+        grants = json.dumps(sorted(expand(grants)))
         conn.execute("INSERT OR IGNORE INTO access_roles (id,label,label_key,description,permissions,builtin) VALUES (?,?,?,?,?,1)",
-                     (key, label, role_key(label), description, json.dumps(sorted(expand(grants)))))
+                     (key, label, role_key(label), description, grants))
+        # Modèles intégrés (non modifiables) : alignés sur cette version, y compris ses nouveaux droits.
+        conn.execute("UPDATE access_roles SET description=?, permissions=? WHERE id=? AND builtin=1", (description, grants, key))
 
 
 def role_permissions(conn, role):

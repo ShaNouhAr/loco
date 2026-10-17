@@ -685,8 +685,29 @@ def x11_environment():
                        "Aucune session graphique X11 ouverte sur ce poste.")
 
 
-def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, rgb_order=False):
-    """Rectangles natifs modifiés, sans perte ; les buffers restent bornés à une capture."""
+class XFixesCursorImage(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort),
+                ("xhot", ctypes.c_ushort), ("yhot", ctypes.c_ushort), ("cursor_serial", ctypes.c_ulong),
+                ("pixels", ctypes.POINTER(ctypes.c_ulong))]
+
+
+def cursor_rect(xhot, yhot, width, height, argb):
+    """Pseudo-rectangle « curseur VMware alpha » : pixels RGBA non prémultipliés (pixels X11 ARGB prémultipliés)."""
+    if not 1 <= width <= 256 or not 1 <= height <= 256 or len(argb) != width * height:
+        raise ValueError("Curseur invalide")
+    rgba = bytearray(width * height * 4)
+    for i, value in enumerate(argb):
+        alpha = (value >> 24) & 255
+        if alpha:
+            rgba[i * 4:i * 4 + 4] = bytes((min(255, ((value >> 16) & 255) * 255 // alpha),
+                                           min(255, ((value >> 8) & 255) * 255 // alpha),
+                                           min(255, (value & 255) * 255 // alpha), alpha))
+    return struct.pack(">HHHHI", min(xhot, width - 1), min(yhot, height - 1), width, height, 0x574D5664) + b"\x01\x00" + bytes(rgba)
+
+
+def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, rgb_order=False, cursor=None):
+    """Rectangles natifs modifiés, sans perte ; les buffers restent bornés à une capture.
+    cursor : pseudo-rectangle de forme du curseur, joint quand elle change."""
     if not 1 <= width <= 65535 or not 1 <= height <= 65535 or width * height > 16777216 or len(data) != width * height * 4:
         raise ValueError("Capture RFB invalide")
     rectangles = []
@@ -719,6 +740,8 @@ def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, 
                 if rgb_order:
                     payload[0::4], payload[2::4] = raw[2::4], raw[0::4]
             rectangles.append(header + payload)
+    if cursor:
+        rectangles.insert(0, cursor)
     return b"\0\0" + struct.pack(">H", len(rectangles)) + b"".join(rectangles)
 
 
@@ -750,6 +773,12 @@ def linux_desktop():
     button = bind(xt, "XTestFakeButtonEvent", integer, [ptr, ctypes.c_uint, integer, ulong])
     motion = bind(xt, "XTestFakeMotionEvent", integer, [ptr, integer, integer, integer, ulong])
     flush = bind(x, "XFlush", integer, [ptr])
+    xfree = bind(x, "XFree", integer, [ptr])
+    try:
+        # Forme du curseur (XFixes) : facultative, le bureau reste utilisable sans elle.
+        get_cursor = bind(ctypes.CDLL("libXfixes.so.3"), "XFixesGetCursorImage", ctypes.POINTER(XFixesCursorImage), [ptr])
+    except OSError:
+        get_cursor = None
     close = bind(x, "XCloseDisplay", integer, [ptr])
     inp, out = sys.stdin.buffer, sys.stdout.buffer
     def read(n):
@@ -764,6 +793,23 @@ def linux_desktop():
         out.write(data)
         out.flush()
     pressed, mask, tight, last_frame, rgb_order = set(), 0, False, 0, False
+    cursor_shape, cursor_serial = False, None
+
+    def cursor_change():
+        nonlocal cursor_serial
+        if not (cursor_shape and get_cursor):
+            return None
+        image = get_cursor(display)
+        if not image:
+            return None
+        try:
+            im = image.contents
+            if im.cursor_serial == cursor_serial or not 1 <= im.width <= 256 or not 1 <= im.height <= 256:
+                return None
+            cursor_serial = im.cursor_serial
+            return cursor_rect(im.xhot, im.yhot, im.width, im.height, im.pixels[:im.width * im.height])
+        finally:
+            xfree(image)
     previous = None
     def interrupted(_signum, _frame):
         raise EOFError()
@@ -792,7 +838,8 @@ def linux_desktop():
                 count = struct.unpack(">xH", read(3))[0]
                 if count > 128:
                     raise ValueError("Trop d'encodages RFB")
-                tight = 7 in struct.unpack(">" + "i" * count, read(count * 4))
+                encodings = struct.unpack(">" + "i" * count, read(count * 4))
+                tight, cursor_shape, cursor_serial = 7 in encodings, 0x574D5664 in encodings, None
             elif kind == 3:
                 incremental = read(9)[0] != 0
                 time.sleep(max(0, 0.04 - (time.monotonic() - last_frame)))
@@ -808,7 +855,7 @@ def linux_desktop():
                         data = b"".join(data[y * im.bytes_per_line:y * im.bytes_per_line + width * 4] for y in range(height))
                 finally:
                     destroy(image)
-                write(rfb_frame(data, width, height, previous, incremental, tight, rgb_order))
+                write(rfb_frame(data, width, height, previous, incremental, tight, rgb_order, cursor_change()))
                 previous = data
                 last_frame = time.monotonic()
             elif kind == 4:

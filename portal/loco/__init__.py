@@ -128,4 +128,5 @@ def startup():
     _db.migrate()
     with _db.transaction() as conn:
         auth.bootstrap_admin(conn, SECRETS)
+        auth.purge_audit(conn)      # rotation du journal (aussi au plus une fois par heure ensuite)
     util.cleanup_temp_files()

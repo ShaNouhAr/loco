@@ -57,7 +57,7 @@
       {% if can('remote.' ~ kind) %}<form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="row" rel="noopener">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
         <button class="btn" {% if not remote_ready %}disabled title="Agent 2.4.0 requis"{% endif %}>{{ label }}</button>
-        <button class="btn" formtarget="_blank" name="view" value="console" aria-label="{{ label }} dans un nouvel onglet" title="Ouvrir dans un nouvel onglet" {% if not remote_ready %}disabled{% endif %}>↗</button>
+        <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ label }} dans un nouvel onglet" title="Ouvrir dans un nouvel onglet" {% if not remote_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
       </form>{% endif %}
       {% endfor %}
       {% if not remote_ready %}<span class="small muted">Disponible après la mise à jour de l'agent en 2.4.0.</span>{% endif %}
