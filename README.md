@@ -292,6 +292,12 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 
 L'agent se met à jour automatiquement avec loco.
 
+**Changer l'adresse du serveur** : annoncez d'abord la future adresse (*Mon parc › Adresse du serveur pour les agents*,
+ou `sudo loco-fleet announce https://192.168.1.20:8443`), attendez que tous les postes soient prévenus
+(`loco-fleet servers`), puis changez l'adresse (`install.sh --host`, ou `setup-loco` sur l'appliance qui fait l'annonce
+lui-même). Les agents passent seuls à la nouvelle adresse, après vérification de l'autorité HTTPS de loco ; un poste
+resté éteint pendant toute l'annonce se réinscrit avec la commande d'installation (même identité).
+
 Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session utilisateur. Sa pastille reprend l'état de Mon parc : vert sans mise à jour, orange de 1 à 9 mises à jour, rouge à partir de 10 (seuil réglable). Un état indisponible ou ancien est gris. Le menu et le double-clic affichent uniquement des détails : **aucune action de mise à jour n'est accessible à l'utilisateur**. Le compagnon ne contacte pas le serveur et ne lit aucun jeton ; il consulte un fichier d'état public, accessible uniquement en lecture aux utilisateurs standards. Le service privilégié reste seul responsable des actions reçues de loco.
 
 ## Sessions distantes via l’agent

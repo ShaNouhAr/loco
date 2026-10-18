@@ -69,6 +69,32 @@
   </section>
 
   {% if can("fleet.settings") %}
+  <details class="panel" {{ 'open' if server_coverage|length > 1 }}>
+    <summary class="panel-h">Adresse du serveur pour les agents{% if server_coverage|length > 1 %} <span class="st warn small">changement annoncé</span>{% endif %}</summary>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+        {% for url, known, total in server_coverage %}
+          <tr>
+            <td class="mono">{{ url }}{% if loop.first %} <span class="tag">actuelle</span>{% else %} <span class="tag">annoncée</span>{% endif %}</td>
+            <td>{% if not loop.first %}<span class="st {{ 'ok' if known == total else 'warn' }}">{{ known }}/{{ total }} poste(s) prévenu(s)</span>{% else %}<span class="muted small">{{ known }}/{{ total }} poste(s) l'ont confirmée</span>{% endif %}</td>
+            <td class="right">{% if not loop.first %}
+              <form method="post" action="{{ url_for('fleet_server_address') }}" data-ajax>
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="forget"><input type="hidden" name="url" value="{{ url }}">
+                <button class="linkbtn del">Retirer</button>
+              </form>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <form method="post" action="{{ url_for('fleet_server_address') }}" class="panel-b row" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="url" required placeholder="https://192.168.1.20:8443" aria-label="Future adresse du serveur" spellcheck="false" class="mono" style="max-width:340px">
+      <button class="btn sm"><span class="spin"></span>Annoncer aux agents</button>
+    </form>
+    <p class="panel-f">Avant de changer l'adresse du serveur, annoncez la nouvelle : chaque agent la reçoit à son prochain contact. Une fois tous les postes prévenus, changez l'adresse (<code>setup-loco</code> sur l'appliance le fait pour vous, sinon <code>install.sh --host</code>) : les agents qui ne joignent plus l'ancienne adresse passent seuls à la nouvelle, après vérification de l'autorité HTTPS de loco. Un poste éteint pendant toute l'annonce reste à réinstaller avec la commande ci-dessous (il garde son identité).</p>
+  </details>
   <details class="panel">
     <summary class="panel-h">Seuil des pastilles</summary>
     <form method="post" action="{{ url_for('fleet_threshold') }}" class="panel-b row" data-ajax>

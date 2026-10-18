@@ -30,6 +30,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
@@ -227,6 +228,60 @@ namespace Loco
             using (var resp = Send(r))
             using (var rd = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
                 return Json.Deserialize<Dictionary<string, object>>(rd.ReadToEnd());
+        }
+
+        static readonly Regex ServerPattern = new Regex(@"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$");
+
+        // Adresse habituelle du serveur, puis celles qu'il a annoncées (changement d'adresse prévu).
+        static List<string> KnownServers(Dictionary<string, object> conf)
+        {
+            var urls = new List<string> { Str(conf, "server") };
+            object v;
+            if (conf.TryGetValue("servers", out v) && v is ArrayList) foreach (object u in (ArrayList)v) urls.Add(Convert.ToString(u));
+            var known = new List<string>();
+            foreach (string u in urls)
+            {
+                string url = (u ?? "").TrimEnd('/');
+                if (ServerPattern.IsMatch(url) && !known.Contains(url) && known.Count < 8) known.Add(url);
+            }
+            return known;
+        }
+
+        // Contact du serveur. Si son adresse habituelle ne répond plus (réseau, certificat), les adresses annoncées sont
+        // essayées ; la première qui répond avec un certificat de l'autorité loco épinglée devient l'adresse du poste.
+        static Dictionary<string, object> Checkin(Dictionary<string, object> conf, Dictionary<string, object> data)
+        {
+            var servers = KnownServers(conf);
+            data["servers"] = servers;
+            Exception failure = null;
+            foreach (string server in servers)
+            {
+                Dictionary<string, object> answer;
+                try { answer = Post(server, "/agent/api/checkin", data, Str(conf, "token")); }
+                catch (LocoHttpException) { throw; }            // le serveur a répondu : ce n'est pas une question d'adresse
+                catch (Exception e) { if (failure == null) failure = e; continue; }
+                var announced = new ArrayList();
+                object v;
+                if (answer.TryGetValue("servers", out v) && v is ArrayList)
+                    foreach (object u in (ArrayList)v)
+                    {
+                        string url = Convert.ToString(u).TrimEnd('/');
+                        if (ServerPattern.IsMatch(url) && !announced.Contains(url) && announced.Count < 8) announced.Add(url);
+                    }
+                bool moved = server != Str(conf, "server");
+                object previous;
+                conf.TryGetValue("servers", out previous);
+                bool listChanged = announced.Count > 0 && !(previous is ArrayList && ((ArrayList)previous).Cast<object>().Select(Convert.ToString).SequenceEqual(announced.Cast<string>()));
+                if (moved) Log("serveur joint à sa nouvelle adresse : " + server + " (au lieu de " + Str(conf, "server") + ")");
+                if (moved || listChanged)
+                {
+                    conf["server"] = server;
+                    if (announced.Count > 0) conf["servers"] = announced;
+                    SaveJson(ConfigPath, conf);
+                }
+                return answer;
+            }
+            throw failure ?? new Exception("aucune adresse de serveur connue");
         }
 
         static void Download(string url, string path, RemoteCertificateValidationCallback check = null)
@@ -606,7 +661,7 @@ namespace Loco
                     rescan = false;
                 }
                 Dictionary<string, object> answer;
-                try { answer = Post(Str(conf, "server"), "/agent/api/checkin", data, Str(conf, "token")); firstRun = false; PublishIndicator(answer); }
+                try { answer = Checkin(conf, data); firstRun = false; PublishIndicator(answer); }
                 catch (LocoHttpException e)
                 {
                     DesktopIndicator.Unavailable("Contact avec loco refusé");
@@ -695,6 +750,7 @@ namespace Loco
             Console.WriteLine("Agent       : loco-client " + Version);
             Console.WriteLine("Serveur     : " + (conf != null ? Str(conf, "server") : "non inscrit (" + Setting("Server") + ")"));
             Console.WriteLine("Identifiant : " + (conf != null ? Str(conf, "uid") : "-"));
+            if (conf != null && KnownServers(conf).Count > 1) Console.WriteLine("De secours  : " + string.Join(" ", KnownServers(conf).Skip(1)));
         }
     }
 }

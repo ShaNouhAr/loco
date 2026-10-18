@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.9.0 — 2026-10-18
+
+- **Changement d'adresse du serveur sans perdre les agents** : la future adresse (IP ou nom DNS) s'annonce dans *Mon parc › Adresse du serveur pour les agents* ou avec `loco-fleet announce https://hôte:port`. Chaque agent la reçoit à son contact suivant ; la page et `loco-fleet servers` indiquent combien de postes sont prévenus.
+- Après le changement, un agent qui ne joint plus l'ancienne adresse essaie celles qu'il connaît et adopte la première qui répond avec un certificat de l'autorité loco épinglée : une adresse annoncée ne peut pas détourner les postes vers un autre serveur. Les réponses HTTP du serveur (jeton refusé…) ne déclenchent jamais de bascule.
+- `setup-loco` (appliance) annonce la nouvelle adresse fixe et attend que les postes soient prévenus avant d'appliquer le réseau ; en DHCP, il prévient que les agents ne pourront pas suivre.
+- Agents Windows et Linux 2.9.0 : liste des adresses mémorisée et déclarée au serveur, affichée par `loco-client status`.
+
 ## 2.8.0 — 2026-10-18
 
 - **Gestion des logiciels unifiée** : catalogue local, store WinGet, groupes de logiciels et suivi des déploiements dans les mêmes onglets. Déploiement depuis une fiche du store, du catalogue ou d'un appareil ; import WinGet partagé et empreinte vérifiée conservée lors des nouvelles tentatives.

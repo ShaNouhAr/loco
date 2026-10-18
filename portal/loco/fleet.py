@@ -25,7 +25,7 @@ import zipfile
 
 from flask import Response, abort, flash, g, redirect, render_template, request, send_file, url_for
 
-from . import app, config, permissions
+from . import addresses, app, config, permissions
 from .auth import audit, login_required, can, require
 from .db import db
 from .util import back
@@ -376,6 +376,8 @@ def agent_checkin():
                  "os_name=COALESCE(NULLIF(?, ''), os_name), agent_version=?, addresses=? WHERE id=?",
                  (_now(), _client_ip(), ident["hostname"], ident["os_name"], ident["agent_version"],
                   ident["addresses"], dev["id"]))
+    if "servers" in data:           # agents 2.9.0 et plus : adresses du serveur qu'ils connaissent
+        conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
     _expire(dev["id"])
@@ -404,7 +406,8 @@ def agent_checkin():
         if c["action"] == "uninstall":
             break                   # rien après le retrait de l'agent
     conn.commit()
-    answer = {"interval": CHECKIN, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": commands}
+    answer = {"interval": CHECKIN, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": commands,
+              "servers": addresses.servers(conn)}
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
@@ -637,7 +640,30 @@ def fleet():
                            commands=_commands(key) if key else {}, checkin=CHECKIN, enroll_key=key,
                            ca_sha256=_ca_fingerprint() if key else "",
                            red_threshold=red_threshold(),
+                           server_coverage=addresses.coverage(db()) if can("fleet.settings") else [],
                            msi_error="" if msi else "téléchargé depuis GitHub à la première installation")
+
+
+@app.route("/parc/adresses", methods=["POST"])
+@login_required
+def fleet_server_address():
+    """Annonce (ou retrait) d'une future adresse du serveur, transmise aux agents avant le changement."""
+    conn = db()
+    url = request.form.get("url", "")
+    try:
+        if request.form.get("action") == "forget":
+            if addresses.forget(conn, url):
+                audit("parc.adresse-retiree", url, commit=False)
+                flash(f"{url} n'est plus annoncée aux agents.", "ok")
+        else:
+            url = addresses.announce(conn, url)
+            audit("parc.adresse-annoncee", url, commit=False)
+            flash(f"{url} annoncée : chaque agent la reçoit à son prochain contact (moins de {CHECKIN // 60} min). "
+                  "Changez l'adresse du serveur quand tous les postes sont prévenus.", "ok")
+        conn.commit()
+    except ValueError as e:
+        flash(f"Adresse refusée : {e}.", "error")
+    return back("fleet")
 
 
 @app.route("/parc/seuil", methods=["POST"])

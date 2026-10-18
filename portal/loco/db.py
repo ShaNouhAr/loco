@@ -260,6 +260,10 @@ MIGRATIONS = [
     CREATE INDEX software_group_members_app ON software_group_members(app_id);
     """,
 
+    # 10 : adresses du serveur connues de chaque agent (annonce d'une nouvelle adresse avant un changement).
+    """
+    ALTER TABLE devices ADD COLUMN servers TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

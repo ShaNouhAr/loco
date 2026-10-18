@@ -95,6 +95,44 @@ def call(server, path, data, token=None, timeout=60):
         return json.load(r)
 
 
+SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
+
+
+def known_servers(conf):
+    """Adresse habituelle du serveur, puis celles qu'il a annoncées (changement d'adresse prévu)."""
+    out = []
+    for url in [conf.get("server", "")] + list(conf.get("servers") or []):
+        url = url.rstrip("/") if isinstance(url, str) else ""
+        if SERVER_RE.match(url) and url not in out:
+            out.append(url)
+    return out[:8]
+
+
+def checkin(conf, data):
+    """Contact du serveur. Si son adresse habituelle ne répond plus (réseau, certificat), les adresses annoncées
+    sont essayées ; la première qui répond avec un certificat de l'autorité loco épinglée devient l'adresse du poste."""
+    data["servers"] = known_servers(conf)
+    failure = None
+    for server in data["servers"]:
+        try:
+            answer = call(server, "/agent/api/checkin", data, conf["token"])
+        except urllib.error.HTTPError:
+            raise                           # le serveur a répondu : ce n'est pas une question d'adresse
+        except (OSError, ValueError) as e:
+            failure = failure or e
+            continue
+        announced = [u.rstrip("/") for u in answer.get("servers") or [] if isinstance(u, str) and SERVER_RE.match(u.rstrip("/"))][:8]
+        if server != conf["server"]:
+            log(f"serveur joint à sa nouvelle adresse : {server} (au lieu de {conf['server']})")
+        if server != conf["server"] or (announced and announced != conf.get("servers")):
+            conf["server"] = server
+            if announced:
+                conf["servers"] = announced
+            save(CONFIG, conf)
+        return answer
+    raise failure or OSError("aucune adresse de serveur connue")
+
+
 def download(server, path, timeout=120):
     req = urllib.request.Request(server.rstrip("/") + path, headers={"User-Agent": f"loco-client/{VERSION}"})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context()))
@@ -311,7 +349,7 @@ def service():
         data["inventory"] = scan()
         state.update(last_scan=time.time(), rescan=False)
     try:
-        answer = call(conf["server"], "/agent/api/checkin", data, conf["token"])
+        answer = checkin(conf, data)
     except urllib.error.HTTPError as e:
         if e.code == 401:
             log("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire.")
@@ -393,6 +431,9 @@ def status_cmd():
     state = load(STATE)
     print(f"Agent      : loco-client {VERSION}")
     print(f"Serveur    : {conf.get('server', 'non inscrit')}")
+    others = known_servers(conf)[1:] if conf.get("server") else []
+    if others:
+        print(f"De secours : {' '.join(others)}")
     print(f"Identifiant: {conf.get('uid', '-')}")
     scanned = state.get("last_scan")
     print(f"Inventaire : {datetime.datetime.fromtimestamp(scanned).isoformat(timespec='seconds') if scanned else 'jamais'}")

@@ -332,6 +332,7 @@ rm -rf "$PREFIX"
 mv "$PREFIX.new" "$PREFIX"
 install -d /usr/local/sbin    # absent sur Alpine minimal
 ln -sf "$PREFIX/bin/loco-user" /usr/local/sbin/loco-user
+ln -sf "$PREFIX/bin/loco-fleet" /usr/local/sbin/loco-fleet
 ln -sf "$PREFIX/bin/loco-backup" /usr/local/sbin/loco-backup
 ln -sf "$PREFIX/bin/loco-apt" /usr/local/sbin/loco-apt
 

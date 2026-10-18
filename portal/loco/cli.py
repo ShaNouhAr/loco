@@ -15,6 +15,9 @@
   user passwd NOM           nouveau mot de passe temporaire (à changer à la connexion)
   user set-password NOM     définit le mot de passe depuis $LOCO_PASSWORD
   user enable|disable NOM   active / désactive un compte
+  fleet servers             adresses du serveur transmises aux agents, et postes prévenus
+  fleet announce URL        annonce une future adresse (https://hôte:port) avant de changer celle du serveur
+  fleet forget URL          retire une adresse annoncée
 """
 
 import datetime
@@ -101,6 +104,24 @@ def user_command(args):
             sys.exit(__doc__)
 
 
+def fleet_command(args):
+    from . import addresses
+    with transaction() as conn:
+        if args[:1] == ["announce"] and len(args) == 2:
+            try:
+                url = addresses.announce(conn, args[1])
+            except ValueError as e:
+                sys.exit(f"Adresse refusée : {e}.")
+            _audit(conn, "parc.adresse-annoncee", url)
+        elif args[:1] == ["forget"] and len(args) == 2:
+            if addresses.forget(conn, args[1]):
+                _audit(conn, "parc.adresse-retiree", args[1])
+        elif args != ["servers"]:
+            sys.exit(__doc__)
+        for i, (url, known, total) in enumerate(addresses.coverage(conn)):
+            print(f"{url:<40} {'actuelle ' if i == 0 else 'annoncée '} {known}/{total} poste(s)")
+
+
 def main(argv):
     if not argv:
         sys.exit(__doc__)
@@ -165,6 +186,8 @@ def main(argv):
         flatpak.update_repo()
     elif cmd == "user":
         user_command(argv[1:])
+    elif cmd == "fleet":
+        fleet_command(argv[1:])
     else:
         sys.exit(__doc__)
 

@@ -24,6 +24,28 @@ reinstall() {
     read -r _
 }
 
+# Annonce de la future adresse aux agents du parc, puis attente qu'ils l'aient reçue (contact toutes les 2 min).
+# Sans cela, les postes ne retrouveraient plus le serveur après le changement.
+announce_agents() {
+    url=$1 waited=0
+    loco-fleet announce "$url" >/dev/null 2>&1 || return 0
+    while :; do
+        progress=$(loco-fleet servers 2>/dev/null | awk -v u="$url" '$1 == u {print $3}')
+        known=${progress%/*} total=${progress#*/}
+        if [ -z "$progress" ] || [ "$total" = 0 ] || [ "$known" = "$total" ]; then return 0; fi
+        if [ "$waited" -ge 300 ]; then
+            dialog --backtitle "$TITLE" --yes-label Continuer --no-label Annuler --yesno \
+                "$known/$total poste(s) prévenu(s) après 5 minutes. Les autres (éteints ou hors réseau) ne retrouveront pas le serveur : il faudra relancer sur eux la commande d'installation de l'agent (ils gardent leur identité).\n\nChanger l'adresse quand même ?" 12 70 && return 0
+            loco-fleet forget "$url" >/dev/null 2>&1
+            return 1
+        fi
+        dialog --backtitle "$TITLE" --title "Agents du parc" --infobox \
+            "Annonce de la nouvelle adresse aux agents :\n$url\n\n$known/$total poste(s) prévenu(s). Chaque agent la reçoit à son prochain contact (2 minutes au plus)." 9 72
+        sleep 5
+        waited=$((waited + 5))
+    done
+}
+
 network() {
     iface=$(appliance_interfaces | head -1)
     current=$(appliance_current_cidr "$iface")
@@ -48,6 +70,13 @@ network() {
         done
     fi
     dialog --backtitle "$TITLE" --yesno "Appliquer ? Les postes devront utiliser la nouvelle adresse, et la session SSH éventuelle sera coupée." 8 66 || return 0
+    if [ "$mode" = static ] && [ "${cidr%/*}" != "$(conf HOST)" ]; then
+        address=${cidr%/*}
+        case "$address" in *:*) address="[$address]" ;; esac      # IPv6 entre crochets dans l'URL
+        announce_agents "https://$address:$(conf HTTPS_PORT)" || return 0
+    elif [ "$mode" = dhcp ]; then
+        dialog --backtitle "$TITLE" --yesno "En DHCP, la nouvelle adresse n'est pas connue à l'avance : les agents du parc ne pourront pas la suivre si elle change. Une adresse fixe est recommandée.\n\nContinuer en DHCP ?" 10 70 || return 0
+    fi
     cp /etc/network/interfaces /etc/network/interfaces.loco-previous
     cp /etc/hosts /etc/hosts.loco-previous
     cp /etc/resolv.conf /etc/resolv.conf.loco-previous

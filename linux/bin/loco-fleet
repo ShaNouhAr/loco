@@ -1,0 +1,12 @@
+#!/bin/bash
+# loco : adresses du serveur transmises aux agents du parc (root). À utiliser avant de changer l'adresse du serveur.
+#   loco-fleet servers          adresses connues des agents et nombre de postes prévenus
+#   loco-fleet announce URL     annonce la future adresse (https://hôte:port) ; les agents la reçoivent sous 2 min
+#   loco-fleet forget URL       retire une adresse annoncée
+set -euo pipefail
+[ "$(id -u)" -eq 0 ] || { echo "Lancez cette commande en root (sudo)." >&2; exit 1; }
+# shellcheck disable=SC1091
+. /etc/loco/loco.conf
+cd /opt/loco/portal
+exec runuser -u loco -- env LOCO_DATA="$DATA" LOCO_STATE=/var/lib/loco LOCO_ETC=/etc/loco \
+    LOCO_ADMIN_URL="https://$HOST:${HTTPS_PORT:-8443}" "${PYTHON:-python3}" -m loco.cli fleet "$@"
