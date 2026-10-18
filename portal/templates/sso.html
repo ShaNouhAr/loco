@@ -9,13 +9,13 @@
     <div class="panel-h"><h2>{{ p.label }}</h2><span class="st {{ 'ok' if p.enabled else 'warn' }}">{{ 'actif' if p.enabled else 'désactivé' }}</span></div>
     <div class="panel-b stack">
       <p class="small muted">{{ presets[p.preset][0] }} · {{ p.accounts }} compte(s) associé(s)</p>
-      <label class="f"><span>URL de retour à déclarer chez le fournisseur</span><input readonly value="{{ callback(p.id) }}" aria-label="URL de retour de {{ p.label }}"></label>
+      <label class="f"><span>URL de retour à déclarer chez le fournisseur</span><input type="text" readonly value="{{ callback(p.id) }}" aria-label="URL de retour de {{ p.label }}"></label>
       <form method="post" action="{{ url_for('sso_update', provider_id=p.id) }}" class="stack">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <input type="hidden" name="preset" value="{{ p.preset }}">
-        <label class="f"><span>Nom affiché sur la connexion</span><input name="label" value="{{ p.label }}" maxlength="80" required></label>
-        <label class="f"><span>Émetteur (issuer)</span><input name="issuer" value="{{ p.issuer }}" readonly></label>
-        <label class="f"><span>Identifiant client</span><input name="client_id" value="{{ p.client_id }}" readonly></label>
+        <label class="f"><span>Nom affiché sur la connexion</span><input type="text" name="label" value="{{ p.label }}" maxlength="80" required></label>
+        <label class="f"><span>Émetteur (issuer)</span><input type="url" name="issuer" value="{{ p.issuer }}" readonly></label>
+        <label class="f"><span>Identifiant client</span><input type="text" name="client_id" value="{{ p.client_id }}" readonly></label>
         <label class="f"><span>Nouveau secret client</span><input name="client_secret" type="password" autocomplete="new-password" placeholder="Laisser vide pour conserver le secret actuel" maxlength="4096"></label>
         <label class="f"><span>Authentification du client</span><select name="auth_method"><option value="client_secret_basic" {{ 'selected' if p.auth_method == 'client_secret_basic' }}>HTTP Basic</option><option value="client_secret_post" {{ 'selected' if p.auth_method == 'client_secret_post' }}>Secret dans la requête (Entra ID, Google…)</option></select></label>
         <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if p.enabled }}> Activer ce fournisseur</label>
@@ -29,10 +29,10 @@
     <form method="post" action="{{ url_for('sso_add') }}" class="panel-b stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="f"><span>Fournisseur</span><select name="preset" id="sso-preset">{% for key, spec in presets.items() %}<option value="{{ key }}" data-issuer="{{ spec[1] }}">{{ spec[0] }}</option>{% endfor %}</select></label>
-      <label class="f"><span>Nom affiché</span><input name="label" id="sso-label" required maxlength="80" placeholder="Connexion entreprise"></label>
+      <label class="f"><span>Nom affiché</span><input type="text" name="label" id="sso-label" required maxlength="80" placeholder="Connexion entreprise"></label>
       <label class="f"><span>Émetteur (issuer)</span><input name="issuer" id="sso-issuer" type="url" required maxlength="2048" placeholder="https://sso.example.com"></label>
       <p class="hint">Remplacez les exemples TENANT, REALM, APPLICATION… par vos valeurs. Pour Entra ID, utilisez l'UUID du tenant précis. Copiez l'émetteur exact, avec sa barre finale si le fournisseur l'impose. GitHub utilise OAuth 2 ; les autres modèles utilisent OpenID Connect.</p>
-      <label class="f"><span>Identifiant client</span><input name="client_id" required maxlength="512" autocomplete="off"></label>
+      <label class="f"><span>Identifiant client</span><input type="text" name="client_id" required maxlength="512" autocomplete="off"></label>
       <label class="f"><span>Secret client</span><input name="client_secret" type="password" required maxlength="4096" autocomplete="new-password"></label>
       <label class="f"><span>Authentification du client</span><select name="auth_method" id="sso-auth-method"><option value="client_secret_basic">HTTP Basic</option><option value="client_secret_post">Secret dans la requête</option></select></label>
       <label><input type="checkbox" name="enabled" value="1" checked> Afficher sur la page de connexion</label>

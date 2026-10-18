@@ -7,6 +7,7 @@ const encoder = new TextEncoder();
 let running = true, inputSeq = 0, outputAck = 0, queue = new Uint8Array(), pending = null;
 let terminal, fit, rfb, channel, failures = 0, cols = 100, rows = 30;
 let pollTimer, inFlight = false;
+let remoteLabel = root.dataset.kind === 'terminal' ? 'terminal du poste' : 'bureau du poste';
 function schedulePoll(delay = 0) {
   if (!running || inFlight) return;
   clearTimeout(pollTimer); pollTimer = setTimeout(poll, delay);
@@ -61,7 +62,7 @@ async function poll() {
     failures = 0; busy = data.packets.length > 0;
     if (pending && data.ack >= pending.seq) pending = null;
     if (data.state === 'active') {
-      message('Connecté · ' + (root.dataset.kind === 'terminal' ? 'terminal du poste' : 'bureau du poste'));
+      message('Connecté · ' + remoteLabel);
       if (channel && channel.readyState === 0) { channel.readyState = 1; if (channel.onopen) channel.onopen({}); }
     }
     for (const packet of data.packets) {
@@ -118,6 +119,8 @@ if (root.dataset.kind === 'terminal') {
   rfb.addEventListener('desktopname', e => {
     if (e.detail.name.startsWith('loco-console root@')) {
       document.querySelector('.remote-description').textContent = 'Console texte · Shell root · Via l’agent loco';
+      remoteLabel = 'console texte du poste · root';
+      if (running) message('Connecté · ' + remoteLabel);
     }
   });
   rfb.addEventListener('disconnect', e => { if (running) stop(e.detail.clean ? 'Bureau déconnecté.' : 'La connexion au bureau a été interrompue.', true); });
