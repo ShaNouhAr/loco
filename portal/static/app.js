@@ -157,6 +157,12 @@
     if (b) b.click();
   });
 
+  /* ---------------------------------------------------------------- filtres appliqués au choix */
+
+  document.addEventListener("change", function (e) {
+    if (e.target.matches("select[data-autosubmit]")) e.target.form.submit();
+  });
+
   /* ---------------------------------------------------------------- menus « Plus » */
 
   document.addEventListener("click", function (e) {

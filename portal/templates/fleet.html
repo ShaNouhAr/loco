@@ -1,56 +1,86 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd %}
 {% block title %}Mon parc{% endblock %}
-{% macro dot(color) -%}
-<span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(color, '') }}" title="{{ {'green': 'à jour', 'orange': 'mises à jour en attente', 'red': 'beaucoup de mises à jour', 'grey': 'état inconnu'}[color] }}"></span>
+{% macro filter_url(statut=None, os=None) -%}
+{{ url_for('fleet', group=selected_group.id if selected_group else None,
+           statut=(statut or None) if statut is not none else (state or None),
+           os=(os or None) if os is not none else (system or None)) }}
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <div class="head">
   <div>
-    <h1>Mon parc</h1>
-    <p>Postes Windows et Linux équipés de l'agent loco. Un poste reste rattaché s'il change d'adresse IP ; seul « Retirer l'agent » le détache.</p>
+    <h1>Mon parc{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
+    <p>Postes équipés de l'agent loco, du plus urgent au plus à jour.</p>
   </div>
-  {% if can('fleet.bulk_update') and rows %}
   <div class="actions">
-    <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="Mettre à jour {{ to_update }} poste(s) ?" data-confirm-text="Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste." data-confirm-ok="Tout mettre à jour">
+    {% if can('fleet.enroll') %}<button type="button" class="btn" data-open="#enroll">Ajouter un poste</button>{% endif %}
+    {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">Déployer sur ce groupe</a>{% endif %}
+    {% if can('fleet.bulk_update') and total %}
+    <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="Mettre à jour {{ to_update }} poste(s) ?" data-confirm-text="Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.{% if can('fleet.reboot') %} Cochez « redémarrer si nécessaire » pour terminer les mises à jour qui l'exigent.{% endif %}" data-confirm-ok="Mettre à jour">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
       {% if can("fleet.reboot") %}<label class="small muted"><input type="checkbox" name="reboot" value="1"> redémarrer si nécessaire</label>{% endif %}
       <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>{{ 'Mettre à jour ce groupe' if selected_group else 'Tout mettre à jour' }}{% if to_update %} ({{ to_update }}){% endif %}</button>
     </form>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
-<div class="stack" data-poll="{{ url_for('fleet',group=selected_group.id) if selected_group else url_for('fleet') }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
-  <form method="get" class="row"><label for="fleet-group-filter">Groupe de machines</label><select id="fleet-group-filter" name="group"><option value="">Tous les appareils</option>{% for group in device_groups %}<option value="{{ group.id }}" {{ 'selected' if selected_group and selected_group.id==group.id }}>{{ group.name }} ({{ group.members }})</option>{% endfor %}</select><button class="btn">Afficher</button>{% if selected_group and can('fleet.bulk_install') %}<a class="btn primary" href="{{ url_for('deployment_compose',device_group=selected_group.id) }}">Déployer sur ce groupe</a>{% endif %}</form>
-  <div class="metrics">
-    <div class="metric"><div class="k"><span class="st ok"></span> À jour</div><div class="v">{{ counts.green }}</div><div class="s">postes</div></div>
-    <div class="metric"><div class="k"><span class="st warn"></span> Mises à jour en attente</div><div class="v">{{ counts.orange }}</div><div class="s">de 1 à {{ red_threshold - 1 }} mises à jour</div></div>
-    <div class="metric"><div class="k"><span class="st err"></span> Beaucoup de mises à jour</div><div class="v">{{ counts.red }}</div><div class="s">{{ red_threshold }} mises à jour ou plus</div></div>
-    <div class="metric"><div class="k"><span class="st"></span> État inconnu</div><div class="v">{{ counts.grey }}</div><div class="s">inventaire, absence de contact, retrait</div></div>
+<div class="stack" data-poll="{{ request.full_path }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
+  <div class="fleet-filters">
+    <nav class="chips" aria-label="Filtrer par état">
+      <a class="chip {{ 'on' if not state }}" href="{{ filter_url(statut='') }}">Tous <b>{{ total }}</b></a>
+      {% for key, label, cls in [('red', 'Nombreuses mises à jour', 'err'), ('orange', 'Mises à jour en attente', 'warn'), ('grey', 'État inconnu', ''), ('green', 'À jour', 'ok')] %}
+      <a class="chip {{ 'on' if state == key }}" href="{{ filter_url(statut=key) }}" title="{{ {'red': red_threshold ~ ' mises à jour ou plus', 'orange': 'de 1 à ' ~ (red_threshold - 1) ~ ' mises à jour', 'grey': 'inventaire en cours ou incomplet, sans contact récent, retrait', 'green': 'aucune mise à jour'}[key] }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
+      {% endfor %}
+    </nav>
+    <div class="row">
+      <nav class="chips" aria-label="Filtrer par système">
+        <a class="chip {{ 'on' if system == 'windows' }}" href="{{ filter_url(os='' if system == 'windows' else 'windows') }}">Windows <b>{{ systems.windows }}</b></a>
+        <a class="chip {{ 'on' if system == 'linux' }}" href="{{ filter_url(os='' if system == 'linux' else 'linux') }}">Linux <b>{{ systems.linux }}</b></a>
+      </nav>
+      {% if device_groups %}
+      <form method="get" class="inline-form">
+        {% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}
+        <select name="group" aria-label="Groupe de machines" data-autosubmit>
+          <option value="">Tous les groupes</option>
+          {% for group in device_groups %}<option value="{{ group.id }}" {{ 'selected' if selected_group and selected_group.id == group.id }}>{{ group.name }} ({{ group.members }})</option>{% endfor %}
+        </select>
+        <noscript><button class="btn sm">Afficher</button></noscript>
+      </form>
+      {% endif %}
+      {% if rows %}<input type="search" class="search-sm" placeholder="Rechercher un poste" data-filter="#fleet-table tbody tr" data-empty="#fleet-none" aria-label="Rechercher un poste">{% endif %}
+    </div>
   </div>
 
   <section class="panel">
-    <div class="panel-h"><h2>Postes <span class="h-count">{{ rows|length }}</span></h2>
-      {% if rows %}<div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#fleet-table tbody tr" aria-label="Filtrer les postes"></div>{% endif %}
-    </div>
     {% if rows %}
     <div class="table-wrap">
-      <table id="fleet-table">
-        <thead><tr><th>Poste</th><th>Adresse IP</th><th>Mises à jour</th><th class="hide-sm">Dernier contact</th><th></th></tr></thead>
+      <table id="fleet-table" class="fleet-table">
+        <thead><tr><th>Poste</th><th>Adresse</th><th>Mises à jour</th><th class="hide-sm">Groupes</th><th class="hide-sm">Contact</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
-          <tr>
-            <td>{{ dot(r.color) }} <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="mono nowrap">{{ d.hostname or d.uid[:8] }}</a>
+          <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
+            <td><span class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" title="{{ r.label }} : {{ r.reason }}"></span>
+              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="mono nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
               <span class="sub">{{ d.os_name or families.get(d.os_family, '') }}</span></td>
-            <td class="mono nowrap">{{ d.ip or '—' }}</td>
-            <td>{{ r.reason }}
-              {% if r.pending %}<span class="sub">en attente : {% for c in r.pending %}{{ actions[c.action]|lower }}{{ ', ' if not loop.last }}{% endfor %}</span>{% endif %}</td>
-            <td class="mono muted nowrap hide-sm">{{ d.last_seen|date_fr if d.last_seen else '—' }}</td>
-            <td class="right">
-              {% if can('fleet.update') and r.needs_update and not r.pending %}
+            <td class="nowrap"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="Adresse par laquelle loco voit le poste (routeur ou NAT)">via {{ r.via }}</span>{% endif %}</td>
+            <td>
+              {% if r.color == 'grey' %}<span class="muted">{{ r.label }}</span>
+              {% elif not r.system and not r.apps %}<span class="muted">à jour</span>
+              {% else %}
+                {% if r.system %}<span class="count">{{ r.system }} système</span>{% endif %}
+                {% if r.apps %}<span class="count">{{ r.apps }} logiciel{{ 's' if r.apps > 1 }}</span>{% endif %}
+                {% if r.security %}<span class="count err">dont {{ r.security }} sécurité</span>{% endif %}
+              {% endif %}
+              {% if d.reboot_required %}<span class="sub warn-text">redémarrage nécessaire</span>{% endif %}
+            </td>
+            <td class="hide-sm">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
+            <td class="muted nowrap hide-sm" title="{{ d.last_seen }}">{{ r.seen }}</td>
+            <td class="right nowrap">
+              {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ actions[r.pending[0].action]|lower }} en attente</span>
+              {% elif can('fleet.update') and r.needs_update %}
               <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
                 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">
                 <button class="btn sm"><span class="spin"></span>Mettre à jour</button>
@@ -61,83 +91,44 @@
         {% endfor %}
         </tbody>
       </table>
+      <div id="fleet-none" class="empty hidden">Aucun poste ne correspond à la recherche.</div>
     </div>
+    {% elif total %}
+    <div class="empty">Aucun poste dans cet état. <a href="{{ filter_url(statut='', os='') }}">Tout afficher</a></div>
     {% else %}
-    <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant : installez l'agent sur un poste{{ ' avec la commande ci-dessous' if can('fleet.enroll') }}.{% endif %}</div>
+    <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant{% if can('fleet.enroll') %} : <button type="button" class="linkbtn" data-open="#enroll">ajoutez-en un</button>{% endif %}.{% endif %}</div>
     {% endif %}
-    <div class="panel-f">Vert : aucune mise à jour. Orange : de 1 à {{ red_threshold - 1 }} mises à jour. Rouge : {{ red_threshold }} mises à jour ou plus. Le total comprend le système, Flatpak et les logiciels du catalogue. Gris : état non connu ou inventaire indisponible. Les postes contactent loco toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
+    <div class="panel-f">Pastille : nombre de mises à jour (système, Flatpak et logiciels du catalogue) — verte à 0, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} ; grise si l'état n'est pas connu. Les postes contactent loco toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
   </section>
-
-  {% if can("fleet.settings") %}
-  <details class="panel" {{ 'open' if server_coverage|length > 1 }}>
-    <summary class="panel-h">Adresse du serveur pour les agents{% if server_coverage|length > 1 %} <span class="st warn small">changement annoncé</span>{% endif %}</summary>
-    <div class="table-wrap">
-      <table>
-        <tbody>
-        {% for url, known, total in server_coverage %}
-          <tr>
-            <td class="mono">{{ url }}{% if loop.first %} <span class="tag">actuelle</span>{% else %} <span class="tag">annoncée</span>{% endif %}</td>
-            <td>{% if not loop.first %}<span class="st {{ 'ok' if known == total else 'warn' }}">{{ known }}/{{ total }} poste(s) prévenu(s)</span>{% else %}<span class="muted small">{{ known }}/{{ total }} poste(s) l'ont confirmée</span>{% endif %}</td>
-            <td class="right">{% if not loop.first %}
-              <form method="post" action="{{ url_for('fleet_server_address') }}" data-ajax>
-                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="forget"><input type="hidden" name="url" value="{{ url }}">
-                <button class="linkbtn del">Retirer</button>
-              </form>{% endif %}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <form method="post" action="{{ url_for('fleet_server_address') }}" class="panel-b row" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="text" name="url" required placeholder="https://192.168.1.20:8443" aria-label="Future adresse du serveur" spellcheck="false" class="mono" style="max-width:340px">
-      <button class="btn sm"><span class="spin"></span>Annoncer aux agents</button>
-    </form>
-    <p class="panel-f">Avant de changer l'adresse du serveur, annoncez la nouvelle : chaque agent la reçoit à son prochain contact. Une fois tous les postes prévenus, changez l'adresse (<code>setup-loco</code> sur l'appliance le fait pour vous, sinon <code>install.sh --host</code>) : les agents qui ne joignent plus l'ancienne adresse passent seuls à la nouvelle, après vérification de l'autorité HTTPS de loco. Un poste éteint pendant toute l'annonce reste à réinstaller avec la commande ci-dessous (il garde son identité).</p>
-  </details>
-  <details class="panel">
-    <summary class="panel-h">Seuil des pastilles</summary>
-    <form method="post" action="{{ url_for('fleet_threshold') }}" class="panel-b row" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label>Rouge à partir de <input type="number" name="threshold" min="2" max="10000" value="{{ red_threshold }}" required style="width:100px;display:inline-block"> mises à jour</label>
-      <button class="btn sm">Enregistrer</button>
-    </form>
-  </details>
-  {% endif %}
-  {% if can("fleet.enroll") %}
-  <section class="panel">
-    <div class="panel-h"><h2>Ajouter un poste</h2>
-      {% if can("fleet.settings") %}<div class="aside">
-        <form method="post" action="{{ url_for('fleet_rotate_key') }}" data-confirm="Changer la clé d'inscription ?" data-confirm-text="Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés." data-confirm-ok="Changer">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">Nouvelle clé d'inscription</button>
-        </form>
-      </div>{% endif %}
-    </div>
-    <div class="panel-b">
-      <div class="tabs" role="tablist">
-        <button type="button" data-tab="agent-win" aria-selected="true">Windows</button>
-        <button type="button" data-tab="agent-linux" aria-selected="false">Debian, Ubuntu, Rocky, AlmaLinux</button>
-      </div>
-      <div class="tab-panel client-panel on" data-panel="agent-win">
-        <p class="muted">Windows 10/11 et Windows Server 2016 et plus, dans PowerShell administrateur.</p>
-        {{ cmd('agent-win', commands.windows, 'PS>') }}
-        {% if commands.windows_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.windows_http }}</code></span>{% endif %}
-        <span class="hint">Installe le service Windows <code>loco-client</code> (MSI, visible dans Programmes et fonctionnalités). L'agent épingle l'autorité de loco sans modifier les certificats du poste.</span>
-        <details class="hint"><summary>Déploiement en masse (GPO, Intune, SCCM)</summary>
-          <p>Distribuer <a href="{{ url_for('agent_file', name='loco-client.msi') }}">loco-client.msi</a>{% if msi_error %} <span class="faint">({{ msi_error }})</span>{% endif %} et créer, par GPO (préférences de registre), sous <code>HKLM\SOFTWARE\Policies\loco\Client</code> les valeurs chaîne :</p>
-          <p><code>Server</code> = <code>{{ https_url }}</code><br><code>Key</code> = <code>{{ enroll_key }}</code><br><code>CaSha256</code> = <code>{{ ca_sha256 or '(vide : certificat public)' }}</code></p>
-          <p>Ou en ligne de commande : <code>msiexec /i loco-client.msi SERVER={{ https_url }} KEY={{ enroll_key }} CA_SHA256={{ ca_sha256 }} /qn</code></p>
-        </details>
-      </div>
-      <div class="tab-panel client-panel" data-panel="agent-linux">
-        <p class="muted">Postes avec systemd et APT ou DNF.</p>
-        {{ cmd('agent-linux', commands.linux) }}
-        {% if commands.linux_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.linux_http }}</code></span>{% endif %}
-        <span class="hint">Retrait local : <code>sudo loco-client remove</code>.</span>
-      </div>
-      <p class="hint">La commande contient la clé d'inscription de ce serveur : ne la partagez qu'avec les personnes qui installent les postes.</p>
-    </div>
-  </section>
-  {% endif %}
 </div>
+
+{% if can("fleet.enroll") %}
+<dialog id="enroll" class="wide-dialog">
+  <div class="dlg-h"><h2>Ajouter un poste</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <div class="dlg-b client-panel">
+    <div class="tabs" role="tablist">
+      <button type="button" data-tab="agent-win" aria-selected="true">Windows</button>
+      <button type="button" data-tab="agent-linux" aria-selected="false">Debian, Ubuntu, Rocky, AlmaLinux</button>
+    </div>
+    <div class="tab-panel client-panel on" data-panel="agent-win">
+      <p class="muted">Windows 10/11 et Windows Server 2016 et plus, dans PowerShell administrateur.</p>
+      {{ cmd('agent-win', commands.windows, 'PS>') }}
+      {% if commands.windows_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.windows_http }}</code></span>{% endif %}
+      <span class="hint">Installe le service Windows <code>loco-client</code> (MSI, visible dans Programmes et fonctionnalités). L'agent épingle l'autorité de loco sans modifier les certificats du poste.</span>
+      <details class="hint"><summary>Déploiement en masse (GPO, Intune, SCCM)</summary>
+        <p>Distribuer <a href="{{ url_for('agent_file', name='loco-client.msi') }}">loco-client.msi</a>{% if msi_error %} <span class="faint">({{ msi_error }})</span>{% endif %} et créer, par GPO (préférences de registre), sous <code>HKLM\SOFTWARE\Policies\loco\Client</code> les valeurs chaîne :</p>
+        <p><code>Server</code> = <code>{{ https_url }}</code><br><code>Key</code> = <code>{{ enroll_key }}</code><br><code>CaSha256</code> = <code>{{ ca_sha256 or '(vide : certificat public)' }}</code></p>
+        <p>Ou en ligne de commande : <code>msiexec /i loco-client.msi SERVER={{ https_url }} KEY={{ enroll_key }} CA_SHA256={{ ca_sha256 }} /qn</code></p>
+      </details>
+    </div>
+    <div class="tab-panel client-panel" data-panel="agent-linux">
+      <p class="muted">Postes avec systemd et APT ou DNF.</p>
+      {{ cmd('agent-linux', commands.linux) }}
+      {% if commands.linux_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.linux_http }}</code></span>{% endif %}
+      <span class="hint">Retrait local : <code>sudo loco-client remove</code>.</span>
+    </div>
+    <p class="hint">La commande contient la clé d'inscription de ce serveur : ne la partagez qu'avec les personnes qui installent les postes.{% if can('fleet.settings') %} Changer de clé : <a href="{{ url_for('fleet_settings') }}">Réglages</a>.{% endif %}</p>
+  </div>
+</dialog>
+{% endif %}
 {% endblock %}

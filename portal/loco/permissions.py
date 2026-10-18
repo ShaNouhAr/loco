@@ -123,7 +123,7 @@ ENDPOINTS = {
     "windows_update_domains": "wu.configure",
     "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_action": "fleet.view",
     "fleet_update_all": "fleet.bulk_update", "fleet_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",
-    "fleet_server_address": "fleet.settings",
+    "fleet_server_address": "fleet.settings", "fleet_settings": "fleet.settings",
     "remote_open": ("remote.terminal", "remote.desktop"),
     "remote_session": ("remote.terminal", "remote.desktop"), "remote_io": ("remote.terminal", "remote.desktop"),
     "system": "system.view", "appliance_updates": "system.view", "appliance_job": "system.view",

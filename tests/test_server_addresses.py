@@ -43,7 +43,7 @@ class TestAnnouncedAddresses(FleetTest):
         lin.checkin()                                               # agent ancien : ne déclare rien
         with db.transaction() as conn:
             self.assertEqual(addresses.coverage(conn), [(config.HTTPS_URL, 1, 2), (NEW, 1, 2)])
-        page = self.admin.c.get("/parc").get_data(as_text=True)
+        page = self.admin.c.get("/parc/reglages").get_data(as_text=True)
         self.assertIn(NEW, page)
         self.assertIn("1/2 poste(s) prévenu(s)", page)
         self.announce(NEW, "forget")
@@ -78,7 +78,8 @@ class TestAnnouncedAddresses(FleetTest):
         viewer = self.browser("adresse-lecture", self.profile("adresse-lecture", {"fleet.view"}))
         r = viewer.post("/parc/adresses", {"url": NEW}, page="/compte")
         self.assertEqual(r.status_code, 403)
-        self.assertNotIn("Annoncer aux agents", viewer.c.get("/parc").get_data(as_text=True))
+        self.assertEqual(viewer.c.get("/parc/reglages").status_code, 403)
+        self.assertNotIn("Réglages", viewer.c.get("/parc").get_data(as_text=True))
 
     def test_console_command(self):
         out = io.StringIO()

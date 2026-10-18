@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.11.0 — 2026-10-19
+
+- **Mon parc repensé** : postes classés du plus urgent au plus à jour ; adresse réelle du poste (et « via » l'adresse vue par loco quand un NAT les sépare) ; mises à jour en compact (système, logiciels, dont sécurité) ; redémarrage signalé ; groupes en étiquettes cliquables ; dernier contact en clair ; action en attente affichée à la place du bouton.
+- **Filtres immédiats** : pastilles d'état avec leur nombre (tous, nombreuses mises à jour, en attente, état inconnu, à jour), Windows / Linux, groupe appliqué dès son choix, recherche ; « Tout mettre à jour » et « Déployer » suivent le groupe affiché.
+- **Ajouter un poste** dans une fenêtre (commandes Windows et Linux, déploiement GPO) au lieu d'un panneau en bas de page.
+- **Onglet Réglages** du parc : adresse du serveur annoncée aux agents, seuil des pastilles et clé d'inscription.
+
 ## 2.10.1 — 2026-10-19
 
 - **Fiche d'un appareil repensée** : en-tête avec le nom, une pastille d'état courte (à jour, mises à jour en attente, nombreuses mises à jour, sans contact récent…), l'explication détaillée, le système, l'adresse du poste, le dernier contact en clair (« il y a 2 min ») et la version de l'agent ; groupes en étiquettes.

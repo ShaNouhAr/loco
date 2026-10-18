@@ -630,6 +630,27 @@ def _commands(key):
     }
 
 
+SEVERITY = {"red": 0, "orange": 1, "grey": 2, "green": 3}
+
+
+def _enrich(rows):
+    """Colonnes de la liste : adresse du poste, compteurs, groupes, contact en clair ; postes à traiter d'abord."""
+    names = {}
+    for r in db().execute("SELECT m.device_id, g.id, g.name FROM device_group_members m JOIN device_groups g ON g.id=m.group_id "
+                          "ORDER BY g.name COLLATE NOCASE"):
+        names.setdefault(r[0], []).append({"id": r[1], "name": r[2]})
+    for r in rows:
+        d = r["d"]
+        own = (d["addresses"] or "").split()
+        updates = inventory(d).get("updates") or []
+        r.update(label=status_label(d, r["color"]), address=own[0] if own else (d["ip"] or ""),
+                 via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
+                 system=d["updates"], security=sum(1 for u in updates if u.get("security")),
+                 linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
+    rows.sort(key=lambda r: (SEVERITY.get(r["color"], 9), (r["d"]["hostname"] or "").lower()))
+    return rows
+
+
 @app.route("/parc")
 @login_required
 def fleet():
@@ -643,19 +664,36 @@ def fleet():
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         rows = [r for r in rows if r["d"]["id"] in member_ids]
     counts = {c: sum(1 for r in rows if r["color"] == c) for c in ("green", "orange", "red", "grey")}
+    systems = {"windows": sum(1 for r in rows if r["d"]["os_family"] == "windows")}
+    systems["linux"] = len(rows) - systems["windows"]
+    total = len(rows)
+    state = request.args.get("statut", "")
+    system = request.args.get("os", "")
+    if state in counts:
+        rows = [r for r in rows if r["color"] == state]
+    if system in systems:
+        rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
+    rows = _enrich(rows)
     signature = hashlib.sha256(json.dumps([[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                             len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     key = enroll_key() if can("fleet.enroll") else ""
     msi, msi_state = agent_msi()
-    return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows, counts=counts, signature=signature, families=FAMILIES,
-                           actions=ACTIONS, to_update=sum(1 for r in rows if r["needs_update"]),
+    return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
+                           counts=counts, systems=systems, total=total, state=state, system=system,
+                           signature=signature, families=FAMILIES, actions=ACTIONS,
+                           to_update=sum(1 for r in rows if r["needs_update"]),
                            commands=_commands(key) if key else {}, checkin=CHECKIN, enroll_key=key,
-                           ca_sha256=_ca_fingerprint() if key else "",
-                           red_threshold=red_threshold(),
-                           server_coverage=addresses.coverage(db()) if can("fleet.settings") else [],
+                           ca_sha256=_ca_fingerprint() if key else "", red_threshold=red_threshold(),
                            msi_error="" if msi else "téléchargé depuis GitHub à la première installation")
+
+
+@app.route("/parc/reglages")
+@login_required
+def fleet_settings():
+    return render_template("fleet_settings.html", red_threshold=red_threshold(), checkin=CHECKIN,
+                           server_coverage=addresses.coverage(db()))
 
 
 @app.route("/parc/adresses", methods=["POST"])
@@ -677,7 +715,7 @@ def fleet_server_address():
         conn.commit()
     except ValueError as e:
         flash(f"Adresse refusée : {e}.", "error")
-    return back("fleet")
+    return back("fleet_settings")
 
 
 @app.route("/parc/seuil", methods=["POST"])
@@ -689,11 +727,11 @@ def fleet_threshold():
             raise ValueError
     except ValueError:
         flash("Le seuil rouge doit être compris entre 2 et 10000 mises à jour.", "error")
-        return back("fleet")
+        return back("fleet_settings")
     set_setting("fleet_red_threshold", str(value))
     audit("parc.seuil", f"rouge à partir de {value} mises à jour")
     flash(f"Pastille rouge à partir de {value} mises à jour (système et logiciels).", "ok")
-    return back("fleet")
+    return back("fleet_settings")
 
 
 def ago_text(stamp):
@@ -813,4 +851,4 @@ def fleet_rotate_key():
     set_setting("enroll_key", secrets.token_urlsafe(18))
     audit("parc.cle", "nouvelle clé d'inscription")
     flash("Nouvelle clé d'inscription : les postes déjà inscrits ne sont pas concernés.", "ok")
-    return redirect(url_for("fleet"))
+    return redirect(url_for("fleet_settings"))

@@ -531,3 +531,26 @@ details.menu > summary::after { content: ""; width: 0; height: 0; margin-left: 2
 .tab-panel > .panel-h.sub:first-child { border-top: 0; }
 .panel-h.sub h2 { font-size: 13px; }
 label.check { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; font-size: 13.5px; }
+
+/* ------------------------------------------------------------------ liste du parc */
+
+.fleet-filters { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
+.fleet-filters > .row { gap: 10px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--text-2); font-size: 13px; text-decoration: none; white-space: nowrap; }
+.chip:hover { color: var(--text); border-color: var(--text-3); }
+.chip b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.chip.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+.chip.on b { color: var(--bg); }
+.chip .st::before { width: 8px; height: 8px; }
+.fleet-filters select { width: auto; height: 30px; min-width: 180px; }
+.fleet-filters .search-sm { width: 220px; height: 30px; }
+.fleet-table td { vertical-align: top; }
+.fleet-table td:first-child .st { margin-right: 4px; }
+.count { display: inline-block; margin-right: 10px; white-space: nowrap; }
+.count.err { color: var(--err); }
+.warn-text { color: var(--warn) !important; }
+.field-md { max-width: 340px; }
+.field-xs { width: 100px !important; display: inline-block; }
+dialog.wide-dialog { width: min(760px, calc(100vw - 32px)); }
+dialog.wide-dialog .dlg-b > * + * { margin-top: 10px; }
