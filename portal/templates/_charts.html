@@ -1,0 +1,44 @@
+{# Graphiques tracés côté serveur en SVG : aucune bibliothèque ni script, couleurs du thème (OLED ou clair). #}
+
+{# Barres empilées par jour : servi depuis le cache (bas) et téléchargé sur Internet (haut). #}
+{% macro daily_bars(wu) -%}
+{% set plot = 130 %}{% set cell = 50 %}{% set left = 58 %}{% set width = left + cell * wu.days|length %}
+<svg class="chart" viewBox="0 0 {{ width }} 172" role="img" aria-label="Windows Update, 14 derniers jours : {{ wu.hit|human }} servis depuis le cache, {{ wu.miss|human }} téléchargés sur Internet">
+  <line class="grid" x1="{{ left - 6 }}" x2="{{ width }}" y1="10" y2="10"/>
+  <line class="grid" x1="{{ left - 6 }}" x2="{{ width }}" y1="{{ 10 + plot / 2 }}" y2="{{ 10 + plot / 2 }}"/>
+  <line class="axis" x1="{{ left - 6 }}" x2="{{ width }}" y1="{{ 10 + plot }}" y2="{{ 10 + plot }}"/>
+  <text x="{{ left - 12 }}" y="14" text-anchor="end">{{ wu.max|human }}</text>
+  <text x="{{ left - 12 }}" y="{{ 14 + plot / 2 }}" text-anchor="end">{{ (wu.max / 2)|human }}</text>
+  <text x="{{ left - 12 }}" y="{{ 14 + plot }}" text-anchor="end">0</text>
+  {% for d in wu.days %}
+    {% set x = left + loop.index0 * cell + 6 %}
+    {% set h_hit = plot * d.hit / wu.max %}{% set h_miss = plot * d.miss / wu.max %}
+    <g>
+      <title>{{ d.label }} : {{ d.hit|human }} depuis le cache, {{ d.miss|human }} depuis Internet</title>
+      <rect class="hover" x="{{ x - 6 }}" y="10" width="{{ cell - 8 }}" height="{{ plot }}"/>
+      {% if d.miss %}<rect class="bar-miss" x="{{ x }}" y="{{ 10 + plot - h_hit - h_miss }}" width="{{ cell - 20 }}" height="{{ [h_miss, 1]|max }}"/>{% endif %}
+      {% if d.hit %}<rect class="bar-hit" x="{{ x }}" y="{{ 10 + plot - h_hit }}" width="{{ cell - 20 }}" height="{{ [h_hit, 1]|max }}"/>{% endif %}
+      {% if loop.index0 % 2 == 1 or loop.last %}<text x="{{ x + (cell - 20) / 2 }}" y="160" text-anchor="middle">{{ d.label }}</text>{% endif %}
+    </g>
+  {% endfor %}
+</svg>
+{%- endmacro %}
+
+{# Anneau : une part par état ; le total au centre. #}
+{% macro ring(fleet) -%}
+<svg class="chart ring" viewBox="0 0 120 120" role="img" aria-label="État du parc : {% for s in fleet.ring %}{{ s.count }} {{ s.label }}{{ ', ' if not loop.last }}{% endfor %}">
+  <circle class="ring-bg" cx="60" cy="60" r="48"/>
+  {% for s in fleet.ring if s.count %}
+    <circle class="ring-{{ s.key }}" cx="60" cy="60" r="48" stroke-dasharray="{{ s.len }} {{ s.gap }}" stroke-dashoffset="{{ s.offset }}" transform="rotate(-90 60 60)"><title>{{ s.count }} {{ s.label }}</title></circle>
+  {% endfor %}
+  <text class="ring-total" x="60" y="60" text-anchor="middle" dominant-baseline="central">{{ fleet.total }}</text>
+  <text x="60" y="80" text-anchor="middle">poste{{ 's' if fleet.total != 1 }}</text>
+</svg>
+{%- endmacro %}
+
+{# Barre horizontale empilée : occupation du disque des données. #}
+{% macro stacked(segments) -%}
+<svg class="chart stacked" viewBox="0 0 1000 22" preserveAspectRatio="none" role="img" aria-label="Occupation du disque : {% for s in segments %}{{ s.label }} {{ s.size|human }}{{ ', ' if not loop.last }}{% endfor %}">
+  {% for s in segments if s.w > 0 %}<rect class="seg-{{ s.cls }}" x="{{ s.x }}" y="0" width="{{ [s.w, 1.5]|max }}" height="22"><title>{{ s.label }} : {{ s.size|human }} ({{ s.pct|string|replace('.', ',') }} %)</title></rect>{% endfor %}
+</svg>
+{%- endmacro %}

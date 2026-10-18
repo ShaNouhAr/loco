@@ -1,8 +1,12 @@
 """Windows Update : statistiques du cache, domaines redirigés, script DNS."""
 
+import datetime
+import glob
+import gzip
 import json
 import os
 import re
+import threading
 import urllib.parse
 
 from flask import Response, flash, render_template, request
@@ -13,6 +17,94 @@ from .util import back, read_stats, service_active
 
 LOG_RE = re.compile(r'^(\S+) \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+) (\S+) "([^"]*)"$')
 _CACHE = {}
+
+
+# --------------------------------------------------------------------------- historique quotidien
+
+MONTHS = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"), 1)}
+_DAILY = {}                     # fichier -> (clé, totaux par jour) ; journal courant : lecture incrémentale
+_DAILY_LOCK = threading.Lock()
+
+
+def _day_totals(lines, totals):
+    """Octets servis depuis le cache et depuis Internet, par jour (date du journal nginx, sans dépendre de la locale)."""
+    for line in lines:
+        m = LOG_RE.match(line)
+        if not m:
+            continue
+        stamp, size, cache = m.group(2), int(m.group(6)), m.group(7)
+        try:
+            day = datetime.date(int(stamp[7:11]), MONTHS[stamp[3:6]], int(stamp[0:2])).isoformat()
+        except (KeyError, ValueError):
+            continue
+        hit, miss = totals.get(day, (0, 0))
+        if cache == "HIT":
+            totals[day] = (hit + size, miss)
+        elif cache in ("MISS", "EXPIRED", "UPDATING", "STALE", "BYPASS"):
+            totals[day] = (hit, miss + size)
+
+
+def _archived(path):
+    """Journal archivé (.1, .2.gz, .AAAAMMJJ) : immuable, lu une seule fois."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return {}
+    key = (st.st_size, st.st_mtime_ns)
+    cached = _DAILY.get(path)
+    if cached and cached[0] == key:
+        return cached[1]
+    totals = {}
+    try:
+        opener = gzip.open if path.endswith(".gz") else open
+        with opener(path, "rb") as f:
+            _day_totals((raw.decode("utf-8", "replace").rstrip("\n") for raw in f), totals)
+    except (OSError, EOFError):
+        return {}
+    _DAILY[path] = (key, totals)
+    return totals
+
+
+def _current(path):
+    """Journal en cours d'écriture : seules les lignes ajoutées depuis la dernière lecture sont analysées."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return {}
+    cached = _DAILY.get(path)
+    inode, offset, totals = cached[0] if cached else (None, 0, {})
+    if inode != st.st_ino or st.st_size < offset:
+        inode, offset, totals = st.st_ino, 0, {}
+    totals = dict(totals)
+    try:
+        with open(path, "rb") as f:
+            f.seek(offset)
+            data = f.read()
+    except OSError:
+        return totals
+    end = data.rfind(b"\n") + 1                # ligne incomplète : relue au prochain passage
+    _day_totals(data[:end].decode("utf-8", "replace").splitlines(), totals)
+    _DAILY[path] = ((inode, offset + end, totals), None)
+    return totals
+
+
+def wu_daily(days=14):
+    """[(jour ISO, octets servis depuis le cache, octets téléchargés sur Internet)] des `days` derniers jours."""
+    merged = {}
+    with _DAILY_LOCK:
+        sources = [_current(config.WU_LOG)]
+        archives = [p for p in glob.glob(glob.escape(config.WU_LOG) + ".*") if not p.endswith((".tmp", ".lock"))]
+        sources += [_archived(p) for p in sorted(archives, key=os.path.getmtime, reverse=True)[:days + 2]]
+    for totals in sources:
+        for day, (hit, miss) in totals.items():
+            h, m = merged.get(day, (0, 0))
+            merged[day] = (h + hit, m + miss)
+    today = datetime.date.today()
+    out = []
+    for i in range(days - 1, -1, -1):
+        day = (today - datetime.timedelta(days=i)).isoformat()
+        out.append((day, *merged.get(day, (0, 0))))
+    return out
 
 
 def read_wu_domains():

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.10.0 — 2026-10-18
+
+- **Graphiques dans la vue d'ensemble**, tracés en SVG par le serveur (aucune bibliothèque ni script, thèmes OLED et clair, infobulles au survol) :
+  - **Windows Update sur 14 jours** : volume servi par le cache et volume téléchargé sur Internet, jour par jour, avec la part économisée. Historique reconstitué depuis les journaux nginx tournants (`.1`, `.2.gz`, `.AAAAMMJJ`), journal courant lu de façon incrémentale ;
+  - **État du parc** : anneau vert, orange, rouge, gris (droit *Consulter les appareils*) ;
+  - **Disque des données** : part de chaque cache (APT, Windows Update, RPM, Flathub), des dépôts et logiciels locaux, du reste et de l'espace libre.
+
 ## 2.9.0 — 2026-10-18
 
 - **Changement d'adresse du serveur sans perdre les agents** : la future adresse (IP ou nom DNS) s'annonce dans *Mon parc › Adresse du serveur pour les agents* ou avec `loco-fleet announce https://hôte:port`. Chaque agent la reçoit à son contact suivant ; la page et `loco-fleet servers` indiquent combien de postes sont prévenus.

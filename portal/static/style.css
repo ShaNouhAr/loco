@@ -20,6 +20,7 @@
   --warn: #8f5d00;
   --err: #b42318;
   --sel: #f0f0ee;
+  --c1: #3f6fae; --c2: #6b5aa6; --c3: #2f8a80; --c4: #a8742a; --c5: #8b4f6c; --c6: #a3a39c;
   color-scheme: light;
 }
 
@@ -36,6 +37,7 @@
   --warn: #d4a23c;
   --err: #f0645a;
   --sel: #101010;
+  --c1: #6f9be0; --c2: #9a88d9; --c3: #4fb7aa; --c4: #d9a24f; --c5: #c27a9b; --c6: #4a4a4a;
   color-scheme: dark;
 }
 
@@ -449,3 +451,34 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .software-detail-actions { margin-bottom: 24px; }
 .selbar-in { flex-wrap: wrap; }
 .selbar .software-selection-actions { flex-shrink: 0; }
+
+/* ------------------------------------------------------------------ graphiques (SVG tracés par le serveur) */
+
+.chart { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--text-3); font: 11px var(--mono); }
+.chart .grid { stroke: var(--line); stroke-dasharray: 3 4; }
+.chart .axis { stroke: var(--line-2); }
+.chart .hover { fill: transparent; }
+.chart g:hover .hover { fill: var(--sel); }
+.bar-hit { fill: var(--ok); background: var(--ok); }
+.bar-miss { fill: var(--text-3); background: var(--text-3); }
+.ring { max-width: 168px; }
+.ring circle { fill: none; stroke-width: 14; }
+.ring .ring-bg { stroke: var(--bg-3); }
+.ring-green { stroke: var(--ok); background: var(--ok); }
+.ring-orange { stroke: var(--warn); background: var(--warn); }
+.ring-red { stroke: var(--err); background: var(--err); }
+.ring-grey { stroke: var(--text-3); background: var(--text-3); }
+.ring .ring-total { fill: var(--text); font: 600 26px var(--sans); }
+.ring-panel { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.ring-panel > * + * { margin-top: 0; }
+.stacked { height: 22px; border-radius: var(--r-sm); overflow: hidden; }
+.seg-c1 { fill: var(--c1); background: var(--c1); } .seg-c2 { fill: var(--c2); background: var(--c2); }
+.seg-c3 { fill: var(--c3); background: var(--c3); } .seg-c4 { fill: var(--c4); background: var(--c4); }
+.seg-c5 { fill: var(--c5); background: var(--c5); } .seg-c6 { fill: var(--c6); background: var(--c6); }
+.seg-free { fill: var(--bg-3); background: var(--bg-3); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-2); }
+.legend.vertical { flex-direction: column; margin: 0; font-size: 13px; }
+.legend .num { color: var(--text); margin-left: 4px; }
+.legend .key { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 2px; vertical-align: -1px; }
+.legend .key.seg-free { box-shadow: inset 0 0 0 1px var(--line-2); }

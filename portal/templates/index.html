@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd, service %}
+{% from "_charts.html" import daily_bars, ring, stacked %}
 {% block title %}Vue d'ensemble{% endblock %}
 {% block content %}
 <div class="head">
@@ -45,6 +46,49 @@
       <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-bind="disk.pct" data-fmt="meter" data-width="{{ d.disk.pct }}"></i></div>
     </div>
   </div>
+
+  <div class="{{ 'cols w21' if charts.fleet }}">
+    <section class="panel">
+      <div class="panel-h"><h2>Windows Update, 14 derniers jours</h2>
+        <div class="aside">{% if charts.wu.hit or charts.wu.miss %}{{ charts.wu.ratio }} % servis par le cache{% endif %}</div></div>
+      <div class="panel-b">
+        {% if charts.wu.hit or charts.wu.miss %}
+        {{ daily_bars(charts.wu) }}
+        <ul class="legend">
+          <li><i class="key bar-hit"></i>Depuis le cache <span class="num">{{ charts.wu.hit|human }}</span></li>
+          <li><i class="key bar-miss"></i>Depuis Internet <span class="num">{{ charts.wu.miss|human }}</span></li>
+        </ul>
+        {% else %}
+        <p class="empty">Aucun téléchargement Windows Update sur la période : les postes doivent utiliser le DNS qui redirige vers loco ({% if can('wu.view') %}<a href="{{ url_for('windows_update') }}">Windows Update</a>{% else %}Windows Update{% endif %}).</p>
+        {% endif %}
+      </div>
+    </section>
+    {% if charts.fleet %}
+    <section class="panel">
+      <div class="panel-h"><h2>Parc</h2><div class="aside"><a href="{{ url_for('fleet') }}">Mon parc</a></div></div>
+      <div class="panel-b ring-panel">
+        {% if charts.fleet.total %}
+        {{ ring(charts.fleet) }}
+        <ul class="legend vertical">
+          {% for s in charts.fleet.ring %}<li><i class="key ring-{{ s.key }}"></i>{{ s.label|capitalize }} <span class="num">{{ s.count }}</span></li>{% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">Aucun poste : installez l'agent depuis <a href="{{ url_for('fleet') }}">Mon parc</a>.</p>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Disque des données</h2><div class="aside"><span>{{ d.disk.free|human }} libres sur {{ d.disk.total|human }}{% if d.stats_updated %} · tailles du {{ d.stats_updated|date_fr }}{% endif %}</span></div></div>
+    <div class="panel-b">
+      {{ stacked(charts.disk) }}
+      <ul class="legend">
+        {% for s in charts.disk %}<li><i class="key seg-{{ s.cls }}"></i>{{ s.label }} <span class="num">{{ s.size|human }}</span></li>{% endfor %}
+      </ul>
+    </div>
+  </section>
 
   <div class="cols w21">
     <div class="stack">

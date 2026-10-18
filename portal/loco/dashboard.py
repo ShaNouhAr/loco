@@ -9,7 +9,7 @@ from .auth import login_required, can
 from .db import db
 from .linux import list_debs
 from .util import disk_usage, read_stats, service_active
-from .wupdate import wu_stats
+from .wupdate import wu_daily, wu_stats
 
 STATUS_LABELS = {"ready": "prêt", "downloading": "téléchargement", "error": "erreur", "pending": "en attente"}
 
@@ -46,10 +46,52 @@ def recent_activity(limit=6):
     return events[:limit]
 
 
+def chart_data(d):
+    """Données des graphiques de la vue d'ensemble (tracés en SVG par le serveur : aucun script tiers)."""
+    stats = read_stats()
+    charts = {}
+    days = wu_daily(14)
+    hit, miss = sum(h for _, h, _ in days), sum(m for _, _, m in days)
+    charts["wu"] = {"days": [{"day": day, "label": day[8:10] + "/" + day[5:7], "hit": h, "miss": m} for day, h, m in days],
+                    "max": max([h + m for _, h, m in days] + [1]), "hit": hit, "miss": miss,
+                    "ratio": round(100 * hit / (hit + miss)) if hit + miss else 0}
+    disk = d["disk"]
+    parts = [("Cache APT", stats.get("acng", 0), "c1"), ("Cache Windows Update", stats.get("wucache", 0), "c2"),
+             ("Cache RPM", stats.get("rpmcache", 0), "c3"), ("Cache Flathub", stats.get("flatpakcache", 0), "c4"),
+             ("Dépôts et logiciels locaux", sum(stats.get(k, 0) for k in ("apt", "rpm", "flatpak", "win")), "c5")]
+    parts = [p for p in parts if p[1] > 0]
+    other = max(0, disk["used"] - sum(p[1] for p in parts))
+    total = max(disk["total"], sum(p[1] for p in parts) + other + disk["free"]) or 1
+    segments, x = [], 0.0
+    for label, size, cls in parts + [("Système et autres", other, "c6")] * bool(other) + [("Libre", disk["free"], "free")]:
+        width = 1000 * size / total
+        segments.append({"label": label, "size": size, "cls": cls, "x": round(x, 2), "w": round(width, 2),
+                         "pct": round(100 * size / total, 1)})
+        x += width
+    charts["disk"] = segments
+    if can("fleet.view"):
+        from .fleet import catalog, status
+        apps = catalog()
+        counts = {"green": 0, "orange": 0, "red": 0, "grey": 0}
+        for dev in db().execute("SELECT * FROM devices WHERE state != 'removed'"):
+            counts[status(dev, apps)[0]] += 1
+        n = sum(counts.values())
+        ring, offset = [], 0.0
+        circumference = 301.59                       # 2π × 48 : rayon de l'anneau
+        for key, label in (("green", "à jour"), ("orange", "mises à jour en attente"), ("red", "à traiter"), ("grey", "en attente")):
+            length = circumference * counts[key] / n if n else 0
+            ring.append({"key": key, "label": label, "count": counts[key], "len": round(length, 2),
+                         "gap": round(circumference - length, 2), "offset": round(-offset, 2)})
+            offset += length
+        charts["fleet"] = {"total": n, "ring": ring}
+    return charts
+
+
 @app.route("/")
 @login_required
 def index():
-    return render_template("index.html", d=dashboard_data(), activity=recent_activity())
+    d = dashboard_data()
+    return render_template("index.html", d=d, activity=recent_activity(), charts=chart_data(d))
 
 
 @app.route("/api/status")
