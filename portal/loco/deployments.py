@@ -261,21 +261,23 @@ def _pin(row):
     if not re.fullmatch(r'installer\.[a-z0-9]{1,8}', name):
         name = 'installer.bin'
     destination = directory / name
-    if not destination.exists():
+    # tarfile du serveur Windows conserve autrement des liens que son restaurateur refuse.
+    # Sous Linux, loco-backup matérialise les liens physiques pendant l'archivage.
+    if not destination.exists() and not config.WINDOWS:
         try:
             os.link(source, destination)
-        except FileExistsError:
-            pass
         except OSError:
-            fd, temporary = tempfile.mkstemp(prefix='.copy-', dir=directory)
-            os.close(fd)
-            try:
-                shutil.copyfile(source, temporary)
-                os.chmod(temporary, 0o644)
-                os.replace(temporary, destination)
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
+            pass
+    if not destination.exists():
+        fd, temporary = tempfile.mkstemp(prefix='.copy-', dir=directory)
+        os.close(fd)
+        try:
+            shutil.copyfile(source, temporary)
+            os.chmod(temporary, 0o644)
+            os.replace(temporary, destination)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
     if sha256_of(str(destination)) != digest:
         raise ValueError('Version conservée altérée : déploiement refusé.')
     payload = fleet.app_payload(row)

@@ -147,16 +147,27 @@ class TestDeployments(FleetTest):
 
     def test_concurrent_confirmations_queue_one_batch(self):
         path = self.preview()
-        cookie_name = fixture.loco.app.config['SESSION_COOKIE_NAME']
-        cookie = self.admin.c.get_cookie(cookie_name).value
+        with self.admin.c.session_transaction() as current:
+            saved_session = dict(current)
         token = self.admin.token('/compte')
         def confirm(_):
             browser = fixture.loco.app.test_client()
-            browser.set_cookie(cookie_name, cookie)
+            with browser.session_transaction() as current:
+                current.update(saved_session)
             return browser.post(path + '/confirmer', data={'csrf': token}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(list(pool.map(confirm, range(2))), [302, 302])
         self.assertEqual(len(self.commands()), 1)
+
+    def test_windows_server_retains_independent_files_compatible_with_native_backups(self):
+        path = self.preview()
+        with mock.patch.object(config, 'WINDOWS', True):
+            self.assertEqual(self.post(path + '/confirmer').status_code, 302)
+        app = json.loads(self.commands()[0]['params'])['app_snapshots'][0]
+        source = Path(config.WIN_DIR, self.app['slug'], self.app['filename'])
+        retained = Path(config.WIN_DIR, app['url'].removeprefix('/win/files/'))
+        self.assertEqual(source.read_bytes(), retained.read_bytes())
+        self.assertFalse(os.path.samefile(source, retained))
 
     def test_mutated_app_or_target_requires_a_new_preview(self):
         path = self.preview()
