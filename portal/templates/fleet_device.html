@@ -1,170 +1,203 @@
 {% extends "base.html" %}
 {% block title %}{{ dev.hostname }}{% endblock %}
+{% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False) -%}
+<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}
+  <button class="{{ cls or 'menu-item' }}"><span class="spin"></span>{{ label }}</button>
+</form>
+{%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 {% set cls = {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(color, '') %}
-<div class="head">
-  <div>
+{% set windows = dev.os_family == 'windows' %}
+{% set active = dev.state == 'active' %}
+
+<div class="device-head">
+  <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">Mon parc</a></p>
-    <h1 class="mono">{{ dev.hostname or dev.uid[:8] }}</h1>
-    <p><span class="st {{ cls }}">{{ reason }}</span></p>
+    <h1><span class="mono">{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ cls }}" title="{{ reason }}">{{ label }}</span></h1>
+    {% if reason|replace('poste ', '') != label %}<p class="device-reason {{ cls }}">{{ reason|capitalize }}.</p>{% endif %}
+    <p class="device-meta">
+      <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
+      <span class="mono">{{ (dev.addresses or dev.ip or '—').split(' ')[0] }}</span>
+      <span title="{{ dev.last_seen }}">vu {{ summary.seen }}</span>
+      <span class="mono">loco-client {{ dev.agent_version or '?' }}</span>
+    </p>
+    {% if memberships %}<p class="device-groups">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a>{% endfor %}</p>{% endif %}
   </div>
-  {% if can_any("fleet.update", "fleet.scan", "fleet.reboot", "fleet.remove") %}
-  <div class="actions">
-    {% if dev.state == 'active' %}
-    {% if can("fleet.update") %}
-    <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" class="row" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">
-      {% if can("fleet.reboot") %}<label class="small muted"><input type="checkbox" name="reboot" value="1"> redémarrer si nécessaire</label>{% endif %}
-      <button class="btn {{ 'primary' if needs_update }}"><span class="spin"></span>Mettre à jour</button>
+
+  <div class="device-actions">
+    {% if active and can_any('remote.terminal', 'remote.desktop') %}
+    {% for kind, label in [('terminal', 'Terminal'), ('desktop', 'Bureau' if windows else 'Console')] %}
+    {% if can('remote.' ~ kind) %}
+    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split" rel="noopener">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
+      <button class="btn" {% if not remote_ready %}disabled title="Agent 2.4.0 requis"{% else %}title="{{ 'PowerShell (SYSTEM)' if windows and kind == 'terminal' else ('Session noVNC' if kind == 'desktop' else 'Shell root') }}, session journalisée"{% endif %}>{{ label }}</button>
+      <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ label }} dans un nouvel onglet" title="Ouvrir dans un nouvel onglet" {% if not remote_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
     </form>
     {% endif %}
-    {% if can("fleet.scan") %}
-    <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="scan">
-      <button class="btn"><span class="spin"></span>Inventaire</button>
-    </form>
+    {% endfor %}
     {% endif %}
-    {% if can("fleet.reboot") %}
-    <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax data-confirm="Redémarrer {{ dev.hostname }} ?" data-confirm-text="Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée." data-confirm-ok="Redémarrer">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
-      <button class="btn {{ 'primary' if dev.reboot_required and not needs_update }}"><span class="spin"></span>Redémarrer</button>
-    </form>
-    {% endif %}
-    {% if can("fleet.remove") %}
-    <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax data-confirm="Retirer l'agent de {{ dev.hostname }} ?" data-confirm-text="Au prochain contact, l'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place." data-confirm-ok="Retirer">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="uninstall">
-      <button class="btn danger"><span class="spin"></span>Retirer l'agent</button>
-    </form>
-    {% endif %}
-    {% else %}
-    {% if can("fleet.remove") %}
-    <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax data-confirm="Oublier {{ dev.hostname }} ?" data-confirm-text="Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n'existe plus." data-confirm-ok="Oublier">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="forget">
-      <button class="btn danger"><span class="spin"></span>Oublier ce poste</button>
-    </form>
-    {% endif %}
+    {% if active and can('fleet.update') %}{{ action('update', 'Mettre à jour', 'btn primary' if needs_update else 'btn') }}{% endif %}
+    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install') %}
+    <details class="menu">
+      <summary class="btn" aria-label="Autres actions">Plus</summary>
+      <div class="menu-list" role="menu">
+        {% if active %}
+        {% if can('fleet.update') and can('fleet.reboot') %}{{ action('update', 'Mettre à jour puis redémarrer si nécessaire', reboot=True) }}{% endif %}
+        {% if can('fleet.scan') %}{{ action('scan', 'Refaire l\'inventaire') }}{% endif %}
+        {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">Déployer des logiciels…</a>{% endif %}
+        {% if can('fleet.reboot') %}{{ action('reboot', 'Redémarrer', confirm='Redémarrer ' ~ dev.hostname ~ ' ?', text='Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.', ok='Redémarrer') }}{% endif %}
+        {% if can('fleet.remove') %}<hr>{{ action('uninstall', 'Retirer l\'agent…', 'menu-item danger', confirm='Retirer l\'agent de ' ~ dev.hostname ~ ' ?', text='Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.', ok='Retirer') }}{% endif %}
+        {% elif can('fleet.remove') %}
+        {{ action('forget', 'Oublier ce poste…', 'menu-item danger', confirm='Oublier ' ~ dev.hostname ~ ' ?', text='Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n\'existe plus.', ok='Oublier') }}
+        {% endif %}
+      </div>
+    </details>
     {% endif %}
   </div>
-  {% endif %}
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
-  {% if can_any('remote.terminal', 'remote.desktop') and dev.state == 'active' %}
-  <section class="panel">
-    <div class="panel-h"><h2>Accès distant</h2><span class="small muted">Via l'agent loco</span></div>
-    <div class="panel-b row">
-      {% for kind, label in [('terminal', 'Terminal PowerShell' if dev.os_family == 'windows' else 'Terminal'), ('desktop', 'Bureau noVNC' if dev.os_family == 'windows' else 'Console noVNC')] %}
-      {% if can('remote.' ~ kind) %}<form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="row" rel="noopener">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
-        <button class="btn" {% if not remote_ready %}disabled title="Agent 2.4.0 requis"{% endif %}>{{ label }}</button>
-        <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ label }} dans un nouvel onglet" title="Ouvrir dans un nouvel onglet" {% if not remote_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
-      </form>{% endif %}
-      {% endfor %}
-      {% if not remote_ready %}<span class="small muted">Disponible après la mise à jour de l'agent en 2.4.0.</span>{% endif %}
-      <span class="small muted">Session d'administration journalisée · fermeture automatique après déconnexion</span>
-    </div>
-  </section>
-  {% endif %}
-  {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ actions[c.action]|lower }} ({{ 'transmise' if c.state != 'queued' else 'au prochain contact' }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
-  <section class="panel"><div class="panel-h"><h2>Groupes de machines</h2>{% if dev.os_family=='windows' and dev.state=='active' and can('fleet.install') %}<a class="btn sm primary" href="{{ url_for('deployment_compose',device=dev.id) }}">Déployer des logiciels</a>{% endif %}</div><div class="panel-b stack"><div class="actions">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor',group_id=group.id) }}">{{ group.name }}</a>{% else %}<span class="muted">Aucun groupe associé.</span>{% endfor %}</div>{% if can('fleet.groups') and device_groups %}<form method="post" action="{{ url_for('fleet_group_membership',dev_id=dev.id) }}" class="stack"><input type="hidden" name="csrf" value="{{ csrf }}"><div class="actions">{% set member_ids=memberships|map(attribute='id')|list %}{% for group in device_groups %}<label><input type="checkbox" name="groups" value="{{ group.id }}" {{ 'checked' if group.id in member_ids }}> {{ group.name }}</label>{% endfor %}</div><div><button class="btn sm">Enregistrer les groupes</button></div></form>{% endif %}</div></section>
+  {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ action_label(c)|lower }} ({{ 'transmise à l\'agent' if c.state != 'queued' else 'au prochain contact' }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
 
-  <div class="cols">
-    <section class="panel">
-      <div class="panel-h"><h2>Poste</h2></div>
-      <dl class="kv">
-        <dt>Système</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
-        <dt>Adresse IP</dt><dd class="mono">{{ dev.ip or '—' }}</dd>
-        <dt>Adresses du poste</dt><dd class="mono">{{ dev.addresses or '—' }}</dd>
-        <dt>Dernier contact</dt><dd class="mono">{{ dev.last_seen|date_fr if dev.last_seen else '—' }}</dd>
-        <dt>Dernier inventaire</dt><dd class="mono">{{ dev.last_scan|date_fr if dev.last_scan else '—' }}</dd>
-        <dt>Redémarrage</dt><dd>{{ 'nécessaire' if dev.reboot_required else 'non nécessaire' }}</dd>
-        <dt>Agent</dt><dd class="mono">loco-client {{ dev.agent_version or '?' }}</dd>
-        <dt>Inscrit le</dt><dd class="mono">{{ dev.enrolled_at|date_fr }}</dd>
-        <dt>Identifiant</dt><dd class="mono small">{{ dev.uid }}</dd>
-      </dl>
-    </section>
+  <div class="metrics">
+    <div class="metric">
+      <div class="k">Mises à jour système</div>
+      <div class="v">{{ summary.updates if dev.last_scan else '—' }}</div>
+      <div class="s">{% if summary.security %}<span class="st err">dont {{ summary.security }} de sécurité</span>{% elif dev.last_scan %}{{ 'à installer' if summary.updates else 'système à jour' }}{% else %}inventaire en cours{% endif %}</div>
+    </div>
+    <div class="metric">
+      <div class="k">{{ 'Logiciels' if windows else 'Flatpak' }}</div>
+      <div class="v">{{ summary.apps if windows else (inv.flatpak or 0) }}</div>
+      <div class="s">{% if windows %}{{ 'à mettre à jour' if summary.apps else 'catalogue à jour' }}{% else %}{{ 'mise(s) à jour' if inv.flatpak else 'à jour' }}{% endif %}</div>
+    </div>
+    <div class="metric">
+      <div class="k">Redémarrage</div>
+      <div class="v">{% if dev.reboot_required %}<span class="st warn">requis</span>{% else %}non{% endif %}</div>
+      <div class="s">{{ 'pour finir les mises à jour' if dev.reboot_required else 'rien en attente' }}</div>
+    </div>
+    <div class="metric">
+      <div class="k">Inventaire</div>
+      <div class="v small-v">{{ summary.scanned }}</div>
+      <div class="s">contact toutes les 2 min</div>
+    </div>
+  </div>
 
-    <section class="panel">
-      <div class="panel-h"><h2>Mises à jour du système <span class="h-count">{{ (inv.updates or [])|length }}</span></h2>
-        {% if inv.flatpak %}<div class="aside">+ {{ inv.flatpak }} Flatpak</div>{% endif %}</div>
+  <section class="panel">
+    <div class="tabs device-tabs" role="tablist" data-hash>
+      <button type="button" data-tab="maj" aria-selected="true">Mises à jour{% if summary.updates or summary.apps %} <span class="h-count">{{ summary.updates + summary.apps }}</span>{% endif %}</button>
+      {% if inv.apps %}<button type="button" data-tab="logiciels" aria-selected="false">Logiciels installés <span class="h-count">{{ inv.apps|length }}</span></button>{% endif %}
+      <button type="button" data-tab="historique" aria-selected="false">Historique{% if history %} <span class="h-count">{{ history|length }}</span>{% endif %}</button>
+      <button type="button" data-tab="details" aria-selected="false">Détails</button>
+    </div>
+
+    <div class="tab-panel on" data-panel="maj">
+      <div class="panel-h sub"><h2>Système</h2>{% if inv.flatpak %}<div class="aside">+ {{ inv.flatpak }} Flatpak</div>{% endif %}</div>
       {% if inv.updates %}
       <div class="table-wrap">
         <table>
           <tbody>
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
-            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">sécurité</span>{% endif %}</td><td class="mono muted small">{{ u.version }}</td></tr>
+            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">sécurité</span>{% endif %}</td><td class="mono muted small right">{{ u.version }}</td></tr>
           {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-      <div class="empty">{{ 'Aucune mise à jour en attente.' if dev.last_scan else 'Inventaire en cours.' }}</div>
+      <div class="empty">{{ 'Aucune mise à jour du système en attente.' if dev.last_scan else 'Inventaire en cours.' }}</div>
       {% endif %}
-    </section>
-  </div>
 
-  {% if dev.os_family == 'windows' %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ "Logiciels du catalogue" if can("windows.view") else "Logiciels installés" }}</h2>{% if can("windows.view") %}<div class="aside"><a href="{{ url_for('windows_apps') }}">Catalogue</a></div>{% endif %}</div>
-    {% if can("windows.view") %}
-    {% if apps %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Logiciel</th><th>Catalogue</th><th>Installé</th><th></th></tr></thead>
-        <tbody>
-        {% for a, installed, outdated in apps %}
-          <tr>
-            <td><a href="{{ url_for('software_detail',slug=a.slug) }}">{{ a.name }}</a></td>
-            <td class="mono">{{ a.version or '—' }}</td>
-            <td>{% if outdated %}<span class="st warn">{{ installed }}</span>{% elif installed %}<span class="st ok">{{ installed }}</span>{% else %}<span class="faint">non installé</span>{% endif %}</td>
-            <td class="right">
-              {% if can('fleet.install') and dev.state == 'active' and (outdated or not installed) %}
-              <a class="btn sm" href="{{ url_for('deployment_compose',app=a.slug,device=dev.id) }}">{{ 'Mettre à jour' if outdated else 'Installer' }}</a>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+      {% if windows and can('windows.view') %}
+      <div class="panel-h sub"><h2>Logiciels du catalogue</h2><div class="aside"><a href="{{ url_for('windows_apps') }}">Catalogue</a></div></div>
+      {% if apps %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Logiciel</th><th>Catalogue</th><th>Installé</th><th></th></tr></thead>
+          <tbody>
+          {% for a, installed, outdated in apps|sort(attribute='2', reverse=true) %}
+            <tr>
+              <td><a href="{{ url_for('software_detail', slug=a.slug) }}">{{ a.name }}</a></td>
+              <td class="mono">{{ a.version or '—' }}</td>
+              <td>{% if outdated %}<span class="st warn">{{ installed }}</span>{% elif installed %}<span class="st ok">{{ installed }}</span>{% else %}<span class="faint">non installé</span>{% endif %}</td>
+              <td class="right">
+                {% if can('fleet.install') and active and (outdated or not installed) %}
+                <a class="btn sm" href="{{ url_for('deployment_compose', app=a.slug, device=dev.id) }}">{{ 'Mettre à jour' if outdated else 'Installer' }}</a>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">Catalogue vide : ajoutez des logiciels dans <a href="{{ url_for('windows_apps') }}">Logiciels Windows</a>.</div>
+      {% endif %}
+      {% endif %}
     </div>
-    {% else %}
-    <div class="empty">Catalogue vide : ajoutez des logiciels dans <a href="{{ url_for('windows_apps') }}">Logiciels Windows</a>.</div>
-    {% endif %}
-    {% endif %}
+
     {% if inv.apps %}
-    <details class="panel-f"><summary>Tous les logiciels installés ({{ inv.apps|length }})</summary>
-      <div class="table-wrap"><table><tbody>
-      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}</span></td><td class="mono muted small">{{ s.version }}</td></tr>{% endfor %}
+    <div class="tab-panel" data-panel="logiciels">
+      <div class="panel-h sub"><h2>Logiciels installés sur le poste</h2>
+        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#installed tbody tr" aria-label="Filtrer les logiciels"></div></div>
+      <div class="table-wrap"><table id="installed"><tbody>
+      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}</span></td><td class="mono muted small right">{{ s.version }}</td></tr>{% endfor %}
       </tbody></table></div>
-    </details>
-    {% endif %}
-  </section>
-  {% endif %}
-
-  <section class="panel">
-    <div class="panel-h"><h2>Historique</h2></div>
-    {% if history %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Date</th><th>Action</th><th class="hide-sm">Par</th><th>État</th></tr></thead>
-        <tbody>
-        {% for c in history %}
-          <tr class="{{ 'has-note' if c.output }}">
-            <td class="mono muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
-            <td>{{ action_label(c) }}</td>
-            <td class="mono muted hide-sm">{{ c.created_by or '—' }}</td>
-            <td>{% if c.state == 'success' %}<span class="st ok">réussie</span>{% elif c.state == 'failed' %}<span class="st err">échec</span>{% elif c.state == 'cancelled' %}<span class="st">annulée</span>{% else %}<span class="st warn">{{ 'en cours' if c.state == 'running' else ('transmise' if c.state == 'sent' else 'en attente') }}</span>{% endif %}</td>
-          </tr>
-          {% if c.output %}<tr class="note-row"><td colspan="4"><details><summary class="small muted">Journal</summary><pre class="log">{{ c.output }}</pre></details></td></tr>{% endif %}
-        {% endfor %}
-        </tbody>
-      </table>
     </div>
-    {% else %}
-    <div class="empty">Aucune action pour l'instant.</div>
     {% endif %}
+
+    <div class="tab-panel" data-panel="historique">
+      {% if history %}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Action</th><th class="hide-sm">Par</th><th>État</th></tr></thead>
+          <tbody>
+          {% for c in history %}
+            <tr class="{{ 'has-note' if c.output }}">
+              <td class="mono muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
+              <td>{{ action_label(c) }}</td>
+              <td class="mono muted hide-sm">{{ c.created_by or '—' }}</td>
+              <td>{% if c.state == 'success' %}<span class="st ok">réussie</span>{% elif c.state == 'failed' %}<span class="st err">échec</span>{% elif c.state == 'cancelled' %}<span class="st">annulée</span>{% else %}<span class="st warn">{{ 'en cours' if c.state == 'running' else ('transmise' if c.state == 'sent' else 'en attente') }}</span>{% endif %}</td>
+            </tr>
+            {% if c.output %}<tr class="note-row"><td colspan="4"><details><summary class="small muted">Journal</summary><pre class="log">{{ c.output }}</pre></details></td></tr>{% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">Aucune action pour l'instant.</div>
+      {% endif %}
+    </div>
+
+    <div class="tab-panel" data-panel="details">
+      <dl class="kv">
+        <dt>Système</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
+        <dt>Adresses du poste</dt><dd class="mono">{{ dev.addresses or '—' }}</dd>
+        <dt>Vu par loco depuis</dt><dd><span class="mono">{{ dev.ip or '—' }}</span>{% if dev.ip and dev.ip not in (dev.addresses or '').split() %} <span class="muted small">(routeur ou NAT entre le poste et loco)</span>{% endif %}</dd>
+        <dt>Dernier contact</dt><dd>{{ summary.seen }} <span class="mono muted small">{{ dev.last_seen }}</span></dd>
+        <dt>Dernier inventaire</dt><dd>{{ summary.scanned }} <span class="mono muted small">{{ dev.last_scan or '' }}</span></dd>
+        <dt>Agent</dt><dd class="mono">loco-client {{ dev.agent_version or '?' }}</dd>
+        <dt>Adresses du serveur connues</dt><dd class="mono small">{{ dev.servers or '—' }}</dd>
+        <dt>Inscrit</dt><dd>{{ summary.enrolled }} <span class="mono muted small">{{ dev.enrolled_at }}</span></dd>
+        <dt>Identifiant</dt><dd class="mono small break">{{ dev.uid }}</dd>
+      </dl>
+      <div class="panel-h sub"><h2>Groupes de machines</h2></div>
+      <div class="panel-b">
+        {% if can('fleet.groups') and device_groups %}
+        <form method="post" action="{{ url_for('fleet_group_membership', dev_id=dev.id) }}" class="row">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          {% set member_ids = memberships|map(attribute='id')|list %}
+          {% for group in device_groups %}<label class="check"><input type="checkbox" name="groups" value="{{ group.id }}" {{ 'checked' if group.id in member_ids }}> {{ group.name }}</label>{% endfor %}
+          <button class="btn sm">Enregistrer</button>
+        </form>
+        {% elif memberships %}
+        {% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a> {% endfor %}
+        {% else %}
+        <span class="muted">Aucun groupe{% if can('fleet.groups') %} : créez-en dans <a href="{{ url_for('fleet') }}">Mon parc</a>{% endif %}.</span>
+        {% endif %}
+      </div>
+    </div>
   </section>
 </div>
 {% endblock %}

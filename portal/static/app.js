@@ -149,6 +149,25 @@
     $$("[data-tab]", tabs).forEach(function (x) { x.setAttribute("aria-selected", x === b); });
     $$("[data-panel]", tabs.parentElement).forEach(function (p) { p.classList.toggle("on", p.dataset.panel === b.dataset.tab); });
     if (b.dataset.cmd && tabs.dataset.target) $(tabs.dataset.target).textContent = b.dataset.cmd;
+    // Onglet mémorisé dans l'adresse : conservé lors du rechargement automatique de la page.
+    if (tabs.hasAttribute("data-hash")) history.replaceState(null, "", "#" + b.dataset.tab);
+  });
+  $$(".tabs[data-hash]").forEach(function (tabs) {
+    var wanted = location.hash.slice(1), b = wanted && $('[data-tab="' + wanted.replace(/[^a-z0-9-]/gi, "") + '"]', tabs);
+    if (b) b.click();
+  });
+
+  /* ---------------------------------------------------------------- menus « Plus » */
+
+  document.addEventListener("click", function (e) {
+    $$("details.menu[open]").forEach(function (m) {
+      if (!m.contains(e.target)) m.open = false;
+      // Après le traitement du clic (envoi du formulaire, confirmation) : le menu se referme.
+      else if (e.target.closest(".menu-item")) setTimeout(function () { m.open = false; }, 0);
+    });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") $$("details.menu[open]").forEach(function (m) { m.open = false; $("summary", m).focus(); });
   });
 
   /* ---------------------------------------------------------------- confirmation */

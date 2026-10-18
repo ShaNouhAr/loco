@@ -205,6 +205,20 @@ def status(dev, apps=None):
     return color, ", ".join(reasons) or "à jour"
 
 
+def status_label(dev, color):
+    """Libellé court du voyant (pastille de la fiche) ; le détail reste dans l'explication complète."""
+    if color != "grey":
+        return {"green": "à jour", "orange": "mises à jour en attente", "red": "nombreuses mises à jour"}[color]
+    seen = _ago(dev["last_seen"])
+    if dev["state"] == "removing":
+        return "retrait demandé"
+    if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
+        return "sans contact récent"
+    if inventory(dev).get("error"):
+        return "inventaire incomplet"
+    return "inventaire en cours"
+
+
 def action_label(cmd):
     """« Installation : 7-Zip » plutôt que « Installation »."""
     label = ACTIONS.get(cmd["action"], cmd["action"])
@@ -682,6 +696,21 @@ def fleet_threshold():
     return back("fleet")
 
 
+def ago_text(stamp):
+    """« à l'instant », « il y a 5 min », « il y a 3 h », sinon la date : plus parlant qu'un horodatage brut."""
+    delta = _ago(stamp)
+    if delta is None:
+        return "jamais"
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 1:
+        return "à l'instant"
+    if minutes < 60:
+        return f"il y a {minutes} min"
+    if minutes < 24 * 60:
+        return f"il y a {minutes // 60} h"
+    return "le " + stamp[8:10] + "/" + stamp[5:7] + " à " + stamp[11:16]
+
+
 def _get(dev_id):
     dev = db().execute("SELECT * FROM devices WHERE id=? AND state != 'removed'", (dev_id,)).fetchone()
     if dev is None:
@@ -702,12 +731,17 @@ def fleet_device(dev_id):
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
+    updates = inv.get("updates") or []
+    summary = {"updates": len(updates) + int(inv.get("flatpak") or 0), "security": sum(1 for u in updates if u.get("security")),
+               "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
+               "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
     from . import groups
     return render_template("fleet_device.html", device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            action_label=action_label,
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
-                           needs_update=needs_update(dev), pending=pending(dev_id))
+                           needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
+                           label=status_label(dev, color))
 
 
 @app.route("/parc/<int:dev_id>/action", methods=["POST"])

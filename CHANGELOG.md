@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.10.1 — 2026-10-19
+
+- **Fiche d'un appareil repensée** : en-tête avec le nom, une pastille d'état courte (à jour, mises à jour en attente, nombreuses mises à jour, sans contact récent…), l'explication détaillée, le système, l'adresse du poste, le dernier contact en clair (« il y a 2 min ») et la version de l'agent ; groupes en étiquettes.
+- Actions regroupées à droite : terminal et bureau à distance, **Mettre à jour** en bouton principal, et un menu **Plus** (mise à jour avec redémarrage, inventaire, déploiement, redémarrage, puis le retrait de l'agent, séparé et en rouge).
+- Quatre indicateurs (mises à jour système dont sécurité, logiciels ou Flatpak, redémarrage, inventaire) et des **onglets** Mises à jour, Logiciels installés (avec filtre), Historique et Détails ; l'onglet choisi est conservé lors de l'actualisation automatique.
+- Détails techniques séparés : adresses du poste, adresse vue par loco (NAT signalé), adresses du serveur connues de l'agent, identifiant et groupes.
+
 ## 2.10.0 — 2026-10-18
 
 - **Graphiques dans la vue d'ensemble**, tracés en SVG par le serveur (aucune bibliothèque ni script, thèmes OLED et clair, infobulles au survol) :
