@@ -67,7 +67,14 @@ def set_password(conn, user_id, password, must_change=False):
 
 
 def active_admins(conn):
-    return conn.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0").fetchone()[0]
+    return conn.execute("SELECT COUNT(*) FROM users u WHERE role='admin' AND disabled=0 AND pending=0 AND "
+                        "(auth_source='local' OR EXISTS (SELECT 1 FROM sso_identities i JOIN sso_providers p ON p.id=i.provider_id "
+                        "WHERE i.user_id=u.id AND p.enabled=1))").fetchone()[0]
+
+
+def last_local_admin(conn, row):
+    return (row["auth_source"] == "local" and row["role"] == "admin" and not row["disabled"]
+            and conn.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0 AND auth_source='local'").fetchone()[0] <= 1)
 
 
 # --------------------------------------------------------------------------- session
@@ -80,11 +87,17 @@ def load_user():
         return
     row = db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     # Compte supprimé, désactivé ou mot de passe changé ailleurs : la session n'est plus valable.
-    if row is None or row["disabled"] or row["pw_version"] != session.get("pwv"):
+    if row is None or row["disabled"] or row["pending"] or row["pw_version"] != session.get("pwv"):
         session.clear()
         # csrf_protect passe avant ce hook : garder un formulaire de connexion valide dès cette réponse.
         session["csrf"] = secrets.token_hex(16)
         return
+    if row["auth_source"] == "sso":
+        provider = db().execute("SELECT p.enabled FROM sso_identities i JOIN sso_providers p ON p.id=i.provider_id "
+                                "WHERE i.user_id=? AND p.id=?", (uid, session.get("sso_provider", ""))).fetchone()
+        if provider is None or not provider["enabled"]:
+            session.clear()
+            return
     g.user = row
 
 
@@ -203,7 +216,7 @@ def login():
             return render_template("login.html", username=username), 429
         row = db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         valid = check_password_hash(row["password_hash"] if row else _DUMMY_HASH, password)
-        if row and valid and not row["disabled"]:
+        if row and valid and not row["disabled"] and not row["pending"] and row["auth_source"] == "local":
             session.clear()
             session.permanent = True
             session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
@@ -244,6 +257,8 @@ def logout():
 @login_required
 def account():
     if request.method == "POST":
+        if g.user["auth_source"] != "local":
+            abort(403)
         current = request.form.get("current", "")
         new = request.form.get("new", "")
         if not check_password_hash(g.user["password_hash"], current):
@@ -278,7 +293,7 @@ def account():
 @app.route("/comptes")
 @login_required
 def users():
-    rows = db().execute("SELECT id,username,role,disabled,must_change,created_at,last_login FROM users ORDER BY username").fetchall()
+    rows = db().execute("SELECT u.*,i.display_name,i.email,i.subject,p.label AS provider_label FROM users u LEFT JOIN sso_identities i ON i.user_id=u.id LEFT JOIN sso_providers p ON p.id=i.provider_id ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
     return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user,
                            assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)})
@@ -319,7 +334,7 @@ def users_add():
 def users_reset(user_id):
     conn = lock_access("users.reset")
     row = _get_user(user_id)
-    if row["id"] == g.user["id"] or not can_manage_user(row):
+    if row["id"] == g.user["id"] or not can_manage_user(row) or row["auth_source"] != "local":
         abort(403)
     password = generate_password()
     set_password(conn, row["id"], password, must_change=True)
@@ -334,6 +349,8 @@ def users_reset(user_id):
 def users_update(user_id):
     conn = lock_access("users.edit")
     row = _get_user(user_id)
+    if row["pending"]:
+        abort(400, "Ce compte doit être approuvé avant son activation.")
     role = request.form.get("role", row["role"])
     disabled = request.form.get("disabled") == "1"
     if role not in permissions.role_labels(conn):
@@ -344,8 +361,8 @@ def users_update(user_id):
         flash("Vous ne pouvez pas modifier le profil ni désactiver votre propre compte.", "error")
         return back("users")
     losing_admin = row["role"] == "admin" and not row["disabled"] and (role != "admin" or disabled)
-    if losing_admin and active_admins(conn) <= 1:
-        flash("Il doit rester au moins un administrateur actif.", "error")
+    if losing_admin and (active_admins(conn) <= 1 or last_local_admin(conn, row)):
+        flash("Il doit rester au moins un administrateur local actif.", "error")
         return back("users")
     changes = []
     if role != row["role"]:
@@ -370,8 +387,8 @@ def users_delete(user_id):
         abort(403)
     if row["id"] == g.user["id"]:
         flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
-    elif row["role"] == "admin" and not row["disabled"] and active_admins(conn) <= 1:
-        flash("Il doit rester au moins un administrateur actif.", "error")
+    elif row["role"] == "admin" and not row["disabled"] and (active_admins(conn) <= 1 or last_local_admin(conn, row)):
+        flash("Il doit rester au moins un administrateur local actif.", "error")
     else:
         permissions.revoke(conn, row["id"])
         conn.execute("DELETE FROM users WHERE id=?", (row["id"],))

@@ -22,7 +22,10 @@ jobs:
       - name: Shell et Python
         run: |
           shellcheck -S style -x install.sh linux/install.sh linux/remove.sh linux/lib/*.sh linux/bin/* tests/*.sh linux/docker/*.sh linux/conf/loco-cron linux/conf/*.initd linux/conf/loco-issue.start linux/lxc/proxmox-lxc.sh portal/templates/setup.sh portal/templates/flatpak-setup.sh portal/templates/rpm-setup.sh linux/iso/*.sh linux/iso/loco-installer windows/client/build.sh
-          pipx run pyflakes portal tests linux/docker/migrate-env.py linux/iso/package.py
+          # Les bibliothèques embarquées restent intactes ; contrôler tout le code propre au projet.
+          rg --files portal tests linux/docker/migrate-env.py linux/iso/package.py -g '*.py' \
+            -g '!portal/loco/_vendor/**' -g '!portal/agents/console/pyte/**' -g '!portal/agents/console/wcwidth/**' \
+            | xargs pipx run pyflakes
           docker compose -f linux/docker/docker-compose.yml config -q
       - name: PowerShell (syntaxe des scripts Windows)
         shell: pwsh

@@ -1,11 +1,11 @@
 {% extends "console_base.html" if detached else "base.html" %}
-{% block title %}{{ 'Terminal' if remote.kind == 'terminal' else 'Bureau noVNC' }} · {{ remote.hostname }}{% endblock %}
+{% block title %}{{ 'Terminal' if remote.kind == 'terminal' else 'Console noVNC' }} · {{ remote.hostname }}{% endblock %}
 {% block content %}
 <div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}">
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">Retour au poste</a></p>
-      <h1>{{ 'Terminal' if remote.kind == 'terminal' else 'Bureau noVNC' }} <span class="muted">{{ remote.hostname }}</span></h1>
-      <p class="small muted remote-description">{{ ('PowerShell · SYSTEM' if remote.os_family == 'windows' else 'Shell · root') if remote.kind == 'terminal' else 'Session graphique du poste · clavier et souris' }} · Via l'agent loco</p>
+      <h1>{{ 'Terminal' if remote.kind == 'terminal' else 'Console noVNC' }} <span class="muted">{{ remote.hostname }}</span></h1>
+      <p class="small muted remote-description">{{ ('PowerShell · SYSTEM' if remote.os_family == 'windows' else 'Shell · root') if remote.kind == 'terminal' else ('Bureau du poste, ou console texte root si aucun bureau X11' if remote.terminal_fallback else 'Session graphique du poste · clavier et souris') }} · Via l'agent loco</p>
     </div>
     <div class="actions">
       {% if remote.kind == 'desktop' %}<label class="remote-scale-label"><span>Affichage</span><select id="remote-scale" aria-label="Taille du bureau"><option value="fit">Ajuster à la fenêtre</option><option value="native">Taille réelle (1:1)</option></select></label><span id="remote-resolution" class="small mono muted" aria-live="polite"></span>{% endif %}

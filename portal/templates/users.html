@@ -25,9 +25,12 @@
         {% for u in users %}
         {% set me = u.id == current_user.id %}{% set manageable = can_manage_user(u) %}
         <tr>
-          <td><span class="mono">{{ u.username }}</span>{% if me %} <span class="faint small">(vous)</span>{% endif %}<span class="sub">créé le {{ u.created_at|date_fr }}</span></td>
+          <td>{% if u.auth_source == "sso" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub">{{ u.email or "Courriel non communiqué" }} · {{ u.provider_label or "Fournisseur supprimé" }}</span><span class="sub">Identité : {{ u.subject or "—" }}</span>{% endif %}<span class="mono">{{ u.username }}</span>{% if me %} <span class="faint small">(vous)</span>{% endif %}<span class="sub">créé le {{ u.created_at|date_fr }}</span></td>
           <td>
-            {% if not me and manageable and can('users.edit') %}
+            {% if u.pending %}
+            <span class="st warn">En attente d'approbation · aucun accès</span>
+            {% if manageable and can('users.approve') %}<form method="post" action="{{ url_for('users_approve', user_id=u.id) }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="role" aria-label="Profil après approbation">{% for key, label in assignable_roles.items() if key != 'pending' %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select><button class="btn sm primary">Approuver</button></form>{% endif %}
+            {% elif not me and manageable and can('users.edit') %}
             <form method="post" action="{{ url_for('users_update', user_id=u.id) }}" class="inline-form" data-ajax>
               <input type="hidden" name="csrf" value="{{ csrf }}">
               <select name="role" aria-label="Profil de {{ u.username }}">{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if u.role == key }}>{{ label }}</option>{% endfor %}</select>
@@ -35,11 +38,11 @@
               <button class="btn sm">Appliquer</button>
             </form>
             {% else %}<span class="role">{{ roles.get(u.role, 'Profil indisponible') }}</span>{% endif %}
-            {% if u.disabled %}<span class="st err small">désactivé</span>{% elif u.must_change %}<span class="st warn small">mot de passe temporaire</span>{% endif %}
+            {% if u.disabled and not u.pending %}<span class="st err small">désactivé</span>{% elif u.must_change %}<span class="st warn small">mot de passe temporaire</span>{% endif %}
           </td>
           <td class="mono muted nowrap">{{ u.last_login|date_fr if u.last_login else '—' }}</td>
           <td class="right">{% if not me and manageable %}<div class="acts">
-            {% if can('users.reset') %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="Réinitialiser le mot de passe de {{ u.username }} ?" data-confirm-text="Ses connexions seront fermées et ses commandes non transmises aux agents annulées." data-confirm-ok="Réinitialiser">
+            {% if can('users.reset') and u.auth_source == 'local' %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="Réinitialiser le mot de passe de {{ u.username }} ?" data-confirm-text="Ses connexions seront fermées et ses commandes non transmises aux agents annulées." data-confirm-ok="Réinitialiser">
               <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">Réinitialiser</button>
             </form>{% endif %}
             {% if can('users.delete') %}<form method="post" action="{{ url_for('users_delete', user_id=u.id) }}" data-ajax data-confirm="Supprimer le compte {{ u.username }} ?" data-confirm-text="Ses actions restent dans le journal. Ses connexions sont fermées et ses commandes non transmises annulées." data-confirm-ok="Supprimer">
@@ -49,7 +52,7 @@
         </tr>
         {% endfor %}
         </tbody></table></div>
-      <div class="panel-f">Vous pouvez gérer uniquement les comptes dont vous possédez tous les droits. Le profil Administrateur est réservé aux administrateurs complets. Votre propre profil et le dernier administrateur actif sont protégés.</div>
+      <div class="panel-f">Vous pouvez gérer uniquement les comptes dont vous possédez tous les droits. Le profil Administrateur est réservé aux administrateurs complets. Votre propre profil et le dernier administrateur local actif sont protégés.</div>
     </section>
     {% if can('users.create') %}
     <section class="panel"><div class="panel-h"><h2>Nouveau compte</h2></div>

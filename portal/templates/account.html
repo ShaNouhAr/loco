@@ -10,7 +10,8 @@
 
 <div class="cols">
   <section class="panel">
-    <div class="panel-h"><h2>Changer de mot de passe</h2></div>
+    <div class="panel-h"><h2>{{ 'Connexion SSO' if current_user.auth_source == 'sso' else 'Changer de mot de passe' }}</h2></div>
+    {% if current_user.auth_source == 'sso' %}<div class="panel-b"><p>Votre connexion est gérée par votre fournisseur SSO. Modifiez votre mot de passe auprès de celui-ci.</p></div>{% else %}
     <form class="panel-b" method="post">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if current_user.must_change %}<p class="note warn">Ce mot de passe est temporaire : choisissez-en un nouveau pour continuer.</p>{% endif %}
@@ -18,7 +19,7 @@
       <label class="f"><span>Nouveau mot de passe</span><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"></label>
       <label class="f"><span>Confirmation</span><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"></label>
       <button class="btn primary"><span class="spin"></span>Enregistrer</button>
-    </form>
+    </form>{% endif %}
   </section>
   <div class="stack">
   <section class="panel"><div class="panel-h"><h2>Mes droits</h2></div><div class="panel-b stack">

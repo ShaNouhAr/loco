@@ -157,6 +157,39 @@ MIGRATIONS = [
         builtin INTEGER NOT NULL DEFAULT 0
     );
     """,
+    # 8 : fédération d'identités, demandes d'accès et transactions de connexion à usage unique.
+    """
+    ALTER TABLE remote_sessions ADD COLUMN terminal_fallback INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN auth_source TEXT NOT NULL DEFAULT 'local';
+    ALTER TABLE users ADD COLUMN pending INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE sso_providers (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        preset TEXT NOT NULL,
+        issuer TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_secret TEXT NOT NULL,
+        auth_method TEXT NOT NULL DEFAULT 'client_secret_basic',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        revision INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE sso_identities (
+        provider_id TEXT NOT NULL REFERENCES sso_providers(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        display_name TEXT NOT NULL DEFAULT '',
+        email TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (provider_id, subject)
+    );
+    CREATE TABLE sso_flows (
+        state_hash TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL REFERENCES sso_providers(id) ON DELETE CASCADE,
+        revision INTEGER NOT NULL,
+        browser_hash TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        expires REAL NOT NULL
+    );
+    """,
 ]
 
 

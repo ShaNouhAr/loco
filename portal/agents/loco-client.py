@@ -16,6 +16,7 @@ import ctypes
 import datetime
 import fcntl
 import http.client
+import hashlib
 import json
 import os
 import platform
@@ -38,6 +39,7 @@ import urllib.parse
 import uuid
 
 VERSION = "@VERSION@"
+CONSOLE_LIB = "@CONSOLE_LIB@"
 ETC = "/etc/loco-client"
 CONFIG = os.path.join(ETC, "client.json")
 CA = os.path.join(ETC, "ca.crt")
@@ -452,7 +454,10 @@ class RemoteProcess:
                     os.close(slave)
                 self.reader = self.writer = master
             elif self.kind == "desktop":
-                self.process = subprocess.Popen([sys.executable, PROGRAM, "desktop"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                command = [sys.executable, PROGRAM, "desktop"]
+                if descriptor.get("terminal_fallback"):
+                    command.append("--terminal-fallback")
+                self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                                 stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
                 self.reader, self.writer = self.process.stdout.fileno(), self.process.stdin.fileno()
             else:
@@ -745,9 +750,41 @@ def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, 
     return b"\0\0" + struct.pack(">H", len(rectangles)) + b"".join(rectangles)
 
 
-def linux_desktop():
+def text_console():
+    """Bibliothèques libres embarquées, vérifiées avant import ; aucun paquet à télécharger sur le poste."""
+    if CONSOLE_LIB.startswith("@"):
+        # Sources du dépôt, pour les essais directs avant génération de l'agent autonome.
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "console"))
+    else:
+        import tempfile
+        data = base64.b64decode(CONSOLE_LIB, validate=True)
+        digest = hashlib.sha256(data).hexdigest()
+        # Répertoire privé au processus : aucun fichier persistant ni collision entre deux consoles.
+        with tempfile.TemporaryDirectory(prefix="loco-console-") as directory:
+            path = os.path.join(directory, "console.zip")
+            with open(path, "wb") as f:
+                f.write(data)
+            with open(path, "rb") as f:
+                if hashlib.sha256(f.read()).hexdigest() != digest:
+                    raise RuntimeError("Bibliothèque de console altérée")
+            sys.path.insert(0, path)
+            from console_rfb import serve
+            return serve(rfb_frame)
+    from console_rfb import serve
+    return serve(rfb_frame)
+
+
+def linux_desktop(terminal_fallback=False):
     """Serveur RFB 3.8 intégré, Tight/RGB compressé, directement sur X11/XTest (aucun port VNC)."""
-    env = x11_environment()
+    try:
+        env = x11_environment()
+    except RuntimeError as e:
+        # Wayland est un bureau existant, pas une machine sans interface graphique.
+        if "Wayland" in str(e):
+            raise
+        if not terminal_fallback:
+            raise RuntimeError("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.")
+        return text_console()
     os.environ["DISPLAY"] = env["DISPLAY"]
     if env.get("XAUTHORITY"):
         os.environ["XAUTHORITY"] = env["XAUTHORITY"]
@@ -905,7 +942,7 @@ def main(argv):
         return remote_service()
     if cmd == "desktop":
         try:
-            linux_desktop()
+            linux_desktop(terminal_fallback="--terminal-fallback" in argv[1:])
             return 0
         except Exception as e:
             print(str(e), file=sys.stderr)

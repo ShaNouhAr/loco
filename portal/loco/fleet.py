@@ -13,6 +13,7 @@ import fnmatch
 import hashlib
 import hmac
 import ipaddress
+import io
 import json
 import os
 import re
@@ -20,6 +21,7 @@ import secrets
 import threading
 import urllib.parse
 import urllib.request
+import zipfile
 
 from flask import Response, abort, flash, g, redirect, render_template, request, send_file, url_for
 
@@ -443,7 +445,20 @@ def _ca_pem():
 
 def _agent_source(name):
     with open(os.path.join(AGENT_DIR, name), encoding="utf-8") as f:
-        return f.read().replace("@VERSION@", config.VERSION)
+        source = f.read().replace("@VERSION@", config.VERSION)
+    if "@CONSOLE_LIB@" in source:
+        # Un seul fichier autonome à installer/mettre à jour, avec les sources et licences embarquées.
+        from pathlib import Path
+        folder = Path(AGENT_DIR, "console")
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(folder.rglob("*")):
+                if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
+                    entry = zipfile.ZipInfo(path.relative_to(folder).as_posix())
+                    entry.compress_type = zipfile.ZIP_DEFLATED
+                    archive.writestr(entry, path.read_bytes())
+        source = source.replace("@CONSOLE_LIB@", base64.b64encode(output.getvalue()).decode())
+    return source
 
 
 # Agent Windows : MSI joint à la release GitHub de cette version de loco (construit par la CI, windows/client/),

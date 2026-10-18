@@ -53,7 +53,7 @@
   <section class="panel">
     <div class="panel-h"><h2>Accès distant</h2><span class="small muted">Via l'agent loco</span></div>
     <div class="panel-b row">
-      {% for kind, label in [('terminal', 'Terminal PowerShell' if dev.os_family == 'windows' else 'Terminal'), ('desktop', 'Bureau noVNC')] %}
+      {% for kind, label in [('terminal', 'Terminal PowerShell' if dev.os_family == 'windows' else 'Terminal'), ('desktop', 'Bureau noVNC' if dev.os_family == 'windows' else 'Console noVNC')] %}
       {% if can('remote.' ~ kind) %}<form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="row" rel="noopener">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
         <button class="btn" {% if not remote_ready %}disabled title="Agent 2.4.0 requis"{% endif %}>{{ label }}</button>

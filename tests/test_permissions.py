@@ -10,7 +10,7 @@ from unittest import mock
 from urllib.parse import urlsplit
 
 import test_portal as fixture
-from test_fleet import FleetTest, Agent, WINDOWS, device
+from test_fleet import FleetTest, Agent, WINDOWS, LINUX, device
 from loco import auth, config, db, permissions, remote, PUBLIC_ENDPOINTS
 
 PASSWORD = 'Permissions-2026-Secret'
@@ -61,7 +61,7 @@ class TestPermissions(FleetTest):
         role = self.profile('empty', [])
         reader = self.browser('empty', role)
         values = {'dev_id': self.dev_id, 'sid': '0' * 32, 'role_id': role,
-                  'user_id': self.uid('empty'), 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present'}
+                  'user_id': self.uid('empty'), 'provider_id': 'missing', 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present'}
         with fixture.loco.app.test_request_context():
             from flask import url_for
             paths = [(rule, url_for(rule.endpoint, **{key: values[key] for key in rule.arguments}))
@@ -77,6 +77,30 @@ class TestPermissions(FleetTest):
         self.assertEqual(self.agent.checkin().status_code, 200)
         with db.transaction() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM device_commands').fetchone()[0], 0)
+
+    def test_linux_novnc_fallback_requires_terminal_permission_and_is_revoked_with_it(self):
+        linux = Agent(LINUX, '192.168.43.62')
+        linux.enroll()
+        dev_id = device(linux.uid)['id']
+        reader = self.browser('desktop-only', self.profile('desktop-only', ['remote.desktop']))
+        response = self.post(reader, f'/parc/{dev_id}/session', {'kind': 'desktop', 'terminal_fallback': '1'})
+        self.assertEqual(response.status_code, 302)
+        sid = response.headers['Location'].rsplit('/', 1)[1]
+        descriptors = linux.post('/agent/api/remote', {'sessions': []}, linux.token).get_json()['sessions']
+        self.assertFalse(next(d for d in descriptors if d['id'] == sid)['terminal_fallback'])
+        both_role = self.profile('both-consoles', ['remote.desktop', 'remote.terminal'])
+        operator = self.browser('both-consoles', both_role)
+        response = self.post(operator, f'/parc/{dev_id}/session', {'kind': 'desktop'})
+        sid = response.headers['Location'].rsplit('/', 1)[1]
+        descriptors = linux.post('/agent/api/remote', {'sessions': []}, linux.token).get_json()['sessions']
+        self.assertTrue(next(d for d in descriptors if d['id'] == sid)['terminal_fallback'])
+        # Même une réduction directe du profil est prise en compte avant le prochain paquet de l'agent.
+        with db.transaction() as conn:
+            conn.execute('UPDATE access_roles SET permissions=? WHERE id=?',
+                         (json.dumps(sorted(permissions.expand(['remote.desktop']))), both_role))
+        linux.post('/agent/api/remote', {'sessions': []}, linux.token)
+        with db.transaction() as conn:
+            self.assertEqual(conn.execute('SELECT state FROM remote_sessions WHERE id=?', (sid,)).fetchone()[0], 'closed')
 
     def test_inventory_right_does_not_allow_updates_reboot_removal_catalog_or_enrollment_key(self):
         operator = self.browser('scan', self.profile('scan', ['fleet.scan']))

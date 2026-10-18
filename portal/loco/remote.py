@@ -13,7 +13,7 @@ import time
 from flask import abort, g, redirect, render_template, request, session, url_for
 
 from . import app, fleet, permissions
-from .auth import audit, login_required, require
+from .auth import audit, can, login_required, require
 from .db import db
 
 PACKET = 256 * 1024
@@ -47,10 +47,11 @@ def _prune():
         "u.pw_version!=s.pw_version OR d.state!='active')", (now, now - 60, now - 30, now - 30)).fetchall()
     for row in expired:
         _close(row["id"], "Session expirée ou accès révoqué.")
-    for row in conn.execute("SELECT s.id,s.kind,u.role FROM remote_sessions s JOIN users u ON u.id=s.user_id "
+    for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,u.role FROM remote_sessions s JOIN users u ON u.id=s.user_id "
                             "WHERE s.state IN ('waiting','active')").fetchall():
         grants = permissions.role_permissions(conn, row["role"])
-        if "fleet.view" not in grants or "remote." + row["kind"] not in grants:
+        if ("fleet.view" not in grants or "remote." + row["kind"] not in grants
+                or row["terminal_fallback"] and "remote.terminal" not in grants):
             _close(row["id"], "Droit d'accès distant révoqué.")
     conn.execute("DELETE FROM remote_sessions WHERE state='closed' AND browser_seen<?", (now - 120,))
 
@@ -135,9 +136,10 @@ def remote_open(dev_id):
                     (dev_id, kind)).fetchone()[0] >= 2:
         abort(409, "Deux sessions de ce type sont déjà ouvertes sur ce poste.")
     sid, now = secrets.token_hex(16), time.time()
-    conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,expires) "
-                 "VALUES (?,?,?,?,?,?,?,?,?)", (sid, dev_id, g.user["id"], _owner(), g.user["pw_version"], kind,
-                                              now, now, now + 3600))
+    conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,expires,terminal_fallback) "
+                 "VALUES (?,?,?,?,?,?,?,?,?,?)", (sid, dev_id, g.user["id"], _owner(), g.user["pw_version"], kind,
+                                              now, now, now + 3600,
+                                              int(kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal"))))
     audit("parc.session.ouverture", f"{dev['hostname']} : {kind}, {sid}")
     return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
 
@@ -224,6 +226,7 @@ def remote_agent():
             continue
         packets = _read(row, "in", acks.get(row["id"], 0)) if row["state"] in OPEN else []
         output.append({"id": row["id"], "kind": row["kind"], "state": row["state"], "packets": packets,
+                       "terminal_fallback": bool(row["terminal_fallback"]),
                        "ack": row["output_seq"], "cols": row["cols"], "rows": row["rows"],
                        "expires_in": max(0, int(row["expires"] - time.time()))})
     conn.commit()

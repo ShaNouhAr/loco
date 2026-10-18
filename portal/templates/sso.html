@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Connexions SSO{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Connexions SSO</h1><p>Connectez votre annuaire ou votre fournisseur d'identité. Chaque nouveau compte attend une approbation dans <a href="{{ url_for('users') }}">Comptes</a>, sans aucun accès.</p></div></div>
+<div class="stack">
+  <div class="note">La connexion locale reste disponible. Les comptes SSO sont indépendants des comptes locaux : aucun rapprochement automatique par adresse e-mail. La suppression ou la désactivation d'un fournisseur ferme ses sessions.</div>
+  {% for p in providers %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ p.label }}</h2><span class="st {{ 'ok' if p.enabled else 'warn' }}">{{ 'actif' if p.enabled else 'désactivé' }}</span></div>
+    <div class="panel-b stack">
+      <p class="small muted">{{ presets[p.preset][0] }} · {{ p.accounts }} compte(s) associé(s)</p>
+      <label class="f"><span>URL de retour à déclarer chez le fournisseur</span><input readonly value="{{ callback(p.id) }}" aria-label="URL de retour de {{ p.label }}"></label>
+      <form method="post" action="{{ url_for('sso_update', provider_id=p.id) }}" class="stack">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="preset" value="{{ p.preset }}">
+        <label class="f"><span>Nom affiché sur la connexion</span><input name="label" value="{{ p.label }}" maxlength="80" required></label>
+        <label class="f"><span>Émetteur (issuer)</span><input name="issuer" value="{{ p.issuer }}" readonly></label>
+        <label class="f"><span>Identifiant client</span><input name="client_id" value="{{ p.client_id }}" readonly></label>
+        <label class="f"><span>Nouveau secret client</span><input name="client_secret" type="password" autocomplete="new-password" placeholder="Laisser vide pour conserver le secret actuel" maxlength="4096"></label>
+        <label class="f"><span>Authentification du client</span><select name="auth_method"><option value="client_secret_basic" {{ 'selected' if p.auth_method == 'client_secret_basic' }}>HTTP Basic</option><option value="client_secret_post" {{ 'selected' if p.auth_method == 'client_secret_post' }}>Secret dans la requête (Entra ID, Google…)</option></select></label>
+        <label><input type="checkbox" name="enabled" value="1" {{ 'checked' if p.enabled }}> Activer ce fournisseur</label>
+        <div><button class="btn primary">Enregistrer</button></div>
+      </form>
+      <form method="post" action="{{ url_for('sso_delete', provider_id=p.id) }}" data-confirm="Supprimer ce fournisseur SSO ?" data-confirm-text="Ses comptes seront désactivés et ses sessions fermées. La connexion locale reste disponible." data-confirm-ok="Supprimer"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">Supprimer le fournisseur</button></form>
+    </div>
+  </section>
+  {% endfor %}
+  <section class="panel"><div class="panel-h"><h2>Ajouter un fournisseur</h2></div>
+    <form method="post" action="{{ url_for('sso_add') }}" class="panel-b stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>Fournisseur</span><select name="preset" id="sso-preset">{% for key, spec in presets.items() %}<option value="{{ key }}" data-issuer="{{ spec[1] }}">{{ spec[0] }}</option>{% endfor %}</select></label>
+      <label class="f"><span>Nom affiché</span><input name="label" id="sso-label" required maxlength="80" placeholder="Connexion entreprise"></label>
+      <label class="f"><span>Émetteur (issuer)</span><input name="issuer" id="sso-issuer" type="url" required maxlength="2048" placeholder="https://sso.example.com"></label>
+      <p class="hint">Remplacez les exemples TENANT, REALM, APPLICATION… par vos valeurs. Pour Entra ID, utilisez l'UUID du tenant précis. Copiez l'émetteur exact, avec sa barre finale si le fournisseur l'impose. GitHub utilise OAuth 2 ; les autres modèles utilisent OpenID Connect.</p>
+      <label class="f"><span>Identifiant client</span><input name="client_id" required maxlength="512" autocomplete="off"></label>
+      <label class="f"><span>Secret client</span><input name="client_secret" type="password" required maxlength="4096" autocomplete="new-password"></label>
+      <label class="f"><span>Authentification du client</span><select name="auth_method" id="sso-auth-method"><option value="client_secret_basic">HTTP Basic</option><option value="client_secret_post">Secret dans la requête</option></select></label>
+      <label><input type="checkbox" name="enabled" value="1" checked> Afficher sur la page de connexion</label>
+      <div><button class="btn primary">Ajouter</button></div>
+      <p class="hint">L'URL de retour apparaît après l'ajout. Déclarez une application web avec le flux code d'autorisation et PKCE S256. Le serveur doit pouvoir joindre les URL HTTPS du fournisseur. Pour un annuaire privé, son autorité doit être reconnue par le système du serveur loco.</p>
+    </form>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='sso.js') }}?v={{ asset_v }}"></script>{% endblock %}

@@ -132,6 +132,7 @@ class TestRemote(FleetTest):
             with sqlite3.connect(backup) as conn:
                 self.assertEqual(conn.execute('SELECT COUNT(*) FROM remote_sessions').fetchone()[0], 0)
                 self.assertEqual(conn.execute('SELECT COUNT(*) FROM remote_packets').fetchone()[0], 0)
+                self.assertEqual(conn.execute('SELECT COUNT(*) FROM sso_flows').fetchone()[0], 0)
             self.assertNotIn(secret, backup.read_bytes())
         descriptor = next(d for d in self.exchange().get_json()['sessions'] if d['id'] == sid)
         self.assertEqual(base64.b64decode(descriptor['packets'][0]['data']), secret)

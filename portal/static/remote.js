@@ -115,6 +115,11 @@ if (root.dataset.kind === 'terminal') {
   new ResizeObserver(updateViewport).observe(screen);
   new MutationObserver(updateViewport).observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height'] });
   rfb.addEventListener('connect', updateViewport);
+  rfb.addEventListener('desktopname', e => {
+    if (e.detail.name.startsWith('loco-console root@')) {
+      document.querySelector('.remote-description').textContent = 'Console texte · Shell root · Via l’agent loco';
+    }
+  });
   rfb.addEventListener('disconnect', e => { if (running) stop(e.detail.clean ? 'Bureau déconnecté.' : 'La connexion au bureau a été interrompue.', true); });
 }
 poll();

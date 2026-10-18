@@ -296,7 +296,24 @@ Le bureau partage la session graphique existante : session utilisateur ouverte s
 
 Les sessions nécessitent le droit **Terminal distant** ou **Bureau noVNC**, selon le type choisi, et restent liées à la connexion au portail. Le profil Administrateur possède ces droits ; les autres profils doivent les recevoir explicitement. La fermeture de l’onglet, la déconnexion, le retrait de l’agent ou la révocation des droits les coupe. Elles expirent après une heure, après une minute sans navigateur ou après une perte prolongée du contact avec l’agent. Deux sessions de chaque type peuvent coexister par poste, dans une limite de huit sessions pour le serveur. Recharger la page ferme l’ancien flux ; **Nouvelle session** permet de repartir proprement.
 
+Sur un Linux sans session graphique X11, **Console noVNC** ouvre automatiquement une **console texte root** rendue en RFB par l'agent 2.7 ou plus récent : shell interactif, couleurs ANSI, flèches, tabulation et Ctrl+C. Aucun serveur X ni port VNC n'est nécessaire. Le droit **Terminal distant** est requis en plus du droit **Bureau noVNC** ; sans lui, aucun shell n'est lancé. Un bureau Wayland reste signalé comme non pris en charge. Cette console privée ne remplace pas le terminal physique du poste. L'écran est de 128 colonnes × 40 lignes (1024 × 640 pixels), avec glyphes latins et tracés de tableaux ; utilisez le terminal habituel pour la sélection/copie de texte, le défilement et les autres écritures.
+
 Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
+
+## Connexions SSO
+
+Dans **Administration → Connexions SSO**, ajoutez une ou plusieurs applications web : Microsoft Entra ID / Microsoft 365, Google / Workspace, GitHub, GitLab, Keycloak, Authentik, Okta, Auth0, Authelia, ZITADEL, Dex, Amazon Cognito, AD FS ou tout fournisseur **OpenID Connect** compatible. Le modèle GitHub utilise son flux OAuth 2. Les modèles fournissent des exemples d'émetteurs à remplacer par les valeurs de votre annuaire ; ils ne contiennent aucun identifiant préconfiguré.
+
+1. Créez une application web confidentielle chez le fournisseur, autorisant le flux code et PKCE S256, avec les scopes `openid profile email` (GitHub : `read:user user:email`).
+2. Dans loco, indiquez l'émetteur exact, l'identifiant client et le secret. Pour Entra ID, utilisez l'UUID de votre tenant dans `https://login.microsoftonline.com/UUID/v2.0`. Choisissez HTTP Basic ou le secret dans la requête selon le fournisseur.
+3. Copiez l'**URL de retour** affichée par loco dans la configuration de cette application. Le serveur loco doit joindre ses points d'accès HTTPS ; une autorité privée doit être approuvée par le système du serveur.
+4. L'utilisateur choisit son fournisseur sur la connexion. Sa première connexion crée une **demande sans accès**, visible en tête de **Comptes**. Une personne disposant du droit **Approuver les demandes SSO** choisit un profil puis approuve. L'utilisateur se reconnecte ensuite par SSO.
+
+Les droits **Gérer les fournisseurs SSO** et **Approuver les demandes SSO** sont distincts et attribués aux administrateurs par défaut. Aucune correspondance de nom ou d'e-mail ne fusionne un compte local avec une identité SSO. Les identités reposent sur le fournisseur et le sujet immuable ; une nouvelle application ou un nouvel émetteur nécessite un nouveau fournisseur et une nouvelle approbation. Les changements de groupe chez le fournisseur n'attribuent pas de droits loco.
+
+Les secrets clients sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes. Les jetons du fournisseur ne sont pas conservés. Les transactions de connexion expirent après dix minutes, sont à usage unique et exclues des sauvegardes. Désactiver, modifier ou supprimer un fournisseur ferme les sessions de ses utilisateurs. Une déconnexion loco ne ferme pas la session chez le fournisseur. **La connexion locale reste disponible** pour administrer loco ; les comptes SSO changent leur mot de passe chez leur fournisseur.
+
+La validation des signatures utilise [PyJWT](https://pyjwt.readthedocs.io/en/latest/usage.html) embarqué (MIT) et cryptography. La console texte embarque les sources de [pyte](https://pyte.readthedocs.io/en/stable/) (LGPLv3), wcwidth (MIT) et font8x8 (domaine public), avec leurs licences dans `portal/agents/console` ; aucun téléchargement de dépendance n'est effectué sur le poste.
 
 ## Utilisateurs et profils d’accès
 
@@ -304,17 +321,18 @@ Dans **Administration → Comptes**, attribuez un profil à chaque utilisateur. 
 
 | Profil intégré | Accès par défaut |
 |---|---|
+| Sans accès | Aucun droit ; profil initial des comptes SSO en attente. |
 | Administrateur | Tous les droits actuels et futurs ; profil protégé. |
 | Lecture seule | Vue d’ensemble, appareils, caches et catalogues locaux. |
 | Technicien du parc | Lecture seule, inventaires, mises à jour individuelles et déploiement de logiciels. Les redémarrages, actions sur tout le parc, retraits d’agents et consoles distantes demandent leurs propres droits. |
 | Gestionnaire des dépôts | Gestion des paquets et installeurs APT, RPM, Flatpak, Windows et du store ; aucun déploiement sur les appareils. |
 | Auditeur | Consultation, système, comptes, profils, journal et son export JSON ; aucune modification. |
 
-Les **48 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
+Les **50 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
 
 Les droits de consultation nécessaires sont ajoutés automatiquement à l’enregistrement. Un profil vide laisse l’utilisateur accéder à **Mon compte** et changer son mot de passe. Les profils intégrés restent protégés ; dupliquez-les pour les adapter. Un profil personnalisé ne reçoit aucun nouveau droit automatiquement lors des futures versions.
 
-La délégation respecte les droits de la personne qui administre : elle peut attribuer uniquement des profils dont elle possède tous les droits, et gérer uniquement des comptes dans cette limite. Seul un Administrateur complet peut attribuer le profil Administrateur ou gérer un autre administrateur. Changer son propre profil, désactiver ou supprimer son propre compte et modifier le profil qui protège son accès sont bloqués. Il doit rester au moins un administrateur actif, y compris lors de modifications simultanées.
+La délégation respecte les droits de la personne qui administre : elle peut attribuer uniquement des profils dont elle possède tous les droits, et gérer uniquement des comptes dans cette limite. Seul un Administrateur complet peut attribuer le profil Administrateur ou gérer un autre administrateur. Changer son propre profil, désactiver ou supprimer son propre compte et modifier le profil qui protège son accès sont bloqués. Il doit rester au moins un administrateur local actif, y compris lors de modifications simultanées.
 
 Changer les droits d’un profil ferme les connexions de tous ses membres et leurs sessions distantes. Changer le profil d’un compte, le désactiver ou réinitialiser/changer son mot de passe révoque aussi ses accès. Ses commandes encore en attente sur le serveur sont annulées avant transmission aux agents ; les opérations déjà transmises peuvent se terminer. Les connexions et les droits sont contrôlés à nouveau à chaque requête, et avant l’envoi d’une commande à un agent. Le journal conserve les changements de comptes, de profils et de permissions.
 

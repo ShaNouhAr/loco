@@ -39,7 +39,7 @@ ETC=/etc/loco
 STATE=/var/lib/loco
 APP_PORT=8089
 PACKAGE_RECORD="$STATE/installed-packages"
-PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask gunicorn curl openssl ca-certificates)
+PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask python3-cryptography gunicorn curl openssl ca-certificates)
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10"
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }

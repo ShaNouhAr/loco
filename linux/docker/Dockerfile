@@ -16,7 +16,7 @@ RUN groupadd --system --gid 990 loco \
  && echo "apt-cacher-ng apt-cacher-ng/tunnelenable boolean false" | debconf-set-selections \
  && apt-get update -q \
  && apt-get install -y -q --no-install-recommends \
-        nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3 python3-flask gunicorn \
+        nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3 python3-flask python3-cryptography gunicorn \
         curl openssl ca-certificates flatpak ostree createrepo-c rpm \
         supervisor logrotate iproute2 procps tzdata \
  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default /usr/sbin/policy-rc.d
