@@ -75,6 +75,8 @@ def fetch_app(row_id, slug, url, expected_sha256="", filename=""):
 
 
 def start_fetch(row, expected_sha256="", filename=""):
+    expected_sha256 = expected_sha256 or row["expected_sha256"]
+    filename = filename or row["source_filename"]
     db().execute("UPDATE win_apps SET status='downloading', error='' WHERE id=?", (row["id"],))
     db().commit()
     threading.Thread(target=fetch_app, args=(row["id"], row["slug"], row["source_url"], expected_sha256, filename),
@@ -180,6 +182,9 @@ def windows_apps_edit(slug):
     if url and not url.startswith(("http://", "https://")):
         flash("Le lien doit commencer par http:// ou https://.", "error")
         return back("windows_apps")
+    upload = request.files.get("file")
+    if url != row["source_url"] or upload and upload.filename:
+        db().execute("UPDATE win_apps SET winget_id='',expected_sha256='',source_filename='' WHERE id=?", (row["id"],))
     db().execute("UPDATE win_apps SET name=?, version=?, kind=?, args=?, source_url=?, updated_at=?, detect=? WHERE id=?",
                  (request.form.get("name", row["name"]).strip()[:100] or row["name"],
                   request.form.get("version", "").strip()[:50], kind,
@@ -224,3 +229,19 @@ def windows_apps_delete(slug):
     audit("windows.suppression", slug)
     flash(f"{row['name']} supprimé.", "ok")
     return back("windows_apps")
+
+
+@app.route("/windows-apps/logiciel/<slug>")
+@login_required
+def software_detail(slug):
+    from . import fleet, groups
+    row = get_app(slug)
+    installed = []
+    if can("fleet.view"):
+        for device in db().execute("SELECT * FROM devices WHERE os_family='windows' AND state!='removed' ORDER BY hostname COLLATE NOCASE"):
+            _, version, outdated = fleet.catalog_state(fleet.inventory(device), [row])[0]
+            if version:
+                installed.append({"device": device, "version": version, "outdated": outdated})
+    return render_template("software_detail.html", software=row, installed=installed,
+                           software_groups=groups.listing("software") if can("windows.groups") else [],
+                           memberships=groups.memberships("software", row["id"]))

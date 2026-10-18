@@ -29,7 +29,9 @@ case "${1:-}" in
         if [ -d "$DATA/flatpak" ]; then paths+=("$D/flatpak"); fi
         if [ -d "$DATA/rpm" ]; then paths+=("$D/rpm"); fi
         rc=0
-        tar -czf "$work/$name" --warning=no-file-changed \
+        # Les versions de déploiement partagent parfois l'inode du catalogue : archiver leur contenu
+        # pour qu'une restauration puisse matérialiser chaque fichier sans liens entre chemins.
+        tar --hard-dereference -czf "$work/$name" --warning=no-file-changed \
             --exclude=etc/loco/install-state --exclude="$S/portal.db" --exclude="$S/portal.db-*" --exclude="$S/gnupg/S.*" \
             --exclude="$D/win/*/.*" \
             --exclude="$D/flatpak/repo/tmp" \

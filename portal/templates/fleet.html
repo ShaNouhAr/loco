@@ -5,6 +5,7 @@
 <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(color, '') }}" title="{{ {'green': 'à jour', 'orange': 'mises à jour en attente', 'red': 'beaucoup de mises à jour', 'grey': 'état inconnu'}[color] }}"></span>
 {%- endmacro %}
 {% block content %}
+{% include '_fleet_nav.html' %}
 <div class="head">
   <div>
     <h1>Mon parc</h1>
@@ -14,14 +15,16 @@
   <div class="actions">
     <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="Mettre à jour {{ to_update }} poste(s) ?" data-confirm-text="Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste." data-confirm-ok="Tout mettre à jour">
       <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
       {% if can("fleet.reboot") %}<label class="small muted"><input type="checkbox" name="reboot" value="1"> redémarrer si nécessaire</label>{% endif %}
-      <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>Tout mettre à jour{% if to_update %} ({{ to_update }}){% endif %}</button>
+      <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>{{ 'Mettre à jour ce groupe' if selected_group else 'Tout mettre à jour' }}{% if to_update %} ({{ to_update }}){% endif %}</button>
     </form>
   </div>
   {% endif %}
 </div>
 
-<div class="stack" data-poll="{{ url_for('fleet') }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
+<div class="stack" data-poll="{{ url_for('fleet',group=selected_group.id) if selected_group else url_for('fleet') }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
+  <form method="get" class="row"><label for="fleet-group-filter">Groupe de machines</label><select id="fleet-group-filter" name="group"><option value="">Tous les appareils</option>{% for group in device_groups %}<option value="{{ group.id }}" {{ 'selected' if selected_group and selected_group.id==group.id }}>{{ group.name }} ({{ group.members }})</option>{% endfor %}</select><button class="btn">Afficher</button>{% if selected_group and can('fleet.bulk_install') %}<a class="btn primary" href="{{ url_for('deployment_compose',device_group=selected_group.id) }}">Déployer sur ce groupe</a>{% endif %}</form>
   <div class="metrics">
     <div class="metric"><div class="k"><span class="st ok"></span> À jour</div><div class="v">{{ counts.green }}</div><div class="s">postes</div></div>
     <div class="metric"><div class="k"><span class="st warn"></span> Mises à jour en attente</div><div class="v">{{ counts.orange }}</div><div class="s">de 1 à {{ red_threshold - 1 }} mises à jour</div></div>
@@ -60,7 +63,7 @@
       </table>
     </div>
     {% else %}
-    <div class="empty">Aucun poste pour l'instant : installez l'agent sur un poste{{ ' avec la commande ci-dessous' if can('fleet.enroll') }}.</div>
+    <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant : installez l'agent sur un poste{{ ' avec la commande ci-dessous' if can('fleet.enroll') }}.{% endif %}</div>
     {% endif %}
     <div class="panel-f">Vert : aucune mise à jour. Orange : de 1 à {{ red_threshold - 1 }} mises à jour. Rouge : {{ red_threshold }} mises à jour ou plus. Le total comprend le système, Flatpak et les logiciels du catalogue. Gris : état non connu ou inventaire indisponible. Les postes contactent loco toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
   </section>

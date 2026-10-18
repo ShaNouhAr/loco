@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% set software = kind == 'software' %}
+{% set editable = can('windows.groups' if software else 'fleet.groups') %}
+{% block title %}{{ group.name if group else 'Nouveau groupe' }}{% endblock %}
+{% block content %}
+{% include '_software_nav.html' if software else '_fleet_nav.html' %}
+<div class="head"><div><p class="small"><a href="{{ url_for('software_groups' if software else 'fleet_groups') }}">← Groupes de {{ 'logiciels' if software else 'machines' }}</a></p><h1>{{ group.name if group else 'Nouveau groupe' }}</h1><p>Choisissez les membres de ce groupe. Les déploiements confirmés gardent leur sélection d'origine.</p></div>
+{% if group and selected and can('fleet.install') and (software or can('fleet.bulk_install')) %}<a class="btn primary" href="{{ url_for('deployment_compose', **({'software_group':group.id} if software else {'device_group':group.id})) }}">Déployer {{ 'ce groupe' if software else 'sur ce groupe' }}</a>{% endif %}</div>
+<form method="post" action="{{ url_for('software_group_save' if software else 'fleet_group_save', group_id=group.id if group else 0) }}" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <section class="panel"><div class="panel-b grid2">
+    <label class="f"><span>Nom du groupe</span><input type="text" name="name" required maxlength="80" value="{{ group.name if group else '' }}" {{ 'readonly' if not editable }}></label>
+    <label class="f"><span>Description</span><input type="text" name="description" maxlength="500" value="{{ group.description if group else '' }}" {{ 'readonly' if not editable }}></label>
+  </div></section>
+  <section class="panel"><div class="panel-h"><h2>{{ 'Logiciels du catalogue' if software else 'Appareils gérés' }}</h2><input class="search-sm" type="search" placeholder="Filtrer les membres" data-filter="#group-members tr" aria-label="Filtrer les membres"></div>
+    <div class="table-wrap"><table><thead><tr><th></th><th>{{ 'Logiciel' if software else 'Appareil' }}</th><th>{{ 'Version et état' if software else 'Système' }}</th></tr></thead><tbody id="group-members">
+    {% for row in rows if editable or row.id in selected %}<tr><td class="chk"><input type="checkbox" name="members" value="{{ row.id }}" {{ 'checked' if row.id in selected }} {{ 'disabled' if not editable }} aria-label="{{ row.name if software else row.hostname }}"></td><td><a href="{{ url_for('software_detail', slug=row.slug) if software else url_for('fleet_device',dev_id=row.id) }}">{{ row.name if software else row.hostname or row.uid[:8] }}</a></td><td class="muted">{{ (row.version or '—') ~ ' · ' ~ app_states.get(row.status,'Indisponible') if software else row.os_name }}</td></tr>
+    {% else %}<tr><td colspan="3" class="empty">Aucun membre disponible. {% if software and can('store.view') %}<a href="{{ url_for('software_store') }}">Parcourir le store</a>{% endif %}</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if editable %}<div class="panel-f"><button class="btn primary">Enregistrer le groupe</button></div>{% endif %}
+  </section>
+</form>
+{% if group and editable %}<form method="post" action="{{ url_for('software_group_delete' if software else 'fleet_group_delete', group_id=group.id) }}" class="group-delete" data-confirm="Supprimer ce groupe ?" data-confirm-text="Les logiciels, appareils et déploiements restent conservés." data-confirm-ok="Supprimer"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">Supprimer le groupe</button></form>{% endif %}
+{% endblock %}

@@ -94,6 +94,7 @@ def inject_globals():
         "acng_port": config.ACNG_PORT,
         "asset_v": ASSET_V,
         "version": config.VERSION,
+        "app_states": {"ready": "Prêt", "pending": "En attente", "downloading": "Téléchargement en cours", "error": "Erreur"},
         "current_user": user,
         "can": auth.can,
         "can_any": auth.can_any,
@@ -118,9 +119,9 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, sso  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, sso, groups, deployments  # noqa: E402
 
-ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, sso)
+ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, sso, groups, deployments)
 
 
 def startup():

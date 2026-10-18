@@ -2,17 +2,20 @@
 {% from "_software_logo.html" import software_logo %}
 {% block title %}{{ doc.get('PackageName') or package_id }} · Store{% endblock %}
 {% block content %}
+{% include '_software_nav.html' %}
 <div class="head"><div><p class="small"><a href="{{ url_for('software_store') }}">← Store logiciels</a></p>
   <div class="store-card-top">{{ software_logo(package_id, doc.get('PackageName') or package_id, 'large') }}<div><h1>{{ doc.get('PackageName') or package_id }}</h1><p class="mono muted">{{ package_id }}</p></div></div></div>
-  {% if known and can("windows.view") %}<a class="btn" href="{{ url_for('windows_apps') }}">Déjà dans le catalogue local</a>
+  {% if known and can("windows.view") %}<a class="btn" href="{{ url_for('software_detail',slug=known.slug) }}">Voir dans le catalogue local</a>
   {% elif info and can("store.import") %}<form method="post" action="{{ url_for('winget_add') }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ package_id }}"><button class="btn primary"><span class="spin"></span>Ajouter à loco</button></form>{% endif %}
 </div>
+{% if info or known %}<div class="actions software-detail-actions">{% if can('fleet.install') and (known or can('store.import')) %}<a class="btn primary" href="{{ url_for('deployment_compose',package_id=package_id) }}">Déployer sur des appareils ou groupes</a>{% endif %}
+{% if can('windows.groups') and software_groups and (known or can('store.import')) %}<form class="row" method="post" action="{{ url_for('store_group_attach',package_id=package_id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="group_id" aria-label="Groupe de logiciels">{% for group in software_groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select><button class="btn">Ajouter à ce groupe</button></form>{% endif %}</div>{% endif %}
 <section class="panel"><div class="panel-b stack">
   <p class="store-description">{{ doc.get('Description') or doc.get('ShortDescription') or 'Aucune description fournie par le catalogue.' }}</p>
   <dl class="kv"><dt>Éditeur</dt><dd>{{ doc.get('Publisher') or '—' }}</dd><dt>Version</dt><dd>{{ doc.get('PackageVersion') or '—' }}</dd><dt>Licence</dt><dd>{{ doc.get('License') or 'Non renseignée' }}</dd><dt>Source</dt><dd>Microsoft WinGet</dd>
   {% if info %}<dt>Installeur retenu</dt><dd>{{ info.type }} · installation silencieuse</dd><dt>SHA-256 de l'installeur</dt><dd class="mono break">{{ info.sha256 }}</dd>{% endif %}
   {% if homepage %}<dt>Site de l'éditeur</dt><dd><a href="{{ homepage }}" target="_blank" rel="noopener noreferrer">{{ homepage }}</a></dd>{% endif %}</dl>
   {% if error %}<p class="note warn">Import indisponible : {{ error }}.</p>{% endif %}
-  <p class="hint">Ajouter à loco télécharge le logiciel sur le serveur. Son installation sur les postes reste une action d'administration dans Mon parc.</p>
+  <p class="hint">Ajouter à loco télécharge le logiciel sur le serveur. Vous pouvez ensuite le déployer depuis cette fiche, le catalogue ou un groupe de logiciels ; aucune installation ne part avant votre confirmation.</p>
 </div></section>
 {% endblock %}

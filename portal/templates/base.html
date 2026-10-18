@@ -31,13 +31,12 @@
       </details>
       {% endif %}
       {% if can_any("wu.view", "windows.view", "store.view") %}
-      <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store')) }}">
+      <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'deployment')) }}">
         <summary aria-expanded="false" aria-controls="nav-windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-windows">
           <div class="nav-panel">
             {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>Cache des mises à jour</small></span></a>{% endif %}
-            {% if can("windows.view") %}<a href="{{ url_for('windows_apps') }}" {% if ep.startswith(('windows_apps', 'winget')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>Logiciels</strong><small>Catalogue et installeurs</small></span></a>{% endif %}
-            {% if can("store.view") %}<a href="{{ url_for('software_store') }}" {% if ep.startswith('software_store') %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>Store logiciels</strong><small>Découvrir le catalogue WinGet</small></span></a>{% endif %}
+            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_','deployment')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>Logiciels</strong><small>Catalogue, store, groupes et déploiements</small></span></a>{% endif %}
           </div>
         </div>
       </details>

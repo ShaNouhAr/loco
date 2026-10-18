@@ -61,7 +61,7 @@ class TestPermissions(FleetTest):
         role = self.profile('empty', [])
         reader = self.browser('empty', role)
         values = {'dev_id': self.dev_id, 'sid': '0' * 32, 'role_id': role,
-                  'user_id': self.uid('empty'), 'provider_id': 'missing', 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present'}
+                  'user_id': self.uid('empty'), 'provider_id': 'missing', 'group_id': 999999, 'deployment_id': 'missing', 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present'}
         with fixture.loco.app.test_request_context():
             from flask import url_for
             paths = [(rule, url_for(rule.endpoint, **{key: values[key] for key in rule.arguments}))
@@ -77,6 +77,14 @@ class TestPermissions(FleetTest):
         self.assertEqual(self.agent.checkin().status_code, 200)
         with db.transaction() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM device_commands').fetchone()[0], 0)
+
+    def test_store_only_profile_keeps_a_navigation_entry_without_catalog_access(self):
+        reader = self.browser('store-reader', self.profile('store-reader', ['store.view']))
+        with mock.patch('loco.winget.browse', return_value=([], 0, 1, 1)):
+            response = reader.c.get('/windows-apps/store')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/windows-apps/store"', response.get_data(as_text=True))
+        self.assertEqual(reader.c.get('/windows-apps').status_code, 403)
 
     def test_linux_novnc_fallback_requires_terminal_permission_and_is_revoked_with_it(self):
         linux = Agent(LINUX, '192.168.43.62')

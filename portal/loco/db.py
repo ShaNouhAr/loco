@@ -190,6 +190,76 @@ MIGRATIONS = [
         expires REAL NOT NULL
     );
     """,
+    # 9 : groupes de logiciels/postes et déploiements confirmés avec sélection et versions figées.
+    """
+    ALTER TABLE win_apps ADD COLUMN expected_sha256 TEXT NOT NULL DEFAULT '';
+    ALTER TABLE win_apps ADD COLUMN source_filename TEXT NOT NULL DEFAULT '';
+    UPDATE win_apps SET expected_sha256=sha256,source_filename=filename WHERE winget_id!='' AND status='ready';
+    CREATE TABLE device_groups (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+    );
+    CREATE TABLE device_group_members (
+        group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+        device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        PRIMARY KEY (group_id,device_id)
+    );
+    CREATE TABLE software_groups (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        description TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+    );
+    CREATE TABLE software_group_members (
+        group_id INTEGER NOT NULL REFERENCES software_groups(id) ON DELETE CASCADE,
+        app_id INTEGER NOT NULL REFERENCES win_apps(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (group_id,app_id)
+    );
+    CREATE TABLE deployments (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        created_by TEXT NOT NULL,
+        pw_version INTEGER NOT NULL,
+        owner TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires REAL NOT NULL,
+        state TEXT NOT NULL DEFAULT 'draft',
+        plan TEXT NOT NULL,
+        confirmed_at TEXT NOT NULL DEFAULT '',
+        cancel_requested INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE deployment_targets (
+        id INTEGER PRIMARY KEY,
+        deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+        device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        device_uid TEXT NOT NULL,
+        hostname TEXT NOT NULL,
+        os_family TEXT NOT NULL,
+        command_id INTEGER UNIQUE REFERENCES device_commands(id) ON DELETE SET NULL,
+        apps TEXT NOT NULL DEFAULT '[]',
+        skipped TEXT NOT NULL DEFAULT '[]',
+        reason TEXT NOT NULL DEFAULT '',
+        last_state TEXT NOT NULL DEFAULT '',
+        last_output TEXT NOT NULL DEFAULT '',
+        UNIQUE (deployment_id,device_uid)
+    );
+    CREATE TRIGGER deployment_command_snapshot BEFORE DELETE ON device_commands
+    BEGIN
+        UPDATE deployment_targets
+        SET last_state=CASE WHEN OLD.state IN ('queued','sent','running') THEN 'cancelled' ELSE OLD.state END,
+            last_output=CASE WHEN OLD.state IN ('queued','sent','running') THEN 'Commande supprimée avant son terme.' ELSE OLD.output END
+        WHERE command_id=OLD.id;
+    END;
+    CREATE INDEX deployment_targets_campaign ON deployment_targets(deployment_id);
+    CREATE INDEX deployments_created ON deployments(created_at);
+    CREATE INDEX device_group_members_device ON device_group_members(device_id);
+    CREATE INDEX software_group_members_app ON software_group_members(app_id);
+    """,
+
 ]
 
 

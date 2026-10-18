@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Déploiements{% endblock %}
+{% block content %}
+{% include '_software_nav.html' %}
+<div class="head"><div><h1>Déploiements</h1><p>Préparations, installations demandées et résultats transmis par les agents.</p></div>{% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose') }}">Nouveau déploiement</a>{% endif %}</div>
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>Déploiement</th><th>Logiciels</th><th>Cibles</th><th>État</th><th>Demandé par</th></tr></thead><tbody>
+{% set labels={'draft':'À confirmer','expired':'Prévisualisation expirée','running':'En cours','cancelling':'Annulation demandée','success':'Terminé','failed':'Terminé avec erreurs','cancelled':'Annulé'} %}
+{% for item in campaigns %}<tr><td><a href="{{ url_for('deployment_detail',deployment_id=item.row.id) }}">{{ item.row.title }}</a><span class="sub">{{ item.row.created_at|date_fr }}</span></td><td>{{ item.apps }}</td><td>{{ item.devices }}</td><td><span class="st {{ 'ok' if item.state=='success' else 'err' if item.state=='failed' else 'warn' if item.state in ('running','draft','cancelling') else '' }}">{{ labels[item.state] }}</span></td><td>{{ item.row.created_by }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Aucun déploiement. Choisissez un logiciel dans le catalogue ou le store pour commencer.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% if pages > 1 %}<nav class="row store-pagination" aria-label="Pages des déploiements">{% if page > 1 %}<a class="btn" href="{{ url_for('deployments',page=page-1) }}">← Précédente</a>{% endif %}<span class="muted">Page {{ page }} sur {{ pages }} · {{ total }} déploiement(s)</span>{% if page < pages %}<a class="btn" href="{{ url_for('deployments',page=page+1) }}">Suivante →</a>{% endif %}</nav>{% endif %}
+{% endblock %}

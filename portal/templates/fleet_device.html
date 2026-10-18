@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ dev.hostname }}{% endblock %}
 {% block content %}
+{% include '_fleet_nav.html' %}
 {% set cls = {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(color, '') %}
 <div class="head">
   <div>
@@ -66,6 +67,7 @@
   </section>
   {% endif %}
   {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ actions[c.action]|lower }} ({{ 'transmise' if c.state != 'queued' else 'au prochain contact' }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  <section class="panel"><div class="panel-h"><h2>Groupes de machines</h2>{% if dev.os_family=='windows' and dev.state=='active' and can('fleet.install') %}<a class="btn sm primary" href="{{ url_for('deployment_compose',device=dev.id) }}">Déployer des logiciels</a>{% endif %}</div><div class="panel-b stack"><div class="actions">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor',group_id=group.id) }}">{{ group.name }}</a>{% else %}<span class="muted">Aucun groupe associé.</span>{% endfor %}</div>{% if can('fleet.groups') and device_groups %}<form method="post" action="{{ url_for('fleet_group_membership',dev_id=dev.id) }}" class="stack"><input type="hidden" name="csrf" value="{{ csrf }}"><div class="actions">{% set member_ids=memberships|map(attribute='id')|list %}{% for group in device_groups %}<label><input type="checkbox" name="groups" value="{{ group.id }}" {{ 'checked' if group.id in member_ids }}> {{ group.name }}</label>{% endfor %}</div><div><button class="btn sm">Enregistrer les groupes</button></div></form>{% endif %}</div></section>
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
 
   <div class="cols">
@@ -114,15 +116,12 @@
         <tbody>
         {% for a, installed, outdated in apps %}
           <tr>
-            <td>{{ a.name }}</td>
+            <td><a href="{{ url_for('software_detail',slug=a.slug) }}">{{ a.name }}</a></td>
             <td class="mono">{{ a.version or '—' }}</td>
             <td>{% if outdated %}<span class="st warn">{{ installed }}</span>{% elif installed %}<span class="st ok">{{ installed }}</span>{% else %}<span class="faint">non installé</span>{% endif %}</td>
             <td class="right">
               {% if can('fleet.install') and dev.state == 'active' and (outdated or not installed) %}
-              <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax>
-                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="install-app"><input type="hidden" name="slug" value="{{ a.slug }}">
-                <button class="btn sm"><span class="spin"></span>{{ 'Mettre à jour' if outdated else 'Installer' }}</button>
-              </form>
+              <a class="btn sm" href="{{ url_for('deployment_compose',app=a.slug,device=dev.id) }}">{{ 'Mettre à jour' if outdated else 'Installer' }}</a>
               {% endif %}
             </td>
           </tr>

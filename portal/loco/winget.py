@@ -22,7 +22,7 @@ import zipfile
 from flask import flash, render_template, request, send_file
 
 from . import app, config
-from .auth import audit, login_required, can
+from .auth import audit, login_required, can, lock_access, require
 from .db import db
 from .util import back, now, slugify
 
@@ -512,7 +512,8 @@ def software_store_detail(package_id):
     homepage = doc.get("PackageUrl") or doc.get("PublisherUrl") or ""
     if not isinstance(homepage, str) or not homepage.startswith("https://"):
         homepage = ""
-    return render_template("software_store_detail.html", package_id=package_id, doc=doc, info=info,
+    from .groups import listing
+    return render_template("software_store_detail.html", software_groups=listing("software") if can("windows.groups") else [], package_id=package_id, doc=doc, info=info,
                            error=error, known=known, homepage=homepage)
 
 
@@ -551,33 +552,44 @@ def _filename(info):
     return name if name.lower().endswith(ext) else name + ext
 
 
+def import_package(package_id):
+    """Import commun au store, aux groupes et aux déploiements ; un seul import concurrent par identifiant."""
+    from .winapps import start_fetch
+    require("store.import")
+    existing = db().execute("SELECT * FROM win_apps WHERE winget_id=? ORDER BY id LIMIT 1", (package_id,)).fetchone()
+    if existing:
+        return existing
+    info = describe(package_id)
+    conn = lock_access("store.import")
+    existing = conn.execute("SELECT * FROM win_apps WHERE winget_id=? ORDER BY id LIMIT 1", (package_id,)).fetchone()
+    if existing:
+        conn.commit()
+        return existing
+    slug = slugify(info["name"]) or slugify(package_id)
+    base, n = slug, 2
+    while conn.execute("SELECT 1 FROM win_apps WHERE slug=?", (slug,)).fetchone():
+        slug, n = f"{base[:60]}-{n}", n + 1
+    cur = conn.execute("INSERT INTO win_apps (slug,name,version,kind,args,source_url,status,updated_at,detect,winget_id,"
+                       "expected_sha256,source_filename) VALUES (?,?,?,?,?,?,'pending',?,?,?,?,?)",
+                       (slug, info["name"][:100], info["version"][:50], info["kind"], info["args"], info["url"], now(),
+                        info["detect"][:200], package_id, info["sha256"], _filename(info)))
+    row = conn.execute("SELECT * FROM win_apps WHERE id=?", (cur.lastrowid,)).fetchone()
+    audit("windows.winget", f"{package_id} {info['version']} ({info['type']})", commit=False)
+    conn.commit()
+    start_fetch(row, expected_sha256=info["sha256"], filename=_filename(info))
+    return db().execute("SELECT * FROM win_apps WHERE id=?", (row["id"],)).fetchone()
+
+
 @app.route("/windows-apps/winget/add", methods=["POST"])
 @login_required
 def winget_add():
-    from .winapps import start_fetch
-    package_id = request.form.get("id", "")
-    if db().execute("SELECT 1 FROM win_apps WHERE winget_id=?", (package_id,)).fetchone():
-        flash("Ce logiciel figure déjà dans le catalogue local.", "ok")
-        return back("windows_apps")
     try:
-        info = describe(package_id)
+        row = import_package(request.form.get("id", ""))
     except (OSError, ValueError, sqlite3.Error) as e:
         flash(f"Import impossible : {e}", "error")
-        return back("winget_search", q=request.form.get("q", ""))
-    slug = slugify(info["name"]) or slugify(package_id)
-    base, n = slug, 2
-    while db().execute("SELECT 1 FROM win_apps WHERE slug=?", (slug,)).fetchone():
-        slug, n = f"{base[:60]}-{n}", n + 1
-    cur = db().execute("INSERT INTO win_apps (slug, name, version, kind, args, source_url, status, updated_at, detect, "
-                       "winget_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                       (slug, info["name"][:100], info["version"][:50], info["kind"], info["args"], info["url"],
-                        "pending", now(), info["detect"][:200], package_id))
-    db().commit()
-    row = db().execute("SELECT * FROM win_apps WHERE id=?", (cur.lastrowid,)).fetchone()
-    start_fetch(row, expected_sha256=info["sha256"], filename=_filename(info))
-    audit("windows.winget", f"{package_id} {info['version']} ({info['type']})")
-    flash(f"{info['name']} {info['version']} : téléchargement lancé (installeur {info['type']}, vérifié par SHA-256).", "ok")
-    return back("windows_apps")
+        return back("software_store", q=request.form.get("q", ""))
+    flash(f"{row['name']} figure dans le catalogue local. Son installeur est vérifié avant tout déploiement.", "ok")
+    return back("software_detail", slug=row["slug"])
 
 
 def check_updates():
@@ -607,9 +619,9 @@ def winget_update():
     for row, info in updates:
         if row["status"] == "downloading":
             continue
-        db().execute("UPDATE win_apps SET version=?, kind=?, args=?, source_url=?, detect=?, updated_at=? WHERE id=?",
+        db().execute("UPDATE win_apps SET version=?, kind=?, args=?, source_url=?, detect=?, updated_at=?,expected_sha256=?,source_filename=? WHERE id=?",
                      (info["version"][:50], info["kind"], info["args"], info["url"], row["detect"] or info["detect"],
-                      now(), row["id"]))
+                      now(), info["sha256"], _filename(info), row["id"]))
         db().commit()
         start_fetch(db().execute("SELECT * FROM win_apps WHERE id=?", (row["id"],)).fetchone(),
                     expected_sha256=info["sha256"], filename=_filename(info))

@@ -430,3 +430,22 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .remote-detached #remote-new-tab { display: none; }
 .remote-session:fullscreen .remote-scale-label { flex: 0 0 auto; }
 @media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-scale-label span { display: none; } }
+
+/* Groupes et déploiements : sélection lisible, séparée de la confirmation. */
+.selection-list { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.selection-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.selection-item + .selection-item { border-top: 1px solid var(--line); }
+.selection-item input { flex: 0 0 auto; margin-top: 3px; }
+.selection-item span { min-width: 0; }
+.selection-item small { display: block; color: var(--text-2); margin-top: 3px; font-size: 12px; }
+.selection-item:has(input:checked) { background: var(--bg-2); }
+.selection-item:has(input:disabled) { opacity: .65; cursor: default; }
+.group-delete { margin-top: 24px; }
+.deployment-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; padding: 12px; background: var(--bg-2); }
+.deployment-columns > .panel { min-width: 0; }
+.software-selection-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 850px) { .deployment-columns { grid-template-columns: 1fr; } }
+
+.software-detail-actions { margin-bottom: 24px; }
+.selbar-in { flex-wrap: wrap; }
+.selbar .software-selection-actions { flex-shrink: 0; }

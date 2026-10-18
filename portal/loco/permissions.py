@@ -18,6 +18,9 @@ GROUPS = [
         ("fleet.update", "Mettre à jour un appareil", "Système, Flatpak et logiciels du catalogue déjà installés.", ("fleet.view",), True),
         ("fleet.bulk_update", "Mettre à jour tout le parc", "Lancer les mises à jour sur tous les appareils concernés.", ("fleet.update",), True),
         ("fleet.install", "Déployer un logiciel", "Installer ou mettre à jour un logiciel du catalogue sur un appareil.", ("fleet.view", "windows.view"), True),
+        ("fleet.bulk_install", "Déployer sur des groupes ou plusieurs postes", "Déploiements de logiciels sur plusieurs appareils ou sur un groupe.", ("fleet.install",), True),
+        ("fleet.groups", "Gérer les groupes de machines", "Créer les groupes et organiser leurs membres, sans déployer de logiciel.", ("fleet.view",), False),
+        ("deployments.view", "Consulter les déploiements", "Versions, cibles confirmées, avancement et résultats par poste.", ("fleet.view", "windows.view"), False),
         ("fleet.reboot", "Redémarrer les appareils", "Redémarrage direct ou après une mise à jour.", ("fleet.view",), True),
         ("fleet.remove", "Retirer les agents et appareils", "Désinstaller l'agent ou oublier un appareil.", ("fleet.view",), True),
         ("fleet.settings", "Configurer le parc", "Seuil des pastilles et rotation de la clé d'inscription.", ("fleet.view",), True),
@@ -44,6 +47,7 @@ GROUPS = [
     ]),
     ("Logiciels Windows et store", [
         ("windows.view", "Consulter le catalogue local", "Logiciels Windows et installeurs disponibles.", (), False),
+        ("windows.groups", "Gérer les groupes de logiciels", "Regrouper les logiciels du catalogue pour les déployer ensemble.", ("windows.view",), False),
         ("windows.add", "Ajouter un logiciel au catalogue", "Téléverser un installeur ou le télécharger depuis une URL.", ("windows.view",), True),
         ("windows.edit", "Modifier un logiciel", "Version, détection et arguments d'installation silencieuse.", ("windows.view",), True),
         ("windows.refresh", "Actualiser les installeurs", "Retélécharger et rechercher les nouvelles versions WinGet.", ("windows.view",), True),
@@ -80,7 +84,7 @@ GROUPS = [
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],
                         "requires": item[3], "sensitive": item[4]}
                for _, items in GROUPS for item in items}
-VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view"}
+VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view", "deployments.view"}
 DEFAULTS = {
     "pending": ("Sans accès", "Aucun droit. Les nouvelles identités SSO attendent une approbation administrative.", set()),
     "admin": ("Administrateur", "Accès complet, y compris aux futurs droits. Profil protégé.", set(PERMISSIONS)),
@@ -94,7 +98,7 @@ DEFAULTS = {
 }
 
 # Chaque route privée est déclarée. Une nouvelle route oubliée est refusée par défaut.
-# Plusieurs droits représentent des alternatives (uniquement pour la lecture des logos).
+# Plusieurs droits représentent des alternatives pour une même page de consultation.
 ENDPOINTS = {
     "index": "dashboard.view", "api_status": "dashboard.view",
     "linux": "linux.view", "linux_repository_create": "linux.create", "linux_upload": "linux.upload",
@@ -105,6 +109,15 @@ ENDPOINTS = {
     "windows_apps_edit": "windows.edit", "windows_apps_refresh": "windows.refresh", "windows_apps_delete": "windows.delete",
     "software_store": "store.view", "software_store_detail": "store.view", "software_store_refresh": "store.refresh",
     "winget_search": "store.view", "winget_add": "store.import", "winget_update": "windows.refresh",
+    "software_detail": "windows.view",
+    "software_groups": "windows.view", "software_group_editor": "windows.view",
+    "software_group_save": "windows.groups", "software_group_delete": "windows.groups",
+    "software_group_attach": "windows.groups", "store_group_attach": "windows.groups",
+    "fleet_groups": "fleet.view", "fleet_group_editor": "fleet.view",
+    "fleet_group_save": "fleet.groups", "fleet_group_delete": "fleet.groups", "fleet_group_membership": "fleet.groups",
+    "deployments": ("deployments.view", "fleet.install"), "deployment_detail": ("deployments.view", "fleet.install"),
+    "deployment_compose": "fleet.install", "deployment_preview": "fleet.install",
+    "deployment_confirm": "fleet.install", "deployment_cancel": "fleet.install",
     "software_icon": ("windows.view", "store.view", "fleet.view"),
     "windows_update": "wu.view", "api_wu": "wu.view", "windows_update_dns": "wu.view",
     "windows_update_domains": "wu.configure",

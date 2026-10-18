@@ -2,9 +2,10 @@
 {% from "_software_logo.html" import software_logo %}
 {% block title %}Store logiciels{% endblock %}
 {% block content %}
+{% include '_software_nav.html' %}
 <div class="head">
   <div><p class="small"><a href="{{ url_for('windows_apps') }}">Mon catalogue local</a></p><h1>Store logiciels</h1>
-    <p>Découvrez les logiciels du catalogue Microsoft WinGet. Ajoutez-les à loco, puis déployez-les depuis Mon parc.</p></div>
+    <p>Parcourez WinGet, ajoutez des logiciels à vos groupes ou préparez directement leur déploiement sur le parc.</p></div>
   {% if can("store.refresh") %}<form method="post" action="{{ url_for('software_store_refresh') }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn"><span class="spin"></span>Actualiser le catalogue</button></form>{% endif %}
 </div>
 <div class="stack">
@@ -20,8 +21,8 @@
     {% for r in results %}<article class="panel store-card">
       <div class="store-card-top">{{ software_logo(r.id, r.name) }}<div><h3><a href="{{ url_for('software_store_detail', package_id=r.id) }}">{{ r.name }}</a></h3><span class="sub mono">{{ r.id }}</span></div></div>
       <p class="muted">Version {{ r.version }}</p>
-      <div class="store-card-actions"><a class="btn sm" href="{{ url_for('software_store_detail', package_id=r.id) }}">Voir la fiche</a>
-      {% if r.id in known %}<span class="st {{ 'ok' if known[r.id].status == 'ready' else 'warn' }}">{{ 'Dans loco' if known[r.id].status == 'ready' else 'Importé · ' ~ known[r.id].status }}</span>{% endif %}</div>
+      <div class="store-card-actions"><a class="btn sm" href="{{ url_for('software_store_detail', package_id=r.id) }}">Voir la fiche</a>{% if can('fleet.install') and (r.id in known or can('store.import')) %}<a class="btn sm primary" href="{{ url_for('deployment_compose',package_id=r.id) }}">Déployer</a>{% endif %}
+      {% if r.id in known %}<span class="st {{ 'ok' if known[r.id].status == 'ready' else 'warn' }}">{{ 'Dans loco' if known[r.id].status == 'ready' else 'Importé · ' ~ app_states.get(known[r.id].status,'Indisponible') }}</span>{% endif %}</div>
     </article>{% else %}{% if not error %}<div class="empty">Aucun logiciel ne correspond. Essayez une autre recherche ou tout le catalogue.</div>{% endif %}{% endfor %}
   </div>
   {% if pages > 1 %}<nav class="row store-pagination" aria-label="Pages du store">

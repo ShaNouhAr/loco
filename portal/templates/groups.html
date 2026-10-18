@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% set software = kind == 'software' %}
+{% block title %}Groupes de {{ 'logiciels' if software else 'machines' }}{% endblock %}
+{% block content %}
+{% include '_software_nav.html' if software else '_fleet_nav.html' %}
+<div class="head"><div><h1>Groupes de {{ 'logiciels' if software else 'machines' }}</h1><p>{{ 'Préparez des ensembles de logiciels Windows à déployer ensemble.' if software else 'Organisez les appareils par équipe, site ou usage pour les cibler ensemble.' }} Un membre peut appartenir à plusieurs groupes.</p></div>
+{% if can('windows.groups' if software else 'fleet.groups') %}<a class="btn primary" href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=0) }}">Créer un groupe</a>{% endif %}</div>
+<div class="store-grid">
+{% for group in groups %}<article class="panel"><div class="panel-h"><h2><a href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a></h2><span class="h-count">{{ group.members }} {{ 'logiciel(s)' if software else 'appareil(s)' }}</span></div><div class="panel-b stack"><p class="muted">{{ group.description or 'Aucune description.' }}</p><div class="actions"><a class="btn" href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=group.id) }}">Ouvrir</a>
+{% if group.members and can('fleet.install') and (software or can('fleet.bulk_install')) %}<a class="btn primary" href="{{ url_for('deployment_compose', **({'software_group':group.id} if software else {'device_group':group.id})) }}">Déployer {{ 'ce groupe' if software else 'sur ce groupe' }}</a>{% endif %}</div></div></article>
+{% else %}<div class="empty">Aucun groupe. {{ 'Créez par exemple un socle bureautique ou un ensemble de logiciels métier.' if software else 'Créez par exemple un groupe Comptabilité, Atelier ou Serveurs.' }}</div>{% endfor %}
+</div>
+{% endblock %}

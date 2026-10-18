@@ -215,6 +215,9 @@ def action_label(cmd):
     if params.get("slug"):
         row = db().execute("SELECT name FROM win_apps WHERE slug=?", (params["slug"],)).fetchone()
         label += " : " + (row["name"] if row else params["slug"])
+    if params.get("app_snapshots"):
+        names = [a.get("name", a.get("slug", "")) for a in params["app_snapshots"]]
+        label += " : " + ", ".join(names[:3]) + ("…" if len(names) > 3 else "")
     if params.get("reboot"):
         label += " (avec redémarrage)"
     return label
@@ -349,6 +352,12 @@ def _payload(dev, cmd):
     if cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
     if cmd["action"] == "install-app":
+        if dev["os_family"] != "windows":
+            return None
+        if params.get("app_snapshots"):
+            from .deployments import _already_installed
+            out["apps"] = [a for a in params["app_snapshots"] if params.get("force") or not _already_installed(dev, a)]
+            return out
         a = db().execute("SELECT * FROM win_apps WHERE slug=? AND status='ready'", (params.get("slug", ""),)).fetchone()
         if a is None:
             return None
@@ -374,10 +383,12 @@ def agent_checkin():
     commands = []
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' ORDER BY id",
                           (dev["id"],)).fetchall():
-        actor = conn.execute("SELECT role,disabled,must_change FROM users WHERE username=?", (c["created_by"],)).fetchone()
-        grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["must_change"] else frozenset()
+        actor = conn.execute("SELECT role,disabled,must_change,pending FROM users WHERE username=?", (c["created_by"],)).fetchone()
+        grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["pending"] and not actor["must_change"] else frozenset()
         required = permissions.ACTION_PERMISSIONS.get(c["action"])
-        if required not in grants or (json.loads(c["params"] or "{}").get("reboot") and "fleet.reboot" not in grants):
+        params = json.loads(c["params"] or "{}")
+        if (required not in grants or params.get("reboot") and "fleet.reboot" not in grants
+                or params.get("bulk_install") and "fleet.bulk_install" not in grants):
             conn.execute("UPDATE device_commands SET state='cancelled',finished_at=?,output=? WHERE id=?",
                          (_now(), "Droits insuffisants avant transmission à l'agent.", c["id"]))
             if c["action"] == "uninstall":
@@ -429,6 +440,9 @@ def agent_result():
         _store_inventory(dev, data["inventory"])
     if cmd["action"] == "uninstall" and state == "success":
         conn.execute("UPDATE devices SET state='removed', token_hash='' WHERE id=?", (dev["id"],))
+    if state in ("success", "failed"):
+        from .deployments import cleanup_artifacts
+        cleanup_artifacts(conn)
     conn.commit()
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     color, reason = status(dev)
@@ -603,6 +617,14 @@ def _commands(key):
 @login_required
 def fleet():
     rows = _rows()
+    from . import groups
+    group_id = request.args.get("group", "")
+    selected_group = None
+    if group_id:
+        group_id = groups.identifiers([group_id])[0]
+        selected_group = groups._group("device", group_id)
+        member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
+        rows = [r for r in rows if r["d"]["id"] in member_ids]
     counts = {c: sum(1 for r in rows if r["color"] == c) for c in ("green", "orange", "red", "grey")}
     signature = hashlib.sha256(json.dumps([[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                             len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
@@ -610,7 +632,7 @@ def fleet():
         return {"signature": signature}
     key = enroll_key() if can("fleet.enroll") else ""
     msi, msi_state = agent_msi()
-    return render_template("fleet.html", rows=rows, counts=counts, signature=signature, families=FAMILIES,
+    return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows, counts=counts, signature=signature, families=FAMILIES,
                            actions=ACTIONS, to_update=sum(1 for r in rows if r["needs_update"]),
                            commands=_commands(key) if key else {}, checkin=CHECKIN, enroll_key=key,
                            ca_sha256=_ca_fingerprint() if key else "",
@@ -654,7 +676,8 @@ def fleet_device(dev_id):
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
-    return render_template("fleet_device.html", dev=dev, inv=inv, color=color, reason=reason, history=history,
+    from . import groups
+    return render_template("fleet_device.html", device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            action_label=action_label,
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
@@ -702,17 +725,26 @@ def fleet_action(dev_id):
 @login_required
 def fleet_update_all():
     apps = catalog()
+    from . import groups
+    group_id = request.form.get("group", "")
+    member_ids = None
+    if group_id:
+        group_id = groups.identifiers([group_id])[0]
+        groups._group("device", group_id)
+        member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
     count = 0
     for r in _rows(apps):
+        if member_ids is not None and r["d"]["id"] not in member_ids:
+            continue
         if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
     audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
     flash(f"Mise à jour demandée sur {count} poste(s)." if count else "Aucun poste à mettre à jour.", "ok")
-    return back("fleet")
+    return back("fleet", **({"group": group_id} if group_id else {}))
 
 
 @app.route("/parc/cle", methods=["POST"])

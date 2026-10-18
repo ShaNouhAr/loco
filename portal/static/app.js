@@ -289,6 +289,14 @@
       var slugs = picked.map(function (c) { return c.value; });
       $(".count", selbar).textContent = slugs.length + (slugs.length > 1 ? " sélectionnés" : " sélectionné");
       $("code", selbar).textContent = "irm '" + base + slugs.join(",") + "' | iex";
+      ["data-deploy-selected", "data-group-selected"].forEach(function (attribute) {
+        var link = $("[" + attribute + "]", selbar);
+        if (!link) return;
+        if (!link.dataset.base) link.dataset.base = link.getAttribute("href");
+        var destination = new URL(link.dataset.base, window.location.href);
+        slugs.forEach(function (slug) { destination.searchParams.append("app", slug); });
+        link.href = destination.href;
+      });
       selbar.classList.toggle("on", slugs.length > 0);
       if (all) all.checked = slugs.length > 0 && slugs.length === boxes().length;
     };

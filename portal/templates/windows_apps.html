@@ -3,10 +3,11 @@
 {% from "_software_logo.html" import software_logo %}
 {% block title %}Logiciels Windows{% endblock %}
 {% block content %}
+{% include '_software_nav.html' %}
 <div class="head">
   <div>
-    <h1>Logiciels Windows</h1>
-    <p>Installeurs stockés sur le serveur et installés en silence par PowerShell. Cochez des logiciels pour obtenir la commande.</p>
+    <h1>Gestion des logiciels</h1>
+    <p>Catalogue Windows, groupes de logiciels et déploiements sur les appareils équipés de l’agent. Sélectionnez des logiciels pour les déployer ensemble.</p>
   </div>
   {% if can_any("windows.add", "windows.refresh", "store.view") %}
   <div class="actions">
@@ -40,7 +41,7 @@
         <tr class="{{ 'has-note' if note }}" data-slug="{{ a.slug }}" data-status="{{ a.status }}">
           <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}" {{ 'disabled' if a.status != 'ready' }}></td>
           {% set used = usage.get(a.slug, [0, 0]) %}
-          <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div>{{ a.name }}<span class="sub">{{ a.slug }}{% if a.winget_id %} · winget {{ a.winget_id }}{% endif %}{% if used[0] %} · <a href="{{ url_for('fleet') }}">{{ used[0] }} poste(s)</a>{% if used[1] %}, <span class="st warn">{{ used[1] }} à mettre à jour</span>{% endif %}{% endif %}</span></div></div></td>
+          <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div><a href="{{ url_for('software_detail',slug=a.slug) }}">{{ a.name }}</a><span class="sub">{{ a.slug }}{% if a.winget_id %} · winget {{ a.winget_id }}{% endif %}{% if used[0] %} · <a href="{{ url_for('fleet') }}">{{ used[0] }} poste(s)</a>{% if used[1] %}, <span class="st warn">{{ used[1] }} à mettre à jour</span>{% endif %}{% endif %}</span></div></div></td>
           <td class="mono">{{ a.version or '—' }}</td>
           <td class="mono muted">{{ a.kind }}</td>
           <td class="mono muted">{{ a.args or '—' }}</td>
@@ -62,7 +63,7 @@
                 <button class="linkbtn" title="Retélécharger depuis le lien source" {{ 'disabled' if a.status == 'downloading' }}>Actualiser</button>
               </form>{% endif %}
               {% endif %}
-              {% if can("windows.delete") %}<form method="post" action="{{ url_for('windows_apps_delete', slug=a.slug) }}" data-ajax data-confirm="Supprimer {{ a.name }} ?" data-confirm-text="Le logiciel et son installeur sont retirés du catalogue." data-confirm-ok="Supprimer">
+              {% if can("windows.delete") %}<form method="post" action="{{ url_for('windows_apps_delete', slug=a.slug) }}" data-ajax data-confirm="Supprimer {{ a.name }} ?" data-confirm-text="Le logiciel est retiré du catalogue et des groupes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution." data-confirm-ok="Supprimer">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <button class="linkbtn del">Supprimer</button>
               </form>{% endif %}
@@ -88,6 +89,7 @@
 
 <div class="selbar" data-base="{{ client_url }}/win/i/">
   <div class="selbar-in">
+    <div class="software-selection-actions">{% if can('fleet.install') %}<a class="btn primary" data-deploy-selected href="{{ url_for('deployment_compose') }}">Déployer sur le parc</a>{% endif %}{% if can('windows.groups') %}<a class="btn" data-group-selected href="{{ url_for('software_group_editor',group_id=0) }}">Créer un groupe</a>{% endif %}</div>
     <span class="count">0 sélectionné</span>
     {{ cmd('cmd-sel', '', 'PS>') }}
     <button type="button" class="btn" data-clear>Désélectionner</button>

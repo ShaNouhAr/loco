@@ -122,11 +122,18 @@ step "Contrôles de sécurité"
 curl -fsS -x http://127.0.0.1:3142 http://deb.debian.org/debian/dists/stable/Release -o /dev/null
 curl -sk -D - -o /dev/null https://127.0.0.1:8443/login | grep -i "content-security-policy: default-src 'none'" > /dev/null
 step "Sauvegarde et restauration des dépôts / comptes / signatures"
+pin_digest=$(printf 'loco-deployment-backup-test' | sha256sum | cut -d ' ' -f 1)
+pin_dir="/srv/loco/win/_deployments/$pin_digest"
+sudo mkdir -p /srv/loco/win/backup-fixture "$pin_dir"
+printf 'loco-deployment-backup-test' | sudo tee /srv/loco/win/backup-fixture/setup.msi >/dev/null
+sudo ln /srv/loco/win/backup-fixture/setup.msi "$pin_dir/installer.msi"
 sudo loco-backup create "$work/backups"
 archive=$(sudo find "$work/backups" -name '*.tar.gz' -type f | head -1)
+sudo mv "$pin_dir" "$work/pinned-before-restore"
 sudo rm "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_all.deb"
 cli rebuild-apt
 sudo loco-backup restore "$archive"
+sudo cmp /srv/loco/win/backup-fixture/setup.msi "$pin_dir/installer.msi"
 sudo ./install.sh >/dev/null
 ready
 sudo cmp "$work/native.deb" "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_all.deb"

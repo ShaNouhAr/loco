@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.8.0 — 2026-10-18
+
+- **Gestion des logiciels unifiée** : catalogue local, store WinGet, groupes de logiciels et suivi des déploiements dans les mêmes onglets. Déploiement depuis une fiche du store, du catalogue ou d'un appareil ; import WinGet partagé et empreinte vérifiée conservée lors des nouvelles tentatives.
+- **Groupes de logiciels et de machines** : appartenances multiples, création et modification des membres ; filtre du parc et mise à jour limitée au groupe affiché. Suppression d'un groupe sans supprimer ses logiciels, appareils ou déploiements.
+- **Déploiements préparés et confirmés** : combinaison de logiciels, lots, postes et groupes, déduplication, exclusions Windows/Linux explicites, sélection et versions figées. Conservation des installeurs confirmés même après modification ou suppression du catalogue ; sauvegarde compatible avec ces versions.
+- **Suivi par poste** : commandes en attente pour les agents hors ligne, journaux et résultats, annulation des seules commandes non transmises. Versions déjà installées et installations identiques déjà en attente ignorées ; réinstallation explicite possible.
+- **Droits distincts** : gestion des deux types de groupes, consultation des déploiements et déploiement sur plusieurs postes. Le déploiement collectif exige un droit réservé aux administrateurs par défaut, vérifié à nouveau avant transmission aux agents.
+
 ## 2.7.0 — 2026-10-18
 
 - **Navigation** : Mon parc se trouve immédiatement après Vue d'ensemble.

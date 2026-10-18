@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Préparer un déploiement{% endblock %}
+{% block content %}
+{% include '_software_nav.html' %}
+<div class="head"><div><h1>Préparer un déploiement</h1><p>Choisissez les logiciels et les cibles. La prochaine page permettra de vérifier la sélection avant toute installation.</p></div></div>
+{% if error %}<p class="note err">{{ error }}</p>{% endif %}
+<form method="post" action="{{ url_for('deployment_preview') }}" class="stack">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="package_id" value="{{ store_id }}">
+<section class="panel"><div class="panel-b"><label class="f"><span>Nom du déploiement (facultatif)</span><input type="text" name="title" maxlength="100" placeholder="Socle bureautique · équipe Comptabilité"></label></div></section>
+<div class="cols deployment-columns">
+  <section class="panel"><div class="panel-h"><h2>1 · Logiciels Windows</h2></div><div class="panel-b stack">
+    {% if store_info %}<div class="note"><strong>{{ store_info.name }} · {{ store_info.version }}</strong><p>Depuis WinGet : l'installeur sera importé et vérifié sur loco pendant la préparation. Aucune installation ne part avant votre confirmation.</p></div>{% endif %}
+    <div><h3>Groupes de logiciels</h3><div class="selection-list">{% for group in software_groups %}<label class="selection-item"><input type="checkbox" name="software_group" value="{{ group.id }}" {{ 'checked' if group.id in selected.software_groups }}><span><strong>{{ group.name }}</strong><small>{{ group.members }} logiciel(s)</small></span></label>{% else %}<p class="small muted">Aucun groupe de logiciels.</p>{% endfor %}</div></div>
+    <div><h3>Logiciels du catalogue</h3><input class="search-sm" type="search" placeholder="Filtrer les logiciels" data-filter="#deploy-apps .selection-item" aria-label="Filtrer les logiciels"><div class="selection-list" id="deploy-apps">{% for software in apps %}<label class="selection-item"><input type="checkbox" name="app" value="{{ software.slug }}" {{ 'checked' if software.slug in selected.apps }}><span><strong>{{ software.name }}</strong><small>{{ software.version or '—' }} · {{ app_states.get(software.status,'Indisponible') }}</small></span></label>{% else %}<p class="small muted">Le catalogue est vide. {% if can('store.view') %}<a href="{{ url_for('software_store') }}">Parcourir le store</a>{% endif %}</p>{% endfor %}</div></div>
+  </div></section>
+  <section class="panel"><div class="panel-h"><h2>2 · Machines cibles</h2></div><div class="panel-b stack">
+    <div><h3>Groupes de machines</h3><div class="selection-list">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}" {{ 'checked' if group.id in selected.device_groups }} {{ 'disabled' if not can('fleet.bulk_install') }}><span><strong>{{ group.name }}</strong><small>{{ group.members }} appareil(s)</small></span></label>{% else %}<p class="small muted">Aucun groupe de machines.</p>{% endfor %}</div>{% if not can('fleet.bulk_install') %}<p class="hint">Le droit de déploiement sur plusieurs postes est requis pour cibler un groupe.</p>{% endif %}</div>
+    <div><h3>Appareils individuels</h3><input type="search" class="search-sm" placeholder="Filtrer les appareils" data-filter="#deploy-devices .selection-item" aria-label="Filtrer les appareils"><div class="selection-list" id="deploy-devices">{% for device in devices %}<label class="selection-item"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if device.os_family != 'windows' or device.state != 'active' }}><span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} · non compatible avec ces logiciels Windows{% elif device.state != 'active' %} · agent en cours de retrait{% endif %}</small></span></label>{% else %}<p class="small muted">Aucun appareil inscrit.</p>{% endfor %}</div></div>
+    <p class="hint">Les appartenances multiples sont regroupées sans doublon. Les appareils Linux des groupes seront signalés comme non compatibles et exclus de l'installation.</p>
+  </div></section>
+</div>
+<section class="panel"><div class="panel-b stack"><label class="selection-item"><input type="checkbox" name="force" value="1"><span>Réinstaller même lorsqu'une version à jour est détectée<small>Par défaut, les logiciels déjà à jour dans un inventaire récent ne sont pas réinstallés.</small></span></label><div><button class="btn primary" {{ 'disabled' if error }}>3 · Prévisualiser le déploiement</button></div></div></section>
+</form>
+{% endblock %}
