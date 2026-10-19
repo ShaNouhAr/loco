@@ -1,41 +1,113 @@
 {% extends "base.html" %}
 {% block title %}Mon compte{% endblock %}
+{% set local = current_user.auth_source == 'local' %}
 {% block content %}
-<div class="head">
-  <div>
-    <h1>Mon compte</h1>
-    <p><span class="mono">{{ current_user.username }}</span> · {{ roles.get(current_user.role, "Profil indisponible") }}{% if current_user.last_login %} · dernière connexion {{ current_user.last_login|date_fr }}{% endif %}</p>
+<div class="head account-head">
+  <div class="account-id">
+    <span class="avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>
+    <div>
+      <h1>{{ current_user.username }}</h1>
+      <p><span class="pill">{{ roles.get(current_user.role, "Profil indisponible") }}</span>
+        <span class="muted">· {{ 'compte local' if local else 'connexion par un fournisseur d’identité' }}{% if current_user.last_login %} · session ouverte le {{ current_user.last_login|date_fr }}{% endif %}{% if current_user.created_at %} · créé le {{ current_user.created_at[:10] }}{% endif %}</span></p>
+    </div>
   </div>
 </div>
 
-<div class="cols">
+<div class="tabs" role="tablist" data-hash>
+  <button type="button" data-tab="securite" aria-selected="true">Sécurité</button>
+  <button type="button" data-tab="apparence" aria-selected="false">Apparence</button>
+  <button type="button" data-tab="droits" aria-selected="false">Mes droits <span class="tab-count">{{ granted_count }}</span></button>
+  <button type="button" data-tab="activite" aria-selected="false">Activité récente</button>
+</div>
+
+<div class="tab-panel on" data-panel="securite">
+  {% if local %}
+  <div class="cols w21">
+    <section class="panel">
+      <div class="panel-h"><h2>Changer de mot de passe</h2></div>
+      <form class="panel-b password-form" method="post" data-password-form data-username="{{ current_user.username }}" data-min="{{ min_password }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="f"><span>Mot de passe actuel</span>
+          <span class="password-field"><input type="password" name="current" required autocomplete="current-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+        <label class="f"><span>Nouveau mot de passe</span>
+          <span class="password-field"><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+        <label class="f"><span>Confirmation</span>
+          <span class="password-field"><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+        <ul class="password-rules" aria-live="polite">
+          <li data-rule="length">Au moins {{ min_password }} caractères</li>
+          <li data-rule="username">Sans le nom du compte</li>
+          <li data-rule="variety">Au moins 5 caractères différents</li>
+          <li data-rule="match">Confirmation identique</li>
+        </ul>
+        <div class="row"><button class="btn primary"><span class="spin"></span>Changer le mot de passe</button></div>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>Bon à savoir</h2></div>
+      <div class="panel-b"><ul class="plain-list account-notes">
+        <li>Changer de mot de passe ferme vos autres sessions ouvertes.</li>
+        <li>Une session inactive pendant 8 heures est fermée.</li>
+        <li>Après plusieurs échecs, la connexion est bloquée quelques minutes.</li>
+      </ul></div>
+    </section>
+  </div>
+  {% else %}
+  <section class="panel"><div class="panel-b"><p>Votre mot de passe est géré par votre fournisseur d’identité : changez-le auprès de celui-ci. Les règles de session de loco s’appliquent (inactivité de 8 heures, blocage après plusieurs échecs).</p></div></section>
+  {% endif %}
+</div>
+
+<div class="tab-panel" data-panel="apparence">
   <section class="panel">
-    <div class="panel-h"><h2>{{ 'Connexion SSO' if current_user.auth_source == 'sso' else 'Changer de mot de passe' }}</h2></div>
-    {% if current_user.auth_source == 'sso' %}<div class="panel-b"><p>Votre connexion est gérée par votre fournisseur SSO. Modifiez votre mot de passe auprès de celui-ci.</p></div>{% else %}
-    <form class="panel-b" method="post">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      {% if current_user.must_change %}<p class="note warn">Ce mot de passe est temporaire : choisissez-en un nouveau pour continuer.</p>{% endif %}
-      <label class="f"><span>Mot de passe actuel</span><input type="password" name="current" required autocomplete="current-password"></label>
-      <label class="f"><span>Nouveau mot de passe</span><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"></label>
-      <label class="f"><span>Confirmation</span><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"></label>
-      <button class="btn primary"><span class="spin"></span>Enregistrer</button>
-    </form>{% endif %}
-  </section>
-  <div class="stack">
-  <section class="panel"><div class="panel-h"><h2>Mes droits</h2></div><div class="panel-b stack">
-    {% for label, grants in granted_groups if grants %}<div><strong>{{ label }}</strong><ul>{% for grant in grants %}<li>{{ grant.label }}</li>{% endfor %}</ul></div>{% else %}<p class="muted">Aucun accès fonctionnel attribué. Votre compte reste disponible pour changer votre mot de passe ; demandez un profil à un administrateur.</p>{% endfor %}
-  </div></section>
-  <section class="panel">
-    <div class="panel-h"><h2>Règles</h2></div>
-    <div class="panel-b">
-      <ol class="steps">
-        <li><span>Au moins {{ min_password }} caractères, sans le nom du compte.</span></li>
-        <li><span>Changer de mot de passe ferme les autres sessions de ce compte.</span></li>
-        <li><span>Une session inactive pendant 8 heures est fermée.</span></li>
-        <li><span>Après plusieurs échecs, la connexion est bloquée quelques minutes.</span></li>
-      </ol>
+    <div class="panel-h"><h2>Thème</h2><div class="aside">mémorisé dans ce navigateur</div></div>
+    <div class="panel-b theme-cards">
+      {% for key, label, hint in [('oled', 'OLED', 'Noir pur, idéal pour les écrans OLED et le soir'), ('dim', 'Sombre doux', 'Anthracite, moins contrasté, reposant sur un écran classique'), ('light', 'Clair', 'Fond blanc, pour les pièces lumineuses')] %}
+      <button type="button" class="theme-card" data-set-theme="{{ key }}" role="radio" aria-checked="false">
+        <span class="theme-preview preview-{{ key }}" aria-hidden="true"><i></i><i></i><i></i></span>
+        <strong>{{ label }}</strong><small>{{ hint }}</small>
+      </button>
+      {% endfor %}
     </div>
   </section>
-  </div>
+  <section class="panel">
+    <div class="panel-h"><h2>Couleur d’accent</h2><div class="aside">boutons principaux, sélections, onglets</div></div>
+    <div class="panel-b accent-cards">
+      {% for key, label in [('neutral', 'Neutre'), ('blue', 'Bleu'), ('green', 'Vert'), ('violet', 'Violet'), ('orange', 'Orange'), ('pink', 'Rose')] %}
+      <button type="button" class="accent-card" data-set-accent="{{ key }}" role="radio" aria-checked="false"><span class="accent-choice accent-{{ key }}" aria-hidden="true"></span>{{ label }}</button>
+      {% endfor %}
+    </div>
+    <div class="panel-f">Aperçu : <button type="button" class="btn primary sm">Bouton principal</button> <span class="chip on">Sélection <b>3</b></span></div>
+  </section>
+</div>
+
+<div class="tab-panel" data-panel="droits">
+  <section class="panel">
+    <div class="panel-h"><h2>Mes droits</h2><div class="aside">{{ granted_count }} sur {{ total_permissions }} · profil {{ roles.get(current_user.role, "indisponible") }}</div></div>
+    {% set ns = namespace(any=false) %}
+    <div class="panel-b rights-list">
+      {% for label, grants in granted_groups if grants %}{% set ns.any = true %}
+      <details class="rights-group">
+        <summary><strong>{{ label }}</strong><span class="faint">{{ grants|length }} droit{{ 's' if grants|length > 1 }}</span></summary>
+        <ul class="plain-list">{% for grant in grants %}<li>{{ grant.label }}{% if grant.description %}<span class="sub sans">{{ grant.description }}</span>{% endif %}</li>{% endfor %}</ul>
+      </details>
+      {% endfor %}
+      {% if not ns.any %}<p class="muted">Aucun accès fonctionnel attribué. Votre compte reste disponible pour changer votre mot de passe ; demandez un profil à un administrateur.</p>{% endif %}
+    </div>
+  </section>
+</div>
+
+<div class="tab-panel" data-panel="activite">
+  <section class="panel">
+    <div class="panel-h"><h2>Activité récente</h2>{% if can('audit.view') %}<div class="aside"><a href="{{ url_for('journal', compte=current_user.username) }}">Tout le journal de ce compte</a></div>{% endif %}</div>
+    {% if activity %}
+    <div class="table-wrap"><table>
+      <tbody>{% for e in activity %}{% set r = e.r %}
+        <tr><td class="mono muted nowrap" title="{{ r.at }}">{{ r.at|date_fr }}</td>
+          <td>{% if e.failure %}<span class="st err"></span>{% endif %}{{ e.label }}{% if r.detail %}<span class="sub sans">{{ r.detail }}</span>{% endif %}</td>
+          <td class="mono muted nowrap hide-sm">{{ r.ip }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<div class="empty">Aucune activité enregistrée pour ce compte.</div>{% endif %}
+    <div class="panel-f">Une connexion ou une action inattendue ? Changez votre mot de passe et prévenez un administrateur.</div>
+  </section>
 </div>
 {% endblock %}

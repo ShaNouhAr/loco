@@ -153,10 +153,15 @@
     // Onglet mémorisé dans l'adresse : conservé lors du rechargement automatique de la page.
     if (tabs.hasAttribute("data-hash")) history.replaceState(null, "", "#" + b.dataset.tab);
   });
-  $$(".tabs[data-hash]").forEach(function (tabs) {
-    var wanted = location.hash.slice(1), b = wanted && $('[data-tab="' + wanted.replace(/[^a-z0-9-]/gi, "") + '"]', tabs);
-    if (b) b.click();
-  });
+  // Onglet désigné par l'adresse (#onglet) : au chargement et quand l'adresse change sur la même page.
+  function tabFromHash() {
+    $$(".tabs[data-hash]").forEach(function (tabs) {
+      var wanted = location.hash.slice(1), b = wanted && $('[data-tab="' + wanted.replace(/[^a-z0-9-]/gi, "") + '"]', tabs);
+      if (b && b.getAttribute("aria-selected") !== "true") b.click();
+    });
+  }
+  tabFromHash();
+  window.addEventListener("hashchange", tabFromHash);
 
   /* ---------------------------------------------------------------- filtres appliqués au choix */
 
@@ -341,6 +346,30 @@
     $("[data-clear]", selbar).addEventListener("click", function () { boxes().forEach(function (c) { c.checked = false; }); refresh(); });
     refresh();
   }
+
+  /* ---------------------------------------------------------------- mot de passe (Mon compte) */
+
+  // Règles vérifiées en direct (les mêmes que le serveur) et affichage du mot de passe à la demande.
+  $$("[data-password-form]").forEach(function (form) {
+    var fresh = $("input[name=new]", form), confirm = $("input[name=confirm]", form);
+    var min = Number(form.dataset.min) || 12, user = (form.dataset.username || "").toLowerCase();
+    var check = function () {
+      var v = fresh.value, rules = {
+        length: v.length >= min,
+        username: !!v && (!user || v.toLowerCase().indexOf(user) < 0),
+        variety: new Set(v).size >= 5,
+        match: !!v && v === confirm.value
+      };
+      $$("[data-rule]", form).forEach(function (li) { li.classList.toggle("ok", rules[li.dataset.rule]); });
+    };
+    fresh.addEventListener("input", check); confirm.addEventListener("input", check); check();
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-reveal]");
+    if (!b) return;
+    var input = $("input", b.parentElement), show = input.type === "password";
+    input.type = show ? "text" : "password"; b.textContent = show ? "Masquer" : "Afficher";
+  });
 
   /* ---------------------------------------------------------------- membres d'un groupe */
 

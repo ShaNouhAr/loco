@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.14.0 — à venir
+
+- **Centre de logiciels** : le « Store WinGet » est renommé « Centre de logiciels » dans toute l'interface (adresses et droits inchangés).
+- **Profil « Opérateur »** : le profil intégré « Technicien du parc » est renommé, y compris sur les installations existantes (sauf si un profil personnalisé porte déjà ce nom).
+- **Apparence** : menu dans l'en-tête et onglet de *Mon compte* ; nouveau thème **Sombre doux** (anthracite) à côté d'OLED et Clair, et **couleur d'accent** au choix (neutre, bleu, vert, violet, orange, rose) pour les boutons principaux, sélections, onglets, focus et la navigation active. Textes secondaires plus contrastés (WCAG AA) en clair et en OLED.
+- **Mon compte repensé** : en-tête avec initiale, profil, type de compte et dates ; onglets Sécurité (règles du mot de passe vérifiées en direct, bouton Afficher), Apparence (aperçu des thèmes), Mes droits (regroupés par domaine avec leur nombre) et Activité récente (dix dernières actions du compte, lien vers son journal). Un lien direct vers un onglet (`/compte#apparence`) fonctionne aussi sans recharger la page.
+
 ## 2.13.4 — 2026-10-19
 
 - Lien direct du MSI de l'agent : si le serveur ne peut pas encore fournir le MSI de sa version (GitHub momentanément injoignable…), il répond 503 avec la raison et « Réessayez dans un instant », et l'inscrit dans son journal, au lieu d'un 404 sans explication.

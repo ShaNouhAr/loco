@@ -284,7 +284,10 @@ def account():
     # Mot de passe temporaire : page dédiée, sans la navigation, qui ne mène nulle part avant le changement.
     template = "password_setup.html" if g.user["must_change"] else "account.html"
     granted = permissions.role_permissions(db(), g.user["role"])
-    return render_template(template, min_password=config.MIN_PASSWORD,
+    activity = [{"r": r, **journal_view.describe(r["action"])} for r in db().execute(
+        "SELECT * FROM audit WHERE username=? ORDER BY id DESC LIMIT 10", (g.user["username"],))]
+    return render_template(template, min_password=config.MIN_PASSWORD, activity=activity,
+                           granted_count=len(granted), total_permissions=len(permissions.PERMISSIONS),
                            granted_groups=[(label, [permissions.PERMISSIONS[item[0]] for item in items if item[0] in granted])
                                            for label, items in permissions.GROUPS])
 
