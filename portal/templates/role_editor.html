@@ -1,31 +1,49 @@
 {% extends "base.html" %}
 {% block title %}{{ profile.label if profile else 'Nouveau profil' }}{% endblock %}
 {% block content %}
-<div class="head"><div><p class="small"><a href="{{ url_for('roles') }}">Retour aux profils</a></p><h1>{{ profile.label if profile else 'Nouveau profil' }}</h1><p>Choisissez les pages et les actions accessibles. Les droits de consultation nécessaires sont ajoutés automatiquement.</p></div>
+<div class="head"><div><p class="small"><a href="{{ url_for('roles') }}">← Profils d’accès</a></p><h1>{{ profile.label if profile else 'Nouveau profil' }}</h1><p>Définissez les pages visibles et les actions autorisées pour les utilisateurs de ce profil.</p></div>
   {% if duplicable %}<a class="btn" href="{{ url_for('roles_editor', role_id='new', copy=profile.id) }}">Dupliquer ce profil</a>{% endif %}
 </div>
 {% if profile and not editable %}<p class="note">{% if profile.builtin %}Profil intégré protégé. Dupliquez-le pour créer votre propre configuration.{% elif profile.id == current_user.role %}Vous ne pouvez pas modifier le profil qui protège votre propre accès.{% else %}Consultation des droits de ce profil.{% endif %}</p>{% endif %}
-<form method="post" action="{{ url_for('roles_update', role_id=profile.id) if profile else url_for('roles_add') }}" class="stack" data-permission-form>
+<form method="post" action="{{ url_for('roles_update', role_id=profile.id) if profile else url_for('roles_add') }}" class="stack permission-editor" data-permission-form>
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <section class="panel"><div class="panel-h"><h2>Profil</h2>{% if profile and profile.builtin %}<span class="tag">intégré</span>{% endif %}</div>
+  <section class="panel"><div class="panel-h"><h2>Informations du profil</h2>{% if profile and profile.builtin %}<span class="tag">Intégré</span>{% endif %}</div>
     <div class="panel-b grid2">
-      <label class="f"><span>Nom</span><input type="text" name="label" value="{{ profile.label if profile else initial_label }}" required minlength="2" maxlength="64" {{ 'disabled' if not editable }}></label>
-      <label class="f"><span>Description</span><input type="text" name="description" value="{{ profile.description if profile else initial_description }}" maxlength="300" {{ 'disabled' if not editable }}></label>
+      <label class="f"><span>Nom</span><input type="text" name="label" value="{{ profile.label if profile else initial_label }}" required minlength="2" maxlength="64" {{ 'disabled' if not editable }} placeholder="Ex. Support informatique"></label>
+      <label class="f"><span>Description</span><input type="text" name="description" value="{{ profile.description if profile else initial_description }}" maxlength="300" {{ 'disabled' if not editable }} placeholder="À qui s’adresse ce profil ?"></label>
     </div>
   </section>
-  <div class="permission-groups">
-    {% for label, items in permission_groups %}<section class="panel">
-      <div class="panel-h"><h2>{{ label }}</h2></div><div class="panel-b permission-list">
-        {% for key, title, description, required, sensitive in items %}
-        <label class="permission-option {{ 'permission-sensitive' if sensitive }}">
-          <input type="checkbox" name="permissions" value="{{ key }}" data-permission="{{ key }}" data-requires='{{ required|tojson }}' {{ 'checked' if key in selected }} {{ 'disabled' if not editable or not can(key) }}>
-          <span><strong>{{ title }}</strong>{% if sensitive %}<span class="tag">action sensible</span>{% endif %}<small>{{ description }}</small>{% if editable and not can(key) %}<small class="muted">Ce droit ne fait pas partie de votre propre profil.</small>{% endif %}</span>
-        </label>
-        {% endfor %}
-      </div>
-    </section>{% endfor %}
+  <div class="permission-toolbar" data-permission-tools hidden>
+    <label class="f"><span>Rechercher un droit</span><input type="search" data-permission-search placeholder="Bureau distant, logiciels, utilisateurs…" aria-label="Rechercher un droit"></label>
+    <label class="f"><span>Afficher</span><select data-permission-filter><option value="all">Tous les droits</option><option value="selected">Droits accordés</option><option value="sensitive">Actions sensibles</option></select></label>
+    <p class="permission-total" data-permission-total aria-live="polite"></p>
   </div>
-  {% if editable %}<section class="panel"><div class="panel-b row"><button class="btn primary">{{ 'Enregistrer le profil' if profile else 'Créer le profil' }}</button><span class="hint">Modifier des droits ferme les connexions des comptes concernés, leurs sessions distantes et annule leurs commandes non transmises aux agents.</span></div></section>{% endif %}
+  <div class="permission-layout">
+    <nav class="permission-nav" aria-label="Catégories de droits">
+      {% for label, items in permission_groups %}<a href="#permission-group-{{ loop.index }}" data-permission-nav="{{ loop.index }}"><span>{{ label }}</span><span class="tag" data-permission-nav-count></span></a>{% endfor %}
+    </nav>
+    <div class="permission-sections">
+      <p class="note" data-permission-empty hidden>Aucun droit ne correspond à votre recherche.</p>
+      {% for label, items in permission_groups %}<section class="panel permission-group" id="permission-group-{{ loop.index }}" data-permission-group="{{ loop.index }}">
+        <div class="panel-h"><div><h2>{{ label }}</h2><span class="small muted" data-permission-count>{{ items|length }} droits</span></div>
+          {% if editable %}<label class="permission-category-toggle" data-permission-tools hidden><input type="checkbox" data-permission-category aria-label="Sélectionner les droits visibles de {{ label }}"><span>Tout sélectionner</span></label>{% endif %}
+        </div>
+        <div class="permission-list">
+          {% for key, title, description, required, sensitive in items %}
+          <label class="permission-option {{ 'permission-sensitive' if sensitive }}" data-sensitive="{{ 'true' if sensitive else 'false' }}">
+            <input type="checkbox" name="permissions" value="{{ key }}" data-permission="{{ key }}" data-requires='{{ required|tojson }}' {{ 'checked' if key in selected }} {{ 'disabled' if not editable or not can(key) }}>
+            <span><span class="permission-title"><strong>{{ title }}</strong>{% if sensitive %}<span class="tag">Sensible</span>{% endif %}</span><small>{{ description }}</small>{% if editable and not can(key) %}<small class="muted">Vous ne pouvez pas accorder ce droit avec votre profil.</small>{% endif %}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>{% endfor %}
+    </div>
+  </div>
+  <div class="permission-save">
+    <div><strong data-permission-summary>{{ selected|length }} droits accordés</strong><p class="hint" data-permission-feedback aria-live="polite">Les droits nécessaires à une action sont sélectionnés automatiquement.</p></div>
+    {% if editable %}<div class="actions"><a class="btn" href="{{ url_for('roles') }}">Annuler</a><button class="btn primary">{{ 'Enregistrer le profil' if profile else 'Créer le profil' }}</button></div>{% endif %}
+  </div>
+  {% if editable and profile %}<p class="hint">L’enregistrement ferme les connexions et sessions distantes des comptes concernés et annule leurs commandes encore en attente de transmission.</p>{% endif %}
 </form>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='permissions.js') }}?v={{ asset_v }}"></script>{% endblock %}

@@ -1,3 +1,4 @@
+import {resolutionFor, resizePacket} from './remote-sizing.js';
 /* Octets RFB/PTY relayés par HTTPS : aucune adresse ni aucun jeton de poste dans le navigateur. */
 const root = document.getElementById('remote-session');
 const screen = document.getElementById('remote-screen');
@@ -104,20 +105,47 @@ if (root.dataset.kind === 'terminal') {
   channel = new RelayChannel(); rfb = new RFB(screen, channel, { shared: true }); rfb.showDotCursor = true;
   const scale = document.getElementById('remote-scale');
   const resolution = document.getElementById('remote-resolution');
+  let nativeSize, resizeTimer, connected = false, textConsole = false, lastSize = '';
+  function requestResolution() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      // Adaptateur noVNC 1.7 : cette capacité n'a pas d'accesseur public.
+      // Ne jamais envoyer SetDesktopSize à un ancien agent qui ne l'annonce pas.
+      if (!running || !nativeSize || !rfb._supportsSetDesktopSize) return;
+      const target = resolutionFor(nativeSize.width, nativeSize.height, screen.clientWidth, screen.clientHeight, scale.value, textConsole);
+      if (!target) return;
+      const key = `${target.width}x${target.height}`;
+      if (key === lastSize) return;
+      lastSize = key;
+      send(resizePacket(target.width, target.height));
+    }, 350);
+  }
+  const capabilityTimer = setInterval(() => {
+    if (!running) { clearInterval(capabilityTimer); clearTimeout(resizeTimer); return; }
+    requestResolution();
+  }, 1000);
   function updateViewport() {
     const canvas = screen.querySelector('canvas');
-    if (!canvas || !canvas.width || !canvas.height) return;
+    if (!connected || !canvas || !canvas.width || !canvas.height) return;
+    if (!nativeSize) nativeSize = {width: canvas.width, height: canvas.height};
     // Réduire si nécessaire ; agrandir une image au-delà de ses pixels rend le texte flou.
-    rfb.scaleViewport = scale.value === 'fit' && (screen.clientWidth < canvas.width || screen.clientHeight < canvas.height);
+    rfb.scaleViewport = scale.value !== 'native' && (screen.clientWidth < canvas.width || screen.clientHeight < canvas.height);
     const percent = Math.round(100 * canvas.getBoundingClientRect().width / canvas.width);
     resolution.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
   }
-  scale.addEventListener('change', updateViewport);
-  new ResizeObserver(updateViewport).observe(screen);
+  scale.addEventListener('change', () => { updateViewport(); requestResolution(); });
+  new ResizeObserver(() => { updateViewport(); requestResolution(); }).observe(screen);
   new MutationObserver(updateViewport).observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height'] });
-  rfb.addEventListener('connect', updateViewport);
+  rfb.addEventListener('connect', () => { connected = true; updateViewport(); requestResolution(); });
   rfb.addEventListener('desktopname', e => {
-    if (e.detail.name.startsWith('loco-console root@')) {
+    if (e.detail.name.startsWith('loco-secure:')) {
+      remoteLabel = 'bureau sécurisé Windows · UAC / verrouillage';
+      document.querySelector('.remote-description').textContent = 'Bureau sécurisé Windows · Via l’agent loco';
+    } else if (e.detail.name.startsWith('loco-desktop:')) {
+      remoteLabel = 'bureau du poste';
+      document.querySelector('.remote-description').textContent = 'Session graphique du poste · clavier et souris · Via l’agent loco';
+    } else if (e.detail.name.startsWith('loco-console root@')) {
+      textConsole = true;
       document.querySelector('.remote-description').textContent = 'Console texte · Shell root · Via l’agent loco';
       remoteLabel = 'console texte du poste · root';
       if (running) message('Connecté · ' + remoteLabel);

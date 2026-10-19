@@ -25,7 +25,7 @@ GROUPS = [
         ("fleet.remove", "Retirer les agents et appareils", "Désinstaller l'agent ou oublier un appareil.", ("fleet.view",), True),
         ("fleet.settings", "Configurer le parc", "Seuil des pastilles, clé d'inscription et adresses du serveur annoncées aux agents.", ("fleet.view",), True),
         ("remote.terminal", "Ouvrir un terminal distant", "Shell root ou PowerShell SYSTEM : contrôle privilégié du poste.", ("fleet.view",), True),
-        ("remote.desktop", "Ouvrir le bureau noVNC", "Voir l'écran et utiliser le clavier et la souris du poste.", ("fleet.view",), True),
+        ("remote.desktop", "Ouvrir le bureau noVNC", "Contrôler le bureau, y compris l’UAC et l’écran verrouillé sous Windows (SYSTEM).", ("fleet.view",), True),
     ]),
     ("Paquets APT", [
         ("linux.view", "Consulter les dépôts APT", "Paquets et commandes de branchement.", (), False),

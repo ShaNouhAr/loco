@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.13.0 — 2026-10-19
+
+- **Console noVNC adaptative** : résolution du flux ajustée à la fenêtre, au plein écran et à l’onglet dédié, avec conservation du rapport d’image et limitation à la source pour le bureau Windows, et retour au flux natif. Protocole RFB ExtendedDesktopSize borné ; repli sur l’ajustement local avec les anciens agents et les bureaux X11. L’écran physique du poste n’est pas reconfiguré.
+- **Console texte Linux** : redimensionnement réel du PTY, du nombre de colonnes/lignes et du rendu, y compris pour les dimensions qui ne sont pas des multiples de la taille des glyphes.
+- **UAC Windows** : compagnon graphique SYSTEM dans la session interactive et suivi du bureau d’entrée, y compris le bureau sécurisé. Les transitions de capture et les saisies momentanément bloquées ne font plus tomber la connexion. Canal local restreint à SYSTEM et vérification du PID conservée ; le tray reste non privilégié.
+- **Éditeur de profils d’accès** : catégories en navigation, recherche sans accents, filtres des droits accordés/actions sensibles, compteurs par domaine, sélection des droits visibles avec état partiel, indication des dépendances ajustées et barre d’enregistrement persistante. Profils protégés et limites de délégation conservés.
+
 ## 2.12.1 — 2026-10-19
 
 - **Agents Windows mis à jour après le serveur** : le serveur ne proposait la nouvelle version de l'agent Windows que si son MSI avait déjà été téléchargé depuis le portail (bouton d'installation ou lien de déploiement). Sans cette action, les postes Windows restaient sur leur ancienne version. Désormais, dès qu'un agent Windows plus ancien que le serveur se présente, le serveur récupère le MSI de sa version sur GitHub (vérifié par SHA256SUMS) en arrière-plan, au plus une tentative toutes les dix minutes, et le propose au contact suivant.

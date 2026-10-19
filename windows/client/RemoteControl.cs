@@ -120,8 +120,7 @@ namespace Loco
             string pipeName = "loco-desktop-" + Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
             var acl = new PipeSecurity(); acl.SetAccessRuleProtection(true, false);
             acl.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.NetworkSid, null), PipeAccessRights.FullControl, AccessControlType.Deny));
-            foreach (var sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid, WellKnownSidType.BuiltinUsersSid })
-                acl.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(sid, null), sid == WellKnownSidType.BuiltinUsersSid ? PipeAccessRights.ReadWrite : PipeAccessRights.FullControl, AccessControlType.Allow));
+            acl.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
             var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 65536, 65536, acl);
             reader = writer = pipe;
             desktop = DesktopIndicator.StartDesktop(pipeName);

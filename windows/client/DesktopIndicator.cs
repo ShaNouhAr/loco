@@ -1,4 +1,4 @@
-// Partie privilégiée : publie un état expurgé et lance le compagnon avec le jeton de chaque utilisateur.
+// Service : état expurgé et tray avec le jeton utilisateur ; contrôle RFB SYSTEM dans la session interactive.
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -93,24 +93,34 @@ namespace Loco
             if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out sessions, out count)) throw new Win32Exception();
             try
             {
-                int selected = -1, console = (int)WTSGetActiveConsoleSessionId();
+                int console = (int)WTSGetActiveConsoleSessionId();
+                int selected = -1;
                 for (int i = 0; i < count; i++)
                 {
                     var session = (Session)Marshal.PtrToStructure(IntPtr.Add(sessions, i * Marshal.SizeOf(typeof(Session))), typeof(Session));
                     if (session.Id > 0 && session.State == 0) { if (selected < 0 || session.Id == console) selected = session.Id; }
                 }
-                if (selected < 0) throw new IOException("Aucune session utilisateur ouverte sur ce poste Windows.");
-                return Launch(selected, file, " --pipe " + pipeName);
+                if (selected < 0 && console > 0) selected = console;
+                if (selected < 0) throw new IOException("Aucune session interactive disponible sur ce poste Windows.");
+                return Launch(selected, file, " --pipe " + pipeName, true);
             }
             finally { WTSFreeMemory(sessions); }
         }
 
-        static Process Launch(int session, string executable, string arguments)
+        static Process Launch(int session, string executable, string arguments, bool desktopControl = false)
         {
             IntPtr token = IntPtr.Zero, environment = IntPtr.Zero;
             try
             {
-                if (!WTSQueryUserToken(session, out token)) throw new Win32Exception();
+                if (desktopControl)
+                {
+                    // Seul le compagnon RFB hérite de SYSTEM, dans la session interactive choisie.
+                    // Le tray reste lancé avec le jeton de l'utilisateur, sans privilèges.
+                    using (var identity = WindowsIdentity.GetCurrent())
+                        if (!DuplicateTokenEx(identity.Token, 0xF01FF, IntPtr.Zero, 2, 1, out token)) throw new Win32Exception();
+                    if (!SetTokenInformation(token, 12, ref session, sizeof(int))) throw new Win32Exception();
+                }
+                else if (!WTSQueryUserToken(session, out token)) throw new Win32Exception();
                 if (!CreateEnvironmentBlock(out environment, token, false)) throw new Win32Exception();
                 var startup = new Startup { Size = Marshal.SizeOf(typeof(Startup)), Desktop = @"winsta0\default" };
                 ProcessInfo process;
@@ -151,6 +161,8 @@ namespace Loco
         [DllImport("userenv.dll", SetLastError = true)] static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);
         [DllImport("userenv.dll")] static extern bool DestroyEnvironmentBlock(IntPtr environment);
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool CreateProcessAsUser(IntPtr token, string application, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, int flags, IntPtr environment, string directory, ref Startup startup, out ProcessInfo process);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool DuplicateTokenEx(IntPtr token, uint access, IntPtr attributes, int level, int type, out IntPtr duplicate);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetTokenInformation(IntPtr token, int informationClass, ref int information, int length);
         [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
     }
 }

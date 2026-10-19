@@ -37,9 +37,16 @@ class TextScreen(pyte.Screen):
     def __init__(self, columns=128, lines=40):
         super().__init__(columns, lines)
         self.font = json.loads(pkgutil.get_data("console_rfb", "font.json").decode())
+        self.pixel_width = columns * 8
         self.pixels = bytearray(columns * 8 * lines * 16 * 4)
         self.cells = {}
         self.responses = bytearray()
+
+    def resize_pixels(self, width, height):
+        self.resize(columns=max(20, width // 8), lines=max(5, height // 16))
+        self.pixel_width = width
+        self.pixels = bytearray(b"\x08\x08\x08\0" * (width * height))
+        self.cells.clear()
 
     def write_process_input(self, data):
         # Réponses aux requêtes VT100 (position du curseur, identification, etc.).
@@ -54,7 +61,7 @@ class TextScreen(pyte.Screen):
         return bytes((int(value[4:6], 16), int(value[2:4], 16), int(value[:2], 16), 0))
 
     def render(self):
-        width = self.columns * 8
+        width = self.pixel_width
         cursor = (self.cursor.x, self.cursor.y) if not self.cursor.hidden else (-1, -1)
         for y in range(self.lines):
             for x in range(self.columns):
@@ -149,7 +156,12 @@ def serve(frame_encoder, inp=None, out=None):
         pixel = struct.pack(">BBBBHHHBBBxxx", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
         name = ("loco-console root@" + socket.gethostname()).encode()
         write(struct.pack(">HH", width, height) + pixel + struct.pack(">I", len(name)) + name)
+        def size_update(reason=0, status=0):
+            return struct.pack(">BBHHHHHiBxxxIHHHHI", 0, 0, 1, reason, status, width, height, -308,
+                               1, 0, 0, 0, width, height, 0)
+
         tight, rgb_order, previous, last_frame = False, False, None, 0
+        extended_size = False
         modifiers, pending_input = set(), bytearray()
         while process.poll() is None:
             # Vider le PTY même lorsque le navigateur est momentanément inactif. Au plus 256 Kio par tour.
@@ -186,13 +198,27 @@ def serve(frame_encoder, inp=None, out=None):
                 count = struct.unpack(">xH", read(3))[0]
                 if count > 128:
                     raise ValueError("Trop d'encodages RFB")
-                tight = 7 in struct.unpack(">" + "i" * count, read(count * 4))
+                encodings = struct.unpack(">" + "i" * count, read(count * 4))
+                tight, extended_size = 7 in encodings, -308 in encodings
             elif kind == 3:
                 incremental = read(9)[0] != 0
+                if extended_size and not incremental:
+                    write(size_update())
                 time.sleep(max(0, 0.04 - (time.monotonic() - last_frame)))
                 data = screen.render()
                 write(frame_encoder(data, width, height, previous, incremental, tight, rgb_order))
                 previous, last_frame = data, time.monotonic()
+            elif kind == 251:
+                new_width, new_height, count = struct.unpack(">xHHBx", read(7))
+                screens = read(count * 16)
+                valid = (extended_size and count == 1 and 160 <= new_width <= 4096 and 100 <= new_height <= 2160 and
+                         screens == struct.pack(">IHHHHI", 0, 0, 0, new_width, new_height, 0))
+                if valid:
+                    width, height = new_width, new_height
+                    screen.resize_pixels(width, height)
+                    fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack("HHHH", screen.lines, screen.columns, 0, 0))
+                    previous = None
+                write(size_update(1, 0 if valid else 3))
             elif kind == 4:
                 down, sym = struct.unpack(">BxxI", read(7))
                 if sym in (0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe9, 0xffea):

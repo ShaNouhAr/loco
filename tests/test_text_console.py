@@ -119,6 +119,35 @@ class TestTextConsole(unittest.TestCase):
                     break
                 time.sleep(0.05)
             self.assertTrue(found, 'Le texte du vrai shell n’apparaît pas dans les pixels RFB')
+            # Négociation du redimensionnement : ACK séparé, nouveau PTY et nouveaux pixels.
+            send(b'\x02\0\0\x02' + struct.pack('>ii', 7, -308))
+            send(b'\xfb\0' + struct.pack('>HHBBIHHHHI', 1001, 577, 1, 0, 0, 0, 0, 1001, 577, 0))
+            ack = read(36)
+            self.assertEqual(struct.unpack_from('>HHHHi', ack, 4), (1, 0, 1001, 577, -308))
+            pixels, _ = decode(update(), 1001, 577)
+            self.assertEqual(len(pixels), 1001 * 577 * 4)
+            # Rejet borné : conserver le flux et la résolution après un écran invalide.
+            send(b'\xfb\0' + struct.pack('>HHBBIHHHHI', 0, 577, 1, 0, 0, 0, 0, 0, 577, 0))
+            ack = read(36)
+            self.assertEqual(struct.unpack_from('>HHHH', ack, 4), (1, 3, 1001, 577))
+            command = "printf '\\033[2J\\033[H'; stty size\r"
+            for ch in command:
+                sym = 0xff0d if ch == '\r' else ord(ch)
+                send(b'\x04\x01\0\0' + struct.pack('>I', sym))
+                send(b'\x04\0\0\0' + struct.pack('>I', sym))
+            expected = console_rfb.TextScreen(125, 36)
+            expected.resize_pixels(1001, 577)
+            pyte.ByteStream(expected).feed(b'36 125')
+            expected.cursor.hidden = True
+            expected_row = expected.render()[:1001 * 16 * 4]
+            until = time.monotonic() + 5
+            while time.monotonic() < until:
+                pixels, _ = decode(update(), 1001, 577, pixels)
+                if pixels[:1001 * 16 * 4] == expected_row:
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail('Le vrai PTY ne reçoit pas les dimensions adaptées')
             process.stdin.close()
             process.wait(timeout=5)
             self.assertEqual(process.returncode, 0, process.stderr.read().decode())
