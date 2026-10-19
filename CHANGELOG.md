@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.16.0 — 2026-10-19
+
+- **Console noVNC — plein écran repensé (bureau)** : l'image du poste occupe **tout l'écran**, sans en-tête. Les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, nouvel onglet, fermeture) passent dans un **rail latéral gauche rétractable** ; une poignée au bord de l'écran le déploie ou le replie.
+- **Curseur du poste corrigé en plein écran** : le curseur logiciel de secours de noVNC (utilisé notamment sur les postes tactiles) était rendu hors de l'élément plein écran — donc **invisible en plein écran** et **décalé au retour**. Il est maintenant replacé dans la console le temps du plein écran, puis rétabli : curseur visible et aligné dans les deux cas.
+- Le plein écran est piloté par une classe posée au changement d'état (indépendant du moteur) ; le plein écran du terminal est inchangé.
+
 ## 2.15.0 — 2026-10-19
 
 - **Console noVNC — affichage repensé** : deux menus indépendants façon RDP. *Résolution* (Adaptée à la fenêtre, qui change la résolution Windows pour suivre la fenêtre en pixels physiques, ou Résolution du poste, qui garde et rétablit celle d'origine) et *Zoom* (Ajuster, ou 50/75/100/125/150/200 % avec défilement ; le pointeur reste juste à tout zoom car l'échelle propre de noVNC est pilotée). La résolution et le pourcentage obtenus restent affichés. Le bureau se centre, se défile dans les deux sens et remplit proprement la fenêtre sans bandes noires inutiles.

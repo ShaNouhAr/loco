@@ -174,10 +174,15 @@ class TestRemote(FleetTest):
                      'data-keys="ctrl shift escape"', 'data-hold="ctrl"', 'data-hold="super"', 'id="remote-type"'):
             self.assertIn(text, page)
         self.assertIn('>Win<', page)                                       # libellés Windows sur un poste Windows
+        self.assertIn('id="remote-rail"', page)                            # rail de commandes du plein écran
+        self.assertIn('id="remote-rail-toggle"', page)
         terminal = self.admin.c.get(f"/parc/session/{self.open('terminal')}").get_data(as_text=True)
         self.assertNotIn('id="remote-toolbar"', terminal)                 # pas de panneau pour le terminal
+        self.assertNotIn('id="remote-rail"', terminal)                    # ni rail
         script = (Path(__file__).resolve().parents[1] / 'portal/static/remote.js').read_text()
         self.assertIn('rfb.sendCtrlAltDel()', script)
+        self.assertIn("classList.toggle('is-fullscreen'", script)          # vrai plein écran piloté par classe
+        self.assertIn('rfb._cursor', script)                               # curseur replacé dans l'élément plein écran
 
     def test_browser_drains_a_large_frame_in_one_batch_without_raising_the_packet_limit(self):
         sid = self.open('desktop')

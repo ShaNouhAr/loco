@@ -90,6 +90,7 @@ document.addEventListener('fullscreenchange', () => {
   const button = document.getElementById('remote-fullscreen');
   button.textContent = full ? 'Quitter le plein écran' : 'Plein écran';
   button.setAttribute('aria-pressed', String(full));
+  root.classList.toggle('is-fullscreen', full);
 });
 if (root.dataset.kind === 'terminal') {
   terminal = new window.Terminal({ cursorBlink: true, fontSize: 14, scrollback: 3000, theme: { background: '#080808', foreground: '#ddd' } });
@@ -184,6 +185,31 @@ if (root.dataset.kind === 'terminal') {
     clipHint.textContent = 'Envoyé au presse-papiers du poste. Collez-y avec Ctrl+V.';
     rfb.focus();
   });
+
+  // Plein écran bureau : les commandes passent dans un rail gauche rétractable, et le curseur logiciel de noVNC
+  // (un canvas ajouté au <body>, donc masqué et décalé en plein écran) est replacé dans l'élément plein écran.
+  const rail = document.getElementById('remote-rail');
+  const railBody = document.getElementById('remote-rail-body');
+  const railToggle = document.getElementById('remote-rail-toggle');
+  const actions = root.querySelector('.actions');
+  const railBar = document.getElementById('remote-toolbar');
+  const home = {a: [actions.parentNode, actions.nextSibling], t: [railBar.parentNode, railBar.nextSibling]};
+  railToggle.addEventListener('click', () => railToggle.setAttribute('aria-expanded', String(rail.classList.toggle('open'))));
+  const cursorCanvas = () => rfb._cursor && rfb._cursor._canvas;
+  function fullscreen(on) {
+    const cc = cursorCanvas();
+    if (on) {
+      railBody.append(actions, railBar);
+      rail.hidden = false; rail.classList.add('open'); railToggle.setAttribute('aria-expanded', 'true');
+      if (cc && cc.parentNode === document.body) root.appendChild(cc);
+    } else {
+      home.a[0].insertBefore(actions, home.a[1]); home.t[0].insertBefore(railBar, home.t[1]);
+      rail.classList.remove('open'); rail.hidden = true;
+      if (cc && cc.parentNode === root) document.body.appendChild(cc);
+    }
+    updateReadout(); requestResolution();
+  }
+  document.addEventListener('fullscreenchange', () => fullscreen(document.fullscreenElement === root));
 
   // Panneau de commandes : combinaisons, touches maintenues et texte tapé (keysyms X11, indépendants du clavier).
   const KEYS = {ctrl: [0xffe3, 'ControlLeft'], alt: [0xffe9, 'AltLeft'], shift: [0xffe1, 'ShiftLeft'], super: [0xffeb, 'MetaLeft'],

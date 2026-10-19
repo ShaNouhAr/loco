@@ -70,6 +70,12 @@
   {% endif %}
   {% if remote.kind == 'desktop' %}
   <div id="remote-viewport" class="remote-viewport"><div id="remote-screen" class="remote-screen desktop"></div></div>
+  <div class="remote-rail" id="remote-rail" hidden>
+    <div class="remote-rail-body" id="remote-rail-body"></div>
+    <button type="button" class="remote-rail-handle" id="remote-rail-toggle" aria-expanded="true" aria-label="Afficher ou masquer les commandes" title="Commandes du poste">
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+  </div>
   {% else %}
   <div id="remote-screen" class="remote-screen {{ remote.kind }}"></div>
   {% endif %}

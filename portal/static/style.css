@@ -425,11 +425,38 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .remote-viewport.fit { overflow: hidden; }
 .remote-viewport.fit .remote-screen.desktop { margin: 0; width: 100%; height: 100%; }
 .remote-viewport.zoomed .remote-screen.desktop { width: max-content; height: max-content; }
-.remote-screen:fullscreen { height: 100dvh; border: 0; border-radius: 0; }
-.remote-session:fullscreen { display: flex; flex-direction: column; gap: 12px; width: 100dvw; height: 100dvh; padding: 16px; background: var(--bg); overflow: auto; }
-.remote-session:fullscreen .head { margin: 0; }
-.remote-session:fullscreen .remote-screen, .remote-session:fullscreen .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; }
-.remote-session:fullscreen > p { margin: 0; }
+/* Plein écran piloté par une classe (posée au fullscreenchange) : testable et indépendant du moteur. */
+.remote-session.is-fullscreen { position: fixed; inset: 0; z-index: 50; margin: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--bg); overflow: auto; }
+.remote-session.is-fullscreen .head { margin: 0; }
+.remote-session.is-fullscreen .remote-screen, .remote-session.is-fullscreen .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; }
+.remote-session.is-fullscreen > p { margin: 0; }
+/* Bureau : vrai plein écran, sans en-tête ; les commandes passent dans le rail latéral rétractable. */
+.remote-session[data-kind="desktop"].is-fullscreen { display: block; padding: 0; gap: 0; background: #000; }
+.remote-session[data-kind="desktop"].is-fullscreen .head,
+.remote-session[data-kind="desktop"].is-fullscreen > #remote-status,
+.remote-session[data-kind="desktop"].is-fullscreen > .remote-footnote { display: none; }
+.remote-session[data-kind="desktop"].is-fullscreen .remote-viewport { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+
+/* Rail latéral gauche rétractable (plein écran bureau) : scène sous le rail, poignée toujours saisissable. */
+.remote-rail { display: none; }
+.remote-session[data-kind="desktop"].is-fullscreen .remote-rail { display: block; position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; }
+.remote-rail-body { position: absolute; left: 0; top: 0; bottom: 0; width: min(300px, 82vw); overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; background: color-mix(in srgb, var(--bg) 92%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-right: 1px solid var(--line-2); transform: translateX(-100%); transition: transform .22s ease; }
+.remote-rail.open .remote-rail-body { transform: none; }
+.remote-rail-handle { position: absolute; top: 14px; left: 0; display: flex; align-items: center; justify-content: center; width: 30px; height: 46px; padding: 0; border: 1px solid var(--line-2); border-left: 0; border-radius: 0 10px 10px 0; background: var(--bg-2); color: var(--text); cursor: pointer; transition: left .22s ease; }
+.remote-rail.open .remote-rail-handle { left: min(300px, 82vw); }
+.remote-rail-handle:hover { background: var(--bg-3, var(--bg-2)); }
+.remote-rail-handle .chev { width: 18px; height: 18px; transition: transform .22s ease; }
+.remote-rail.open .remote-rail-handle .chev { transform: scaleX(-1); }
+.remote-rail .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.remote-rail .remote-field { justify-content: space-between; }
+.remote-rail .remote-field select { max-width: 160px; }
+.remote-rail #remote-readout { align-self: center; }
+.remote-rail .toolbar-sep { flex-basis: 100%; width: auto; height: 1px; margin: 2px 0; background: var(--line); }
+.remote-rail .menu-list { position: static; width: 100%; min-width: 0; margin-top: 6px; box-shadow: none; border-color: var(--line); }
+.remote-rail .menu-form { min-width: 0; padding: 4px; }
+.remote-rail form { width: 100%; }
+.remote-rail .actions .btn { width: 100%; justify-content: center; }
 .store-description { white-space: pre-line; }
 .store-pagination { justify-content: center; }
 .store-search input { flex: 1; min-width: 180px; }
