@@ -1,0 +1,33 @@
+{# Fenêtre « Modifier » d'un logiciel du catalogue, remplie par data-app (liste et fiche du logiciel). #}
+{% macro app_data(a) -%}
+{{ {"slug": a.slug, "name": a.name, "version": a.version, "kind": a.kind, "args": a.args, "url": a.source_url, "filename": a.filename, "sha256": a.sha256, "detect": a.detect}|tojson|forceescape }}
+{%- endmacro %}
+{% if can("windows.edit") %}<dialog id="edit">
+  <form method="post" action="" data-base="{{ url_for('windows_apps_edit', slug='__slug__') }}" enctype="multipart/form-data" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% if retour %}<input type="hidden" name="retour" value="{{ retour }}">{% endif %}
+    <div class="dlg-h"><h2>Modifier <span data-title></span></h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-b">
+      <div class="grid2">
+        <label class="f"><span>Nom</span><input type="text" name="name" required></label>
+        <label class="f"><span>Version</span><input type="text" name="version"></label>
+        <label class="f wide"><span>Lien source</span><input type="url" name="url"></label>
+        <label class="f"><span>Type</span>
+          <select name="kind"><option value="auto">Automatique</option>{% for k in ['exe', 'msi', 'msu', 'ps1', 'file'] %}<option>{{ k }}</option>{% endfor %}</select>
+        </label>
+        <label class="f"><span>Arguments</span><input type="text" name="args"></label>
+        <label class="f wide"><span>Nom dans Windows (détection sur le parc)</span><input type="text" name="detect" placeholder="par défaut : le nom"></label>
+        <div class="wide">
+          <span class="cmd-label">Remplacer le fichier</span>
+          <div class="drop"><input type="file" name="file" aria-label="Nouveau fichier"><div class="files"></div></div>
+          <span class="hint mono" data-file></span>
+        </div>
+      </div>
+      <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button class="btn primary"><span class="spin"></span>Enregistrer</button>
+    </div>
+  </form>
+</dialog>{% endif %}

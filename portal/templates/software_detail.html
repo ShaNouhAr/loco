@@ -1,12 +1,105 @@
 {% extends 'base.html' %}
 {% from '_software_logo.html' import software_logo %}
+{% from "_app_edit_dialog.html" import app_data with context %}
 {% block title %}{{ software.name }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
-<div class="head"><div class="store-card-top">{{ software_logo(software.winget_id,software.name,'large') }}<div><h1>{{ software.name }}</h1><p>{{ software.version or 'Version non renseignée' }} · {{ 'Issu du store WinGet' if software.winget_id else 'Logiciel géré localement' }}</p></div></div>
-<div class="actions">{% if software.winget_id and can('store.view') %}<a class="btn" href="{{ url_for('software_store_detail',package_id=software.winget_id) }}">Fiche du store</a>{% endif %}{% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose',app=software.slug) }}">Préparer un déploiement</a>{% endif %}</div></div>
-<div class="cols"><div class="stack">
-<section class="panel" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="2000"><div class="panel-h"><h2>Installeur local</h2><span class="st {{ 'ok' if software.status == 'ready' else 'err' if software.status == 'error' else 'warn' }}">{{ app_states.get(software.status,'Indisponible') }}</span></div><div class="panel-b"><table><tbody><tr data-slug="{{ software.slug }}" data-status="{{ software.status }}"><td><span data-progress="{{ software.slug }}">{{ software.error or ('Prêt pour le déploiement' if software.status == 'ready' else 'Téléchargement de l’installeur') }}</span></td></tr></tbody></table><dl class="kv"><dt>Type</dt><dd>{{ software.kind }}</dd><dt>Taille</dt><dd>{{ software.size|human }}</dd><dt>Arguments silencieux</dt><dd class="mono break">{{ software.args or '—' }}</dd><dt>Détection sur les postes</dt><dd>{{ software.detect or software.name }}</dd><dt>Empreinte SHA-256</dt><dd class="mono break">{{ software.sha256 or software.expected_sha256 or 'En attente du fichier' }}</dd></dl></div></section>
-<section class="panel"><div class="panel-h"><h2>Groupes de logiciels</h2></div><div class="panel-b stack"><div class="actions">{% for group in memberships %}<a class="tag" href="{{ url_for('software_group_editor',group_id=group.id) }}">{{ group.name }}</a>{% else %}<span class="muted">Ce logiciel n'appartient encore à aucun groupe.</span>{% endfor %}</div>{% if can('windows.groups') and software_groups %}<form class="row" method="post" action="{{ url_for('software_group_attach',slug=software.slug) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="group_id" aria-label="Groupe de logiciels">{% for group in software_groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select><button class="btn">Ajouter au groupe</button></form>{% endif %}{% if can('windows.groups') %}<a href="{{ url_for('software_group_editor',group_id=0,app=software.slug) }}">Créer un groupe avec ce logiciel →</a>{% endif %}</div></section>
-</div><section class="panel"><div class="panel-h"><h2>Installé sur le parc <span class="h-count">{{ installed|length }}</span></h2></div><div class="table-wrap"><table><tbody>{% for item in installed %}<tr><td><a href="{{ url_for('fleet_device',dev_id=item.device.id) }}">{{ item.device.hostname }}</a></td><td>{{ item.version }}{% if item.outdated %} <span class="st warn">à mettre à jour</span>{% endif %}</td></tr>{% else %}<tr><td class="empty">{{ 'Non détecté dans les inventaires disponibles.' if can('fleet.view') else 'Le droit de consultation du parc est requis.' }}</td></tr>{% endfor %}</tbody></table></div></section></div>
+{% set outdated = installed|selectattr('outdated')|list %}
+<div class="head">
+  <div class="store-card-top">{{ software_logo(software.winget_id, software.name, 'large') }}
+    <div><h1>{{ software.name }}</h1>
+      <p><span class="mono">{{ software.version or 'version non renseignée' }}</span> · {{ software.kind }} · {{ 'issu du store WinGet' if software.winget_id else 'ajouté manuellement' }}</p></div>
+  </div>
+  <div class="actions">
+    {% if can('windows.edit') %}<button type="button" class="btn" data-open="#edit" data-app='{{ app_data(software) }}'>Modifier</button>{% endif %}
+    {% if can('fleet.install') %}<a class="btn primary {{ 'disabled' if software.status != 'ready' }}" href="{{ url_for('deployment_compose', app=software.slug) }}">Déployer sur le parc</a>{% endif %}
+    {% if (software.winget_id and can('store.view')) or (software.source_url and can('windows.refresh')) or can('windows.delete') %}
+    <details class="menu">
+      <summary class="btn" aria-label="Autres actions">Plus</summary>
+      <div class="menu-list" role="menu">
+        {% if software.winget_id and can('store.view') %}<a class="menu-item" href="{{ url_for('software_store_detail', package_id=software.winget_id) }}">Fiche du store WinGet</a>{% endif %}
+        {% if software.source_url and can('windows.refresh') %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=software.slug) }}" data-ajax>
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche">
+          <button class="menu-item" {{ 'disabled' if software.status == 'downloading' }}><span class="spin"></span>Retélécharger l'installeur</button>
+        </form>{% endif %}
+        {% if can('windows.delete') %}<hr>
+        <form method="post" action="{{ url_for('windows_apps_delete', slug=software.slug) }}" data-ajax data-confirm="Supprimer {{ software.name }} ?" data-confirm-text="Le logiciel est retiré du catalogue et des groupes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution." data-confirm-ok="Supprimer">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>Supprimer du catalogue…</button>
+        </form>{% endif %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+</div>
+
+<div class="stack" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="2000">
+  {% if software.status == 'error' %}
+  <div class="note err row-between"><span>{{ software.error or 'Téléchargement impossible.' }}</span>
+    {% if software.source_url and can('windows.refresh') %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=software.slug) }}" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche"><button class="btn sm"><span class="spin"></span>Réessayer</button>
+    </form>{% endif %}</div>
+  {% elif software.status == 'ready' and software.kind == 'exe' and not software.args %}
+  <div class="note warn row-between"><span>Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).</span>
+    {% if can('windows.edit') %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(software) }}'>Renseigner</button>{% endif %}</div>
+  {% endif %}
+
+  <div class="metrics">
+    <div class="metric" data-slug="{{ software.slug }}" data-status="{{ software.status }}"><div class="k">Installeur</div>
+      <div class="v small-v"><span class="st {{ 'ok' if software.status == 'ready' else 'err' if software.status == 'error' else 'warn' }}" {% if software.status == 'downloading' %}data-progress="{{ software.slug }}"{% endif %}>{{ app_states.get(software.status, 'indisponible')|lower }}</span></div>
+      <div class="s">{{ software.size|human if software.size else 'fichier en attente' }}</div></div>
+    {% if can('fleet.view') %}
+    <div class="metric"><div class="k">Installé sur</div><div class="v">{{ installed|length }}</div><div class="s">poste{{ 's' if installed|length != 1 }} Windows</div></div>
+    <div class="metric"><div class="k">À mettre à jour</div><div class="v {{ 'warn-text' if outdated }}">{{ outdated|length }}</div><div class="s">{{ 'version plus ancienne que ' ~ software.version if outdated else 'aucun poste en retard' }}</div></div>
+    {% endif %}
+    <div class="metric"><div class="k">Groupes</div><div class="v">{{ memberships|length }}</div><div class="s">groupe{{ 's' if memberships|length != 1 }} de logiciels</div></div>
+  </div>
+
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><h2>Installé sur le parc</h2>
+        {% if outdated and can('fleet.install') and software.status == 'ready' %}<div class="aside"><a class="btn sm" href="{{ url_for('deployment_compose', app=software.slug) }}">Déployer la mise à jour</a></div>{% endif %}</div>
+      {% if installed %}
+      <div class="table-wrap"><table><tbody>
+        {% for item in installed %}<tr>
+          <td><a href="{{ url_for('fleet_device', dev_id=item.device.id) }}" class="mono">{{ item.device.hostname }}</a></td>
+          <td class="mono">{{ item.version }}</td>
+          <td class="right">{% if item.outdated %}<span class="st warn">à mettre à jour</span>{% else %}<span class="st ok">à jour</span>{% endif %}</td>
+        </tr>{% endfor %}
+      </tbody></table></div>
+      {% else %}
+      <div class="empty">{{ 'Non détecté dans les inventaires du parc.' if can('fleet.view') else 'Le droit de consultation du parc est requis.' }}</div>
+      {% endif %}
+    </section>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-h"><h2>Installeur</h2></div>
+        <div class="panel-b"><dl class="kv">
+          <dt>Fichier</dt><dd class="mono break">{{ software.filename or '—' }}</dd>
+          <dt>Arguments silencieux</dt><dd class="mono break">{{ software.args or '—' }}</dd>
+          <dt>Nom dans Windows</dt><dd>{{ software.detect or software.name }}</dd>
+          {% if software.source_url %}<dt>Lien source</dt><dd class="mono break">{{ software.source_url }}</dd>{% endif %}
+          <dt>Empreinte SHA-256</dt><dd class="mono break">{{ software.sha256 or software.expected_sha256 or 'en attente du fichier' }}</dd>
+        </dl></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><h2>Groupes de logiciels</h2>
+          {% if can('windows.groups') %}<div class="aside"><a href="{{ url_for('software_group_editor', group_id=0, app=software.slug) }}">Nouveau groupe</a></div>{% endif %}</div>
+        <div class="panel-b stack-sm">
+          <div class="row">{% for group in memberships %}<a class="tag" href="{{ url_for('software_group_editor', group_id=group.id) }}">{{ group.name }}</a>{% else %}<span class="muted">Dans aucun groupe.</span>{% endfor %}</div>
+          {% if can('windows.groups') and software_groups %}
+          <form class="row" method="post" action="{{ url_for('software_group_attach', slug=software.slug) }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <select name="group_id" aria-label="Groupe de logiciels">{% for group in software_groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select>
+            <button class="btn">Ajouter au groupe</button>
+          </form>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{% with retour = 'fiche' %}{% include "_app_edit_dialog.html" %}{% endwith %}
 {% endblock %}

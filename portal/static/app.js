@@ -389,7 +389,7 @@
   function renderApps(d) {
     var changed = false;
     d.apps.forEach(function (a) {
-      var row = $('tr[data-slug="' + a.slug + '"]');
+      var row = $('[data-slug="' + a.slug + '"]');
       if (!row) return;
       if (row.dataset.status !== a.status) { changed = true; return; }
       var el = $("[data-progress]", row);

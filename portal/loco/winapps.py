@@ -109,12 +109,47 @@ def get_app(slug):
     return row
 
 
+# Filtres de la liste : clé -> (libellé, classe de la pastille).
+ATTENTION = {"parc": ("Mises à jour à déployer", "warn"), "arguments": ("Arguments manquants", "warn"),
+             "erreur": ("Erreurs", "err"), "telechargement": ("En téléchargement", "")}
+
+
+def attention(row, used):
+    """Points à traiter pour un logiciel du catalogue (clés de ATTENTION)."""
+    keys = set()
+    if used and used[1]:
+        keys.add("parc")
+    if row["status"] == "ready" and row["kind"] == "exe" and not row["args"]:
+        keys.add("arguments")
+    if row["status"] == "error":
+        keys.add("erreur")
+    if row["status"] in ("downloading", "pending"):
+        keys.add("telechargement")
+    return keys
+
+
+def _back_to(slug):
+    """Retour sur la fiche du logiciel quand le formulaire en vient, sinon sur la liste."""
+    if request.form.get("retour") == "fiche":
+        return back("software_detail", slug=slug)
+    return back("windows_apps")
+
+
 @app.route("/windows-apps")
 @login_required
 def windows_apps():
     from .fleet import fleet_usage
     rows = db().execute("SELECT * FROM win_apps ORDER BY name COLLATE NOCASE").fetchall()
-    return render_template("windows_apps.html", apps=rows, default_args=config.DEFAULT_ARGS, usage=fleet_usage(rows) if can("fleet.view") else {})
+    usage = fleet_usage(rows) if can("fleet.view") else {}
+    items = [{"a": r, "used": usage.get(r["slug"]), "flags": attention(r, usage.get(r["slug"]))} for r in rows]
+    counts = {k: sum(k in i["flags"] for i in items) for k in ATTENTION}
+    state = request.args.get("etat", "")
+    if state not in ATTENTION:
+        state = ""
+    return render_template("windows_apps.html", items=[i for i in items if not state or state in i["flags"]],
+                           total=len(items), total_size=sum(r["size"] for r in rows), counts=counts, state=state,
+                           filters=ATTENTION, winget=any(r["winget_id"] for r in rows),
+                           default_args=config.DEFAULT_ARGS, show_usage=can("fleet.view"))
 
 
 @app.route("/api/apps")
@@ -181,7 +216,7 @@ def windows_apps_edit(slug):
     url = request.form.get("url", "").strip()
     if url and not url.startswith(("http://", "https://")):
         flash("Le lien doit commencer par http:// ou https://.", "error")
-        return back("windows_apps")
+        return _back_to(slug)
     upload = request.files.get("file")
     if url != row["source_url"] or upload and upload.filename:
         db().execute("UPDATE win_apps SET winget_id='',expected_sha256='',source_filename='' WHERE id=?", (row["id"],))
@@ -197,11 +232,11 @@ def windows_apps_edit(slug):
         error = save_upload(row, upload, secure_filename(upload.filename))
         if error:
             flash(error, "error")
-            return back("windows_apps")
+            return _back_to(slug)
         detail += " (nouveau fichier)"
     audit("windows.modification", detail)
     flash(f"{row['name']} mis à jour.", "ok")
-    return back("windows_apps")
+    return _back_to(slug)
 
 
 @app.route("/windows-apps/<slug>/refresh", methods=["POST"])
@@ -214,7 +249,7 @@ def windows_apps_refresh(slug):
         start_fetch(row)
         audit("windows.actualisation", slug)
         flash(f"Nouveau téléchargement de {row['name']} lancé.", "ok")
-    return back("windows_apps")
+    return _back_to(slug)
 
 
 @app.route("/windows-apps/<slug>/delete", methods=["POST"])
@@ -242,6 +277,6 @@ def software_detail(slug):
             _, version, outdated = fleet.catalog_state(fleet.inventory(device), [row])[0]
             if version:
                 installed.append({"device": device, "version": version, "outdated": outdated})
-    return render_template("software_detail.html", software=row, installed=installed,
+    return render_template("software_detail.html", software=row, installed=installed, default_args=config.DEFAULT_ARGS,
                            software_groups=groups.listing("software") if can("windows.groups") else [],
                            memberships=groups.memberships("software", row["id"]))

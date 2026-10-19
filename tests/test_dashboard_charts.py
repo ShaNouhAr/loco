@@ -99,10 +99,16 @@ class TestWindowsUpdatePage(FleetTest):
         self.addCleanup(patcher.stop)
         wupdate._DAILY.clear()
         wupdate._CACHE.clear()
+        service = mock.patch("loco.wupdate.service_active", return_value=True)   # nginx absent des VM de test
+        self.nginx = service.start()
+        self.addCleanup(service.stop)
 
     def test_page_names_known_devices_and_counts_the_last_14_days(self):
         page = self.admin.c.get("/windows-update").get_data(as_text=True)
         self.assertIn("Aucun poste n'est encore passé par loco", page)
+        self.nginx.return_value = False
+        self.assertIn("Le cache est arrêté (nginx)", self.admin.c.get("/windows-update").get_data(as_text=True))
+        self.nginx.return_value = True
         Agent(WINDOWS, "192.168.43.50").enroll()                            # même adresse que le journal
         today = datetime.date.today()
         with open(self.log, "w") as f:

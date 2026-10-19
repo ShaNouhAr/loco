@@ -1,91 +1,99 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd %}
 {% from "_software_logo.html" import software_logo %}
+{% from "_app_edit_dialog.html" import app_data with context %}
 {% block title %}Logiciels Windows{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
 <div class="head">
   <div>
-    <h1>Gestion des logiciels</h1>
-    <p>Catalogue Windows, groupes de logiciels et déploiements sur les appareils équipés de l’agent. Sélectionnez des logiciels pour les déployer ensemble.</p>
+    <h1>Catalogue local</h1>
+    <p>Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.</p>
   </div>
-  {% if can_any("windows.add", "windows.refresh", "store.view") %}
+  {% if can_any("windows.add", "windows.refresh") %}
   <div class="actions">
-    {% if apps|selectattr('winget_id')|list %}
-    {% if can("windows.refresh") %}<form method="post" action="{{ url_for('winget_update') }}" data-ajax>
+    {% if winget and can("windows.refresh") %}<form method="post" action="{{ url_for('winget_update') }}" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button class="btn" title="Nouvelles versions des logiciels importés depuis winget"><span class="spin"></span>Nouvelles versions</button>
+      <button class="btn" title="Cherche dans WinGet une version plus récente des logiciels qui en sont issus et la télécharge"><span class="spin"></span>Chercher des mises à jour WinGet</button>
     </form>{% endif %}
-    {% endif %}
-{% if can("store.view") %}    <a class="btn" href="{{ url_for('software_store') }}">Ouvrir le store</a>{% endif %}
     {% if can("windows.add") %}<button type="button" class="btn primary" data-open="#add">Ajouter un logiciel</button>{% endif %}
   </div>
   {% endif %}
 </div>
 
-<section class="panel" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="1500">
-  <div class="panel-h">
-    <h2>Catalogue <span class="h-count">{{ apps|length }} · {{ apps|sum(attribute='size')|human }}</span></h2>
-    {% if apps %}<div class="aside"><input type="search" placeholder="Filtrer" data-filter="#apps tbody tr:not(.note-row)" data-empty="#apps-none" class="search-sm"></div>{% endif %}
-  </div>
-  {% if apps %}
-  <div class="table-wrap">
-    <table id="apps">
-      <thead><tr>
-        <th class="chk"><input type="checkbox" id="pick-all" aria-label="Tout sélectionner"></th>
-        <th>Logiciel</th><th>Version</th><th>Type</th><th>Arguments</th><th class="num">Taille</th><th>État</th><th></th>
-      </tr></thead>
-      <tbody>
-      {% for a in apps %}
-        {% set note = a.status == 'error' or (a.status == 'ready' and a.kind == 'exe' and not a.args) %}
-        <tr class="{{ 'has-note' if note }}" data-slug="{{ a.slug }}" data-status="{{ a.status }}">
-          <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}" {{ 'disabled' if a.status != 'ready' }}></td>
-          {% set used = usage.get(a.slug, [0, 0]) %}
-          <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div><a href="{{ url_for('software_detail',slug=a.slug) }}">{{ a.name }}</a><span class="sub">{{ a.slug }}{% if a.winget_id %} · winget {{ a.winget_id }}{% endif %}{% if used[0] %} · <a href="{{ url_for('fleet') }}">{{ used[0] }} poste(s)</a>{% if used[1] %}, <span class="st warn">{{ used[1] }} à mettre à jour</span>{% endif %}{% endif %}</span></div></div></td>
-          <td class="mono">{{ a.version or '—' }}</td>
-          <td class="mono muted">{{ a.kind }}</td>
-          <td class="mono muted">{{ a.args or '—' }}</td>
-          <td class="num">{{ a.size|human if a.size else '—' }}</td>
-          <td class="nowrap">
-            {% if a.status == 'ready' %}<span class="st ok">prêt</span>
-            {% elif a.status == 'downloading' %}<span class="st warn" data-progress="{{ a.slug }}">téléchargement</span>
-            {% elif a.status == 'error' %}<span class="st err">erreur</span>
-            {% else %}<span class="st">en attente</span>{% endif %}
-          </td>
-          <td class="right">
-            {% if can_any("windows.edit", "windows.refresh", "windows.delete") %}
-            <div class="acts">
-              {% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit"
-                data-app='{{ {"slug": a.slug, "name": a.name, "version": a.version, "kind": a.kind, "args": a.args, "url": a.source_url, "filename": a.filename, "sha256": a.sha256, "detect": a.detect}|tojson|forceescape }}'>Modifier</button>{% endif %}
-              {% if a.source_url %}
-              {% if can("windows.refresh") %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=a.slug) }}" data-ajax>
-                <input type="hidden" name="csrf" value="{{ csrf }}">
-                <button class="linkbtn" title="Retélécharger depuis le lien source" {{ 'disabled' if a.status == 'downloading' }}>Actualiser</button>
-              </form>{% endif %}
-              {% endif %}
-              {% if can("windows.delete") %}<form method="post" action="{{ url_for('windows_apps_delete', slug=a.slug) }}" data-ajax data-confirm="Supprimer {{ a.name }} ?" data-confirm-text="Le logiciel est retiré du catalogue et des groupes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution." data-confirm-ok="Supprimer">
-                <input type="hidden" name="csrf" value="{{ csrf }}">
-                <button class="linkbtn del">Supprimer</button>
-              </form>{% endif %}
-            </div>
-            {% endif %}
-          </td>
-        </tr>
-        {% if a.status == 'error' %}
-        <tr class="note-row err"><td></td><td colspan="7">{{ a.error }}</td></tr>
-        {% elif note %}
-        <tr class="note-row warn"><td></td><td colspan="7">Aucun argument silencieux : l'installeur risque d'attendre un clic. À renseigner via Modifier (souvent <code>/S</code>).</td></tr>
-        {% endif %}
+<div class="stack" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="1500">
+  {% if total %}
+  <div class="fleet-filters">
+    <nav class="chips" aria-label="Filtrer le catalogue">
+      <a class="chip {{ 'on' if not state }}" href="{{ url_for('windows_apps') }}">Tous <b>{{ total }}</b></a>
+      {% for key, (label, cls) in filters.items() if counts[key] or state == key %}
+      {% if key != 'parc' or show_usage %}
+      <a class="chip {{ 'on' if state == key }}" href="{{ url_for('windows_apps', etat=key) }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
+      {% endif %}
       {% endfor %}
-      </tbody>
-    </table>
-    <div id="apps-none" class="empty hidden">Aucun logiciel ne correspond.</div>
+    </nav>
+    <div class="row">
+      <span class="muted small">{{ total_size|human }} au total</span>
+      {% if items %}<input type="search" class="search-sm" placeholder="Rechercher un logiciel" data-filter="#apps tbody tr:not(.note-row)" data-empty="#apps-none" aria-label="Rechercher un logiciel">{% endif %}
+    </div>
   </div>
-  {% else %}
-  <div class="empty">Catalogue vide. Ajoutez un installeur par lien ou par fichier.</div>
   {% endif %}
-  <div class="panel-f">Commande en HTTPS : l'autorité loco doit être importée sur le poste (GPO).{% if http_url %} Sans elle, remplacer l'adresse par <code>{{ http_url }}</code>.{% endif %} Chaque installeur a 30 minutes pour se terminer (<code>LOCO_TIMEOUT</code>) et le fichier est vérifié par SHA256 avant installation.</div>
-</section>
+
+  <section class="panel">
+    {% if items %}
+    <div class="table-wrap">
+      <table id="apps" class="apps-table">
+        <thead><tr>
+          <th class="chk"><input type="checkbox" id="pick-all" aria-label="Tout sélectionner"></th>
+          <th>Logiciel</th><th>Version</th>{% if show_usage %}<th class="hide-sm">Sur le parc</th>{% endif %}<th class="num hide-sm">Taille</th><th>État</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for i in items %}{% set a = i.a %}
+          <tr data-slug="{{ a.slug }}" data-status="{{ a.status }}" data-search="{{ a.name }} {{ a.winget_id }} {{ a.slug }}" class="{{ 'has-note' if 'erreur' in i.flags or 'arguments' in i.flags }}">
+            <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}" {{ 'disabled' if a.status != 'ready' }}></td>
+            <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div>
+              <a href="{{ url_for('software_detail', slug=a.slug) }}">{{ a.name }}</a>
+              <span class="sub sans">{{ a.kind }} · {{ 'WinGet ' ~ a.winget_id if a.winget_id else 'ajouté manuellement' }}</span></div></div></td>
+            <td class="mono nowrap">{{ a.version or '—' }}</td>
+            {% if show_usage %}
+            <td class="hide-sm nowrap">
+              {% if i.used and i.used[0] %}{{ i.used[0] }} poste{{ 's' if i.used[0] > 1 }}{% else %}<span class="faint">aucun poste</span>{% endif %}
+              {% if i.used and i.used[1] %}<span class="sub sans warn-text">{{ i.used[1] }} à mettre à jour{% if can('fleet.install') and a.status == 'ready' %} · <a href="{{ url_for('deployment_compose', app=a.slug) }}">déployer</a>{% endif %}</span>{% endif %}
+            </td>
+            {% endif %}
+            <td class="num nowrap hide-sm">{{ a.size|human if a.size else '—' }}</td>
+            <td class="nowrap">
+              {% if a.status == 'ready' %}<span class="st ok">prêt</span>
+              {% elif a.status == 'downloading' %}<span class="st warn" data-progress="{{ a.slug }}">téléchargement</span>
+              {% elif a.status == 'error' %}<span class="st err">erreur</span>
+              {% else %}<span class="st">en attente</span>{% endif %}
+            </td>
+            <td class="right nowrap">{% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit" data-app='{{ app_data(a) }}'>Modifier</button>{% endif %}</td>
+          </tr>
+          {% if 'erreur' in i.flags %}
+          <tr class="note-row err"><td></td><td colspan="{{ 6 if show_usage else 5 }}">
+            <div class="row-between"><span>{{ a.error }}</span>
+            {% if a.source_url and can("windows.refresh") %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=a.slug) }}" data-ajax>
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm"><span class="spin"></span>Réessayer</button>
+            </form>{% endif %}</div></td></tr>
+          {% elif 'arguments' in i.flags %}
+          <tr class="note-row warn"><td></td><td colspan="{{ 6 if show_usage else 5 }}">
+            <div class="row-between"><span>Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).</span>
+            {% if can("windows.edit") %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(a) }}'>Renseigner</button>{% endif %}</div></td></tr>
+          {% endif %}
+        {% endfor %}
+        </tbody>
+      </table>
+      <div id="apps-none" class="empty hidden">Aucun logiciel ne correspond à la recherche.</div>
+    </div>
+    {% elif total %}
+    <div class="empty">Rien à traiter ici. <a href="{{ url_for('windows_apps') }}">Tout afficher</a></div>
+    {% else %}
+    <div class="empty">Catalogue vide : {% if can("windows.add") %}<button type="button" class="linkbtn" data-open="#add">ajoutez un installeur</button> par lien ou par fichier{% endif %}{% if can("store.view") %}{{ ', ou ' if can("windows.add") }}importez-en un depuis le <a href="{{ url_for('software_store') }}">store WinGet</a>{% endif %}.</div>
+    {% endif %}
+    <div class="panel-f">Chaque installeur est vérifié par SHA-256 sur le poste avant installation et dispose de 30 minutes (<code>LOCO_TIMEOUT</code>). Commande PowerShell en HTTPS : autorité loco importée sur le poste (GPO){% if http_url %}, sinon remplacer l'adresse par <code>{{ http_url }}</code>{% endif %}.</div>
+  </section>
+</div>
 
 <div class="selbar" data-base="{{ client_url }}/win/i/">
   <div class="selbar-in">
@@ -96,7 +104,6 @@
   </div>
 </div>
 
-{% if can_any("windows.add", "windows.edit") %}
 {# ------------------------------------------------------------ ajout #}
 {% if can("windows.add") %}<dialog id="add">
   <form method="post" action="{{ url_for('windows_apps_add') }}" enctype="multipart/form-data" data-ajax>
@@ -141,34 +148,5 @@
   </form>
 </dialog>{% endif %}
 
-{# ------------------------------------------------------------ modification #}
-{% if can("windows.edit") %}<dialog id="edit">
-  <form method="post" action="" data-base="{{ url_for('windows_apps_edit', slug='__slug__') }}" enctype="multipart/form-data" data-ajax>
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="dlg-h"><h2>Modifier <span data-title></span></h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
-    <div class="dlg-b">
-      <div class="grid2">
-        <label class="f"><span>Nom</span><input type="text" name="name" required></label>
-        <label class="f"><span>Version</span><input type="text" name="version"></label>
-        <label class="f wide"><span>Lien source</span><input type="url" name="url"></label>
-        <label class="f"><span>Type</span>
-          <select name="kind"><option value="auto">Automatique</option>{% for k in ['exe', 'msi', 'msu', 'ps1', 'file'] %}<option>{{ k }}</option>{% endfor %}</select>
-        </label>
-        <label class="f"><span>Arguments</span><input type="text" name="args"></label>
-        <label class="f wide"><span>Nom dans Windows (détection sur le parc)</span><input type="text" name="detect" placeholder="par défaut : le nom"></label>
-        <div class="wide">
-          <span class="cmd-label">Remplacer le fichier</span>
-          <div class="drop"><input type="file" name="file" aria-label="Nouveau fichier"><div class="files"></div></div>
-          <span class="hint mono" data-file></span>
-        </div>
-      </div>
-      <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
-    </div>
-    <div class="dlg-f">
-      <button type="button" class="btn" data-close>Annuler</button>
-      <button class="btn primary"><span class="spin"></span>Enregistrer</button>
-    </div>
-  </form>
-</dialog>{% endif %}
-{% endif %}
+{% include "_app_edit_dialog.html" %}
 {% endblock %}

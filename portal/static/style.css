@@ -583,3 +583,12 @@ details.hint > summary:hover { color: var(--text); }
 details.hint[open] > summary { margin-bottom: 6px; }
 td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; font-family: var(--sans); color: var(--text-2); }
 @media (max-width: 720px) { td .sub.only-sm { display: block; margin-top: 2px; } .journal-table .nowrap { white-space: normal; } }
+
+/* ------------------------------------------------------------------ logiciels Windows */
+
+.btn.disabled { opacity: .45; pointer-events: none; }
+.stack-sm > * + * { margin-top: 12px; }
+td .sub.sans { font-family: var(--sans); }
+.apps-table td { vertical-align: middle; }
+.apps-table tr.note-row td { padding-bottom: 12px; }
+.apps-table .note-row .btn.sm { color: var(--text); }

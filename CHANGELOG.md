@@ -8,6 +8,8 @@
 - **Windows Update repensé** : indicateurs sur 14 jours (servi par le cache et part du trafic, pris sur Internet), taille du cache et état du service, dernière requête et nombre de postes ; graphique quotidien des 14 derniers jours ; alerte si aucun poste n'est encore passé par loco ou si le cache est arrêté.
 - Domaines redirigés en liste compacte, modifiables dans une fenêtre ; explication du fonctionnement repliée.
 - Dernières requêtes : nom du poste du parc à la place de son adresse (droit *Consulter les appareils*), source « cache » ou « Internet ».
+- **Catalogue local repensé** : pastilles des points à traiter avec leur nombre (mises à jour à déployer sur le parc, arguments silencieux manquants, erreurs, téléchargements en cours) ; colonnes réduites à l'essentiel (logiciel, version, postes équipés et en retard avec un lien « déployer », taille, état). Type et origine passent sous le nom ; « Réessayer » sur un téléchargement en échec et « Renseigner » sur un installeur sans arguments, directement dans la liste.
+- **Fiche d'un logiciel** : en-tête avec Modifier, Déployer et un menu Plus (fiche du store, retélécharger, supprimer) ; indicateurs (état de l'installeur, postes équipés, postes à mettre à jour, groupes) ; liste des postes avec leur version et « Déployer la mise à jour ». Après une modification depuis la fiche, on y revient.
 - Les listes actualisées en direct échappent aussi les guillemets des noms de fichiers demandés par les postes.
 
 ## 2.11.0 — 2026-10-19
