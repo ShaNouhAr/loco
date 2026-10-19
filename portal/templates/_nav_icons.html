@@ -28,12 +28,31 @@
   <path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/>
 {% elif name == 'devices' %}
   <rect x="2" y="4" width="14" height="10" rx="1.5"/><path d="M6 18h6M9 14v4"/><rect x="18" y="7" width="4" height="11" rx="1"/>
+{% elif name == 'palette' %}
+  <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2Z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="14.5" cy="7.5" r="1"/>
 {% elif name == 'server' %}
   <rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M16 6.5h2M16 17.5h2"/>
 {% endif %}
 </svg>
 {%- endmacro %}
 
+{# Apparence : thème et couleur d'accent, mémorisés dans le navigateur (theme.js les applique avant l'affichage). #}
+{% macro appearance_choices() -%}
+<div class="menu-label">Thème</div>
+{% for key, label in [('oled', 'OLED (noir)'), ('dim', 'Sombre doux'), ('light', 'Clair')] %}
+<button type="button" class="menu-item theme-choice" data-set-theme="{{ key }}" role="menuitemradio" aria-checked="false"><span class="theme-swatch swatch-{{ key }}" aria-hidden="true"></span>{{ label }}</button>
+{% endfor %}
+<div class="menu-label">Couleur d'accent</div>
+<div class="accent-row">
+{% for key, label in [('neutral', 'Neutre'), ('blue', 'Bleu'), ('green', 'Vert'), ('violet', 'Violet'), ('orange', 'Orange'), ('pink', 'Rose')] %}
+<button type="button" class="accent-choice accent-{{ key }}" data-set-accent="{{ key }}" role="menuitemradio" aria-checked="false" aria-label="{{ label }}" title="{{ label }}"></button>
+{% endfor %}
+</div>
+{%- endmacro %}
+
 {% macro theme_toggle() -%}
-<button type="button" class="theme-toggle" aria-label="Thème OLED ou clair" aria-pressed="true" title="Passer au thème clair">{{ nav_icon('moon') }}</button>
+<details class="menu theme-menu">
+  <summary class="theme-toggle" aria-label="Apparence : thème et couleur d'accent" title="Apparence">{{ nav_icon('palette') }}</summary>
+  <div class="menu-list" role="menu">{{ appearance_choices() }}</div>
+</details>
 {%- endmacro %}

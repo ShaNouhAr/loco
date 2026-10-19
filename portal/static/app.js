@@ -91,19 +91,20 @@
   /* ---------------------------------------------------------------- thème */
 
   /* OLED par défaut ; la lune bascule vers le thème clair et inversement (choix mémorisé). */
-  function applyTheme(p) {
-    document.documentElement.dataset.theme = p;
-    $$(".theme-toggle").forEach(function (b) {
-      b.setAttribute("aria-pressed", p === "oled");
-      b.title = p === "oled" ? "Passer au thème clair" : "Passer au thème OLED";
-    });
+  // Apparence : thème (OLED, sombre doux, clair) et couleur d'accent, mémorisés dans le navigateur.
+  function applyAppearance() {
+    var root = document.documentElement;
+    $$("[data-set-theme]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setTheme === root.dataset.theme); });
+    $$("[data-set-accent]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setAccent === (root.dataset.accent || "neutral")); });
   }
-  applyTheme(document.documentElement.dataset.theme === "light" ? "light" : "oled");
+  applyAppearance();
   document.addEventListener("click", function (e) {
-    if (!e.target.closest(".theme-toggle")) return;
-    var p = document.documentElement.dataset.theme === "light" ? "oled" : "light";
-    try { localStorage.setItem("lr-theme", p); } catch (err) { /* navigation privée */ }
-    applyTheme(p);
+    var choice = e.target.closest("[data-set-theme], [data-set-accent]");
+    if (!choice) return;
+    var key = choice.dataset.setTheme ? "theme" : "accent", value = choice.dataset.setTheme || choice.dataset.setAccent;
+    document.documentElement.dataset[key] = value;
+    try { localStorage.setItem("lr-" + key, value); } catch (err) { /* navigation privée */ }
+    applyAppearance();
   });
 
   /* ---------------------------------------------------------------- notifications */
