@@ -104,7 +104,7 @@ namespace Loco
                         }
                         lastCursor = new IntPtr(-1);
                     }
-                    else if (kind == 3) { var request = Read(9); Frame(request[0] != 0); }
+                    else if (kind == 3) { var request = Read(9); Frame(CoalesceRequests(request[0] != 0)); }
                     else if (kind == 4) { var p = Read(7); if (AttachDesktop()) Key(I32(p, 3), p[0] != 0); }
                     else if (kind == 5) { var p = Read(5); if (AttachDesktop()) Pointer(p[0], I16(p, 1), I16(p, 3)); }
                     else if (kind == 6) { var p = Read(7); uint length = I32(p, 3); if (length > 1024 * 1024) throw new InvalidDataException(); Read((int)length); }
@@ -131,6 +131,21 @@ namespace Loco
             foreach (var button in new[] { new[] { 1, 4 }, new[] { 2, 64 }, new[] { 4, 16 } })
                 if ((mouseMask & button[0]) != 0) { var input = new Input(); input.Data.Mouse.Flags = (uint)button[1]; Send(input); }
             mouseMask = 0;
+        }
+        bool CoalesceRequests(bool incremental)
+        {
+            // RFB permet de satisfaire plusieurs demandes en attente avec une seule image.
+            // Les notifications de résolution/UAC génèrent aussi des demandes chez noVNC.
+            var pipe = stream as NamedPipeClientStream;
+            if (pipe == null) return incremental;
+            var peek = new byte[10]; uint read, available, left;
+            for (int i = 0; i < 63; i++)
+            {
+                if (!PeekNamedPipe(pipe.SafePipeHandle.DangerousGetHandle(), peek, 10, out read, out available, out left) ||
+                    read < 10 || peek[0] != 3) break;
+                incremental &= Read(10)[1] != 0;
+            }
+            return incremental;
         }
         void Frame(bool incremental)
         {
@@ -356,6 +371,7 @@ namespace Loco
         [StructLayout(LayoutKind.Explicit)] struct InputData { [FieldOffset(0)] public MouseInput Mouse; [FieldOffset(0)] public KeyboardInput Keyboard; }
         [StructLayout(LayoutKind.Sequential)] struct MouseInput { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }
         [StructLayout(LayoutKind.Sequential)] struct KeyboardInput { public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra; }
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool PeekNamedPipe(IntPtr pipe, byte[] buffer, uint size, out uint read, out uint available, out uint left);
         [DllImport("user32.dll")] static extern uint SendInput(uint count, Input[] input, int size);
         [StructLayout(LayoutKind.Sequential)] struct CursorInfo { public int Size, Flags; public IntPtr Cursor; public int X, Y; }
         [StructLayout(LayoutKind.Sequential)] struct IconInfo { public bool Icon; public int HotX, HotY; public IntPtr Mask, Color; }

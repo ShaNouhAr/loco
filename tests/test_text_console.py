@@ -67,8 +67,9 @@ class TestTextConsole(unittest.TestCase):
             def send(data):
                 process.stdin.write(data)
                 process.stdin.flush()
-            def update():
-                send(b'\x03\x01' + struct.pack('>HHHH', 0, 0, 1024, 640))
+            def update(request=True):
+                if request:
+                    send(b'\x03\x01' + struct.pack('>HHHH', 0, 0, 1024, 640))
                 header = read(4)
                 frame = bytearray(header)
                 for _ in range(struct.unpack_from('>H', header, 2)[0]):
@@ -148,6 +149,17 @@ class TestTextConsole(unittest.TestCase):
                 time.sleep(0.05)
             else:
                 self.fail('Le vrai PTY ne reçoit pas les dimensions adaptées')
+            # Plusieurs demandes arrivées ensemble donnent une image ; conserver le rafraîchissement complet.
+            request = b'\x03\x01' + struct.pack('>HHHH', 0, 0, 1001, 577)
+            full = b'\x03\0' + struct.pack('>HHHH', 0, 0, 1001, 577)
+            send(request + full + request)
+            ack = read(36)
+            self.assertEqual(struct.unpack_from('>HHHH', ack, 4), (0, 0, 1001, 577))
+            pixels, count = decode(update(request=False), 1001, 577, pixels)
+            self.assertEqual(count, 40)
+            # La commande suivante ne doit ni être absorbée ni recevoir une ancienne image en guise d'ACK.
+            send(b'\xfb\0' + struct.pack('>HHBBIHHHHI', 1024, 640, 1, 0, 0, 0, 0, 1024, 640, 0))
+            self.assertEqual(struct.unpack_from('>HHHH', read(36), 4), (1, 0, 1024, 640))
             process.stdin.close()
             process.wait(timeout=5)
             self.assertEqual(process.returncode, 0, process.stderr.read().decode())

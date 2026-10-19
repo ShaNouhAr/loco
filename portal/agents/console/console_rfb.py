@@ -162,6 +162,7 @@ def serve(frame_encoder, inp=None, out=None):
 
         tight, rgb_order, previous, last_frame = False, False, None, 0
         extended_size = False
+        pending_kind = None
         modifiers, pending_input = set(), bytearray()
         while process.poll() is None:
             # Vider le PTY même lorsque le navigateur est momentanément inactif. Au plus 256 Kio par tour.
@@ -186,9 +187,10 @@ def serve(frame_encoder, inp=None, out=None):
                     del pending_input[:written]
                 except BlockingIOError:
                     pass
-            if not select.select([inp], [], [], 0.025)[0]:
+            if pending_kind is None and not select.select([inp], [], [], 0.025)[0]:
                 continue
-            kind = read(1)[0]
+            kind = pending_kind if pending_kind is not None else read(1)[0]
+            pending_kind = None
             if kind == 0:
                 fmt = read(19)[3:]
                 if fmt[:10] != pixel[:10] or fmt[10:13] not in (b"\x10\x08\x00", b"\x00\x08\x10"):
@@ -202,6 +204,15 @@ def serve(frame_encoder, inp=None, out=None):
                 tight, extended_size = 7 in encodings, -308 in encodings
             elif kind == 3:
                 incremental = read(9)[0] != 0
+                # Une image satisfait les demandes consécutives déjà reçues ; ne jamais absorber une saisie.
+                for _ in range(63):
+                    if not select.select([inp], [], [], 0)[0]:
+                        break
+                    following = read(1)[0]
+                    if following != 3:
+                        pending_kind = following
+                        break
+                    incremental &= read(9)[0] != 0
                 if extended_size and not incremental:
                     write(size_update())
                 time.sleep(max(0, 0.04 - (time.monotonic() - last_frame)))
