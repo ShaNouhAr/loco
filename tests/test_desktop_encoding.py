@@ -112,8 +112,8 @@ class TestWindowsDesktopEncoding(unittest.TestCase):
 using System; using System.IO; using Loco;
 class Probe {
  static void Main(string[] args) {
-  int w=257,h=129; var image=new byte[w*h*4];
-  for(int y=0;y<h;y++) for(int x=0;x<w;x++) { int p=(y*w+x)*4; image[p]=(byte)x; image[p+1]=(byte)y; image[p+2]=(byte)(x+y); }
+  int w=257,h=129; var image=new byte[w*h*4];   // peu de couleurs par tuile : reste en Tight zlib sans perte
+  for(int y=0;y<h;y++) for(int x=0;x<w;x++) { int p=(y*w+x)*4; image[p]=(byte)(x/16*16); image[p+1]=(byte)(y/16*16); image[p+2]=0; }
   var encoder=new RfbFramebuffer(w,h);
   File.WriteAllBytes(Path.Combine(args[0],"image.bin"),image);
   File.WriteAllBytes(Path.Combine(args[0],"initial.bin"),encoder.Update(image,true,true,false));
@@ -133,8 +133,9 @@ class Probe {
 }'''
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory); (path / 'Probe.cs').write_text(harness)
-            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-out:' + str(path / 'Probe.exe'),
-                            str(ROOT / 'windows/client/RfbFramebuffer.cs'), str(path / 'Probe.cs')], check=True, capture_output=True)
+            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
+                            '-out:' + str(path / 'Probe.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            str(path / 'Probe.cs')], check=True, capture_output=True)
             subprocess.run(['mono', str(path / 'Probe.exe'), directory], check=True, capture_output=True)
             image = (path / 'image.bin').read_bytes()
             decoded, count = decode((path / 'initial.bin').read_bytes(), 257, 129)
@@ -156,6 +157,44 @@ class Probe {
             decoded, count = decode((path / '4k-delta.bin').read_bytes(), 3840, 2160, decoded)
             self.assertEqual(decoded, changed); self.assertEqual(count, 1)
             self.assertLess((path / '4k-delta.bin').stat().st_size, (path / '4k.bin').stat().st_size // 10)
+
+    def test_complex_tiles_use_jpeg_and_flat_tiles_stay_lossless(self):
+        """Tuile riche en couleurs : sous-encodage Tight JPEG (0x90) ; tuile à peu de couleurs : zlib sans perte (0x01)."""
+        harness = r'''
+using System; using System.IO; using Loco;
+class Jpeg {
+ static void Main(string[] args) {
+  int w=128,h=128; var photo=new byte[w*h*4]; var flat=new byte[w*h*4];
+  for(int y=0;y<h;y++) for(int x=0;x<w;x++) { int p=(y*w+x)*4;
+   photo[p]=(byte)(x*2); photo[p+1]=(byte)(y*2); photo[p+2]=(byte)((x*y)%251);
+   byte v=(byte)(((x+y)/16)%3==0?0x20:((x+y)/16)%3==1?0x80:0xd0); flat[p]=v; flat[p+1]=v; flat[p+2]=v; }
+  File.WriteAllBytes(Path.Combine(args[0],"photo.bin"),new RfbFramebuffer(w,h).Update(photo,true,true,false));
+  File.WriteAllBytes(Path.Combine(args[0],"flat.bin"),new RfbFramebuffer(w,h).Update(flat,true,true,false));
+ }
+}'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory); (path / 'Jpeg.cs').write_text(harness)
+            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
+                            '-out:' + str(path / 'Jpeg.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            str(path / 'Jpeg.cs')], check=True, capture_output=True)
+            run = subprocess.run(['mono', str(path / 'Jpeg.exe'), directory], capture_output=True, text=True)
+            if run.returncode:
+                self.fail(run.stderr)
+            photo = (path / 'photo.bin').read_bytes()
+            self.assertEqual(struct.unpack_from('>H', photo, 2)[0], 1)          # une tuile
+            self.assertEqual(struct.unpack_from('>HHHHi', photo, 4), (0, 0, 128, 128, 7))   # Tight, pleine tuile
+            if photo[16] == 0x01:
+                self.skipTest('JPEG indisponible (libgdiplus absent) : repli zlib sans perte')
+            self.assertEqual(photo[16], 0x90)                                   # sous-encodage JPEG
+            b = photo[17]; size = b & 0x7f; pos = 18
+            if b & 0x80:
+                b = photo[18]; size |= (b & 0x7f) << 7; pos = 19
+                if b & 0x80:
+                    size |= photo[19] << 14; pos = 20
+            data = photo[pos:]
+            self.assertEqual(len(data), size)                                  # longueur compacte Tight exacte
+            self.assertEqual((data[:2], data[-2:]), (b'\xff\xd8', b'\xff\xd9'))  # flux JPEG complet
+            self.assertEqual((path / 'flat.bin').read_bytes()[16], 0x01)        # peu de couleurs : zlib sans perte
 
     def test_resolution_choice_fills_the_window_before_matching_its_size(self):
         """Mode du pilote retenu : celui qui remplit la zone (rapport conservé), puis le plus proche de 100 %."""

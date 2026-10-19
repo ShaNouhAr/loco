@@ -50,6 +50,7 @@ namespace Loco
         bool tight, rgbOrder, cursorShape;
         IntPtr lastCursor = new IntPtr(-1);
         byte mouseMask;
+        uint clipboardSeq;
         readonly Stopwatch frameTime = Stopwatch.StartNew();
         public RfbDesktop(Stream stream)
         {
@@ -58,6 +59,8 @@ namespace Loco
             width = bounds.Width; height = bounds.Height;
             framebuffer = new RfbFramebuffer(width, height);
             captureArea = new Rectangle(0, 0, width, height);
+            // Presse-papiers courant marqué « déjà vu » : on ne transmet que les changements survenant après l'ouverture de la session.
+            clipboardSeq = GetClipboardSequenceNumber();
         }
         byte[] Read(int n)
         {
@@ -110,7 +113,7 @@ namespace Loco
                     else if (kind == 3) { var request = Read(9); Frame(CoalesceRequests(request[0] != 0)); }
                     else if (kind == 4) { var p = Read(7); if (AttachDesktop()) Key(I32(p, 3), p[0] != 0); }
                     else if (kind == 5) { var p = Read(5); if (AttachDesktop()) Pointer(p[0], I16(p, 1), I16(p, 3)); }
-                    else if (kind == 6) { var p = Read(7); uint length = I32(p, 3); if (length > 1024 * 1024) throw new InvalidDataException(); Read((int)length); }
+                    else if (kind == 6) { var p = Read(7); uint length = I32(p, 3); if (length > 256 * 1024) throw new InvalidDataException(); SetClipboard(FromCutText(Read((int)length))); }
                     else if (kind == 251)
                     {
                         var p = Read(7); int w = I16(p, 1), h = I16(p, 3), count = p[5];
@@ -160,6 +163,7 @@ namespace Loco
         {
             int wait = 40 - (int)frameTime.ElapsedMilliseconds; if (wait > 0) Thread.Sleep(wait); frameTime.Restart();
             if (!AttachDesktop()) { Write(new byte[4]); return; }
+            PollClipboard();
             if (pendingResolution) ApplyResolution();
             if (extendedSize && (bounds.Width != width || bounds.Height != height))
             {
@@ -408,6 +412,66 @@ namespace Loco
             try { using (var request = EventWaitHandle.OpenExisting(@"Global\loco-sas")) request.Set(); }
             catch (Exception) { }
         }
+        // Presse-papiers texte partagé, uniquement sur le bureau utilisateur (Default), jamais sur le bureau sécurisé.
+        void PollClipboard()
+        {
+            if (!String.Equals(desktopName, "Default", StringComparison.OrdinalIgnoreCase)) return;
+            uint seq = GetClipboardSequenceNumber();
+            if (seq == clipboardSeq) return;
+            if (!OpenClipboard(IntPtr.Zero)) return;   // occupé : nouvelle tentative à la frame suivante (seq inchangé)
+            string text = null;
+            try
+            {
+                IntPtr handle = GetClipboardData(13);   // CF_UNICODETEXT
+                if (handle != IntPtr.Zero)
+                {
+                    IntPtr p = GlobalLock(handle);
+                    if (p != IntPtr.Zero) { try { text = Marshal.PtrToStringUni(p); } finally { GlobalUnlock(handle); } }
+                }
+            }
+            finally { CloseClipboard(); }
+            clipboardSeq = seq;
+            if (String.IsNullOrEmpty(text)) return;
+            byte[] body = CutTextBytes(text);
+            Write(Join(new byte[] { 3, 0, 0, 0 }, U32((uint)body.Length), body));   // ServerCutText
+        }
+        void SetClipboard(string text)
+        {
+            if (!String.Equals(desktopName, "Default", StringComparison.OrdinalIgnoreCase) || !OpenClipboard(IntPtr.Zero)) return;
+            try
+            {
+                EmptyClipboard();
+                byte[] bytes = Encoding.Unicode.GetBytes(text + "\0");
+                IntPtr mem = GlobalAlloc(0x2042, (UIntPtr)bytes.Length);   // GHND : déplaçable et initialisé à zéro
+                if (mem == IntPtr.Zero) return;
+                IntPtr p = GlobalLock(mem);
+                if (p == IntPtr.Zero) { GlobalFree(mem); return; }
+                Marshal.Copy(bytes, 0, p, bytes.Length); GlobalUnlock(mem);
+                if (SetClipboardData(13, mem) == IntPtr.Zero) GlobalFree(mem);   // libérer seulement si le presse-papiers n'a pas pris la main
+            }
+            finally { CloseClipboard(); clipboardSeq = GetClipboardSequenceNumber(); }   // ne pas se renvoyer sa propre écriture
+        }
+        // Le texte « cut » RFB est en Latin-1, sauts de ligne LF ; le presse-papiers Windows utilise UTF-16 et CRLF.
+        static byte[] CutTextBytes(string text)
+        {
+            if (text.Length > 100000) text = text.Substring(0, 100000);
+            var bytes = new List<byte>(text.Length);
+            char prev = '\0';
+            foreach (char c in text)
+            {
+                if (c == '\n') { if (prev != '\r') bytes.Add(10); }
+                else if (c == '\r') bytes.Add(10);
+                else bytes.Add(c <= 0xff ? (byte)c : (byte)'?');
+                prev = c;
+            }
+            return bytes.ToArray();
+        }
+        static string FromCutText(byte[] body)
+        {
+            var text = new StringBuilder(body.Length);
+            foreach (byte b in body) { if (b == 10) text.Append("\r\n"); else if (b != 13) text.Append((char)b); }
+            return text.ToString();
+        }
         [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public InputData Data; }
         [StructLayout(LayoutKind.Explicit)] struct InputData { [FieldOffset(0)] public MouseInput Mouse; [FieldOffset(0)] public KeyboardInput Keyboard; }
         [StructLayout(LayoutKind.Sequential)] struct MouseInput { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }
@@ -427,5 +491,15 @@ namespace Loco
         [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool GetUserObjectInformation(IntPtr handle, int index, StringBuilder data, int length, out int needed);
         [DllImport("user32.dll", SetLastError = true)] static extern bool SetThreadDesktop(IntPtr desktop);
         [DllImport("user32.dll")] static extern bool CloseDesktop(IntPtr desktop);
+        [DllImport("user32.dll")] static extern bool OpenClipboard(IntPtr hwnd);
+        [DllImport("user32.dll")] static extern bool CloseClipboard();
+        [DllImport("user32.dll")] static extern bool EmptyClipboard();
+        [DllImport("user32.dll")] static extern IntPtr GetClipboardData(uint format);
+        [DllImport("user32.dll")] static extern IntPtr SetClipboardData(uint format, IntPtr data);
+        [DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
+        [DllImport("kernel32.dll")] static extern IntPtr GlobalAlloc(uint flags, UIntPtr bytes);
+        [DllImport("kernel32.dll")] static extern IntPtr GlobalFree(IntPtr mem);
+        [DllImport("kernel32.dll")] static extern IntPtr GlobalLock(IntPtr mem);
+        [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr mem);
     }
 }

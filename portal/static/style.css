@@ -419,10 +419,16 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .remote-session [hidden] { display: none !important; }
 .remote-screen { height: max(420px, calc(100dvh - 315px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
 .remote-screen.terminal { padding: 12px; }
+/* Bureau : la fenêtre « scène » porte le cadre et le défilement ; l'écran noVNC s'y centre (margin auto, défilement possible dans les deux sens) ou le remplit en mode Ajuster. */
+.remote-viewport { height: max(420px, calc(100dvh - 315px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: 8px; overflow: auto; scrollbar-gutter: stable; display: flex; }
+.remote-viewport .remote-screen.desktop { margin: auto; height: auto; min-height: 0; background: none; border: 0; border-radius: 0; overflow: visible; }
+.remote-viewport.fit { overflow: hidden; }
+.remote-viewport.fit .remote-screen.desktop { margin: 0; width: 100%; height: 100%; }
+.remote-viewport.zoomed .remote-screen.desktop { width: max-content; height: max-content; }
 .remote-screen:fullscreen { height: 100dvh; border: 0; border-radius: 0; }
 .remote-session:fullscreen { display: flex; flex-direction: column; gap: 12px; width: 100dvw; height: 100dvh; padding: 16px; background: var(--bg); overflow: auto; }
 .remote-session:fullscreen .head { margin: 0; }
-.remote-session:fullscreen .remote-screen { flex: 1 1 auto; height: auto; min-height: 0; }
+.remote-session:fullscreen .remote-screen, .remote-session:fullscreen .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; }
 .remote-session:fullscreen > p { margin: 0; }
 .store-description { white-space: pre-line; }
 .store-pagination { justify-content: center; }
@@ -443,8 +449,10 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 /* Console ouverte dans son propre onglet : toute la surface appartient au poste. */
 .remote-session .head { align-items: center; }
 .remote-session .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.remote-scale-label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.remote-scale-label select { width: auto; max-width: 210px; }
+.remote-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.remote-field span { color: var(--text-2); }
+.remote-field select { width: auto; max-width: 200px; }
+#remote-readout { white-space: nowrap; }
 .remote-detached { overflow: hidden; }
 .remote-detached .remote-console { max-width: none; margin: 0; padding: 0; height: 100dvh; }
 .remote-detached .remote-session { display: flex; flex-direction: column; gap: 0; height: 100%; min-height: 0; }
@@ -452,11 +460,11 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .remote-detached .remote-session h1 { font-size: 15px; }
 .remote-detached .remote-description, .remote-detached .remote-footnote, .remote-detached .head > div > p { display: none; }
 .remote-detached #remote-status { flex: 0 0 auto; padding: 4px 16px; margin: 0; border: 0; font-size: 12px; }
-.remote-detached .remote-screen { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
+.remote-detached .remote-screen, .remote-detached .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
 .remote-detached .remote-screen.terminal { padding: 8px; }
 .remote-detached #remote-new-tab { display: none; }
-.remote-session:fullscreen .remote-scale-label { flex: 0 0 auto; }
-@media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-scale-label span { display: none; } }
+.remote-session:fullscreen .remote-field { flex: 0 0 auto; }
+@media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } }
 
 /* Groupes et déploiements : sélection lisible, séparée de la confirmation. */
 .selection-list { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); }
@@ -791,8 +799,10 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .remote-toolbar .toolbar-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--line-2); }
 .remote-toolbar .modifier[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .remote-toolbar .menu-list { left: 0; right: auto; }
-.remote-toolbar .send-text .menu-list { min-width: 340px; }
+.remote-toolbar .send-text .menu-list, .remote-toolbar .clipboard .menu-list { min-width: 340px; }
 .remote-toolbar .menu-form textarea { width: 100%; font-family: var(--mono); }
+.clipboard-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.clipboard-actions .btn { justify-self: unset; }
 .menu-item .shortcut { margin-left: auto; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 3px; font-size: 11.5px; color: var(--text-3); }
 
 /* ------------------------------------------------------------------ fonctionnalités */

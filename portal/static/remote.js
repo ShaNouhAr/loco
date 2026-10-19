@@ -103,19 +103,39 @@ if (root.dataset.kind === 'terminal') {
 } else {
   const { default: RFB } = await import('./vendor/novnc-1.7.0/core/rfb.js');
   channel = new RelayChannel(); rfb = new RFB(screen, channel, { shared: true }); rfb.showDotCursor = true;
-  const scale = document.getElementById('remote-scale');
-  const resolution = document.getElementById('remote-resolution');
+  const viewport = document.getElementById('remote-viewport');
+  const resolutionMode = document.getElementById('remote-resolution-mode');
+  const zoom = document.getElementById('remote-zoom');
+  const readout = document.getElementById('remote-readout');
   let nativeSize, resizeTimer, connected = false, lastSize = '';
+  const dpr = () => window.devicePixelRatio || 1;
+
+  // Zoom fixe : on pilote l'échelle propre de noVNC (le pointeur se mappe par cette même échelle, donc clics justes à tout zoom).
+  // 100 % = un pixel du bureau par pixel physique (net) ; l'échelle noVNC vaut donc (zoom/100)/dpr. « Ajuster » laisse noVNC remplir la fenêtre.
+  const baseUpdateScale = rfb._updateScale.bind(rfb);
+  rfb._updateScale = function () {
+    if (zoom.value === 'fit') { baseUpdateScale(); return; }
+    rfb._display.scale = (parseInt(zoom.value, 10) / 100) / dpr();
+    if (typeof rfb._fixScrollbars === 'function') rfb._fixScrollbars();
+  };
+  function applyDisplay() {
+    const fit = zoom.value === 'fit';
+    rfb.clipViewport = false;
+    rfb.scaleViewport = fit;   // déclenche _updateScale (notre surcharge) ; en mode fixe, l'écran est défilé par la scène.
+    viewport.classList.toggle('fit', fit);
+    viewport.classList.toggle('zoomed', !fit);
+    rfb._updateScale();
+    updateReadout();
+  }
   function requestResolution() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      // Adaptateur noVNC 1.7 : cette capacité n'a pas d'accesseur public.
-      // Ne jamais envoyer SetDesktopSize à un ancien agent qui ne l'annonce pas.
+      // Adaptateur noVNC 1.7 : cette capacité n'a pas d'accesseur public. Ne jamais envoyer SetDesktopSize à un ancien agent qui ne l'annonce pas.
       if (!running || !nativeSize || !rfb._supportsSetDesktopSize) return;
-      // Pixels de l'écran et non pixels CSS : avec un affichage à 150 %, un pixel du bureau = un pixel affiché.
-      const dpr = window.devicePixelRatio || 1;
-      const target = resolutionFor(nativeSize.width, nativeSize.height, Math.floor((screen.clientWidth - 2) * dpr),
-                                   Math.floor((screen.clientHeight - 2) * dpr), scale.value);
+      // « Résolution du poste » : rétablir la résolution d'origine (relevée à la connexion). « Adaptée » : pixels physiques de la fenêtre.
+      const target = resolutionMode.value === 'native'
+        ? {width: nativeSize.width, height: nativeSize.height}
+        : resolutionFor(Math.floor(viewport.clientWidth * dpr()), Math.floor(viewport.clientHeight * dpr()));
       if (!target) return;
       const key = `${target.width}x${target.height}`;
       if (key === lastSize) return;
@@ -127,20 +147,43 @@ if (root.dataset.kind === 'terminal') {
     if (!running) { clearInterval(capabilityTimer); clearTimeout(resizeTimer); return; }
     requestResolution();
   }, 1000);
-  function updateViewport() {
+  function updateReadout() {
     const canvas = screen.querySelector('canvas');
     if (!connected || !canvas || !canvas.width || !canvas.height) return;
     if (!nativeSize) nativeSize = {width: canvas.width, height: canvas.height};
-    // Ajuster aussi vers le haut si le pilote limite les résolutions disponibles.
-    rfb.scaleViewport = scale.value !== 'native';
-    // 100 % : un pixel du bureau par pixel de l'écran (net), quelle que soit la mise à l'échelle du navigateur.
-    const percent = Math.round(100 * canvas.getBoundingClientRect().width * (window.devicePixelRatio || 1) / canvas.width);
-    resolution.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
+    const percent = Math.round(100 * canvas.getBoundingClientRect().width * dpr() / canvas.width);
+    readout.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
   }
-  scale.addEventListener('change', () => { updateViewport(); requestResolution(); });
-  new ResizeObserver(() => { updateViewport(); requestResolution(); }).observe(screen);
-  new MutationObserver(updateViewport).observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height'] });
-  rfb.addEventListener('connect', () => { connected = true; updateViewport(); requestResolution(); });
+  resolutionMode.addEventListener('change', () => { lastSize = ''; requestResolution(); });
+  zoom.addEventListener('change', applyDisplay);
+  new ResizeObserver(() => { updateReadout(); requestResolution(); }).observe(viewport);
+  new MutationObserver(() => { updateReadout(); if (zoom.value !== 'fit') rfb._updateScale(); })
+    .observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height'] });
+  rfb.addEventListener('connect', () => { connected = true; applyDisplay(); requestResolution(); });
+
+  // Presse-papiers partagé : noVNC émet « clipboard » quand le poste copie (ServerCutText) et clipboardPasteFrom() renvoie vers le poste (ClientCutText).
+  const clip = document.getElementById('remote-clipboard');
+  const clipArea = clip.querySelector('textarea');
+  const clipHint = document.getElementById('remote-clipboard-hint');
+  rfb.addEventListener('clipboard', e => {
+    clipArea.value = e.detail.text || '';
+    if (navigator.clipboard && navigator.clipboard.writeText)
+      navigator.clipboard.writeText(clipArea.value).then(
+        () => { clipHint.textContent = 'Copié depuis le poste et placé dans votre presse-papiers local.'; },
+        () => { clipHint.textContent = 'Copié depuis le poste. Cliquez dans la zone puis Ctrl+C pour le récupérer localement.'; });
+    else clipHint.textContent = 'Copié depuis le poste.';
+  });
+  document.getElementById('remote-clipboard-read').addEventListener('click', async () => {
+    try { clipArea.value = await navigator.clipboard.readText(); clipArea.focus(); }
+    catch { clipHint.textContent = 'Lecture du presse-papiers local refusée par le navigateur ; collez (Ctrl+V) dans la zone, puis « Envoyer au poste ».'; clipArea.focus(); }
+  });
+  clip.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!connected) return;
+    rfb.clipboardPasteFrom(clipArea.value.slice(0, 100000));
+    clipHint.textContent = 'Envoyé au presse-papiers du poste. Collez-y avec Ctrl+V.';
+    rfb.focus();
+  });
 
   // Panneau de commandes : combinaisons, touches maintenues et texte tapé (keysyms X11, indépendants du clavier).
   const KEYS = {ctrl: [0xffe3, 'ControlLeft'], alt: [0xffe9, 'AltLeft'], shift: [0xffe1, 'ShiftLeft'], super: [0xffeb, 'MetaLeft'],

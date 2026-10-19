@@ -1,8 +1,11 @@
-// Images RFB natives : rectangles modifiés et compression Tight sans perte, curseur à transparence.
+// Images RFB natives : rectangles modifiés, zones d'interface sans perte (Tight zlib) et zones complexes en JPEG, curseur à transparence.
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 
 namespace Loco
 {
@@ -11,6 +14,27 @@ namespace Loco
         readonly int width, height;
         byte[] previous;
         const int Tile = 128;
+        // Au-delà de ce nombre de couleurs distinctes, une tuile est « photographique » (photo, dégradé, fond d'écran) : JPEG.
+        // En dessous (texte, aplats, icônes), compression Tight zlib sans perte, nette au pixel.
+        const int ColorThreshold = 256;
+        static readonly EncoderParameters JpegQuality = JpegParams(80L);
+        static ImageCodecInfo jpegCodec;
+        static bool jpegResolved;
+        static EncoderParameters JpegParams(long quality)
+        {
+            var p = new EncoderParameters(1); p.Param[0] = new EncoderParameter(Encoder.Quality, quality); return p;
+        }
+        // Résolu à la première tuile complexe seulement : sans GDI+/libgdiplus, on reste simplement en zlib sans perte.
+        static ImageCodecInfo JpegCodec()
+        {
+            if (!jpegResolved)
+            {
+                jpegResolved = true;
+                try { foreach (var codec in ImageCodecInfo.GetImageEncoders()) if (codec.FormatID == ImageFormat.Jpeg.Guid) { jpegCodec = codec; break; } }
+                catch (Exception) { jpegCodec = null; }
+            }
+            return jpegCodec;
+        }
         public RfbFramebuffer(int width, int height)
         {
             if (width < 1 || height < 1 || width > 65535 || height > 65535 || (long)width * height > 16777216)
@@ -60,6 +84,46 @@ namespace Loco
                     if (pixels[p] != previous[p]) return true;
             return false;
         }
+        // Nombre de couleurs distinctes borné : sortie dès le seuil atteint, donc peu coûteux sur les photos.
+        bool Complex(byte[] pixels, int x, int y, int w, int h)
+        {
+            var seen = new HashSet<int>();
+            for (int row = y; row < y + h; row++)
+                for (int p = (row * width + x) * 4, end = p + w * 4; p < end; p += 4)
+                {
+                    seen.Add(pixels[p] | (pixels[p + 1] << 8) | (pixels[p + 2] << 16));
+                    if (seen.Count > ColorThreshold) return true;
+                }
+            return false;
+        }
+        // JPEG d'une tuile à partir des pixels BGRX de la capture ; l'ordre mémoire 24bppRgb est déjà B,G,R.
+        // null si JPEG indisponible ou en échec : l'appelant retombe alors sur la compression zlib sans perte.
+        byte[] TryJpeg(byte[] pixels, int x, int y, int w, int h)
+        {
+            ImageCodecInfo codec = JpegCodec();
+            if (codec == null) return null;
+            try { return JpegTile(codec, pixels, x, y, w, h); }
+            catch (Exception) { return null; }
+        }
+        byte[] JpegTile(ImageCodecInfo codec, byte[] pixels, int x, int y, int w, int h)
+        {
+            using (var bitmap = new Bitmap(w, h, PixelFormat.Format24bppRgb))
+            {
+                var bits = bitmap.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+                try
+                {
+                    byte[] row = new byte[w * 3];
+                    for (int r = 0; r < h; r++)
+                    {
+                        int src = ((y + r) * width + x) * 4, next = 0;
+                        for (int c = 0; c < w; c++, src += 4) { row[next++] = pixels[src]; row[next++] = pixels[src + 1]; row[next++] = pixels[src + 2]; }
+                        Marshal.Copy(row, 0, IntPtr.Add(bits.Scan0, r * bits.Stride), w * 3);
+                    }
+                }
+                finally { bitmap.UnlockBits(bits); }
+                using (var memory = new MemoryStream()) { bitmap.Save(memory, codec, JpegQuality); return memory.ToArray(); }
+            }
+        }
         public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null)
         {
             if (pixels.Length != width * height * 4) throw new ArgumentException("Taille de capture invalide");
@@ -79,6 +143,12 @@ namespace Loco
                 {
                     int x = tile[0], y = tile[1], w = tile[2], h = tile[3];
                     U16(frame, x); U16(frame, y); U16(frame, w); U16(frame, h); U32(frame, tight ? 7u : 0u);
+                    // Sous-encodage JPEG (0x90) de Tight pour les tuiles complexes : bien moins de données qu'en zlib sans perte.
+                    if (tight && Complex(pixels, x, y, w, h))
+                    {
+                        byte[] jpeg = TryJpeg(pixels, x, y, w, h);
+                        if (jpeg != null) { frame.WriteByte(0x90); Compact(frame, jpeg.Length); frame.Write(jpeg, 0, jpeg.Length); continue; }
+                    }
                     byte[] data = new byte[w * h * (tight ? 3 : 4)]; int next = 0;
                     for (int row = y; row < y + h; row++)
                         for (int p = (row * width + x) * 4, end = p + w * 4; p < end; p += 4)

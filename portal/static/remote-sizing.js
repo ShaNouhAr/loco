@@ -1,11 +1,8 @@
-/* La fenêtre définit le bureau demandé ; le pilote Windows confirme la taille réellement disponible. */
-export function resolutionFor(nativeWidth, nativeHeight, viewWidth, viewHeight, mode) {
-  if (![nativeWidth, nativeHeight, viewWidth, viewHeight].every(n => Number.isFinite(n) && n > 0)) return null;
-  if (mode === 'auto') return {width: Math.max(160, Math.min(4000, Math.floor(viewWidth))), height: Math.max(100, Math.min(2160, Math.floor(viewHeight)))};
-  const ratio = Math.min(1, 4096 / nativeWidth, 2160 / nativeHeight);
-  const width = Math.max(160, Math.round(nativeWidth * ratio));
-  const height = Math.max(100, Math.round(nativeHeight * ratio));
-  return {width, height};
+/* En mode « Adaptée à la fenêtre », le bureau demandé suit la zone d'affichage ; le pilote Windows confirme la taille réellement disponible. */
+export function resolutionFor(viewWidth, viewHeight) {
+  if (![viewWidth, viewHeight].every(n => Number.isFinite(n) && n > 0)) return null;
+  return {width: Math.max(160, Math.min(4096, Math.floor(viewWidth))),
+          height: Math.max(100, Math.min(2160, Math.floor(viewHeight)))};
 }
 
 export function resizePacket(width, height) {
