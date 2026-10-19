@@ -289,6 +289,32 @@ class TestDeployments(FleetTest):
         self.assertIn('Installeur en échec : code 1603', html)
         self.assertIn('pc-compta', html)
 
+    def test_list_shows_progress_and_filters_by_state(self):
+        draft = self.preview()
+        failed = self.preview()
+        self.post(failed + '/confirmer')
+        cmd = self.agent.checkin().get_json()['commands'][0]
+        self.agent.result(cmd['id'], 'failed', 'Installeur en échec : code 1603')
+        html = self.admin.c.get('/windows-apps/deploiements').get_data(as_text=True)
+        self.assertIn('Avec erreurs <b>1</b>', html)
+        self.assertIn('À confirmer <b>1</b>', html)
+        self.assertIn('0/1 réussi', html)
+        self.assertIn('class="prog-failed"', html)
+        html = self.admin.c.get('/windows-apps/deploiements?etat=erreurs').get_data(as_text=True)
+        self.assertIn(failed.rsplit('/', 1)[-1], html)
+        self.assertNotIn(draft.rsplit('/', 1)[-1], html)
+        html = self.admin.c.get(failed).get_data(as_text=True)
+        self.assertIn('Échecs', html)
+        self.assertIn('<details class="output-details" open>', html)        # journal d'un échec déplié
+
+    def test_preview_explains_why_it_cannot_be_confirmed(self):
+        path = self.preview()
+        other = fixture.Browser()
+        other.login('admin', fixture.ADMIN_PW)                              # autre connexion du même compte
+        html = other.c.get(path).get_data(as_text=True)
+        self.assertIn('faite depuis une autre connexion', html)
+        self.assertEqual(other.post(path + '/confirmer', {}, page='/compte').status_code, 403)
+
     def test_expired_preview_and_all_incompatible_devices_never_queue(self):
         path = self.preview()
         with transaction() as conn:

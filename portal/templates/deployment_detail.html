@@ -1,25 +1,111 @@
 {% extends 'base.html' %}
+{% from "_charts.html" import progress as progress_bar %}
 {% block title %}{{ deployment.title }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
-{% set labels={'draft':'Prévisualisation · aucune installation lancée','expired':'Prévisualisation expirée','running':'Déploiement en cours','cancelling':'Annulation demandée','success':'Déploiement terminé','failed':'Déploiement terminé avec erreurs','cancelled':'Déploiement annulé'} %}
-<div class="head"><div><p class="small"><a href="{{ url_for('deployments') }}">← Déploiements</a></p><h1>{{ deployment.title }}</h1><p>{{ labels[state] }} · {{ deployment.created_by }} · {{ deployment.created_at|date_fr }}</p></div><a class="btn" href="{{ recompose }}">Préparer un autre déploiement</a></div>
-<div class="stack" data-poll="{{ url_for('deployment_detail',deployment_id=deployment.id) }}" data-poll-kind="reload" data-poll-every="3000" data-signature="{{ signature }}">
-  {% if deployment.state == 'draft' %}<p class="note">Vérifiez les versions et les machines ci-dessous. Les modifications futures des groupes n'ajouteront aucune cible à ce déploiement. {% if plan.bulk %}Le droit de déploiement sur plusieurs postes est requis.{% endif %}</p>{% endif %}
-  {% if state=='expired' %}<p class="note warn">Cette prévisualisation a expiré. Préparez un nouveau déploiement pour reprendre la sélection.</p>{% endif %}
-  {% if plan.force %}<p class="note warn">Réinstallation demandée : les logiciels seront réinstallés même lorsqu'une version à jour est détectée.</p>{% endif %}
-  {% if plan.groups.software or plan.groups.devices %}<section class="panel"><div class="panel-b"><strong>Groupes sélectionnés</strong><p>{{ (plan.groups.software + plan.groups.devices)|join(' · ') }}</p></div></section>{% endif %}
-  <section class="panel"><div class="panel-h"><h2>Logiciels <span class="h-count">{{ apps|length }}</span></h2></div><div class="table-wrap"><table><thead><tr><th>Logiciel</th><th>Version retenue</th><th>Installeur</th></tr></thead><tbody>
-  {% for item in apps %}<tr><td>{{ item.snapshot.name }}</td><td class="mono">{{ item.snapshot.version or '—' }}</td><td>{% if item.problem %}<span class="st warn">{{ item.problem }}</span>{% else %}<span class="st ok">{{ 'Prêt' if deployment.state=='draft' else 'Version conservée lors de la confirmation' }}</span>{% endif %}<span class="sub mono break">{{ item.snapshot.sha256 or 'Empreinte disponible après le téléchargement' }}</span></td></tr>{% endfor %}
-  </tbody></table></div></section>
-  <section class="panel"><div class="panel-h"><h2>Machines <span class="h-count">{{ plan.devices|length }}</span></h2></div><div class="table-wrap"><table><thead><tr><th>Appareil</th><th>{{ 'Compatibilité' if deployment.state=='draft' else 'État' }}</th><th>{{ 'Système' if deployment.state=='draft' else 'Résultat' }}</th></tr></thead><tbody>
-  {% if deployment.state=='draft' %}{% for device in plan.devices %}<tr><td>{{ device.hostname or device.uid[:8] }}</td><td><span class="st {{ 'warn' if device.reason else 'ok' }}">{{ device.reason or 'Cible Windows retenue' }}</span></td><td>{{ device.os_family }}</td></tr>{% endfor %}
-  {% else %}{% for target in targets %}<tr><td>{% if target.device_id %}<a href="{{ url_for('fleet_device',dev_id=target.device_id) }}">{{ target.hostname }}</a>{% else %}{{ target.hostname }}{% endif %}<span class="sub">{{ target.apps|length }} logiciel(s) demandé(s)</span></td><td><span class="st {{ 'ok' if target.state=='success' else 'err' if target.state=='failed' else 'warn' if target.state in ('queued','sent','running') else '' }}">{{ states[target.state] }}</span></td><td>{{ target.reason }}{% for skipped in target.skipped %}<span class="sub">{{ skipped.name }} : {{ skipped.reason }}</span>{% endfor %}{% if target.output %}<details><summary>Journal de l'installation</summary><pre class="deployment-output">{{ target.output }}</pre></details>{% endif %}</td></tr>{% endfor %}{% endif %}
-  </tbody></table></div></section>
-  {% if can('fleet.install') %}<div class="actions">
-    {% if deployment.state=='draft' %}<form method="post" action="{{ url_for('deployment_confirm',deployment_id=deployment.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" {{ 'disabled' if not confirmable or (plan.bulk and not can('fleet.bulk_install')) }}>Confirmer le déploiement</button></form>{% if not confirmable and state=='draft' %}<span class="small muted">Les installeurs doivent être prêts et cette préparation doit appartenir à votre connexion actuelle.</span>{% endif %}{% endif %}
-    {% if state in ('draft','expired','running') and (not plan.bulk or can('fleet.bulk_install')) %}<form method="post" action="{{ url_for('deployment_cancel',deployment_id=deployment.id) }}" data-confirm="Annuler ce déploiement ?" data-confirm-text="Seules les commandes non transmises seront annulées. Les installations déjà reçues par un agent peuvent se terminer." data-confirm-ok="Annuler"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger">{{ 'Abandonner la préparation' if deployment.state=='draft' else 'Annuler les commandes en attente' }}</button></form>{% endif %}
-  </div>{% endif %}
-  <p class="hint">Un agent peut être hors ligne : sa commande attend son prochain contact. Les logiciels déjà à jour et les installations identiques déjà en attente sont ignorés. Les résultats restent consultables même si un groupe est modifié ou supprimé.</p>
+{% set labels = {'draft': 'Préparation à confirmer · aucune installation lancée', 'expired': 'Préparation expirée', 'running': 'Déploiement en cours', 'cancelling': 'Annulation demandée', 'success': 'Déploiement terminé', 'failed': 'Déploiement terminé avec erreurs', 'cancelled': 'Déploiement annulé'} %}
+{% set cls = 'ok' if state == 'success' else 'err' if state == 'failed' else 'warn' if state in ('running', 'draft', 'cancelling') else '' %}
+{% set draft = deployment.state == 'draft' %}
+{% set can_cancel = can('fleet.install') and state in ('draft', 'expired', 'running') and (not plan.bulk or can('fleet.bulk_install')) %}
+<p class="small back-link"><a href="{{ url_for('deployments') }}">← Déploiements</a></p>
+<div class="head">
+  <div>
+    <h1>{{ deployment.title }}</h1>
+    <p><span class="st {{ cls }}">{{ labels[state] }}</span> · {{ deployment.created_by }} · {{ deployment.created_at|date_fr }}{% if plan.groups.software or plan.groups.devices %} · groupes {{ (plan.groups.software + plan.groups.devices)|join(', ') }}{% endif %}</p>
+  </div>
+  {% if can('fleet.install') %}
+  <div class="actions">
+    {% if draft %}
+      {% if can_cancel %}<form method="post" action="{{ url_for('deployment_cancel', deployment_id=deployment.id) }}" data-confirm="Abandonner cette préparation ?" data-confirm-text="Aucune installation n'a été lancée : la préparation est simplement fermée." data-confirm-ok="Abandonner">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Abandonner</button>
+      </form>{% endif %}
+      {% if state == 'draft' %}<form method="post" action="{{ url_for('deployment_confirm', deployment_id=deployment.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" {{ 'disabled' if not confirmable }}><span class="spin"></span>Confirmer le déploiement</button>
+      </form>{% else %}<a class="btn primary" href="{{ recompose }}">Préparer à nouveau</a>{% endif %}
+    {% else %}
+      <a class="btn" href="{{ recompose }}">Préparer un déploiement similaire</a>
+      {% if can_cancel and not draft %}
+      <details class="menu">
+        <summary class="btn" aria-label="Autres actions">Plus</summary>
+        <div class="menu-list" role="menu">
+          <form method="post" action="{{ url_for('deployment_cancel', deployment_id=deployment.id) }}" data-confirm="Annuler ce déploiement ?" data-confirm-text="Seules les commandes non transmises sont annulées. Les installations déjà reçues par un agent peuvent se terminer." data-confirm-ok="Annuler les commandes">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>Annuler les commandes en attente…</button>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="stack" data-poll="{{ url_for('deployment_detail', deployment_id=deployment.id) }}" data-poll-kind="reload" data-poll-every="3000" data-signature="{{ signature }}">
+  {% if state == 'draft' %}
+    {% if blocked %}<p class="note warn">{{ blocked }}</p>
+    {% else %}<p class="note">Vérifiez les logiciels et les postes ci-dessous, puis confirmez. Les postes ajoutés plus tard aux groupes ne rejoignent pas ce déploiement.{% if plan.bulk %} Déploiement sur plusieurs postes.{% endif %}</p>{% endif %}
+  {% elif state == 'expired' %}<p class="note warn">Cette préparation a expiré (une heure). <a href="{{ recompose }}">Préparez-la à nouveau</a> pour reprendre la même sélection.</p>
+  {% endif %}
+  {% if plan.force %}<p class="note warn">Réinstallation demandée : les logiciels sont réinstallés même quand une version à jour est détectée.</p>{% endif %}
+
+  {% if not draft %}
+  <div class="metrics">
+    <div class="metric"><div class="k">Réussis</div><div class="v">{{ progress.success }}</div><div class="s">sur {{ progress.total }} poste{{ 's' if progress.total > 1 }}</div></div>
+    <div class="metric"><div class="k">En attente</div><div class="v {{ 'warn-text' if progress.active }}">{{ progress.active }}</div><div class="s">au prochain contact de l'agent</div></div>
+    <div class="metric"><div class="k">Échecs</div><div class="v {{ 'err-text' if progress.failed }}">{{ progress.failed }}</div><div class="s">journal sur chaque poste</div></div>
+    <div class="metric"><div class="k">Non déployés</div><div class="v">{{ progress.other }}</div><div class="s">incompatibles ou annulés</div></div>
+  </div>
+  {{ progress_bar(progress) }}
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-h"><h2>Postes <span class="h-count">{{ plan.devices|length }}</span></h2></div>
+    <div class="table-wrap">
+      <table class="deploy-targets">
+        <thead><tr><th>Poste</th><th>{{ 'Compatibilité' if draft else 'État' }}</th><th>{{ 'Système' if draft else 'Détail' }}</th></tr></thead>
+        <tbody>
+        {% if draft %}
+          {% for d in plan.devices %}
+          <tr>
+            <td class="mono nowrap">{{ d.hostname or d.uid[:8] }}</td>
+            <td><span class="st {{ 'warn' if d.reason else 'ok' }}">{{ d.reason or 'Poste Windows retenu' }}</span></td>
+            <td>{{ families.get(d.os_family, d.os_family) }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          {% for t in targets %}{% set tcls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
+          <tr>
+            <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}" class="mono">{{ t.hostname }}</a>{% else %}<span class="mono">{{ t.hostname }}</span>{% endif %}
+              {% if t.apps %}<span class="sub sans">{{ t.apps|length }} logiciel{{ 's' if t.apps|length > 1 }} à installer</span>{% endif %}</td>
+            <td class="nowrap"><span class="st {{ tcls }}">{{ states[t.state] }}</span>{% if t.sent_at and t.state in ('sent', 'running') %}<span class="sub sans">transmis {{ t.sent_at|date_fr }}</span>{% elif t.finished_at %}<span class="sub sans">{{ t.finished_at|date_fr }}</span>{% endif %}</td>
+            <td>
+              {% if t.reason %}<span class="muted">{{ t.reason }}</span>{% endif %}
+              {% for skipped in t.skipped %}<span class="sub sans">{{ skipped.name }} : {{ skipped.reason }}</span>{% endfor %}
+              {% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' }}><summary>Journal de l'installation</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Logiciels <span class="h-count">{{ apps|length }}</span></h2><div class="aside">{{ 'versions vérifiées à la confirmation' if draft else 'versions conservées à la confirmation' }}</div></div>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+        {% for item in apps %}{% set a = item.snapshot %}
+          <tr>
+            <td>{{ a.name }}</td>
+            <td class="mono nowrap">{{ a.version or '—' }}</td>
+            <td class="right">{% if item.problem %}<span class="st warn">{{ item.problem }}</span>{% else %}<span class="st ok" title="SHA-256 {{ a.sha256 or 'en attente du fichier' }}">{{ 'prêt' if draft else 'version conservée' }}</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-f">Un poste hors ligne reçoit sa commande à son prochain contact. Les logiciels déjà à jour et les installations identiques déjà en attente sont ignorés. Les résultats restent consultables même si un groupe est modifié ou supprimé.</div>
+  </section>
 </div>
 {% endblock %}

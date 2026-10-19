@@ -15,7 +15,7 @@ import zipfile
 from flask import abort, flash, g, render_template, request, session, url_for
 
 from . import app, config, fleet, groups, winget
-from .auth import audit, lock_access, login_required, require
+from .auth import audit, can, lock_access, login_required, require
 from .db import db
 from .util import back, sha256_of
 
@@ -201,27 +201,51 @@ def _targets(deployment_id):
              'apps': json.loads(row['apps']), 'skipped': json.loads(row['skipped'])} for row in rows]
 
 
+# Filtres de la liste : clé -> (libellé, états de déploiement retenus, classe de la pastille).
+FILTERS = {'en-cours': ('En cours', ('running', 'cancelling'), 'warn'), 'a-confirmer': ('À confirmer', ('draft',), 'warn'),
+           'erreurs': ('Avec erreurs', ('failed',), 'err'), 'termines': ('Terminés', ('success', 'cancelled', 'expired'), 'ok')}
+
+
+def _progress(targets):
+    """Postes réussis, en attente, en échec et non concernés (non déployés ou annulés)."""
+    counts = {'success': 0, 'active': 0, 'failed': 0, 'other': 0}
+    for t in targets:
+        key = 'active' if t['state'] in ACTIVE else t['state'] if t['state'] in ('success', 'failed') else 'other'
+        counts[key] += 1
+    counts['total'] = len(targets)
+    return counts
+
+
 @app.route('/windows-apps/deploiements')
 @login_required
 def deployments():
     db().execute("BEGIN IMMEDIATE")
     cleanup_artifacts(db())
     db().commit()
-    total = db().execute("SELECT COUNT(*) FROM deployments WHERE state!='draft' OR user_id=?", (g.user['id'],)).fetchone()[0]
+    wanted = request.args.get('etat', '')
+    if wanted not in FILTERS:
+        wanted = ''
+    rows = db().execute("SELECT * FROM deployments WHERE state!='draft' OR user_id=? ORDER BY created_at DESC,id DESC",
+                        (g.user['id'],)).fetchall()
+    campaigns, counts = [], dict.fromkeys(FILTERS, 0)
+    for row in rows:
+        targets = _targets(row['id'])
+        plan = json.loads(row['plan'])
+        state = _state(row, targets)
+        for key, (_label, states, _cls) in FILTERS.items():
+            counts[key] += state in states
+        if wanted and state not in FILTERS[wanted][1]:
+            continue
+        campaigns.append({'row': row, 'state': state, 'devices': len(plan['devices']), 'apps': len(plan['apps']),
+                          'names': [a['name'] for a in plan['apps']], 'progress': _progress(targets)})
+    total = len(campaigns)
     pages = max(1, (total + 49) // 50)
     try:
         page = min(pages, max(1, int(request.args.get('page', '1'))))
     except ValueError:
         page = 1
-    rows = db().execute("SELECT * FROM deployments WHERE state!='draft' OR user_id=? ORDER BY created_at DESC,id DESC LIMIT 50 OFFSET ?",
-                        (g.user['id'], (page - 1) * 50)).fetchall()
-    campaigns = []
-    for row in rows:
-        targets = _targets(row['id'])
-        plan = json.loads(row['plan'])
-        campaigns.append({'row': row, 'state': _state(row, targets), 'devices': len(plan['devices']),
-                          'apps': len(plan['apps']), 'finished': sum(t['state'] not in ACTIVE for t in targets)})
-    return render_template('deployments.html', campaigns=campaigns, total=total, page=page, pages=pages)
+    return render_template('deployments.html', campaigns=campaigns[(page - 1) * 50:page * 50], total=total, page=page,
+                           pages=pages, all_count=len(rows), counts=counts, filters=FILTERS, wanted=wanted)
 
 
 @app.route('/windows-apps/deploiements/<deployment_id>')
@@ -235,14 +259,22 @@ def deployment_detail(deployment_id):
         apps.append({'snapshot': snapshot, 'current': current, 'problem': problem})
     targets = _targets(deployment_id)
     state = _state(row, targets)
-    confirmable = (state == 'draft' and all(not a['problem'] for a in apps) and row['user_id'] == g.user['id']
-                   and row['owner'] == _owner() and row['pw_version'] == g.user['pw_version'])
+    blocked = ''
+    if state == 'draft':
+        if row['user_id'] != g.user['id'] or row['owner'] != _owner() or row['pw_version'] != g.user['pw_version']:
+            blocked = 'Cette préparation a été faite depuis une autre connexion : préparez à nouveau le déploiement.'
+        elif any(a['problem'] for a in apps):
+            blocked = 'Un installeur n’est pas prêt (voir les logiciels ci-dessous) : la confirmation sera possible ensuite.'
+        elif plan['bulk'] and not can('fleet.bulk_install'):
+            blocked = 'Le droit de déploiement sur plusieurs postes est requis pour confirmer.'
+    confirmable = state == 'draft' and not blocked
     signature = hashlib.sha256(json.dumps([state, [(a['current']['status'] if a['current'] else '', a['problem']) for a in apps],
                                           [(t['id'], t['state'], t['output']) for t in targets]]).encode()).hexdigest()[:16]
     if request.headers.get('X-Requested-With') == 'fetch':
         return {'signature': signature}
     return render_template('deployment_detail.html', deployment=row, plan=plan, apps=apps, targets=targets,
-                           state=state, states=STATES, confirmable=confirmable, signature=signature,
+                           state=state, states=STATES, confirmable=confirmable, blocked=blocked, signature=signature,
+                           progress=_progress(targets), families=fleet.FAMILIES,
                            recompose=url_for("deployment_compose", app=[a['slug'] for a in plan['apps']],
                                              device=[d['id'] for d in plan['devices']]))
 

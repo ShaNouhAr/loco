@@ -15,6 +15,8 @@
 - **Groupes de logiciels et de machines repensés** : liste compacte avec la description, un aperçu des membres (icônes des logiciels, noms des appareils) et leur état résumé (logiciels prêts ou en erreur ; appareils à jour, en attente, nombreuses mises à jour) ; « Déployer » et, pour les machines, « Voir dans Mon parc » sur chaque ligne.
 - **Éditeur de groupe** : membres affichés en premier avec un compteur en direct, filtre « membres seulement » et recherche ; icône, version et état de chaque logiciel, système et voyant de chaque appareil ; barre Enregistrer toujours visible en bas ; suppression du groupe dans le menu Plus. En lecture seule, seuls les membres sont listés.
 - Les champs côte à côte (groupes, profils, configuration de l'appliance) sont de nouveau alignés.
+- **Déploiements repensés** : liste avec pastilles par état (en cours, à confirmer, avec erreurs, terminés), logiciels nommés et barre d'avancement par déploiement (réussis, en attente, échecs). Le suivi d'un déploiement montre quatre indicateurs, la barre d'avancement et les postes en premier, avec le journal d'un échec déplié d'office ; les empreintes passent en infobulle. Confirmer, Abandonner et Annuler sont dans l'en-tête, et un déploiement non confirmable dit pourquoi (autre connexion, installeur pas prêt, droit manquant).
+- **Préparation d'un déploiement** : sélections affichées en premier (avec les icônes des logiciels), compteurs en direct, appareils compatibles avant les autres, et barre « Vérifier avant de déployer » toujours visible avec le nom et l'option de réinstallation.
 - Les listes actualisées en direct échappent aussi les guillemets des noms de fichiers demandés par les postes.
 
 ## 2.11.0 — 2026-10-19

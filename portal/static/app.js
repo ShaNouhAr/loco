@@ -343,7 +343,7 @@
 
   /* ---------------------------------------------------------------- membres d'un groupe */
 
-  // Compteur des cases cochées et affichage limité aux lignes cochées (éditeur de groupe).
+  // Compteur des cases cochées (groupes, préparation d'un déploiement) et lignes cochées seules (éditeur de groupe).
   function syncPicked() {
     $$("[data-checked-count]").forEach(function (el) {
       el.textContent = $$(el.dataset.checkedCount).filter(function (c) { return c.checked; }).length;
@@ -351,9 +351,10 @@
     $$("tr input[name=members]").forEach(function (c) { c.closest("tr").classList.toggle("picked", c.checked); });
   }
   document.addEventListener("change", function (e) {
-    if (e.target.matches("input[name=members]")) syncPicked();
+    if (e.target.matches("input[type=checkbox], input[type=radio]")) syncPicked();
     if (e.target.matches("[data-only-checked]")) $(e.target.dataset.onlyChecked).classList.toggle("only-picked", e.target.checked);
   });
+  if ($("[data-checked-count]")) syncPicked();
 
   /* ---------------------------------------------------------------- jauges */
 

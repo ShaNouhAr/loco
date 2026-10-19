@@ -624,3 +624,31 @@ td .sub.sans { font-family: var(--sans); }
 .sticky-actions { position: sticky; bottom: 0; z-index: 5; background: var(--bg); color: var(--text-3); }
 .sticky-actions .btn { color: var(--text); }
 .sticky-actions .btn.primary { color: var(--bg); }
+
+/* ------------------------------------------------------------------ déploiements */
+
+.progress-bar { display: block; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; }
+.prog-bg { fill: var(--bg-3); }
+.prog-success { fill: var(--ok); }
+.prog-failed { fill: var(--err); }
+.prog-active { fill: var(--warn); }
+.prog-other { fill: var(--text-3); }
+.deploy-progress { min-width: 180px; }
+.deploy-progress .progress-bar { margin-bottom: 5px; }
+.deploy-progress .small { white-space: nowrap; }
+.deployments-table td { vertical-align: middle; }
+.summary-line { color: var(--text-2); font-size: 13px; }
+.err-text { color: var(--err); }
+.deploy-targets td { vertical-align: top; }
+.output-details { margin-top: 4px; }
+.output-details > summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; }
+.output-details[open] > summary { margin-bottom: 6px; }
+.pick-title { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.selection-list.short { max-height: 200px; }
+.selection-item .app-logo-box { margin-top: -2px; }
+.selection-list .pad { padding: 12px; }
+.compose-bar { margin-top: 24px; }
+.compose-bar-in { display: flex; align-items: flex-end; gap: 12px 20px; flex-wrap: wrap; }
+.compose-bar-in > * + * { margin-top: 0 !important; }
+.compose-title { flex: 1; min-width: 240px; }
+.compose-force { padding-bottom: 8px; white-space: nowrap; }

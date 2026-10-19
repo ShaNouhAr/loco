@@ -1,11 +1,64 @@
 {% extends 'base.html' %}
+{% from "_charts.html" import progress %}
 {% block title %}Déploiements{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
-<div class="head"><div><h1>Déploiements</h1><p>Préparations, installations demandées et résultats transmis par les agents.</p></div>{% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose') }}">Nouveau déploiement</a>{% endif %}</div>
-<section class="panel"><div class="table-wrap"><table><thead><tr><th>Déploiement</th><th>Logiciels</th><th>Cibles</th><th>État</th><th>Demandé par</th></tr></thead><tbody>
-{% set labels={'draft':'À confirmer','expired':'Prévisualisation expirée','running':'En cours','cancelling':'Annulation demandée','success':'Terminé','failed':'Terminé avec erreurs','cancelled':'Annulé'} %}
-{% for item in campaigns %}<tr><td><a href="{{ url_for('deployment_detail',deployment_id=item.row.id) }}">{{ item.row.title }}</a><span class="sub">{{ item.row.created_at|date_fr }}</span></td><td>{{ item.apps }}</td><td>{{ item.devices }}</td><td><span class="st {{ 'ok' if item.state=='success' else 'err' if item.state=='failed' else 'warn' if item.state in ('running','draft','cancelling') else '' }}">{{ labels[item.state] }}</span></td><td>{{ item.row.created_by }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Aucun déploiement. Choisissez un logiciel dans le catalogue ou le store pour commencer.</td></tr>{% endfor %}
-</tbody></table></div></section>
-{% if pages > 1 %}<nav class="row store-pagination" aria-label="Pages des déploiements">{% if page > 1 %}<a class="btn" href="{{ url_for('deployments',page=page-1) }}">← Précédente</a>{% endif %}<span class="muted">Page {{ page }} sur {{ pages }} · {{ total }} déploiement(s)</span>{% if page < pages %}<a class="btn" href="{{ url_for('deployments',page=page+1) }}">Suivante →</a>{% endif %}</nav>{% endif %}
+{% set labels = {'draft': 'À confirmer', 'expired': 'Préparation expirée', 'running': 'En cours', 'cancelling': 'Annulation demandée', 'success': 'Terminé', 'failed': 'Terminé avec erreurs', 'cancelled': 'Annulé'} %}
+<div class="head">
+  <div>
+    <h1>Déploiements</h1>
+    <p>Installations de logiciels Windows demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.</p>
+  </div>
+  {% if can('fleet.install') %}<div class="actions"><a class="btn primary" href="{{ url_for('deployment_compose') }}">Nouveau déploiement</a></div>{% endif %}
+</div>
+
+<div class="stack">
+  {% if all_count %}
+  <nav class="chips" aria-label="Filtrer par état">
+    <a class="chip {{ 'on' if not wanted }}" href="{{ url_for('deployments') }}">Tous <b>{{ all_count }}</b></a>
+    {% for key, (label, _states, cls) in filters.items() if counts[key] or wanted == key %}
+    <a class="chip {{ 'on' if wanted == key }}" href="{{ url_for('deployments', etat=key) }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+
+  <section class="panel">
+    {% if campaigns %}
+    <div class="table-wrap">
+      <table class="deployments-table">
+        <thead><tr><th>Déploiement</th><th class="hide-sm">Logiciels</th><th>Avancement</th><th>État</th></tr></thead>
+        <tbody>
+        {% for item in campaigns %}{% set p = item.progress %}
+          <tr>
+            <td><a href="{{ url_for('deployment_detail', deployment_id=item.row.id) }}" class="strong-link">{{ item.row.title }}</a>
+              <span class="sub sans">{{ item.row.created_at|date_fr }} · {{ item.row.created_by }}</span></td>
+            <td class="hide-sm"><span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
+            <td class="deploy-progress">
+              {% if item.state in ('draft', 'expired') %}<span class="faint small">{{ item.devices }} poste{{ 's' if item.devices > 1 }} prévu{{ 's' if item.devices > 1 }}</span>
+              {% else %}
+              {{ progress(p) }}
+              <span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span>
+              {% endif %}
+            </td>
+            <td class="nowrap"><span class="st {{ 'ok' if item.state == 'success' else 'err' if item.state == 'failed' else 'warn' if item.state in ('running', 'draft', 'cancelling') else '' }}">{{ labels[item.state] }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif wanted %}
+    <div class="empty">Aucun déploiement dans cet état. <a href="{{ url_for('deployments') }}">Tout afficher</a></div>
+    {% else %}
+    <div class="empty">Aucun déploiement. {% if can('fleet.install') %}<a href="{{ url_for('deployment_compose') }}">Préparez-en un</a>, ou partez d'un logiciel du catalogue, du store ou d'un groupe.{% endif %}</div>
+    {% endif %}
+  </section>
+
+  {% if pages > 1 %}
+  <nav class="row store-pagination" aria-label="Pages des déploiements">
+    {% if page > 1 %}<a class="btn sm" href="{{ url_for('deployments', page=page-1, etat=wanted or None) }}">Précédente</a>{% endif %}
+    <span class="muted small">Page {{ page }} sur {{ pages }} · {{ total }} déploiement{{ 's' if total > 1 }}</span>
+    {% if page < pages %}<a class="btn sm" href="{{ url_for('deployments', page=page+1, etat=wanted or None) }}">Suivante</a>{% endif %}
+  </nav>
+  {% endif %}
+</div>
 {% endblock %}
