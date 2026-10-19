@@ -78,6 +78,7 @@
     if (directlyChanged.size) feedback.textContent = automatic ? `${automatic} ${automatic === 1 ? "droit lié ajusté" : "droits liés ajustés"} automatiquement, y compris dans les autres catégories.` : 'Les droits nécessaires à une action sont sélectionnés automatiquement.';
     refresh();
   });
+  search.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
   search.addEventListener('input', refresh);
   filter.addEventListener('change', refresh);
   refresh();

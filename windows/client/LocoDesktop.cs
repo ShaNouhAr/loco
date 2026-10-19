@@ -122,13 +122,15 @@ namespace Loco
                 }
             }
             catch (EndOfStreamException) { }
-            finally
-            {
-                foreach (var item in pressed.Values) { var input = item; input.Data.Keyboard.Flags |= 2; try { Send(input); } catch (IOException) { } }
-                pressed.Clear();
-                foreach (var b in new[] { new[] { 1, 4 }, new[] { 2, 64 }, new[] { 4, 16 } })
-                    if ((mouseMask & b[0]) != 0) { var input = new Input(); input.Data.Mouse.Flags = (uint)b[1]; try { Send(input); } catch (IOException) { } }
-            }
+            finally { ReleaseInput(); }
+        }
+        void ReleaseInput()
+        {
+            foreach (var item in pressed.Values) { var input = item; input.Data.Keyboard.Flags |= 2; Send(input); }
+            pressed.Clear();
+            foreach (var button in new[] { new[] { 1, 4 }, new[] { 2, 64 }, new[] { 4, 16 } })
+                if ((mouseMask & button[0]) != 0) { var input = new Input(); input.Data.Mouse.Flags = (uint)button[1]; Send(input); }
+            mouseMask = 0;
         }
         void Frame(bool incremental)
         {
@@ -192,8 +194,7 @@ namespace Loco
             if (desktopName != name.ToString())
             {
                 // Ne pas rejouer une touche maintenue sur l'autre bureau.
-                foreach (var item in pressed.Values) { var up = item; up.Data.Keyboard.Flags |= 2; Send(up); }
-                pressed.Clear(); mouseMask = 0;
+                ReleaseInput();
                 desktopName = name.ToString(); lastCursor = new IntPtr(-1);
                 if (desktopNameEncoding)
                 {
