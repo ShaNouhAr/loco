@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.17.0 — 2026-10-20
+
+- **Console noVNC plus réactive** (agent Windows 2.17) : l'écran est lu par **duplication DXGI** — seulement quand il change, avec les zones modifiées — au lieu d'une capture GDI complète à chaque image (≈ 180 ms sur une machine virtuelle). Le compagnon garde la demande d'image tant que rien ne bouge et y répond dès le premier changement, sans retarder la saisie ; plus aucun échange ni calcul sur un bureau immobile (≈ 1 % d'un cœur contre ≈ 35 %). GDI prend le relais sur le bureau sécurisé, avec plusieurs écrans ou un pilote sans duplication, et la duplication est rouverte aussitôt après un changement de mode. Tampons réutilisés, au plus ~30 images par seconde. Mesuré sur la VM de démonstration : saisie → image modifiée de 257 à ~135 ms (pire cas 641 → ~250 ms), image complète de 310 à ~85 ms.
+- **Relais plus court** : l'agent repart dès qu'une image est prête (en un seul échange) et, session ouverte, relance toutes les 12 ms (aller-retour pur du relais 48 → 33 ms) ; les transactions du relais, éphémères, ne forcent plus d'écriture disque à chaque requête (coût par requête 5,4 → 2,1 ms), le reste de loco gardant sa durabilité complète ; décodage base64 plus rapide dans le navigateur, interrogation espacée après une seconde de calme.
+- **Plus d'ascenseurs en résolution adaptée** (y compris en sortant du plein écran) : l'image est toujours ajustée à la fenêtre, et le zoom y agrandit l'interface du poste sans défiler. En résolution du poste, le zoom agrandit l'image, avec des ascenseurs fins. Réglages d'affichage mémorisés par navigateur ; « Ajuster » par défaut.
+- **Curseur unique et net** : sur les machines dont le pilote n'a pas de curseur matériel (VM, adaptateur de base), Windows dessine le curseur dans l'image ; l'agent le reconnaît et le navigateur n'affiche plus qu'un point de repère au lieu d'une seconde flèche décalée. Le curseur suit l'échelle du bureau affiché (zoom, ajustement).
+- **Console repensée** : pastille d'état avec la latence vers le serveur (reprise dans le rail en plein écran), superposition de connexion puis de fin de session avec « Nouvelle session » en un clic, boutons à icônes, touches maintenues façon touches de clavier, libellés réduits aux icônes sur fenêtre étroite. En plein écran, un clic sur le bureau replie le rail de commandes.
+- **Presse-papiers** : option d'envoi automatique du presse-papiers local au poste à chaque clic sur le bureau (autorisation du navigateur demandée une fois).
+- Un arrêt anormal du compagnon de bureau est tracé dans le journal de l'agent ; une capture en échec retombe sur GDI au lieu de fermer la session.
+
 ## 2.16.0 — 2026-10-19
 
 - **Console noVNC — plein écran repensé (bureau)** : l'image du poste occupe **tout l'écran**, sans en-tête. Les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, nouvel onglet, fermeture) passent dans un **rail latéral gauche rétractable** ; une poignée au bord de l'écran le déploie ou le replie.

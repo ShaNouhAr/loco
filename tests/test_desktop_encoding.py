@@ -196,6 +196,30 @@ class Jpeg {
             self.assertEqual((data[:2], data[-2:]), (b'\xff\xd8', b'\xff\xd9'))  # flux JPEG complet
             self.assertEqual((path / 'flat.bin').read_bytes()[16], 0x01)        # peu de couleurs : zlib sans perte
 
+    def test_capture_mask_limits_the_compared_tiles(self):
+        """Zones signalées par la duplication DXGI : seules les tuiles marquées sont comparées (les autres sont réputées identiques)."""
+        harness = r'''
+using System; using System.IO; using Loco;
+class Mask {
+ static void Main(string[] args) {
+  int w=256,h=128; var image=new byte[w*h*4];
+  var e=new RfbFramebuffer(w,h); e.Update(image,true,true,false);
+  image[(10*w+10)*4]=200; image[(10*w+200)*4]=200;          // une modification dans chacune des deux tuiles
+  File.WriteAllBytes(Path.Combine(args[0],"left.bin"), e.Update(image,true,true,false,null,new[]{true,false}));
+  File.WriteAllBytes(Path.Combine(args[0],"none.bin"), e.Update(image,true,true,false,null,new[]{false,false}));
+ }
+}'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory); (path / 'Mask.cs').write_text(harness)
+            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
+                            '-out:' + str(path / 'Mask.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            str(path / 'Mask.cs')], check=True, capture_output=True)
+            subprocess.run(['mono', str(path / 'Mask.exe'), directory], check=True, capture_output=True)
+            left = (path / 'left.bin').read_bytes()
+            self.assertEqual(struct.unpack_from('>H', left, 2)[0], 1)                # seule la tuile marquée part
+            self.assertEqual(struct.unpack_from('>HH', left, 4), (0, 0))
+            self.assertEqual((path / 'none.bin').read_bytes(), b'\0\0\0\0')     # rien de marqué : mise à jour vide
+
     def test_resolution_choice_fills_the_window_before_matching_its_size(self):
         """Mode du pilote retenu : celui qui remplit la zone (rapport conservé), puis le plus proche de 100 %."""
         harness = r'''

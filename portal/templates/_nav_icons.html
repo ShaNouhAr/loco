@@ -37,6 +37,23 @@
 {%- endmacro %}
 
 {# Apparence : thème et couleur d'accent, mémorisés dans le navigateur (theme.js les applique avant l'affichage). #}
+{# Icônes des boutons de console (même tracé que la navigation, 15 px). #}
+{% macro ui_icon(name) -%}
+<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+{%- if name == 'shield' %}<path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/>
+{%- elif name == 'keyboard' %}<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/>
+{%- elif name == 'type' %}<path d="M5 7V5h14v2M9.5 19h5M12 5v14"/>
+{%- elif name == 'clipboard' %}<rect x="6" y="4.5" width="12" height="16.5" rx="2"/><path d="M9.5 4.5V3h5v1.5M9 10h6M9 13.5h6M9 17h3.5"/>
+{%- elif name == 'expand' %}<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>
+{%- elif name == 'external' %}<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>
+{%- elif name == 'close' %}<path d="M6 6l12 12M18 6 6 18"/>
+{%- elif name == 'refresh' %}<path d="M20 7v5h-5M4 17v-5h5M5.1 8a8 8 0 0 1 13-3L20 8M4 16l1.9 3a8 8 0 0 0 13-3"/>
+{%- elif name == 'unplug' %}<path d="m4 20 3-3m10-10 3-3M9 15l-2 2 3 3 2-2M15 9l2-2-3-3-2 2M8.5 8.5l7 7"/>
+{%- elif name == 'chevron' %}<path d="M9 6l6 6-6 6"/>
+{%- endif %}
+</svg>
+{%- endmacro %}
+
 {% macro appearance_choices() -%}
 <div class="menu-label">Thème</div>
 {% for key, label in [('oled', 'OLED (noir)'), ('dim', 'Sombre doux'), ('light', 'Clair')] %}

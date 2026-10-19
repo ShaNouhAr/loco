@@ -417,43 +417,69 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 .app-logo-box.large { flex-basis: 64px; width: 64px; height: 64px; font-size: 32px; }
 .store-card-actions { margin-top: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .remote-session [hidden] { display: none !important; }
-.remote-screen { height: max(420px, calc(100dvh - 315px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
-.remote-screen.terminal { padding: 12px; }
-/* Bureau : la fenêtre « scène » porte le cadre et le défilement ; l'écran noVNC s'y centre (margin auto, défilement possible dans les deux sens) ou le remplit en mode Ajuster. */
-.remote-viewport { height: max(420px, calc(100dvh - 315px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: 8px; overflow: auto; scrollbar-gutter: stable; display: flex; }
-.remote-viewport .remote-screen.desktop { margin: auto; height: auto; min-height: 0; background: none; border: 0; border-radius: 0; overflow: visible; }
+/* Scène : cadre de l'image du poste. Le bureau (ou le terminal) l'occupe entièrement ; la superposition et le rail s'y posent. */
+.remote-stage { position: relative; height: max(420px, calc(100dvh - 285px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.remote-screen.terminal { position: absolute; inset: 0; padding: 12px; }
+.remote-viewport { position: absolute; inset: 0; display: flex; overflow: auto; scrollbar-width: thin; scrollbar-color: #4c4c4c transparent; }
+.remote-viewport::-webkit-scrollbar { width: 10px; height: 10px; }
+.remote-viewport::-webkit-scrollbar-thumb { background: #4c4c4c; border: 2px solid #080808; border-radius: 6px; }
+.remote-viewport::-webkit-scrollbar-track, .remote-viewport::-webkit-scrollbar-corner { background: transparent; }
+.remote-viewport .remote-screen.desktop { margin: auto; }
 .remote-viewport.fit { overflow: hidden; }
 .remote-viewport.fit .remote-screen.desktop { margin: 0; width: 100%; height: 100%; }
 .remote-viewport.zoomed .remote-screen.desktop { width: max-content; height: max-content; }
+
+/* Superposition : connexion en cours, puis fin de session avec reprise en un clic. */
+.remote-overlay { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px; background: rgb(8 8 8 / .78); color: #e8e8e8; }
+.remote-overlay.ended { background: rgb(8 8 8 / .92); }
+.remote-overlay-box { display: grid; justify-items: center; gap: 8px; max-width: 420px; text-align: center; }
+.remote-overlay-box p { margin: 0; }
+.remote-overlay-title { margin-top: 6px !important; font-size: 15px; font-weight: 600; }
+.remote-overlay .small.muted { color: #9d9d9d; }
+.remote-spinner.spin { width: 26px; height: 26px; border-width: 2.5px; color: #cfcfcf; }
+.remote-overlay-icon .ui-icon { width: 30px; height: 30px; color: #9d9d9d; }
+.remote-overlay-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+
+/* Pastille d'état de session (dans le titre, ou en tête du rail en plein écran). */
+.remote-pill { display: inline-flex; align-items: center; gap: 7px; margin-left: 6px; padding: 3px 10px 3px 9px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--bg-2); color: var(--text-2); font-size: 12px; font-weight: 500; letter-spacing: 0; line-height: 1.4; vertical-align: middle; white-space: nowrap; }
+.remote-pill::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+.remote-pill[data-state="ok"]::before { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.remote-pill[data-state="warn"]::before, .remote-pill[data-state="connecting"]::before { background: var(--warn); }
+.remote-pill[data-state="connecting"]::before { animation: remote-pulse 1.2s ease-in-out infinite; }
+.remote-pill[data-state="closed"]::before { background: var(--err); }
+@keyframes remote-pulse { 50% { opacity: .3; } }
+
 /* Plein écran piloté par une classe (posée au fullscreenchange) : testable et indépendant du moteur. */
 .remote-session.is-fullscreen { position: fixed; inset: 0; z-index: 50; margin: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: var(--bg); overflow: auto; }
 .remote-session.is-fullscreen .head { margin: 0; }
-.remote-session.is-fullscreen .remote-screen, .remote-session.is-fullscreen .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; }
+.remote-session.is-fullscreen .remote-stage { flex: 1 1 auto; height: auto; min-height: 0; }
 .remote-session.is-fullscreen > p { margin: 0; }
 /* Bureau : vrai plein écran, sans en-tête ; les commandes passent dans le rail latéral rétractable. */
 .remote-session[data-kind="desktop"].is-fullscreen { display: block; padding: 0; gap: 0; background: #000; }
 .remote-session[data-kind="desktop"].is-fullscreen .head,
-.remote-session[data-kind="desktop"].is-fullscreen > #remote-status,
 .remote-session[data-kind="desktop"].is-fullscreen > .remote-footnote { display: none; }
-.remote-session[data-kind="desktop"].is-fullscreen .remote-viewport { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+.remote-session[data-kind="desktop"].is-fullscreen .remote-stage { position: absolute; inset: 0; height: auto; min-height: 0; border: 0; border-radius: 0; }
 
-/* Rail latéral gauche rétractable (plein écran bureau) : scène sous le rail, poignée toujours saisissable. */
+/* Rail latéral gauche rétractable (plein écran bureau) : posé sur l'image, poignée toujours saisissable. */
 .remote-rail { display: none; }
 .remote-session[data-kind="desktop"].is-fullscreen .remote-rail { display: block; position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; }
-.remote-rail-body { position: absolute; left: 0; top: 0; bottom: 0; width: min(300px, 82vw); overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; background: color-mix(in srgb, var(--bg) 92%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-right: 1px solid var(--line-2); transform: translateX(-100%); transition: transform .22s ease; }
+.remote-rail-body { position: absolute; left: 0; top: 0; bottom: 0; width: min(310px, 84vw); overflow: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 16px; background: color-mix(in srgb, var(--bg) 93%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-right: 1px solid var(--line-2); box-shadow: 8px 0 24px rgb(0 0 0 / .25); transform: translateX(-105%); transition: transform .22s ease; }
 .remote-rail.open .remote-rail-body { transform: none; }
-.remote-rail-handle { position: absolute; top: 14px; left: 0; display: flex; align-items: center; justify-content: center; width: 30px; height: 46px; padding: 0; border: 1px solid var(--line-2); border-left: 0; border-radius: 0 10px 10px 0; background: var(--bg-2); color: var(--text); cursor: pointer; transition: left .22s ease; }
-.remote-rail.open .remote-rail-handle { left: min(300px, 82vw); }
-.remote-rail-handle:hover { background: var(--bg-3, var(--bg-2)); }
+.remote-rail-handle { position: absolute; top: 16px; left: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 48px; padding: 0; border: 1px solid var(--line-2); border-left: 0; border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--bg-2) 90%, transparent); color: var(--text); cursor: pointer; opacity: .75; transition: left .22s ease, opacity .15s; }
+.remote-rail-handle:hover, .remote-rail.open .remote-rail-handle { opacity: 1; }
+.remote-rail.open .remote-rail-handle { left: min(310px, 84vw); }
 .remote-rail-handle .chev { width: 18px; height: 18px; transition: transform .22s ease; }
 .remote-rail.open .remote-rail-handle .chev { transform: scaleX(-1); }
+.remote-rail .remote-pill { align-self: flex-start; margin: 0; }
 .remote-rail .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.remote-rail .remote-display { flex-direction: column; align-items: stretch; gap: 8px; margin: 0 0 4px; padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--line); }
 .remote-rail .remote-field { justify-content: space-between; }
-.remote-rail .remote-field select { max-width: 160px; }
-.remote-rail #remote-readout { align-self: center; }
-.remote-rail .toolbar-sep { flex-basis: 100%; width: auto; height: 1px; margin: 2px 0; background: var(--line); }
-.remote-rail .menu-list { position: static; width: 100%; min-width: 0; margin-top: 6px; box-shadow: none; border-color: var(--line); }
+.remote-rail .remote-field select { max-width: 170px; }
+.remote-rail .remote-readout { align-self: flex-end; min-width: 0; }
+.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.remote-rail #remote-toolbar .toolbar-sep { flex-basis: 100%; width: auto; height: 0; margin: 2px 0; background: none; }
+.remote-rail .menu-list { position: static; width: 100%; min-width: 0 !important; margin-top: 6px; box-shadow: none; border-color: var(--line); }
+.remote-rail details.menu[open] { flex-basis: 100%; }
 .remote-rail .menu-form { min-width: 0; padding: 4px; }
 .remote-rail form { width: 100%; }
 .remote-rail .actions .btn { width: 100%; justify-content: center; }
@@ -476,22 +502,24 @@ dialog::backdrop { background: rgb(0 0 0 / .45); }
 /* Console ouverte dans son propre onglet : toute la surface appartient au poste. */
 .remote-session .head { align-items: center; }
 .remote-session .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.remote-display { display: inline-flex; align-items: center; gap: 10px; margin-right: 2px; padding-right: 12px; border-right: 1px solid var(--line); }
 .remote-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .remote-field span { color: var(--text-2); }
 .remote-field select { width: auto; max-width: 200px; }
-#remote-readout { white-space: nowrap; }
+.remote-readout { min-width: 9.5em; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
+.ui-icon { flex: none; width: 15px; height: 15px; }
 .remote-detached { overflow: hidden; }
 .remote-detached .remote-console { max-width: none; margin: 0; padding: 0; height: 100dvh; }
 .remote-detached .remote-session { display: flex; flex-direction: column; gap: 0; height: 100%; min-height: 0; }
 .remote-detached .remote-session .head { flex: 0 0 auto; padding: 10px 16px; margin: 0; border-bottom: 1px solid var(--line); gap: 12px; }
 .remote-detached .remote-session h1 { font-size: 15px; }
 .remote-detached .remote-description, .remote-detached .remote-footnote, .remote-detached .head > div > p { display: none; }
-.remote-detached #remote-status { flex: 0 0 auto; padding: 4px 16px; margin: 0; border: 0; font-size: 12px; }
-.remote-detached .remote-screen, .remote-detached .remote-viewport { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
+.remote-detached .remote-toolbar { flex: 0 0 auto; margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.remote-detached .remote-stage { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
 .remote-detached .remote-screen.terminal { padding: 8px; }
 .remote-detached #remote-new-tab { display: none; }
-.remote-session:fullscreen .remote-field { flex: 0 0 auto; }
-@media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } }
+@media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn > span { display: inline; } }
+@media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } .remote-display { border: 0; padding: 0; } }
 
 /* Groupes et déploiements : sélection lisible, séparée de la confirmation. */
 .selection-list { max-height: 340px; overflow: auto; margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-sm); }
@@ -823,11 +851,18 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 /* ------------------------------------------------------------------ commandes de la console */
 
 .remote-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.remote-toolbar .btn.sm { gap: 6px; }
+.remote-toolbar .btn.sm .ui-icon { width: 14px; height: 14px; color: var(--text-2); }
 .remote-toolbar .toolbar-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--line-2); }
-.remote-toolbar .modifier[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.remote-hold { display: inline-flex; align-items: center; gap: 5px; }
+.remote-hold > .small { margin-right: 3px; }
+.keycap { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 26px; padding: 0 8px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 6px; background: var(--bg); color: var(--text); font: 500 12px var(--mono); cursor: pointer; transition: background .1s, transform .1s; }
+.keycap:hover { border-color: var(--text-3); }
+.keycap[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); border-bottom-width: 1px; transform: translateY(1px); }
 .remote-toolbar .menu-list { left: 0; right: auto; }
-.remote-toolbar .send-text .menu-list, .remote-toolbar .clipboard .menu-list { min-width: 340px; }
+.remote-toolbar .send-text .menu-list, .remote-toolbar .clipboard .menu-list { min-width: 360px; }
 .remote-toolbar .menu-form textarea { width: 100%; font-family: var(--mono); }
+.remote-toolbar .menu-form label.check { margin: 0; font-size: 12.5px; color: var(--text-2); }
 .clipboard-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .clipboard-actions .btn { justify-self: unset; }
 .menu-item .shortcut { margin-left: auto; padding: 0 5px; border: 1px solid var(--line-2); border-radius: 3px; font-size: 11.5px; color: var(--text-3); }

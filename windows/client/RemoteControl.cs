@@ -18,6 +18,8 @@ namespace Loco
     {
         readonly WaitHandle stopping;
         readonly Thread worker;
+        // Signalé dès qu'une session a des octets à envoyer : l'échange suivant part sans attendre la fin du délai.
+        internal static readonly AutoResetEvent Activity = new AutoResetEvent(false);
         public RemoteControl(WaitHandle stopping)
         {
             this.stopping = stopping;
@@ -43,8 +45,12 @@ namespace Loco
             var lastOk = Stopwatch.StartNew(); int delay = 2000;
             try
             {
-                while (!stopping.WaitOne(delay))
+                var waits = new[] { stopping, (WaitHandle)Activity };
+                int signaled;
+                while ((signaled = WaitHandle.WaitAny(waits, delay)) != 0)
                 {
+                    // Réveil sur sortie : le compagnon écrit une image d'un bloc, la laisser finir d'arriver pour l'envoyer en un seul échange.
+                    if (signaled == 1) Thread.Sleep(3);
                     delay = 5000;
                     try
                     {
@@ -63,7 +69,8 @@ namespace Loco
                             if (!sessions.TryGetValue(pair.Key, out item)) { item = new RemoteSession(pair.Value, stopping); sessions[pair.Key] = item; }
                             item.Update(pair.Value);
                         }
-                        delay = sessions.Count > 0 ? (sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any()) ? 0 : 25) : 5000;
+                        // Session ouverte : relancer vite (saisie reçue en ~6 ms en moyenne) ; aucune session : contact espacé.
+                        delay = sessions.Count > 0 ? (sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any()) ? 0 : 12) : 5000;
                     }
                     catch (Exception e)
                     {
@@ -211,6 +218,7 @@ namespace Loco
                         if (disposed) continue; // Continuer à vider ConPTY pendant sa fermeture.
                         byte[] part = new byte[count]; Buffer.BlockCopy(buffer, 0, part, 0, count); output.Enqueue(part); queuedBytes += count;
                     }
+                    RemoteControl.Activity.Set();
                 }
             }
             catch (Exception e) { lock (gate) if (!disposed) error = kind == "desktop" ? "Session graphique inaccessible ou fermée." : e.Message; }

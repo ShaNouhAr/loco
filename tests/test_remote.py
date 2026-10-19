@@ -183,6 +183,24 @@ class TestRemote(FleetTest):
         self.assertIn('rfb.sendCtrlAltDel()', script)
         self.assertIn("classList.toggle('is-fullscreen'", script)          # vrai plein écran piloté par classe
         self.assertIn('rfb._cursor', script)                               # curseur replacé dans l'élément plein écran
+        # Scène : superposition de connexion/fin de session et pastille d'état, pour le bureau comme pour le terminal.
+        for html in (page, terminal):
+            self.assertIn('id="remote-overlay"', html)
+            self.assertIn('id="remote-status" class="remote-pill" data-state="connecting"', html)
+        self.assertIn('<option value="fit" selected>Ajuster</option>', page)   # par défaut : jamais d'ascenseurs
+        self.assertIn("localStorage.setItem(PREFS", script)                  # réglages d'affichage mémorisés
+
+    def test_relay_transactions_skip_the_per_commit_fsync_only_for_the_relay(self):
+        sid = self.open('desktop')
+        from flask import g
+        from loco import app, remote
+        with app.test_request_context():
+            conn = remote._relay_transaction()
+            self.assertEqual(conn.execute('PRAGMA synchronous').fetchone()[0], 1)    # NORMAL (WAL) : éphémère, cohérent
+            conn.rollback(); g.pop('db').close()
+        with transaction() as conn:
+            self.assertEqual(conn.execute('PRAGMA synchronous').fetchone()[0], 2)    # le reste de loco : FULL inchangé
+        self.assertEqual(self.io(sid).status_code, 200)
 
     def test_browser_drains_a_large_frame_in_one_batch_without_raising_the_packet_limit(self):
         sid = self.open('desktop')

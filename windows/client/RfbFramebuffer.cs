@@ -13,7 +13,7 @@ namespace Loco
     {
         readonly int width, height;
         byte[] previous;
-        const int Tile = 128;
+        internal const int Tile = 128;
         // Au-delà de ce nombre de couleurs distinctes, une tuile est « photographique » (photo, dégradé, fond d'écran) : JPEG.
         // En dessous (texte, aplats, icônes), compression Tight zlib sans perte, nette au pixel.
         const int ColorThreshold = 256;
@@ -124,15 +124,17 @@ namespace Loco
                 using (var memory = new MemoryStream()) { bitmap.Save(memory, codec, JpegQuality); return memory.ToArray(); }
             }
         }
-        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null)
+        /// <param name="mask">Tuiles à comparer (zones signalées par la capture) ; null : toutes.</param>
+        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null, bool[] mask = null)
         {
             if (pixels.Length != width * height * 4) throw new ArgumentException("Taille de capture invalide");
             var tiles = new List<int[]>();
+            int index = 0;
             for (int y = 0; y < height; y += Tile)
-                for (int x = 0; x < width; x += Tile)
+                for (int x = 0; x < width; x += Tile, index++)
                 {
                     int w = Math.Min(Tile, width - x), h = Math.Min(Tile, height - y);
-                    if (!incremental || previous == null || Changed(pixels, x, y, w, h)) tiles.Add(new[] { x, y, w, h });
+                    if (!incremental || previous == null || (mask == null || mask[index]) && Changed(pixels, x, y, w, h)) tiles.Add(new[] { x, y, w, h });
                 }
             using (var frame = new MemoryStream())
             {

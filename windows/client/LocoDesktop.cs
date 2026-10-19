@@ -29,7 +29,18 @@ namespace Loco
                 { pipe.Connect(15000); new RfbDesktop(pipe).Run(); }
                 return 0;
             }
-            catch (Exception) { return 1; }
+            catch (Exception e)
+            {
+                // Arrêt anormal : tracé dans le journal de l'agent pour le support (la session se ferme côté service).
+                try
+                {
+                    string frames = String.Join(" < ", (e.StackTrace ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Take(3));
+                    File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "loco-client", "loco-client.log"),
+                        DateTime.Now.ToString("s") + " bureau distant interrompu : " + e.GetType().Name + " : " + e.Message + " | " + frames + Environment.NewLine);
+                }
+                catch (Exception) { }
+                return 1;
+            }
         }
         [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
     }
@@ -52,6 +63,11 @@ namespace Loco
         byte mouseMask;
         uint clipboardSeq;
         readonly Stopwatch frameTime = Stopwatch.StartNew();
+        byte[] pixels; bool[] dirty;
+        DesktopDuplication duplication; bool duplicationFresh; int duplicationRetryAt = Environment.TickCount, duplicationFailures;
+        Bitmap gdiBitmap; Graphics gdiGraphics; int gdiInterval; readonly Stopwatch gdiTime = Stopwatch.StartNew();
+        // Dernière forme de curseur (RGBA) : sert à reconnaître un curseur déjà dessiné dans l'image par Windows.
+        byte[] cursorRgba; int cursorW, cursorH, cursorHotX, cursorHotY, bakedVotes; bool cursorInImage, sentBaked;
         public RfbDesktop(Stream stream)
         {
             this.stream = stream; bounds = SystemInformation.VirtualScreen;
@@ -86,8 +102,15 @@ namespace Loco
                 Write(new byte[4]); Read(1);
                 byte[] name = Encoding.UTF8.GetBytes(Environment.MachineName);
                 Write(Join(U16(width), U16(height), new byte[] { 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0 }, U32((uint)name.Length), name));
+                bool pending = false, full = false, pipe = stream is NamedPipeClientStream;
                 while (true)
                 {
+                    // Demande d'image en attente : y répondre dès que l'écran change, sans retarder la saisie qui arrive entre-temps.
+                    if (pending && (!pipe || !InputPending()))
+                    {
+                        if (Update(full, !pipe)) { pending = false; full = false; }
+                        continue;
+                    }
                     int kind = Read(1)[0];
                     if (kind == 0)
                     {
@@ -110,9 +133,10 @@ namespace Loco
                         }
                         lastCursor = new IntPtr(-1);
                     }
-                    else if (kind == 3) { var request = Read(9); Frame(CoalesceRequests(request[0] != 0)); }
-                    else if (kind == 4) { var p = Read(7); if (AttachDesktop()) Key(I32(p, 3), p[0] != 0); }
-                    else if (kind == 5) { var p = Read(5); if (AttachDesktop()) Pointer(p[0], I16(p, 1), I16(p, 3)); }
+                    else if (kind == 3) { var request = Read(9); pending = true; full |= request[0] == 0; }
+                    // Une saisie annonce souvent un changement d'écran : la capture GDI reprend aussitôt son rythme rapide.
+                    else if (kind == 4) { var p = Read(7); gdiInterval = 0; if (AttachDesktop()) Key(I32(p, 3), p[0] != 0); }
+                    else if (kind == 5) { var p = Read(5); gdiInterval = 0; if (AttachDesktop()) Pointer(p[0], I16(p, 1), I16(p, 3)); }
                     else if (kind == 6) { var p = Read(7); uint length = I32(p, 3); if (length > 256 * 1024) throw new InvalidDataException(); SetClipboard(FromCutText(Read((int)length))); }
                     else if (kind == 251)
                     {
@@ -133,8 +157,8 @@ namespace Loco
                     else throw new InvalidDataException();
                 }
             }
-            catch (EndOfStreamException) { }
-            finally { ReleaseInput(); resolution.Dispose(); }
+            catch (IOException) { }   // canal fermé par le service (fin de session), y compris pendant une écriture : sortie normale
+            finally { ReleaseInput(); DropDuplication(); DropGdi(); resolution.Dispose(); }
         }
         void ReleaseInput()
         {
@@ -144,60 +168,104 @@ namespace Loco
                 if ((mouseMask & button[0]) != 0) { var input = new Input(); input.Data.Mouse.Flags = (uint)button[1]; Send(input); }
             mouseMask = 0;
         }
-        bool CoalesceRequests(bool incremental)
+        bool InputPending()
         {
-            // RFB permet de satisfaire plusieurs demandes en attente avec une seule image.
-            // Les notifications de résolution/UAC génèrent aussi des demandes chez noVNC.
-            var pipe = stream as NamedPipeClientStream;
-            if (pipe == null) return incremental;
-            var peek = new byte[10]; uint read, available, left;
-            for (int i = 0; i < 63; i++)
-            {
-                if (!PeekNamedPipe(pipe.SafePipeHandle.DangerousGetHandle(), peek, 10, out read, out available, out left) ||
-                    read < 10 || peek[0] != 3) break;
-                incremental &= Read(10)[1] != 0;
-            }
-            return incremental;
+            uint read, available, left;
+            var pipe = (NamedPipeClientStream)stream;
+            return PeekNamedPipe(pipe.SafePipeHandle.DangerousGetHandle(), null, 0, out read, out available, out left) && available > 0;
         }
-        void Frame(bool incremental)
+        // Répond à la demande d'image : true si une mise à jour est partie, false pour la garder (rien de neuf à l'écran).
+        bool Update(bool full, bool force)
         {
-            int wait = 40 - (int)frameTime.ElapsedMilliseconds; if (wait > 0) Thread.Sleep(wait); frameTime.Restart();
-            if (!AttachDesktop()) { Write(new byte[4]); return; }
+            if (!AttachDesktop())
+            {
+                if (!full && !force) { Thread.Sleep(50); return false; }
+                Write(new byte[4]); return true;
+            }
             PollClipboard();
             if (pendingResolution) ApplyResolution();
-            if (extendedSize && (bounds.Width != width || bounds.Height != height))
+            bool fresh = full;
+            if (extendedSize && (bounds.Width != width || bounds.Height != height)) { SetFrameSize(bounds.Width, bounds.Height); fresh = true; }
+            // Au plus ~30 images par seconde ; l'attente se fait par petites tranches pour laisser passer la saisie.
+            int gap = 33 - (int)frameTime.ElapsedMilliseconds;
+            if (!fresh && !force && gap > 0) { Thread.Sleep(Math.Min(gap, 10)); return false; }
+            bool changed;
+            // Une capture qui échoue (bureau en transition, mode en cours de changement…) ne doit jamais fermer la session.
+            try { changed = Capture(fresh); }
+            catch (Exception) { DropDuplication(); duplicationRetryAt = unchecked(Environment.TickCount + 1000); if (!fresh && !force) return false; Write(new byte[4]); return true; }
+            if (changed && cursorShape && !cursorInImage && duplication != null) DetectCursorInImage();
+            bool baked = cursorInImage && duplication != null;   // GDI n'incruste pas le curseur : en repli, renvoyer la vraie forme
+            if (baked != sentBaked) { sentBaked = baked; lastCursor = new IntPtr(-1); }
+            byte[] cursor = cursorShape ? CursorChange() : null;
+            if (!fresh && !force && !changed && cursor == null) return false;
+            byte[] update = framebuffer.Update(pixels, !fresh, tight, rgbOrder, cursor, fresh ? null : dirty);
+            Array.Clear(dirty, 0, dirty.Length);
+            gdiInterval = update.Length > 4 ? 0 : Math.Min(400, gdiInterval + 50);
+            if (!fresh && !force && update.Length == 4) return false;   // aucune tuile réellement modifiée
+            if (extendedSize && fresh) Write(SizeUpdate(0, 0));
+            Write(update); frameTime.Restart();
+            return true;
+        }
+        // Image courante dans « pixels » : duplication DXGI quand c'est possible (lecture seulement si l'écran a changé),
+        // sinon GDI. Renvoie true si une nouvelle image a été lue ; les tuiles à comparer sont marquées dans « dirty ».
+        bool Capture(bool fresh)
+        {
+            if (pixels == null || pixels.Length != width * height * 4)
             {
-                SetFrameSize(bounds.Width, bounds.Height); Write(SizeUpdate(0, 0));
+                pixels = new byte[width * height * 4];
+                dirty = new bool[((width + RfbFramebuffer.Tile - 1) / RfbFramebuffer.Tile) * ((height + RfbFramebuffer.Tile - 1) / RfbFramebuffer.Tile)];
+                DropDuplication(); fresh = true;
             }
-            else if (extendedSize && !incremental) Write(SizeUpdate(0, 0));
-            try
+            if (width == bounds.Width && height == bounds.Height && String.Equals(desktopName, "Default", StringComparison.OrdinalIgnoreCase))
             {
-                using (var source = new Bitmap(width, height, PixelFormat.Format32bppRgb))
+                if (duplication == null && unchecked(Environment.TickCount - duplicationRetryAt) >= 0)
                 {
-                    using (var graphics = Graphics.FromImage(source))
-                    {
-                        graphics.Clear(Color.Black);
-                        if (width == bounds.Width && height == bounds.Height)
-                            graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-                        else using (var native = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppRgb))
-                        {
-                            using (var capture = Graphics.FromImage(native)) capture.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
-                            graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                            graphics.DrawImage(native, captureArea);
-                        }
-                    }
-                    var bitmap = source.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format32bppRgb);
-                    byte[] data = new byte[width * height * 4];
-                    try
-                    {
-                        for (int y = 0; y < height; y++) Marshal.Copy(IntPtr.Add(bitmap.Scan0, y * bitmap.Stride), data, y * width * 4, width * 4);
-                    }
-                    finally { source.UnlockBits(bitmap); }
-                    Write(framebuffer.Update(data, incremental, tight, rgbOrder, cursorShape ? CursorChange() : null));
+                    try { duplication = DesktopDuplication.Open(bounds); } catch (Exception) { duplication = null; }
+                    // Échec souvent transitoire juste après un changement de mode : nouvel essai rapide, puis espacé (GDI entre-temps).
+                    if (duplication == null) duplicationRetryAt = unchecked(Environment.TickCount + Math.Min(10000, 250 << Math.Min(duplicationFailures++, 6)));
+                    else { duplicationFresh = true; duplicationFailures = 0; }
+                }
+                if (duplication != null)
+                {
+                    // La première image d'une duplication couvre tout l'écran : l'attendre un peu plus longtemps.
+                    int result;
+                    try { result = duplication.Capture(pixels, duplicationFresh ? 300 : 16, RfbFramebuffer.Tile, dirty); }
+                    catch (Exception) { result = -1; }
+                    if (result > 0) { duplicationFresh = false; return true; }
+                    if (result == 0 && !duplicationFresh) return false;   // rien de neuf : le tampon contient déjà l'écran courant
+                    DropDuplication(); duplicationRetryAt = unchecked(Environment.TickCount + 100);   // perdue (bureau, mode) : GDI cette fois, réouverture aussitôt
                 }
             }
-            catch (System.ComponentModel.Win32Exception) { Write(new byte[4]); }
-            catch (System.Runtime.InteropServices.ExternalException) { Write(new byte[4]); }
+            // GDI : coûteux sur certaines machines virtuelles, donc espacé tant que l'écran ne change pas.
+            if (!fresh && gdiTime.ElapsedMilliseconds < gdiInterval) { Thread.Sleep(5); return false; }
+            CaptureGdi(); gdiTime.Restart();
+            for (int i = 0; i < dirty.Length; i++) dirty[i] = true;
+            return true;
+        }
+        void CaptureGdi()
+        {
+            if (gdiBitmap == null || gdiBitmap.Width != width || gdiBitmap.Height != height)
+            {
+                DropGdi();
+                gdiBitmap = new Bitmap(width, height, PixelFormat.Format32bppRgb); gdiGraphics = Graphics.FromImage(gdiBitmap);
+            }
+            if (width == bounds.Width && height == bounds.Height) gdiGraphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+            else using (var native = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppRgb))
+            {
+                using (var capture = Graphics.FromImage(native)) capture.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size);
+                gdiGraphics.Clear(Color.Black);
+                gdiGraphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                gdiGraphics.DrawImage(native, captureArea);
+            }
+            var bits = gdiBitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, PixelFormat.Format32bppRgb);
+            try { for (int y = 0; y < height; y++) Marshal.Copy(IntPtr.Add(bits.Scan0, y * bits.Stride), pixels, y * width * 4, width * 4); }
+            finally { gdiBitmap.UnlockBits(bits); }
+        }
+        void DropDuplication() { if (duplication != null) { duplication.Dispose(); duplication = null; } }
+        void DropGdi()
+        {
+            if (gdiGraphics != null) { gdiGraphics.Dispose(); gdiGraphics = null; }
+            if (gdiBitmap != null) { gdiBitmap.Dispose(); gdiBitmap = null; }
         }
         byte[] SizeUpdate(int reason, int status)
         {
@@ -241,7 +309,7 @@ namespace Loco
             if (desktopName != name.ToString())
             {
                 // Ne pas rejouer une touche maintenue sur l'autre bureau.
-                ReleaseInput();
+                ReleaseInput(); DropDuplication();
                 desktopName = name.ToString(); lastCursor = new IntPtr(-1);
                 if (desktopNameEncoding)
                 {
@@ -265,7 +333,42 @@ namespace Loco
             IntPtr handle = (info.Flags & 1) != 0 ? info.Cursor : IntPtr.Zero;
             if (handle == lastCursor) return null;
             lastCursor = handle;
-            return CursorShape(handle);
+            byte[] shape = CursorShape(handle);
+            if (shape != null && shape.Length > 14)
+            {
+                // Pseudo-rectangle : point chaud x, y, largeur, hauteur (U16), encodage (U32), type, bourrage, puis RGBA.
+                cursorHotX = (shape[0] << 8) | shape[1]; cursorHotY = (shape[2] << 8) | shape[3];
+                cursorW = (shape[4] << 8) | shape[5]; cursorH = (shape[6] << 8) | shape[7];
+                cursorRgba = new byte[shape.Length - 14]; Buffer.BlockCopy(shape, 14, cursorRgba, 0, cursorRgba.Length);
+            }
+            // Curseur déjà incrusté dans l'image (pilote sans curseur matériel : VM, adaptateur de base) : n'en afficher
+            // aucun second côté navigateur ; noVNC y montre un simple point pour le retour immédiat de la position.
+            return sentBaked ? RfbFramebuffer.CursorRect(0, 0, 1, 1, new byte[4]) : shape;
+        }
+        // Reconnaît le curseur de Windows dans l'image capturée, à la position du pointeur : si ses pixels opaques y sont
+        // (deux fois), le pilote dessine le curseur dans l'image et le curseur local du navigateur ferait double emploi.
+        void DetectCursorInImage()
+        {
+            if (cursorRgba == null || cursorW * cursorH * 4 != cursorRgba.Length || width != bounds.Width || height != bounds.Height) return;
+            var info = new CursorInfo { Size = Marshal.SizeOf(typeof(CursorInfo)) };
+            if (!GetCursorInfo(ref info) || (info.Flags & 1) == 0) return;
+            // Pixels nettement sombres ou clairs de la forme, comparés par classe de luminance : le contour incrusté est
+            // mélangé au fond (noir légèrement teinté), mais le motif sombre/clair à la position du pointeur reste net.
+            // Chaque classe est jugée à part : le remplissage clair doit y être (≥ 90 %) ET le contour sombre (≥ 60 %, ses bords
+            // sont fondus dans le fond). Sans curseur incrusté, aucun fond ne réunit les deux à la forme exacte du pointeur.
+            int ox = info.X - bounds.Left - cursorHotX, oy = info.Y - bounds.Top - cursorHotY, dark = 0, light = 0, darkMatch = 0, lightMatch = 0;
+            for (int y = 0; y < cursorH; y++)
+                for (int x = 0; x < cursorW; x++)
+                {
+                    int s = (y * cursorW + x) * 4, px = ox + x, py = oy + y;
+                    if (cursorRgba[s + 3] < 250 || px < 0 || py < 0 || px >= width || py >= height) continue;
+                    int d = (py * width + px) * 4, sum = cursorRgba[s] + cursorRgba[s + 1] + cursorRgba[s + 2], seen = pixels[d] + pixels[d + 1] + pixels[d + 2];
+                    if (sum < 150) { dark++; if (seen < 220) darkMatch++; }
+                    else if (sum > 600) { light++; if (seen > 540) lightMatch++; }
+                }
+            if (dark < 10 || light < 10) return;   // forme peu discriminante (point, curseur uni) : ne pas conclure
+            if (lightMatch * 100 >= light * 90 && darkMatch * 100 >= dark * 60) { if (++bakedVotes >= 2) { cursorInImage = true; lastCursor = new IntPtr(-1); } }
+            else if (lightMatch * 100 < light * 50 || darkMatch * 100 < dark * 30) bakedVotes = 0;
         }
         internal static byte[] CursorShape(IntPtr handle)
         {
