@@ -11,6 +11,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from . import app, config, permissions, PUBLIC_ENDPOINTS
+from . import journal as journal_view
 from .db import db
 from .util import back, safe_next
 
@@ -552,50 +553,75 @@ def purge_audit(conn):
     return conn.execute("DELETE FROM audit WHERE at < ?", (limit,)).rowcount
 
 
-def _day(value, end=False):
-    """« 2026-10-18 » -> borne incluse de la journée ; vide -> None ; autre -> ValueError."""
-    if not value:
-        return None
-    day = datetime.datetime.strptime(value, "%Y-%m-%d")
-    return day.strftime("%Y-%m-%d") + (" 23:59:59" if end else " 00:00:00")
+FILTERS = ("periode", "debut", "fin", "categorie", "compte", "echecs", "q")
+
+
+def _filters():
+    """Filtres de la page reconnus dans la requête (repris par les liens, la pagination et l'export)."""
+    return {k: request.args[k] for k in FILTERS if request.args.get(k)}
 
 
 @app.route("/journal")
 @login_required
 def journal():
-    rows = db().execute("SELECT * FROM audit ORDER BY id DESC LIMIT 500").fetchall()
+    args = _filters()
+    try:
+        sql, values = journal_view.where(args)
+    except ValueError:
+        flash("Période invalide : dates attendues au format AAAA-MM-JJ, la première avant la seconde.", "err")
+        return redirect(url_for("journal"))
+    before = request.args.get("avant", type=int)
+    page_sql = sql + (" AND" if sql else " WHERE") + " id < ?" if before else sql
+    rows = db().execute("SELECT * FROM audit" + page_sql + " ORDER BY id DESC LIMIT ?",
+                        values + ([before] if before else []) + [journal_view.PAGE + 1]).fetchall()
+    more = len(rows) > journal_view.PAGE
+    days = []
+    for r in rows[:journal_view.PAGE]:
+        label = journal_view.day_label(r["at"])
+        if not days or days[-1]["label"] != label:
+            days.append({"label": label, "events": []})
+        days[-1]["events"].append({"r": r, **journal_view.describe(r["action"])})
     stats = db().execute("SELECT COUNT(*) AS n, MIN(at) AS first FROM audit").fetchone()
-    return render_template("journal.html", rows=rows, stats=stats, retention=audit_retention(db()),
+    matching = db().execute("SELECT COUNT(*) FROM audit" + sql, values).fetchone()[0] if args else stats["n"]
+    failures = db().execute("SELECT COUNT(*) FROM audit WHERE at >= ? AND (action LIKE '%echec' OR action LIKE "
+                            "'%bloquee')", ((datetime.datetime.now() - datetime.timedelta(days=1))
+                                            .strftime("%Y-%m-%d %H:%M:%S"),)).fetchone()[0]
+    accounts = [r[0] for r in db().execute("SELECT DISTINCT username FROM audit WHERE username != '' "
+                                           "ORDER BY username COLLATE NOCASE")]
+    def link(**changes):
+        return url_for("journal", **{k: v for k, v in {**args, **changes}.items() if v})
+    return render_template("journal.html", days=days, args=args, link=link, before=before, more=more,
+                           last_id=rows[journal_view.PAGE - 1]["id"] if more else None,
+                           stats=stats, matching=matching, failures=failures, accounts=accounts,
+                           counts=journal_view.category_counts(db(), args), categories=journal_view.CATEGORIES,
+                           periods=journal_view.PERIODS, retention=audit_retention(db()),
                            choices=AUDIT_RETENTION_CHOICES, today=datetime.date.today().isoformat())
 
 
 @app.route("/journal/export")
 @login_required
 def journal_export():
-    """Journal en JSON, sur une période (dates incluses) ou en entier."""
+    """Journal en JSON : en entier, sur une période (dates incluses) ou avec les filtres de la page."""
+    args = _filters()
     try:
-        start, end = _day(request.args.get("debut", "")), _day(request.args.get("fin", ""), end=True)
+        start, end = journal_view.bounds(args)
+        sql, values = journal_view.where(args)
     except ValueError:
-        abort(400, "Dates attendues au format AAAA-MM-JJ.")
-    if start and end and start > end:
-        abort(400, "La date de début doit précéder la date de fin.")
-    where, values = [], []
-    if start:
-        where.append("at >= ?")
-        values.append(start)
-    if end:
-        where.append("at <= ?")
-        values.append(end)
-    sql = "SELECT id, at, username, ip, action, detail FROM audit"
-    rows = db().execute(sql + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id", values).fetchall()
-    period = f"{request.args.get('debut') or 'début'}_{request.args.get('fin') or 'fin'}"
-    audit("journal.export", f"{len(rows)} événement(s), période {period.replace('_', ' → ')}")
+        abort(400, "Dates attendues au format AAAA-MM-JJ, la date de début avant la date de fin.")
+    rows = db().execute("SELECT id, at, username, ip, action, detail FROM audit" + sql + " ORDER BY id",
+                        values).fetchall()
+    period = f"{(start or 'début')[:10]}_{(end or 'fin')[:10]}"
+    others = {k: v for k, v in args.items() if k not in ("periode", "debut", "fin")}
+    audit("journal.export", f"{len(rows)} événement(s), période {period.replace('_', ' → ')}"
+          + "".join(f", {k}={v}" for k, v in others.items()))
     document = {
         "server": config.HOST, "loco_version": config.VERSION,
         "exported_at": datetime.datetime.now().isoformat(timespec="seconds"), "exported_by": g.user["username"],
-        "period": {"from": start, "to": end}, "retention_days": audit_retention(db()), "count": len(rows),
+        "period": {"from": start, "to": end}, "filters": others, "retention_days": audit_retention(db()),
+        "count": len(rows),
         "events": [{"id": r["id"], "at": r["at"], "username": r["username"], "ip": r["ip"],
-                    "action": r["action"], "detail": r["detail"]} for r in rows],
+                    "action": r["action"], "label": journal_view.describe(r["action"])["label"],
+                    "detail": r["detail"]} for r in rows],
     }
     name = f"loco-journal-{config.HOST}-{period}.json".replace(":", "-")
     return Response(json.dumps(document, ensure_ascii=False, indent=2) + "\n", mimetype="application/json",

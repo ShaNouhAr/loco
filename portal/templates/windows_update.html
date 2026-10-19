@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% from "_macros.html" import service %}
+{% from "_charts.html" import daily_bars %}
 {% block title %}Windows Update{% endblock %}
 {% block content %}
 <div class="head">
   <div>
     <h1>Windows Update</h1>
-    <p>Les mises à jour sont téléchargées une fois chez Microsoft, puis servies en local aux autres postes.</p>
+    <p>Chaque mise à jour est téléchargée une fois chez Microsoft, puis servie en local aux autres postes.</p>
   </div>
   <div class="actions">
     <a class="btn" href="{{ url_for('windows_update_dns') }}">Script DNS Active Directory</a>
@@ -13,54 +14,66 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('api_wu') }}" data-poll-kind="wu" data-poll-every="5000">
+  {% if not nginx %}
+  <div class="note err">Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.{% if can('system.view') %} Voir <a href="{{ url_for('system') }}">Système</a>.{% endif %}</div>
+  {% elif not wu.last %}
+  <div class="note warn">Aucun poste n'est encore passé par loco. Faites répondre <span class="mono">{{ host }}</span> par le DNS du réseau pour les domaines redirigés (script DNS ci-dessus pour Active Directory).</div>
+  {% endif %}
+
   <div class="metrics">
-    <div class="metric"><div class="k">En cache</div><div class="v" data-bind="cache_size" data-fmt="bytes">{{ stats.get('wucache', 0)|human }}</div><div class="s">{{ service(nginx) }}</div></div>
-    <div class="metric"><div class="k">Servi en local</div><div class="v" data-bind="hit_bytes" data-fmt="bytes">{{ wu.hit_bytes|human }}</div><div class="s"><span data-bind="hits">{{ wu.hits }}</span> requêtes</div></div>
-    <div class="metric"><div class="k">Depuis Internet</div><div class="v" data-bind="miss_bytes" data-fmt="bytes">{{ wu.miss_bytes|human }}</div><div class="s"><span data-bind="misses">{{ wu.misses }}</span> requêtes</div></div>
-    <div class="metric"><div class="k">Part servie en local</div><div class="v" data-bind="ratio" data-fmt="pct">{{ wu.ratio }} %</div><div class="s">trafic récent</div></div>
+    <div class="metric"><div class="k">Servi par le cache</div><div class="v" data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</div><div class="s"><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> du trafic, 14 jours</div></div>
+    <div class="metric"><div class="k">Pris sur Internet</div><div class="v" data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</div><div class="s">premiers téléchargements, 14 jours</div></div>
+    <div class="metric"><div class="k">En cache</div><div class="v" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</div><div class="s">{{ service(nginx) }}</div></div>
+    <div class="metric"><div class="k">Dernière requête</div><div class="v small-v" data-bind="last_text">{{ wu.last_text or 'aucune' }}</div><div class="s"><span data-bind="clients">{{ wu.clients }}</span> poste(s) dans le journal récent</div></div>
   </div>
 
   <div class="cols w21">
     <section class="panel">
-      <div class="panel-h"><h2>Fonctionnement</h2></div>
+      <div class="panel-h"><h2>14 derniers jours</h2><div class="aside">{% if chart.hit or chart.miss %}{{ chart.ratio }} % servis par le cache{% endif %}</div></div>
       <div class="panel-b">
-        <ol class="steps">
-          <li><span>Le DNS du réseau répond <span class="mono">{{ host }}</span> pour les domaines de la liste (script ci-dessus pour un DNS Active Directory).</span></li>
-          <li><span>Les postes Windows envoient donc leurs téléchargements à ce serveur au lieu de Microsoft.</span></li>
-          <li><span>Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.</span></li>
-          <li><span>Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache. Seuls les fichiers immuables sont gardés.</span></li>
-        </ol>
+        {% if chart.hit or chart.miss %}
+        {{ daily_bars(chart) }}
+        <ul class="legend">
+          <li><i class="key bar-hit"></i>Depuis le cache <span class="num">{{ chart.hit|human }}</span></li>
+          <li><i class="key bar-miss"></i>Depuis Internet <span class="num">{{ chart.miss|human }}</span></li>
+        </ul>
+        {% else %}
+        <p class="empty">Aucun téléchargement sur la période.</p>
+        {% endif %}
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Domaines redirigés</h2><div class="aside">sous-domaines compris</div></div>
-      {% if can('wu.configure') %}
-      <form class="panel-b" method="post" action="{{ url_for('windows_update_domains') }}" data-ajax>
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <textarea name="domains" rows="4" spellcheck="false" aria-label="Un domaine par ligne">{{ domains|join('\n') }}</textarea>
-        <p class="hint">Un domaine par ligne. Appliqué au cache dès l'enregistrement ; relancer ensuite le script DNS (<code>-Remove</code> annule).</p>
-        <button class="btn primary"><span class="spin"></span>Enregistrer</button>
-      </form>
-      {% else %}
-      <div class="panel-b"><p class="mono">{{ domains|join('<br>'|safe) }}</p></div>
-      {% endif %}
+      <div class="panel-h"><h2>Domaines redirigés</h2>
+        {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">Modifier</button></div>{% endif %}</div>
+      <div class="panel-b wu-domains">
+        <ul class="plain-list">{% for d in domains %}<li class="mono">{{ d }}</li>{% endfor %}</ul>
+        <p class="hint">Sous-domaines compris. Le DNS du réseau doit répondre <span class="mono">{{ host }}</span> pour ces domaines.</p>
+        <details class="hint">
+          <summary>Fonctionnement</summary>
+          <ol class="steps">
+            <li><span>Les postes Windows envoient leurs téléchargements à loco au lieu de Microsoft.</span></li>
+            <li><span>Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.</span></li>
+            <li><span>Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache : seuls les fichiers immuables sont gardés.</span></li>
+          </ol>
+        </details>
+      </div>
     </section>
   </div>
 
   <section class="panel">
-    <div class="panel-h"><h2>Dernières requêtes</h2><div class="aside">actualisé toutes les 5 s</div></div>
+    <div class="panel-h"><h2>Dernières requêtes</h2><div class="aside">en direct</div></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Heure</th><th>Poste</th><th>Fichier</th><th class="num">Taille</th><th>Cache</th></tr></thead>
+        <thead><tr><th>Heure</th><th>Poste</th><th>Fichier</th><th class="num">Taille</th><th>Source</th></tr></thead>
         <tbody id="wu-log">
         {% for r in wu.recent %}
           <tr data-key="{{ r.time }}{{ r.client }}{{ r.file }}">
             <td class="mono muted nowrap">{{ r.time }}</td>
-            <td class="mono nowrap">{{ r.client }}</td>
+            <td class="nowrap">{% if r.name %}<span class="mono">{{ r.name }}</span><span class="sub">{{ r.client }}</span>{% else %}<span class="mono">{{ r.client }}</span>{% endif %}</td>
             <td><span class="mono">{{ r.file[:70] }}{{ '…' if r.file|length > 70 }}</span><span class="sub">{{ r.host }}</span></td>
             <td class="num nowrap">{{ r.size|human if r.size else '—' }}</td>
-            <td class="mono {{ 'muted' if r.cache != 'HIT' }}">{{ r.cache|lower }}</td>
+            <td class="nowrap" title="{{ r.cache }}">{% if r.source == 'cache' %}<span class="st ok">cache</span>{% else %}<span class="st">{{ r.source }}</span>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -69,4 +82,16 @@
     </div>
   </section>
 </div>
+
+{% if can('wu.configure') %}
+<dialog id="domains">
+  <div class="dlg-h"><h2>Domaines redirigés</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <form class="dlg-b dlg-stack" method="post" action="{{ url_for('windows_update_domains') }}" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="domains" rows="6" spellcheck="false" aria-label="Un domaine par ligne">{{ domains|join('\n') }}</textarea>
+    <p class="hint">Un domaine par ligne, sous-domaines compris. Appliqué au cache dès l'enregistrement ; relancez ensuite le script DNS (<code>-Remove</code> annule).</p>
+    <div class="row"><button class="btn primary"><span class="spin"></span>Enregistrer</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

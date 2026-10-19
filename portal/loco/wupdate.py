@@ -12,7 +12,9 @@ import urllib.parse
 from flask import Response, flash, render_template, request
 
 from . import app, config
-from .auth import audit, login_required
+from .auth import audit, can, login_required
+from .db import db
+from .fleet import ago_text
 from .util import back, read_stats, service_active
 
 LOG_RE = re.compile(r'^(\S+) \[([^\]]+)\] "(\S+) (\S+)[^"]*" (\d+) (\d+) (\S+) "([^"]*)"$')
@@ -107,6 +109,30 @@ def wu_daily(days=14):
     return out
 
 
+def wu_chart(days=14):
+    """Historique quotidien pour le graphique en barres (vue d'ensemble et page Windows Update)."""
+    rows = wu_daily(days)
+    hit, miss = sum(h for _, h, _ in rows), sum(m for _, _, m in rows)
+    return {"days": [{"day": day, "label": day[8:10] + "/" + day[5:7], "hit": h, "miss": m} for day, h, m in rows],
+            "max": max([h + m for _, h, m in rows] + [1]), "hit": hit, "miss": miss,
+            "ratio": round(100 * hit / (hit + miss)) if hit + miss else 0}
+
+
+def _stamp(nginx_date):
+    """« 19/Oct/2026:10:22:33 +0200 » -> « 2026-10-19 10:22:33 » à l'heure locale du serveur, ou ''."""
+    try:
+        moment = datetime.datetime(int(nginx_date[7:11]), MONTHS[nginx_date[3:6]], int(nginx_date[0:2]),
+                                   int(nginx_date[12:14]), int(nginx_date[15:17]), int(nginx_date[18:20]),
+                                   tzinfo=datetime.datetime.strptime(nginx_date[21:26], "%z").tzinfo)
+    except (KeyError, ValueError, IndexError):
+        return ""
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
+SOURCES = {"HIT": "cache", "MISS": "Internet", "EXPIRED": "Internet", "UPDATING": "Internet", "STALE": "Internet",
+           "BYPASS": "Internet"}
+
+
 def read_wu_domains():
     try:
         with open(config.WU_DOMAINS_PATH) as f:
@@ -132,7 +158,8 @@ def wu_stats(max_bytes=20 * 1024 * 1024, recent=0):
 
 
 def _parse_log(max_bytes, recent):
-    res = {"hit_bytes": 0, "miss_bytes": 0, "hits": 0, "misses": 0, "ok": False, "recent": []}
+    res = {"hit_bytes": 0, "miss_bytes": 0, "hits": 0, "misses": 0, "ok": False, "recent": [], "clients": 0,
+           "last": ""}
     try:
         with open(config.WU_LOG, "rb") as f:
             f.seek(0, os.SEEK_END)
@@ -141,7 +168,7 @@ def _parse_log(max_bytes, recent):
         res["ok"] = True
     except OSError:
         lines = []
-    entries = []
+    entries, clients, last = [], set(), ""
     for line in lines:
         # format : ip [date] "requête" statut octets cache "hôte"
         m = LOG_RE.match(line)
@@ -149,6 +176,8 @@ def _parse_log(max_bytes, recent):
             continue
         ip, date, _method, path, status, size, cache, host = m.groups()
         size = int(size)
+        clients.add(ip)
+        last = date
         if cache == "HIT":
             res["hits"] += 1
             res["hit_bytes"] += size
@@ -157,12 +186,14 @@ def _parse_log(max_bytes, recent):
             res["miss_bytes"] += size
         if recent:
             entries.append((ip, date, path, status, size, cache, host))
+    res["clients"], res["last"] = len(clients), _stamp(last) if last else ""
     total = res["hit_bytes"] + res["miss_bytes"]
     res["ratio"] = round(100 * res["hit_bytes"] / total) if total else 0
     for ip, date, path, status, size, cache, host in reversed(entries[-recent:] if recent else []):
         name = urllib.parse.unquote(path.split("?")[0].rsplit("/", 1)[-1]) or "/"
         res["recent"].append({"client": ip, "time": date.split(":", 1)[-1].split(" ")[0], "host": host,
-                              "file": name, "status": status, "size": size, "cache": cache})
+                              "file": name, "status": status, "size": size, "cache": cache,
+                              "source": SOURCES.get(cache, "relayé")})
     return res
 
 
@@ -179,19 +210,35 @@ def write_wu_maps(domains=None):
         os.replace(tmp, os.path.join(config.NGINX_MAP_DIR, name))
 
 
+def _live():
+    """Compteurs de la page (rafraîchis toutes les 5 s) : 14 derniers jours, dernières requêtes, postes connus."""
+    wu = wu_stats(recent=15)
+    wu["cache_size"] = read_stats().get("wucache", 0)
+    chart = wu_chart(14)
+    wu["period"] = {k: chart[k] for k in ("hit", "miss", "ratio")}
+    names = {}
+    if can("fleet.view"):
+        for row in db().execute("SELECT hostname, ip, addresses FROM devices WHERE state != 'removed' AND hostname != ''"):
+            for ip in [row["ip"]] + row["addresses"].split():
+                names.setdefault(ip, row["hostname"])
+    for r in wu["recent"]:
+        r["name"] = names.get(r["client"], "")
+    wu["last_text"] = ago_text(wu["last"]) if wu["last"] else ""
+    return wu, chart
+
+
 @app.route("/windows-update")
 @login_required
 def windows_update():
-    return render_template("windows_update.html", domains=read_wu_domains(), wu=wu_stats(recent=12),
-                           stats=read_stats(), nginx=service_active("nginx"))
+    wu, chart = _live()
+    return render_template("windows_update.html", domains=read_wu_domains(), wu=wu, chart=chart,
+                           nginx=service_active("nginx"))
 
 
 @app.route("/api/wu")
 @login_required
 def api_wu():
-    wu = wu_stats(recent=12)
-    wu["cache_size"] = read_stats().get("wucache", 0)
-    return wu
+    return _live()[0]
 
 
 @app.route("/windows-update/domains", methods=["POST"])

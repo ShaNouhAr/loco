@@ -66,7 +66,7 @@ class TestDashboardCharts(FleetTest):
         a = Agent(WINDOWS, "192.168.43.50")
         a.enroll()
         a.checkin({"updates": [], "apps": []})
-        with mock.patch("loco.dashboard.wu_daily", return_value=[("2026-10-17", 3 * 2**30, 2**30), ("2026-10-18", 0, 0)]):
+        with mock.patch("loco.wupdate.wu_daily", return_value=[("2026-10-17", 3 * 2**30, 2**30), ("2026-10-18", 0, 0)]):
             page = self.admin.c.get("/").get_data(as_text=True)
         self.assertIn("Windows Update, 14 derniers jours", page)
         self.assertIn("75 % servis par le cache", page)
@@ -86,6 +86,52 @@ class TestDashboardCharts(FleetTest):
         page = viewer.c.get("/").get_data(as_text=True)
         self.assertIn("Windows Update, 14 derniers jours", page)
         self.assertNotIn('class="chart ring"', page)
+
+
+class TestWindowsUpdatePage(FleetTest):
+    def setUp(self):
+        super().setUp()
+        work = tempfile.TemporaryDirectory()
+        self.addCleanup(work.cleanup)
+        self.log = os.path.join(work.name, "loco-wu.log")
+        patcher = mock.patch.object(config, "WU_LOG", self.log)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        wupdate._DAILY.clear()
+        wupdate._CACHE.clear()
+
+    def test_page_names_known_devices_and_counts_the_last_14_days(self):
+        page = self.admin.c.get("/windows-update").get_data(as_text=True)
+        self.assertIn("Aucun poste n'est encore passé par loco", page)
+        Agent(WINDOWS, "192.168.43.50").enroll()                            # même adresse que le journal
+        today = datetime.date.today()
+        with open(self.log, "w") as f:
+            f.write(line(today - datetime.timedelta(days=20), "MISS", 999) + line(today, "MISS", 2**20)
+                    + line(today, "HIT", 3 * 2**20))
+        data = self.admin.c.get("/api/wu").get_json()
+        self.assertEqual(data["period"], {"hit": 3 * 2**20, "miss": 2**20, "ratio": 75})
+        self.assertEqual(data["recent"][0]["name"], WINDOWS["hostname"])
+        self.assertEqual([r["source"] for r in data["recent"]], ["cache", "Internet", "Internet"])
+        self.assertEqual(data["clients"], 1)
+        self.assertTrue(data["last"].startswith(today.isoformat()))
+        page = self.admin.c.get("/windows-update").get_data(as_text=True)
+        self.assertNotIn("Aucun poste n'est encore passé", page)
+        self.assertIn(f'<span class="mono">{WINDOWS["hostname"]}</span><span class="sub">192.168.43.50</span>', page)
+        self.assertIn('id="domains"', page)
+        self.assertIn('class="bar-hit"', page)
+
+    def test_viewers_without_fleet_rights_see_addresses_only(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        viewer = test_permissions.TestPermissions.browser(
+            self, "wu-lecture", test_permissions.TestPermissions.profile(self, "wu-lecture", {"wu.view"}))
+        Agent(WINDOWS, "192.168.43.50").enroll()
+        with open(self.log, "w") as f:
+            f.write(line(datetime.date.today(), "HIT", 10))
+        self.assertEqual(viewer.c.get("/api/wu").get_json()["recent"][0]["name"], "")
+        page = viewer.c.get("/windows-update").get_data(as_text=True)
+        self.assertNotIn('id="domains"', page)
+        self.assertNotIn(WINDOWS["hostname"], page)
 
 
 if __name__ == "__main__":

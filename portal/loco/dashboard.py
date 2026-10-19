@@ -9,7 +9,7 @@ from .auth import login_required, can
 from .db import db
 from .linux import list_debs
 from .util import disk_usage, read_stats, service_active
-from .wupdate import wu_daily, wu_stats
+from .wupdate import wu_chart, wu_stats
 
 STATUS_LABELS = {"ready": "prêt", "downloading": "téléchargement", "error": "erreur", "pending": "en attente"}
 
@@ -50,11 +50,7 @@ def chart_data(d):
     """Données des graphiques de la vue d'ensemble (tracés en SVG par le serveur : aucun script tiers)."""
     stats = read_stats()
     charts = {}
-    days = wu_daily(14)
-    hit, miss = sum(h for _, h, _ in days), sum(m for _, _, m in days)
-    charts["wu"] = {"days": [{"day": day, "label": day[8:10] + "/" + day[5:7], "hit": h, "miss": m} for day, h, m in days],
-                    "max": max([h + m for _, h, m in days] + [1]), "hit": hit, "miss": miss,
-                    "ratio": round(100 * hit / (hit + miss)) if hit + miss else 0}
+    charts["wu"] = wu_chart(14)
     disk = d["disk"]
     parts = [("Cache APT", stats.get("acng", 0), "c1"), ("Cache Windows Update", stats.get("wucache", 0), "c2"),
              ("Cache RPM", stats.get("rpmcache", 0), "c3"), ("Cache Flathub", stats.get("flatpakcache", 0), "c4"),

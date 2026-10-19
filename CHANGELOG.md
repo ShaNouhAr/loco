@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.12.0 — 2026-10-19
+
+- **Journal repensé** : événements groupés par jour (aujourd'hui, hier, puis la date), heure seule, actions en clair avec leur catégorie au lieu des codes techniques (le code reste en infobulle et dans l'export). Échecs signalés par une pastille rouge et résumés en tête de page sur les dernières 24 heures.
+- **Filtres côté serveur** sur tout le journal (et plus seulement les 500 derniers événements) : période (aujourd'hui, 7 jours, 30 jours, tout ou dates au choix), catégorie avec son nombre d'événements, compte, échecs seulement, recherche ; pages de 100 événements (« Plus anciens »). Un clic sur un compte filtre ses événements. Sur mobile, le détail passe sous l'action.
+- **Export et conservation dans des fenêtres** ouvertes depuis l'en-tête : l'export reprend la vue filtrée (ou une période, ou tout) et ajoute le libellé de chaque action et les filtres appliqués au fichier JSON.
+- **Windows Update repensé** : indicateurs sur 14 jours (servi par le cache et part du trafic, pris sur Internet), taille du cache et état du service, dernière requête et nombre de postes ; graphique quotidien des 14 derniers jours ; alerte si aucun poste n'est encore passé par loco ou si le cache est arrêté.
+- Domaines redirigés en liste compacte, modifiables dans une fenêtre ; explication du fonctionnement repliée.
+- Dernières requêtes : nom du poste du parc à la place de son adresse (droit *Consulter les appareils*), source « cache » ou « Internet ».
+- Les listes actualisées en direct échappent aussi les guillemets des noms de fichiers demandés par les postes.
+
 ## 2.11.0 — 2026-10-19
 
 - **Mon parc repensé** : postes classés du plus urgent au plus à jour ; adresse réelle du poste (et « via » l'adresse vue par loco quand un NAT les sépare) ; mises à jour en compact (système, logiciels, dont sécurité) ; redémarrage signalé ; groupes en étiquettes cliquables ; dernier contact en clair ; action en attente affichée à la place du bouton.

@@ -1,70 +1,143 @@
 {% extends "base.html" %}
 {% block title %}Journal{% endblock %}
+{% macro retention_text(d) -%}
+{% if d == 0 %}sans limite{% elif d % 365 == 0 %}{{ d // 365 }} an{{ 's' if d > 365 }}{% else %}{{ d }} jours{% endif %}
+{%- endmacro %}
 {% block content %}
 <div class="head">
   <div>
     <h1>Journal</h1>
-    <p>Connexions et modifications, avec le compte et l'adresse d'origine. {% if container %}Aussi envoyé au journal du conteneur (<code>docker compose logs loco</code>).{% elif alpine %}Aussi écrit dans <code>/var/log/loco/portal.log</code>.{% else %}Aussi envoyé à journald (<code>journalctl -u loco-portal</code>).{% endif %}</p>
+    <p>Connexions et modifications, avec le compte et l'adresse d'origine. Événements gardés {{ retention_text(retention) }}.</p>
+  </div>
+  <div class="actions">
+    {% if can('audit.configure') %}<button type="button" class="btn" data-open="#retention">Conservation : {{ retention_text(retention) }}</button>{% endif %}
+    {% if can('audit.export') %}<button type="button" class="btn primary" data-open="#export">Exporter en JSON</button>{% endif %}
   </div>
 </div>
 
-{% if can('audit.export') or can('audit.configure') %}
-<div class="cols journal-tools">
-  {% if can('audit.export') %}
+<div class="stack">
+  {% if failures and args.get('echecs') != '1' %}
+  <div class="note err row-between">
+    <span>{{ failures }} échec{{ 's' if failures > 1 }} de connexion ces dernières 24 heures.</span>
+    <a href="{{ url_for('journal', echecs='1') }}">Voir</a>
+  </div>
+  {% endif %}
+
+  <div class="journal-filters">
+  <div class="fleet-filters">
+    <nav class="chips" aria-label="Période">
+      {% set custom = args.get('debut') or args.get('fin') %}
+      {% for key, (label, _n) in periods.items() %}
+      <a class="chip {{ 'on' if (args.get('periode') == key) or (key == 'tout' and not args.get('periode') and not custom) }}" href="{{ link(periode=None if key == 'tout' else key, debut=None, fin=None) }}">{{ label }}</a>
+      {% endfor %}
+      <details class="menu">
+        <summary class="chip {{ 'on' if custom }}">{% if custom %}{{ args.get('debut', '…') }} → {{ args.get('fin', "aujourd'hui") }}{% else %}Autre période{% endif %}</summary>
+        <div class="menu-list menu-left">
+          <form method="get" class="menu-form" data-clean>
+            {% for k, v in args.items() if k not in ('periode', 'debut', 'fin') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <div class="grid2">
+              <label class="f"><span>Du</span><input type="date" name="debut" max="{{ today }}" value="{{ args.get('debut', '') }}"></label>
+              <label class="f"><span>Au</span><input type="date" name="fin" max="{{ today }}" value="{{ args.get('fin', '') }}"></label>
+            </div>
+            <button class="btn sm primary">Afficher</button>
+          </form>
+        </div>
+      </details>
+    </nav>
+    <form method="get" class="row" role="search" data-clean>
+      {% for k, v in args.items() if k not in ('compte', 'echecs', 'q') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <label class="small muted nowrap"><input type="checkbox" name="echecs" value="1" data-autosubmit {{ 'checked' if args.get('echecs') == '1' }}> échecs seulement</label>
+      {% if accounts %}
+      <select name="compte" aria-label="Compte" data-autosubmit>
+        <option value="">Tous les comptes</option>
+        {% for a in accounts %}<option {{ 'selected' if args.get('compte') == a }}>{{ a }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <input type="search" name="q" class="search-sm" value="{{ args.get('q', '') }}" placeholder="Rechercher (Entrée)" aria-label="Rechercher dans le journal">
+    </form>
+  </div>
+
+  <nav class="chips" aria-label="Catégorie">
+    <a class="chip {{ 'on' if not args.get('categorie') }}" href="{{ link(categorie=None) }}">Toutes <b>{{ counts.values()|sum }}</b></a>
+    {% for key, (label, _p) in categories.items() if counts[key] or args.get('categorie') == key %}
+    <a class="chip {{ 'on' if args.get('categorie') == key }}" href="{{ link(categorie=key) }}">{{ label }} <b>{{ counts[key] }}</b></a>
+    {% endfor %}
+  </nav>
+  </div>
+
   <section class="panel">
-    <div class="panel-h"><h2>Exporter en JSON</h2><div class="aside">{{ stats.n }} événement(s){% if stats.first %} depuis le {{ stats.first[:10] }}{% endif %}</div></div>
-    <form method="get" action="{{ url_for('journal_export') }}" class="panel-b">
+    {% if days %}
+    <div class="table-wrap">
+      <table class="journal-table">
+        <thead><tr><th>Heure</th><th>Action</th><th>Compte</th><th class="hide-sm">Adresse</th><th class="hide-sm">Détail</th></tr></thead>
+        {% for day in days %}
+        <tbody>
+          <tr class="day-row"><th colspan="5">{{ day.label }}</th></tr>
+          {% for e in day.events %}{% set r = e.r %}
+          <tr>
+            <td class="mono muted nowrap" title="{{ r.at }}">{{ r.at[11:16] }}</td>
+            <td><span class="nowrap" title="{{ r.action }}">{% if e.failure %}<span class="st err"></span>{% endif %}{{ e.label }}</span>
+              <span class="sub">{{ e.category_label }}</span>{% if r.detail %}<span class="sub only-sm">{{ r.detail }}</span>{% endif %}</td>
+            <td class="mono nowrap">{% if r.username %}<a href="{{ link(compte=r.username) }}" class="quiet-link" title="Événements de ce compte">{{ r.username }}</a>{% else %}—{% endif %}</td>
+            <td class="mono muted nowrap hide-sm">{{ r.ip }}</td>
+            <td class="detail-cell hide-sm">{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% endfor %}
+      </table>
+    </div>
+    {% elif args %}
+    <div class="empty">Aucun événement ne correspond à ces filtres. <a href="{{ url_for('journal') }}">Tout afficher</a></div>
+    {% else %}
+    <div class="empty">Aucun événement.</div>
+    {% endif %}
+    <div class="panel-f row-between">
+      <span>{{ matching }} événement{{ 's' if matching != 1 }}{% if args %} sur {{ stats.n }}{% endif %}{% if stats.first %} · le plus ancien du {{ stats.first[:10] }}{% endif %} · {% if container %}aussi dans <code>docker compose logs loco</code>{% elif alpine %}aussi dans <code>/var/log/loco/portal.log</code>{% else %}aussi dans <code>journalctl -u loco-portal</code>{% endif %}</span>
+      <span class="row">
+        {% if before %}<a class="btn sm" href="{{ link() }}">Plus récents</a>{% endif %}
+        {% if more %}<a class="btn sm" href="{{ link(avant=last_id) }}">Plus anciens</a>{% endif %}
+      </span>
+    </div>
+  </section>
+</div>
+
+{% if can('audit.export') %}
+<dialog id="export">
+  <div class="dlg-h"><h2>Exporter en JSON</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <div class="dlg-b dlg-stack">
+    {% if args %}
+    <div class="row-between">
+      <span>Vue affichée, avec ses filtres <span class="faint">({{ matching }} événement{{ 's' if matching != 1 }})</span></span>
+      <a class="btn primary" href="{{ url_for('journal_export', **args) }}">Exporter</a>
+    </div>
+    <hr class="sep">
+    {% endif %}
+    <form method="get" action="{{ url_for('journal_export') }}" class="dlg-stack">
       <div class="grid2">
         <label class="f"><span>Du</span><input type="date" name="debut" max="{{ today }}" value="{{ (stats.first or today)[:10] }}"></label>
         <label class="f"><span>Au</span><input type="date" name="fin" max="{{ today }}" value="{{ today }}"></label>
       </div>
       <div class="row">
-        <button class="btn primary">Exporter la période</button>
-        <a class="btn" href="{{ url_for('journal_export') }}">Tout exporter</a>
+        <button class="btn {{ '' if args else 'primary' }}">Exporter la période</button>
+        <a class="btn" href="{{ url_for('journal_export') }}">Tout exporter ({{ stats.n }})</a>
       </div>
-      <p class="hint">Dates incluses. Fichier JSON : serveur, période, auteur de l'export et événements (date, compte, adresse, action, détail). L'export est lui-même journalisé.</p>
     </form>
-  </section>
-  {% endif %}
-  {% if can('audit.configure') %}
-  <section class="panel">
-    <div class="panel-h"><h2>Conservation</h2><div class="aside">{{ 'illimitée' if not retention else retention ~ ' jours' }}</div></div>
-    <form method="post" action="{{ url_for('journal_retention') }}" class="panel-b" data-ajax data-confirm="Modifier la conservation du journal ?" data-confirm-text="Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d'abord si vous devez les garder." data-confirm-ok="Appliquer">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label class="f"><span>Garder les événements</span>
-        <select name="days">{% for d in choices %}<option value="{{ d }}" {{ 'selected' if d == retention }}>{% if d == 0 %}sans limite{% elif d % 365 == 0 %}{{ d // 365 }} an{{ 's' if d > 365 }}{% else %}{{ d }} jours{% endif %}{% if d == 30 %} (par défaut){% endif %}</option>{% endfor %}</select></label>
-      <button class="btn"><span class="spin"></span>Appliquer</button>
-      <p class="hint">Rotation automatique : les événements plus anciens sont supprimés au démarrage du portail puis au plus une fois par heure.</p>
-    </form>
-  </section>
-  {% endif %}
-</div>
+    <p class="hint">Dates incluses. Le fichier contient le serveur, la période, l'auteur de l'export et les événements (date, compte, adresse, action, détail). L'export est lui-même journalisé.</p>
+  </div>
+</dialog>
 {% endif %}
 
-<section class="panel">
-  <div class="panel-h"><h2>500 derniers événements</h2>
-    {% if rows %}<div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#audit tbody tr" data-empty="#audit-none"></div>{% endif %}
-  </div>
-  {% if rows %}
-  <div class="table-wrap">
-    <table id="audit">
-      <thead><tr><th>Date</th><th>Compte</th><th>Adresse</th><th>Action</th><th>Détail</th></tr></thead>
-      <tbody>
-      {% for r in rows %}
-        <tr>
-          <td class="mono muted nowrap">{{ r.at }}</td>
-          <td class="mono">{{ r.username or '—' }}</td>
-          <td class="mono muted">{{ r.ip }}</td>
-          <td class="mono">{% if r.action.endswith(('echec', 'bloquee')) %}<span class="st err">{{ r.action }}</span>{% else %}{{ r.action }}{% endif %}</td>
-          <td>{{ r.detail }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    <div id="audit-none" class="empty hidden">Aucun événement ne correspond.</div>
-  </div>
-  {% else %}
-  <div class="empty">Aucun événement.</div>
-  {% endif %}
-</section>
+{% if can('audit.configure') %}
+<dialog id="retention">
+  <div class="dlg-h"><h2>Conservation du journal</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <form method="post" action="{{ url_for('journal_retention') }}" class="dlg-b dlg-stack" data-ajax data-confirm="Modifier la conservation du journal ?" data-confirm-text="Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d'abord si vous devez les garder." data-confirm-ok="Appliquer">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f"><span>Garder les événements</span>
+      <select name="days">{% for d in choices %}<option value="{{ d }}" {{ 'selected' if d == retention }}>{{ retention_text(d) }}{% if d == 30 %} (par défaut){% endif %}</option>{% endfor %}</select></label>
+    <p class="hint">Rotation automatique : les événements plus anciens sont supprimés au démarrage du portail puis au plus une fois par heure.</p>
+    <div class="row"><button class="btn primary"><span class="spin"></span>Appliquer</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

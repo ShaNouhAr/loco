@@ -129,7 +129,7 @@ main { max-width: var(--w); margin: 0 auto; padding: 32px 32px 120px; }
 .panel-b { padding: 16px; }
 .panel-b > * + * { margin-top: 12px; }
 .panel-b.row > * + * { margin-top: 0; }
-.journal-tools { margin-bottom: 24px; }   /* rangée horizontale : alignement par flex, sans marge verticale */
+
 .panel-f { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--text-3); }
 
 /* Rangée d'indicateurs */
@@ -554,3 +554,32 @@ label.check { display: inline-flex; align-items: center; gap: 6px; margin-right:
 .field-xs { width: 100px !important; display: inline-block; }
 dialog.wide-dialog { width: min(760px, calc(100vw - 32px)); }
 dialog.wide-dialog .dlg-b > * + * { margin-top: 10px; }
+
+/* ------------------------------------------------------------------ journal */
+
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+.dlg-stack > * + * { margin-top: 14px; }
+hr.sep { border: 0; border-top: 1px solid var(--line); }
+.menu-list.menu-left { right: auto; left: 0; }
+.menu-form { display: grid; gap: 12px; padding: 8px; min-width: 300px; }
+.menu-form .btn { justify-self: start; }
+details.menu > summary.chip { cursor: pointer; }
+.journal-table td { vertical-align: top; }
+.journal-table td .st { margin-right: 6px; }
+.journal-table .day-row th { padding-top: 14px; background: var(--bg-2); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+.journal-table .detail-cell { min-width: 240px; overflow-wrap: anywhere; color: var(--text-2); }
+.journal-table td .sub { font-family: var(--sans); }
+.quiet-link { color: inherit; text-decoration: none; }
+.quiet-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.journal-filters { display: grid; gap: 10px; }
+
+/* ------------------------------------------------------------------ Windows Update */
+
+.plain-list { margin: 0; padding: 0; list-style: none; }
+.plain-list li { padding: 3px 0; overflow-wrap: anywhere; }
+.wu-domains > * + * { margin-top: 12px; }
+details.hint > summary { cursor: pointer; color: var(--text-2); }
+details.hint > summary:hover { color: var(--text); }
+details.hint[open] > summary { margin-bottom: 6px; }
+td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; font-family: var(--sans); color: var(--text-2); }
+@media (max-width: 720px) { td .sub.only-sm { display: block; margin-top: 2px; } .journal-table .nowrap { white-space: normal; } }

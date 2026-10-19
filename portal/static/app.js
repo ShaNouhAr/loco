@@ -159,8 +159,17 @@
 
   /* ---------------------------------------------------------------- filtres appliqués au choix */
 
+  // Formulaire de filtres (GET) : l'adresse ne garde que les champs remplis (« ?compte=marie » et non « &q= »).
+  function go(form) {
+    var params = new URLSearchParams();
+    new FormData(form).forEach(function (v, k) { if (v !== "") params.append(k, v); });
+    var query = params.toString();
+    location.href = (form.getAttribute("action") || location.pathname) + (query ? "?" + query : "");
+  }
+
   document.addEventListener("change", function (e) {
-    if (e.target.matches("select[data-autosubmit]")) e.target.form.submit();
+    if (!e.target.matches("select[data-autosubmit], input[type=checkbox][data-autosubmit]")) return;
+    if (e.target.form.hasAttribute("data-clean")) go(e.target.form); else e.target.form.submit();
   });
 
   /* ---------------------------------------------------------------- menus « Plus » */
@@ -237,6 +246,7 @@
       return;
     }
     if (form.hasAttribute("data-ajax")) { e.preventDefault(); send(form, btn); }
+    else if (form.hasAttribute("data-clean")) { e.preventDefault(); go(form); }
     else if (btn) btn.classList.add("loading");
   });
 
@@ -350,7 +360,10 @@
     return tick;
   }
 
-  function esc(s) { var d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+  // Texte sûr dans un élément comme dans un attribut entre guillemets.
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
 
   // Journal Windows Update : remplace les lignes, en signalant les nouvelles.
   function renderWuLog(d) {
@@ -360,11 +373,14 @@
     body.innerHTML = d.recent.map(function (r) {
       var key = r.time + r.client + r.file;
       var file = r.file.length > 70 ? r.file.slice(0, 70) + "…" : r.file;
+      var who = r.name ? '<span class="mono">' + esc(r.name) + '</span><span class="sub">' + esc(r.client) + '</span>'
+                       : '<span class="mono">' + esc(r.client) + '</span>';
+      var source = r.source === "cache" ? '<span class="st ok">cache</span>' : '<span class="st">' + esc(r.source) + '</span>';
       return '<tr' + (known[key] ? "" : ' class="new"') + ' data-key="' + esc(key) + '">' +
-        '<td class="mono muted nowrap">' + esc(r.time) + '</td><td class="mono nowrap">' + esc(r.client) + '</td>' +
+        '<td class="mono muted nowrap">' + esc(r.time) + '</td><td class="nowrap">' + who + '</td>' +
         '<td><span class="mono">' + esc(file) + '</span><span class="sub">' + esc(r.host) + '</span></td>' +
         '<td class="num nowrap">' + (r.size ? bytes(r.size) : "—") + '</td>' +
-        '<td class="mono' + (r.cache === "HIT" ? "" : " muted") + '">' + esc(r.cache.toLowerCase()) + '</td></tr>';
+        '<td class="nowrap" title="' + esc(r.cache) + '">' + source + '</td></tr>';
     }).join("");
     none.classList.toggle("hidden", d.recent.length > 0);
   }

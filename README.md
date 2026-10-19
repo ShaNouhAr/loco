@@ -369,8 +369,13 @@ Sur Windows natif, utilisez `loco user …` ; sur l’appliance Alpine, `loco-us
 
 La page *Administration › Journal* trace les connexions et les actions, avec le compte et l'adresse d'origine.
 
-- **Export JSON** d'une période (dates incluses) ou du journal entier : serveur, période, auteur de l'export et
-  événements (date, compte, adresse, action, détail). Chaque export est lui-même journalisé.
+- **Lecture** : événements groupés par jour, actions en clair (« Adresse du serveur annoncée aux agents ») et
+  catégorie ; filtres par période (aujourd'hui, 7 jours, 30 jours, dates au choix), catégorie (connexions, parc,
+  accès distant, logiciels, dépôts Linux, Windows Update, comptes, serveur), compte, échecs seulement et recherche
+  dans les détails ; pages de 100 événements. Les échecs de connexion des dernières 24 heures sont signalés en tête.
+- **Export JSON** de la vue filtrée, d'une période (dates incluses) ou du journal entier : serveur, période, filtres,
+  auteur de l'export et événements (date, compte, adresse, action et son libellé, détail). Chaque export est
+  lui-même journalisé.
 - **Conservation** réglable (7 jours à 2 ans, ou sans limite), **30 jours par défaut** : les événements plus anciens
   sont supprimés au démarrage du portail puis au plus une fois par heure. Exportez-les avant de réduire la durée.
 - Droits distincts : *Consulter le journal*, *Exporter le journal* (inclus dans le profil Auditeur) et *Configurer la
