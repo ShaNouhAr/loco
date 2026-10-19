@@ -46,7 +46,7 @@ LABELS = {
     "linux.depot.ajout": "Dépôt APT créé", "rpm.ajout": "Paquet RPM ajouté", "rpm.suppression": "Paquet RPM supprimé",
     "rpm.depot.ajout": "Dépôt RPM créé", "flatpak.ajout": "Application Flatpak ajoutée",
     "flatpak.suppression": "Application Flatpak supprimée", "windows_update.domaines": "Domaines Windows Update modifiés",
-    "systeme.configuration": "Configuration du serveur", "systeme.check": "Recherche de mises à jour",
+    "systeme.configuration": "Configuration du serveur", "systeme.fonctionnalites": "Fonctionnalités activées ou désactivées", "systeme.check": "Recherche de mises à jour",
     "systeme.update-loco": "Mise à jour de loco", "systeme.update-system": "Mise à jour du système",
     "systeme.reboot": "Redémarrage du serveur", "systeme.configure": "Réglages du serveur", "journal.export": "Journal exporté",
     "journal.conservation": "Conservation du journal modifiée",

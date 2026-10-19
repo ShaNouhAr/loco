@@ -27,7 +27,7 @@ import zipfile
 
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
-from . import addresses, app, config, permissions
+from . import addresses, app, config, features, permissions
 from .auth import audit, login_required, can, require
 from .db import db
 from .util import back
@@ -401,6 +401,8 @@ def agent_checkin():
     commands = []
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' ORDER BY id",
                           (dev["id"],)).fetchall():
+        if c["action"] == "install-app" and "windows_apps" in features.disabled(conn):
+            continue                # logiciels Windows coupés : la commande attend leur réactivation
         actor = conn.execute("SELECT role,disabled,must_change,pending FROM users WHERE username=?", (c["created_by"],)).fetchone()
         grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["pending"] and not actor["must_change"] else frozenset()
         required = permissions.ACTION_PERMISSIONS.get(c["action"])

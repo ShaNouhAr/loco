@@ -135,6 +135,8 @@ ENDPOINTS = {
     "sso_delete": "sso.manage",
     "users_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
+    # Réservé en plus au compte « admin » de l'installation (vérifié par la page).
+    "features": "system.view", "features_save": "system.view",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }

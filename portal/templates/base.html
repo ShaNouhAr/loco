@@ -42,7 +42,7 @@
       </details>
       {% endif %}
       {% if can_any("users.view", "roles.view", "audit.view", "system.view") %}
-      <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso')) or ep in ('journal', 'system') }}">
+      <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso', 'features')) or ep in ('journal', 'system') }}">
         <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">Administration</span><span class="nav-short">Admin</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-admin">
           <div class="nav-panel">
@@ -51,6 +51,7 @@
             {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" {% if ep.startswith('sso') %}aria-current="page"{% endif %}>{{ nav_icon('user') }}<span><strong>Connexions SSO</strong><small>Fournisseurs d'identité</small></span></a>{% endif %}
             {% if can("audit.view") %}<a href="{{ url_for('journal') }}" {% if ep == 'journal' %}aria-current="page"{% endif %}>{{ nav_icon('journal') }}<span><strong>Journal</strong><small>Historique des actions</small></span></a>{% endif %}
             {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>Système</strong><small>Services et sauvegardes</small></span></a>{% endif %}
+            {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Fonctionnalités</strong><small>Activer ou désactiver les fonctions</small></span></a>{% endif %}
             {% if appliance and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Mises à jour</strong><small>loco et Alpine Linux</small></span></a>
             {% if can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Configuration</strong><small>Accès, fonctions et stockage</small></span></a>{% endif %}{% endif %}
           </div>
@@ -74,13 +75,14 @@
 </header>
 
 <main>
-  {% if ep.startswith(('users', 'roles', 'appliance', 'sso')) or ep in ('journal', 'system') %}
+  {% if ep.startswith(('users', 'roles', 'appliance', 'sso', 'features')) or ep in ('journal', 'system') %}
   <div class="tabs subnav">
     {% if can("users.view") %}<a href="{{ url_for('users') }}" class="{{ 'on' if ep.startswith('users') }}">Comptes</a>{% endif %}
     {% if can("roles.view") %}<a href="{{ url_for('roles') }}" class="{{ 'on' if ep.startswith('roles') }}">Profils d'accès</a>{% endif %}
     {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" class="{{ 'on' if ep.startswith('sso') }}">Connexions SSO</a>{% endif %}
     {% if can("audit.view") %}<a href="{{ url_for('journal') }}" class="{{ 'on' if ep == 'journal' }}">Journal</a>{% endif %}
     {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">Système</a>{% endif %}
+    {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">Fonctionnalités</a>{% endif %}
     {% if appliance and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">Mises à jour</a>
     {% if can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">Configuration</a>{% endif %}{% endif %}
   </div>

@@ -12,12 +12,12 @@
 
 <div class="stack" data-poll="{{ url_for('api_status') }}" data-poll-kind="status" data-poll-every="10000">
   <div class="metrics">
-    <div class="metric">
+    {% if feature('apt') %}<div class="metric">
       <div class="k">Cache APT</div>
       <div class="v" data-bind="acng_size" data-fmt="bytes">{{ d.acng_size|human }}</div>
       <div class="s"><span data-bind="debs">{{ d.debs }}</span> paquet(s) local(aux)</div>
-    </div>
-    <div class="metric">
+    </div>{% endif %}
+    {% if feature('wu') %}<div class="metric">
       <div class="k">Cache Windows</div>
       <div class="v" data-bind="wucache_size" data-fmt="bytes">{{ d.wucache_size|human }}</div>
       <div class="s">sur disque</div>
@@ -26,13 +26,13 @@
       <div class="k">Servi en local</div>
       <div class="v" data-bind="wu.hit_bytes" data-fmt="bytes">{{ d.wu.hit_bytes|human }}</div>
       <div class="s"><span data-bind="wu.ratio" data-fmt="pct">{{ d.wu.ratio }} %</span> du trafic récent</div>
-    </div>
-    <div class="metric">
+    </div>{% endif %}
+    {% if feature('windows_apps') %}<div class="metric">
       <div class="k">Logiciels Windows</div>
       <div class="v" data-bind="apps">{{ d.apps }}</div>
       <div class="s" data-bind="apps_size" data-fmt="bytes">{{ d.apps_size|human }}</div>
-    </div>
-    {% if flatpak_enabled %}
+    </div>{% endif %}
+    {% if flatpak_enabled and feature('flatpak') %}
     <div class="metric">
       <div class="k">Cache Flathub</div>
       <div class="v" data-bind="flatpak_cache" data-fmt="bytes">{{ d.flatpak_cache|human }}</div>
@@ -47,8 +47,10 @@
     </div>
   </div>
 
-  <div class="{{ 'cols w21' if charts.fleet }}">
-    <section class="panel">
+  {% set wu_on = feature('wu') %}
+  {% if wu_on or charts.fleet %}
+  <div class="{{ 'cols w21' if charts.fleet and wu_on }}">
+    {% if wu_on %}<section class="panel">
       <div class="panel-h"><h2>Windows Update, 14 derniers jours</h2>
         <div class="aside">{% if charts.wu.hit or charts.wu.miss %}{{ charts.wu.ratio }} % servis par le cache{% endif %}</div></div>
       <div class="panel-b">
@@ -62,7 +64,7 @@
         <p class="empty">Aucun téléchargement Windows Update sur la période : les postes doivent utiliser le DNS qui redirige vers loco ({% if can('wu.view') %}<a href="{{ url_for('windows_update') }}">Windows Update</a>{% else %}Windows Update{% endif %}).</p>
         {% endif %}
       </div>
-    </section>
+    </section>{% endif %}
     {% if charts.fleet %}
     <section class="panel">
       <div class="panel-h"><h2>Parc</h2><div class="aside"><a href="{{ url_for('fleet') }}">Mon parc</a></div></div>
@@ -79,6 +81,7 @@
     </section>
     {% endif %}
   </div>
+  {% endif %}
 
   <section class="panel">
     <div class="panel-h"><h2>Disque des données</h2><div class="aside"><span>{{ d.disk.free|human }} libres sur {{ d.disk.total|human }}{% if d.stats_updated %} · tailles du {{ d.stats_updated|date_fr }}{% endif %}</span></div></div>

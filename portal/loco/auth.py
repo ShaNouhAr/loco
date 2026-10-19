@@ -122,7 +122,10 @@ def can(permission):
         return False
     if "permissions" not in g:
         g.permissions = permissions.role_permissions(db(), g.user["role"])
-    return permission in g.permissions
+    if permission not in g.permissions:
+        return False
+    from . import features            # import tardif : features dépend de ce module
+    return features.allows(permission)
 
 
 def can_any(*values):
