@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.13.2 — 2026-10-19
+
+- **Le bureau à distance remplit la fenêtre** : en mode automatique, l'agent Windows choisit parmi les résolutions du pilote celle qui remplit le mieux la zone d'affichage (rapport d'image conservé), puis la plus proche de 100 %. Une fenêtre très large obtient par exemple 2560 × 1080 (21:9) au lieu de 1280 × 720 avec de grandes bandes noires.
+- La taille demandée est calculée en pixels de l'écran et non en pixels CSS : avec un affichage mis à l'échelle (150 % sur un portable, par exemple), le bureau n'est plus réduit d'autant, et un pixel du bureau correspond à un pixel affiché. Le pourcentage indiqué à côté de la résolution suit la même règle (100 % = net).
+
 ## 2.13.1 — 2026-10-19
 
 - **Résolution dynamique Windows corrigée** : le mode automatique change réellement la résolution du bureau Windows à mesure que la fenêtre est agrandie ou réduite, y compris en plein écran. L’agent utilise les résolutions acceptées par le pilote graphique ; la résolution initiale est restaurée à la fermeture. Les demandes pendant l’UAC sont appliquées au retour sur le bureau normal. Les postes multi-moniteurs et les sessions concurrentes conservent un ajustement de l’affichage sans reconfigurer les écrans.

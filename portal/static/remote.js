@@ -112,7 +112,10 @@ if (root.dataset.kind === 'terminal') {
       // Adaptateur noVNC 1.7 : cette capacité n'a pas d'accesseur public.
       // Ne jamais envoyer SetDesktopSize à un ancien agent qui ne l'annonce pas.
       if (!running || !nativeSize || !rfb._supportsSetDesktopSize) return;
-      const target = resolutionFor(nativeSize.width, nativeSize.height, screen.clientWidth - 2, screen.clientHeight - 2, scale.value);
+      // Pixels de l'écran et non pixels CSS : avec un affichage à 150 %, un pixel du bureau = un pixel affiché.
+      const dpr = window.devicePixelRatio || 1;
+      const target = resolutionFor(nativeSize.width, nativeSize.height, Math.floor((screen.clientWidth - 2) * dpr),
+                                   Math.floor((screen.clientHeight - 2) * dpr), scale.value);
       if (!target) return;
       const key = `${target.width}x${target.height}`;
       if (key === lastSize) return;
@@ -130,7 +133,8 @@ if (root.dataset.kind === 'terminal') {
     if (!nativeSize) nativeSize = {width: canvas.width, height: canvas.height};
     // Ajuster aussi vers le haut si le pilote limite les résolutions disponibles.
     rfb.scaleViewport = scale.value !== 'native';
-    const percent = Math.round(100 * canvas.getBoundingClientRect().width / canvas.width);
+    // 100 % : un pixel du bureau par pixel de l'écran (net), quelle que soit la mise à l'échelle du navigateur.
+    const percent = Math.round(100 * canvas.getBoundingClientRect().width * (window.devicePixelRatio || 1) / canvas.width);
     resolution.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
   }
   scale.addEventListener('change', () => { updateViewport(); requestResolution(); });

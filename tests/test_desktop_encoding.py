@@ -156,3 +156,27 @@ class Probe {
             decoded, count = decode((path / '4k-delta.bin').read_bytes(), 3840, 2160, decoded)
             self.assertEqual(decoded, changed); self.assertEqual(count, 1)
             self.assertLess((path / '4k-delta.bin').stat().st_size, (path / '4k.bin').stat().st_size // 10)
+
+    def test_resolution_choice_fills_the_window_before_matching_its_size(self):
+        """Mode du pilote retenu : celui qui remplit la zone (rapport conservé), puis le plus proche de 100 %."""
+        harness = r'''
+using System; using System.Linq; using Loco;
+class Pick {
+ static void Main(string[] args) {
+  var modes = "640x480 1024x768 800x600 2048x1280 1920x1200 1600x1000 1680x1050 1440x900 1280x800 848x480 1400x1050 1600x1200 1280x720 4096x2160 3840x2160 2560x1080 1920x1080"
+   .Split(' ').Select(m => m.Split('x').Select(int.Parse).ToArray()).ToArray();
+  foreach (var target in args) {
+   var t = target.Split('x').Select(int.Parse).ToArray();
+   var best = modes.OrderBy(m => DesktopResolution.Score(m[0], m[1], t[0], t[1])).First();
+   Console.WriteLine(target + "=" + best[0] + "x" + best[1]);
+  }
+ }
+}'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory); (path / 'Pick.cs').write_text(harness)
+            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Core.dll', '-out:' + str(path / 'Pick.exe'),
+                            str(ROOT / 'windows/client/DesktopResolution.cs'), str(path / 'Pick.cs')], check=True, capture_output=True)
+            out = subprocess.run(['mono', str(path / 'Pick.exe'), '1868x772', '1280x800', '1920x1080', '1400x800'],
+                                 check=True, capture_output=True, text=True).stdout.split()
+        self.assertEqual(out, ['1868x772=2560x1080',     # fenêtre très large : 21:9 plutôt que 16:9 avec des bandes
+                               '1280x800=1280x800', '1920x1080=1920x1080', '1400x800=1280x720'])

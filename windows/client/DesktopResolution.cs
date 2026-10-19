@@ -32,10 +32,13 @@ namespace Loco
         static bool Same(DisplayMode a, DisplayMode b)
         { return a.Width == b.Width && a.Height == b.Height && a.Orientation == b.Orientation && a.Frequency == b.Frequency; }
 
+        // Plus petit = meilleur. Le navigateur ajuste le bureau à la zone en conservant son rapport :
+        // d'abord la part de la zone remplie (un 21:9 pour une fenêtre très large), puis l'écart à 100 %.
         internal static double Score(int width, int height, int targetWidth, int targetHeight)
         {
-            double x = Math.Log((double)width / targetWidth), y = Math.Log((double)height / targetHeight);
-            return x * x + y * y;
+            double scale = Math.Min((double)targetWidth / width, (double)targetHeight / height);
+            double fill = scale * scale * width * height / ((double)targetWidth * targetHeight);
+            return (1 - fill) + 0.05 * Math.Abs(Math.Log(scale));
         }
 
         public bool Resize(int width, int height)
