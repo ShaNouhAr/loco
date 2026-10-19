@@ -172,7 +172,10 @@ namespace Loco
         {
             uint read, available, left;
             var pipe = (NamedPipeClientStream)stream;
-            return PeekNamedPipe(pipe.SafePipeHandle.DangerousGetHandle(), null, 0, out read, out available, out left) && available > 0;
+            // Canal fermé ou en erreur (fin de session côté service) : laisser Read() le constater, pour sortir aussitôt
+            // et rétablir la résolution, au lieu d'attendre un changement d'écran jusqu'à être arrêté de force.
+            if (!PeekNamedPipe(pipe.SafePipeHandle.DangerousGetHandle(), null, 0, out read, out available, out left)) return true;
+            return available > 0;
         }
         // Répond à la demande d'image : true si une mise à jour est partie, false pour la garder (rien de neuf à l'écran).
         bool Update(bool full, bool force)

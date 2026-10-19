@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.17.1 — 2026-10-20
+
+- **Résolution du poste toujours rétablie à la fermeture de la console** (agent Windows) : en 2.17.0, quand le navigateur fermait la session pendant qu'une demande d'image attendait un changement d'écran, le compagnon de bureau ne voyait pas la fermeture du canal ; il était arrêté de force au bout de 5 secondes, sans rétablir la résolution d'origine (le poste restait par exemple en 848 × 480). Le canal fermé est maintenant constaté aussitôt : le compagnon se termine proprement et rend la résolution initiale. Vérifié sur une suite de sessions avec changements de résolution, plein écran et zoom.
+
 ## 2.17.0 — 2026-10-20
 
 - **Console noVNC plus réactive** (agent Windows 2.17) : l'écran est lu par **duplication DXGI** — seulement quand il change, avec les zones modifiées — au lieu d'une capture GDI complète à chaque image (≈ 180 ms sur une machine virtuelle). Le compagnon garde la demande d'image tant que rien ne bouge et y répond dès le premier changement, sans retarder la saisie ; plus aucun échange ni calcul sur un bureau immobile (≈ 1 % d'un cœur contre ≈ 35 %). GDI prend le relais sur le bureau sécurisé, avec plusieurs écrans ou un pilote sans duplication, et la duplication est rouverte aussitôt après un changement de mode. Tampons réutilisés, au plus ~30 images par seconde. Mesuré sur la VM de démonstration : saisie → image modifiée de 257 à ~135 ms (pire cas 641 → ~250 ms), image complète de 310 à ~85 ms.
