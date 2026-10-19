@@ -45,6 +45,33 @@ def _group(kind, group_id):
     return row
 
 
+def _device_state(dev, apps):
+    color, reason = fleet.status(dev, apps)
+    return {"color": color, "label": fleet.status_label(dev, color), "reason": reason}
+
+
+def _overview(kind):
+    """Par groupe : aperçu des membres (dans l'ordre) et état résumé (logiciels prêts, voyants des appareils)."""
+    out = {}
+    if kind == "software":
+        rows = db().execute("SELECT m.group_id, a.name, a.slug, a.winget_id, a.status FROM software_group_members m "
+                            "JOIN win_apps a ON a.id=m.app_id ORDER BY m.group_id, m.position, a.name COLLATE NOCASE")
+        for r in rows:
+            g = out.setdefault(r["group_id"], {"members": [], "states": {}})
+            g["members"].append(r)
+            g["states"][r["status"]] = g["states"].get(r["status"], 0) + 1
+    else:
+        apps = fleet.catalog()
+        rows = db().execute("SELECT m.group_id, d.* FROM device_group_members m JOIN devices d ON d.id=m.device_id "
+                            "WHERE d.state!='removed' ORDER BY m.group_id, d.hostname COLLATE NOCASE")
+        for r in rows:
+            g = out.setdefault(r["group_id"], {"members": [], "states": {}})
+            color = fleet.status(r, apps)[0]
+            g["members"].append(r)
+            g["states"][color] = g["states"].get(color, 0) + 1
+    return out
+
+
 def _editor(kind, group_id):
     software = kind == "software"
     group = _group(kind, group_id) if group_id else None
@@ -54,10 +81,15 @@ def _editor(kind, group_id):
         if not group_id:
             wanted = set(request.args.getlist("app"))
             selected = {r["id"] for r in rows if r["slug"] in wanted}
+        items = [{"row": r} for r in rows]
     else:
         rows = db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall()
         selected = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
-    return render_template("group_editor.html", kind=kind, group=group, rows=rows, selected=selected)
+        apps = fleet.catalog()
+        items = [{"row": r, **_device_state(r, apps)} for r in rows]
+    items.sort(key=lambda i: i["row"]["id"] not in selected)      # membres d'abord, ordre alphabétique conservé
+    return render_template("group_editor.html", kind=kind, group=group, items=items, selected=selected,
+                           families=fleet.FAMILIES)
 
 
 def _save(kind, group_id):
@@ -111,7 +143,7 @@ def _delete(kind, group_id):
 @app.route("/windows-apps/groupes")
 @login_required
 def software_groups():
-    return render_template("groups.html", kind="software", groups=listing("software"))
+    return render_template("groups.html", kind="software", groups=listing("software"), overview=_overview("software"))
 
 
 @app.route("/windows-apps/groupes/nouveau", defaults={"group_id": 0})
@@ -137,7 +169,7 @@ def software_group_delete(group_id):
 @app.route("/parc/groupes")
 @login_required
 def fleet_groups():
-    return render_template("groups.html", kind="device", groups=listing("device"))
+    return render_template("groups.html", kind="device", groups=listing("device"), overview=_overview("device"))
 
 
 @app.route("/parc/groupes/nouveau", defaults={"group_id": 0})

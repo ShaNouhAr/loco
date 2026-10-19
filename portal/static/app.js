@@ -341,6 +341,20 @@
     refresh();
   }
 
+  /* ---------------------------------------------------------------- membres d'un groupe */
+
+  // Compteur des cases cochées et affichage limité aux lignes cochées (éditeur de groupe).
+  function syncPicked() {
+    $$("[data-checked-count]").forEach(function (el) {
+      el.textContent = $$(el.dataset.checkedCount).filter(function (c) { return c.checked; }).length;
+    });
+    $$("tr input[name=members]").forEach(function (c) { c.closest("tr").classList.toggle("picked", c.checked); });
+  }
+  document.addEventListener("change", function (e) {
+    if (e.target.matches("input[name=members]")) syncPicked();
+    if (e.target.matches("[data-only-checked]")) $(e.target.dataset.onlyChecked).classList.toggle("only-picked", e.target.checked);
+  });
+
   /* ---------------------------------------------------------------- jauges */
 
   $$("[data-width]").forEach(function (el) { el.style.width = Math.max(0, Math.min(100, Number(el.dataset.width))) + "%"; });

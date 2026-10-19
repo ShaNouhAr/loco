@@ -1,9 +1,10 @@
-"""Catalogue local Windows : points à traiter, actions de la fiche d'un logiciel, droits."""
+"""Catalogue local Windows et groupes : points à traiter, actions de la fiche d'un logiciel, aperçu des groupes, droits."""
 import unittest
 
 import test_permissions
 from test_fleet import FleetTest, Agent, WINDOWS
 from loco.db import transaction
+from test_fleet import device
 
 
 def add(slug, name, version, kind="msi", args="/qn", status="ready", error="", winget=""):
@@ -16,6 +17,9 @@ def add(slug, name, version, kind="msi", args="/qn", status="ready", error="", w
 class TestSoftwareCatalog(FleetTest):
     def setUp(self):
         super().setUp()
+        with transaction() as conn:
+            conn.execute("DELETE FROM software_groups")
+            conn.execute("DELETE FROM device_groups")
         add("7-zip", "7-Zip", "26.04", winget="7zip.7zip")
         add("vlc", "VLC media player", "3.0.21", kind="exe", args="")
         add("git", "Git", "2.51.0", kind="exe", args="/VERYSILENT", status="error", error="HTTP 404 (lien expiré)")
@@ -68,6 +72,47 @@ class TestSoftwareCatalog(FleetTest):
         self.assertNotIn("Supprimer du catalogue", page)
         self.assertNotIn('data-open="#edit"', page)
         self.assertIn("Le droit de consultation du parc est requis.", page)
+
+
+    def group(self, kind, name, members, description=""):
+        prefix = "/windows-apps" if kind == "software" else "/parc"
+        r = self.admin.post(prefix + "/groupes/enregistrer", {"name": name, "description": description,
+                                                              "members": [str(m) for m in members]}, page=prefix + "/groupes")
+        return int(r.headers["Location"].rstrip("/").split("/")[-1])
+
+    def test_group_list_previews_members_and_their_state(self):
+        with transaction() as conn:
+            ids = {r[0]: r[1] for r in conn.execute("SELECT slug, id FROM win_apps")}
+        self.group("software", "Socle", [ids["7-zip"], ids["vlc"]], "Tous les postes")
+        self.group("software", "Outils IT", [ids["git"]])
+        page = self.admin.c.get("/windows-apps/groupes").get_data(as_text=True)
+        self.assertIn("Tous les postes", page)
+        self.assertIn("2 prêts", page)
+        self.assertIn("1 en erreur", page)
+        self.assertIn('title="VLC media player"', page)
+        dev = device(Agent(WINDOWS, "192.168.43.50").uid)["id"]
+        self.group("device", "Compta", [dev])
+        page = self.admin.c.get("/parc/groupes").get_data(as_text=True)
+        self.assertIn("1 en attente", page)                                # 7-Zip en retard sur le poste
+        self.assertIn(WINDOWS["hostname"], page)
+
+    def test_editor_lists_members_first_and_readers_only_see_members(self):
+        with transaction() as conn:
+            ids = {r[0]: r[1] for r in conn.execute("SELECT slug, id FROM win_apps")}
+        gid = self.group("software", "Socle", [ids["vlc"]])
+        page = self.admin.c.get(f"/windows-apps/groupes/{gid}").get_data(as_text=True)
+        self.assertLess(page.index("VLC media player"), page.index("7-Zip</a>"))     # membres d'abord
+        self.assertIn("1</span> dans le groupe sur 3", page)
+        self.assertIn("Supprimer le groupe", page)
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        reader = test_permissions.TestPermissions.browser(
+            self, "groupes-lecture", test_permissions.TestPermissions.profile(self, "groupes-lecture", {"windows.view"}))
+        page = reader.c.get(f"/windows-apps/groupes/{gid}").get_data(as_text=True)
+        self.assertIn("VLC media player", page)
+        self.assertNotIn("7-Zip</a>", page)
+        self.assertNotIn('name="members"', page)
+        self.assertNotIn("Supprimer le groupe", page)
+        self.assertNotIn("Enregistrer", page)
 
 
 if __name__ == "__main__":

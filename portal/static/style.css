@@ -128,7 +128,7 @@ main { max-width: var(--w); margin: 0 auto; padding: 32px 32px 120px; }
 .panel-h .aside { font-size: 12.5px; color: var(--text-3); display: flex; align-items: center; gap: 10px; }
 .panel-b { padding: 16px; }
 .panel-b > * + * { margin-top: 12px; }
-.panel-b.row > * + * { margin-top: 0; }
+.panel-b.row > * + *, .panel-b.grid2 > * + * { margin-top: 0; }   /* rangées et grilles : espacement par gap */
 
 .panel-f { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--text-3); }
 
@@ -612,3 +612,15 @@ td .sub.sans { font-family: var(--sans); }
 .back-link { margin: -8px 0 10px; }
 .back-link a { color: var(--text-2); text-decoration: none; }
 .back-link a:hover { color: var(--text); }
+
+/* ------------------------------------------------------------------ groupes */
+
+.groups-table td { vertical-align: middle; }
+.strong-link { font-weight: 500; }
+.member-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.member-strip .tag { font-size: 11.5px; }
+.group-members-table td { vertical-align: middle; }
+.only-picked tr:not(.picked) { display: none; }
+.sticky-actions { position: sticky; bottom: 0; z-index: 5; background: var(--bg); color: var(--text-3); }
+.sticky-actions .btn { color: var(--text); }
+.sticky-actions .btn.primary { color: var(--bg); }

@@ -1,13 +1,71 @@
 {% extends "base.html" %}
+{% from "_software_logo.html" import software_logo %}
 {% set software = kind == 'software' %}
+{% set editor = 'software_group_editor' if software else 'fleet_group_editor' %}
 {% block title %}Groupes de {{ 'logiciels' if software else 'machines' }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' if software else '_fleet_nav.html' %}
-<div class="head"><div><h1>Groupes de {{ 'logiciels' if software else 'machines' }}</h1><p>{{ 'Préparez des ensembles de logiciels Windows à déployer ensemble.' if software else 'Organisez les appareils par équipe, site ou usage pour les cibler ensemble.' }} Un membre peut appartenir à plusieurs groupes.</p></div>
-{% if can('windows.groups' if software else 'fleet.groups') %}<a class="btn primary" href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=0) }}">Créer un groupe</a>{% endif %}</div>
-<div class="store-grid">
-{% for group in groups %}<article class="panel"><div class="panel-h"><h2><a href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a></h2><span class="h-count">{{ group.members }} {{ 'logiciel(s)' if software else 'appareil(s)' }}</span></div><div class="panel-b stack"><p class="muted">{{ group.description or 'Aucune description.' }}</p><div class="actions"><a class="btn" href="{{ url_for('software_group_editor' if software else 'fleet_group_editor', group_id=group.id) }}">Ouvrir</a>
-{% if group.members and can('fleet.install') and (software or can('fleet.bulk_install')) %}<a class="btn primary" href="{{ url_for('deployment_compose', **({'software_group':group.id} if software else {'device_group':group.id})) }}">Déployer {{ 'ce groupe' if software else 'sur ce groupe' }}</a>{% endif %}</div></div></article>
-{% else %}<div class="empty">Aucun groupe. {{ 'Créez par exemple un socle bureautique ou un ensemble de logiciels métier.' if software else 'Créez par exemple un groupe Comptabilité, Atelier ou Serveurs.' }}</div>{% endfor %}
+<div class="head">
+  <div>
+    <h1>Groupes de {{ 'logiciels' if software else 'machines' }}</h1>
+    <p>{{ 'Ensembles de logiciels Windows à déployer en une fois : socle bureautique, outils d’un service…' if software else 'Appareils regroupés par équipe, site ou usage pour les mettre à jour ou leur déployer des logiciels ensemble.' }} Un {{ 'logiciel' if software else 'appareil' }} peut appartenir à plusieurs groupes.</p>
+  </div>
+  {% if can('windows.groups' if software else 'fleet.groups') %}<div class="actions"><a class="btn primary" href="{{ url_for(editor, group_id=0) }}">Créer un groupe</a></div>{% endif %}
 </div>
+
+<section class="panel">
+  {% if groups %}
+  <div class="table-wrap">
+    <table class="groups-table">
+      <thead><tr><th>Groupe</th><th>{{ 'Logiciels' if software else 'Appareils' }}</th><th class="hide-sm">État</th><th></th></tr></thead>
+      <tbody>
+      {% for group in groups %}{% set o = overview.get(group.id, {'members': [], 'states': {}}) %}
+        <tr>
+          <td><a href="{{ url_for(editor, group_id=group.id) }}" class="strong-link">{{ group.name }}</a>
+            <span class="sub sans">{{ group.description or 'Sans description' }}</span></td>
+          <td>
+            {% if o.members %}
+            <div class="member-strip">
+              {% if software %}
+                {% for m in o.members[:6] %}<span title="{{ m.name }}">{{ software_logo(m.winget_id, m.name, 'small') }}</span>{% endfor %}
+              {% else %}
+                {% for m in o.members[:4] %}<span class="tag">{{ m.hostname or m.uid[:8] }}</span>{% endfor %}
+              {% endif %}
+              {% if o.members|length > (6 if software else 4) %}<span class="faint small">+{{ o.members|length - (6 if software else 4) }}</span>{% endif %}
+            </div>
+            {% else %}<span class="faint">vide</span>{% endif %}
+          </td>
+          <td class="hide-sm nowrap">
+            {% if not o.members %}—
+            {% elif software %}
+              {% set ready = o.states.get('ready', 0) %}
+              {% if ready == o.members|length %}<span class="st ok">{{ ready }} prêt{{ 's' if ready > 1 }}</span>
+              {% else %}
+                {% if o.states.get('error') %}<span class="st err">{{ o.states.error }} en erreur</span>{% endif %}
+                {% if o.members|length - ready - o.states.get('error', 0) %}<span class="st warn">{{ o.members|length - ready - o.states.get('error', 0) }} en téléchargement</span>{% endif %}
+              {% endif %}
+            {% else %}
+              {% for color, cls, label in [('red', 'err', 'nombreuses mises à jour'), ('orange', 'warn', 'en attente'), ('grey', '', 'état inconnu'), ('green', 'ok', 'à jour')] if o.states.get(color) %}
+              <span class="st {{ cls }}" title="{{ label }}">{{ o.states[color] }} {{ label }}</span>{{ ' ' if not loop.last }}
+              {% endfor %}
+            {% endif %}
+          </td>
+          <td class="right nowrap">
+            {% if software %}
+              {% if o.members and can('fleet.install') %}<a class="btn sm" href="{{ url_for('deployment_compose', software_group=group.id) }}">Déployer</a>{% endif %}
+            {% else %}
+              <a class="btn sm" href="{{ url_for('fleet', group=group.id) }}">Voir dans Mon parc</a>
+              {% if o.members and can('fleet.install') and can('fleet.bulk_install') %}<a class="btn sm" href="{{ url_for('deployment_compose', device_group=group.id) }}">Déployer</a>{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">Aucun groupe. {{ 'Créez par exemple un socle bureautique ou un ensemble de logiciels métier.' if software else 'Créez par exemple un groupe Comptabilité, Atelier ou Serveurs.' }}{% if can('windows.groups' if software else 'fleet.groups') %} <a href="{{ url_for(editor, group_id=0) }}">Créer un groupe</a>{% endif %}</div>
+  {% endif %}
+  <div class="panel-f">{{ 'Déployer un groupe prépare un déploiement à vérifier avant confirmation.' if software else 'Mon parc filtre ses appareils et « Tout mettre à jour » sur le groupe choisi.' }} Modifier un groupe ne change pas les déploiements déjà confirmés.</div>
+</section>
 {% endblock %}
