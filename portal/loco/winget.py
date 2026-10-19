@@ -513,8 +513,10 @@ def software_store_detail(package_id):
     if not isinstance(homepage, str) or not homepage.startswith("https://"):
         homepage = ""
     from .groups import listing
+    store_version = str(doc.get("PackageVersion") or "")
+    newer = bool(known and store_version and _version_key(store_version) > _version_key(known["version"]))
     return render_template("software_store_detail.html", software_groups=listing("software") if can("windows.groups") else [], package_id=package_id, doc=doc, info=info,
-                           error=error, known=known, homepage=homepage)
+                           error=error, known=known, homepage=homepage, newer=newer)
 
 
 @app.route("/windows-apps/store/refresh", methods=["POST"])
@@ -589,6 +591,8 @@ def winget_add():
         flash(f"Import impossible : {e}", "error")
         return back("software_store", q=request.form.get("q", ""))
     flash(f"{row['name']} figure dans le catalogue local. Son installeur est vérifié avant tout déploiement.", "ok")
+    if request.form.get("retour") == "store":          # ajout depuis la liste : on y reste pour en ajouter d'autres
+        return back("software_store", **{k: request.form[k] for k in ("q", "category", "page") if request.form.get(k)})
     return back("software_detail", slug=row["slug"])
 
 

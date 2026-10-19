@@ -511,6 +511,31 @@ class TestSoftwareStore(FleetTest):
         self.assertEqual(viewer.c.get("/windows-apps/store").status_code, 403)
         self.assertEqual(viewer.c.get("/windows-apps/store/Example.Tool").status_code, 403)
 
+    def test_store_list_adds_in_place_and_flags_known_or_outdated_software(self):
+        with transaction() as conn:
+            conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect, winget_id) "
+                         "VALUES ('outil', 'Example Tool', '2.0.0', 'exe', '/S', 'tool.exe', ?, 'ready', '', 'Example.Tool')",
+                         ("d" * 64,))
+        page = self.admin.c.get("/windows-apps/store?q=Vendor.App0").get_data(as_text=True)
+        self.assertIn('name="retour" value="store"', page)
+        self.assertIn('<input type="hidden" name="q" value="Vendor.App0">', page)
+        page = self.admin.c.get("/windows-apps/store?q=Example").get_data(as_text=True)
+        self.assertIn("dans loco", page)
+        self.assertNotIn('value="Example.Tool"', page)                      # déjà présent : pas de bouton Ajouter
+        with transaction() as conn:
+            known = conn.execute("SELECT * FROM win_apps WHERE slug='outil'").fetchone()
+        with mock.patch.object(winget, "import_package", return_value=known):
+            r = self.admin.post("/windows-apps/winget/add", {"id": "Example.Tool", "retour": "store", "q": "Example"},
+                                page="/windows-apps/store")
+            self.assertTrue(r.headers["Location"].endswith("/windows-apps/store?q=Example"))
+            r = self.admin.post("/windows-apps/winget/add", {"id": "Example.Tool"}, page="/windows-apps/store")
+            self.assertTrue(r.headers["Location"].endswith("/windows-apps/logiciel/outil"))
+        with mock.patch.object(winget, "manifest", return_value=winget.parse_yaml(MANIFEST)):
+            page = self.admin.c.get("/windows-apps/store/Example.Tool").get_data(as_text=True)
+        self.assertIn("Le catalogue local a la version 2.0.0 ; le store propose 2.5.0", page)
+        self.assertIn("Voir dans le catalogue local", page)
+        self.assertNotIn("Ajouter à loco</button>", page)
+
     def test_offline_store_can_read_the_last_valid_index(self):
         with mock.patch.object(winget, "INDEX", self.index), \
                 mock.patch.object(winget, "refresh_index", side_effect=OSError("hors ligne")):

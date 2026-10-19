@@ -592,3 +592,23 @@ td .sub.sans { font-family: var(--sans); }
 .apps-table td { vertical-align: middle; }
 .apps-table tr.note-row td { padding-bottom: 12px; }
 .apps-table .note-row .btn.sm { color: var(--text); }
+
+/* ------------------------------------------------------------------ store WinGet */
+
+.store-filters { display: grid; gap: 12px; }
+.store-search { display: flex; gap: 8px; }
+.store-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.store-item { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); }
+.store-item:hover { border-color: var(--line-2); background: var(--bg-2); }
+.store-item-text { display: grid; min-width: 0; flex: 1; }
+.store-item-link { color: var(--text); font-weight: 500; line-height: 1.3; text-decoration: none; overflow-wrap: anywhere; }
+.store-item-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }   /* toute la carte ouvre la fiche */
+.store-item-link:focus-visible { outline: none; }
+.store-item:focus-within { outline: 2px solid var(--text-3); outline-offset: 2px; }
+.store-item-text .sub { display: block; overflow: hidden; font: 11.5px var(--mono); color: var(--text-3); text-overflow: ellipsis; white-space: nowrap; }
+.store-item-version { font: 12px var(--mono); color: var(--text-2); }
+.store-item-action { position: relative; z-index: 1; flex: none; }
+.store-item-action .st { font-size: 12.5px; text-decoration: none; }
+.back-link { margin: -8px 0 10px; }
+.back-link a { color: var(--text-2); text-decoration: none; }
+.back-link a:hover { color: var(--text); }

@@ -1,35 +1,82 @@
 {% extends "base.html" %}
 {% from "_software_logo.html" import software_logo %}
-{% block title %}Store logiciels{% endblock %}
+{% block title %}Store WinGet{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
 <div class="head">
-  <div><p class="small"><a href="{{ url_for('windows_apps') }}">Mon catalogue local</a></p><h1>Store logiciels</h1>
-    <p>Parcourez WinGet, ajoutez des logiciels à vos groupes ou préparez directement leur déploiement sur le parc.</p></div>
-  {% if can("store.refresh") %}<form method="post" action="{{ url_for('software_store_refresh') }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn"><span class="spin"></span>Actualiser le catalogue</button></form>{% endif %}
-</div>
-<div class="stack">
-  <form method="get" action="{{ url_for('software_store') }}" class="row store-search">
-    <input type="search" name="q" value="{{ query }}" placeholder="Rechercher dans tout le catalogue : Firefox, VLC, 7-Zip…" aria-label="Rechercher dans le store">
-    <button class="btn primary">Rechercher</button>
-  </form>
-  <nav class="store-categories" aria-label="Catégories de logiciels">{% for key, cat in categories.items() %}
-    <a href="{{ url_for('software_store', category=key) }}" class="btn sm {{ 'primary' if key == category and not query }}" {% if key == category and not query %}aria-current="page"{% endif %}>{{ cat[0] }}</a>{% endfor %}</nav>
-  {% if error %}<p class="note err">{{ error }}</p>{% endif %}
-  <div class="store-heading"><h2>{{ 'Résultats pour « ' ~ query ~ ' »' if query else categories[category][0] }} <span class="h-count">{{ total }} logiciel(s)</span></h2><a href="{{ url_for('windows_apps') }}">Voir le catalogue local →</a></div>
-  <div class="store-grid">
-    {% for r in results %}<article class="panel store-card">
-      <div class="store-card-top">{{ software_logo(r.id, r.name) }}<div><h3><a href="{{ url_for('software_store_detail', package_id=r.id) }}">{{ r.name }}</a></h3><span class="sub mono">{{ r.id }}</span></div></div>
-      <p class="muted">Version {{ r.version }}</p>
-      <div class="store-card-actions"><a class="btn sm" href="{{ url_for('software_store_detail', package_id=r.id) }}">Voir la fiche</a>{% if can('fleet.install') and (r.id in known or can('store.import')) %}<a class="btn sm primary" href="{{ url_for('deployment_compose',package_id=r.id) }}">Déployer</a>{% endif %}
-      {% if r.id in known %}<span class="st {{ 'ok' if known[r.id].status == 'ready' else 'warn' }}">{{ 'Dans loco' if known[r.id].status == 'ready' else 'Importé · ' ~ app_states.get(known[r.id].status,'Indisponible') }}</span>{% endif %}</div>
-    </article>{% else %}{% if not error %}<div class="empty">Aucun logiciel ne correspond. Essayez une autre recherche ou tout le catalogue.</div>{% endif %}{% endfor %}
+  <div>
+    <h1>Store WinGet</h1>
+    <p>Catalogue communautaire de Microsoft. Ajoutez un logiciel à loco pour le déployer sur le parc : l'installeur est téléchargé une fois puis vérifié par son empreinte.</p>
   </div>
-  {% if pages > 1 %}<nav class="row store-pagination" aria-label="Pages du store">
-    {% if page > 1 %}<a class="btn sm" href="{{ url_for('software_store', q=query, category=category, page=page-1) }}">← Précédente</a>{% endif %}
-    <span class="muted">Page {{ page }} sur {{ pages }}</span>
-    {% if page < pages %}<a class="btn sm" href="{{ url_for('software_store', q=query, category=category, page=page+1) }}">Suivante →</a>{% endif %}
-  </nav>{% endif %}
-  <p class="hint">Source : catalogue communautaire Microsoft WinGet{% if updated %} · Index du {{ updated }}{% endif %}. Les catégories sont des sélections de logiciels. L'import vérifie la compatibilité de l'installation silencieuse et l'empreinte SHA-256 de l'installeur. Aucun logiciel n'est déployé sans action de l'administrateur.</p>
+  {% if can("store.refresh") %}
+  <div class="actions">
+    <form method="post" action="{{ url_for('software_store_refresh') }}" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn" title="{{ 'Index du ' ~ updated if updated else 'Télécharger l’index WinGet' }}"><span class="spin"></span>Actualiser l'index</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="stack">
+  <div class="store-filters">
+    <form method="get" action="{{ url_for('software_store') }}" class="store-search" role="search">
+      <input type="search" name="q" value="{{ query }}" placeholder="Rechercher un logiciel : Firefox, VLC, 7-Zip…" aria-label="Rechercher dans le store">
+      <button class="btn primary">Rechercher</button>
+    </form>
+    <nav class="chips" aria-label="Catégories de logiciels">
+      {% for key, cat in categories.items() %}
+      <a href="{{ url_for('software_store', category=key) }}" class="chip {{ 'on' if key == category and not query }}" {% if key == category and not query %}aria-current="page"{% endif %}>{{ cat[0] }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% if error %}<p class="note err">{{ error }}</p>{% endif %}
+
+  <div class="store-heading">
+    <h2>{{ 'Résultats pour « ' ~ query ~ ' »' if query else categories[category][0] }} <span class="h-count">{{ total }} logiciel{{ 's' if total != 1 }}</span></h2>
+    {% if query %}<a href="{{ url_for('software_store') }}" class="small">Effacer la recherche</a>{% endif %}
+  </div>
+
+  {% if results %}
+  <div class="store-grid">
+    {% for r in results %}{% set k = known.get(r.id) %}
+    <article class="store-item">
+      {{ software_logo(r.id, r.name) }}
+      <div class="store-item-text">
+        <a class="store-item-link" href="{{ url_for('software_store_detail', package_id=r.id) }}">{{ r.name }}</a>
+        <span class="sub">{{ r.id }}</span>
+        <span class="store-item-version">{{ r.version }}</span>
+      </div>
+      <div class="store-item-action">
+        {% if k %}
+          {% if k.status == 'ready' %}<a class="st ok" href="{{ url_for('software_detail', slug=k.slug) }}">dans loco</a>
+          {% elif k.status == 'error' %}<a class="st err" href="{{ url_for('software_detail', slug=k.slug) }}">erreur</a>
+          {% else %}<a class="st warn" href="{{ url_for('software_detail', slug=k.slug) }}">téléchargement</a>{% endif %}
+        {% elif can('store.import') %}
+        <form method="post" action="{{ url_for('winget_add') }}" data-ajax>
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ r.id }}"><input type="hidden" name="retour" value="store">
+          {% if query %}<input type="hidden" name="q" value="{{ query }}">{% else %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+          {% if page > 1 %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
+          <button class="btn sm" title="Ajouter {{ r.name }} au catalogue local"><span class="spin"></span>Ajouter</button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% elif not error %}
+  <div class="panel"><div class="empty">Aucun logiciel ne correspond. Essayez un autre nom ou <a href="{{ url_for('software_store', category='all') }}">parcourez tout le catalogue</a>.</div></div>
+  {% endif %}
+
+  {% if pages > 1 %}
+  <nav class="row store-pagination" aria-label="Pages du store">
+    {% if page > 1 %}<a class="btn sm" href="{{ url_for('software_store', q=query or None, category=None if query else category, page=page-1) }}">Précédente</a>{% endif %}
+    <span class="muted small">Page {{ page }} sur {{ pages }}</span>
+    {% if page < pages %}<a class="btn sm" href="{{ url_for('software_store', q=query or None, category=None if query else category, page=page+1) }}">Suivante</a>{% endif %}
+  </nav>
+  {% endif %}
+
+  <p class="hint">Source : Microsoft WinGet{% if updated %}, index du {{ updated }}{% endif %}. Les catégories sont des sélections. À l'ajout, loco retient un installeur silencieux et son empreinte SHA-256 ; rien n'est installé sur les postes sans un déploiement confirmé.</p>
 </div>
 {% endblock %}
