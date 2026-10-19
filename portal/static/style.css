@@ -593,7 +593,8 @@ details.menu > summary.chip { cursor: pointer; }
 .journal-table td .st { margin-right: 6px; }
 .journal-table .day-row th { padding-top: 14px; background: var(--bg-2); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
 .journal-table .detail-cell { min-width: 240px; overflow-wrap: anywhere; color: var(--text-2); }
-.journal-table td .sub { font-family: var(--sans); }
+.journal-table td .sub, .user-cell .sub { font-family: var(--sans); }
+.user-cell { min-width: 220px; max-width: 320px; overflow-wrap: anywhere; }
 .quiet-link { color: inherit; text-decoration: none; }
 .quiet-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .journal-filters { display: grid; gap: 10px; }
@@ -817,3 +818,4 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .script-preview { margin: 0; padding: 14px 16px; max-height: 460px; overflow: auto; font: 12.5px/1.5 var(--mono); white-space: pre; background: var(--bg-2); border-radius: 0 0 var(--r) var(--r); }
 .script-snapshot > summary { cursor: pointer; list-style: none; }
 .scripts-table td { vertical-align: middle; }
+.directory-test input { width: 200px; }

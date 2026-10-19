@@ -4,7 +4,7 @@ import json
 from flask import abort, flash, g, render_template, request, session
 
 from . import app, config
-from .auth import audit, can, login_required
+from .auth import audit, login_required
 from .db import db
 from .util import back
 
@@ -20,12 +20,14 @@ FEATURES = {
     "windows_apps": ("Logiciels Windows", "Catalogue local, centre de logiciels, groupes de logiciels et déploiements.", (), ""),
     "remote": ("Accès distant", "Terminal et bureau à distance (console noVNC) par l'agent.", ("fleet",), ""),
     "scripts": ("Scripts", "Bibliothèque de scripts PowerShell et shell exécutés sur les postes par l'agent.", ("fleet",), ""),
+    "directories": ("Annuaires LDAP et RADIUS", "Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles.", (), ""),
 }
 
 # Module de la page -> fonctionnalités nécessaires ; quelques pages partagées sont précisées par leur nom.
 MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("flatpak",), "loco.wupdate": ("wu",),
            "loco.winapps": ("windows_apps",), "loco.winget": ("windows_apps",), "loco.deployments": ("windows_apps", "fleet"),
-           "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts")}
+           "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"),
+           "loco.directories": ("directories",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -36,7 +38,7 @@ ENDPOINTS = {"linux_setup": ("apt",), "linux_repository_source": ("apt",), "rpm_
 # Droits rattachés à une fonctionnalité : coupée, elle rend ces droits inopérants (navigation, boutons, pages).
 PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu": ("wu",), "windows": ("windows_apps",),
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
-               "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts")}
+               "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                    "agent_file", "remote_agent"}

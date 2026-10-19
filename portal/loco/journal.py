@@ -3,7 +3,7 @@
 import datetime
 
 # Catégories : clé -> (libellé, préfixes « x. » ou codes exacts, sous-codes compris). Une action appartient à la
-# première catégorie qui la reconnaît, dans cet ordre : les sessions distantes avant le parc, les connexions SSO
+# première catégorie qui la reconnaît, dans cet ordre : les sessions distantes avant le parc, les connexions par annuaire
 # avant les comptes.
 CATEGORIES = {
     "connexions": ("Connexions", ("connexion", "deconnexion", "sso.connexion", "sso.echec")),
@@ -20,10 +20,10 @@ CATEGORIES = {
 
 LABELS = {
     "connexion": "Connexion", "deconnexion": "Déconnexion", "connexion.echec": "Échec de connexion",
-    "connexion.bloquee": "Connexion bloquée (trop d'échecs)", "sso.connexion": "Connexion SSO", "sso.echec": "Échec de connexion SSO",
-    "sso.demande": "Demande d'accès SSO", "sso.approbation": "Accès SSO approuvé",
-    "sso.fournisseur.ajout": "Fournisseur SSO ajouté", "sso.fournisseur.modification": "Fournisseur SSO modifié",
-    "sso.fournisseur.suppression": "Fournisseur SSO supprimé",
+    "connexion.bloquee": "Connexion bloquée (trop d'échecs)", "sso.connexion": "Connexion par annuaire", "sso.echec": "Annuaire injoignable ou en erreur",
+    "sso.demande": "Demande d'accès (annuaire)", "sso.approbation": "Accès approuvé (annuaire)", "sso.test": "Test d'un annuaire",
+    "sso.fournisseur.ajout": "Annuaire ajouté", "sso.fournisseur.modification": "Annuaire modifié",
+    "sso.fournisseur.suppression": "Annuaire supprimé",
     "comptes.ajout": "Compte créé", "comptes.modification": "Compte modifié", "comptes.suppression": "Compte supprimé",
     "comptes.reinitialisation": "Mot de passe réinitialisé", "comptes.mot_de_passe": "Mot de passe défini",
     "compte.mot_de_passe": "Mot de passe changé", "profils.ajout": "Profil créé", "profils.modification": "Profil modifié",

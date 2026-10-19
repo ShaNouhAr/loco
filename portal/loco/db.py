@@ -308,6 +308,30 @@ MIGRATIONS = [
         UPDATE script_run_targets SET last_state=OLD.state, last_output=OLD.output WHERE command_id=OLD.id;
     END;
     """,
+    # 13 : annuaires LDAP et RADIUS à la place d'OpenID Connect. Les anciens fournisseurs sont désactivés ; leurs comptes
+    # restent (journal, profils) et ne se connectent plus tant qu'un administrateur ne leur donne pas un mot de passe local.
+    """
+    CREATE TABLE auth_directories (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('ldap', 'radius')),
+        label TEXT NOT NULL,
+        config TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        position INTEGER NOT NULL DEFAULT 0,
+        revision INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE directory_identities (
+        directory_id TEXT NOT NULL REFERENCES auth_directories(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        display_name TEXT NOT NULL DEFAULT '',
+        email TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (directory_id, subject)
+    );
+    UPDATE sso_providers SET enabled=0;
+    DELETE FROM sso_flows;
+    """,
 ]
 
 

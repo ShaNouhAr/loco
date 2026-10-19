@@ -347,6 +347,17 @@
     refresh();
   }
 
+  /* ---------------------------------------------------------------- modèles de formulaire */
+
+  // Liste de modèles : l'option choisie remplit les champs du formulaire (data-fill = {nom du champ: valeur}).
+  document.addEventListener("change", function (e) {
+    if (!e.target.matches("select[data-preset]")) return;
+    var option = e.target.selectedOptions[0], form = e.target.form;
+    if (!option || !option.dataset.fill || !form) return;
+    var values = JSON.parse(option.dataset.fill);
+    Object.keys(values).forEach(function (name) { var field = form.elements[name]; if (field) field.value = values[name]; });
+  });
+
   /* ---------------------------------------------------------------- mot de passe (Mon compte) */
 
   // Règles vérifiées en direct (les mêmes que le serveur) et affichage du mot de passe à la demande.

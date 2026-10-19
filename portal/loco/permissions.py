@@ -74,8 +74,8 @@ GROUPS = [
     ]),
     ("Utilisateurs, profils et audit", [
         ("users.view", "Consulter les comptes", "Identifiants, profils, état et dernière connexion.", (), False),
-        ("users.approve", "Approuver les demandes SSO", "Attribuer un profil et autoriser un nouveau compte SSO à accéder à loco.", ("users.view",), True),
-        ("sso.manage", "Gérer les fournisseurs SSO", "Ajouter et configurer les fournisseurs de confiance ; révoquer leurs connexions.", ("users.view",), True),
+        ("users.approve", "Approuver les comptes d'annuaire", "Attribuer un profil à une nouvelle identité LDAP ou RADIUS et l'autoriser à accéder à loco.", ("users.view",), True),
+        ("sso.manage", "Gérer les annuaires", "Ajouter, tester et configurer les annuaires LDAP et RADIUS ; révoquer leurs connexions.", ("users.view",), True),
         ("users.create", "Créer des comptes", "Attribuer uniquement des profils dont vous possédez tous les droits.", ("users.view",), True),
         ("users.edit", "Modifier les comptes", "Changer le profil, activer ou désactiver les comptes que vous pouvez gérer.", ("users.view",), True),
         ("users.reset", "Réinitialiser les mots de passe", "Comptes que vous pouvez gérer ; leurs sessions sont fermées.", ("users.view",), True),
@@ -92,7 +92,7 @@ PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2
                for _, items in GROUPS for item in items}
 VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view", "deployments.view"}
 DEFAULTS = {
-    "pending": ("Sans accès", "Aucun droit. Les nouvelles identités SSO attendent une approbation administrative.", set()),
+    "pending": ("Sans accès", "Aucun droit. Les nouvelles identités d'annuaire attendent une approbation administrative.", set()),
     "admin": ("Administrateur", "Accès complet, y compris aux futurs droits. Profil protégé.", set(PERMISSIONS)),
     "viewer": ("Lecture seule", "Consultation des appareils, caches et catalogues locaux.", VIEWER),
     "operator": ("Opérateur", "Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage.",
@@ -137,8 +137,8 @@ ENDPOINTS = {
     "appliance_settings": "system.configure", "appliance_settings_post": "system.configure",
     "users": "users.view", "users_add": "users.create", "users_update": "users.edit",
     "users_approve": "users.approve",
-    "sso_settings": "sso.manage", "sso_add": "sso.manage", "sso_update": "sso.manage",
-    "sso_delete": "sso.manage",
+    "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage",
+    "directory_delete": "sso.manage", "directory_move": "sso.manage", "directory_test": "sso.manage",
     "users_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
     "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",
@@ -149,7 +149,7 @@ ENDPOINTS = {
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }
-ACCOUNT_ENDPOINTS = {"login", "account", "logout", "sso_start", "sso_callback"}
+ACCOUNT_ENDPOINTS = {"login", "account", "logout"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "run-script": "scripts.run",
                       "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 

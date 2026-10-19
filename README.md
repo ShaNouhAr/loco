@@ -317,24 +317,43 @@ Les sessions nécessitent le droit **Terminal distant** ou **Bureau noVNC**, sel
 
 Sur un Linux sans session graphique X11, **Console noVNC** ouvre automatiquement une **console texte root** rendue en RFB par l'agent 2.7 ou plus récent : shell interactif, couleurs ANSI, flèches, tabulation et Ctrl+C. Aucun serveur X ni port VNC n'est nécessaire. Le droit **Terminal distant** est requis en plus du droit **Bureau noVNC** ; sans lui, aucun shell n'est lancé. Un bureau Wayland reste signalé comme non pris en charge. Cette console privée ne remplace pas le terminal physique du poste. L’écran démarre à 128 colonnes × 40 lignes (1024 × 640 pixels) et adapte le PTY et ses pixels à la fenêtre avec l’agent 2.13, avec glyphes latins et tracés de tableaux ; utilisez le terminal habituel pour la sélection/copie de texte, le défilement et les autres écritures.
 
-Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
-
-## Connexions SSO
-
-Dans **Administration → Connexions SSO**, ajoutez une ou plusieurs applications web : Microsoft Entra ID / Microsoft 365, Google / Workspace, GitHub, GitLab, Keycloak, Authentik, Okta, Auth0, Authelia, ZITADEL, Dex, Amazon Cognito, AD FS ou tout fournisseur **OpenID Connect** compatible. Le modèle GitHub utilise son flux OAuth 2. Les modèles fournissent des exemples d'émetteurs à remplacer par les valeurs de votre annuaire ; ils ne contiennent aucun identifiant préconfiguré.
-
-1. Créez une application web confidentielle chez le fournisseur, autorisant le flux code et PKCE S256, avec les scopes `openid profile email` (GitHub : `read:user user:email`).
-2. Dans loco, indiquez l'émetteur exact, l'identifiant client et le secret. Pour Entra ID, utilisez l'UUID de votre tenant dans `https://login.microsoftonline.com/UUID/v2.0`. Choisissez HTTP Basic ou le secret dans la requête selon le fournisseur.
-3. Copiez l'**URL de retour** affichée par loco dans la configuration de cette application. Le serveur loco doit joindre ses points d'accès HTTPS ; une autorité privée doit être approuvée par le système du serveur.
-4. L'utilisateur choisit son fournisseur sur la connexion. Sa première connexion crée une **demande sans accès**, visible en tête de **Comptes**. Une personne disposant du droit **Approuver les demandes SSO** choisit un profil puis approuve. L'utilisateur se reconnecte ensuite par SSO.
-
-Les droits **Gérer les fournisseurs SSO** et **Approuver les demandes SSO** sont distincts et attribués aux administrateurs par défaut. Aucune correspondance de nom ou d'e-mail ne fusionne un compte local avec une identité SSO. Les identités reposent sur le fournisseur et le sujet immuable ; une nouvelle application ou un nouvel émetteur nécessite un nouveau fournisseur et une nouvelle approbation. Les changements de groupe chez le fournisseur n'attribuent pas de droits loco.
-
-Les secrets clients sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes. Les jetons du fournisseur ne sont pas conservés. Les transactions de connexion expirent après dix minutes, sont à usage unique et exclues des sauvegardes. Désactiver, modifier ou supprimer un fournisseur ferme les sessions de ses utilisateurs. Une déconnexion loco ne ferme pas la session chez le fournisseur. **La connexion locale reste disponible** pour administrer loco ; les comptes SSO changent leur mot de passe chez leur fournisseur.
-
-La validation des signatures utilise [PyJWT](https://pyjwt.readthedocs.io/en/latest/usage.html) embarqué (MIT) et cryptography. La console texte embarque les sources de [pyte](https://pyte.readthedocs.io/en/stable/) (LGPLv3), wcwidth (MIT) et font8x8 (domaine public), avec leurs licences dans `portal/agents/console` ; aucun téléchargement de dépendance n'est effectué sur le poste.
+La console texte embarque les sources de [pyte](https://pyte.readthedocs.io/en/stable/) (LGPLv3), wcwidth (MIT) et font8x8 (domaine public), avec leurs licences dans `portal/agents/console` ; aucun téléchargement de dépendance n'est effectué sur le poste.
 
 Sur Windows, l’agent 2.13 suit le bureau sécurisé lors d’une demande UAC et revient ensuite au bureau utilisateur. Le contrôle graphique s’exécute sous SYSTEM dans la session interactive ; le tray reste non privilégié. Les transitions momentanément indisponibles suspendent la capture et la saisie sans fermer la session. Aucune stratégie UAC n’est désactivée.
+
+Le **panneau de commandes** de la console noVNC envoie **Ctrl+Alt+Suppr** et les raccourcis courants (menu Démarrer, Exécuter, Explorateur, Afficher le bureau, Verrouiller, Gestionnaire des tâches, Alt+Tab, Alt+F4, Échap, Impr. écran, menu contextuel). Les touches Ctrl, Alt, Maj et Win peuvent être maintenues jusqu’au clic suivant. **Envoyer du texte** tape un texte caractère par caractère, quelle que soit la disposition du clavier du poste (mots de passe, commandes) ; rien n’est conservé. Sous Windows, la séquence sécurisée n’est acceptée que d’un service : le compagnon de bureau la signale au service loco-client, qui l’envoie uniquement pendant une session de bureau à distance (agent 2.14).
+
+Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
+
+## Scripts
+
+**Mon parc → Scripts** regroupe une bibliothèque de scripts **PowerShell** (Windows) et **shell** (Linux) avec leur description, leur auteur et leur version : chaque changement de contenu ou de système crée une nouvelle version. **Exécuter** ouvre la sélection des appareils et des groupes de machines ; seuls les postes actifs du bon système sont retenus. La version relue doit être celle exécutée : un script modifié entre-temps impose de le revoir.
+
+Le contenu envoyé est figé à l’exécution avec son empreinte SHA-256, vérifiée par l’agent avant de lancer le script en **SYSTEM** (PowerShell sans profil) ou **root** (`/bin/sh`, ou l’interpréteur de la première ligne `#!`), avec un délai de 30 minutes. La page de l’exécution suit chaque poste en direct : état, code de retour, sortie standard et erreurs. Les postes qui n’ont pas encore reçu le script peuvent être annulés ; un script déjà transmis se termine. Les résultats restent consultables après la suppression du script.
+
+Les droits **Consulter les scripts**, **Gérer les scripts** et **Exécuter des scripts** sont distincts ; les deux derniers sont sensibles et réservés par défaut aux administrateurs. Le droit d’exécution est revérifié avant la transmission à l’agent. Agents Windows et Linux 2.14 ou plus récents.
+
+## Annuaires LDAP et RADIUS
+
+Dans **Administration → Annuaires**, ajoutez un annuaire **LDAP** (Active Directory, OpenLDAP, 389 DS, FreeIPA…) ou un serveur **RADIUS** (NPS, FreeRADIUS…). Les utilisateurs se connectent ensuite avec leur identifiant et leur mot de passe habituels, **depuis le formulaire de connexion de loco**. Un identifiant inconnu de loco est essayé dans l’ordre des annuaires actifs (boutons **Monter**).
+
+- **LDAP** : adresse `ldaps://` (recommandé) ou `ldap://` avec **StartTLS** obligatoire, le mot de passe ne circule jamais en clair ; certificat vérifié avec les autorités du système ou l’autorité PEM fournie. Avec un **compte de service**, loco recherche l’utilisateur (base et filtre, modèles Active Directory et OpenLDAP) puis vérifie son mot de passe par une liaison ; sans compte de service, il se lie directement avec un modèle (`{username}@entreprise.local` ou `uid={username},ou=people,dc=exemple,dc=org`). Le nom affiché et le courriel sont relus à chaque connexion. Les identifiants sont échappés dans le filtre (RFC 4515) et un mot de passe vide est refusé.
+- **RADIUS** : authentification PAP (RFC 2865) avec le secret partagé ; loco envoie et **exige l’attribut Message-Authenticator** dans les réponses (protection BlastRADIUS, RFC 3579). Sur NPS ou FreeRADIUS, déclarez loco comme client RADIUS et activez cet attribut dans les réponses.
+- **Tester** vérifie la connexion à l’annuaire et un compte, sans créer de demande ; le résultat est journalisé sans le mot de passe.
+
+La première connexion d’une identité crée un compte **sans accès**, en tête de **Comptes**. Une personne disposant du droit **Approuver les comptes d’annuaire** choisit son profil puis l’approuve. Aucune correspondance de nom ou de courriel ne fusionne un compte local avec une identité d’annuaire, et les groupes de l’annuaire n’attribuent aucun droit loco. Un compte d’annuaire change son mot de passe dans l’annuaire. **Les comptes locaux restent toujours disponibles** pour administrer loco.
+
+Les secrets (mot de passe du compte de service, secret partagé) sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes, et ne sont jamais réaffichés. Modifier ou désactiver un annuaire ferme les sessions de ses comptes ; le supprimer les désactive. Les droits **Gérer les annuaires** et **Approuver les comptes d’annuaire** sont distincts et attribués aux administrateurs par défaut.
+
+**Depuis la 2.14, les connexions OpenID Connect sont retirées** : les fournisseurs existants sont désactivés et les comptes concernés conservés, sans accès. Dans **Comptes**, **Mot de passe local** leur donne un mot de passe temporaire ; ils deviennent des comptes locaux.
+
+## Fonctionnalités
+
+**Administration → Fonctionnalités**, réservé au compte local **admin** créé à l’installation (même les autres administrateurs n’y ont pas accès), active ou désactive des pans entiers de loco : paquets APT, RPM et Flatpak, cache Windows Update, Mon parc et agents, logiciels Windows, accès distant, scripts et annuaires. Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d’ensemble ; ses pages et API sont refusées avec un message explicite et ses droits deviennent inopérants. Les agents reçoivent « réessayer plus tard » quand le parc est coupé ; installations et scripts attendent la réactivation. Les dépendances sont appliquées (accès distant et scripts suivent le parc). Sur l’appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés. Les données sont conservées et chaque changement est journalisé.
+
+## Mon compte et apparence
+
+**Mon compte** présente le profil, le type de compte et ses dates, avec quatre onglets : **Sécurité** (changement du mot de passe avec ses règles vérifiées en direct), **Apparence**, **Mes droits** (regroupés par domaine) et **Activité récente** (dix dernières actions du compte). Le menu **Apparence** de l’en-tête et l’onglet du même nom proposent les thèmes **OLED**, **Sombre doux** (anthracite) et **Clair**, ainsi qu’une **couleur d’accent** (neutre, bleu, vert, violet, orange, rose). Le choix est conservé par le navigateur.
 
 ## Utilisateurs et profils d’accès
 
@@ -342,14 +361,14 @@ Dans **Administration → Comptes**, attribuez un profil à chaque utilisateur. 
 
 | Profil intégré | Accès par défaut |
 |---|---|
-| Sans accès | Aucun droit ; profil initial des comptes SSO en attente. |
+| Sans accès | Aucun droit ; profil initial des comptes d’annuaire en attente. |
 | Administrateur | Tous les droits actuels et futurs ; profil protégé. |
 | Lecture seule | Vue d’ensemble, appareils, caches et catalogues locaux. |
 | Opérateur | Lecture seule, inventaires, mises à jour individuelles et déploiement de logiciels. Les redémarrages, actions sur tout le parc, retraits d’agents et consoles distantes demandent leurs propres droits. |
 | Gestionnaire des dépôts | Gestion des paquets et installeurs APT, RPM, Flatpak, Windows et du centre de logiciels ; aucun déploiement sur les appareils. |
 | Auditeur | Consultation, système, comptes, profils, journal et son export JSON ; aucune modification. |
 
-Les **54 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
+Les **57 permissions** distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; consultation, gestion et exécution des scripts ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils et des annuaires ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
 
 L’éditeur organise les droits par domaine avec navigation directe, recherche, filtres « accordés » et « sensibles », compteurs et sélection des droits visibles d’une catégorie. La barre d’enregistrement reste accessible en bas de page. Cocher une action sélectionne ses prérequis ; retirer un prérequis retire les actions qui en dépendent, avec indication des ajustements automatiques. Les droits de consultation nécessaires sont aussi ajoutés automatiquement à l’enregistrement côté serveur. Un profil vide laisse l’utilisateur accéder à **Mon compte** et changer son mot de passe. Les profils intégrés restent protégés ; dupliquez-les pour les adapter. Un profil personnalisé ne reçoit aucun nouveau droit automatiquement lors des futures versions.
 
@@ -376,7 +395,7 @@ La page *Administration › Journal* trace les connexions et les actions, avec l
 
 - **Lecture** : événements groupés par jour, actions en clair (« Adresse du serveur annoncée aux agents ») et
   catégorie ; filtres par période (aujourd'hui, 7 jours, 30 jours, dates au choix), catégorie (connexions, parc,
-  accès distant, logiciels, dépôts Linux, Windows Update, comptes, serveur), compte, échecs seulement et recherche
+  accès distant, logiciels, dépôts Linux, Windows Update, scripts, comptes et annuaires, serveur), compte, échecs seulement et recherche
   dans les détails ; pages de 100 événements. Les échecs de connexion des dernières 24 heures sont signalés en tête.
 - **Export JSON** de la vue filtrée, d'une période (dates incluses) ou du journal entier : serveur, période, filtres,
   auteur de l'export et événements (date, compte, adresse, action et son libellé, détail). Chaque export est

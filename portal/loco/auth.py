@@ -69,8 +69,8 @@ def set_password(conn, user_id, password, must_change=False):
 
 def active_admins(conn):
     return conn.execute("SELECT COUNT(*) FROM users u WHERE role='admin' AND disabled=0 AND pending=0 AND "
-                        "(auth_source='local' OR EXISTS (SELECT 1 FROM sso_identities i JOIN sso_providers p ON p.id=i.provider_id "
-                        "WHERE i.user_id=u.id AND p.enabled=1))").fetchone()[0]
+                        "(auth_source='local' OR EXISTS (SELECT 1 FROM directory_identities i JOIN auth_directories d "
+                        "ON d.id=i.directory_id WHERE i.user_id=u.id AND d.enabled=1))").fetchone()[0]
 
 
 def last_local_admin(conn, row):
@@ -93,10 +93,14 @@ def load_user():
         # csrf_protect passe avant ce hook : garder un formulaire de connexion valide dès cette réponse.
         session["csrf"] = secrets.token_hex(16)
         return
-    if row["auth_source"] == "sso":
-        provider = db().execute("SELECT p.enabled FROM sso_identities i JOIN sso_providers p ON p.id=i.provider_id "
-                                "WHERE i.user_id=? AND p.id=?", (uid, session.get("sso_provider", ""))).fetchone()
-        if provider is None or not provider["enabled"]:
+    if row["auth_source"] == "sso":                     # ancienne connexion OpenID Connect : retirée
+        session.clear()
+        return
+    if row["auth_source"] == "directory":
+        directory = db().execute("SELECT d.enabled FROM directory_identities i JOIN auth_directories d ON d.id=i.directory_id "
+                                 "WHERE i.user_id=? AND d.id=?", (uid, session.get("directory", ""))).fetchone()
+        from . import features
+        if directory is None or not directory["enabled"] or "directories" in features.disabled():
             session.clear()
             return
     g.user = row
@@ -220,16 +224,30 @@ def login():
             return render_template("login.html", username=username), 429
         row = db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         valid = check_password_hash(row["password_hash"] if row else _DUMMY_HASH, password)
-        if row and valid and not row["disabled"] and not row["pending"] and row["auth_source"] == "local":
+        directory, notice = None, None
+        if not (row and row["auth_source"] == "local"):
+            # Annuaire LDAP/RADIUS : compte déjà lié, ou identifiant inconnu essayé dans l'ordre des annuaires actifs.
+            from .directories import directory_login
+            found, result = directory_login(username, password)
+            if found is not None:
+                row, valid, directory = found, True, result
+            else:
+                notice = result
+        if notice:
+            flash(notice, "ok")
+            return render_template("login.html", username=username), 202
+        if row and valid and not row["disabled"] and not row["pending"] and row["auth_source"] in ("local", "directory"):
             session.clear()
             session.permanent = True
             session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
+            if directory:
+                session["directory"] = directory
             db().execute("DELETE FROM login_failures WHERE username=?", (username,))
             db().execute("UPDATE users SET last_login=? WHERE id=?",
                          (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), row["id"]))
             db().commit()
             g.user = row
-            audit("connexion")
+            audit("sso.connexion" if directory else "connexion")
             if row["must_change"]:
                 return redirect(url_for("account"))
             return redirect(safe_next(request.args.get("next", "/")))
@@ -300,7 +318,11 @@ def account():
 @app.route("/comptes")
 @login_required
 def users():
-    rows = db().execute("SELECT u.*,i.display_name,i.email,i.subject,p.label AS provider_label FROM users u LEFT JOIN sso_identities i ON i.user_id=u.id LEFT JOIN sso_providers p ON p.id=i.provider_id ORDER BY u.pending DESC,u.username").fetchall()
+    rows = db().execute("SELECT u.*, COALESCE(di.display_name, i.display_name) AS display_name, COALESCE(di.email, i.email) AS email, "
+                        "COALESCE(di.subject, i.subject) AS subject, COALESCE(d.label, p.label) AS provider_label, d.kind AS directory_kind "
+                        "FROM users u LEFT JOIN sso_identities i ON i.user_id=u.id LEFT JOIN sso_providers p ON p.id=i.provider_id "
+                        "LEFT JOIN directory_identities di ON di.user_id=u.id LEFT JOIN auth_directories d ON d.id=di.directory_id "
+                        "ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
     return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user,
                            assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)})
@@ -341,10 +363,12 @@ def users_add():
 def users_reset(user_id):
     conn = lock_access("users.reset")
     row = _get_user(user_id)
-    if row["id"] == g.user["id"] or not can_manage_user(row) or row["auth_source"] != "local":
+    if row["id"] == g.user["id"] or not can_manage_user(row) or row["auth_source"] not in ("local", "sso"):
         abort(403)
     password = generate_password()
     set_password(conn, row["id"], password, must_change=True)
+    if row["auth_source"] == "sso":
+        conn.execute("UPDATE users SET auth_source='local' WHERE id=?", (row["id"],))
     session["issued_password"] = {"username": row["username"], "password": password}
     audit("comptes.reinitialisation", row["username"], commit=False)
     conn.commit()

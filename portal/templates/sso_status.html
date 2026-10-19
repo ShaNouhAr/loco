@@ -1,7 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Connexion SSO{% endblock %}
-{% block body %}
-<div class="login"><div class="login-box"><div class="brand"><b>loco</b><span>{{ host }}</span></div><section class="panel"><div class="panel-h"><h1>Connexion SSO</h1></div><div class="panel-b stack"><p role="status">{{ message }}</p>{% if complete %}<a class="btn primary" id="sso-continue" href="{{ url_for('index') }}">Ouvrir loco</a>{% else %}<a class="btn" href="{{ url_for('login') }}">Revenir à la connexion</a>{% endif %}</div></section></div></div>
-{% endblock %}
-
-{% block scripts %}{% if complete %}<script src="{{ url_for('static', filename='sso-complete.js') }}?v={{ asset_v }}"></script>{% endif %}{% endblock %}
