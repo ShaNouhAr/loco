@@ -20,7 +20,7 @@ mcs -nologo -target:winexe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 
     -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Web.Extensions.dll \
     "$WORK/version.cs" "$HERE/LocoTray.cs" "$HERE/DesktopStatus.cs"
 mcs -nologo -target:winexe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-desktop.exe" \
-    -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Core.dll "$WORK/version.cs" "$HERE/LocoDesktop.cs" "$HERE/RfbFramebuffer.cs"
+    -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Core.dll "$WORK/version.cs" "$HERE/LocoDesktop.cs" "$HERE/DesktopResolution.cs" "$HERE/RfbFramebuffer.cs"
 cp "$HERE/loco-client.exe.config" "$WORK/"
 cp "$HERE/loco-client.exe.config" "$WORK/loco-tray.exe.config"
 cp "$HERE/loco-client.exe.config" "$WORK/loco-desktop.exe.config"

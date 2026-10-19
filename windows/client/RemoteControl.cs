@@ -220,8 +220,9 @@ namespace Loco
                 disposed = true; Monitor.PulseAll(gate); wake.Set();
                 if (writeNativeThread != IntPtr.Zero) CancelSynchronousIo(writeNativeThread);
             }
-            // EOF laisse au compagnon le temps de relâcher les touches et boutons injectés.
-            if (desktop != null && reader != null) { reader.Dispose(); try { desktop.WaitForExit(1500); } catch (Exception) { } }
+            // EOF laisse au compagnon le temps de relâcher les touches et boutons injectés, et de rétablir
+            // la résolution d'origine (un changement de mode peut prendre plus d'une seconde sur un vrai GPU).
+            if (desktop != null && reader != null) { reader.Dispose(); try { desktop.WaitForExit(5000); } catch (Exception) { } }
             if (desktopJob != null) { desktopJob.Dispose(); desktopJob = null; }
             if (desktop != null) { try { if (!desktop.HasExited) desktop.Kill(); } catch (Exception) { } desktop.Dispose(); desktop = null; }
             if (terminal != null) { terminal.Dispose(); terminal = null; }

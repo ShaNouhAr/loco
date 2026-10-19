@@ -1,9 +1,8 @@
-/* Conserver le rapport du bureau et éviter de grossir les pixels ou d'envoyer une image 4K dans une petite fenêtre. */
-export function resolutionFor(nativeWidth, nativeHeight, viewWidth, viewHeight, mode, textConsole = false) {
+/* La fenêtre définit le bureau demandé ; le pilote Windows confirme la taille réellement disponible. */
+export function resolutionFor(nativeWidth, nativeHeight, viewWidth, viewHeight, mode) {
   if (![nativeWidth, nativeHeight, viewWidth, viewHeight].every(n => Number.isFinite(n) && n > 0)) return null;
-  if (mode === 'auto' && textConsole) return {width: Math.max(160, Math.min(4000, Math.floor(viewWidth))), height: Math.max(100, Math.min(2160, Math.floor(viewHeight)))};
-  let ratio = mode === 'auto' ? Math.min(1, viewWidth / nativeWidth, viewHeight / nativeHeight) : 1;
-  ratio = Math.min(ratio, 4096 / nativeWidth, 2160 / nativeHeight);
+  if (mode === 'auto') return {width: Math.max(160, Math.min(4000, Math.floor(viewWidth))), height: Math.max(100, Math.min(2160, Math.floor(viewHeight)))};
+  const ratio = Math.min(1, 4096 / nativeWidth, 2160 / nativeHeight);
   const width = Math.max(160, Math.round(nativeWidth * ratio));
   const height = Math.max(100, Math.round(nativeHeight * ratio));
   return {width, height};

@@ -14,8 +14,9 @@ class TestRemoteSizing(unittest.TestCase):
         script = r'''
 import assert from 'node:assert/strict';
 const {resolutionFor, resizePacket} = await import(process.argv[1]);
-assert.deepEqual(resolutionFor(3840,2160,1280,900,'auto'), {width:1280,height:720});
-assert.deepEqual(resolutionFor(1280,800,4096,2160,'auto'), {width:1280,height:800});
+assert.deepEqual(resolutionFor(3840,2160,1280,900,'auto'), {width:1280,height:900});
+assert.deepEqual(resolutionFor(1280,800,1920,1080,'auto'), {width:1920,height:1080});
+assert.deepEqual(resolutionFor(1280,800,8000,4000,'auto'), {width:4000,height:2160});
 assert.deepEqual(resolutionFor(3840,2160,800,600,'native'), {width:3840,height:2160});
 assert.deepEqual(resolutionFor(1024,640,1920,1080,'auto',true), {width:1920,height:1080});
 assert.deepEqual(resolutionFor(1024,640,8000,4000,'auto',true), {width:4000,height:2160});

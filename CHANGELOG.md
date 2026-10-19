@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.13.1 — 2026-10-19
+
+- **Résolution dynamique Windows corrigée** : le mode automatique change réellement la résolution du bureau Windows à mesure que la fenêtre est agrandie ou réduite, y compris en plein écran. L’agent utilise les résolutions acceptées par le pilote graphique ; la résolution initiale est restaurée à la fermeture. Les demandes pendant l’UAC sont appliquées au retour sur le bureau normal. Les postes multi-moniteurs et les sessions concurrentes conservent un ajustement de l’affichage sans reconfigurer les écrans.
+- La taille demandée suit toute la surface disponible, sans rester limitée à la résolution ou au rapport d’image de départ. Si le pilote impose une taille différente, le navigateur ajuste le bureau entier à la fenêtre, en conservant son rapport d’image.
+- **Machines virtuelles** : le pilote d’affichage de base de Windows (adaptateur VGA standard d’une VM sans pilote graphique, dont Proxmox par défaut) ne propose qu’une seule résolution et refuse tout changement ; l’image est alors ajustée à la fenêtre par le navigateur. Pour un vrai redimensionnement, utiliser un adaptateur VirtIO-GPU avec son pilote (virtio-win) ou le pilote du GPU physique.
+- Le service laisse jusqu’à cinq secondes au compagnon de bureau pour rétablir la résolution d’origine à la fermeture de la session.
+
 ## 2.13.0 — 2026-10-19
 
 - **Console noVNC adaptative** : résolution du flux ajustée à la fenêtre, au plein écran et à l’onglet dédié, avec conservation du rapport d’image et limitation à la source pour le bureau Windows, et retour au flux natif. Protocole RFB ExtendedDesktopSize borné ; repli sur l’ajustement local avec les anciens agents et les bureaux X11. L’écran physique du poste n’est pas reconfiguré.

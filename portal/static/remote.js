@@ -105,14 +105,14 @@ if (root.dataset.kind === 'terminal') {
   channel = new RelayChannel(); rfb = new RFB(screen, channel, { shared: true }); rfb.showDotCursor = true;
   const scale = document.getElementById('remote-scale');
   const resolution = document.getElementById('remote-resolution');
-  let nativeSize, resizeTimer, connected = false, textConsole = false, lastSize = '';
+  let nativeSize, resizeTimer, connected = false, lastSize = '';
   function requestResolution() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       // Adaptateur noVNC 1.7 : cette capacité n'a pas d'accesseur public.
       // Ne jamais envoyer SetDesktopSize à un ancien agent qui ne l'annonce pas.
       if (!running || !nativeSize || !rfb._supportsSetDesktopSize) return;
-      const target = resolutionFor(nativeSize.width, nativeSize.height, screen.clientWidth, screen.clientHeight, scale.value, textConsole);
+      const target = resolutionFor(nativeSize.width, nativeSize.height, screen.clientWidth - 2, screen.clientHeight - 2, scale.value);
       if (!target) return;
       const key = `${target.width}x${target.height}`;
       if (key === lastSize) return;
@@ -128,8 +128,8 @@ if (root.dataset.kind === 'terminal') {
     const canvas = screen.querySelector('canvas');
     if (!connected || !canvas || !canvas.width || !canvas.height) return;
     if (!nativeSize) nativeSize = {width: canvas.width, height: canvas.height};
-    // Réduire si nécessaire ; agrandir une image au-delà de ses pixels rend le texte flou.
-    rfb.scaleViewport = scale.value !== 'native' && (screen.clientWidth < canvas.width || screen.clientHeight < canvas.height);
+    // Ajuster aussi vers le haut si le pilote limite les résolutions disponibles.
+    rfb.scaleViewport = scale.value !== 'native';
     const percent = Math.round(100 * canvas.getBoundingClientRect().width / canvas.width);
     resolution.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
   }
@@ -145,7 +145,6 @@ if (root.dataset.kind === 'terminal') {
       remoteLabel = 'bureau du poste';
       document.querySelector('.remote-description').textContent = 'Session graphique du poste · clavier et souris · Via l’agent loco';
     } else if (e.detail.name.startsWith('loco-console root@')) {
-      textConsole = true;
       document.querySelector('.remote-description').textContent = 'Console texte · Shell root · Via l’agent loco';
       remoteLabel = 'console texte du poste · root';
       if (running) message('Connecté · ' + remoteLabel);

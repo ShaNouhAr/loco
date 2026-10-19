@@ -36,8 +36,11 @@ namespace Loco
     internal sealed class RfbDesktop
     {
         readonly Stream stream;
+        readonly DesktopResolution resolution = new DesktopResolution();
         Rectangle bounds;
         int width, height;
+        int requestedWidth, requestedHeight;
+        bool pendingResolution;
         readonly Dictionary<uint, Input> pressed = new Dictionary<uint, Input>();
         RfbFramebuffer framebuffer;
         IntPtr inputDesktop;
@@ -115,14 +118,20 @@ namespace Loco
                         bool valid = extendedSize && count == 1 && I32(screens, 0) == 0 && I16(screens, 4) == 0 && I16(screens, 6) == 0 &&
                             I16(screens, 8) == w && I16(screens, 10) == h && I32(screens, 12) == 0 &&
                             w >= 160 && h >= 100 && w <= 4096 && h <= 2160;
-                        if (valid) { width = w; height = h; framebuffer = new RfbFramebuffer(w, h); lastCursor = new IntPtr(-1); UpdateCaptureArea(); }
+                        if (valid)
+                        {
+                            requestedWidth = w; requestedHeight = h; pendingResolution = true;
+                            AttachDesktop(); ApplyResolution();
+                            // Toujours annoncer les pixels réels : le navigateur ajuste les modes imposés par le pilote.
+                            SetFrameSize(bounds.Width, bounds.Height);
+                        }
                         Write(SizeUpdate(1, valid ? 0 : 3));
                     }
                     else throw new InvalidDataException();
                 }
             }
             catch (EndOfStreamException) { }
-            finally { ReleaseInput(); }
+            finally { ReleaseInput(); resolution.Dispose(); }
         }
         void ReleaseInput()
         {
@@ -150,8 +159,13 @@ namespace Loco
         void Frame(bool incremental)
         {
             int wait = 40 - (int)frameTime.ElapsedMilliseconds; if (wait > 0) Thread.Sleep(wait); frameTime.Restart();
-            if (extendedSize && !incremental) Write(SizeUpdate(0, 0));
             if (!AttachDesktop()) { Write(new byte[4]); return; }
+            if (pendingResolution) ApplyResolution();
+            if (extendedSize && (bounds.Width != width || bounds.Height != height))
+            {
+                SetFrameSize(bounds.Width, bounds.Height); Write(SizeUpdate(0, 0));
+            }
+            else if (extendedSize && !incremental) Write(SizeUpdate(0, 0));
             try
             {
                 using (var source = new Bitmap(width, height, PixelFormat.Format32bppRgb))
@@ -191,6 +205,20 @@ namespace Loco
             double scale = Math.Min((double)width / bounds.Width, (double)height / bounds.Height);
             int w = Math.Max(1, (int)Math.Round(bounds.Width * scale)), h = Math.Max(1, (int)Math.Round(bounds.Height * scale));
             captureArea = new Rectangle((width - w) / 2, (height - h) / 2, w, h);
+        }
+        void SetFrameSize(int w, int h)
+        {
+            width = w; height = h;
+            framebuffer = new RfbFramebuffer(w, h); lastCursor = new IntPtr(-1); UpdateCaptureArea();
+        }
+        void ApplyResolution()
+        {
+            // Le bureau sécurisé conserve la taille courante ; appliquer la dernière demande au retour du bureau.
+            if (!pendingResolution || !String.Equals(desktopName, "Default", StringComparison.OrdinalIgnoreCase)) return;
+            pendingResolution = false;
+            resolution.Resize(requestedWidth, requestedHeight);
+            bounds = SystemInformation.VirtualScreen;
+            UpdateCaptureArea();
         }
         bool AttachDesktop()
         {
