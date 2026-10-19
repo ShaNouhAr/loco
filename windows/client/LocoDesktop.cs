@@ -375,10 +375,17 @@ namespace Loco
                 if (!pressed.TryGetValue(sym, out input)) return;
                 input.Data.Keyboard.Flags |= 2; Send(input); pressed.Remove(sym); return;
             }
+            // Ctrl+Alt+Suppr : la séquence sécurisée de Windows ne peut pas être simulée par une frappe.
+            if ((sym == 0xffff || sym == 0xff9f) && (pressed.ContainsKey(0xffe3) || pressed.ContainsKey(0xffe4)) &&
+                (pressed.ContainsKey(0xffe9) || pressed.ContainsKey(0xffea)))
+            {
+                SecureAttention();
+                return;
+            }
             ushort vk = 0;
             var special = new Dictionary<uint, ushort> { {0xff08,8},{0xff09,9},{0xff0d,13},{0xff1b,27},{0xff50,36},{0xff51,37},{0xff52,38},{0xff53,39},{0xff54,40},
                 {0xff55,33},{0xff56,34},{0xff57,35},{0xff63,45},{0xffff,46},{0xffe1,160},{0xffe2,161},{0xffe3,162},{0xffe4,163},
-                {0xffe9,164},{0xffea,165},{0xffeb,91},{0xffec,92},{0xffe5,20},{0xff7f,144},{0xff14,145} };
+                {0xffe9,164},{0xffea,165},{0xffeb,91},{0xffec,92},{0xffe5,20},{0xff7f,144},{0xff14,145},{0xff61,44},{0xff67,93},{0xff13,19} };
             if (special.ContainsKey(sym)) vk = special[sym];
             else if (sym >= 0xffbe && sym <= 0xffd5) vk = (ushort)(112 + sym - 0xffbe);
             input = new Input { Type = 1 };
@@ -395,6 +402,12 @@ namespace Loco
             Send(input); pressed[sym] = input;
         }
         static void Send(Input input) { SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Input))); }
+        static void SecureAttention()
+        {
+            // Seul un service peut envoyer la séquence sécurisée : la demander au service loco-client (événement réservé à SYSTEM).
+            try { using (var request = EventWaitHandle.OpenExisting(@"Global\loco-sas")) request.Set(); }
+            catch (Exception) { }
+        }
         [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public InputData Data; }
         [StructLayout(LayoutKind.Explicit)] struct InputData { [FieldOffset(0)] public MouseInput Mouse; [FieldOffset(0)] public KeyboardInput Keyboard; }
         [StructLayout(LayoutKind.Sequential)] struct MouseInput { public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra; }

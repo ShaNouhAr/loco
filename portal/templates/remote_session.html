@@ -25,6 +25,36 @@
     </div>
   </div>
   <p id="remote-status" class="note" role="status">Connexion à l'agent…</p>
+  {% if remote.kind == 'desktop' %}
+  {% set win = remote.os_family == 'windows' %}
+  <div class="remote-toolbar" id="remote-toolbar" role="toolbar" aria-label="Commandes envoyées au poste">
+    <button type="button" class="btn sm" data-keys="ctrl alt delete" title="{{ 'Sécurité Windows : verrouiller, changer d’utilisateur, gestionnaire des tâches' if win else 'Ctrl+Alt+Suppr' }}">Ctrl+Alt+Suppr</button>
+    <details class="menu">
+      <summary class="btn sm">Raccourcis</summary>
+      <div class="menu-list" role="menu">
+        {% for keys, label, hint in ([('super', 'Menu Démarrer', 'Win'), ('super r', 'Exécuter…', 'Win+R'), ('super e', 'Explorateur de fichiers', 'Win+E'), ('super d', 'Afficher le bureau', 'Win+D'), ('super l', 'Verrouiller la session', 'Win+L'), ('ctrl shift escape', 'Gestionnaire des tâches', 'Ctrl+Maj+Échap')] if win else [('super', 'Menu des applications', 'Super')]) + [('alt tab', 'Changer de fenêtre', 'Alt+Tab'), ('alt f4', 'Fermer la fenêtre', 'Alt+F4'), ('escape', 'Échap', 'Échap'), ('print', 'Capture d’écran', 'Impr. écran'), ('menu', 'Menu contextuel', 'Menu')] %}
+        <button type="button" class="menu-item" data-keys="{{ keys }}">{{ label }}<kbd class="shortcut">{{ hint }}</kbd></button>
+        {% endfor %}
+      </div>
+    </details>
+    <span class="toolbar-sep" aria-hidden="true"></span>
+    <span class="small muted">Maintenir :</span>
+    {% for key, label in [('ctrl', 'Ctrl'), ('alt', 'Alt'), ('shift', 'Maj'), ('super', 'Win' if win else 'Super')] %}
+    <button type="button" class="btn sm modifier" data-hold="{{ key }}" aria-pressed="false" title="Reste enfoncée jusqu’au prochain clic">{{ label }}</button>
+    {% endfor %}
+    <span class="toolbar-sep" aria-hidden="true"></span>
+    <details class="menu send-text">
+      <summary class="btn sm">Envoyer du texte</summary>
+      <div class="menu-list">
+        <form class="menu-form" id="remote-type">
+          <label class="f"><span>Texte tapé sur le poste</span><textarea rows="3" maxlength="2000" spellcheck="false" placeholder="Mot de passe, commande, adresse…"></textarea></label>
+          <span class="hint">Tapé caractère par caractère, quelle que soit la disposition du clavier du poste. Rien n’est conservé.</span>
+          <button class="btn sm primary">Taper sur le poste</button>
+        </form>
+      </div>
+    </details>
+  </div>
+  {% endif %}
   <div id="remote-screen" class="remote-screen {{ remote.kind }}"></div>
   <p class="small muted remote-footnote">La session expire après une heure. Fermer cet onglet coupe la connexion au poste.</p>
 </div>

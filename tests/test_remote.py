@@ -166,6 +166,18 @@ class TestRemote(FleetTest):
         other = fixture.Browser(); other.login('admin', fixture.ADMIN_PW)
         self.assertEqual(other.c.get(location).status_code, 404)
 
+    def test_desktop_page_offers_the_command_panel(self):
+        sid = self.open('desktop')
+        page = self.admin.c.get(f'/parc/session/{sid}').get_data(as_text=True)
+        for text in ('id="remote-toolbar"', 'data-keys="ctrl alt delete"', 'data-keys="super r"', 'data-keys="super l"',
+                     'data-keys="ctrl shift escape"', 'data-hold="ctrl"', 'data-hold="super"', 'id="remote-type"'):
+            self.assertIn(text, page)
+        self.assertIn('>Win<', page)                                       # libellés Windows sur un poste Windows
+        terminal = self.admin.c.get(f"/parc/session/{self.open('terminal')}").get_data(as_text=True)
+        self.assertNotIn('id="remote-toolbar"', terminal)                 # pas de panneau pour le terminal
+        script = (Path(__file__).resolve().parents[1] / 'portal/static/remote.js').read_text()
+        self.assertIn('rfb.sendCtrlAltDel()', script)
+
     def test_browser_drains_a_large_frame_in_one_batch_without_raising_the_packet_limit(self):
         sid = self.open('desktop')
         blocks = [bytes([n]) * (256 * 1024) for n in range(1, 6)]

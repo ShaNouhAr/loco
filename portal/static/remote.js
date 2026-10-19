@@ -141,6 +141,57 @@ if (root.dataset.kind === 'terminal') {
   new ResizeObserver(() => { updateViewport(); requestResolution(); }).observe(screen);
   new MutationObserver(updateViewport).observe(screen, { childList: true, subtree: true, attributes: true, attributeFilter: ['width', 'height'] });
   rfb.addEventListener('connect', () => { connected = true; updateViewport(); requestResolution(); });
+
+  // Panneau de commandes : combinaisons, touches maintenues et texte tapé (keysyms X11, indépendants du clavier).
+  const KEYS = {ctrl: [0xffe3, 'ControlLeft'], alt: [0xffe9, 'AltLeft'], shift: [0xffe1, 'ShiftLeft'], super: [0xffeb, 'MetaLeft'],
+                delete: [0xffff, 'Delete'], escape: [0xff1b, 'Escape'], tab: [0xff09, 'Tab'], f4: [0xffc1, 'F4'],
+                print: [0xff61, 'PrintScreen'], menu: [0xff67, 'ContextMenu'], enter: [0xff0d, 'Enter'],
+                r: [0x72, 'KeyR'], e: [0x65, 'KeyE'], d: [0x64, 'KeyD'], l: [0x6c, 'KeyL']};
+  const held = new Set();
+  function combo(names) {
+    const keys = names.split(' ').map(n => KEYS[n]).filter(Boolean);
+    keys.forEach(([sym, code]) => rfb.sendKey(sym, code, true));
+    keys.slice().reverse().forEach(([sym, code]) => rfb.sendKey(sym, code, false));
+  }
+  function releaseHeld() {
+    held.forEach(name => rfb.sendKey(KEYS[name][0], KEYS[name][1], false));
+    held.clear();
+    document.querySelectorAll('[data-hold]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  }
+  const toolbar = document.getElementById('remote-toolbar');
+  toolbar.addEventListener('click', e => {
+    const button = e.target.closest('[data-keys], [data-hold]');
+    if (!button || !connected) return;
+    if (button.dataset.keys) {
+      // Ctrl+Alt+Suppr : séquence dédiée (l'agent Windows la transmet au système comme la vraie séquence sécurisée).
+      if (button.dataset.keys === 'ctrl alt delete') rfb.sendCtrlAltDel(); else combo(button.dataset.keys);
+      releaseHeld();
+    } else {
+      const name = button.dataset.hold, on = !held.has(name);
+      rfb.sendKey(KEYS[name][0], KEYS[name][1], on);
+      if (on) held.add(name); else held.delete(name);
+      button.setAttribute('aria-pressed', String(on));
+    }
+    rfb.focus();
+  });
+  // Une touche maintenue se relâche au prochain clic dans le bureau, comme sur un clavier tactile.
+  screen.addEventListener('mouseup', () => { if (held.size) setTimeout(releaseHeld, 50); });
+  document.getElementById('remote-type').addEventListener('submit', e => {
+    e.preventDefault();
+    const area = e.target.querySelector('textarea');
+    if (!connected || !area.value) return;
+    releaseHeld();
+    for (const ch of area.value.slice(0, 2000)) {
+      const cp = ch.codePointAt(0);
+      if (ch === '\n') { rfb.sendKey(0xff0d, 'Enter'); continue; }
+      if (ch === '\t') { rfb.sendKey(0xff09, 'Tab'); continue; }
+      if (cp < 32) continue;
+      rfb.sendKey(cp <= 0xff ? cp : 0x01000000 + cp, null);
+    }
+    area.value = '';
+    e.target.closest('details').open = false;
+    rfb.focus();
+  });
   rfb.addEventListener('desktopname', e => {
     if (e.detail.name.startsWith('loco-secure:')) {
       remoteLabel = 'bureau sécurisé Windows · UAC / verrouillage';

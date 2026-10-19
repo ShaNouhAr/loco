@@ -22,6 +22,7 @@ namespace Loco
         {
             this.stopping = stopping;
             worker = new Thread(Loop) { IsBackground = true, Name = "loco-remote" }; worker.Start();
+            SecureAttentionRelay.Start(stopping);
         }
         public void Join() { worker.Join(15000); }
         internal static string Str(Dictionary<string, object> d, string key) { object v; return d.TryGetValue(key, out v) && v != null ? Convert.ToString(v) : ""; }
@@ -82,6 +83,66 @@ namespace Loco
         }
     }
 
+    // Ctrl+Alt+Suppr d'une session de bureau : Windows n'accepte SendSAS que d'un service. Le compagnon (SYSTEM dans la
+    // session) signale la demande par un événement réservé à SYSTEM ; le service l'exécute si un bureau distant est ouvert.
+    internal static class SecureAttentionRelay
+    {
+        internal const string EventName = @"Global\loco-sas";
+        static int desktops;
+        static DateTime last = DateTime.MinValue;
+        internal static void Opened() { Interlocked.Increment(ref desktops); }
+        internal static void Closed() { Interlocked.Decrement(ref desktops); }
+        internal static void Start(WaitHandle stopping)
+        {
+            new Thread(() =>
+            {
+                try
+                {
+                    var security = new EventWaitHandleSecurity();
+                    security.SetAccessRuleProtection(true, false);
+                    security.AddAccessRule(new EventWaitHandleAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                        EventWaitHandleRights.FullControl, AccessControlType.Allow));
+                    bool created;
+                    using (var request = new EventWaitHandle(false, EventResetMode.AutoReset, EventName, out created, security))
+                        while (WaitHandle.WaitAny(new[] { stopping, request }) == 1)
+                        {
+                            if (Volatile.Read(ref desktops) <= 0 || DateTime.UtcNow - last < TimeSpan.FromSeconds(2)) continue;
+                            last = DateTime.UtcNow;
+                            Send();
+                        }
+                }
+                catch (Exception) { }   // sans relais, Ctrl+Alt+Suppr reste sans effet ; le reste de la session fonctionne
+            }) { IsBackground = true, Name = "loco-sas" }.Start();
+        }
+        static void Send()
+        {
+            // La stratégie SoftwareSASGeneration doit autoriser les services (bit 1) : le temps de l'appel seulement.
+            const string path = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+            using (var key = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(path))
+            {
+                object previous = key.GetValue("SoftwareSASGeneration");
+                int current = previous is int ? (int)previous : 0;
+                try
+                {
+                    if ((current & 1) == 0) key.SetValue("SoftwareSASGeneration", current | 1, Microsoft.Win32.RegistryValueKind.DWord);
+                    SendSAS(false);
+                    Thread.Sleep(800);
+                }
+                catch (Exception) { }
+                finally
+                {
+                    try
+                    {
+                        if (previous == null) key.DeleteValue("SoftwareSASGeneration", false);
+                        else if ((current & 1) == 0) key.SetValue("SoftwareSASGeneration", previous, Microsoft.Win32.RegistryValueKind.DWord);
+                    }
+                    catch (Exception) { }
+                }
+            }
+        }
+        [DllImport("sas.dll")] static extern void SendSAS(bool asUser);
+    }
+
     internal sealed class RemoteSession : IDisposable
     {
         readonly object gate = new object();
@@ -124,6 +185,7 @@ namespace Loco
             var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 65536, 65536, acl);
             reader = writer = pipe;
             desktop = DesktopIndicator.StartDesktop(pipeName);
+            SecureAttentionRelay.Opened();
             desktopJob = new ProcessJob(); desktopJob.Add(desktop.Handle);
             IAsyncResult ready = pipe.BeginWaitForConnection(null, null);
             try
@@ -224,7 +286,7 @@ namespace Loco
             // la résolution d'origine (un changement de mode peut prendre plus d'une seconde sur un vrai GPU).
             if (desktop != null && reader != null) { reader.Dispose(); try { desktop.WaitForExit(5000); } catch (Exception) { } }
             if (desktopJob != null) { desktopJob.Dispose(); desktopJob = null; }
-            if (desktop != null) { try { if (!desktop.HasExited) desktop.Kill(); } catch (Exception) { } desktop.Dispose(); desktop = null; }
+            if (desktop != null) { try { if (!desktop.HasExited) desktop.Kill(); } catch (Exception) { } desktop.Dispose(); desktop = null; SecureAttentionRelay.Closed(); }
             if (terminal != null) { terminal.Dispose(); terminal = null; }
             else { if (reader != null) reader.Dispose(); if (writer != null && writer != reader) writer.Dispose(); }
             if (readThread != null) readThread.Join(1000);
