@@ -78,6 +78,10 @@
               {% if t.apps %}<span class="sub sans">{{ t.apps|length }} logiciel{{ 's' if t.apps|length > 1 }} à installer</span>{% endif %}</td>
             <td class="nowrap"><span class="st {{ tcls }}">{{ states[t.state] }}</span>{% if t.sent_at and t.state in ('sent', 'running') %}<span class="sub sans">transmis {{ t.sent_at|date_fr }}</span>{% elif t.finished_at %}<span class="sub sans">{{ t.finished_at|date_fr }}</span>{% endif %}</td>
             <td>
+              {% if t.live %}<div class="live-step" aria-live="polite">
+                <svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="{{ t.live.percent }} %"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ t.live.percent }}" height="6"/></svg>
+                <span class="small">{{ t.live.label }}</span></div>
+              {% elif t.state in ('sent', 'running') %}<span class="small muted">{{ 'Installation en cours sur le poste…' if t.state == 'running' else 'Commande reçue par l’agent, démarrage…' }}</span>{% endif %}
               {% if t.reason %}<span class="muted">{{ t.reason }}</span>{% endif %}
               {% for skipped in t.skipped %}<span class="sub sans">{{ skipped.name }} : {{ skipped.reason }}</span>{% endfor %}
               {% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' }}><summary>Journal de l'installation</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% endif %}

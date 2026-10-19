@@ -809,3 +809,4 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .switch input:checked + i::after { transform: translateX(18px); background: var(--accent-fg); }
 .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 .switch input:disabled + i { opacity: .45; }
+.live-step { display: grid; gap: 4px; max-width: 420px; margin-bottom: 4px; }

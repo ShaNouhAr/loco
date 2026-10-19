@@ -59,7 +59,7 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
-  {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ action_label(c)|lower }} ({{ 'transmise à l\'agent' if c.state != 'queued' else 'au prochain contact' }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ action_label(c)|lower }} ({% set live = progress_view(c.progress) if c.state == 'running' else None %}{{ live.label|lower if live else ('transmise à l\'agent' if c.state != 'queued' else 'au prochain contact') }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
 
   <div class="metrics">

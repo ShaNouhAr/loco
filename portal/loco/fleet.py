@@ -437,6 +437,45 @@ def agent_checkin():
     return answer
 
 
+PROGRESS_STEPS = {"download": "Téléchargement", "verify": "Vérification de l'empreinte", "install": "Installation",
+                  "windows_update": "Mises à jour Windows"}
+
+
+def _progress(value):
+    """Étape remontée par l'agent, bornée : {step, app, index, total, percent}."""
+    if not isinstance(value, dict) or value.get("step") not in PROGRESS_STEPS:
+        return None
+    out = {"step": value["step"], "app": _text(value.get("app"), 100)}
+    for key, low, high in (("index", 1, 1000), ("total", 1, 1000), ("percent", 0, 100)):
+        number = value.get(key)
+        if isinstance(number, int) and not isinstance(number, bool) and low <= number <= high:
+            out[key] = number
+    return out
+
+
+def progress_view(raw):
+    """Étape lisible et part accomplie (0-100) d'une commande en cours, d'après la dernière remontée de l'agent."""
+    try:
+        p = json.loads(raw) if raw else None
+    except ValueError:
+        p = None
+    if not isinstance(p, dict) or p.get("step") not in PROGRESS_STEPS:
+        return None
+    total, index = p.get("total") or 1, min(p.get("index") or 1, p.get("total") or 1)
+    # Part de chaque logiciel : téléchargement 0-60 %, vérification 60-70 %, installation 70-100 %.
+    within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "windows_update": 0.0}[p["step"]]
+    overall = round(100 * ((index - 1) + within) / total)
+    label = PROGRESS_STEPS[p["step"]] + (f" de {p['app']}" if p.get("app") else "")
+    if p["step"] == "download" and "percent" in p:
+        label += f" · {p['percent']} %"
+    if total > 1 and p["step"] != "windows_update":
+        label += f" · logiciel {index}/{total}"
+    return {"label": label, "percent": max(1, min(99, overall)), "step": p["step"]}
+
+
+app.jinja_env.globals["progress_view"] = progress_view
+
+
 @app.route("/agent/api/result", methods=["POST"])
 def agent_result():
     dev = _device()
@@ -456,6 +495,9 @@ def agent_result():
     code = data.get("exit_code") if isinstance(data.get("exit_code"), int) else None
     if state == "running":
         conn.execute("UPDATE device_commands SET state='running' WHERE id=? AND state='sent'", (cmd_id,))
+        progress = _progress(data.get("progress"))
+        if progress:
+            conn.execute("UPDATE device_commands SET progress=? WHERE id=? AND state='running'", (json.dumps(progress), cmd_id))
     else:
         conn.execute("UPDATE device_commands SET state=?, finished_at=?, output=?, exit_code=? WHERE id=?",
                      (state, _now(), output, code, cmd_id))
@@ -798,7 +840,7 @@ def fleet_device(dev_id):
     history = db().execute("SELECT * FROM device_commands WHERE device_id=? ORDER BY id DESC LIMIT 30",
                            (dev_id,)).fetchall()
     signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"],
-                                           [(c["id"], c["state"]) for c in history]]).encode()).hexdigest()[:16]
+                                           [(c["id"], c["state"], c["progress"]) for c in history]]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []

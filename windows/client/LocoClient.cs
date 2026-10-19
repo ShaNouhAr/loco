@@ -284,11 +284,21 @@ namespace Loco
             throw failure ?? new Exception("aucune adresse de serveur connue");
         }
 
-        static void Download(string url, string path, RemoteCertificateValidationCallback check = null)
+        static void Download(string url, string path, RemoteCertificateValidationCallback check = null, Action<int> percent = null)
         {
             using (var resp = Send(Request("GET", url, null, 600000, check)))
             using (Stream s = resp.GetResponseStream())
-            using (FileStream f = File.Create(path)) s.CopyTo(f);
+            using (FileStream f = File.Create(path))
+            {
+                long length = resp.ContentLength, done = 0;
+                var buffer = new byte[81920];
+                int n;
+                while ((n = s.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    f.Write(buffer, 0, n); done += n;
+                    if (percent != null && length > 0) percent((int)Math.Min(100, 100 * done / length));
+                }
+            }
         }
 
         static string Sha256File(string path)
@@ -520,7 +530,10 @@ namespace Loco
             }
         }
 
-        static bool InstallCatalogApps(string server, object appsValue, List<string> lines)
+        // Étape d'installation remontée au serveur (page du déploiement) : étape, logiciel, rang, nombre, pourcentage.
+        internal delegate void Progress(string step, string app, int index, int total, int percent);
+
+        static bool InstallCatalogApps(string server, object appsValue, List<string> lines, Progress progress = null)
         {
             var apps = appsValue as ArrayList ?? new ArrayList();
             if (apps.Count == 0) { lines.Add("Logiciels du catalogue : rien à mettre à jour."); return true; }
@@ -529,14 +542,20 @@ namespace Loco
             Directory.CreateDirectory(dir);
             try
             {
+                int index = 0;
                 foreach (Dictionary<string, object> a in apps)
                 {
                     string name = Str(a, "name") + " " + Str(a, "version");
+                    int rank = ++index;
                     try
                     {
                         string dest = Path.Combine(dir, Path.GetFileName(Str(a, "file")));
-                        Download(server + Str(a, "url"), dest);
+                        if (progress != null) progress("download", Str(a, "name"), rank, apps.Count, 0);
+                        Download(server + Str(a, "url"), dest, null,
+                                 progress == null ? (Action<int>)null : p => progress("download", Str(a, "name"), rank, apps.Count, p));
+                        if (progress != null) progress("verify", Str(a, "name"), rank, apps.Count, -1);
                         if (Sha256File(dest) != Str(a, "sha256").ToLowerInvariant()) throw new Exception("somme SHA-256 invalide");
+                        if (progress != null) progress("install", Str(a, "name"), rank, apps.Count, -1);
                         string args = Str(a, "args");
                         int code;
                         switch (Str(a, "kind"))
@@ -697,14 +716,28 @@ namespace Loco
                     {
                         var lines = new List<string>();
                         bool ok = true;
+                        // Avancement : au plus une remontée par seconde pour une même étape, immédiate à chaque changement.
+                        string lastStep = ""; var lastSent = DateTime.MinValue;
+                        Progress progress = (step, app, index, total, percent) =>
+                        {
+                            string key = step + "|" + app + "|" + index;
+                            if (key == lastStep && (DateTime.UtcNow - lastSent).TotalSeconds < 1) return;
+                            lastStep = key; lastSent = DateTime.UtcNow;
+                            var detail = new Dictionary<string, object> { { "step", step }, { "app", app }, { "index", index }, { "total", total } };
+                            if (percent >= 0) detail["percent"] = percent;
+                            var report = new Dictionary<string, object> { { "id", id }, { "state", "running" }, { "output", "" }, { "exit_code", null }, { "progress", detail } };
+                            try { Post(Str(conf, "server"), "/agent/api/result", report, Str(conf, "token")); }
+                            catch (Exception) { }
+                        };
                         if (action == "update")
                         {
+                            progress("windows_update", "", 1, 1, -1);
                             try { ok = InstallWindowsUpdates(lines); }
                             catch (Exception e) { ok = false; lines.Add("Windows Update : " + e.Message); }
                         }
                         object apps;
                         cmd.TryGetValue("apps", out apps);
-                        if (!InstallCatalogApps(Str(conf, "server"), apps, lines)) ok = false;
+                        if (!InstallCatalogApps(Str(conf, "server"), apps, lines, progress)) ok = false;
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;

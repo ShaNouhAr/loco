@@ -307,6 +307,27 @@ class TestDeployments(FleetTest):
         self.assertIn('Échecs', html)
         self.assertIn('<details class="output-details" open>', html)        # journal d'un échec déplié
 
+    def test_live_install_steps_are_shown_while_the_agent_works(self):
+        path = self.preview()
+        self.post(path + '/confirmer')
+        cmd = self.agent.checkin().get_json()['commands'][0]
+        report = lambda progress: self.agent.post('/agent/api/result', {'id': cmd['id'], 'state': 'running', 'output': '',
+                                                                       'progress': progress}, self.agent.token)
+        self.assertEqual(report({'step': 'download', 'app': 'Outil Éditeur', 'index': 1, 'total': 2, 'percent': 45}).status_code, 200)
+        html = self.admin.c.get(path).get_data(as_text=True)
+        self.assertIn('Téléchargement de Outil Éditeur · 45 % · logiciel 1/2', html)
+        self.assertIn('class="prog-active" x="0" y="0" width="14"', html)       # 0,6 × 45 % du premier logiciel sur deux
+        report({'step': 'install', 'app': 'Outil Éditeur', 'index': 2, 'total': 2})
+        self.assertIn('Installation de Outil Éditeur · logiciel 2/2', self.admin.c.get(path).get_data(as_text=True))
+        report({'step': 'pirater', 'app': '<script>', 'index': 99999})            # étape inconnue : ignorée
+        html = self.admin.c.get(path).get_data(as_text=True)
+        self.assertIn('Installation de Outil Éditeur · logiciel 2/2', html)
+        self.assertNotIn('pirater', html)
+        device_page = self.admin.c.get(f"/parc/{device(self.agent.uid)['id']}").get_data(as_text=True)
+        self.assertIn('installation de outil éditeur · logiciel 2/2', device_page)
+        self.agent.result(cmd['id'], 'success', 'OK : Outil Éditeur 1.0')
+        self.assertNotIn('class="live-step"', self.admin.c.get(path).get_data(as_text=True))   # terminé : plus de barre
+
     def test_preview_explains_why_it_cannot_be_confirmed(self):
         path = self.preview()
         other = fixture.Browser()

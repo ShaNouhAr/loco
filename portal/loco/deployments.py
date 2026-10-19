@@ -194,11 +194,15 @@ def _state(row, targets):
 
 
 def _targets(deployment_id):
-    rows = db().execute('SELECT t.*,c.state AS command_state,COALESCE(c.output,t.last_output) AS output,c.finished_at,c.sent_at,d.state AS device_state '
+    rows = db().execute('SELECT t.*,c.state AS command_state,COALESCE(c.output,t.last_output) AS output,c.finished_at,c.sent_at,c.progress,d.state AS device_state '
                         'FROM deployment_targets t LEFT JOIN device_commands c ON c.id=t.command_id '
                         'LEFT JOIN devices d ON d.id=t.device_id WHERE t.deployment_id=? ORDER BY t.hostname,t.id', (deployment_id,)).fetchall()
-    return [{**dict(row), 'state': row['command_state'] or row['last_state'] or ('cancelled' if row['apps'] != '[]' else 'skipped'),
-             'apps': json.loads(row['apps']), 'skipped': json.loads(row['skipped'])} for row in rows]
+    out = []
+    for row in rows:
+        state = row['command_state'] or row['last_state'] or ('cancelled' if row['apps'] != '[]' else 'skipped')
+        out.append({**dict(row), 'state': state, 'apps': json.loads(row['apps']), 'skipped': json.loads(row['skipped']),
+                    'live': fleet.progress_view(row['progress']) if state == 'running' else None})
+    return out
 
 
 # Filtres de la liste : clé -> (libellé, états de déploiement retenus, classe de la pastille).
@@ -269,7 +273,7 @@ def deployment_detail(deployment_id):
             blocked = 'Le droit de déploiement sur plusieurs postes est requis pour confirmer.'
     confirmable = state == 'draft' and not blocked
     signature = hashlib.sha256(json.dumps([state, [(a['current']['status'] if a['current'] else '', a['problem']) for a in apps],
-                                          [(t['id'], t['state'], t['output']) for t in targets]]).encode()).hexdigest()[:16]
+                                          [(t['id'], t['state'], t['output'], t['progress']) for t in targets]]).encode()).hexdigest()[:16]
     if request.headers.get('X-Requested-With') == 'fetch':
         return {'signature': signature}
     return render_template('deployment_detail.html', deployment=row, plan=plan, apps=apps, targets=targets,

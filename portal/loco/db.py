@@ -264,6 +264,10 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN servers TEXT NOT NULL DEFAULT '';
     """,
+    # 11 : étape en cours remontée par l'agent pendant une installation (téléchargement, vérification, installation).
+    """
+    ALTER TABLE device_commands ADD COLUMN progress TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 
