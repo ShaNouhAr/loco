@@ -49,7 +49,7 @@
     {% elif wanted %}
     <div class="empty">Aucun déploiement dans cet état. <a href="{{ url_for('deployments') }}">Tout afficher</a></div>
     {% else %}
-    <div class="empty">Aucun déploiement. {% if can('fleet.install') %}<a href="{{ url_for('deployment_compose') }}">Préparez-en un</a>, ou partez d'un logiciel du catalogue, du store ou d'un groupe.{% endif %}</div>
+    <div class="empty">Aucun déploiement. {% if can('fleet.install') %}<a href="{{ url_for('deployment_compose') }}">Préparez-en un</a>, ou partez d'un logiciel du catalogue, du centre de logiciels ou d'un groupe.{% endif %}</div>
     {% endif %}
   </section>
 

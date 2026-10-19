@@ -8,7 +8,7 @@
 <div class="head">
   <div class="store-card-top">{{ software_logo(software.winget_id, software.name, 'large') }}
     <div><h1>{{ software.name }}</h1>
-      <p><span class="mono">{{ software.version or 'version non renseignée' }}</span> · {{ software.kind }} · {{ 'issu du store WinGet' if software.winget_id else 'ajouté manuellement' }}</p></div>
+      <p><span class="mono">{{ software.version or 'version non renseignée' }}</span> · {{ software.kind }} · {{ 'issu du centre de logiciels (WinGet)' if software.winget_id else 'ajouté manuellement' }}</p></div>
   </div>
   <div class="actions">
     {% if can('windows.edit') %}<button type="button" class="btn" data-open="#edit" data-app='{{ app_data(software) }}'>Modifier</button>{% endif %}
@@ -17,7 +17,7 @@
     <details class="menu">
       <summary class="btn" aria-label="Autres actions">Plus</summary>
       <div class="menu-list" role="menu">
-        {% if software.winget_id and can('store.view') %}<a class="menu-item" href="{{ url_for('software_store_detail', package_id=software.winget_id) }}">Fiche du store WinGet</a>{% endif %}
+        {% if software.winget_id and can('store.view') %}<a class="menu-item" href="{{ url_for('software_store_detail', package_id=software.winget_id) }}">Fiche du centre de logiciels</a>{% endif %}
         {% if software.source_url and can('windows.refresh') %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=software.slug) }}" data-ajax>
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche">
           <button class="menu-item" {{ 'disabled' if software.status == 'downloading' }}><span class="spin"></span>Retélécharger l'installeur</button>

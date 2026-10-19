@@ -45,16 +45,16 @@ GROUPS = [
         ("flatpak.upload", "Importer une application Flatpak", "Ajouter un bundle au dépôt local.", ("flatpak.view",), True),
         ("flatpak.delete", "Supprimer une application Flatpak", "Retirer une référence du dépôt local.", ("flatpak.view",), True),
     ]),
-    ("Logiciels Windows et store", [
+    ("Logiciels Windows et centre de logiciels", [
         ("windows.view", "Consulter le catalogue local", "Logiciels Windows et installeurs disponibles.", (), False),
         ("windows.groups", "Gérer les groupes de logiciels", "Regrouper les logiciels du catalogue pour les déployer ensemble.", ("windows.view",), False),
         ("windows.add", "Ajouter un logiciel au catalogue", "Téléverser un installeur ou le télécharger depuis une URL.", ("windows.view",), True),
         ("windows.edit", "Modifier un logiciel", "Version, détection et arguments d'installation silencieuse.", ("windows.view",), True),
         ("windows.refresh", "Actualiser les installeurs", "Retélécharger et rechercher les nouvelles versions WinGet.", ("windows.view",), True),
         ("windows.delete", "Supprimer un logiciel", "Retirer son installeur du catalogue local.", ("windows.view",), True),
-        ("store.view", "Parcourir le store WinGet", "Rechercher et consulter les fiches publiques du store.", (), False),
-        ("store.refresh", "Actualiser l'index du store", "Télécharger à nouveau l'index WinGet.", ("store.view",), False),
-        ("store.import", "Importer depuis le store", "Ajouter un installeur vérifié au catalogue local.", ("store.view", "windows.add"), True),
+        ("store.view", "Parcourir le centre de logiciels", "Rechercher et consulter les fiches publiques WinGet.", (), False),
+        ("store.refresh", "Actualiser l'index du centre de logiciels", "Télécharger à nouveau l'index WinGet.", ("store.view",), False),
+        ("store.import", "Importer depuis le centre de logiciels", "Ajouter un installeur vérifié au catalogue local.", ("store.view", "windows.add"), True),
     ]),
     ("Cache Windows Update", [
         ("wu.view", "Consulter le cache Windows Update", "Statistiques, domaines et commandes DNS.", (), False),
@@ -89,7 +89,7 @@ DEFAULTS = {
     "pending": ("Sans accès", "Aucun droit. Les nouvelles identités SSO attendent une approbation administrative.", set()),
     "admin": ("Administrateur", "Accès complet, y compris aux futurs droits. Profil protégé.", set(PERMISSIONS)),
     "viewer": ("Lecture seule", "Consultation des appareils, caches et catalogues locaux.", VIEWER),
-    "operator": ("Technicien du parc", "Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage.",
+    "operator": ("Opérateur", "Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage.",
                  VIEWER | {"fleet.scan", "fleet.update", "fleet.install"}),
     "repository_manager": ("Gestionnaire des dépôts", "Gestion des paquets et installeurs. Aucun déploiement sur les postes.",
                            {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
@@ -165,6 +165,9 @@ def seed_roles(conn):
                      (key, label, role_key(label), description, grants))
         # Modèles intégrés (non modifiables) : alignés sur cette version, y compris ses nouveaux droits.
         conn.execute("UPDATE access_roles SET description=?, permissions=? WHERE id=? AND builtin=1", (description, grants, key))
+        # Nom renommé entre deux versions : appliqué sauf si un profil personnalisé porte déjà ce nom.
+        conn.execute("UPDATE access_roles SET label=?, label_key=? WHERE id=? AND builtin=1 AND label!=? AND NOT EXISTS "
+                     "(SELECT 1 FROM access_roles WHERE label_key=? AND id!=?)", (label, role_key(label), key, label, role_key(label), key))
 
 
 def role_permissions(conn, role):

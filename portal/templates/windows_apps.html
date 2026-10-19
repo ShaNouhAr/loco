@@ -89,7 +89,7 @@
     {% elif total %}
     <div class="empty">Rien à traiter ici. <a href="{{ url_for('windows_apps') }}">Tout afficher</a></div>
     {% else %}
-    <div class="empty">Catalogue vide : {% if can("windows.add") %}<button type="button" class="linkbtn" data-open="#add">ajoutez un installeur</button> par lien ou par fichier{% endif %}{% if can("store.view") %}{{ ', ou ' if can("windows.add") }}importez-en un depuis le <a href="{{ url_for('software_store') }}">store WinGet</a>{% endif %}.</div>
+    <div class="empty">Catalogue vide : {% if can("windows.add") %}<button type="button" class="linkbtn" data-open="#add">ajoutez un installeur</button> par lien ou par fichier{% endif %}{% if can("store.view") %}{{ ', ou ' if can("windows.add") }}importez-en un depuis le <a href="{{ url_for('software_store') }}">centre de logiciels</a>{% endif %}.</div>
     {% endif %}
     <div class="panel-f">Chaque installeur est vérifié par SHA-256 sur le poste avant installation et dispose de 30 minutes (<code>LOCO_TIMEOUT</code>). Commande PowerShell en HTTPS : autorité loco importée sur le poste (GPO){% if http_url %}, sinon remplacer l'adresse par <code>{{ http_url }}</code>{% endif %}.</div>
   </section>

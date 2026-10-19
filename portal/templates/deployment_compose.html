@@ -26,7 +26,7 @@
     <section class="panel">
       <div class="panel-h"><h2>1 · Logiciels</h2><div class="aside"><span><span data-checked-count="input[name=app], input[name=software_group]">0</span> choisi(s)</span></div></div>
       <div class="panel-b stack-sm">
-        {% if store_info %}<div class="note"><strong>{{ store_info.name }} {{ store_info.version }}</strong> depuis le store WinGet : l'installeur est ajouté à loco et vérifié pendant la préparation.</div>{% endif %}
+        {% if store_info %}<div class="note"><strong>{{ store_info.name }} {{ store_info.version }}</strong> depuis le centre de logiciels : l'installeur est ajouté à loco et vérifié pendant la préparation.</div>{% endif %}
         {% if software_groups %}
         <div><h3 class="pick-title">Groupes de logiciels</h3>
           <div class="selection-list short">{% for group in software_groups %}<label class="selection-item"><input type="checkbox" name="software_group" value="{{ group.id }}" {{ 'checked' if group.id in selected.software_groups }}><span><strong>{{ group.name }}</strong><small>{{ group.members }} logiciel{{ 's' if group.members != 1 }}</small></span></label>{% endfor %}</div>
@@ -36,7 +36,7 @@
           <div class="selection-list" id="deploy-apps">
             {% for software in apps if software.slug in selected.apps %}{{ app_item(software) }}{% endfor %}
             {% for software in apps if software.slug not in selected.apps %}{{ app_item(software) }}{% endfor %}
-            {% if not apps %}<p class="small muted pad">Le catalogue est vide.{% if can('store.view') %} <a href="{{ url_for('software_store') }}">Parcourir le store</a>{% endif %}</p>{% endif %}
+            {% if not apps %}<p class="small muted pad">Le catalogue est vide.{% if can('store.view') %} <a href="{{ url_for('software_store') }}">Parcourir le centre de logiciels</a>{% endif %}</p>{% endif %}
           </div>
         </div>
       </div>

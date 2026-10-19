@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% from "_software_logo.html" import software_logo %}
-{% block title %}Store WinGet{% endblock %}
+{% block title %}Centre de logiciels{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
 <div class="head">
   <div>
-    <h1>Store WinGet</h1>
-    <p>Catalogue communautaire de Microsoft. Ajoutez un logiciel à loco pour le déployer sur le parc : l'installeur est téléchargé une fois puis vérifié par son empreinte.</p>
+    <h1>Centre de logiciels</h1>
+    <p>Logiciels du catalogue communautaire Microsoft WinGet. Ajoutez un logiciel à loco pour le déployer sur le parc : l'installeur est téléchargé une fois puis vérifié par son empreinte.</p>
   </div>
   {% if can("store.refresh") %}
   <div class="actions">
@@ -21,7 +21,7 @@
 <div class="stack">
   <div class="store-filters">
     <form method="get" action="{{ url_for('software_store') }}" class="store-search" role="search">
-      <input type="search" name="q" value="{{ query }}" placeholder="Rechercher un logiciel : Firefox, VLC, 7-Zip…" aria-label="Rechercher dans le store">
+      <input type="search" name="q" value="{{ query }}" placeholder="Rechercher un logiciel : Firefox, VLC, 7-Zip…" aria-label="Rechercher dans le centre de logiciels">
       <button class="btn primary">Rechercher</button>
     </form>
     <nav class="chips" aria-label="Catégories de logiciels">
@@ -70,7 +70,7 @@
   {% endif %}
 
   {% if pages > 1 %}
-  <nav class="row store-pagination" aria-label="Pages du store">
+  <nav class="row store-pagination" aria-label="Pages du centre de logiciels">
     {% if page > 1 %}<a class="btn sm" href="{{ url_for('software_store', q=query or None, category=None if query else category, page=page-1) }}">Précédente</a>{% endif %}
     <span class="muted small">Page {{ page }} sur {{ pages }}</span>
     {% if page < pages %}<a class="btn sm" href="{{ url_for('software_store', q=query or None, category=None if query else category, page=page+1) }}">Suivante</a>{% endif %}

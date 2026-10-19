@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_software_logo.html" import software_logo %}
 {% set name = doc.get('PackageName') or package_id %}
-{% block title %}{{ name }} · Store WinGet{% endblock %}
+{% block title %}{{ name }} · Centre de logiciels{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
-<p class="small back-link"><a href="{{ url_for('software_store') }}">← Store WinGet</a></p>
+<p class="small back-link"><a href="{{ url_for('software_store') }}">← Centre de logiciels</a></p>
 <div class="head">
   <div class="store-card-top">{{ software_logo(package_id, name, 'large') }}
     <div><h1>{{ name }}</h1>
@@ -25,11 +25,11 @@
 </div>
 
 <div class="stack">
-  {% if error %}<p class="note warn">Ajout impossible depuis le store : {{ error }}.</p>{% endif %}
+  {% if error %}<p class="note warn">Ajout impossible depuis le centre de logiciels : {{ error }}.</p>{% endif %}
   {% if known %}
   <div class="note {{ 'warn' if newer or known.status == 'error' else '' }}">
     {% if known.status == 'error' %}Dans le catalogue local, mais le téléchargement de l'installeur a échoué : voir la <a href="{{ url_for('software_detail', slug=known.slug) }}">fiche du logiciel</a>.
-    {% elif newer %}Le catalogue local a la version {{ known.version }} ; le store propose {{ doc.get('PackageVersion') }}. « Chercher des mises à jour WinGet » dans le <a href="{{ url_for('windows_apps') }}">catalogue local</a> la télécharge.
+    {% elif newer %}Le catalogue local a la version {{ known.version }} ; le centre de logiciels propose {{ doc.get('PackageVersion') }}. « Chercher des mises à jour WinGet » dans le <a href="{{ url_for('windows_apps') }}">catalogue local</a> la télécharge.
     {% elif known.status == 'ready' %}Dans le catalogue local (version {{ known.version }}), prêt à être déployé.
     {% else %}Ajouté au catalogue local : téléchargement de l'installeur en cours.{% endif %}
   </div>

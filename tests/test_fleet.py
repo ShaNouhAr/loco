@@ -589,7 +589,7 @@ class TestSoftwareStore(FleetTest):
             self.assertTrue(r.headers["Location"].endswith("/windows-apps/logiciel/outil"))
         with mock.patch.object(winget, "manifest", return_value=winget.parse_yaml(MANIFEST)):
             page = self.admin.c.get("/windows-apps/store/Example.Tool").get_data(as_text=True)
-        self.assertIn("Le catalogue local a la version 2.0.0 ; le store propose 2.5.0", page)
+        self.assertIn("Le catalogue local a la version 2.0.0 ; le centre de logiciels propose 2.5.0", page)
         self.assertIn("Voir dans le catalogue local", page)
         self.assertNotIn("Ajouter à loco</button>", page)
 

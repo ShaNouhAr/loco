@@ -65,7 +65,7 @@
             {% endif %}
           </tr>
         {% else %}
-          <tr><td colspan="4" class="empty">{% if editable %}{{ 'Le catalogue local est vide.' if software else 'Aucun appareil dans le parc.' }}{% if software and can('store.view') %} <a href="{{ url_for('software_store') }}">Parcourir le store</a>{% endif %}{% else %}Ce groupe est vide.{% endif %}</td></tr>
+          <tr><td colspan="4" class="empty">{% if editable %}{{ 'Le catalogue local est vide.' if software else 'Aucun appareil dans le parc.' }}{% if software and can('store.view') %} <a href="{{ url_for('software_store') }}">Parcourir le centre de logiciels</a>{% endif %}{% else %}Ce groupe est vide.{% endif %}</td></tr>
         {% endfor %}
         </tbody>
       </table>
