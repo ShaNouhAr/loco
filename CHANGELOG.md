@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.13.4 — 2026-10-19
+
+- Lien direct du MSI de l'agent : si le serveur ne peut pas encore fournir le MSI de sa version (GitHub momentanément injoignable…), il répond 503 avec la raison et « Réessayez dans un instant », et l'inscrit dans son journal, au lieu d'un 404 sans explication.
+- Le MSI récupéré depuis la publication est écrit sous un nom temporaire unique avant d'être mis en place : deux téléchargements simultanés ne peuvent plus se gêner.
+
 ## 2.13.3 — 2026-10-19
 
 - **MSI de l'agent Windows en téléchargement direct** dans la fenêtre *Ajouter un poste*, juste après les commandes : bouton « Télécharger le MSI » (version et empreinte SHA-256 affichées), liens directs à ouvrir depuis le navigateur du poste (HTTPS et, s'il est activé, HTTP sans avertissement de certificat), puis la commande `msiexec` prête à copier qui installe et inscrit le poste avec l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité. Un simple double-clic sur le MSI installe le service sans l'inscrire : c'est indiqué.

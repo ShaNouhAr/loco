@@ -346,6 +346,11 @@ class TestInstallers(FleetTest):
         with mock.patch.object(fleet, "agent_msi", return_value=(None, "pas d'accès à GitHub")):
             ps1 = self.admin.c.get(f"/agent/windows.ps1?key={Agent.key()}").get_data(as_text=True)
             self.assertIn("pas d''accès à GitHub", ps1)
+            # Lien direct du MSI : indisponibilité expliquée (503 + raison), pas un 404 muet.
+            r = self.admin.c.get("/agent/files/loco-client.msi")
+            self.assertEqual(r.status_code, 503)
+            self.assertIn("pas d'accès à GitHub", r.get_data(as_text=True))
+            self.assertEqual(r.headers["Retry-After"], "30")
 
     def test_enroll_dialog_offers_the_msi_with_its_install_command(self):
         sha = "e" * 64
@@ -360,6 +365,26 @@ class TestInstallers(FleetTest):
         command = (f'msiexec /i &#34;%USERPROFILE%\\Downloads\\loco-client.msi&#34; SERVER=https://repo.test:8443 '
                    f'KEY={Agent.key()} CA_SHA256={CA_SHA256} /qb')
         self.assertIn(command, page)
+
+    def test_msi_is_fetched_from_the_release_and_checked(self):
+        data = b"MSI publie"
+        name = f"loco-client-{config.VERSION}.msi"
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = os.path.join(tmp, "agents", name)
+            def release(url, limit):
+                if url.endswith("SHA256SUMS"):
+                    return f"{hashlib.sha256(data).hexdigest()}  {name}\n".encode()
+                return served[0]
+            with mock.patch.object(fleet, "AGENT_DIR", tmp), mock.patch.object(fleet, "_msi_cache", return_value=cache), \
+                    mock.patch.object(fleet, "_get_url", side_effect=release):
+                served = [b"MSI altere"]
+                self.assertEqual(fleet.agent_msi(fetch=True), (None, "empreinte SHA-256 du MSI incorrecte"))
+                self.assertFalse(os.path.exists(cache))
+                served = [data]
+                self.assertEqual(fleet.agent_msi(fetch=True), (cache, hashlib.sha256(data).hexdigest()))
+                with open(cache, "rb") as f:
+                    self.assertEqual(f.read(), data)
+                self.assertEqual(os.listdir(os.path.dirname(cache)), [name])     # aucun fichier temporaire restant
 
     def test_outdated_windows_agents_make_the_server_fetch_its_msi(self):
         """Après la mise à jour du serveur, le MSI de sa version est récupéré pour les agents Windows en retard."""

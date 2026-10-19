@@ -18,13 +18,14 @@ import json
 import os
 import re
 import secrets
+import tempfile
 import threading
 import time
 import urllib.parse
 import urllib.request
 import zipfile
 
-from flask import Response, abort, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from . import addresses, app, config, permissions
 from .auth import audit, login_required, can, require
@@ -540,10 +541,16 @@ def agent_msi(fetch=False):
         if hashlib.sha256(data).hexdigest() != expected:
             return None, "empreinte SHA-256 du MSI incorrecte"
         os.makedirs(os.path.dirname(_msi_cache()), exist_ok=True)
-        tmp = _msi_cache() + ".tmp"
-        with open(tmp, "wb") as f:
-            f.write(data)
-        os.replace(tmp, _msi_cache())
+        # Nom temporaire unique : plusieurs processus du portail peuvent télécharger en même temps.
+        fd, tmp = tempfile.mkstemp(prefix=".msi-", dir=os.path.dirname(_msi_cache()))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, _msi_cache())
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
         _SHA.pop(_msi_cache(), None)
         return _msi_cache(), expected
 
@@ -616,9 +623,12 @@ def agent_file(name):
     if name == "loco-client.py":
         return Response(_agent_source(name), mimetype="text/plain")
     if name == "loco-client.msi":
-        path, _ = agent_msi(fetch=True)
+        path, reason = agent_msi(fetch=True)
         if path is None:
-            abort(404)
+            # Indisponible pour l'instant (GitHub injoignable…) : le dire au lieu d'un 404 muet.
+            current_app.logger.warning("MSI de l'agent %s indisponible : %s", config.VERSION, reason)
+            return Response(f"loco-client.msi {config.VERSION} indisponible : {reason}. Réessayez dans un instant.\n",
+                            status=503, mimetype="text/plain", headers={"Retry-After": "30"})
         return send_file(path, mimetype="application/x-msi", as_attachment=True, download_name="loco-client.msi")
     abort(404)
 
