@@ -61,7 +61,7 @@ class TestPermissions(FleetTest):
         role = self.profile('empty', [])
         reader = self.browser('empty', role)
         values = {'dev_id': self.dev_id, 'sid': '0' * 32, 'role_id': role,
-                  'user_id': self.uid('empty'), 'provider_id': 'missing', 'group_id': 999999, 'deployment_id': 'missing', 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present'}
+                  'user_id': self.uid('empty'), 'provider_id': 'missing', 'group_id': 999999, 'deployment_id': 'missing', 'slug': 'not-present', 'package_id': 'Vendor.Application', 'job_id': 'not-present', 'script_id': 999999, 'run_id': 999999}
         with fixture.loco.app.test_request_context():
             from flask import url_for
             paths = [(rule, url_for(rule.endpoint, **{key: values[key] for key in rule.arguments}))

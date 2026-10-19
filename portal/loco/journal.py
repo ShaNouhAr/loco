@@ -15,6 +15,7 @@ CATEGORIES = {
     "comptes": ("Comptes et profils", ("comptes.", "compte.", "profils.", "sso.")),
     "serveur": ("Serveur", ("systeme.",)),
     "journal": ("Journal", ("journal.",)),
+    "scripts": ("Scripts", ("scripts.",)),
 }
 
 LABELS = {
@@ -50,6 +51,8 @@ LABELS = {
     "systeme.update-loco": "Mise à jour de loco", "systeme.update-system": "Mise à jour du système",
     "systeme.reboot": "Redémarrage du serveur", "systeme.configure": "Réglages du serveur", "journal.export": "Journal exporté",
     "journal.conservation": "Conservation du journal modifiée",
+    "scripts.ajout": "Script créé", "scripts.modification": "Script modifié", "scripts.suppression": "Script supprimé",
+    "scripts.execution": "Script exécuté sur des postes",
 }
 FAILURES = ("echec", "bloquee")
 PERIODS = {"jour": ("Aujourd'hui", 0), "7j": ("7 jours", 6), "30j": ("30 jours", 29), "tout": ("Tout", None)}

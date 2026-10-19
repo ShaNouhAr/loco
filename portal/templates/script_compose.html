@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Exécuter {{ script.name }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('script_editor', script_id=script.id) }}">← {{ script.name }}</a></p>
+<div class="head">
+  <div>
+    <h1>Exécuter {{ script.name }}</h1>
+    <p><span class="tag">{{ platforms[script.platform] }}</span> · version {{ script.version }} · exécuté en <strong>{{ 'SYSTEM' if script.platform == 'windows' else 'root' }}</strong> au prochain contact de chaque agent.</p>
+  </div>
+</div>
+<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-confirm="Exécuter {{ script.name }} sur les postes choisis ?" data-confirm-text="Le script s’exécute avec les pleins pouvoirs ({{ 'SYSTEM' if script.platform == 'windows' else 'root' }}) sur chaque poste. Vérifiez son contenu avant de continuer." data-confirm-ok="Exécuter">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ script.version }}">
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><h2>Postes</h2><div class="aside"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> choisi(s)</span></div></div>
+      <div class="panel-b stack-sm">
+        {% if device_groups %}
+        <div><h3 class="pick-title">Groupes de machines</h3>
+          <div class="selection-list short">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}"><span><strong>{{ group.name }}</strong><small>{{ group.members }} appareil{{ 's' if group.members != 1 }} · seuls les postes compatibles sont retenus</small></span></label>{% endfor %}</div>
+        </div>
+        {% endif %}
+        <div><div class="row-between"><h3 class="pick-title">Appareils {{ 'Windows' if script.platform == 'windows' else 'Linux' }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="Rechercher" data-filter="#script-devices .selection-item" aria-label="Rechercher un appareil">{% endif %}</div>
+          <div class="selection-list" id="script-devices">
+            {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong class="mono">{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">Aucun appareil compatible actif.</p>{% endfor %}
+          </div>
+          {% if incompatible %}<p class="hint">{{ incompatible }} autre{{ 's' if incompatible > 1 }} appareil{{ 's' if incompatible > 1 }} (autre système ou agent en retrait) non proposé{{ 's' if incompatible > 1 }}.</p>{% endif %}
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>Contenu exécuté</h2><div class="aside">version {{ script.version }}</div></div>
+      <pre class="script-preview">{{ script.content }}</pre>
+    </section>
+  </div>
+  <section class="panel sticky-actions compose-bar"><div class="panel-b compose-bar-in row-between">
+    <span class="muted">La sortie et le code de retour de chaque poste s’affichent sur la page de suivi.</span>
+    <button class="btn primary"><span class="spin"></span>Exécuter</button>
+  </div></section>
+</form>
+{% endblock %}

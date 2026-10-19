@@ -30,6 +30,7 @@ import struct
 import ssl
 import subprocess
 import sys
+import tempfile
 import termios
 import time
 import zlib
@@ -294,6 +295,32 @@ def report(conf, cmd_id, state, output="", code=None, inventory=None):
         log(f"résultat non transmis : {e}")
 
 
+def run_script(cmd):
+    """Script de la bibliothèque loco : contenu vérifié par son empreinte, exécuté en root (sh, ou l'interpréteur du #!)."""
+    script = cmd.get("script") or {}
+    content = script.get("content") or ""
+    if script.get("platform") != "linux":
+        return 1, "Script destiné à un autre système."
+    if hashlib.sha256(content.encode()).hexdigest() != (script.get("sha256") or "").lower():
+        return 1, "Empreinte du script invalide : non exécuté."
+    fd, path = tempfile.mkstemp(prefix="loco-script-", suffix=".sh")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.chmod(path, 0o700)
+        argv = [path] if content.startswith("#!") else ["/bin/sh", path]
+        try:
+            done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                  timeout=1800, cwd="/")
+        except subprocess.TimeoutExpired as e:
+            return -1, ((e.output or b"").decode("utf-8", "replace") + "\nArrêté : pas terminé après 1800 s.").strip()
+        except OSError as e:
+            return 1, f"Exécution impossible : {e}"
+        return done.returncode, done.stdout.decode("utf-8", "replace").strip() or "(aucune sortie)"
+    finally:
+        os.unlink(path)
+
+
 def self_update(conf, wanted):
     """Nouvelle version de loco sur le serveur : l'agent se met à jour (code servi par le serveur épinglé)."""
     def key(v):
@@ -385,6 +412,9 @@ def service():
                 save(STATE, state)
                 subprocess.run(["shutdown", "-r", "+1", "loco : redémarrage après mise à jour"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 0
+        elif action == "run-script":
+            code, out = run_script(cmd)
+            report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)
         elif action == "reboot":
             report(conf, cmd["id"], "success", "Redémarrage dans une minute.", 0)
             save(STATE, state)

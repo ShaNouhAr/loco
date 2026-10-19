@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_charts.html" import progress %}
+{% set editable = can('scripts.edit') %}
+{% block title %}{{ script.name if script else 'Nouveau script' }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('scripts') }}">← Scripts</a></p>
+<div class="head">
+  <div>
+    <h1>{{ script.name if script else 'Nouveau script' }}</h1>
+    <p>{% if script %}<span class="tag">{{ platforms[script.platform] }}</span> · version {{ script.version }} · modifié le {{ script.updated_at|date_fr }} par {{ script.updated_by }}{% else %}PowerShell pour Windows ou shell pour Linux, exécuté en SYSTEM ou root.{% endif %}</p>
+  </div>
+  {% if script %}
+  <div class="actions">
+    {% if can('scripts.run') %}<a class="btn primary" href="{{ url_for('script_compose', script_id=script.id) }}">Exécuter sur des postes</a>{% endif %}
+    {% if editable %}
+    <details class="menu">
+      <summary class="btn" aria-label="Autres actions">Plus</summary>
+      <div class="menu-list" role="menu">
+        <form method="post" action="{{ url_for('script_delete', script_id=script.id) }}" data-confirm="Supprimer le script {{ script.name }} ?" data-confirm-text="Les résultats de ses exécutions restent consultables." data-confirm-ok="Supprimer">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>Supprimer le script…</button>
+        </form>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="cols w21">
+  <form method="post" action="{{ url_for('script_save', script_id=script.id if script else 0) }}" class="panel">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-b grid2">
+      <label class="f"><span>Nom</span><input type="text" name="name" required maxlength="80" value="{{ script.name if script else '' }}" placeholder="Nettoyer les fichiers temporaires" {{ 'readonly' if not editable }}></label>
+      <label class="f"><span>Système</span><select name="platform" {{ 'disabled' if not editable }}>{% for key, label in platforms.items() %}<option value="{{ key }}" {{ 'selected' if script and script.platform == key }}>{{ label }}</option>{% endfor %}</select></label>
+      <label class="f wide"><span>Description</span><input type="text" name="description" maxlength="300" value="{{ script.description if script else '' }}" placeholder="facultatif" {{ 'readonly' if not editable }}></label>
+      <label class="f wide"><span>Contenu</span><textarea name="content" class="script-content" rows="18" spellcheck="false" required {{ 'readonly' if not editable }} placeholder="# PowerShell : Get-ChildItem $env:TEMP | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue&#10;# shell : apt-get clean">{{ script.content if script else '' }}</textarea>
+        <span class="hint">64 Kio au plus. Code de retour 0 = réussi ; la sortie standard et les erreurs sont remontées pour chaque poste. Délai maximal : 30 minutes.</span></label>
+    </div>
+    {% if editable %}<div class="panel-f sticky-actions row-between"><span>Modifier le contenu crée une nouvelle version ; les exécutions passées gardent la leur.</span><button class="btn primary"><span class="spin"></span>Enregistrer</button></div>{% endif %}
+  </form>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Exécutions</h2></div>
+    {% if runs %}
+    <div class="table-wrap"><table><tbody>
+      {% for item in runs %}{% set r = item.run %}{% set p = item.summary %}
+      <tr><td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.created_at|date_fr }}</a> <span class="mono faint">v{{ r.version }}</span><span class="sub sans">{{ r.created_by }} · {{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.failed %} · {{ p.failed }} échec{{ 's' if p.failed > 1 }}{% endif %}</span></td>
+        <td class="deploy-progress">{{ progress(p) }}</td></tr>
+      {% endfor %}
+    </tbody></table></div>
+    {% else %}<div class="empty">{{ 'Pas encore exécuté.' if script else 'Enregistrez le script pour pouvoir l’exécuter.' }}</div>{% endif %}
+  </section>
+</div>
+{% endblock %}

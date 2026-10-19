@@ -810,3 +810,10 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .switch input:focus-visible + i { outline: 2px solid var(--accent); outline-offset: 2px; }
 .switch input:disabled + i { opacity: .45; }
 .live-step { display: grid; gap: 4px; max-width: 420px; margin-bottom: 4px; }
+
+/* ------------------------------------------------------------------ scripts */
+
+.script-content { font-family: var(--mono); font-size: 13px; line-height: 1.5; tab-size: 4; min-height: 320px; }
+.script-preview { margin: 0; padding: 14px 16px; max-height: 460px; overflow: auto; font: 12.5px/1.5 var(--mono); white-space: pre; background: var(--bg-2); border-radius: 0 0 var(--r) var(--r); }
+.script-snapshot > summary { cursor: pointer; list-style: none; }
+.scripts-table td { vertical-align: middle; }

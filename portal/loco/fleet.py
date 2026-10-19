@@ -39,7 +39,7 @@ SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": "Windows", "debian": "Debian / Ubuntu", "rhel": "Red Hat"}
-ACTIONS = {"scan": "Inventaire", "update": "Mise à jour", "install-app": "Installation", "reboot": "Redémarrage",
+ACTIONS = {"scan": "Inventaire", "update": "Mise à jour", "install-app": "Installation", "run-script": "Script", "reboot": "Redémarrage",
            "uninstall": "Retrait de l'agent"}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
@@ -367,6 +367,12 @@ def _payload(dev, cmd):
     out = {"id": cmd["id"], "action": cmd["action"], "reboot": bool(params.get("reboot"))}
     if cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
+    if cmd["action"] == "run-script":
+        run = db().execute("SELECT * FROM script_runs WHERE id=?", (params.get("run_id"),)).fetchone()
+        if run is None or (run["platform"] == "windows") != (dev["os_family"] == "windows"):
+            return None
+        out["script"] = {"name": run["name"], "platform": run["platform"], "content": run["content"], "sha256": run["sha256"]}
+        return out
     if cmd["action"] == "install-app":
         if dev["os_family"] != "windows":
             return None
@@ -401,8 +407,9 @@ def agent_checkin():
     commands = []
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' ORDER BY id",
                           (dev["id"],)).fetchall():
-        if c["action"] == "install-app" and "windows_apps" in features.disabled(conn):
-            continue                # logiciels Windows coupés : la commande attend leur réactivation
+        if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
+                or c["action"] == "run-script" and "scripts" in features.disabled(conn)):
+            continue                # fonctionnalité coupée : la commande attend sa réactivation
         actor = conn.execute("SELECT role,disabled,must_change,pending FROM users WHERE username=?", (c["created_by"],)).fetchone()
         grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["pending"] and not actor["must_change"] else frozenset()
         required = permissions.ACTION_PERMISSIONS.get(c["action"])
@@ -417,7 +424,8 @@ def agent_checkin():
         payload = _payload(dev, c)
         if payload is None:
             conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE id=?",
-                         (_now(), "Logiciel absent du catalogue.", c["id"]))
+                         (_now(), "Script indisponible ou incompatible avec ce système." if c["action"] == "run-script"
+                          else "Logiciel absent du catalogue.", c["id"]))
             continue
         conn.execute("UPDATE device_commands SET state='sent', sent_at=? WHERE id=?", (_now(), c["id"]))
         commands.append(payload)

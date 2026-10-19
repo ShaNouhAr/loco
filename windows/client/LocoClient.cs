@@ -516,6 +516,54 @@ namespace Loco
             return ok;
         }
 
+        // Script de la bibliothèque loco : contenu vérifié par son empreinte, exécuté en SYSTEM par PowerShell.
+        static int RunScript(Dictionary<string, object> cmd, out string output)
+        {
+            var script = cmd.ContainsKey("script") ? cmd["script"] as Dictionary<string, object> : null;
+            string content = script == null ? "" : Str(script, "content");
+            if (script == null || Str(script, "platform") != "windows") { output = "Script destiné à un autre système."; return 1; }
+            using (var sha = SHA256.Create())
+                if (BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(content))).Replace("-", "").ToLowerInvariant()
+                    != Str(script, "sha256").ToLowerInvariant()) { output = "Empreinte du script invalide : non exécuté."; return 1; }
+            string dir = Path.Combine(Path.GetTempPath(), "loco-script-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string file = Path.Combine(dir, "script.ps1");
+                File.WriteAllText(file, content, new UTF8Encoding(true));        // BOM : PowerShell 5.1 lit alors l'UTF-8
+                string arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = " +
+                                   "[Text.Encoding]::UTF8; & '" + file.Replace("'", "''") + "'; exit $LASTEXITCODE\"";
+                return RunCapture("powershell.exe", arguments, InstallerTimeout, out output);
+            }
+            finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
+        }
+
+        static int RunCapture(string file, string arguments, int timeoutSeconds, out string output)
+        {
+            var psi = new ProcessStartInfo(file, arguments)
+            {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
+            };
+            var text = new StringBuilder();
+            DataReceivedEventHandler collect = (sender, e) => { if (e.Data != null) lock (text) if (text.Length < OutputLimit * 2) text.AppendLine(e.Data); };
+            using (var p = new Process { StartInfo = psi })
+            {
+                p.OutputDataReceived += collect; p.ErrorDataReceived += collect;
+                p.Start(); p.BeginOutputReadLine(); p.BeginErrorReadLine();
+                if (!p.WaitForExit(timeoutSeconds * 1000))
+                {
+                    try { p.Kill(); } catch (Exception) { }
+                    lock (text) output = text + "\nArrêté : pas terminé après " + timeoutSeconds + " s.";
+                    return -1;
+                }
+                p.WaitForExit();                              // fin de la lecture asynchrone des sorties
+                lock (text) output = text.ToString().TrimEnd();
+                if (output.Length == 0) output = "(aucune sortie)";
+                return p.ExitCode;
+            }
+        }
+
         static int RunInstaller(string file, string arguments)
         {
             var psi = new ProcessStartInfo(file, arguments ?? "") { UseShellExecute = false, CreateNoWindow = true };
@@ -744,6 +792,11 @@ namespace Loco
                         if (reboot) lines.Add("Redémarrage dans une minute.");
                         Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, inv);
                         if (reboot) { SaveState(lastScan, scanHours, false); Restart("redémarrage après mise à jour"); return true; }
+                    }
+                    else if (action == "run-script")
+                    {
+                        string output; int code = RunScript(cmd, out output);
+                        Report(conf, id, code == 0 ? "success" : "failed", output, code, null);
                     }
                     else if (action == "reboot")
                     {

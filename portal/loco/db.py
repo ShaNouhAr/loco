@@ -268,6 +268,46 @@ MIGRATIONS = [
     """
     ALTER TABLE device_commands ADD COLUMN progress TEXT NOT NULL DEFAULT '';
     """,
+    # 12 : bibliothèque de scripts (PowerShell, shell) et exécutions sur les postes, contenu figé à l'exécution.
+    """
+    CREATE TABLE scripts (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        platform TEXT NOT NULL CHECK (platform IN ('windows', 'linux')),
+        content TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE script_runs (
+        id INTEGER PRIMARY KEY,
+        script_id INTEGER REFERENCES scripts(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        platform TEXT NOT NULL,
+        content TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    CREATE TABLE script_run_targets (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES script_runs(id) ON DELETE CASCADE,
+        device_id INTEGER REFERENCES devices(id) ON DELETE SET NULL,
+        hostname TEXT NOT NULL,
+        command_id INTEGER UNIQUE REFERENCES device_commands(id) ON DELETE SET NULL,
+        last_state TEXT NOT NULL DEFAULT '',
+        last_output TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX script_runs_script ON script_runs(script_id);
+    CREATE INDEX script_run_targets_run ON script_run_targets(run_id);
+    CREATE TRIGGER script_command_snapshot BEFORE DELETE ON device_commands
+    BEGIN
+        UPDATE script_run_targets SET last_state=OLD.state, last_output=OLD.output WHERE command_id=OLD.id;
+    END;
+    """,
 ]
 
 

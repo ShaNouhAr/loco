@@ -2,5 +2,6 @@
   <a href="{{ url_for('fleet') }}" class="{{ 'on' if request.endpoint in ('fleet','fleet_device') }}">Appareils</a>
   <a href="{{ url_for('fleet_groups') }}" class="{{ 'on' if request.endpoint.startswith('fleet_group') }}">Groupes de machines</a>
   {% if can_any('deployments.view','fleet.install') %}<a href="{{ url_for('deployments') }}" class="{{ 'on' if request.endpoint.startswith('deployment') }}">Déploiements</a>{% endif %}
+  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" class="{{ 'on' if request.endpoint.startswith('script') }}">Scripts</a>{% endif %}
   {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" class="{{ 'on' if request.endpoint == 'fleet_settings' }}">Réglages</a>{% endif %}
 </nav>

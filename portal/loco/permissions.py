@@ -66,6 +66,12 @@ GROUPS = [
         ("system.update", "Mettre à jour le serveur", "Installer une version de loco ou les paquets de l'appliance.", ("system.view",), True),
         ("system.reboot", "Redémarrer le serveur", "Demander un redémarrage de l'appliance.", ("system.view",), True),
     ]),
+    ("Scripts", [
+        ("scripts.view", "Consulter les scripts", "Bibliothèque de scripts et résultats de leurs exécutions.", (), False),
+        ("scripts.edit", "Gérer les scripts", "Créer, modifier et supprimer des scripts PowerShell ou shell.", ("scripts.view",), True),
+        ("scripts.run", "Exécuter un script sur des postes", "Lancer un script en SYSTEM (Windows) ou root (Linux) sur des appareils ou groupes.",
+         ("scripts.view", "fleet.view"), True),
+    ]),
     ("Utilisateurs, profils et audit", [
         ("users.view", "Consulter les comptes", "Identifiants, profils, état et dernière connexion.", (), False),
         ("users.approve", "Approuver les demandes SSO", "Attribuer un profil et autoriser un nouveau compte SSO à accéder à loco.", ("users.view",), True),
@@ -135,13 +141,16 @@ ENDPOINTS = {
     "sso_delete": "sso.manage",
     "users_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
+    "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",
+    "script_compose": "scripts.run", "script_run_start": "scripts.run", "script_run": "scripts.view",
+    "script_run_cancel": "scripts.run",
     # Réservé en plus au compte « admin » de l'installation (vérifié par la page).
     "features": "system.view", "features_save": "system.view",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }
 ACCOUNT_ENDPOINTS = {"login", "account", "logout", "sso_start", "sso_callback"}
-ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install",
+ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "run-script": "scripts.run",
                       "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 
 

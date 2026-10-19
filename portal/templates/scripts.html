@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "_charts.html" import progress %}
+{% block title %}Scripts{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<div class="head">
+  <div>
+    <h1>Scripts</h1>
+    <p>Bibliothèque de scripts PowerShell (Windows) et shell (Linux) exécutés par l’agent en SYSTEM ou root sur les postes choisis, avec la sortie de chaque poste.</p>
+  </div>
+  {% if can('scripts.edit') %}<div class="actions"><a class="btn primary" href="{{ url_for('script_editor', script_id=0) }}">Nouveau script</a></div>{% endif %}
+</div>
+
+<div class="stack">
+  <section class="panel">
+    {% if scripts %}
+    <div class="table-wrap">
+      <table class="scripts-table">
+        <thead><tr><th>Script</th><th>Système</th><th class="hide-sm">Version</th><th class="hide-sm">Dernière exécution</th><th></th></tr></thead>
+        <tbody>
+        {% for s in scripts %}
+          <tr>
+            <td><a href="{{ url_for('script_editor', script_id=s.id) }}" class="strong-link">{{ s.name }}</a><span class="sub sans">{{ s.description or 'Sans description' }}</span></td>
+            <td class="nowrap"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else 'Linux' }}</span></td>
+            <td class="hide-sm mono">v{{ s.version }}<span class="sub sans">{{ s.updated_at|date_fr }} · {{ s.updated_by }}</span></td>
+            <td class="hide-sm nowrap">{% if s.last_run %}{{ s.last_run|date_fr }}<span class="sub sans">{{ s.runs }} exécution{{ 's' if s.runs > 1 }}</span>{% else %}<span class="faint">jamais</span>{% endif %}</td>
+            <td class="right nowrap">{% if can('scripts.run') %}<a class="btn sm" href="{{ url_for('script_compose', script_id=s.id) }}">Exécuter</a>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">Aucun script.{% if can('scripts.edit') %} <a href="{{ url_for('script_editor', script_id=0) }}">Créez-en un</a> : nettoyage de fichiers temporaires, réglage du registre, redémarrage d’un service…{% endif %}</div>
+    {% endif %}
+  </section>
+
+  {% if recent %}
+  <section class="panel">
+    <div class="panel-h"><h2>Exécutions récentes</h2></div>
+    <div class="table-wrap"><table class="deployments-table"><tbody>
+      {% for item in recent %}{% set r = item.run %}{% set p = item.summary %}
+      <tr>
+        <td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.name }}</a> <span class="mono faint">v{{ r.version }}</span><span class="sub sans">{{ r.created_at|date_fr }} · {{ r.created_by }}</span></td>
+        <td class="deploy-progress">{{ progress(p) }}<span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
