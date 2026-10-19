@@ -1,4 +1,5 @@
 """Fonctionnalités désactivables par le seul compte « admin » : masquées, pages/API refusées, agents tenus à l'écart."""
+import html
 import json
 import unittest
 
@@ -41,7 +42,8 @@ class TestFeatures(FleetTest):
                           conn.execute("SELECT detail FROM audit WHERE action='systeme.fonctionnalites' ORDER BY id DESC").fetchone()[0])
         r = self.admin.c.get("/windows-update")
         self.assertEqual(r.status_code, 403)
-        self.assertIn("Fonctionnalité désactivée par l&#39;administrateur : Cache Windows Update", r.get_data(as_text=True))
+        # Werkzeug échappe l'apostrophe en &#39; ou &#x27; selon sa version.
+        self.assertIn("Fonctionnalité désactivée par l'administrateur : Cache Windows Update", html.unescape(r.get_data(as_text=True)))
         home = self.admin.c.get("/").get_data(as_text=True)
         self.assertNotIn('href="/windows-update"', home)
         self.assertNotIn("Windows Update, 14 derniers jours", home)
