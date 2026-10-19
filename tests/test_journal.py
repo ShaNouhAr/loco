@@ -141,7 +141,8 @@ class TestJournal(FleetTest):
         self.assertEqual(r.status_code, 302)
 
     def test_export_follows_the_page_filters(self):
-        add_event(days_ago(1), "connexion.echec", "mot de passe erroné")
+        recent = (datetime.datetime.now() - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        add_event(recent, "connexion.echec", "mot de passe erroné")       # loin de la limite des 24 heures
         self.assertIn("1 échec de connexion ces dernières 24 heures", self.admin.c.get("/journal").get_data(as_text=True))
         add_event(days_ago(1), "parc.update", "poste-07")
         doc = json.loads(self.admin.c.get("/journal/export?categorie=connexions").get_data(as_text=True))

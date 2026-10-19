@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.12.1 — 2026-10-19
+
+- **Agents Windows mis à jour après le serveur** : le serveur ne proposait la nouvelle version de l'agent Windows que si son MSI avait déjà été téléchargé depuis le portail (bouton d'installation ou lien de déploiement). Sans cette action, les postes Windows restaient sur leur ancienne version. Désormais, dès qu'un agent Windows plus ancien que le serveur se présente, le serveur récupère le MSI de sa version sur GitHub (vérifié par SHA256SUMS) en arrière-plan, au plus une tentative toutes les dix minutes, et le propose au contact suivant.
+- Test du journal rendu indépendant de la seconde à laquelle il s'exécute.
+
 ## 2.12.0 — 2026-10-19
 
 - **Journal repensé** : événements groupés par jour (aujourd'hui, hier, puis la date), heure seule, actions en clair avec leur catégorie au lieu des codes techniques (le code reste en infobulle et dans l'export). Échecs signalés par une pastille rouge et résumés en tête de page sur les dernières 24 heures.

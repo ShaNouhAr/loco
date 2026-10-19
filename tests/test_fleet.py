@@ -347,6 +347,24 @@ class TestInstallers(FleetTest):
             ps1 = self.admin.c.get(f"/agent/windows.ps1?key={Agent.key()}").get_data(as_text=True)
             self.assertIn("pas d''accès à GitHub", ps1)
 
+    def test_outdated_windows_agents_make_the_server_fetch_its_msi(self):
+        """Après la mise à jour du serveur, le MSI de sa version est récupéré pour les agents Windows en retard."""
+        old = dict(WINDOWS, agent_version="2.9.0")
+        a = Agent(old, "192.168.43.50")
+        a.enroll()
+        fleet._PREFETCH["last"] = 0.0
+        with mock.patch.object(fleet, "agent_msi", return_value=(None, "absent")), \
+                mock.patch.object(fleet.threading, "Thread") as thread:
+            self.assertNotIn("agent_msi", a.checkin().get_json())
+            a.checkin()                                                     # moins de dix minutes : pas de relance
+            thread.assert_called_once()
+            self.assertEqual(thread.call_args.kwargs["kwargs"], {"fetch": True})
+            fleet._PREFETCH["last"] = 0.0
+            current = Agent(WINDOWS, "192.168.43.51")                       # agent à jour : rien à récupérer
+            current.enroll()
+            current.checkin()
+            thread.assert_called_once()
+
 
 # Autorité de test (certificat auto-signé quelconque) et son empreinte SHA-256 (DER).
 CA_PEM = """-----BEGIN CERTIFICATE-----

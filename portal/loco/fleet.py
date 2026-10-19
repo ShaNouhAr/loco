@@ -19,6 +19,7 @@ import os
 import re
 import secrets
 import threading
+import time
 import urllib.parse
 import urllib.request
 import zipfile
@@ -428,6 +429,8 @@ def agent_checkin():
         path, sha = agent_msi()
         if path:
             answer["agent_msi"] = {"version": config.VERSION, "sha256": sha}
+        elif version_key(dev["agent_version"]) < version_key(config.VERSION):
+            prefetch_msi()          # proposé au contact suivant, sans faire attendre l'agent
     return answer
 
 
@@ -500,6 +503,18 @@ _MSI_LOCK = threading.Lock()
 
 def _msi_cache():
     return os.path.join(config.DATA, "agents", f"loco-client-{config.VERSION}.msi")
+
+
+_PREFETCH = {"last": 0.0}
+
+
+def prefetch_msi():
+    """Télécharge en arrière-plan le MSI de cette version (au plus une tentative toutes les dix minutes).
+    Sans lui, les agents Windows plus anciens ne se voient proposer aucune mise à jour après celle du serveur."""
+    if time.time() - _PREFETCH["last"] < 600:
+        return
+    _PREFETCH["last"] = time.time()
+    threading.Thread(target=agent_msi, kwargs={"fetch": True}, name="loco-msi", daemon=True).start()
 
 
 def agent_msi(fetch=False):
