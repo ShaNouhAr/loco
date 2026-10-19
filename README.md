@@ -281,6 +281,9 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
   d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache.
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de
   certificats du poste ; installeurs vérifiés par SHA-256 ; jetons stockés hachés côté serveur.
+- **Windows, MSI téléchargé** : la fenêtre *Ajouter un poste* propose aussi le MSI en téléchargement direct (lien
+  public, également ouvrable depuis le navigateur du poste) et la commande `msiexec` à lancer en administrateur avec
+  l'adresse, la clé et l'empreinte du serveur ; un simple double-clic installe le service sans l'inscrire.
 - **Windows en masse** : distribuer `loco-client.msi` (GPO, Intune, SCCM) et définir `Server`, `Key` et `CaSha256`
   sous `HKLM\SOFTWARE\Policies\loco\Client`, ou `msiexec /i loco-client.msi SERVER=… KEY=… CA_SHA256=… /qn`.
   Le MSI est publié avec chaque version ; le serveur le télécharge depuis GitHub à la première installation

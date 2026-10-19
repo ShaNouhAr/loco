@@ -115,6 +115,19 @@
       {{ cmd('agent-win', commands.windows, 'PS>') }}
       {% if commands.windows_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.windows_http }}</code></span>{% endif %}
       <span class="hint">Installe le service Windows <code>loco-client</code> (MSI, visible dans Programmes et fonctionnalités). L'agent épingle l'autorité de loco sans modifier les certificats du poste.</span>
+
+      <div class="msi-direct">
+        <div class="row-between">
+          <div><h3 class="pick-title">Ou télécharger l'installeur</h3>
+            <span class="small muted">loco-client.msi · version {{ msi_version }}{% if msi_sha256 %} · <span title="SHA-256 {{ msi_sha256 }}">SHA-256 {{ msi_sha256[:12] }}…</span>{% elif msi_error %} · {{ msi_error }}{% endif %}</span></div>
+          <a class="btn primary" href="{{ url_for('agent_file', name='loco-client.msi') }}" download>Télécharger le MSI</a>
+        </div>
+        <span class="hint">Depuis le navigateur du poste : {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}{% if commands.msi_urls|length > 1 %} (sans avertissement de certificat si l'autorité loco n'est pas importée){% endif %}.</span>
+        <p class="small muted">Puis, dans une invite de commandes en administrateur, pour l'installer et l'inscrire :</p>
+        {{ cmd('agent-msi', commands.msiexec, '>') }}
+        <span class="hint">Un simple double-clic installe le service sans l'inscrire : la commande lui donne l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité.</span>
+      </div>
+
       <details class="hint"><summary>Déploiement en masse (GPO, Intune, SCCM)</summary>
         <p>Distribuer <a href="{{ url_for('agent_file', name='loco-client.msi') }}">loco-client.msi</a>{% if msi_error %} <span class="faint">({{ msi_error }})</span>{% endif %} et créer, par GPO (préférences de registre), sous <code>HKLM\SOFTWARE\Policies\loco\Client</code> les valeurs chaîne :</p>
         <p><code>Server</code> = <code>{{ https_url }}</code><br><code>Key</code> = <code>{{ enroll_key }}</code><br><code>CaSha256</code> = <code>{{ ca_sha256 or '(vide : certificat public)' }}</code></p>

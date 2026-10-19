@@ -347,6 +347,20 @@ class TestInstallers(FleetTest):
             ps1 = self.admin.c.get(f"/agent/windows.ps1?key={Agent.key()}").get_data(as_text=True)
             self.assertIn("pas d''accès à GitHub", ps1)
 
+    def test_enroll_dialog_offers_the_msi_with_its_install_command(self):
+        sha = "e" * 64
+        with mock.patch.object(fleet, "agent_msi", return_value=("/nulle/part.msi", sha)), \
+                mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
+            page = self.admin.c.get("/parc").get_data(as_text=True)
+        self.assertIn("Télécharger le MSI", page)
+        self.assertIn('href="/agent/files/loco-client.msi" download', page)
+        self.assertIn("https://repo.test:8443/agent/files/loco-client.msi", page)   # depuis le poste, en HTTPS
+        self.assertIn("http://repo.test:8088/agent/files/loco-client.msi", page)    # ou en HTTP
+        self.assertIn(f"SHA-256 {sha[:12]}", page)
+        command = (f'msiexec /i &#34;%USERPROFILE%\\Downloads\\loco-client.msi&#34; SERVER=https://repo.test:8443 '
+                   f'KEY={Agent.key()} CA_SHA256={CA_SHA256} /qb')
+        self.assertIn(command, page)
+
     def test_outdated_windows_agents_make_the_server_fetch_its_msi(self):
         """Après la mise à jour du serveur, le MSI de sa version est récupéré pour les agents Windows en retard."""
         old = dict(WINDOWS, agent_version="2.9.0")

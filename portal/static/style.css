@@ -699,3 +699,6 @@ td .sub.sans { font-family: var(--sans); }
   .nav .nav-icon { width: 16px; height: 16px; }
   .nav .nav-chevron { width: 10px; height: 10px; }
 }
+.msi-direct { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.msi-direct > * + * { margin-top: 8px; }
+.msi-direct .hint a { overflow-wrap: anywhere; }

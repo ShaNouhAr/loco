@@ -637,9 +637,14 @@ def _rows(apps=None):
 
 def _commands(key):
     base, http = config.HTTPS_URL, config.HTTP_URL
+    ca = _ca_fingerprint()
     return {
         "windows": f"irm '{base}/agent/windows.ps1?key={key}' | iex",
         "windows_http": f"irm '{http}/agent/windows.ps1?key={key}' | iex" if http else "",
+        # MSI téléchargé à la main : sans ces paramètres, il installe le service sans l'inscrire.
+        "msiexec": (f'msiexec /i "%USERPROFILE%\\Downloads\\loco-client.msi" SERVER={base} KEY={key}'
+                    + (f" CA_SHA256={ca}" if ca else "") + " /qb"),
+        "msi_urls": [u + "/agent/files/loco-client.msi" for u in (base, http) if u],
         "linux": f"curl -fsSL '{base}/agent/linux.sh?key={key}' | sudo sh",
         "linux_http": f"curl -fsSL '{http}/agent/linux.sh?key={key}' | sudo sh" if http else "",
     }
@@ -701,7 +706,8 @@ def fleet():
                            to_update=sum(1 for r in rows if r["needs_update"]),
                            commands=_commands(key) if key else {}, checkin=CHECKIN, enroll_key=key,
                            ca_sha256=_ca_fingerprint() if key else "", red_threshold=red_threshold(),
-                           msi_error="" if msi else "téléchargé depuis GitHub à la première installation")
+                           msi_error="" if msi else "téléchargé depuis GitHub à la première installation",
+                           msi_sha256=msi_state if msi else "", msi_version=config.VERSION)
 
 
 @app.route("/parc/reglages")

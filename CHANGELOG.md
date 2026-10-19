@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.13.3 — 2026-10-19
+
+- **MSI de l'agent Windows en téléchargement direct** dans la fenêtre *Ajouter un poste*, juste après les commandes : bouton « Télécharger le MSI » (version et empreinte SHA-256 affichées), liens directs à ouvrir depuis le navigateur du poste (HTTPS et, s'il est activé, HTTP sans avertissement de certificat), puis la commande `msiexec` prête à copier qui installe et inscrit le poste avec l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité. Un simple double-clic sur le MSI installe le service sans l'inscrire : c'est indiqué.
+
 ## 2.13.2 — 2026-10-19
 
 - **Le bureau à distance remplit la fenêtre** : en mode automatique, l'agent Windows choisit parmi les résolutions du pilote celle qui remplit le mieux la zone d'affichage (rapport d'image conservé), puis la plus proche de 100 %. Une fenêtre très large obtient par exemple 2560 × 1080 (21:9) au lieu de 1280 × 720 avec de grandes bandes noires.
