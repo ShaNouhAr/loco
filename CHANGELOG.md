@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.20.1 — 2026-10-20
+
+- **Disponibilité et mises à jour distinctes dans Mon parc** : près du nom du poste, une pastille verte indique un contact de l’agent dans les six dernières minutes (trois cycles habituels) et une rouge l’absence de contact récent. Le voyant du volume de mises à jour se trouve désormais dans la colonne *Mises à jour*. La fiche reprend la disponibilité près du nom et le bilan des mises à jour près des compteurs. Le passage hors ligne est pris en compte par le rafraîchissement automatique, même sans nouvelle activité du poste.
+
 ## 2.20.0 — 2026-10-20
 
 - **Réseau en direct sur la vue d'ensemble** : débits entrant et sortant du serveur, relevés toutes les 2 secondes sur l'interface de la route par défaut (à défaut, les interfaces physiques), avec le pic et la courbe des 2 dernières minutes (échelle commune aux deux sens, valeur d'un instant au survol). Le débit est calculé dans le navigateur entre deux relevés des compteurs : rien n'est mesuré ni conservé quand la page n'est pas affichée. Linux (`/proc/net/dev`) et serveur Windows natif (compteurs 64 bits de l'API `GetIfEntry2`, vérifiés en CI contre `Get-NetAdapterStatistics`).

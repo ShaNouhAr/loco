@@ -33,6 +33,7 @@ from .db import db
 from .util import back
 
 CHECKIN = 120                   # secondes entre deux contacts de l'agent
+ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles avant de déclarer le poste hors ligne
 SCAN_HOURS = 6                  # inventaire complet des mises à jour (et après chaque action)
 STALE_DAYS = 1                  # sans contact depuis : orange
 SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
@@ -173,6 +174,18 @@ def app_updates(dev, apps=None):
 def last_result(dev_id):
     return db().execute("SELECT * FROM device_commands WHERE device_id=? AND state IN ('success', 'failed') "
                         "AND action != 'scan' ORDER BY id DESC LIMIT 1", (dev_id,)).fetchone()
+
+
+def presence(dev):
+    """Disponibilité d'après les contacts de l'agent, indépendante de son inventaire et des mises à jour."""
+    seen = _ago(dev["last_seen"])
+    online = (dev["state"] != "removed" and seen is not None
+              and datetime.timedelta(0) <= seen <= datetime.timedelta(seconds=ONLINE_SECONDS))
+    label = "En ligne" if online else "Hors ligne"
+    detail = (f"Contact de l'agent dans les {ONLINE_SECONDS // 60} dernières minutes" if online
+              else f"Aucun contact de l'agent depuis {ONLINE_SECONDS // 60} minutes"
+              if seen is not None else "Aucun contact de l'agent enregistré")
+    return {"online": online, "label": label, "detail": detail}
 
 
 def status(dev, apps=None):
@@ -770,7 +783,7 @@ def _enrich(rows):
         d = r["d"]
         own = (d["addresses"] or "").split()
         updates = inventory(d).get("updates") or []
-        r.update(label=status_label(d, r["color"]), address=own[0] if own else (d["ip"] or ""),
+        r.update(label=status_label(d, r["color"]), presence=presence(d), address=own[0] if own else (d["ip"] or ""),
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
                  system=d["updates"], security=sum(1 for u in updates if u.get("security")),
                  linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
@@ -802,7 +815,7 @@ def fleet():
         rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
     rows = _enrich(rows)
     signature = hashlib.sha256(json.dumps([[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
-                                            len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
+                                            r["presence"]["online"], len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     key = enroll_key() if can("fleet.enroll") else ""
@@ -811,7 +824,7 @@ def fleet():
                            counts=counts, systems=systems, total=total, state=state, system=system,
                            signature=signature, families=FAMILIES, actions=ACTIONS,
                            to_update=sum(1 for r in rows if r["needs_update"]),
-                           commands=_commands(key) if key else {}, checkin=CHECKIN, enroll_key=key,
+                           commands=_commands(key) if key else {}, checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, enroll_key=key,
                            ca_sha256=_ca_fingerprint() if key else "", red_threshold=red_threshold(),
                            msi_error="" if msi else "téléchargé depuis GitHub à la première installation",
                            msi_sha256=msi_state if msi else "", msi_version=config.VERSION)
@@ -890,9 +903,10 @@ def fleet_device(dev_id):
     dev = _get(dev_id)
     inv = inventory(dev)
     color, reason = status(dev)
+    availability = presence(dev)
     history = db().execute("SELECT * FROM device_commands WHERE device_id=? ORDER BY id DESC LIMIT 30",
                            (dev_id,)).fetchall()
-    signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"],
+    signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"], availability["online"],
                                            [(c["id"], c["state"], c["progress"]) for c in history]]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
@@ -918,7 +932,7 @@ def fleet_device(dev_id):
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
-                           label=status_label(dev, color))
+                           label=status_label(dev, color), presence=availability)
 
 
 @app.route("/parc/<int:dev_id>/action", methods=["POST"])

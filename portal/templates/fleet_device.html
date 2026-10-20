@@ -15,8 +15,7 @@
 <div class="device-head">
   <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">Mon parc</a></p>
-    <h1><span>{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ cls }}" title="{{ reason }}">{{ label }}</span></h1>
-    {% if reason|replace('poste ', '') != label %}<p class="device-reason {{ cls }}">{{ reason|capitalize }}.</p>{% endif %}
+    <h1><span>{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
       <span class="mono">{{ (dev.addresses or dev.ip or '—').split(' ')[0] }}</span>
@@ -62,6 +61,11 @@
   {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ action_label(c)|lower }} ({% set live = progress_view(c.progress) if c.state == 'running' else None %}{{ live.label|lower if live else ('transmise à l\'agent' if c.state != 'queued' else 'au prochain contact') }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
 
+  <div class="device-update-state">
+    <span class="small muted">Mises à jour</span>
+    <span class="pill {{ cls }}" title="{{ reason }}">{{ label|capitalize }}</span>
+    {% if reason|replace('poste ', '') != label %}<span class="small muted">{{ reason|capitalize }}.</span>{% endif %}
+  </div>
   <div class="metrics">
     <div class="metric">
       <div class="k">Mises à jour système</div>

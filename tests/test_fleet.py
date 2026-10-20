@@ -1,6 +1,7 @@
 """Parc de postes : inscription de l'agent, identité indépendante de l'IP, voyants, actions, catalogue winget."""
 
 import base64
+import datetime
 import hashlib
 import json
 import os
@@ -134,6 +135,51 @@ class TestEnrollment(FleetTest):
 
 
 class TestStatus(FleetTest):
+    def test_presence_uses_recent_contacts_independently_of_inventory(self):
+        now = datetime.datetime.now()
+        for age, online in ((0, True), (120, True), (360, True), (361, False), (86400, False), (-86400, False)):
+            with self.subTest(age=age), mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=age)):
+                # Un agent qui attend son premier inventaire ou dont le retrait est demandé peut être en ligne.
+                for state in ("active", "removing"):
+                    self.assertEqual(fleet.presence({"state": state, "last_seen": str(now)})["online"], online)
+        for missing in ("", "invalide"):
+            self.assertFalse(fleet.presence({"state": "active", "last_seen": missing})["online"])
+
+    def test_fleet_separates_presence_from_update_volume_and_refreshes_when_offline(self):
+        a = Agent(WINDOWS, "192.168.43.50")
+        a.enroll()
+        a.checkin({"updates": [{"name": f"KB{i}"} for i in range(10)]})
+        path = f"/parc/{device(a.uid)['id']}"
+        headers = {"X-Requested-With": "fetch"}
+        with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=120)):
+            page = self.admin.c.get("/parc").get_data(as_text=True)
+            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
+            self.assertIn('aria-label="En ligne"', cells[0])
+            self.assertIn('class="st ok device-availability"', cells[0])
+            self.assertIn('class="st err"', cells[2])
+            self.assertIn('aria-label="Mises à jour : à traiter"', cells[2])
+            detail = self.admin.c.get(path).get_data(as_text=True)
+            self.assertIn('device-availability"', detail)
+            self.assertIn('>En ligne</span>', detail)
+            self.assertIn('class="device-update-state"', detail)
+            self.assertIn('>À traiter</span>', detail)
+            signatures = [self.admin.c.get(p, headers=headers).json["signature"] for p in ("/parc", path)]
+        # Sans nouvel événement ni nouvel inventaire, le franchissement du délai doit rafraîchir les deux pages.
+        with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
+            page = self.admin.c.get("/parc").get_data(as_text=True)
+            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
+            self.assertIn('aria-label="Hors ligne"', cells[0])
+            self.assertIn('class="st err device-availability"', cells[0])
+            self.assertIn('aria-label="Mises à jour : à traiter"', cells[2])
+            for p, previous in zip(("/parc", path), signatures):
+                self.assertNotEqual(self.admin.c.get(p, headers=headers).json["signature"], previous)
+        a.checkin({"updates": []})
+        with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
+            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', self.admin.c.get("/parc").get_data(as_text=True), re.S)
+            self.assertIn('aria-label="Hors ligne"', cells[0])
+            self.assertIn('aria-label="Mises à jour : à jour"', cells[2])
+            self.assertIn('class="st ok"', cells[2])
+
     def test_indicator_matches_the_fleet_and_marks_unknown_inventory(self):
         a = Agent(WINDOWS, "192.168.43.50")
         a.enroll()

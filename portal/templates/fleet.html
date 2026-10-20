@@ -62,11 +62,14 @@
         <tbody>
         {% for r in rows %}{% set d = r.d %}
           <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
-            <td><span class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" title="{{ r.label }} : {{ r.reason }}"></span>
+            <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ r.presence.label }} · {{ r.presence.detail }} · dernier contact : {{ r.seen }}"></span>
               <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
               <span class="sub">{{ d.os_name or families.get(d.os_family, '') }}</span></td>
             <td class="nowrap" data-label="Adresse"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="Adresse par laquelle loco voit le poste (routeur ou NAT)">via {{ r.via }}</span>{% endif %}</td>
             <td data-label="Mises à jour">
+              <span class="fleet-update-state">
+              <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" role="img" aria-label="Mises à jour : {{ r.label }}" title="{{ r.label }} : {{ r.reason }}"></span>
+              <span>
               {% if r.color == 'grey' %}<span class="muted">{{ r.label }}</span>
               {% elif not r.system and not r.apps %}<span class="muted">à jour</span>
               {% else %}
@@ -75,6 +78,8 @@
                 {% if r.security %}<span class="count err">dont {{ r.security }} sécurité</span>{% endif %}
               {% endif %}
               {% if d.reboot_required %}<span class="sub warn-text">redémarrage nécessaire</span>{% endif %}
+              </span>
+              </span>
             </td>
             <td class="hide-sm" data-label="Groupes">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
             <td class="muted nowrap hide-sm" data-label="Contact" title="{{ d.last_seen }}">{{ r.seen }}</td>
@@ -98,7 +103,7 @@
     {% else %}
     <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant{% if can('fleet.enroll') %} : <button type="button" class="linkbtn" data-open="#enroll">ajoutez-en un</button>{% endif %}.{% endif %}</div>
     {% endif %}
-    <div class="panel-f">Pastille : vert sans mise à jour, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} (système, Flatpak et catalogue), gris si l'état est inconnu. Contact toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
+    <div class="panel-f">Près du nom : vert si l'agent a contacté loco dans les {{ online_minutes }} dernières minutes, rouge sinon.<br>Mises à jour : vert sans mise à jour, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} (système, Flatpak et catalogue), gris si l'état est inconnu. Contact toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
   </section>
 </div>
 

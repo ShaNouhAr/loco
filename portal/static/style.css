@@ -577,9 +577,7 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .device-id > .small a:hover { color: var(--text); }
 .device-actions { align-self: flex-end; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .device-actions form { display: inline-flex; }
-.device-reason { margin-top: 6px; font-size: 13.5px; color: var(--text-2); }
-.device-reason.err { color: var(--err); }
-.device-reason.warn { color: var(--text-2); }
+.device-update-state { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .device-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 6px; color: var(--text-2); font-size: 13.5px; }
 .device-meta .mono { font-size: 12.5px; }
 .device-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -593,6 +591,7 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .fleet-table td { vertical-align: top; }
 .fleet-table td:first-child .st { margin-right: 4px; }
 .fleet-table .host { font-weight: 500; color: var(--text); }
+.fleet-update-state { display: inline-flex; align-items: baseline; gap: 8px; }
 .head-option { display: inline-flex; align-items: center; gap: 8px; height: var(--h); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; color: var(--text-2); cursor: pointer; }
 .head-option:hover { color: var(--text); background: var(--bg-2); }
 
