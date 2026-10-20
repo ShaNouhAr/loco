@@ -243,8 +243,8 @@ def login():
             if directory:
                 session["directory"] = directory
             db().execute("DELETE FROM login_failures WHERE username=?", (username,))
-            db().execute("UPDATE users SET last_login=? WHERE id=?",
-                         (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), row["id"]))
+            db().execute("UPDATE users SET last_login=?, last_ip=? WHERE id=?",
+                         (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ip, row["id"]))
             db().commit()
             g.user = row
             audit("sso.connexion" if directory else "connexion")

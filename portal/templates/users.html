@@ -40,7 +40,7 @@
             {% else %}<span class="role">{{ roles.get(u.role, 'Profil indisponible') }}</span>{% endif %}
             {% if u.disabled and not u.pending %}<span class="st err small">désactivé</span>{% elif u.must_change %}<span class="st warn small">mot de passe temporaire</span>{% endif %}
           </td>
-          <td class="muted nowrap">{{ u.last_login|date_fr if u.last_login else '—' }}</td>
+          <td>{% if u.last_login %}{{ u.last_login|date_fr }}{% if u.last_ip %}<span class="sub nowrap">depuis <span class="mono">{{ u.last_ip }}</span></span>{% endif %}{% if can('audit.view') %}<a class="sub nowrap" href="{{ url_for('journal', compte=u.username, categorie='connexions') }}" title="Connexions de {{ u.username }} dans le journal">historique</a>{% endif %}{% else %}<span class="faint">jamais</span>{% endif %}</td>
           <td class="right">{% if not me and manageable %}<div class="acts">
             {% if can('users.reset') and u.auth_source in ('local', 'sso') %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="{{ 'Donner un mot de passe local à ' ~ u.username ~ ' ?' if u.auth_source == 'sso' else 'Réinitialiser le mot de passe de ' ~ u.username ~ ' ?' }}" data-confirm-text="{{ 'Le compte devient un compte local avec un mot de passe temporaire à changer à la première connexion.' if u.auth_source == 'sso' else 'Ses connexions seront fermées et ses commandes non transmises aux agents annulées.' }}" data-confirm-ok="{{ 'Donner un mot de passe' if u.auth_source == 'sso' else 'Réinitialiser' }}">
               <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ 'Mot de passe local' if u.auth_source == 'sso' else 'Réinitialiser' }}</button>

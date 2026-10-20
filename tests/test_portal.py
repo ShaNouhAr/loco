@@ -208,5 +208,35 @@ class TestClients(unittest.TestCase):
         self.assertIn('loco_windows_apps{status="ready"}', body)
 
 
+class TestLastLoginAddress(unittest.TestCase):
+    """Comptes : adresse de la dernière connexion, enregistrée à chaque connexion et reprise du journal pour l'existant."""
+
+    def test_accounts_page_shows_where_each_account_last_logged_in(self):
+        reset_failures()
+        b = Browser()
+        b.c.post("/login", data={"csrf": b.token(), "username": "admin", "password": ADMIN_PW},
+                 headers={"X-Forwarded-For": "192.168.43.77"})
+        with connect() as conn:
+            self.assertEqual(conn.execute("SELECT last_ip FROM users WHERE username='admin'").fetchone()[0], "192.168.43.77")
+        page = b.c.get("/comptes").get_data(as_text=True)
+        self.assertIn('depuis <span class="mono">192.168.43.77</span>', page)
+        self.assertIn(">historique</a>", page)
+        self.assertRegex(page, r'href="/journal\?[^"]*compte=admin')
+
+    def test_existing_accounts_take_the_address_of_their_last_login_from_the_journal(self):
+        import sqlite3
+        from loco.db import MIGRATIONS
+        script = next(m for m in MIGRATIONS if "last_ip" in m)
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT);"
+                           "CREATE TABLE audit (id INTEGER PRIMARY KEY, username TEXT, ip TEXT, action TEXT);"
+                           "INSERT INTO users (username) VALUES ('marie'), ('jamais');"
+                           "INSERT INTO audit (username, ip, action) VALUES ('marie', '192.168.43.20', 'connexion'),"
+                           " ('marie', '192.168.43.21', 'sso.connexion'), ('marie', '192.168.43.99', 'comptes.ajout');")
+        conn.executescript(script)
+        self.assertEqual(dict(conn.execute("SELECT username, last_ip FROM users")), {"marie": "192.168.43.21", "jamais": ""})
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

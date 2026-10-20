@@ -341,6 +341,13 @@ MIGRATIONS = [
         updated_at TEXT NOT NULL DEFAULT ''
     );
     """,
+    # 15 : adresse de la dernière connexion de chaque compte (page Comptes), reprise du journal pour l'existant ;
+    # le journal ne garde ses événements que quelques semaines.
+    """
+    ALTER TABLE users ADD COLUMN last_ip TEXT NOT NULL DEFAULT '';
+    UPDATE users SET last_ip = COALESCE((SELECT ip FROM audit WHERE audit.username = users.username
+                                         AND action IN ('connexion', 'sso.connexion') ORDER BY id DESC LIMIT 1), '');
+    """,
 ]
 
 

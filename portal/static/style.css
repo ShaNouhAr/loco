@@ -630,6 +630,8 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .journal-table .day-row th { padding-top: 16px; font-size: 13px; font-weight: 600; color: var(--text); background: none; }
 .journal-table .detail-cell { min-width: 240px; overflow-wrap: anywhere; color: var(--text-2); }
 .user-cell { min-width: 190px; max-width: 300px; overflow-wrap: anywhere; }
+#users-table .st { white-space: normal; }
+#users-table .acts { flex-direction: column; align-items: flex-end; gap: 6px; }
 td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; color: var(--text-2); }
 @media (max-width: 720px) { td .sub.only-sm { display: block; margin-top: 2px; } .journal-table .nowrap { white-space: normal; } }
 

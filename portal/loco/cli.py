@@ -51,7 +51,8 @@ def user_command(args):
             for r in conn.execute("SELECT * FROM users ORDER BY username"):
                 state = "désactivé" if r["disabled"] else ("à changer" if r["must_change"] else "actif")
                 print(f"{r['username']:<24} {labels.get(r['role'], r['role']):<16} {state:<10} "
-                      f"dernière connexion : {r['last_login'] or '—'}")
+                      f"dernière connexion : {r['last_login'] or '—'}"
+                      + (f" depuis {r['last_ip']}" if r["last_ip"] else ""))
             return
         cmd, name = args[0], (args[1] if len(args) > 1 else "")
         if not name:
