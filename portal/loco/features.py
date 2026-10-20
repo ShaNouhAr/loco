@@ -16,6 +16,7 @@ FEATURES = {
     "rpm": ("Paquets RPM", "Cache et dépôts locaux RHEL, Rocky et AlmaLinux.", (), "RPM_ENABLED"),
     "flatpak": ("Flatpak", "Cache Flathub et applications Flatpak internes.", (), "FLATPAK_ENABLED"),
     "wu": ("Cache Windows Update", "Mises à jour Windows téléchargées une fois puis servies en local.", (), "WU_ENABLED"),
+    "wu_proxy": ("Proxy Windows Update (sans DNS)", "Dirige automatiquement les postes Windows gérés vers le cache par leur proxy WinHTTP (Squid), sans redirection DNS. L'agent pose et retire le réglage.", ("wu", "fleet"), ""),
     "fleet": ("Mon parc et agents", "Postes équipés de l'agent : inventaire, mises à jour, actions, groupes de machines.", (), ""),
     "windows_apps": ("Logiciels Windows", "Catalogue local, centre de logiciels, groupes de logiciels et déploiements.", (), ""),
     "remote": ("Accès distant", "Terminal et bureau à distance (console noVNC) par l'agent.", ("fleet",), ""),

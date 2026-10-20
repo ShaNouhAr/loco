@@ -130,7 +130,6 @@ ENDPOINTS = {
     "software_icon": ("windows.view", "store.view", "fleet.view"),
     "windows_update": "wu.view", "api_wu": "wu.view", "windows_update_dns": "wu.view",
     "windows_update_domains": "wu.configure",
-    "windows_update_proxy": "wu.configure",
     "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_action": "fleet.view",
     "fleet_cancel_command": "fleet.view",
     "fleet_update_all": "fleet.bulk_update", "fleet_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",

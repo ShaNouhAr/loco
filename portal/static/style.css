@@ -961,6 +961,7 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .files-nav { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .files-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .files-tools label.btn { cursor: pointer; }
+.files [hidden] { display: none; }   /* l'attribut hidden l'emporte sur l'affichage des boutons (bouton « Coller » masqué) */
 .files-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 13.5px; }
 .files-crumb { border: 0; background: none; padding: 3px 6px; border-radius: var(--r-sm); color: var(--text-2); font: 13.5px var(--sans); cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .files-crumb:hover { color: var(--text); background: var(--bg-2); }

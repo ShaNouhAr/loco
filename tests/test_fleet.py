@@ -736,19 +736,18 @@ class TestWuProxy(FleetTest):
         self.win = Agent(WINDOWS, "192.168.43.50"); self.win.enroll()
         self.lin = Agent(LINUX, "192.168.43.60"); self.lin.enroll()
 
-    def test_proxy_directive_pushed_to_windows_only_when_enabled(self):
-        # Par défaut : réglage absent → directive présente mais fausse (l'agent retire ce qu'il aurait posé).
-        self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
-        self.assertNotIn("wu_proxy", self.lin.checkin().get_json())            # Linux : pas de WinHTTP
-        # Activation par le portail.
-        self.assertEqual(self.admin.post("/windows-update/proxy", {"push": "1"}, page="/windows-update").status_code, 302)
+    def test_proxy_directive_on_by_default_off_when_feature_disabled(self):
+        # Par défaut la fonctionnalité « Proxy Windows Update » est active → directive poussée aux postes Windows.
         directive = self.win.checkin().get_json()["wu_proxy"]
         self.assertEqual(directive["port"], int(config.WU_PROXY_PORT))
         self.assertTrue(directive["host"])
         self.assertIn("<local>", directive["bypass"])
-        self.assertNotIn("wu_proxy", self.lin.checkin().get_json())
-        # Désactivation.
-        self.admin.post("/windows-update/proxy", {"push": ""}, page="/windows-update")
+        self.assertNotIn("wu_proxy", self.lin.checkin().get_json())            # Linux : pas de WinHTTP
+        # Fonctionnalité coupée par le compte admin → directive fausse (l'agent retire le proxy).
+        from loco import features
+        with transaction() as conn:
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (features.SETTING, json.dumps(["wu_proxy"])))
         self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
 
     def test_pages_show_the_manual_proxy_command(self):

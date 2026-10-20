@@ -230,24 +230,12 @@ def _live():
 @app.route("/windows-update")
 @login_required
 def windows_update():
-    from .fleet import setting
+    from . import features
     wu, chart = _live()
     return render_template("windows_update.html", domains=read_wu_domains(), wu=wu, chart=chart,
                            nginx=service_active("nginx"), proxy_active=service_active("squid"),
-                           proxy_push=setting("wu_proxy_push") == "1",
+                           proxy_on="wu_proxy" not in features.disabled(),
                            proxy_host=config.HOST, proxy_port=config.WU_PROXY_PORT)
-
-
-@app.route("/windows-update/proxy", methods=["POST"])
-@login_required
-def windows_update_proxy():
-    from .fleet import set_setting
-    on = request.form.get("push") == "1"
-    set_setting("wu_proxy_push", "1" if on else "")
-    audit("windows_update.proxy", "activé" if on else "désactivé")
-    flash("Les postes Windows seront dirigés vers le cache par proxy, sans DNS, au prochain contact de leur agent."
-          if on else "Le proxy ne sera plus poussé ; les agents le retirent au prochain contact.", "ok")
-    return back("windows_update")
 
 
 @app.route("/api/wu")

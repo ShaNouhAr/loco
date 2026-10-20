@@ -98,8 +98,7 @@ namespace Loco
                 bool ready; try { ready = d.IsReady; } catch (Exception) { ready = false; }
                 if (ready) roots.Add(new Dictionary<string, object> { { "name", d.Name + (string.IsNullOrEmpty(d.VolumeLabel) ? "" : " (" + d.VolumeLabel + ")") }, { "path", d.RootDirectory.FullName } });
             }
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrEmpty(home) || !Directory.Exists(home)) home = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+            string home = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";   // on démarre à la racine du disque système (C:\)
             reply["os"] = "windows"; reply["sep"] = "\\"; reply["home"] = home;
             reply["user"] = Environment.UserName; reply["host"] = Environment.MachineName; reply["roots"] = roots;
             return Empty;

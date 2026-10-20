@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.26.0 — 2026-10-20
+
+- **Proxy Windows Update activé par défaut**, et réglable dans *Administration › Fonctionnalités* (« Proxy Windows Update (sans DNS) »). Les postes Windows gérés sont dirigés vers le cache par leur proxy WinHTTP dès l'installation, sans aucune redirection DNS ; couper la fonctionnalité fait retirer le proxy par les agents. La page *Windows Update* montre l'état au lieu d'un interrupteur dédié.
+- **Gestionnaire de fichiers** : correction du bouton vide (« Coller ») qui apparaissait dans la barre, et démarrage à la **racine du disque système (`C:\`)** sous Windows (toujours `/root` sous Linux, l'agent agissant en root/SYSTEM avec tous les droits).
+
 ## 2.25.0 — 2026-10-20
 
 - **Cache Windows Update par proxy, sans DNS** : loco embarque un proxy-cache (Squid) atteint par le réglage **proxy WinHTTP** des postes Windows. Nouvelle alternative à la redirection DNS : sur la page *Windows Update*, un interrupteur « Diriger les postes gérés » fait régler par l'agent loco le proxy WinHTTP de chaque poste Windows vers loco (par poste, réversible, l'agent le retire s'il n'arrive plus à joindre loco ou au retrait de l'agent) ; aucune zone DNS à éditer. Le proxy met en cache les mêmes fichiers immuables (HTTP) et relaie le HTTPS sans le déchiffrer — même couverture que la voie DNS. La commande manuelle (`netsh winhttp set proxy …`) est aussi proposée sur les pages *Windows Update* et *Enrôlement*. Le service est installé avec le cache Windows Update (option `--wu-proxy-port`, 3128 par défaut) sur Debian/Ubuntu, Rocky/AlmaLinux, Alpine, l'ISO et le conteneur, et apparaît dans la page *Système*. Validé en réel : Windows Update d'un poste passe par le proxy (recherche et téléchargement), fichier WU mis en cache (MISS puis HIT), et installation complète de loco amenant Squid actif.

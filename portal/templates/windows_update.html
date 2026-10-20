@@ -72,16 +72,10 @@
           <a class="btn sm" href="{{ url_for('windows_update_dns') }}">Script DNS Active Directory</a>
         </div>
         <div>
-          <h3 class="pick-title">Par proxy, sans DNS <span class="badge-ro">via l'agent</span></h3>
+          <h3 class="pick-title">Par proxy, sans DNS <span class="badge-ro">via l'agent</span> <span class="st ok">activé par défaut</span></h3>
           <p class="small muted">L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.</p>
-          {% if can('wu.configure') %}
-          <form method="post" action="{{ url_for('windows_update_proxy') }}" class="row">
-            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="push" value="{{ '' if proxy_push else '1' }}">
-            <button class="btn sm {{ '' if proxy_push else 'primary' }}">{{ 'Ne plus diriger' if proxy_push else 'Diriger les postes gérés' }}</button>
-            <span class="st {{ 'ok' if proxy_push else '' }}">{{ 'Actif : agents dirigés vers le proxy' if proxy_push else 'Inactif' }}</span>
-          </form>
-          {% else %}<p class="small"><span class="st {{ 'ok' if proxy_push else '' }}">{{ 'Actif' if proxy_push else 'Inactif' }}</span></p>{% endif %}
-          {% if proxy_push and not proxy_active %}<p class="hint">Le service proxy (squid) n'est pas actif sur loco{% if can('system.view') %} — voir <a href="{{ url_for('system') }}">Système</a>{% endif %}.</p>{% endif %}
+          <p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ 'Actif : les postes gérés sont dirigés vers le proxy' if proxy_on else 'Désactivé dans Fonctionnalités' }}</span></p>
+          <p class="hint">Activé par défaut ; se coupe {% if is_super_admin() %}dans <a href="{{ url_for('features') }}">Administration › Fonctionnalités</a>{% else %}dans Administration › Fonctionnalités{% endif %} (« Proxy Windows Update »).{% if proxy_on and not proxy_active %} Le service proxy (squid) n'est pas actif{% if can('system.view') %} — voir <a href="{{ url_for('system') }}">Système</a>{% endif %}.{% endif %} Les postes doivent pouvoir joindre <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span>.</p>
           <p class="small muted">Manuellement sur un poste (PowerShell administrateur) :</p>
           {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
         </div>

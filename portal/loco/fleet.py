@@ -80,8 +80,8 @@ _PROXY_BYPASS = ("<local>;10.*;192.168.*;169.254.*;"
 
 def wu_proxy_directive():
     """Réglage proxy WinHTTP à pousser aux postes Windows (cache WU sans DNS), ou False pour le retirer.
-    Piloté par le réglage du portail et désactivé si la fonction Windows Update est coupée."""
-    if setting("wu_proxy_push") != "1" or "windows_update" in features.disabled(db()):
+    Actif par défaut ; coupé par la fonctionnalité « Proxy Windows Update » (ou le cache WU / le parc)."""
+    if "wu_proxy" in features.disabled(db()):
         return False
     return {"host": config.HOST, "port": int(config.WU_PROXY_PORT), "bypass": config.HOST + ";" + _PROXY_BYPASS}
 
