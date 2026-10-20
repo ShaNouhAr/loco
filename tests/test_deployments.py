@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 import time
 from unittest import mock
+from urllib.parse import urlsplit
 
 import test_portal as fixture
 from test_fleet import Agent, FleetTest, WINDOWS, LINUX, device
@@ -322,7 +323,9 @@ class TestDeployments(FleetTest):
                          ('/windows-apps/deployer?app=x', '/parc/deploiements/nouveau?app=x'),
                          ('/windows-apps/deploiements/' + detail.rsplit('/', 1)[-1], detail)):
             response = self.admin.c.get(old)
-            self.assertEqual((response.status_code, response.location), (308, new))
+            where = urlsplit(response.location)                                  # absolue ou relative selon Werkzeug
+            target = where.path + ('?' + where.query if where.query else '')
+            self.assertEqual((response.status_code, target), (308, new))
 
     def test_live_install_steps_are_shown_while_the_agent_works(self):
         path = self.preview()
