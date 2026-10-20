@@ -121,30 +121,12 @@ def script_compose(script_id):
                            device_groups=groups.listing("device"), selected={int(v) for v in request.args.getlist("device") if v.isdigit()})
 
 
-@app.route("/parc/scripts/<int:script_id>/executer", methods=["POST"])
-@login_required
-def script_run_start(script_id):
-    conn = lock_access("scripts.run")
-    script = conn.execute("SELECT * FROM scripts WHERE id=?", (script_id,)).fetchone()
-    if script is None:
-        abort(404)
-    if request.form.get("version") != str(script["version"]):
-        abort(409, "Le script a été modifié entre-temps : vérifiez-le avant de l'exécuter.")
-    try:
-        run_after = fleet._schedule_time(request.form.get("run_after"))
-    except ValueError as e:
-        abort(400, str(e))
-    ids = set(groups.identifiers(request.form.getlist("device"), MAX_TARGETS))
-    for gid in groups.identifiers(request.form.getlist("device_group")):
-        ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (gid,))}
-    devices = [d for d in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids)) if d]
-    targets = [d for d in devices if _compatible(d, script["platform"])]
-    if not targets or len(targets) > MAX_TARGETS:
-        abort(400, "Choisissez au moins un poste compatible avec ce script.")
-    now, user = fleet._now(), g.user["username"]
+def start_run(conn, script, targets, user, run_after=""):
+    """Exécution figée (contenu et empreinte) envoyée aux postes cibles ; renvoie son identifiant."""
+    now = fleet._now()
     sha = hashlib.sha256(script["content"].encode()).hexdigest()
     run_id = conn.execute("INSERT INTO script_runs (script_id, name, version, platform, content, sha256, created_by, created_at) "
-                          "VALUES (?,?,?,?,?,?,?,?)", (script_id, script["name"], script["version"], script["platform"],
+                          "VALUES (?,?,?,?,?,?,?,?)", (script["id"], script["name"], script["version"], script["platform"],
                                                         script["content"], sha, user, now)).lastrowid
     for dev in targets:
         command_id = conn.execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by, run_after) "
@@ -152,16 +134,44 @@ def script_run_start(script_id):
                                   (dev["id"], json.dumps({"run_id": run_id}), now, user, run_after)).lastrowid
         conn.execute("INSERT INTO script_run_targets (run_id, device_id, hostname, command_id) VALUES (?,?,?,?)",
                      (run_id, dev["id"], dev["hostname"] or dev["uid"][:8], command_id))
-    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)"
-                               f"{' (planifié pour ' + run_after + ')' if run_after else ''}", commit=False)
+    return run_id
+
+
+@app.route("/parc/scripts/<int:script_id>/executer", methods=["POST"])
+@login_required
+def script_run_start(script_id):
+    from . import schedules
+    conn = lock_access("scripts.run")
+    script = conn.execute("SELECT * FROM scripts WHERE id=?", (script_id,)).fetchone()
+    if script is None:
+        abort(404)
+    if request.form.get("version") != str(script["version"]):
+        abort(409, "Le script a été modifié entre-temps : vérifiez-le avant de l'exécuter.")
+    device_ids = groups.identifiers(request.form.getlist("device"), MAX_TARGETS)
+    group_ids = groups.identifiers(request.form.getlist("device_group"))
+    ids = set(device_ids)
+    for gid in group_ids:
+        ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (gid,))}
+    devices = [d for d in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids)) if d]
+    targets = [d for d in devices if _compatible(d, script["platform"])]
+    if not targets or len(targets) > MAX_TARGETS:
+        abort(400, "Choisissez au moins un poste compatible avec ce script.")
+    if request.form.get("when") == "schedule":
+        # Planifié : les cibles restent dynamiques (membres actuels des groupes à chaque occurrence).
+        try:
+            sched_id = schedules.create(conn, "run-script", {"script_id": script["id"], "version": script["version"]},
+                                        {"devices": device_ids, "groups": group_ids}, request.form)
+        except ValueError as e:
+            abort(400, str(e))
+        conn.commit()
+        flash(f"Planification créée : {script['name']}.", "ok")
+        return back("schedules", _anchor=f"planif-{sched_id}")
+    run_id = start_run(conn, script, targets, g.user["username"])
+    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)", commit=False)
     conn.commit()
     skipped = len(devices) - len(targets)
-    if run_after:
-        flash(f"Script planifié sur {len(targets)} poste(s) pour le {run_after} (heure du serveur)"
-              + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
-    else:
-        flash(f"Script envoyé à {len(targets)} poste(s) au prochain contact de leur agent"
-              + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
+    flash(f"Script envoyé à {len(targets)} poste(s) au prochain contact de leur agent"
+          + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
     return back("script_run", run_id=run_id)
 
 

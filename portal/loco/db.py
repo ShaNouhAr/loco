@@ -353,6 +353,31 @@ MIGRATIONS = [
     """
     ALTER TABLE device_commands ADD COLUMN run_after TEXT NOT NULL DEFAULT '';
     """,
+    # 17 : planifications (mises à jour et scripts), une fois ou récurrentes. Transformées en commandes d'agent quand elles
+    # sont dues ; next_run vide = terminée. Heures locales du serveur, comme le reste du portail.
+    """
+    CREATE TABLE schedules (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        action TEXT NOT NULL CHECK (action IN ('update', 'run-script')),
+        params TEXT NOT NULL DEFAULT '{}',
+        targets TEXT NOT NULL DEFAULT '{}',
+        recurrence TEXT NOT NULL CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly')),
+        at_time TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        weekdays TEXT NOT NULL DEFAULT '',
+        monthday INTEGER NOT NULL DEFAULT 0,
+        next_run TEXT NOT NULL DEFAULT '',
+        last_run TEXT NOT NULL DEFAULT '',
+        last_result TEXT NOT NULL DEFAULT '',
+        last_ref INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX schedules_due ON schedules(enabled, next_run);
+    """,
 ]
 
 

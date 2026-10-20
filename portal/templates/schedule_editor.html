@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_schedule.html" import planner, icon with context %}
+{% block title %}{{ 'Modifier la planification' if s else 'Nouvelle planification' }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('schedules') }}">← Planifications</a></p>
+<div class="head">
+  <div>
+    <h1>{{ 'Modifier la planification' if s else 'Nouvelle planification' }}</h1>
+    <p>Une mise à jour ou un script, lancé automatiquement sur les postes choisis.</p>
+  </div>
+</div>
+{% set can_update, can_script = can('fleet.update'), can('scripts.run') and scripts %}
+{% set selection = targets.devices or targets.groups %}
+<form method="post" action="{{ url_for('schedule_save', sched_id=s.id if s else 0) }}" class="stack schedule-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="cols">
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-h"><h2>Que faire</h2></div>
+        <div class="panel-b stack-sm">
+          <div class="seg" role="radiogroup" aria-label="Action">
+            {% if can_update %}<label><input type="radio" name="action" value="update" {{ 'checked' if action == 'update' or not can_script }}><span>Mettre à jour</span></label>{% endif %}
+            {% if can_script %}<label><input type="radio" name="action" value="run-script" {{ 'checked' if action == 'run-script' or not can_update }}><span>Exécuter un script</span></label>{% endif %}
+          </div>
+          <div data-show-for="action:update" class="stack-sm">
+            <p class="small muted">Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue déjà installés, sur chaque poste visé.</p>
+            {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1" {{ 'checked' if params.reboot }}> Redémarrer si une mise à jour l'exige</label>{% endif %}
+          </div>
+          {% if can_script %}
+          <div data-show-for="action:run-script">
+            <label class="f"><span>Script</span>
+              <select name="script_id">{% for sc in scripts %}<option value="{{ sc.id }}" {{ 'selected' if params.script_id == sc.id }}>{{ sc.name }} — {{ 'Windows' if sc.platform == 'windows' else 'Linux' }}, v{{ sc.version }}</option>{% endfor %}</select></label>
+            <p class="hint">La version actuelle du script est retenue : s'il est modifié ensuite, la planification se met en pause jusqu'à ce que vous la repreniez. Seuls les postes du bon système l'exécutent.</p>
+          </div>
+          {% endif %}
+          <label class="f"><span>Nom <span class="faint">(facultatif)</span></span><input type="text" name="name" maxlength="120" value="{{ s.name if s else '' }}" placeholder="ex. Patch du mardi"></label>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h2>Quand</h2></div>
+        <div class="panel-b">{{ planner(plan) }}</div>
+      </section>
+    </div>
+    <section class="panel">
+      <div class="panel-h"><h2>Sur quels postes</h2><div class="aside" data-show-for="target:selection"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> choisi(s)</span></div></div>
+      <div class="panel-b stack-sm">
+        <div class="seg" role="radiogroup" aria-label="Postes visés">
+          <label><input type="radio" name="target" value="all" {{ 'checked' if targets.all or not selection }}><span>Tout le parc</span></label>
+          <label><input type="radio" name="target" value="selection" {{ 'checked' if selection and not targets.all }}><span>Groupes et appareils</span></label>
+        </div>
+        <p class="small muted" data-show-for="target:all">Tous les postes actifs au moment de chaque exécution, y compris ceux inscrits entre-temps.</p>
+        <div data-show-for="target:selection" class="stack-sm">
+          {% if device_groups %}
+          <div><h3 class="pick-title">Groupes de machines</h3>
+            <div class="selection-list short">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}" {{ 'checked' if group.id in targets.groups }}><span><strong>{{ group.name }}</strong><small>{{ group.members }} appareil{{ 's' if group.members != 1 }} · membres résolus à chaque exécution</small></span></label>{% endfor %}</div>
+          </div>
+          {% endif %}
+          <div><div class="row-between"><h3 class="pick-title">Appareils</h3>{% if devices %}<input type="search" class="search-sm" placeholder="Rechercher" data-filter="#schedule-devices .selection-item" aria-label="Rechercher un appareil">{% endif %}</div>
+            <div class="selection-list" id="schedule-devices">
+              {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in targets.devices }}><span><strong>{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">Aucun appareil actif.</p>{% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <section class="panel sticky-actions compose-bar"><div class="panel-b compose-bar-in row-between">
+    <span class="muted">Enregistrée, la planification apparaît dans la liste et sur la fiche des postes concernés.</span>
+    <div class="row"><a class="btn" href="{{ url_for('schedules') }}">Annuler</a><button class="btn primary">{{ icon('calendar') }}<span>{{ 'Enregistrer' if s else 'Planifier' }}</span></button></div>
+  </div></section>
+</form>
+{% endblock %}

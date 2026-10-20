@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.29.0 — 2026-10-21
+
+- **Planifications repensées, et récurrentes** : nouvel onglet *Mon parc → Planifications* (liste avec action, cibles, récurrence en clair, prochaine et dernière exécution, état ; modifier, mettre en pause, reprendre, supprimer). Mises à jour et scripts se planifient **une fois, chaque jour, chaque semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour du mois), sur tout le parc, des groupes (membres résolus à chaque exécution) ou des appareils. Un composant « Quand » commun (choix segmenté, jours en pastilles, résumé en clair avec la prochaine exécution) remplace les champs date/heure. En contexte : bouton calendrier à côté de *Mettre à jour* sur la fiche d'un poste et *Planifier…* à côté de *Tout mettre à jour* (fenêtre de planification), choix « Maintenant / Planifier » à l'exécution d'un script ; la fiche d'un poste affiche les planifications qui le concernent.
+- Une planification due devient une action au prochain contact des agents ; les occurrences manquées ne s'accumulent pas. Un script modifié depuis sa planification la met en pause (reprise avec la version actuelle, à la demande). Les droits de l'action planifiée sont exigés à la création et revérifiés à l'envoi. Les planifications ponctuelles de la 2.24 (champ date/heure) sont remplacées par ce système.
+
 ## 2.28.0 — 2026-10-20
 
 - **Icônes œil / œil barré** pour afficher ou masquer : sur tous les champs de mot de passe (connexion, premier mot de passe, compte, annuaires), et à la place de la case « Fichiers cachés » du gestionnaire de fichiers.

@@ -1,0 +1,50 @@
+{# Planification : composant « Quand » (une fois, chaque jour, chaque semaine, chaque mois) et fenêtre de planification.
+   À importer « with context » (jeton CSRF et libellés fournis par le contexte). #}
+{% macro icon(name) -%}
+{% if name == 'calendar' %}<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4.5" width="18" height="16.5" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg>
+{%- elif name == 'repeat' %}<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/></svg>
+{%- elif name == 'clock' %}<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+{%- endif %}
+{%- endmacro %}
+
+{% macro planner(plan) -%}
+{% set rec = plan.recurrence or 'once' %}
+{% set wdays = (plan.weekdays or planner_default_weekday()|string).split(',') %}
+<div class="planner" data-planner>
+  <div class="seg" role="radiogroup" aria-label="Fréquence">
+    {% for key, label in recurrence_labels.items() %}<label><input type="radio" name="recurrence" value="{{ key }}" {{ 'checked' if key == rec }}><span>{{ label }}</span></label>{% endfor %}
+  </div>
+  <div class="planner-fields">
+    <label class="f"><span data-date-label>{{ 'Date' if rec == 'once' else 'À partir du' }}</span><input type="date" name="start_date" value="{{ plan.start_date or planner_default_date() }}" required></label>
+    <label class="f"><span>Heure</span><input type="time" name="at_time" value="{{ plan.at_time or '02:00' }}" required></label>
+    <label class="f" data-show-for="recurrence:monthly"><span>Jour du mois</span>
+      <select name="monthday">{% for d in range(1, 29) %}<option value="{{ d }}" {{ 'selected' if (plan.monthday or 1)|int == d }}>{{ '1er' if d == 1 else d }}</option>{% endfor %}<option value="31" {{ 'selected' if (plan.monthday or 0)|int == 31 }}>Dernier jour du mois</option></select></label>
+  </div>
+  <div class="planner-days" data-show-for="recurrence:weekly">
+    <span class="f-label">Jours</span>
+    <div class="day-chips" role="group" aria-label="Jours de la semaine">{% for d in planner_days %}<label class="day-chip" title="{{ d|capitalize }}"><input type="checkbox" name="weekdays" value="{{ loop.index0 }}" {{ 'checked' if loop.index0|string in wdays }}><span>{{ d[0]|upper }}</span></label>{% endfor %}</div>
+  </div>
+  <p class="planner-summary" data-summary aria-live="polite">{{ icon('clock') }}<span></span></p>
+  <p class="hint">Heure du serveur loco ({{ planner_tz() }}). Une occurrence manquée (serveur ou poste éteint) n'est pas rattrapée : la suivante a lieu normalement.</p>
+</div>
+{%- endmacro %}
+
+{% macro schedule_dialog(id, title, action, hidden, next, reboot=False, intro='') -%}
+<dialog id="{{ id }}" class="wide-dialog">
+  <form method="post" action="{{ url_for('schedule_save') }}">
+    <div class="dlg-h"><h2>{{ title }}</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="next" value="{{ next }}">
+      {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+      {% if intro %}<p class="muted">{{ intro }}</p>{% endif %}
+      {{ planner({'recurrence': 'once'}) }}
+      {% if reboot %}<label class="check"><input type="checkbox" name="reboot" value="1"> Redémarrer si une mise à jour l'exige</label>{% endif %}
+    </div>
+    <div class="dlg-f">
+      <a class="linkbtn dlg-more" href="{{ url_for('schedules') }}">Toutes les planifications</a>
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button class="btn primary">Planifier</button>
+    </div>
+  </form>
+</dialog>
+{%- endmacro %}

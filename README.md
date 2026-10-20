@@ -290,10 +290,16 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 - **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
   facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
   Ces actions utilisent une liste fermée ; les administrateurs disposent aussi du terminal interactif décrit ci-dessous.
-- **Planifier** : les mises à jour (un poste, le parc ou un groupe) et l'exécution d'un script acceptent une **date et
-  heure** (heure du serveur) ; la commande attend et n'est transmise à l'agent qu'à partir de cet instant. Une action
-  planifiée se voit sur la fiche du poste (et la page de suivi d'un script) et s'**annule** tant qu'elle n'a pas été
-  transmise. Laisser le champ vide garde le comportement habituel (dès le prochain contact).
+- **Planifications** (*Mon parc → Planifications*) : mises à jour et scripts lancés **une fois, chaque jour, chaque
+  semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour), à l'heure du serveur, sur tout le parc, des
+  groupes (membres résolus à chaque exécution) ou des appareils. On planifie aussi en contexte : bouton calendrier à
+  côté de *Mettre à jour* sur la fiche d'un poste, *Planifier…* à côté de *Tout mettre à jour*, et choix « Maintenant /
+  Planifier » à l'exécution d'un script. Un résumé en clair (« Chaque mardi et jeudi à 02:00 · prochaine exécution… »)
+  accompagne la saisie ; la fiche d'un poste liste les planifications qui le concernent. Une planification due devient
+  une action envoyée au prochain contact des agents ; une occurrence manquée n'est pas rattrapée. Pause, reprise et
+  suppression depuis la liste. Un script modifié après sa planification la met en pause (on n'exécute que ce qui a été
+  relu) ; une action encore en file s'annule depuis la fiche du poste. Droits : ceux de l'action planifiée (mettre à
+  jour, tout le parc, redémarrer, exécuter des scripts), revérifiés à l'envoi aux postes.
 - **Identité** : chaque poste a un identifiant et un jeton propres, indépendants de son adresse. Un poste qui change
   d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache.
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de

@@ -284,23 +284,6 @@ def pending(dev_id):
                         "ORDER BY id", (dev_id,)).fetchall()
 
 
-def _schedule_time(raw):
-    """Horodatage « datetime-local » du navigateur (heure du serveur) → « AAAA-MM-JJ HH:MM:SS », ou '' si immédiat.
-    Lève ValueError si le format est invalide ou si l'instant est déjà passé (petite marge d'une minute)."""
-    raw = (raw or "").strip()
-    if not raw:
-        return ""
-    try:
-        when = datetime.datetime.strptime(raw.replace("T", " ")[:16], "%Y-%m-%d %H:%M")
-    except ValueError:
-        raise ValueError("Date et heure de planification invalides.")
-    if when < datetime.datetime.now() - datetime.timedelta(minutes=1):
-        raise ValueError("L'instant planifié est déjà passé.")
-    if when > datetime.datetime.now() + datetime.timedelta(days=366):
-        raise ValueError("La planification ne peut pas dépasser un an.")
-    return when.strftime("%Y-%m-%d %H:%M:%S")
-
-
 def queue(dev, action, params=None, user=None, run_after=""):
     """Ajoute une action (sans doublon d'une action identique déjà en attente) ; renvoie True si ajoutée.
     run_after non vide = commande transmise seulement à partir de cet instant (planification ponctuelle)."""
@@ -504,6 +487,8 @@ def agent_checkin():
         _store_inventory(dev, data["inventory"])
     _expire(dev["id"])
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
+    from . import schedules
+    schedules.materialize(conn)       # planifications dues : commandes créées, occurrence suivante
     commands = []
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
                           "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
@@ -1015,7 +1000,7 @@ def fleet_device(dev_id):
     summary = {"updates": len(updates) + int(inv.get("flatpak") or 0), "security": sum(1 for u in updates if u.get("security")),
                "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
                "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
-    from . import groups
+    from . import groups, schedules
     return render_template("fleet_device.html", device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
@@ -1023,7 +1008,8 @@ def fleet_device(dev_id):
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
-                           label=status_label(dev, color), presence=availability)
+                           label=status_label(dev, color), presence=availability,
+                           planned=schedules.covering(db(), dev_id))
 
 
 @app.route("/parc/<int:dev_id>/action", methods=["POST"])
@@ -1044,11 +1030,6 @@ def fleet_action(dev_id):
         return back("fleet")
     if action not in ACTIONS or dev["state"] != "active":
         abort(400)
-    try:
-        run_after = _schedule_time(request.form.get("run_after")) if action in ("update", "scan", "reboot") else ""
-    except ValueError as e:
-        flash(str(e), "error")
-        return back("fleet_device", dev_id=dev_id)
     params = {}
     if action == "update":
         params["reboot"] = request.form.get("reboot") == "1"
@@ -1058,15 +1039,11 @@ def fleet_action(dev_id):
                 "SELECT 1 FROM win_apps WHERE slug=? AND status='ready'", (slug,)).fetchone():
             abort(400)
         params["slug"] = slug
-    if queue(dev, action, params, run_after=run_after):
+    if queue(dev, action, params):
         db().commit()
-        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}"
-                                f"{' (planifiée pour ' + run_after + ')' if run_after else ''}")
-        if run_after:
-            flash(f"{ACTIONS[action]} planifiée sur {dev['hostname']} pour le {run_after} (heure du serveur).", "ok")
-        else:
-            flash(f"{ACTIONS[action]} demandée sur {dev['hostname']} : exécutée au prochain contact "
-                  f"(moins de {CHECKIN // 60} min).", "ok")
+        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}")
+        flash(f"{ACTIONS[action]} demandée sur {dev['hostname']} : exécutée au prochain contact "
+              f"(moins de {CHECKIN // 60} min).", "ok")
     else:
         flash("Action déjà en attente sur ce poste.", "error")
     return back("fleet_device", dev_id=dev_id)
@@ -1104,26 +1081,15 @@ def fleet_update_all():
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
-    try:
-        run_after = _schedule_time(request.form.get("run_after"))
-    except ValueError as e:
-        flash(str(e), "error")
-        return back("fleet", **({"group": group_id} if group_id else {}))
     count = 0
     for r in _rows(apps):
         if member_ids is not None and r["d"]["id"] not in member_ids:
             continue
-        if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}, run_after=run_after):
+        if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
-    audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}"
-                                     f"{' (planifiée pour ' + run_after + ')' if run_after else ''}")
-    if not count:
-        flash("Aucun poste à mettre à jour.", "ok")
-    elif run_after:
-        flash(f"Mise à jour planifiée sur {count} poste(s) pour le {run_after} (heure du serveur).", "ok")
-    else:
-        flash(f"Mise à jour demandée sur {count} poste(s).", "ok")
+    audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
+    flash(f"Mise à jour demandée sur {count} poste(s)." if count else "Aucun poste à mettre à jour.", "ok")
     return back("fleet", **({"group": group_id} if group_id else {}))
 
 

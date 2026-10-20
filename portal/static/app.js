@@ -443,6 +443,99 @@
     b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Afficher le mot de passe"); b.title = "Afficher le mot de passe";
     wrap.appendChild(b);
   });
+  /* ---------------------------------------------------------------- choix conditionnels et planification */
+
+  // [data-show-for="nom:v1 v2"] : visible (et ses champs envoyés) seulement si le bouton radio « nom » coché vaut v1 ou v2.
+  function syncSwitches(form) {
+    $$("[data-show-for]", form).forEach(function (el) {
+      var spec = el.dataset.showFor.split(":"), checked = form.querySelector('input[name="' + spec[0] + '"]:checked');
+      var on = !!checked && spec[1].split(" ").indexOf(checked.value) >= 0;
+      el.hidden = !on;
+      $$("input, select, textarea", el).forEach(function (i) { i.disabled = !on; });
+    });
+    var alt = form.dataset.altWhen;                // formulaire à deux issues (exécuter maintenant / planifier)
+    if (alt) {
+      var parts = alt.split(":"), picked = form.querySelector('input[name="' + parts[0] + '"]:checked');
+      var on2 = !!picked && picked.value === parts[1];
+      ["confirm", "confirmText", "confirmOk"].forEach(function (k) {
+        if (form.dataset[k + "Base"] === undefined) form.dataset[k + "Base"] = form.dataset[k] || "";
+        form.dataset[k] = on2 ? form.dataset[k + "Alt"] : form.dataset[k + "Base"];
+      });
+      $$("[data-alt]", form).forEach(function (b) {
+        var label = $("[data-label]", b) || b;
+        if (b.dataset.base === undefined) b.dataset.base = label.textContent;
+        label.textContent = on2 ? b.dataset.alt : b.dataset.base;
+      });
+    }
+    $$("[data-planner]", form).forEach(renderPlanner);
+  }
+  var DAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+  var MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function dayIndex(d) { return (d.getDay() + 6) % 7; }        // lundi = 0, comme côté serveur
+  function joinFr(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " et " + a[a.length - 1]; }
+  function whenFr(d) {
+    var t = DAYS_FR[dayIndex(d)] + " " + (d.getDate() === 1 ? "1er" : d.getDate()) + " " + MONTHS_FR[d.getMonth()];
+    if (d.getFullYear() !== new Date().getFullYear()) t += " " + d.getFullYear();
+    return t + " à " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+  function plannerState(box) {
+    var rec = box.querySelector('input[name="recurrence"]:checked'), date = box.querySelector('input[name="start_date"]').value;
+    var time = box.querySelector('input[name="at_time"]').value;
+    return { rec: rec ? rec.value : "once", date: date, time: time, monthday: parseInt(box.querySelector('select[name="monthday"]').value, 10),
+             days: $$('input[name="weekdays"]:checked', box).map(function (i) { return parseInt(i.value, 10); }) };
+  }
+  // Même calcul que schedules.next_occurrence : première occurrence strictement après maintenant.
+  function nextRun(st) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(st.date) || !/^\d{2}:\d{2}$/.test(st.time)) return null;
+    var p = st.date.split("-").map(Number), h = st.time.split(":").map(Number), now = new Date();
+    var start = new Date(p[0], p[1] - 1, p[2]), at = function (d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h[0], h[1]); };
+    if (st.rec === "once") { var once = at(start); return once > now ? once : null; }
+    var day = start > now ? start : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (st.rec === "monthly") {
+      for (var m = 0; m < 25; m++) {
+        var y = day.getFullYear(), mo = day.getMonth() + m, last = new Date(y, mo + 1, 0).getDate();
+        var c = at(new Date(y, mo, Math.min(st.monthday, last)));
+        if (c > now && c >= start) return c;
+      }
+      return null;
+    }
+    var allowed = st.rec === "weekly" ? st.days : [0, 1, 2, 3, 4, 5, 6];
+    for (var o = 0; o < 8; o++) {
+      var d = new Date(day.getFullYear(), day.getMonth(), day.getDate() + o), w = at(d);
+      if (allowed.indexOf(dayIndex(d)) >= 0 && w > now) return w;
+    }
+    return null;
+  }
+  function describeFr(st) {
+    if (st.rec === "once") { var p = st.date.split("-").map(Number), h = st.time.split(":").map(Number); return "Le " + whenFr(new Date(p[0], p[1] - 1, p[2], h[0], h[1])); }
+    if (st.rec === "daily") return "Chaque jour à " + st.time;
+    if (st.rec === "weekly") {
+      var days = st.days.slice().sort();
+      if (days.length === 7) return "Chaque jour à " + st.time;
+      if (days.join() === "0,1,2,3,4") return "Du lundi au vendredi à " + st.time;
+      if (days.join() === "5,6") return "Le week-end à " + st.time;
+      return "Chaque " + joinFr(days.map(function (d) { return DAYS_FR[d]; })) + " à " + st.time;
+    }
+    if (st.monthday === 31) return "Le dernier jour de chaque mois à " + st.time;
+    return "Le " + (st.monthday === 1 ? "1er" : st.monthday) + " de chaque mois à " + st.time;
+  }
+  function renderPlanner(box) {
+    var st = plannerState(box), out = $("[data-summary]", box), text = $("span", out), label = $("[data-date-label]", box);
+    if (label) label.textContent = st.rec === "once" ? "Date" : "À partir du";
+    var next = st.rec === "weekly" && !st.days.length ? null : nextRun(st);
+    out.classList.toggle("warn", !next);
+    if (st.rec === "weekly" && !st.days.length) text.textContent = "Choisissez au moins un jour de la semaine.";
+    else if (!st.date || !st.time) text.textContent = "Indiquez une date et une heure.";
+    else text.textContent = describeFr(st) + (next ? (st.rec === "once" ? "" : " · prochaine exécution : " + whenFr(next)) : " · cet instant est déjà passé");
+  }
+  $$("form").forEach(function (form) {
+    if (!form.querySelector("[data-show-for], [data-planner], [data-alt-when]") && !form.dataset.altWhen) return;
+    syncSwitches(form);
+    form.addEventListener("change", function () { syncSwitches(form); });
+    form.addEventListener("input", function (e) { if (e.target.closest("[data-planner]")) syncSwitches(form); });
+  });
+
   document.addEventListener("click", function (e) {
     var b = e.target.closest(".reveal");
     if (!b) return;

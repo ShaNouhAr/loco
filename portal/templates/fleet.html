@@ -5,6 +5,7 @@
            statut=(statut or None) if statut is not none else (state or None),
            os=(os or None) if os is not none else (system or None)) }}
 {%- endmacro %}
+{% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <div class="head">
@@ -20,9 +21,9 @@
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
       {% if can("fleet.reboot") %}<label class="head-option"><input type="checkbox" name="reboot" value="1"> Redémarrer si nécessaire</label>{% endif %}
-      <label class="head-option" title="Vide = au prochain contact ; sinon à l'heure indiquée (heure du serveur)">Planifier <input type="datetime-local" name="run_after"></label>
       <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>{{ 'Mettre à jour ce groupe' if selected_group else 'Tout mettre à jour' }}{% if to_update %} ({{ to_update }}){% endif %}</button>
     </form>
+    {% if can('fleet.bulk_update') %}<button type="button" class="btn" data-open="#plan-all" title="Planifier une mise à jour, une fois ou de façon récurrente">{{ plan_icon('calendar') }}<span>Planifier…</span></button>{% endif %}
     {% endif %}
   </div>
 </div>
@@ -107,4 +108,5 @@
   </section>
 </div>
 
+{% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', 'Planifier la mise à jour du groupe ' ~ selected_group.name if selected_group else 'Planifier la mise à jour du parc', 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=('Tous les postes actifs du groupe ' ~ selected_group.name if selected_group else 'Tous les postes actifs du parc') ~ ' au moment de chaque exécution : système, Flatpak et logiciels du catalogue.') }}{% endif %}
 {% endblock %}

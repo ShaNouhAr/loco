@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Exécuter {{ script.name }}{% endblock %}
+{% from "_schedule.html" import planner, icon as plan_icon with context %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <p class="small back-link"><a href="{{ url_for('script_editor', script_id=script.id) }}">← {{ script.name }}</a></p>
@@ -9,7 +10,7 @@
     <p><span class="tag">{{ platforms[script.platform] }}</span> · version {{ script.version }} · exécuté en <strong>{{ 'SYSTEM' if script.platform == 'windows' else 'root' }}</strong> au prochain contact de chaque agent.</p>
   </div>
 </div>
-<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-confirm="Exécuter {{ script.name }} sur les postes choisis ?" data-confirm-text="Le script s’exécute avec les pleins pouvoirs ({{ 'SYSTEM' if script.platform == 'windows' else 'root' }}) sur chaque poste. Vérifiez son contenu avant de continuer." data-confirm-ok="Exécuter">
+<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-alt-when="when:schedule" data-confirm-alt="Planifier {{ script.name }} ?" data-confirm-text-alt="Le script s’exécutera avec les pleins pouvoirs ({{ 'SYSTEM' if script.platform == 'windows' else 'root' }}) à chaque occurrence, dans sa version {{ script.version }} : s’il est modifié ensuite, la planification se met en pause." data-confirm-ok-alt="Planifier" data-confirm="Exécuter {{ script.name }} sur les postes choisis ?" data-confirm-text="Le script s’exécute avec les pleins pouvoirs ({{ 'SYSTEM' if script.platform == 'windows' else 'root' }}) sur chaque poste. Vérifiez son contenu avant de continuer." data-confirm-ok="Exécuter">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ script.version }}">
   <div class="cols">
     <section class="panel">
@@ -33,12 +34,17 @@
       <pre class="script-preview">{{ script.content }}</pre>
     </section>
   </div>
+  <section class="panel" data-show-for="when:schedule">
+    <div class="panel-h"><h2>Quand</h2><div class="aside">groupes résolus à chaque exécution</div></div>
+    <div class="panel-b">{{ planner({'recurrence': 'once'}) }}</div>
+  </section>
   <section class="panel sticky-actions compose-bar"><div class="panel-b compose-bar-in row-between">
-    <span class="muted">La sortie et le code de retour de chaque poste s’affichent sur la page de suivi.</span>
-    <div class="row">
-      <label class="head-option" title="Vide = au prochain contact ; sinon à l'heure indiquée (heure du serveur)">Planifier <input type="datetime-local" name="run_after"></label>
-      <button class="btn primary"><span class="spin"></span>Exécuter</button>
+    <div class="seg" role="radiogroup" aria-label="Moment">
+      <label><input type="radio" name="when" value="now" checked><span>Maintenant</span></label>
+      <label><input type="radio" name="when" value="schedule"><span>{{ plan_icon('calendar') }}Planifier</span></label>
     </div>
+    <div class="row"><span class="muted compose-note" data-show-for="when:now">Sortie et code de retour de chaque poste sur la page de suivi.</span>
+      <button class="btn primary" data-alt="Planifier"><span class="spin"></span><span data-label>Exécuter</span></button></div>
   </div></section>
 </form>
 {% endblock %}

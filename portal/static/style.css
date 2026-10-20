@@ -301,7 +301,7 @@ label.f { display: block; }
 label.f > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; }
 .hint { display: block; margin-top: 6px; font-size: 13px; color: var(--text-3); }
 .hint-tight { margin-top: -4px; }
-input[type=text], input[type=url], input[type=password], input[type=search], input[type=date], input[type=number], input[type=email], select, textarea {
+input[type=text], input[type=url], input[type=password], input[type=search], input[type=date], input[type=time], input[type=datetime-local], input[type=number], input[type=email], select, textarea {
   width: 100%; height: var(--h); padding: 0 11px; border: 1px solid var(--line-2); border-radius: var(--r-sm);
   background: var(--field); color: var(--text); font: 14px var(--sans); outline: none; transition: border-color .12s, box-shadow .12s;
 }
@@ -958,6 +958,56 @@ label.f > span.password-field { display: block; margin: 0; font-size: inherit; f
 .clipboard-actions .btn { justify-self: unset; }
 @media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn > span { display: inline; } }
 @media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } .remote-display { border: 0; padding: 0; } }
+
+/* ------------------------------------------------------------------ planification */
+[data-show-for][hidden] { display: none !important; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg-2); }
+.seg label { position: relative; display: block; }
+.seg input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.seg span { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: var(--r-sm); color: var(--text-2); font: 13.5px var(--sans); white-space: nowrap; transition: background .12s, color .12s; }
+.seg label:hover span { color: var(--text); }
+.seg input:checked + span { background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 0 0 1px var(--line-2), 0 1px 2px rgb(0 0 0 / .08); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg .ui-icon { width: 14px; height: 14px; }
+.planner { display: grid; gap: 14px; }
+.planner-fields { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+.planner-fields label.f { flex: 0 0 auto; }
+.planner-fields input, .planner-fields select { width: 170px; }
+.f-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; }
+.day-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.day-chip { position: relative; display: block; }
+.day-chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.day-chip span { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line-2); border-radius: 50%; color: var(--text-2); font: 500 13px var(--sans); transition: background .12s, border-color .12s, color .12s; }
+.day-chip:hover span { border-color: var(--text-3); color: var(--text); }
+.day-chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.day-chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.planner-summary { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); color: var(--text); font-size: 13.5px; }
+.planner-summary .ui-icon { color: var(--text-3); }
+.planner-summary.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); color: var(--warn); }
+.planner-summary.warn .ui-icon { color: var(--warn); }
+.split-action { display: inline-flex; }
+.split-action > form .btn { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-action > .btn.icon { width: 34px; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; color: var(--text-2); }
+.split-action > .btn.icon:hover { color: var(--text); }
+.planned { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.planned-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; color: var(--text); font-size: 13.5px; }
+.planned-item + .planned-item { border-top: 1px solid var(--line); }
+.planned-item:hover { background: var(--bg-2); text-decoration: none; }
+.planned-item .ui-icon { color: var(--text-3); }
+.planned-item .muted { margin-left: auto; white-space: nowrap; }
+.schedules-table td { vertical-align: middle; }
+.schedules-table tr.faded td:not(:last-child) { color: var(--text-3); }
+.schedules-table tr:target { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.when { display: inline-flex; align-items: center; gap: 8px; }
+.when .ui-icon { color: var(--text-3); }
+.empty-rich { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; }
+.empty-rich .ui-icon { width: 28px; height: 28px; color: var(--text-3); }
+.empty-rich strong { color: var(--text); font-size: 15px; }
+.empty-rich span { max-width: 520px; }
+.empty-rich .btn { margin-top: 8px; }
+.dlg-f .dlg-more { margin-right: auto; font-size: 13px; color: var(--text-2); }
+.compose-note { font-size: 13px; }
+@media (max-width: 720px) { .planned-item { flex-wrap: wrap; } .planned-item .muted { margin-left: 25px; } .planner-fields input, .planner-fields select { width: 150px; } }
 
 /* ------------------------------------------------------------------ actions planifiées (en attente) */
 .pending-list { display: flex; flex-direction: column; gap: 6px; }

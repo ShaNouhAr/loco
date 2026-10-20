@@ -764,44 +764,111 @@ class TestWuProxy(FleetTest):
 class TestScheduling(FleetTest):
     def setUp(self):
         super().setUp()
+        with transaction() as conn:
+            conn.execute("DELETE FROM schedules")
         self.a = Agent(LINUX, "192.168.43.60")
         self.a.enroll()
         self.dev = device(self.a.uid)["id"]
 
-    def queue(self, uid, action, **form):
-        d = device(uid)
-        return self.admin.post(f"/parc/{d['id']}/action", dict(form, action=action), page=f"/parc/{d['id']}")
+    def plan(self, **form):
+        values = {"action": "update", "target": "selection", "device": str(self.dev), "recurrence": "once",
+                  "start_date": (datetime.date.today() + datetime.timedelta(days=1)).isoformat(), "at_time": "02:00"}
+        values.update(form)
+        return self.admin.post("/parc/planifications/enregistrer", values, page="/parc/planifications")
 
-    def _set_run_after(self, value):
+    def due(self):
+        past = (datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
         with transaction() as conn:
-            conn.execute("UPDATE device_commands SET run_after=? WHERE device_id=?", (value, self.dev))
+            conn.execute("UPDATE schedules SET next_run=? WHERE next_run!=''", (past,))
 
-    def test_scheduled_update_is_withheld_until_its_time(self):
-        future = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
-        self.assertEqual(self.queue(self.a.uid, "update", run_after=future).status_code, 302)
+    def schedule(self):
         with transaction() as conn:
-            self.assertTrue(conn.execute("SELECT run_after FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0])
-        self.assertEqual(self.a.checkin().get_json()["commands"], [])          # pas avant l'heure
-        self._set_run_after((datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"))
+            return conn.execute("SELECT * FROM schedules ORDER BY id DESC").fetchone()
+
+    def test_occurrences_and_wording(self):
+        from loco import schedules as sc
+        wednesday = datetime.datetime(2026, 10, 21, 3, 0)                   # mercredi 21 octobre 2026, 03:00
+        base = {"at_time": "02:00", "start_date": "2026-10-21", "weekdays": "", "monthday": 0}
+        nxt = lambda **k: sc.next_occurrence(dict(base, **k), wednesday)
+        self.assertEqual(nxt(recurrence="daily"), datetime.datetime(2026, 10, 22, 2, 0))
+        self.assertEqual(nxt(recurrence="weekly", weekdays="1,3"), datetime.datetime(2026, 10, 22, 2, 0))   # jeudi
+        self.assertEqual(nxt(recurrence="weekly", weekdays="1"), datetime.datetime(2026, 10, 27, 2, 0))     # mardi suivant
+        self.assertEqual(nxt(recurrence="monthly", monthday=31), datetime.datetime(2026, 10, 31, 2, 0))
+        self.assertEqual(sc.next_occurrence(dict(base, recurrence="monthly", monthday=31), datetime.datetime(2026, 11, 1)),
+                         datetime.datetime(2026, 11, 30, 2, 0))                # dernier jour d'un mois de 30 jours
+        self.assertIsNone(nxt(recurrence="once"))                              # 02:00 déjà passé ce jour-là
+        self.assertEqual(sc.describe(dict(base, recurrence="weekly", weekdays="1,3")), "Chaque mardi et jeudi à 02:00")
+        self.assertEqual(sc.describe(dict(base, recurrence="weekly", weekdays="0,1,2,3,4")), "Du lundi au vendredi à 02:00")
+        self.assertEqual(sc.describe(dict(base, recurrence="monthly", monthday=1)), "Le 1er de chaque mois à 02:00")
+        self.assertEqual(sc.describe(dict(base, recurrence="monthly", monthday=31)), "Le dernier jour de chaque mois à 02:00")
+
+    def test_one_shot_update_runs_when_due_then_finishes(self):
+        self.assertEqual(self.plan().status_code, 302)
+        s = self.schedule()
+        self.assertEqual((s["action"], s["recurrence"]), ("update", "once"))
+        self.assertTrue(s["next_run"])
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])            # pas avant l'heure
+        self.due()
         self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["update"])
+        s = self.schedule()
+        self.assertEqual((s["next_run"], s["last_result"]), ("", "1 poste(s)"))  # terminée
+        self.assertIn("Terminée", self.admin.c.get("/parc/planifications").get_data(as_text=True))
 
-    def test_past_or_invalid_schedule_queues_nothing(self):
-        self.queue(self.a.uid, "update", run_after="2000-01-01T00:00")
-        self.queue(self.a.uid, "update", run_after="pas une date")
+    def test_recurring_schedule_advances_without_piling_up_missed_runs(self):
+        self.plan(recurrence="weekly", weekdays=["1", "3"], start_date=datetime.date.today().isoformat())
+        self.due()
+        self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["update"])
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])            # une seule fois par occurrence
+        s = self.schedule()
+        self.assertGreater(s["next_run"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        page = self.admin.c.get(f"/parc/{self.dev}").get_data(as_text=True)    # fiche : planifications du poste
+        self.assertIn("chaque mardi et jeudi à 02:00", page)
+        self.assertIn('id="plan-update"', page)
+
+    def test_invalid_plans_create_nothing(self):
+        yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+        self.plan(start_date=yesterday)                                        # instant passé
+        self.plan(recurrence="weekly")                                         # aucun jour choisi
+        self.plan(at_time="25:00")
+        self.plan(target="selection", device="")                               # aucune cible
         with transaction() as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM schedules").fetchone()[0], 0)
 
-    def test_scheduled_command_can_be_cancelled_before_it_is_sent(self):
-        future = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
-        self.queue(self.a.uid, "update", run_after=future)
+    def test_pause_resume_and_delete(self):
+        self.plan(recurrence="daily", start_date=datetime.date.today().isoformat())
+        sid = self.schedule()["id"]
+        self.admin.post(f"/parc/planifications/{sid}/pause", {}, page="/parc/planifications")
+        self.due()
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])            # en pause : rien n'est envoyé
+        self.admin.post(f"/parc/planifications/{sid}/pause", {}, page="/parc/planifications")
+        s = self.schedule()
+        self.assertEqual(s["enabled"], 1)
+        self.assertGreater(s["next_run"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))   # pas de rattrapage
+        self.admin.post(f"/parc/planifications/{sid}/supprimer", {}, page="/parc/planifications")
+        self.assertIsNone(self.schedule())
+
+    def test_rights_follow_the_planned_action(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        viewer = test_permissions.TestPermissions.browser(
+            self, "plan-lecture", test_permissions.TestPermissions.profile(self, "plan-lecture", {"fleet.view"}))
+        self.assertEqual(viewer.c.get("/parc/planifications").status_code, 200)
+        self.assertEqual(viewer.post("/parc/planifications/enregistrer", {"action": "update", "target": "all",
+                                     "recurrence": "daily", "at_time": "02:00",
+                                     "start_date": datetime.date.today().isoformat()}, page="/compte").status_code, 403)
+        single = test_permissions.TestPermissions.browser(
+            self, "plan-poste", test_permissions.TestPermissions.profile(self, "plan-poste", {"fleet.update"}))
+        r = single.post("/parc/planifications/enregistrer", {"action": "update", "target": "all", "recurrence": "daily",
+                        "at_time": "02:00", "start_date": datetime.date.today().isoformat()}, page="/compte")
+        self.assertEqual(r.status_code, 403)                                   # tout le parc : droit « tout le parc »
+
+    def test_queued_command_can_be_cancelled_before_it_is_sent(self):
+        r = self.admin.post(f"/parc/{self.dev}/action", {"action": "update"}, page=f"/parc/{self.dev}")
+        self.assertEqual(r.status_code, 302)
         with transaction() as conn:
             cid = conn.execute("SELECT id FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0]
         self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 302)
-        with transaction() as conn:
-            self.assertEqual(conn.execute("SELECT state FROM device_commands WHERE id=?", (cid,)).fetchone()[0], "cancelled")
-        self._set_run_after((datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"))
-        self.assertEqual(self.a.checkin().get_json()["commands"], [])          # annulée : jamais transmise
-        # une commande déjà transmise n'est plus annulable ici
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])
         self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 404)
 
 
