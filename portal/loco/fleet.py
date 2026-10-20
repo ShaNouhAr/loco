@@ -188,6 +188,16 @@ def presence(dev):
     return {"online": online, "label": label, "detail": detail}
 
 
+def record_contact(dev, conn):
+    """Un échange valide prouve la présence même pendant une longue installation.
+    Borner l'écriture au rythme habituel : le relais noVNC peut appeler cette fonction plusieurs fois par seconde.
+    La transaction du point d'entrée reste responsable du commit."""
+    age = _ago(dev["last_seen"])
+    if age is None or age < datetime.timedelta(0) or age >= datetime.timedelta(seconds=CHECKIN):
+        conn.execute("UPDATE devices SET last_seen=? WHERE id=? AND last_seen=?",
+                     (_now(), dev["id"], dev["last_seen"]))
+
+
 def status(dev, apps=None):
     """Voyant du volume de mises à jour : aucune / quelques-unes / au moins le seuil rouge.
     Une information de santé (sécurité, échec, redémarrage) ne change pas ce comptage."""
@@ -574,6 +584,7 @@ def agent_result():
     if state in ("success", "failed"):
         from .deployments import cleanup_artifacts
         cleanup_artifacts(conn)
+    record_contact(dev, conn)
     conn.commit()
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     color, reason = status(dev)

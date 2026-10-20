@@ -235,6 +235,7 @@ def remote_agent():
                        "terminal_fallback": bool(row["terminal_fallback"]),
                        "ack": row["output_seq"], "cols": row["cols"], "rows": row["rows"],
                        "expires_in": max(0, int(row["expires"] - time.time()))})
+    fleet.record_contact(dev, conn)
     conn.commit()
     for detail in finished:
         audit("parc.session.fin", detail, username="agent")

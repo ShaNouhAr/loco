@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest import mock
 
 import test_portal as fixture
 from test_fleet import FleetTest, Agent, WINDOWS, LINUX, device
@@ -33,6 +34,22 @@ class TestRemote(FleetTest):
 
     def io(self, sid, data=None, browser=None):
         return (browser or self.admin).post(f'/parc/session/{sid}/io', data or {})
+
+    def test_authenticated_remote_contacts_keep_presence_without_writing_every_packet(self):
+        old = '2020-01-01 00:00:00'
+        with transaction() as conn:
+            conn.execute('UPDATE devices SET last_seen=? WHERE id=?', (old, self.dev_id))
+        self.assertEqual(self.agent.post('/agent/api/remote', {'sessions': []}, 'invalid').status_code, 401)
+        self.assertEqual(device(self.agent.uid)['last_seen'], old)
+        self.assertEqual(self.exchange().status_code, 200)
+        seen = device(self.agent.uid)['last_seen']
+        self.assertNotEqual(seen, old)
+        from loco import fleet
+        self.assertTrue(fleet.presence(device(self.agent.uid))['online'])
+        # Une deuxième requête immédiate ne réécrit pas le contact, même si l'horodatage produit diffère.
+        with mock.patch.object(fleet, '_now', return_value='2099-01-01 00:00:00'):
+            self.assertEqual(self.exchange().status_code, 200)
+        self.assertEqual(device(self.agent.uid)['last_seen'], seen)
 
     def test_terminal_and_desktop_relay_binary_bytes_without_replaying_input(self):
         for kind in ('terminal', 'desktop'):

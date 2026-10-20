@@ -279,6 +279,17 @@ class TestActions(FleetTest):
         dev = device(uid)
         return self.admin.post(f"/parc/{dev['id']}/action", dict(form, action=action), page=f"/parc/{dev['id']}")
 
+    def test_command_reports_keep_a_busy_device_online(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        a.checkin({"updates": []})
+        self.queue(a.uid, "scan")
+        command = a.checkin().json["commands"][0]
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen='2020-01-01 00:00:00' WHERE uid=?", (a.uid,))
+        self.assertEqual(a.result(command["id"], "running").status_code, 200)
+        self.assertTrue(fleet.presence(device(a.uid))["online"])
+
     def test_update_reaches_the_device_with_catalog_files_and_reports_back(self):
         self.add_app()
         a = Agent(WINDOWS, "192.168.43.50")

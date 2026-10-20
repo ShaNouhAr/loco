@@ -3,6 +3,7 @@
 ## 2.20.1 — 2026-10-20
 
 - **Disponibilité et mises à jour distinctes dans Mon parc** : près du nom du poste, une pastille verte indique un contact de l’agent dans les six dernières minutes (trois cycles habituels) et une rouge l’absence de contact récent. Le voyant du volume de mises à jour se trouve désormais dans la colonne *Mises à jour*. La fiche reprend la disponibilité près du nom et le bilan des mises à jour près des compteurs. Le passage hors ligne est pris en compte par le rafraîchissement automatique, même sans nouvelle activité du poste.
+- Les échanges du relais distant et les résultats d’actions maintiennent aussi le poste en ligne pendant une longue opération. L’horodatage est enregistré au plus une fois par cycle de contact pour éviter une écriture à chaque image noVNC.
 
 ## 2.20.0 — 2026-10-20
 
