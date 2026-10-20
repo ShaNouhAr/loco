@@ -96,6 +96,7 @@
       {% if soft.packages %}<button type="button" data-tab="paquets" aria-selected="false">Paquets installés <span class="h-count">{{ soft.packages|length }}</span></button>{% endif %}
       {% if soft.flatpaks %}<button type="button" data-tab="flatpak" aria-selected="false">Flatpak <span class="h-count">{{ soft.flatpaks|length }}</span></button>{% endif %}
       <button type="button" data-tab="historique" aria-selected="false">Historique{% if history %} <span class="h-count">{{ history|length }}</span>{% endif %}</button>
+      {% if files_ready and active %}<button type="button" data-tab="fichiers" aria-selected="false">Fichiers</button>{% endif %}
       <button type="button" data-tab="details" aria-selected="false">Détails</button>
     </div>
 
@@ -218,6 +219,56 @@
       {% endif %}
     </div>
 
+    {% if files_ready and active %}
+    <div class="tab-panel" data-panel="fichiers">
+      <div id="file-manager" class="files" data-dev="{{ dev.id }}" data-open="{{ url_for('remote_open', dev_id=dev.id) }}"
+           data-csrf="{{ csrf }}" data-windows="{{ 1 if dev.os_family == 'windows' else 0 }}" hidden>
+        <div class="files-bar">
+          <div class="files-nav">
+            <button type="button" class="btn icon sm" data-files="up" title="Dossier parent" aria-label="Dossier parent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V6M5 12l7-7 7 7"/></svg></button>
+            <button type="button" class="btn icon sm" data-files="refresh" title="Actualiser" aria-label="Actualiser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></button>
+            <nav class="files-crumbs" aria-label="Chemin"></nav>
+          </div>
+          <div class="files-tools">
+            <button type="button" class="btn sm" data-files="paste" hidden></button>
+            <button type="button" class="btn sm" data-files="mkdir">Nouveau dossier</button>
+            <label class="btn sm primary"><input type="file" multiple hidden>Téléverser</label>
+          </div>
+        </div>
+        <div class="files-sub">
+          <div class="files-roots"></div>
+          <label class="check"><input type="checkbox" data-files="hidden"> Fichiers cachés</label>
+        </div>
+        <div class="files-pane">
+          <div class="table-wrap">
+            <table class="files-table">
+              <thead><tr><th>Nom</th><th class="num">Taille</th><th class="nowrap">Modifié</th><th class="num">Droits</th><th aria-label="Actions"></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="files-empty empty hidden">Dossier vide.</div>
+          <div class="files-truncated note warn hidden">Dossier volumineux : seuls les 5000 premiers éléments sont affichés.</div>
+          <div class="files-drop"><div class="files-drop-in">Déposez les fichiers à téléverser</div></div>
+        </div>
+        <div class="files-foot">
+          <div class="files-status" role="status"></div>
+          <div class="files-transfers"></div>
+        </div>
+        <dialog class="files-editor">
+          <form method="dialog" class="files-editor-form">
+            <div class="dlg-h"><h2>Modifier</h2><span class="mono small muted files-editor-path"></span></div>
+            <div class="dlg-b"><textarea spellcheck="false" wrap="off" aria-label="Contenu du fichier"></textarea></div>
+            <div class="dlg-f">
+              <span class="files-editor-note muted small"></span>
+              <button type="button" class="btn" data-editor="cancel">Fermer</button>
+              <button type="button" class="btn primary" data-editor="save">Enregistrer</button>
+            </div>
+          </form>
+        </dialog>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="tab-panel" data-panel="details">
       <dl class="kv">
         <dt>Système</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
@@ -259,4 +310,7 @@
     </div>
   </section>
 </div>
+{% endblock %}
+{% block scripts %}
+{% if files_ready and dev.state == 'active' %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% endblock %}

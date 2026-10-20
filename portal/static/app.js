@@ -211,6 +211,7 @@
       dlg.showModal();
     });
   }
+  window.lrConfirm = confirmDialog;
 
   /* ---------------------------------------------------------------- formulaires */
 
@@ -597,7 +598,8 @@
     var kind = live.dataset.pollKind;
     if (kind === "apps" && !$('tr[data-status="downloading"]')) return;
     // Parc : rechargement quand un poste ou une action change (rien n'est saisi sur ces pages).
-    var reload = function (d) { if (d.signature && d.signature !== live.dataset.signature) window.location.reload(); };
+    // Suspendu tant que le gestionnaire de fichiers est ouvert : ne pas interrompre un transfert ou une édition.
+    var reload = function (d) { if (document.body.dataset.noReload) return; if (d.signature && d.signature !== live.dataset.signature) window.location.reload(); };
     var handler = { status: bind, wu: function (d) { bind(d); renderWuLog(d); }, apps: renderApps, job: renderJob,
                     reload: reload }[kind];
     var tick = poll(live.dataset.poll, Number(live.dataset.pollEvery) || 10000, handler);

@@ -132,11 +132,12 @@ def _browser_session(sid):
 def remote_open(dev_id):
     dev = fleet._get(dev_id)
     kind = request.form.get("kind")
-    if kind not in ("terminal", "desktop") or dev["state"] != "active":
+    if kind not in ("terminal", "desktop", "files") or dev["state"] != "active":
         abort(400)
     require("remote." + kind)
-    if fleet.version_key(dev["agent_version"]) < (2, 4):
-        abort(409, "L'agent doit être mis à jour vers la version 2.4.0.")
+    minimum = (2, 23) if kind == "files" else (2, 4)
+    if fleet.version_key(dev["agent_version"]) < minimum:
+        abort(409, f"L'agent doit être mis à jour vers la version {'.'.join(map(str, minimum))}.0.")
     conn = db()
     conn.execute("BEGIN IMMEDIATE")
     _prune()
@@ -151,6 +152,8 @@ def remote_open(dev_id):
                                               now, now, now + 3600,
                                               int(kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal"))))
     audit("parc.session.ouverture", f"{dev['hostname']} : {kind}, {sid}")
+    if kind == "files":                       # onglet intégré à la fiche du poste : pas de page dédiée (audit a validé)
+        return {"sid": sid, "io": url_for("remote_io", sid=sid)}
     return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
 
 

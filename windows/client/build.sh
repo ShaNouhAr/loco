@@ -15,7 +15,7 @@ printf '[assembly: System.Reflection.AssemblyVersion("%s.0")]\n[assembly: System
 mcs -nologo -target:exe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-client.exe" \
     -r:System.ServiceProcess.dll -r:System.Management.dll -r:System.Web.Extensions.dll -r:Microsoft.CSharp.dll \
     -r:System.Core.dll "$WORK/version.cs" "$HERE/LocoClient.cs" "$HERE/DesktopIndicator.cs" "$HERE/DesktopStatus.cs" \
-    "$HERE/RemoteControl.cs" "$HERE/NativeTerminal.cs"
+    "$HERE/RemoteControl.cs" "$HERE/RemoteFiles.cs" "$HERE/NativeTerminal.cs"
 mcs -nologo -target:winexe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-tray.exe" \
     -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Web.Extensions.dll \
     "$WORK/version.cs" "$HERE/LocoTray.cs" "$HERE/DesktopStatus.cs"

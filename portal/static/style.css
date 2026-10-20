@@ -948,6 +948,58 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 @media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn > span { display: inline; } }
 @media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } .remote-display { border: 0; padding: 0; } }
 
+/* ------------------------------------------------------------------ gestionnaire de fichiers */
+.files { display: flex; flex-direction: column; gap: 12px; }
+.files-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.files-nav { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
+.files-tools { display: flex; align-items: center; gap: 8px; flex: none; }
+.files-tools label.btn { cursor: pointer; }
+.files-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 13.5px; }
+.files-crumb { border: 0; background: none; padding: 3px 6px; border-radius: var(--r-sm); color: var(--text-2); font: 13.5px var(--sans); cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-crumb:hover { color: var(--text); background: var(--bg-2); }
+.files-crumb:last-of-type { color: var(--text); font-weight: 500; }
+.files-crumb-sep { color: var(--text-3); user-select: none; }
+.files-sub { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.files-roots { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.files-root { height: 26px; padding: 0 10px; font-size: 12.5px; }
+.files-sub label.check { margin: 0; }
+.files-pane { position: relative; min-height: 120px; }
+.files-table { width: 100%; }
+.files-table th, .files-table td { vertical-align: middle; }
+.files-table tbody tr:hover { background: var(--bg-2); }
+.files-table td:last-child { width: 1%; }
+.files-name { display: inline-flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; border: 0; background: none; padding: 0; font: 14px var(--sans); color: var(--text); text-align: left; }
+.files-name svg { flex: none; width: 17px; height: 17px; color: var(--text-3); }
+.files-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button.files-name { cursor: pointer; }
+button.files-name:hover span { text-decoration: underline; text-underline-offset: 3px; }
+button.files-name:hover svg { color: var(--accent); }
+.files-menu > summary.btn::after { content: none; }
+.files-menu > summary.btn.icon { color: var(--text-3); }
+.files-drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 10px; background: color-mix(in srgb, var(--bg) 80%, transparent); border-radius: var(--r); z-index: 5; pointer-events: none; }
+.files-pane.dropping .files-drop { display: flex; }
+.files-drop-in { padding: 24px 32px; border: 1.5px dashed var(--accent); border-radius: var(--r); color: var(--text); font-weight: 500; background: var(--bg); }
+.files-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; min-height: 18px; }
+.files-status { font-size: 13px; color: var(--text-2); }
+.files-status[data-kind="err"] { color: var(--err); }
+.files-transfers { display: flex; flex-direction: column; gap: 8px; width: min(340px, 100%); margin-left: auto; }
+.files-xfer { font-size: 12.5px; }
+.files-xfer-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.files-xfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-xfer .meter { margin-top: 0; }
+.files-xfer.err .meter > i { background: var(--err); }
+.files-xfer.err .files-xfer-pct { color: var(--err); }
+dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
+.files-editor .dlg-h { gap: 12px; }
+.files-editor-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-editor .dlg-b { padding: 12px 20px; }
+.files-editor textarea { width: 100%; height: min(60vh, 460px); resize: vertical; font: 13px/1.5 var(--mono); white-space: pre; tab-size: 4; }
+.files-editor .dlg-f { justify-content: space-between; align-items: center; }
+.files-editor-note { margin-right: auto; }
+.files-prompt .field { display: block; }
+.files-prompt .field span { display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-2); }
+.files-prompt .field input { width: 100%; }
+
 /* ------------------------------------------------------------------ petits écrans */
 
 @media (max-width: 980px) {

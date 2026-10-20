@@ -26,6 +26,7 @@ import re
 import shutil
 import socket
 import signal
+import stat
 import struct
 import ssl
 import subprocess
@@ -624,6 +625,11 @@ class RemoteProcess:
                 self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                                 stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
                 self.reader, self.writer = self.process.stdout.fileno(), self.process.stdin.fileno()
+            elif self.kind == "files":
+                self.process = subprocess.Popen([sys.executable, PROGRAM, "files"], stdin=subprocess.PIPE,
+                                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                                start_new_session=True, close_fds=True)
+                self.reader, self.writer = self.process.stdout.fileno(), self.process.stdin.fileno()
             else:
                 raise ValueError("Type de session inconnu")
             for fd in set((self.reader, self.writer)):
@@ -692,7 +698,7 @@ class RemoteProcess:
             if self.process.poll() is not None and not self.pending:
                 self.state = "closed"
             if self.state == "closed":
-                if self.kind == "desktop" and self.process.stderr:
+                if self.kind in ("desktop", "files") and self.process.stderr:
                     self.error = self.process.stderr.read(1000).decode("utf-8", "replace").strip()[-300:]
                 self.error = self.error or "Session terminée."
         return {"id": self.sid, "ack": self.ack, "seq": self.seq,
@@ -1097,6 +1103,225 @@ def linux_desktop(terminal_fallback=False):
         signal.signal(signal.SIGTERM, previous_term)
 
 
+# --------------------------------------------------------------------------- gestionnaire de fichiers
+
+# Trame : [u32 longueur en-tête][u32 longueur données] + en-tête JSON + données binaires.
+# Les requêtes du navigateur et les réponses de l'agent empruntent le même relais d'octets que les terminaux.
+FILE_HEADER_MAX = 64 * 1024
+FILE_DATA_MAX = 1024 * 1024
+FILE_CHUNK = 256 * 1024
+FILE_LIST_MAX = 5000
+
+
+def _readn(fd, n):
+    buf = bytearray()
+    while len(buf) < n:
+        chunk = os.read(fd, n - len(buf))
+        if not chunk:
+            break
+        buf += chunk
+    return bytes(buf)
+
+
+def _writeall(fd, data):
+    view = memoryview(data)
+    while view:
+        view = view[os.write(fd, view):]
+
+
+def _read_frame(fd):
+    prefix = _readn(fd, 8)
+    if not prefix:
+        return None                                  # fin de flux propre : le navigateur a fermé la session
+    if len(prefix) < 8:
+        raise ValueError("flux interrompu")
+    hlen, dlen = struct.unpack(">II", prefix)
+    if hlen > FILE_HEADER_MAX or dlen > FILE_DATA_MAX:
+        raise ValueError("trame trop grande")
+    header, data = _readn(fd, hlen), _readn(fd, dlen)
+    if len(header) < hlen or len(data) < dlen:
+        raise ValueError("flux interrompu")
+    return json.loads(header.decode()), data
+
+
+def _write_frame(fd, header, data=b""):
+    blob = json.dumps(header, ensure_ascii=False).encode()
+    _writeall(fd, struct.pack(">II", len(blob), len(data)) + blob + bytes(data))
+
+
+class FileSession:
+    """Opérations de fichiers exécutées en root sur le poste, pour le gestionnaire du portail.
+
+    Chaque opération renvoie (en-tête, données) ; « read » porte un fragment du fichier, « write » reçoit un
+    fragment d'un téléversement écrit dans un fichier temporaire renommé à la fin (remplacement atomique)."""
+    def __init__(self):
+        self.uploads = {}                            # chemin -> (fichier temporaire ouvert, nom temporaire)
+
+    def cleanup(self):
+        for handle, tmp in self.uploads.values():
+            try:
+                handle.close()
+                os.unlink(tmp)
+            except OSError:
+                pass
+        self.uploads.clear()
+
+    def handle(self, header, data):
+        op = header.get("op")
+        method = getattr(self, "op_" + op, None) if isinstance(op, str) and op.isidentifier() else None
+        if method is None:
+            raise ValueError("opération inconnue")
+        return method(header, data)
+
+    # ------------------------------------------------------------------ inspection
+    def _entry(self, name, full):
+        link = os.path.islink(full)
+        try:
+            st = os.stat(full)                       # suit le lien : un lien vers un dossier se parcourt
+            mode = st.st_mode
+            kind = "dir" if stat.S_ISDIR(mode) else "file" if stat.S_ISREG(mode) else "other"
+            size, mtime = st.st_size, int(st.st_mtime)
+        except OSError:
+            try:
+                st = os.lstat(full)
+                mode, size, mtime = st.st_mode, st.st_size, int(st.st_mtime)
+            except OSError:
+                mode, size, mtime = 0, 0, 0
+            kind = "other"
+        return {"name": name, "type": kind, "size": size, "mtime": mtime, "mode": stat.S_IMODE(mode), "link": link}
+
+    def op_hello(self, h, data):
+        info = pwd.getpwuid(os.getuid())
+        roots = [{"name": "Racine", "path": "/"}, {"name": "Dossier personnel", "path": info.pw_dir}]
+        return {"os": "linux", "sep": "/", "home": info.pw_dir, "user": info.pw_name,
+                "host": socket.gethostname(), "roots": roots}, b""
+
+    def op_list(self, h, data):
+        path = os.path.abspath(h["path"])
+        names = sorted(os.listdir(path))
+        entries = [self._entry(name, os.path.join(path, name)) for name in names[:FILE_LIST_MAX]]
+        entries.sort(key=lambda e: (e["type"] != "dir", e["name"].lower()))
+        parent = None if path == "/" else os.path.dirname(path)
+        return {"path": path, "parent": parent, "entries": entries, "truncated": len(names) > FILE_LIST_MAX}, b""
+
+    def op_stat(self, h, data):
+        path = os.path.abspath(h["path"])
+        reply = {"path": path, "exists": os.path.lexists(path)}
+        if reply["exists"]:
+            reply.update(self._entry(os.path.basename(path), path))
+        return reply, b""
+
+    # ------------------------------------------------------------------ modifications
+    def op_mkdir(self, h, data):
+        os.mkdir(os.path.abspath(h["path"]))
+        return {}, b""
+
+    def op_rename(self, h, data):
+        path = os.path.abspath(h["path"])
+        dest = os.path.join(os.path.dirname(path), os.path.basename(h["name"]))
+        if os.path.lexists(dest):
+            raise ValueError("Un élément porte déjà ce nom.")
+        os.rename(path, dest)
+        return {"path": dest}, b""
+
+    def op_move(self, h, data):
+        path = os.path.abspath(h["path"])
+        dest = os.path.join(os.path.abspath(h["to"]), os.path.basename(path))
+        if os.path.lexists(dest):
+            raise ValueError("Un élément porte déjà ce nom à destination.")
+        shutil.move(path, dest)
+        return {"path": dest}, b""
+
+    def op_copy(self, h, data):
+        path = os.path.abspath(h["path"])
+        dest = os.path.join(os.path.abspath(h["to"]), os.path.basename(path))
+        if os.path.lexists(dest):
+            raise ValueError("Un élément porte déjà ce nom à destination.")
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.copytree(path, dest, symlinks=True)
+        else:
+            shutil.copy2(path, dest, follow_symlinks=False)
+        return {"path": dest}, b""
+
+    def op_delete(self, h, data):
+        path = os.path.abspath(h["path"])
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.unlink(path)
+        return {}, b""
+
+    def op_chmod(self, h, data):
+        os.chmod(os.path.abspath(h["path"]), int(h["mode"]) & 0o7777)
+        return {}, b""
+
+    # ------------------------------------------------------------------ transfert
+    def op_read(self, h, data):
+        path = os.path.abspath(h["path"])
+        offset = max(0, int(h.get("offset", 0)))
+        length = max(0, min(int(h.get("length", FILE_CHUNK)), FILE_CHUNK))
+        with open(path, "rb") as f:
+            size = os.fstat(f.fileno()).st_size
+            f.seek(offset)
+            chunk = f.read(length)
+        return {"offset": offset, "size": size, "eof": offset + len(chunk) >= size}, chunk
+
+    def op_write(self, h, data):
+        path = os.path.abspath(h["path"])
+        offset = max(0, int(h.get("offset", 0)))
+        entry = self.uploads.get(path)
+        if offset == 0:
+            if entry:
+                entry[0].close()
+            tmp = path + ".loco-part"
+            entry = (open(tmp, "wb"), tmp)
+            self.uploads[path] = entry
+        elif entry is None:
+            raise ValueError("Téléversement sans début.")
+        handle = entry[0]
+        handle.seek(offset)
+        handle.write(data)
+        if h.get("final"):
+            handle.flush()
+            os.fsync(handle.fileno())
+            handle.close()
+            os.replace(entry[1], path)
+            self.uploads.pop(path, None)
+        return {"offset": offset, "written": len(data), "final": bool(h.get("final"))}, b""
+
+    def op_write_cancel(self, h, data):
+        path = os.path.abspath(h["path"])
+        entry = self.uploads.pop(path, None)
+        if entry:
+            entry[0].close()
+            try:
+                os.unlink(entry[1])
+            except OSError:
+                pass
+        return {}, b""
+
+
+def files_service():
+    session = FileSession()
+    try:
+        while True:
+            frame = _read_frame(0)
+            if frame is None:
+                break
+            header, data = frame
+            rid = header.get("id")
+            try:
+                reply, payload = session.handle(header, data)
+                reply = dict(reply); reply["id"], reply["ok"] = rid, True
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                reply = {"id": rid, "ok": False, "error": str(e)[:500], "errno": getattr(e, "errno", None)}
+                payload = b""
+            _write_frame(1, reply, payload)
+    finally:
+        session.cleanup()
+    return 0
+
+
 def main(argv):
     if os.geteuid() != 0:
         print("loco-client : lancez cette commande en root.", file=sys.stderr)
@@ -1111,6 +1336,8 @@ def main(argv):
         except Exception as e:
             print(str(e), file=sys.stderr)
             return 1
+    if cmd == "files":
+        return files_service()
     if cmd == "run":
         return service()
     if cmd == "enroll" and len(argv) == 5 and argv[1] == "--server" and argv[3] == "--key":

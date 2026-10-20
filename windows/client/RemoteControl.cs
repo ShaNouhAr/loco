@@ -161,6 +161,7 @@ namespace Loco
         NativeTerminal terminal;
         Process desktop;
         ProcessJob desktopJob;
+        FileRelay files;
         Thread readThread, writeThread;
         IntPtr writeNativeThread;
         bool disposed, eof;
@@ -177,6 +178,7 @@ namespace Loco
                 cols = RemoteControl.Number(descriptor, "cols", 20, 500); rows = RemoteControl.Number(descriptor, "rows", 5, 200);
                 if (kind == "terminal") { terminal = new NativeTerminal(cols, rows); reader = terminal.Output; writer = terminal.Input; }
                 else if (kind == "desktop") { OpenDesktop(stopping); }
+                else if (kind == "files") { files = new FileRelay(); reader = files.Reader; writer = files.Writer; }
                 else throw new InvalidDataException("Type de session inconnu");
                 readThread = new Thread(Read) { IsBackground = true, Name = "loco-remote-output" }; readThread.Start();
                 writeThread = new Thread(Write) { IsBackground = true, Name = "loco-remote-input" }; writeThread.Start();
@@ -296,6 +298,7 @@ namespace Loco
             if (desktopJob != null) { desktopJob.Dispose(); desktopJob = null; }
             if (desktop != null) { try { if (!desktop.HasExited) desktop.Kill(); } catch (Exception) { } desktop.Dispose(); desktop = null; SecureAttentionRelay.Closed(); }
             if (terminal != null) { terminal.Dispose(); terminal = null; }
+            else if (files != null) { files.Dispose(); files = null; }
             else { if (reader != null) reader.Dispose(); if (writer != null && writer != reader) writer.Dispose(); }
             if (readThread != null) readThread.Join(1000);
             if (writeThread != null) writeThread.Join(1000);

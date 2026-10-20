@@ -28,7 +28,7 @@ import zipfile
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from . import addresses, agentpkg, app, config, features, permissions
-from .auth import audit, login_required, require
+from .auth import audit, can, login_required, require
 from .db import db
 from .util import back
 
@@ -985,6 +985,7 @@ def fleet_device(dev_id):
     from . import groups
     return render_template("fleet_device.html", device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
+                           files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,

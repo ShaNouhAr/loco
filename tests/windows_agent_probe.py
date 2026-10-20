@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import time
@@ -125,6 +126,69 @@ finally:
 wait('arrêt des enfants du terminal fermé', lambda: powershell(
     f'if (Get-Process -Id {child} -ErrorAction SilentlyContinue) {{ 1 }} else {{ 0 }}').stdout.strip() == '0', 30)
 print('Terminal natif : flux HTTPS interactif, compte SYSTEM, fermeture et arrêt des enfants validés')
+
+
+class FilesRelay:
+    """Client minimal du gestionnaire de fichiers : trames relayées par /io, comme le navigateur."""
+    def __init__(self, io_path, token):
+        self.io, self.token, self.inseq, self.outack, self.buf, self.nid = io_path, token, 0, 0, b'', 0
+
+    def request(self, op, extra=None, data=b''):
+        self.nid += 1
+        header = dict(extra or {}, id=self.nid, op=op)
+        hb = json.dumps(header).encode()
+        frame = struct.pack('>II', len(hb), len(data)) + hb + data
+        self.inseq += 1
+        pending = base64.b64encode(frame).decode()
+        end = time.monotonic() + 40
+        while time.monotonic() < end:
+            values = {'csrf': self.token, 'ack': self.outack}
+            if pending:
+                values.update(seq=self.inseq, data=pending)
+            _, text = post(self.io, values)
+            response = json.loads(text)
+            if response['ack'] >= self.inseq:
+                pending = ''
+            for packet in response['packets']:
+                if packet['seq'] > self.outack:
+                    self.buf += base64.b64decode(packet['data'])
+                    self.outack = packet['seq']
+            while len(self.buf) >= 8:
+                hlen, dlen = struct.unpack('>II', self.buf[:8])
+                if len(self.buf) < 8 + hlen + dlen:
+                    break
+                reply = json.loads(self.buf[8:8 + hlen].decode())
+                body = self.buf[8 + hlen:8 + hlen + dlen]
+                self.buf = self.buf[8 + hlen + dlen:]
+                if reply.get('id') == self.nid:
+                    return reply, body
+            assert response['state'] != 'closed', response.get('error')
+            time.sleep(0.15)
+        sys.exit(f'Gestionnaire de fichiers : pas de réponse à {op}')
+
+
+# Gestionnaire de fichiers via le relais : vrai FileRelay C# du poste (agent 2.23+), hello/list/write/read/delete.
+_, body = post(f'/parc/{dev}/session', {'csrf': csrf(get(f'/parc/{dev}')), 'kind': 'files'})
+files_sid = json.loads(body)['sid']
+files_io = f'/parc/session/{files_sid}/io'
+files = FilesRelay(files_io, csrf(get(f'/parc/{dev}')))
+files_dir = r'C:\Windows\Temp\loco-fmprobe'
+files_path = files_dir + r'\probe.txt'
+payload = b'FileRelay sur ' + hostname.encode() + b' fonctionne'
+try:
+    hello, _ = files.request('hello')
+    assert hello['ok'] and hello['os'] == 'windows', hello
+    files.request('delete', {'path': files_dir})                         # efface un reste d'exécution précédente
+    assert files.request('mkdir', {'path': files_dir})[0]['ok'], 'mkdir refusé'
+    assert files.request('write', {'path': files_path, 'offset': 0, 'final': True}, payload)[0]['ok'], 'write refusé'
+    read = files.request('read', {'path': files_path, 'offset': 0, 'length': 65536})
+    assert read[1] == payload, repr(read)
+    names = [e['name'] for e in files.request('list', {'path': files_dir})[0]['entries']]
+    assert 'probe.txt' in names, names
+    assert files.request('delete', {'path': files_dir})[0]['ok'], 'delete refusé'
+finally:
+    post(files_io, {'csrf': files.token, 'close': 1})
+print('Gestionnaire de fichiers : FileRelay C# — hello, écriture, lecture, liste et suppression via le relais HTTPS')
 desktop_exe = Path(os.environ['ProgramFiles'], 'loco-client', 'loco-desktop.exe')
 assert desktop_exe.is_file(), 'Compagnon de bureau absent du MSI'
 assert subprocess.run([str(desktop_exe), '--update'], timeout=10).returncode == 2, 'Arguments du compagnon trop permissifs'

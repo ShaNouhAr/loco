@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.23.0 — 2026-10-20
+
+- **Gestionnaire de fichiers du poste** (onglet *Fichiers* de la fiche d'un appareil) : parcourir l'arborescence, téléverser (bouton ou glisser-déposer), télécharger, créer un dossier, renommer, copier, déplacer, supprimer, modifier un fichier texte dans l'éditeur intégré, et ajuster les droits (octal) sous Linux. Fil d'Ariane, raccourcis vers la racine et le dossier personnel, affichage optionnel des fichiers cachés et progression par transfert. Comme les terminaux et le bureau, tout passe par le relais HTTPS — l'agent exécute chaque opération en root (SYSTEM sous Windows) et le serveur ne se connecte jamais au poste ; aucune adresse ni aucun jeton de poste n'arrive au navigateur. Nouveau droit *Gérer les fichiers du poste* (réservé à l'administrateur par défaut), agent 2.23 minimum ; le rafraîchissement automatique de la fiche est suspendu tant que l'onglet est ouvert, pour ne pas interrompre un transfert ou une édition.
+
 ## 2.22.0 — 2026-10-20
 
 - **Paquet « agent et dépôts »** (page Enrôlement, Debian/Ubuntu et Rocky/AlmaLinux/RHEL) : le même paquet `loco-client` confie l'autorité de loco au système, branche le poste sur le cache et le dépôt local de sa version — le cache seul si ce dépôt n'existe pas encore — puis installe l'agent. C'est désormais le choix recommandé ; « agent seul » reste proposé. Sa version est un cran au-dessus (`+depots`, `1.depots`) : passer de l'agent seul au paquet complet est une mise à jour qui conserve l'inscription du poste, et désinstaller le paquet complet retire aussi la configuration des dépôts (dépôts du système rétablis sur Red Hat). Les scripts de dépôts gagnent l'option `--from-package` (aucun appel à APT ni à DNF, occupés par l'installation). Validé par des installations, mises à jour et désinstallations réelles sur Debian 13 et Rocky Linux 9.
