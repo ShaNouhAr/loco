@@ -7,7 +7,7 @@ import unittest
 from unittest import mock
 
 from test_fleet import FleetTest, Agent, WINDOWS
-from loco import config, wupdate
+from loco import config, util, wupdate
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -138,6 +138,59 @@ class TestWindowsUpdatePage(FleetTest):
         page = viewer.c.get("/windows-update").get_data(as_text=True)
         self.assertNotIn('id="domains"', page)
         self.assertNotIn(WINDOWS["hostname"], page)
+
+
+PROC_DEV = """Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo:  500000    1000    0    0    0     0          0         0   500000    1000    0    0    0     0       0          0
+  eth0: 9000000   12000    0    0    0     0          0         0  4000000    9000    0    0    0     0       0          0
+docker0:  700000    800    0    0    0     0          0         0   300000     400    0    0    0     0       0          0
+vethab12:  100000    100    0    0    0     0          0         0   200000     100    0    0    0     0       0          0
+"""
+PROC_ROUTE = """Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
+eth0	00000000	FE2AA8C0	0003	0	0	0	00000000	0	0	0
+eth0	002AA8C0	00000000	0001	0	0	0	00FFFFFF	0	0	0
+docker0	000011AC	00000000	0001	0	0	0	0000FFFF	0	0	0
+"""
+
+
+class TestLiveNetwork(FleetTest):
+    """Réseau en direct : compteurs de l'interface de la route par défaut, débit calculé par le navigateur."""
+
+    def counters(self, dev, route):
+        work = tempfile.TemporaryDirectory()
+        self.addCleanup(work.cleanup)
+        paths = []
+        for name, text in (("dev", dev), ("route", route)):
+            path = os.path.join(work.name, name)
+            if text is not None:
+                with open(path, "w") as f:
+                    f.write(text)
+            paths.append(path)
+        with mock.patch.object(util, "PROC_NET_DEV", paths[0]), mock.patch.object(util, "PROC_NET_ROUTE", paths[1]), \
+                mock.patch.object(config, "WINDOWS", False):
+            return util.net_counters()
+
+    def test_default_route_interface_is_measured(self):
+        self.assertEqual(self.counters(PROC_DEV, PROC_ROUTE), {"iface": "eth0", "rx": 9000000, "tx": 4000000})
+
+    def test_without_default_route_physical_interfaces_are_summed(self):
+        extra = PROC_DEV + "  eth1:  1000000   10    0    0    0     0          0         0  2000000    10    0    0    0     0       0          0\n"
+        self.assertEqual(self.counters(extra, None), {"iface": "eth0, eth1", "rx": 10000000, "tx": 6000000})
+
+    def test_missing_counters_are_reported_unavailable(self):
+        self.assertIsNone(self.counters(None, None))
+        page = self.admin.c.get("/").get_data(as_text=True)
+        self.assertIn('data-net="/api/network"', page)
+        with mock.patch("loco.dashboard.net_counters", return_value=None):
+            self.assertEqual(self.admin.c.get("/api/network").get_json(), {"available": False})
+
+    def test_api_returns_counters_with_a_monotonic_timestamp(self):
+        with mock.patch("loco.dashboard.net_counters", return_value={"iface": "eth0", "rx": 10, "tx": 20}):
+            first = self.admin.c.get("/api/network").get_json()
+            second = self.admin.c.get("/api/network").get_json()
+        self.assertEqual((first["available"], first["iface"], first["rx"], first["tx"]), (True, "eth0", 10, 20))
+        self.assertGreaterEqual(second["t"], first["t"])
 
 
 if __name__ == "__main__":

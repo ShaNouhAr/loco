@@ -47,6 +47,21 @@
     </div>
   </div>
 
+  <section class="panel net-live" data-net="{{ url_for('api_network') }}">
+    <div class="panel-h"><h2>Réseau en direct</h2><div class="aside"><span class="mono" data-net-iface></span><span>relevé toutes les 2 s</span></div></div>
+    <div class="net-grid">
+      {% for dir, label in [('rx', 'Entrant'), ('tx', 'Sortant')] %}
+      <div class="net-cell" data-net-dir="{{ dir }}">
+        <div class="k">{{ label }}</div>
+        <div class="v" data-net-value>—</div>
+        <div class="s" data-net-note>mesure en cours…</div>
+        <svg class="net-spark" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="Débit {{ label|lower }} des 2 dernières minutes"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="empty hidden" data-net-off>Débit réseau indisponible sur ce système.</p>
+  </section>
+
   {% set wu_on = feature('wu') %}
   {% if wu_on or charts.fleet %}
   <div class="{{ 'cols w21 even' if charts.fleet and wu_on }}">

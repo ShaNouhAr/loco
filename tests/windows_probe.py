@@ -7,6 +7,7 @@ import hashlib
 import http.client
 import http.cookiejar
 import http.server
+import json
 import os
 from pathlib import Path
 import re
@@ -96,6 +97,23 @@ assert url.rstrip('/') == base, f'Connexion refusée : {url}'
 for page in ('/', '/linux', '/rpm', '/flatpak', '/windows-apps', '/windows-update', '/systeme', '/api/status'):
     assert get(page), page
 print('Portail HTTPS et pages authentifiées : OK')
+
+# Réseau en direct : compteurs 64 bits de l'interface vers Internet lus par GetIfEntry2 (structure MIB_IF_ROW2 décrite
+# en ctypes), comparés aux statistiques de la carte données par PowerShell : un décalage de champ se verrait aussitôt.
+first = json.loads(get('/api/network'))
+assert first.get('available') and first['iface'] and first['rx'] > 0 and first['tx'] > 0, first
+reference = subprocess.run(['powershell', '-NoProfile', '-Command',
+                            f"$s = Get-NetAdapterStatistics -Name '{first['iface']}'; \"$($s.ReceivedBytes) $($s.SentBytes)\""],
+                           capture_output=True, text=True, timeout=60)
+second = json.loads(get('/api/network'))
+assert second['t'] > first['t'] and second['rx'] >= first['rx'] and second['tx'] >= first['tx'], (first, second)
+if reference.returncode == 0 and len(reference.stdout.split()) == 2:
+    received, sent = map(int, reference.stdout.split())
+    for name, ours, theirs in (('reçus', first['rx'], received), ('émis', first['tx'], sent)):
+        assert abs(ours - theirs) <= max(theirs // 10, 50 * 2**20), f"octets {name} : API {ours}, PowerShell {theirs}"
+    print(f"Réseau en direct ({first['iface']}) : compteurs cohérents avec Get-NetAdapterStatistics : OK")
+else:
+    print(f"Réseau en direct ({first['iface']}) : compteurs croissants (pas de carte PowerShell à comparer) : OK")
 
 for compression in ('xz', 'gzip', 'zstd'):
     # Des paquets identiques, encodés différemment, dans des dépôts séparés.

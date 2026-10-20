@@ -518,6 +518,74 @@
     if (d.state !== "queued" && d.state !== "running") window.location.reload();
   }
 
+  // Réseau en direct (vue d'ensemble) : débit calculé entre deux relevés des compteurs de l'interface, courbe des
+  // 2 dernières minutes avec une échelle commune aux deux sens pour qu'ils restent comparables.
+  var net = $("[data-net]");
+  if (net) {
+    var SPAN = 60, EVERY = 2000, samples = [], previous = null;
+    var cells = $$("[data-net-dir]", net);
+    var bits = function (v) {
+      var units = ["bit/s", "kbit/s", "Mbit/s", "Gbit/s"], i = 0;
+      while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+      var s = i === 0 ? String(Math.round(v)) : v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : String(Math.round(v));
+      return s.replace(".", ",") + " " + units[i];
+    };
+    var note = function (cell, dir) {
+      var peak = Math.max.apply(null, samples.map(function (p) { return p[dir]; }));
+      $("[data-net-note]", cell).textContent = "pic sur " + Math.round(samples.length * EVERY / 1000) + " s : " + bits(peak);
+    };
+    var render = function () {
+      var top = Math.max(1000, Math.max.apply(null, samples.map(function (p) { return Math.max(p.rx, p.tx); })));
+      var step = 120 / (SPAN - 1);
+      cells.forEach(function (cell) {
+        var dir = cell.dataset.netDir;
+        var points = samples.map(function (p, i) {
+          return [(120 - (samples.length - 1 - i) * step).toFixed(2), (38 - 34 * p[dir] / top).toFixed(2)];
+        });
+        var line = points.map(function (p, i) { return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ");
+        $(".line", cell).setAttribute("d", line);
+        $(".area", cell).setAttribute("d", points.length > 1 ? line + " L120 39 L" + points[0][0] + " 39 Z" : "");
+        $("[data-net-value]", cell).textContent = bits(samples[samples.length - 1][dir]);
+        if (!cell.dataset.hover) note(cell, dir);
+      });
+    };
+    cells.forEach(function (cell) {
+      var svg = $(".net-spark", cell), dir = cell.dataset.netDir;
+      svg.addEventListener("mousemove", function (e) {
+        if (!samples.length) return;
+        var box = svg.getBoundingClientRect();
+        var back = Math.round((box.right - e.clientX) / box.width * (SPAN - 1));
+        var p = samples[Math.max(0, samples.length - 1 - back)];
+        cell.dataset.hover = "1";
+        $("[data-net-note]", cell).textContent = "il y a " + Math.round((Date.now() - p.at) / 1000) + " s : " + bits(p[dir]);
+      });
+      svg.addEventListener("mouseleave", function () { delete cell.dataset.hover; if (samples.length) note(cell, dir); });
+    });
+    var sample = function () {
+      if (document.hidden) return;
+      fetch(net.dataset.net, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          $("[data-net-off]", net).classList.toggle("hidden", d.available);
+          $(".net-grid", net).classList.toggle("hidden", !d.available);
+          if (!d.available) return;
+          $("[data-net-iface]", net).textContent = d.iface;
+          if (previous && d.t > previous.t && d.iface === previous.iface) {
+            var dt = d.t - previous.t;
+            samples.push({ rx: Math.max(0, (d.rx - previous.rx) * 8 / dt), tx: Math.max(0, (d.tx - previous.tx) * 8 / dt), at: Date.now() });
+            if (samples.length > SPAN) samples.shift();
+            render();
+          }
+          previous = d;
+        })
+        .catch(function () {});
+    };
+    sample();
+    setTimeout(sample, 1000);
+    setInterval(sample, EVERY);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) { previous = null; sample(); } });
+  }
+
   var operations = $("[data-operations]");
   if (operations) {
     poll(operations.dataset.operations, 3000, function (d) {

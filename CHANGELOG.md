@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.20.0 — 2026-10-20
+
+- **Réseau en direct sur la vue d'ensemble** : débits entrant et sortant du serveur, relevés toutes les 2 secondes sur l'interface de la route par défaut (à défaut, les interfaces physiques), avec le pic et la courbe des 2 dernières minutes (échelle commune aux deux sens, valeur d'un instant au survol). Le débit est calculé dans le navigateur entre deux relevés des compteurs : rien n'est mesuré ni conservé quand la page n'est pas affichée. Linux (`/proc/net/dev`) et serveur Windows natif (compteurs 64 bits de l'API `GetIfEntry2`, vérifiés en CI contre `Get-NetAdapterStatistics`).
+- **Icônes de retour dans la barre de navigation**.
+- Captures du README mises à jour.
+
 ## 2.19.0 — 2026-10-20
 
 - **Interface repensée, sobre et cohérente** : un vrai système de design remplace les ajouts successifs — échelle typographique resserrée (12 à 24 px), espacements sur une grille de 4 px, rayons 6 px (commandes) et 8 px (panneaux), une seule ombre pour les éléments flottants. Police à chasse fixe réservée au code (commandes, chemins, adresses, versions, empreintes) : noms de postes, dates, comptes, compteurs et valeurs des indicateurs passent en police normale. Libellés des indicateurs en minuscules au lieu de capitales espacées, liens non soulignés hors du texte courant, navigation principale sans icônes sur grand écran, en-tête translucide.

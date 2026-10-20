@@ -132,11 +132,10 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .brand b::before { content: ""; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); }
 .brand span { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
 .nav { display: flex; align-items: stretch; height: 100%; gap: 4px; }
-.nav > a, .nav-group > summary { display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 10px; color: var(--text-2); font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .12s; }
+.nav > a, .nav-group > summary { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 10px; color: var(--text-2); font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .12s; }
 .nav > a:hover, .nav-group > summary:hover, .nav-group[open] > summary { color: var(--text); text-decoration: none; }
 .nav > a.on, .nav-group.on > summary { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
 .nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
-.nav > a > .nav-icon, .nav-group > summary > .nav-icon:not(.nav-chevron) { display: none; }   /* icônes : navigation compacte seulement */
 .nav-chevron { width: 12px; height: 12px; color: var(--text-3); transition: transform .16s; }
 .nav-group { position: relative; }
 .nav-group > summary { list-style: none; }
@@ -542,6 +541,18 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .ring-grey { fill: var(--text-3); background: var(--text-3); }
 .ring-bg { fill: var(--bg-3); }
 
+/* Réseau en direct : débit courant, pic et courbe des 2 dernières minutes, une colonne par sens. */
+.net-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.net-cell { padding: 16px; min-width: 0; }
+.net-cell + .net-cell { border-left: 1px solid var(--line); }
+.net-cell .v { font-variant-numeric: tabular-nums; }
+.net-cell .s { margin-top: 2px; font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.net-spark { display: block; width: 100%; height: 56px; margin-top: 14px; overflow: visible; cursor: crosshair; }
+.net-spark .base { stroke: var(--line); vector-effect: non-scaling-stroke; }
+.net-spark .area { fill: var(--viz-1); opacity: .14; }
+.net-spark .line { fill: none; stroke: var(--viz-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.net-live .aside .mono { color: var(--text-2); }
+
 /* Occupation du disque : une ligne par poste de dépense, barres d'une seule teinte. */
 .usage-list { margin: 0; padding: 0; list-style: none; }
 .usage-list li { display: grid; grid-template-columns: minmax(0, 1fr) 90px minmax(80px, 34%); align-items: center; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
@@ -925,7 +936,6 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
   .top-in { padding: 8px 16px 0; gap: 16px; height: auto; flex-wrap: wrap; }
   .nav { position: relative; order: 3; width: 100%; height: 44px; gap: 2px; justify-content: space-between; }
   .nav > a, .nav-group > summary { gap: 6px; font-size: 13.5px; padding: 0 6px; }
-  .nav > a > .nav-icon, .nav-group > summary > .nav-icon:not(.nav-chevron) { display: block; }
   .nav-home > span, .nav-long { display: none; }
   .nav-short { display: inline; }
   .nav-admin > summary > .nav-icon:not(.nav-chevron) { display: none; }
@@ -953,6 +963,8 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
   .fleet-filters select { flex: 1; }
   .usage-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .usage-list .bar { grid-column: 1 / -1; }
+  .net-grid { grid-template-columns: 1fr; }
+  .net-cell + .net-cell { border-left: 0; border-top: 1px solid var(--line); }
   /* Tableaux en cartes : chaque ligne devient un bloc, les cellules s'empilent. */
   .table-cards thead { display: none; }
   .table-cards, .table-cards tbody, .table-cards tr, .table-cards td { display: block; width: 100%; }

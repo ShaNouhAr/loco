@@ -1,6 +1,7 @@
 """Vue d'ensemble."""
 
 import datetime
+import time
 
 from flask import render_template
 
@@ -8,7 +9,7 @@ from . import app
 from .auth import login_required, can
 from .db import db
 from .linux import list_debs
-from .util import disk_usage, read_stats, service_active
+from .util import disk_usage, net_counters, read_stats, service_active
 from .wupdate import wu_chart, wu_stats
 
 STATUS_LABELS = {"ready": "prêt", "downloading": "téléchargement", "error": "erreur", "pending": "en attente"}
@@ -94,3 +95,13 @@ def index():
 @login_required
 def api_status():
     return dashboard_data()
+
+
+@app.route("/api/network")
+@login_required
+def api_network():
+    """Compteurs cumulés de l'interface réseau et instant du relevé : le débit se calcule entre deux appels."""
+    counters = net_counters()
+    if not counters:
+        return {"available": False}
+    return dict(counters, available=True, t=round(time.monotonic(), 3))

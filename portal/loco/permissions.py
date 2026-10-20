@@ -106,7 +106,7 @@ DEFAULTS = {
 # Chaque route privée est déclarée. Une nouvelle route oubliée est refusée par défaut.
 # Plusieurs droits représentent des alternatives pour une même page de consultation.
 ENDPOINTS = {
-    "index": "dashboard.view", "api_status": "dashboard.view",
+    "index": "dashboard.view", "api_status": "dashboard.view", "api_network": "dashboard.view",
     "linux": "linux.view", "linux_repository_create": "linux.create", "linux_upload": "linux.upload",
     "linux_copy": "linux.copy", "linux_delete": "linux.delete",
     "rpm": "rpm.view", "rpm_repository_create": "rpm.create", "rpm_upload": "rpm.upload", "rpm_delete": "rpm.delete",

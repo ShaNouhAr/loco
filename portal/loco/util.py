@@ -145,6 +145,78 @@ def disk_usage():
             "pct": round(100 * (d.total - d.free) / d.total) if d.total else 0}
 
 
+PROC_NET_DEV, PROC_NET_ROUTE = "/proc/net/dev", "/proc/net/route"
+VIRTUAL_IFACES = ("lo", "veth", "docker", "br-", "virbr", "vnet", "tap", "tun", "fwbr", "fwpr", "fwln")
+
+
+def net_counters():
+    """Octets reçus et émis depuis le démarrage par l'interface de la route par défaut (à défaut, par les interfaces
+    physiques) : le navigateur en déduit le débit entre deux relevés. None si le système ne les fournit pas."""
+    if config.WINDOWS:
+        try:
+            return _net_counters_windows()
+        except (OSError, AttributeError, ValueError):
+            return None
+    rows = {}
+    try:
+        with open(PROC_NET_DEV) as f:
+            for line in f.readlines()[2:]:
+                name, _, data = line.partition(":")
+                fields = data.split()
+                if len(fields) >= 9:
+                    rows[name.strip()] = (int(fields[0]), int(fields[8]))
+    except (OSError, ValueError):
+        return None
+    default = set()
+    try:
+        with open(PROC_NET_ROUTE) as f:
+            for line in f.readlines()[1:]:
+                fields = line.split()
+                if len(fields) > 2 and fields[1] == "00000000":          # destination 0.0.0.0 : route par défaut
+                    default.add(fields[0])
+    except OSError:
+        pass
+    chosen = sorted(default & rows.keys()) or sorted(n for n in rows if not n.startswith(VIRTUAL_IFACES))
+    if not chosen:
+        return None
+    return {"iface": ", ".join(chosen), "rx": sum(rows[n][0] for n in chosen), "tx": sum(rows[n][1] for n in chosen)}
+
+
+def _net_counters_windows():
+    """Compteurs 64 bits de l'interface vers Internet (GetBestInterface puis GetIfEntry2, iphlpapi)."""
+    import ctypes
+    import socket
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("a", ctypes.c_uint32), ("b", ctypes.c_uint16), ("c", ctypes.c_uint16), ("d", ctypes.c_uint8 * 8)]
+
+    class MIB_IF_ROW2(ctypes.Structure):                                   # netioapi.h, 1352 octets en x64
+        _fields_ = [("luid", ctypes.c_uint64), ("index", ctypes.c_uint32), ("guid", GUID),
+                    ("alias", ctypes.c_uint16 * 257), ("description", ctypes.c_uint16 * 257),
+                    ("phys_len", ctypes.c_uint32), ("phys", ctypes.c_uint8 * 32), ("perm_phys", ctypes.c_uint8 * 32),
+                    ("mtu", ctypes.c_uint32), ("type", ctypes.c_uint32), ("tunnel", ctypes.c_int32),
+                    ("media", ctypes.c_int32), ("medium", ctypes.c_int32), ("access", ctypes.c_int32),
+                    ("direction", ctypes.c_int32), ("flags", ctypes.c_uint8), ("oper", ctypes.c_int32),
+                    ("admin", ctypes.c_int32), ("connect", ctypes.c_int32), ("network_guid", GUID),
+                    ("connection", ctypes.c_int32), ("tx_speed", ctypes.c_uint64), ("rx_speed", ctypes.c_uint64),
+                    ("in_octets", ctypes.c_uint64)] + [(f"in_{i}", ctypes.c_uint64) for i in range(8)] + [
+                    ("out_octets", ctypes.c_uint64)] + [(f"out_{i}", ctypes.c_uint64) for i in range(8)]
+
+    if ctypes.sizeof(MIB_IF_ROW2) != 1352:
+        return None
+    iphlpapi = ctypes.WinDLL("iphlpapi")
+    index = ctypes.c_uint32()
+    dest = int.from_bytes(socket.inet_aton("1.1.1.1"), "little")             # adresse IPv4 dans l'ordre réseau
+    if iphlpapi.GetBestInterface(ctypes.c_uint32(dest), ctypes.byref(index)) != 0:
+        return None
+    row = MIB_IF_ROW2()
+    row.index = index.value
+    if iphlpapi.GetIfEntry2(ctypes.byref(row)) != 0:
+        return None
+    alias = "".join(map(chr, row.alias)).split("\0")[0]
+    return {"iface": alias, "rx": row.in_octets, "tx": row.out_octets}
+
+
 class Cancelled(Exception):
     """Téléchargement interrompu (logiciel supprimé entre-temps)."""
 
