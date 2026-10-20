@@ -216,13 +216,18 @@ def _live():
     wu["cache_size"] = read_stats().get("wucache", 0)
     chart = wu_chart(14)
     wu["period"] = {k: chart[k] for k in ("hit", "miss", "ratio")}
+    # Seuls les postes Windows font des requêtes Windows Update. Derrière un NAT, plusieurs postes partagent une adresse :
+    # on ne choisit pas au hasard, on les nomme tous (« lab-win11 ou lab-ws2025 »).
     names = {}
     if can("fleet.view"):
-        for row in db().execute("SELECT hostname, ip, addresses FROM devices WHERE state != 'removed' AND hostname != ''"):
-            for ip in [row["ip"]] + row["addresses"].split():
-                names.setdefault(ip, row["hostname"])
+        for row in db().execute("SELECT hostname, ip, addresses FROM devices WHERE state != 'removed' AND hostname != '' "
+                                "AND os_family = 'windows' ORDER BY hostname COLLATE NOCASE"):
+            for ip in dict.fromkeys([row["ip"]] + row["addresses"].split()):
+                names.setdefault(ip, []).append(row["hostname"])
     for r in wu["recent"]:
-        r["name"] = names.get(r["client"], "")
+        found = names.get(r["client"], [])
+        r["name"] = " ou ".join(found) if len(found) <= 2 else f"{len(found)} postes Windows"
+        r["shared"] = len(found) > 1
     wu["last_text"] = ago_text(wu["last"]) if wu["last"] else ""
     return wu, chart
 

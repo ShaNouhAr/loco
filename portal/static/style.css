@@ -799,8 +799,17 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .avatar { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: var(--bg-3); color: var(--text); border: 1px solid var(--line-2); font-size: 19px; font-weight: 600; flex: none; }
 .account-id p { margin-top: 4px; }
 .password-form > * + * { margin-top: 16px; }
-label.f > span.password-field { display: flex; align-items: center; gap: 10px; margin: 0; }
-.password-field input { flex: 1; }
+/* Mot de passe : bouton œil dans le champ, à droite (œil = afficher, œil barré = masquer). */
+.password-field { position: relative; display: block; min-width: 0; }
+label.f > span.password-field { display: block; margin: 0; font-size: inherit; font-weight: inherit; }
+.password-field input { width: 100%; padding-right: 40px; }
+.reveal { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+          width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-3); cursor: pointer; }
+.reveal:hover { color: var(--text); background: var(--bg-3); }
+.reveal svg { width: 16px; height: 16px; display: block; }
+.reveal .eye-off, .reveal[aria-pressed="true"] .eye, .btn.eye-toggle svg.eye-off, .btn.eye-toggle[aria-pressed="true"] svg.eye { display: none; }
+.reveal[aria-pressed="true"] .eye-off, .btn.eye-toggle[aria-pressed="true"] svg.eye-off { display: block; }
+.btn.eye-toggle[aria-pressed="true"] { color: var(--text); background: var(--bg-3); }
 .password-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-3); }
 .password-rules li::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 10px; border-radius: 50%; border: 1.5px solid currentColor; vertical-align: 1px; }
 .password-rules li.ok { color: var(--ok); }
@@ -963,6 +972,9 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 .files-nav { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 auto; }
 .files-tools { display: flex; align-items: center; gap: 8px; flex: none; }
 .files-tools label.btn { cursor: pointer; }
+.files-bar, .files-sub, .files-foot { padding-left: 16px; padding-right: 16px; }
+.files-bar { padding-top: 4px; }
+.files-foot { padding-bottom: 14px; }
 .files [hidden] { display: none; }   /* l'attribut hidden l'emporte sur l'affichage des boutons (bouton « Coller » masqué) */
 .files-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 13.5px; }
 .files-crumb { border: 0; background: none; padding: 3px 6px; border-radius: var(--r-sm); color: var(--text-2); font: 13.5px var(--sans); cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

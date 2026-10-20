@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from test_fleet import FleetTest, Agent, WINDOWS
+from test_fleet import FleetTest, Agent, LINUX, WINDOWS
 from loco import config, util, wupdate
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -125,6 +125,17 @@ class TestWindowsUpdatePage(FleetTest):
         self.assertIn(f'<span>{WINDOWS["hostname"]}</span><span class="sub mono">192.168.43.50</span>', page)
         self.assertIn('id="domains"', page)
         self.assertIn('class="bar-hit"', page)
+
+    def test_only_windows_postes_are_named_and_a_shared_nat_address_names_them_all(self):
+        with open(self.log, "w") as f:
+            f.write(line(datetime.date.today(), "HIT", 10))
+        Agent(LINUX, "192.168.43.50").enroll()                              # Debian derrière la même adresse
+        self.assertEqual(self.admin.c.get("/api/wu").get_json()["recent"][0]["name"], "")
+        Agent(WINDOWS, "192.168.43.50").enroll()
+        Agent(dict(WINDOWS, hostname="pc-accueil"), "192.168.43.50").enroll()   # NAT : deux postes, une adresse
+        recent = self.admin.c.get("/api/wu").get_json()["recent"][0]
+        self.assertEqual((recent["name"], recent["shared"]), ("pc-accueil ou pc-compta", True))
+        self.assertIn("adresse partagée (NAT)", self.admin.c.get("/windows-update").get_data(as_text=True))
 
     def test_viewers_without_fleet_rights_see_addresses_only(self):
         import test_permissions

@@ -404,7 +404,12 @@ async function doPaste() {
     clip = null; pasteBtn.hidden = true; refresh();
   } catch (e) { toast(e.message, 'error'); }
 }
-hiddenToggle.addEventListener('change', () => { showHidden = hiddenToggle.checked; renderList(listing, !truncEl.classList.contains('hidden')); });
+hiddenToggle.addEventListener('click', () => {
+  showHidden = !showHidden;
+  const label = showHidden ? 'Masquer les fichiers cachés' : 'Afficher les fichiers cachés';
+  hiddenToggle.setAttribute('aria-pressed', String(showHidden)); hiddenToggle.setAttribute('aria-label', label); hiddenToggle.title = label;
+  renderList(listing, !truncEl.classList.contains('hidden'));
+});
 fileInput.addEventListener('change', () => { Array.from(fileInput.files).forEach(upload); fileInput.value = ''; });
 editor.querySelector('[data-editor="save"]').addEventListener('click', saveEditor);
 editor.querySelector('[data-editor="cancel"]').addEventListener('click', () => { editor.close(); editing = null; });

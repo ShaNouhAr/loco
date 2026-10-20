@@ -427,11 +427,28 @@
     };
     fresh.addEventListener("input", check); confirm.addEventListener("input", check); check();
   });
+  // Afficher / masquer : bouton œil sur chaque champ de mot de passe (ajouté ici, pour toutes les pages).
+  var EYE = '<svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>' +
+            '<svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.2M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.5-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/></svg>';
+  window.lrEyeIcons = EYE;
+  $$('input[type="password"]').forEach(function (input) {
+    var wrap = input.parentElement;
+    if (!wrap.classList.contains("password-field")) {
+      wrap = document.createElement("span"); wrap.className = "password-field";
+      input.parentNode.insertBefore(wrap, input); wrap.appendChild(input);
+    }
+    if ($(".reveal", wrap)) return;
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "reveal"; b.innerHTML = EYE;
+    b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Afficher le mot de passe"); b.title = "Afficher le mot de passe";
+    wrap.appendChild(b);
+  });
   document.addEventListener("click", function (e) {
-    var b = e.target.closest("[data-reveal]");
+    var b = e.target.closest(".reveal");
     if (!b) return;
-    var input = $("input", b.parentElement), show = input.type === "password";
-    input.type = show ? "text" : "password"; b.textContent = show ? "Masquer" : "Afficher";
+    var input = $("input", b.parentElement), show = input.type === "password", label = show ? "Masquer le mot de passe" : "Afficher le mot de passe";
+    input.type = show ? "text" : "password";
+    b.setAttribute("aria-pressed", String(show)); b.setAttribute("aria-label", label); b.title = label;
   });
 
   /* ---------------------------------------------------------------- membres d'un groupe */
@@ -481,7 +498,7 @@
     body.innerHTML = d.recent.map(function (r) {
       var key = r.time + r.client + r.file;
       var file = r.file.length > 70 ? r.file.slice(0, 70) + "…" : r.file;
-      var who = r.name ? '<span class="mono">' + esc(r.name) + '</span><span class="sub">' + esc(r.client) + '</span>'
+      var who = r.name ? '<span>' + esc(r.name) + '</span><span class="sub mono">' + esc(r.client) + (r.shared ? ' · adresse partagée (NAT)' : '') + '</span>'
                        : '<span class="mono">' + esc(r.client) + '</span>';
       var source = r.source === "cache" ? '<span class="st ok">cache</span>' : '<span class="st">' + esc(r.source) + '</span>';
       return '<tr' + (known[key] ? "" : ' class="new"') + ' data-key="' + esc(key) + '">' +

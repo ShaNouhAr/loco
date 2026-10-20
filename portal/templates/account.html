@@ -28,11 +28,11 @@
       <form class="panel-b password-form" method="post" data-password-form data-username="{{ current_user.username }}" data-min="{{ min_password }}">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <label class="f"><span>Mot de passe actuel</span>
-          <span class="password-field"><input type="password" name="current" required autocomplete="current-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+          <span class="password-field"><input type="password" name="current" required autocomplete="current-password"></span></label>
         <label class="f"><span>Nouveau mot de passe</span>
-          <span class="password-field"><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+          <span class="password-field"><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"></span></label>
         <label class="f"><span>Confirmation</span>
-          <span class="password-field"><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"><button type="button" class="linkbtn" data-reveal>Afficher</button></span></label>
+          <span class="password-field"><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"></span></label>
         <ul class="password-rules" aria-live="polite">
           <li data-rule="length">Au moins {{ min_password }} caractères</li>
           <li data-rule="username">Sans le nom du compte</li>

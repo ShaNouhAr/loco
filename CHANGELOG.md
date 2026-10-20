@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.28.0 — 2026-10-20
+
+- **Icônes œil / œil barré** pour afficher ou masquer : sur tous les champs de mot de passe (connexion, premier mot de passe, compte, annuaires), et à la place de la case « Fichiers cachés » du gestionnaire de fichiers.
+- **Windows Update, dernières requêtes** : seuls les postes Windows sont nommés (un poste Debian partageant l'adresse n'apparaît plus). Derrière un NAT, quand plusieurs postes Windows ont la même adresse vue par loco, tous sont nommés (« pc-a ou pc-b ») avec la mention « adresse partagée (NAT) », au lieu d'en choisir un au hasard.
+- Gestionnaire de fichiers : la barre d'outils ne touche plus les bords du panneau.
+
 ## 2.27.0 — 2026-10-20
 
 - **Nouveau logo de l'application** (bâtiment, main et souris) : vectorisé (SVG), fond transparent, il prend la couleur du thème (clair, sombre doux, OLED) et suit la couleur d'accent choisie. Il remplace le carré dans la barre de navigation et apparaît en grand sur les écrans de connexion et de premier mot de passe. L'icône de l'onglet du navigateur utilise le même logo et s'adapte au mode clair ou sombre du navigateur.

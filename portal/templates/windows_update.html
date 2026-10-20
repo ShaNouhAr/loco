@@ -92,7 +92,7 @@
         {% for r in wu.recent %}
           <tr data-key="{{ r.time }}{{ r.client }}{{ r.file }}">
             <td class="muted nowrap">{{ r.time }}</td>
-            <td class="nowrap">{% if r.name %}<span>{{ r.name }}</span><span class="sub mono">{{ r.client }}</span>{% else %}<span class="mono">{{ r.client }}</span>{% endif %}</td>
+            <td class="nowrap">{% if r.name %}<span>{{ r.name }}</span><span class="sub mono">{{ r.client }}{% if r.shared %} · adresse partagée (NAT){% endif %}</span>{% else %}<span class="mono">{{ r.client }}</span>{% endif %}</td>
             <td><span class="mono">{{ r.file[:70] }}{{ '…' if r.file|length > 70 }}</span><span class="sub">{{ r.host }}</span></td>
             <td class="num nowrap">{{ r.size|human if r.size else '—' }}</td>
             <td class="nowrap" title="{{ r.cache }}">{% if r.source == 'cache' %}<span class="st ok">cache</span>{% else %}<span class="st">{{ r.source }}</span>{% endif %}</td>
