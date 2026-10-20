@@ -15,7 +15,7 @@
 <div class="device-head">
   <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">Mon parc</a></p>
-    <h1><span class="mono">{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ cls }}" title="{{ reason }}">{{ label }}</span></h1>
+    <h1><span>{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ cls }}" title="{{ reason }}">{{ label }}</span></h1>
     {% if reason|replace('poste ', '') != label %}<p class="device-reason {{ cls }}">{{ reason|capitalize }}.</p>{% endif %}
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
@@ -102,7 +102,7 @@
         <table>
           <tbody>
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
-            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">sécurité</span>{% endif %}</td><td class="mono muted small right">{{ u.version }}</td></tr>
+            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">sécurité</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
           {% endfor %}
           </tbody>
         </table>
@@ -144,30 +144,30 @@
       <div class="panel-h sub"><h2>Logiciels installés sur le poste</h2>
         <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#installed tbody tr" aria-label="Filtrer les logiciels"></div></div>
       <div class="table-wrap"><table id="installed"><tbody>
-      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}</span></td><td class="mono muted small right">{{ s.version }}</td></tr>{% endfor %}
+      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}</span></td><td class="mono muted right">{{ s.version }}</td></tr>{% endfor %}
       </tbody></table></div>
     </div>
     {% endif %}
 
     {% if soft.packages %}
     <div class="tab-panel" data-panel="paquets" data-pkgs="#packages" data-empty="#packages-empty">
-      <div class="panel-h sub"><h2>Paquets installés sur le poste</h2>
-        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" aria-label="Filtrer les paquets"></div></div>
+      <div class="panel-h sub">
       <div class="chips" role="group" aria-label="Filtrer les paquets">
         <button type="button" class="chip on" data-chip="all" aria-pressed="true">Tous <b>{{ pkg_stats.total }}</b></button>
         <button type="button" class="chip" data-chip="manual" aria-pressed="false">Installés volontairement <b>{{ pkg_stats.manual }}</b></button>
         {% if pkg_stats.outdated %}<button type="button" class="chip" data-chip="update" aria-pressed="false">À mettre à jour <b>{{ pkg_stats.outdated }}</b></button>{% endif %}
       </div>
+        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer les paquets" aria-label="Filtrer les paquets"></div></div>
       <div class="table-wrap">
         <table id="packages">
-          <thead><tr><th>Paquet</th><th>Version</th><th class="hide-sm">Arch.</th><th class="right">Taille</th></tr></thead>
+          <thead><tr><th>Paquet</th><th>Version</th><th class="hide-sm">Architecture</th><th class="num">Taille</th></tr></thead>
           <tbody>
           {% for p in soft.packages|sort(attribute='name') %}
             <tr{% if p.manual %} data-manual="1"{% endif %}{% if p.name in pkg_updates %} data-update="1"{% endif %}>
               <td>{{ p.name }}{% if not p.manual %} <span class="faint small">dépendance</span>{% endif %}</td>
-              <td class="mono muted small">{{ p.version }}{% if p.name in pkg_updates %} <span class="tag">→ {{ pkg_updates[p.name] }}</span>{% endif %}</td>
-              <td class="mono muted small hide-sm">{{ p.arch }}</td>
-              <td class="mono muted small right">{{ p.size|human if p.size else '—' }}</td>
+              <td class="mono muted">{{ p.version }}{% if p.name in pkg_updates %} <span class="tag">→ {{ pkg_updates[p.name] }}</span>{% endif %}</td>
+              <td class="muted hide-sm">{{ p.arch }}</td>
+              <td class="num muted">{{ p.size|human if p.size else '—' }}</td>
             </tr>
           {% endfor %}
           </tbody>
@@ -185,7 +185,7 @@
         <thead><tr><th>Application</th><th>Version</th><th class="hide-sm">Origine</th></tr></thead>
         <tbody>
         {% for f in soft.flatpaks|sort(attribute='name') %}
-          <tr><td>{{ f.name or f.id }}<span class="sub mono">{{ f.id }}</span></td><td class="mono muted small">{{ f.version }}{% if f.branch %} <span class="faint">({{ f.branch }})</span>{% endif %}</td><td class="mono muted small hide-sm">{{ f.origin }}</td></tr>
+          <tr><td>{{ f.name or f.id }}<span class="sub mono">{{ f.id }}</span></td><td class="mono muted">{{ f.version }}{% if f.branch %} <span class="faint">({{ f.branch }})</span>{% endif %}</td><td class="muted hide-sm">{{ f.origin }}</td></tr>
         {% endfor %}
         </tbody></table></div>
     </div>
@@ -199,9 +199,9 @@
           <tbody>
           {% for c in history %}
             <tr class="{{ 'has-note' if c.output }}">
-              <td class="mono muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
+              <td class="muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
               <td>{{ action_label(c) }}</td>
-              <td class="mono muted hide-sm">{{ c.created_by or '—' }}</td>
+              <td class="muted hide-sm">{{ c.created_by or '—' }}</td>
               <td>{% if c.state == 'success' %}<span class="st ok">réussie</span>{% elif c.state == 'failed' %}<span class="st err">échec</span>{% elif c.state == 'cancelled' %}<span class="st">annulée</span>{% else %}<span class="st warn">{{ 'en cours' if c.state == 'running' else ('transmise' if c.state == 'sent' else 'en attente') }}</span>{% endif %}</td>
             </tr>
             {% if c.output %}<tr class="note-row"><td colspan="4"><details><summary class="small muted">Journal</summary><pre class="log">{{ c.output }}</pre></details></td></tr>{% endif %}
@@ -219,11 +219,11 @@
         <dt>Système</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
         <dt>Adresses du poste</dt><dd class="mono">{{ dev.addresses or '—' }}</dd>
         <dt>Vu par loco depuis</dt><dd><span class="mono">{{ dev.ip or '—' }}</span>{% if dev.ip and dev.ip not in (dev.addresses or '').split() %} <span class="muted small">(routeur ou NAT entre le poste et loco)</span>{% endif %}</dd>
-        <dt>Dernier contact</dt><dd>{{ summary.seen }} <span class="mono muted small">{{ dev.last_seen }}</span></dd>
-        <dt>Dernier inventaire</dt><dd>{{ summary.scanned }} <span class="mono muted small">{{ dev.last_scan or '' }}</span></dd>
+        <dt>Dernier contact</dt><dd>{{ summary.seen }} <span class="faint small">· {{ dev.last_seen|date_fr }}</span></dd>
+        <dt>Dernier inventaire</dt><dd>{{ summary.scanned }}{% if dev.last_scan %} <span class="faint small">· {{ dev.last_scan|date_fr }}</span>{% endif %}</dd>
         <dt>Agent</dt><dd class="mono">loco-client {{ dev.agent_version or '?' }}</dd>
         <dt>Adresses du serveur connues</dt><dd class="mono small">{{ dev.servers or '—' }}</dd>
-        <dt>Inscrit</dt><dd>{{ summary.enrolled }} <span class="mono muted small">{{ dev.enrolled_at }}</span></dd>
+        <dt>Inscrit</dt><dd>{{ summary.enrolled }} <span class="faint small">· {{ dev.enrolled_at|date_fr }}</span></dd>
         <dt>Identifiant</dt><dd class="mono small break">{{ dev.uid }}</dd>
       </dl>
       {% if soft.system and (soft.system.kernel or soft.system.cpu) %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd, service %}
-{% from "_charts.html" import daily_bars, ring, stacked %}
+{% from "_charts.html" import daily_bars, status_bar, usage_bar %}
 {% block title %}Vue d'ensemble{% endblock %}
 {% block content %}
 <div class="head">
@@ -49,7 +49,7 @@
 
   {% set wu_on = feature('wu') %}
   {% if wu_on or charts.fleet %}
-  <div class="{{ 'cols w21' if charts.fleet and wu_on }}">
+  <div class="{{ 'cols w21 even' if charts.fleet and wu_on }}">
     {% if wu_on %}<section class="panel">
       <div class="panel-h"><h2>Windows Update, 14 derniers jours</h2>
         <div class="aside">{% if charts.wu.hit or charts.wu.miss %}{{ charts.wu.ratio }} % servis par le cache{% endif %}</div></div>
@@ -67,12 +67,13 @@
     </section>{% endif %}
     {% if charts.fleet %}
     <section class="panel">
-      <div class="panel-h"><h2>Parc</h2><div class="aside"><a href="{{ url_for('fleet') }}">Mon parc</a></div></div>
-      <div class="panel-b ring-panel">
+      <div class="panel-h"><h2>Parc</h2><div class="aside"><a href="{{ url_for('fleet') }}">Ouvrir Mon parc</a></div></div>
+      <div class="panel-b">
         {% if charts.fleet.total %}
-        {{ ring(charts.fleet) }}
-        <ul class="legend vertical">
-          {% for s in charts.fleet.ring %}<li><i class="key ring-{{ s.key }}"></i>{{ s.label|capitalize }} <span class="num">{{ s.count }}</span></li>{% endfor %}
+        <p class="status-total"><b>{{ charts.fleet.total }}</b><span>poste{{ 's' if charts.fleet.total != 1 }} équipé{{ 's' if charts.fleet.total != 1 }}</span></p>
+        {{ status_bar(charts.fleet) }}
+        <ul class="status-list">
+          {% for s in charts.fleet.ring %}<li><i class="key ring-{{ s.key }}"></i>{{ s.label|capitalize }}<span class="num">{{ s.count }}</span></li>{% endfor %}
         </ul>
         {% else %}
         <p class="empty">Aucun poste : installez l'agent depuis <a href="{{ url_for('fleet') }}">Mon parc</a>.</p>
@@ -84,11 +85,12 @@
   {% endif %}
 
   <section class="panel">
-    <div class="panel-h"><h2>Disque des données</h2><div class="aside"><span>{{ d.disk.free|human }} libres sur {{ d.disk.total|human }}{% if d.stats_updated %} · tailles du {{ d.stats_updated|date_fr }}{% endif %}</span></div></div>
+    <div class="panel-h"><h2>Disque des données</h2>{% if d.stats_updated %}<div class="aside">tailles du {{ d.stats_updated|date_fr }}</div>{% endif %}</div>
     <div class="panel-b">
-      {{ stacked(charts.disk) }}
-      <ul class="legend">
-        {% for s in charts.disk %}<li><i class="key seg-{{ s.cls }}"></i>{{ s.label }} <span class="num">{{ s.size|human }}</span></li>{% endfor %}
+      <div class="usage-head"><span><b>{{ d.disk.used|human }}</b> utilisés sur {{ d.disk.total|human }}</span><span>{{ d.disk.free|human }} libres</span></div>
+      <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-width="{{ d.disk.pct }}"></i></div>
+      <ul class="usage-list">
+        {% for s in charts.disk if s.cls != 'free' %}<li><span>{{ s.label }}</span><span class="size">{{ s.size|human }}</span>{{ usage_bar(s.pct) }}</li>{% endfor %}
       </ul>
     </div>
   </section>
@@ -96,7 +98,7 @@
   <div class="cols w21">
     <div class="stack">
       <section class="panel">
-        <div class="panel-h"><h2>Services</h2>{% if can('system.view') %}<div class="aside"><a href="{{ url_for('system') }}">Détails</a></div>{% endif %}</div>
+        <div class="panel-h"><h2>Services</h2>{% if can('system.view') %}<div class="aside"><a href="{{ url_for('system') }}">Système</a></div>{% endif %}</div>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Service</th><th class="hide-sm">Rôle</th><th>Adresse</th><th>État</th></tr></thead>
@@ -156,14 +158,14 @@
     </div>
 
     <section class="panel">
-      <div class="panel-h"><h2>Activité récente</h2></div>
+      <div class="panel-h"><h2>Derniers ajouts</h2></div>
       {% if activity %}
       <div class="table-wrap">
         <table>
           <tbody>
           {% for e in activity %}
             <tr>
-              <td>{{ e.title }}<span class="sub">{{ 'deb' if e.kind == 'linux' else 'windows' }} · {{ e.detail }}</span></td>
+              <td>{{ e.title }}<span class="sub">{{ 'Paquet APT' if e.kind == 'linux' else 'Windows' }} · {{ e.detail }}</span></td>
               <td class="num faint small nowrap">{{ e.when|date_fr }}</td>
             </tr>
           {% endfor %}

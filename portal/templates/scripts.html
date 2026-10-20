@@ -22,7 +22,7 @@
           <tr>
             <td><a href="{{ url_for('script_editor', script_id=s.id) }}" class="strong-link">{{ s.name }}</a><span class="sub sans">{{ s.description or 'Sans description' }}</span></td>
             <td class="nowrap"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else 'Linux' }}</span></td>
-            <td class="hide-sm mono">v{{ s.version }}<span class="sub sans">{{ s.updated_at|date_fr }} · {{ s.updated_by }}</span></td>
+            <td class="hide-sm">v{{ s.version }}<span class="sub">{{ s.updated_at|date_fr }} · {{ s.updated_by }}</span></td>
             <td class="hide-sm nowrap">{% if s.last_run %}{{ s.last_run|date_fr }}<span class="sub sans">{{ s.runs }} exécution{{ 's' if s.runs > 1 }}</span>{% else %}<span class="faint">jamais</span>{% endif %}</td>
             <td class="right nowrap">{% if can('scripts.run') %}<a class="btn sm" href="{{ url_for('script_compose', script_id=s.id) }}">Exécuter</a>{% endif %}</td>
           </tr>
@@ -41,7 +41,7 @@
     <div class="table-wrap"><table class="deployments-table"><tbody>
       {% for item in recent %}{% set r = item.run %}{% set p = item.summary %}
       <tr>
-        <td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.name }}</a> <span class="mono faint">v{{ r.version }}</span><span class="sub sans">{{ r.created_at|date_fr }} · {{ r.created_by }}</span></td>
+        <td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.name }}</a> <span class="faint">v{{ r.version }}</span><span class="sub">{{ r.created_at|date_fr }} · {{ r.created_by }}</span></td>
         <td class="deploy-progress">{{ progress(p) }}<span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span></td>
       </tr>
       {% endfor %}

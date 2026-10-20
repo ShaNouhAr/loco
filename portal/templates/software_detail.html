@@ -61,7 +61,7 @@
       {% if installed %}
       <div class="table-wrap"><table><tbody>
         {% for item in installed %}<tr>
-          <td><a href="{{ url_for('fleet_device', dev_id=item.device.id) }}" class="mono">{{ item.device.hostname }}</a></td>
+          <td><a href="{{ url_for('fleet_device', dev_id=item.device.id) }}">{{ item.device.hostname }}</a></td>
           <td class="mono">{{ item.version }}</td>
           <td class="right">{% if item.outdated %}<span class="st warn">à mettre à jour</span>{% else %}<span class="st ok">à jour</span>{% endif %}</td>
         </tr>{% endfor %}

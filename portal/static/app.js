@@ -199,6 +199,10 @@
       $("h2", dlg).textContent = title;
       $(".dlg-b p", dlg).textContent = text || "";
       $("[data-ok]", dlg).textContent = okLabel || "Confirmer";
+      // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
+      var danger = /^(Supprimer|Retirer|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser)/.test(okLabel || "");
+      $("[data-ok]", dlg).classList.toggle("danger", danger);
+      $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;
       var done = function (v) { if (answered) return; answered = true; dlg.close(); resolve(v); };
       $("[data-ok]", dlg).onclick = function () { done(true); };
@@ -261,6 +265,20 @@
   $$(".drop").forEach(function (drop) {
     var input = $('input[type="file"]', drop);
     var list = $(".files", drop);
+    // Le champ natif (libellés dans la langue du navigateur) laisse place à une consigne et un bouton.
+    var ui = document.createElement("div");
+    var hint = document.createElement("span");
+    var pick = document.createElement("button");
+    ui.className = "drop-ui";
+    hint.textContent = input.multiple ? "Déposez les fichiers ici ou" : "Déposez le fichier ici ou";
+    pick.type = "button";
+    pick.className = "btn sm";
+    pick.textContent = "Parcourir…";
+    pick.addEventListener("click", function () { input.click(); });
+    ui.appendChild(hint);
+    ui.appendChild(pick);
+    drop.insertBefore(ui, input);
+    drop.classList.add("enhanced");
     var show = function () {
       list.textContent = Array.prototype.map.call(input.files, function (f) { return f.name + "  " + bytes(f.size); }).join("\n");
     };

@@ -45,7 +45,7 @@
                 {% if o.members|length - ready - o.states.get('error', 0) %}<span class="st warn">{{ o.members|length - ready - o.states.get('error', 0) }} en téléchargement</span>{% endif %}
               {% endif %}
             {% else %}
-              {% for color, cls, label in [('red', 'err', 'nombreuses mises à jour'), ('orange', 'warn', 'en attente'), ('grey', '', 'état inconnu'), ('green', 'ok', 'à jour')] if o.states.get(color) %}
+              {% for color, cls, label in [('red', 'err', 'à traiter'), ('orange', 'warn', 'à mettre à jour'), ('grey', '', 'état inconnu'), ('green', 'ok', 'à jour')] if o.states.get(color) %}
               <span class="st {{ cls }}" title="{{ label }}">{{ o.states[color] }} {{ label }}</span>{{ ' ' if not loop.last }}
               {% endfor %}
             {% endif %}

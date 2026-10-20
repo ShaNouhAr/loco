@@ -8,7 +8,7 @@
 {% macro device_item(device) -%}
 {% set usable = device.os_family == 'windows' and device.state == 'active' %}
 <label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
-  <span><strong class="mono">{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} · non compatible (logiciels Windows){% elif device.state != 'active' %} · agent en cours de retrait{% endif %}</small></span></label>
+  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} · non compatible (logiciels Windows){% elif device.state != 'active' %} · agent en cours de retrait{% endif %}</small></span></label>
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}

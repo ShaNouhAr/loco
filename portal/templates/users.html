@@ -25,7 +25,7 @@
         {% for u in users %}
         {% set me = u.id == current_user.id %}{% set manageable = can_manage_user(u) %}
         <tr>
-          <td class="user-cell">{% if u.auth_source == "directory" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub">{{ 'RADIUS' if u.directory_kind == 'radius' else 'LDAP' }} · {{ u.provider_label or "annuaire supprimé" }}{% if u.subject and u.subject != u.username %} · identifiant d'annuaire {{ u.subject }}{% endif %}</span>{% if u.email %}<span class="sub">{{ u.email }}</span>{% endif %}{% elif u.auth_source == "sso" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub warn-text">Ancienne connexion OpenID Connect, retirée : donnez-lui un mot de passe local pour la réactiver.</span>{% endif %}<span class="mono">{{ u.username }}</span>{% if me %} <span class="faint small">(vous)</span>{% endif %}<span class="sub">créé le {{ u.created_at|date_fr }}</span></td>
+          <td class="user-cell">{% if u.auth_source == "directory" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub">{{ 'RADIUS' if u.directory_kind == 'radius' else 'LDAP' }} · {{ u.provider_label or "annuaire supprimé" }}{% if u.subject and u.subject != u.username %} · identifiant d'annuaire {{ u.subject }}{% endif %}</span>{% if u.email %}<span class="sub">{{ u.email }}</span>{% endif %}{% elif u.auth_source == "sso" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub warn-text">Ancienne connexion OpenID Connect, retirée : donnez-lui un mot de passe local pour la réactiver.</span>{% endif %}<span>{{ u.username }}</span>{% if me %} <span class="faint small">(vous)</span>{% endif %}<span class="sub">créé le {{ u.created_at|date_fr }}</span></td>
           <td>
             {% if u.pending %}
             <span class="st warn">En attente d'approbation · aucun accès</span>
@@ -40,7 +40,7 @@
             {% else %}<span class="role">{{ roles.get(u.role, 'Profil indisponible') }}</span>{% endif %}
             {% if u.disabled and not u.pending %}<span class="st err small">désactivé</span>{% elif u.must_change %}<span class="st warn small">mot de passe temporaire</span>{% endif %}
           </td>
-          <td class="mono muted nowrap">{{ u.last_login|date_fr if u.last_login else '—' }}</td>
+          <td class="muted nowrap">{{ u.last_login|date_fr if u.last_login else '—' }}</td>
           <td class="right">{% if not me and manageable %}<div class="acts">
             {% if can('users.reset') and u.auth_source in ('local', 'sso') %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="{{ 'Donner un mot de passe local à ' ~ u.username ~ ' ?' if u.auth_source == 'sso' else 'Réinitialiser le mot de passe de ' ~ u.username ~ ' ?' }}" data-confirm-text="{{ 'Le compte devient un compte local avec un mot de passe temporaire à changer à la première connexion.' if u.auth_source == 'sso' else 'Ses connexions seront fermées et ses commandes non transmises aux agents annulées.' }}" data-confirm-ok="{{ 'Donner un mot de passe' if u.auth_source == 'sso' else 'Réinitialiser' }}">
               <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ 'Mot de passe local' if u.auth_source == 'sso' else 'Réinitialiser' }}</button>

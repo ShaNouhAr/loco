@@ -93,7 +93,7 @@ class TestSoftwareCatalog(FleetTest):
         dev = device(Agent(WINDOWS, "192.168.43.50").uid)["id"]
         self.group("device", "Compta", [dev])
         page = self.admin.c.get("/parc/groupes").get_data(as_text=True)
-        self.assertIn("1 en attente", page)                                # 7-Zip en retard sur le poste
+        self.assertIn("1 à mettre à jour", page)                           # 7-Zip en retard sur le poste
         self.assertIn(WINDOWS["hostname"], page)
 
     def test_editor_lists_members_first_and_readers_only_see_members(self):

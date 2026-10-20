@@ -6,10 +6,10 @@
 </div>
 <div class="stack">
   <section class="panel"><div class="panel-h"><h2>Profils <span class="h-count">{{ profiles|length }}</span></h2></div>
-    <div class="table-wrap"><table><thead><tr><th>Profil</th><th>Droits</th><th>Comptes</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>Profil</th><th class="num">Droits</th><th class="num">Comptes</th><th></th></tr></thead><tbody>
       {% for profile in profiles %}<tr>
         <td><a href="{{ url_for('roles_editor', role_id=profile.id) }}"><strong>{{ profile.label }}</strong></a>{% if profile.builtin %} <span class="tag">intégré</span>{% endif %}<span class="sub">{{ profile.description }}</span></td>
-        <td class="mono">{{ role_permissions(profile.id)|length }}</td><td class="mono">{{ profile.accounts }}</td>
+        <td class="num">{{ role_permissions(profile.id)|length }}</td><td class="num">{{ profile.accounts }}</td>
         <td class="right"><div class="acts"><a class="linkbtn" href="{{ url_for('roles_editor', role_id=profile.id) }}">Consulter{% if can('roles.manage') and editable_role(profile) %} / modifier{% endif %}</a>
           {% if can('roles.manage') and editable_role(profile) %}<form method="post" action="{{ url_for('roles_delete', role_id=profile.id) }}" data-confirm="Supprimer le profil {{ profile.label }} ?" data-confirm-text="Le profil doit être inutilisé. Les profils intégrés ne peuvent pas être supprimés." data-confirm-ok="Supprimer"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del" {{ 'disabled' if profile.accounts }} title="{{ 'Réaffectez les comptes avant de supprimer ce profil' if profile.accounts else 'Supprimer ce profil inutilisé' }}">Supprimer</button></form>{% endif %}
         </div></td>

@@ -66,7 +66,7 @@
         {% if draft %}
           {% for d in plan.devices %}
           <tr>
-            <td class="mono nowrap">{{ d.hostname or d.uid[:8] }}</td>
+            <td class="nowrap">{{ d.hostname or d.uid[:8] }}</td>
             <td><span class="st {{ 'warn' if d.reason else 'ok' }}">{{ d.reason or 'Poste Windows retenu' }}</span></td>
             <td>{{ families.get(d.os_family, d.os_family) }}</td>
           </tr>
@@ -74,7 +74,7 @@
         {% else %}
           {% for t in targets %}{% set tcls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
           <tr>
-            <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}" class="mono">{{ t.hostname }}</a>{% else %}<span class="mono">{{ t.hostname }}</span>{% endif %}
+            <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}
               {% if t.apps %}<span class="sub sans">{{ t.apps|length }} logiciel{{ 's' if t.apps|length > 1 }} à installer</span>{% endif %}</td>
             <td class="nowrap"><span class="st {{ tcls }}">{{ states[t.state] }}</span>{% if t.sent_at and t.state in ('sent', 'running') %}<span class="sub sans">transmis {{ t.sent_at|date_fr }}</span>{% elif t.finished_at %}<span class="sub sans">{{ t.finished_at|date_fr }}</span>{% endif %}</td>
             <td>

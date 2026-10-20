@@ -210,7 +210,7 @@ def status(dev, apps=None):
 def status_label(dev, color):
     """Libellé court du voyant (pastille de la fiche) ; le détail reste dans l'explication complète."""
     if color != "grey":
-        return {"green": "à jour", "orange": "mises à jour en attente", "red": "nombreuses mises à jour"}[color]
+        return {"green": "à jour", "orange": "mises à jour en attente", "red": "à traiter"}[color]
     seen = _ago(dev["last_seen"])
     if dev["state"] == "removing":
         return "retrait demandé"

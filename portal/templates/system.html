@@ -75,7 +75,7 @@
         <dt>Disque</dt><dd><span class="num">{{ disk.free|human }}</span> libres sur <span class="num">{{ disk.total|human }}</span></dd>
         {% for label, path in paths.items() %}<dt>{{ label }}</dt><dd class="mono">{{ path }}</dd>{% endfor %}
         {% for name, version in versions.items() %}<dt>{{ name }}</dt><dd class="mono">{{ version or '—' }}</dd>{% endfor %}
-        <dt>Tailles mises à jour</dt><dd class="mono">{{ stats.updated or '—' }}</dd>
+        <dt>Tailles mises à jour</dt><dd>{{ stats.updated|date_fr if stats.updated else '—' }}</dd>
       </dl>
     </section>
   </div>
@@ -87,7 +87,7 @@
       <table>
         <thead><tr><th>Archive</th><th>Date</th><th class="num">Taille</th></tr></thead>
         <tbody>
-        {% for b in backups %}<tr><td class="mono">{{ b.name }}</td><td class="mono muted">{{ b.when|date_fr }}</td><td class="num">{{ b.size|human }}</td></tr>{% endfor %}
+        {% for b in backups %}<tr><td class="mono">{{ b.name }}</td><td class="muted">{{ b.when|date_fr }}</td><td class="num">{{ b.size|human }}</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

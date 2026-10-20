@@ -45,7 +45,7 @@
     {% if runs %}
     <div class="table-wrap"><table><tbody>
       {% for item in runs %}{% set r = item.run %}{% set p = item.summary %}
-      <tr><td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.created_at|date_fr }}</a> <span class="mono faint">v{{ r.version }}</span><span class="sub sans">{{ r.created_by }} · {{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.failed %} · {{ p.failed }} échec{{ 's' if p.failed > 1 }}{% endif %}</span></td>
+      <tr><td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.created_at|date_fr }}</a> <span class="faint">v{{ r.version }}</span><span class="sub">{{ r.created_by }} · {{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.failed %} · {{ p.failed }} échec{{ 's' if p.failed > 1 }}{% endif %}</span></td>
         <td class="deploy-progress">{{ progress(p) }}</td></tr>
       {% endfor %}
     </tbody></table></div>

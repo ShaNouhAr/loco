@@ -28,7 +28,7 @@
       <dl class="kv">
         <dt>Installé</dt><dd class="mono">{{ version }}</dd>
         <dt>Dernière publiée</dt><dd class="mono">{% if latest %}{{ latest.version }}{% if latest.published %} <span class="faint">({{ latest.published[:10] }})</span>{% endif %}{% else %}—{% endif %}</dd>
-        <dt>Vérifié le</dt><dd class="mono">{{ status.checked|date_fr if status.checked else 'jamais' }}</dd>
+        <dt>Vérifié le</dt><dd>{{ status.checked|date_fr if status.checked else 'jamais' }}</dd>
       </dl>
       {% if update_available %}
       <div class="panel-f row">
@@ -51,7 +51,7 @@
       </div>
       <dl class="kv">
         <dt>Alpine Linux</dt><dd class="mono">{{ alpine_release or '—' }}</dd>
-        <dt>Paquets à mettre à jour</dt><dd>{% if status.system_updates %}<details><summary class="mono">{{ status.system_updates|length }}</summary><span class="mono small">{{ status.system_updates|join(', ') }}</span></details>{% else %}<span class="mono">0</span>{% endif %}</dd>
+        <dt>Paquets à mettre à jour</dt><dd>{% if status.system_updates %}<details><summary>{{ status.system_updates|length }}</summary><span class="mono small">{{ status.system_updates|join(', ') }}</span></details>{% else %}<span class="mono">0</span>{% endif %}</dd>
       </dl>
       <div class="panel-f row">
         {% if status.system_updates %}
@@ -77,9 +77,9 @@
         <tbody>
         {% for j in jobs %}
           <tr class="{{ 'sel' if job and j.id == job.id }}">
-            <td class="mono muted nowrap"><a href="{{ url_for('appliance_updates', operation=j.id) }}">{{ (j.started or j.queued)|date_fr }}</a></td>
+            <td class="muted nowrap"><a href="{{ url_for('appliance_updates', operation=j.id) }}">{{ (j.started or j.queued)|date_fr }}</a></td>
             <td>{{ labels.get(j.action, j.action) }}{% if j.params %}<span class="sub">{% for k, v in j.params.items() %}{{ k }}={{ v }}{{ ' ' if not loop.last }}{% endfor %}</span>{% endif %}</td>
-            <td class="mono muted hide-sm">{{ j.user or '—' }}</td>
+            <td class="muted hide-sm">{{ j.user or '—' }}</td>
             <td>{% if j.state == 'success' %}<span class="st ok">réussie</span>{% elif j.state == 'failed' %}<span class="st err">échec</span>{% else %}<span class="st warn">en cours</span>{% endif %}</td>
           </tr>
         {% endfor %}

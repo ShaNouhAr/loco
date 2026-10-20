@@ -74,7 +74,7 @@ class TestDashboardCharts(FleetTest):
         self.assertIn("17/10 : 3,00 Go depuis le cache, 1,00 Go depuis Internet", page)
         self.assertIn('class="ring-green"', page)
         self.assertIn("Disque des données", page)
-        self.assertIn('class="seg-free"', page)
+        self.assertIn('class="usage-list"', page)
         self.assertNotIn("<script", page.split("Windows Update, 14 derniers jours")[1].split("Services")[0])
 
     def test_fleet_chart_follows_permissions(self):
@@ -85,7 +85,7 @@ class TestDashboardCharts(FleetTest):
         viewer = browser(self, "graphiques", profile(self, "graphiques", {"dashboard.view"}))
         page = viewer.c.get("/").get_data(as_text=True)
         self.assertIn("Windows Update, 14 derniers jours", page)
-        self.assertNotIn('class="chart ring"', page)
+        self.assertNotIn('class="chart status-bar"', page)
 
 
 class TestWindowsUpdatePage(FleetTest):
@@ -122,7 +122,7 @@ class TestWindowsUpdatePage(FleetTest):
         self.assertTrue(data["last"].startswith(today.isoformat()))
         page = self.admin.c.get("/windows-update").get_data(as_text=True)
         self.assertNotIn("Aucun poste n'est encore passé", page)
-        self.assertIn(f'<span class="mono">{WINDOWS["hostname"]}</span><span class="sub">192.168.43.50</span>', page)
+        self.assertIn(f'<span>{WINDOWS["hostname"]}</span><span class="sub mono">192.168.43.50</span>', page)
         self.assertIn('id="domains"', page)
         self.assertIn('class="bar-hit"', page)
 

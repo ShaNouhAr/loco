@@ -22,7 +22,7 @@
         {% endif %}
         <div><div class="row-between"><h3 class="pick-title">Appareils {{ 'Windows' if script.platform == 'windows' else 'Linux' }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="Rechercher" data-filter="#script-devices .selection-item" aria-label="Rechercher un appareil">{% endif %}</div>
           <div class="selection-list" id="script-devices">
-            {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong class="mono">{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">Aucun appareil compatible actif.</p>{% endfor %}
+            {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong>{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">Aucun appareil compatible actif.</p>{% endfor %}
           </div>
           {% if incompatible %}<p class="hint">{{ incompatible }} autre{{ 's' if incompatible > 1 }} appareil{{ 's' if incompatible > 1 }} (autre système ou agent en retrait) non proposé{{ 's' if incompatible > 1 }}.</p>{% endif %}
         </div>

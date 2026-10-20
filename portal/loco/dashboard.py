@@ -74,7 +74,7 @@ def chart_data(d):
         n = sum(counts.values())
         ring, offset = [], 0.0
         circumference = 301.59                       # 2π × 48 : rayon de l'anneau
-        for key, label in (("green", "à jour"), ("orange", "mises à jour en attente"), ("red", "à traiter"), ("grey", "en attente")):
+        for key, label in (("green", "à jour"), ("orange", "mises à jour en attente"), ("red", "à traiter"), ("grey", "état inconnu")):
             length = circumference * counts[key] / n if n else 0
             ring.append({"key": key, "label": label, "count": counts[key], "len": round(length, 2),
                          "gap": round(circumference - length, 2), "offset": round(-offset, 2)})

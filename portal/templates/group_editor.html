@@ -59,7 +59,7 @@
             <td class="mono nowrap">{{ r.version or '—' }}</td>
             <td class="nowrap">{% if r.status == 'ready' %}<span class="st ok">prêt</span>{% elif r.status == 'error' %}<span class="st err">erreur</span>{% else %}<span class="st warn">téléchargement</span>{% endif %}</td>
             {% else %}
-            <td><a href="{{ url_for('fleet_device', dev_id=r.id) }}" class="mono">{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
+            <td><a href="{{ url_for('fleet_device', dev_id=r.id) }}" >{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
             <td>{{ r.os_name or families.get(r.os_family, '') }}</td>
             <td class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(i.color, '') }}" title="{{ i.reason }}">{{ i.label }}</span></td>
             {% endif %}

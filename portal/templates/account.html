@@ -101,7 +101,7 @@
     {% if activity %}
     <div class="table-wrap"><table>
       <tbody>{% for e in activity %}{% set r = e.r %}
-        <tr><td class="mono muted nowrap" title="{{ r.at }}">{{ r.at|date_fr }}</td>
+        <tr><td class="muted nowrap" title="{{ r.at }}">{{ r.at|date_fr }}</td>
           <td>{% if e.failure %}<span class="st err"></span>{% endif %}{{ e.label }}{% if r.detail %}<span class="sub sans">{{ r.detail }}</span>{% endif %}</td>
           <td class="mono muted nowrap hide-sm">{{ r.ip }}</td></tr>
       {% endfor %}</tbody>

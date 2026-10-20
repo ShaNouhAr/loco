@@ -20,7 +20,7 @@
     <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="Mettre à jour {{ to_update }} poste(s) ?" data-confirm-text="Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.{% if can('fleet.reboot') %} Cochez « redémarrer si nécessaire » pour terminer les mises à jour qui l'exigent.{% endif %}" data-confirm-ok="Mettre à jour">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
-      {% if can("fleet.reboot") %}<label class="small muted"><input type="checkbox" name="reboot" value="1"> redémarrer si nécessaire</label>{% endif %}
+      {% if can("fleet.reboot") %}<label class="head-option"><input type="checkbox" name="reboot" value="1"> Redémarrer si nécessaire</label>{% endif %}
       <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>{{ 'Mettre à jour ce groupe' if selected_group else 'Tout mettre à jour' }}{% if to_update %} ({{ to_update }}){% endif %}</button>
     </form>
     {% endif %}
@@ -31,7 +31,7 @@
   <div class="fleet-filters">
     <nav class="chips" aria-label="Filtrer par état">
       <a class="chip {{ 'on' if not state }}" href="{{ filter_url(statut='') }}">Tous <b>{{ total }}</b></a>
-      {% for key, label, cls in [('red', 'Nombreuses mises à jour', 'err'), ('orange', 'Mises à jour en attente', 'warn'), ('grey', 'État inconnu', ''), ('green', 'À jour', 'ok')] %}
+      {% for key, label, cls in [('red', 'À traiter', 'err'), ('orange', 'Mises à jour en attente', 'warn'), ('grey', 'État inconnu', ''), ('green', 'À jour', 'ok')] %}
       <a class="chip {{ 'on' if state == key }}" href="{{ filter_url(statut=key) }}" title="{{ {'red': red_threshold ~ ' mises à jour ou plus', 'orange': 'de 1 à ' ~ (red_threshold - 1) ~ ' mises à jour', 'grey': 'inventaire en cours ou incomplet, sans contact récent, retrait', 'green': 'aucune mise à jour'}[key] }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
       {% endfor %}
     </nav>
@@ -57,16 +57,16 @@
   <section class="panel">
     {% if rows %}
     <div class="table-wrap">
-      <table id="fleet-table" class="fleet-table">
+      <table id="fleet-table" class="fleet-table table-cards">
         <thead><tr><th>Poste</th><th>Adresse</th><th>Mises à jour</th><th class="hide-sm">Groupes</th><th class="hide-sm">Contact</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
           <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
             <td><span class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" title="{{ r.label }} : {{ r.reason }}"></span>
-              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="mono nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
+              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
               <span class="sub">{{ d.os_name or families.get(d.os_family, '') }}</span></td>
-            <td class="nowrap"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="Adresse par laquelle loco voit le poste (routeur ou NAT)">via {{ r.via }}</span>{% endif %}</td>
-            <td>
+            <td class="nowrap" data-label="Adresse"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="Adresse par laquelle loco voit le poste (routeur ou NAT)">via {{ r.via }}</span>{% endif %}</td>
+            <td data-label="Mises à jour">
               {% if r.color == 'grey' %}<span class="muted">{{ r.label }}</span>
               {% elif not r.system and not r.apps %}<span class="muted">à jour</span>
               {% else %}
@@ -76,9 +76,9 @@
               {% endif %}
               {% if d.reboot_required %}<span class="sub warn-text">redémarrage nécessaire</span>{% endif %}
             </td>
-            <td class="hide-sm">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
-            <td class="muted nowrap hide-sm" title="{{ d.last_seen }}">{{ r.seen }}</td>
-            <td class="right nowrap">
+            <td class="hide-sm" data-label="Groupes">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
+            <td class="muted nowrap hide-sm" data-label="Contact" title="{{ d.last_seen }}">{{ r.seen }}</td>
+            <td class="right nowrap card-action">
               {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ actions[r.pending[0].action]|lower }} en attente</span>
               {% elif can('fleet.update') and r.needs_update %}
               <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
@@ -98,7 +98,7 @@
     {% else %}
     <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant{% if can('fleet.enroll') %} : <button type="button" class="linkbtn" data-open="#enroll">ajoutez-en un</button>{% endif %}.{% endif %}</div>
     {% endif %}
-    <div class="panel-f">Pastille : nombre de mises à jour (système, Flatpak et logiciels du catalogue) — verte à 0, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} ; grise si l'état n'est pas connu. Les postes contactent loco toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
+    <div class="panel-f">Pastille : vert sans mise à jour, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} (système, Flatpak et catalogue), gris si l'état est inconnu. Contact toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
   </section>
 </div>
 

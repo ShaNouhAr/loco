@@ -75,10 +75,10 @@
           <tr class="day-row"><th colspan="5">{{ day.label }}</th></tr>
           {% for e in day.events %}{% set r = e.r %}
           <tr>
-            <td class="mono muted nowrap" title="{{ r.at }}">{{ r.at[11:16] }}</td>
+            <td class="muted nowrap" title="{{ r.at }}">{{ r.at[11:16] }}</td>
             <td><span class="nowrap" title="{{ r.action }}">{% if e.failure %}<span class="st err"></span>{% endif %}{{ e.label }}</span>
               <span class="sub">{{ e.category_label }}</span>{% if r.detail %}<span class="sub only-sm">{{ r.detail }}</span>{% endif %}</td>
-            <td class="mono nowrap">{% if r.username %}<a href="{{ link(compte=r.username) }}" class="quiet-link" title="Événements de ce compte">{{ r.username }}</a>{% else %}—{% endif %}</td>
+            <td class="nowrap">{% if r.username %}<a href="{{ link(compte=r.username) }}" class="quiet-link" title="Événements de ce compte">{{ r.username }}</a>{% else %}—{% endif %}</td>
             <td class="mono muted nowrap hide-sm">{{ r.ip }}</td>
             <td class="detail-cell hide-sm">{{ r.detail }}</td>
           </tr>
