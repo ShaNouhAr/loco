@@ -16,4 +16,6 @@ def enrollment():
     return render_template("enrollment.html", key=key, commands=fleet._commands(key) if key else {},
                            ca_sha256=fleet._ca_fingerprint() if key else "", version=config.VERSION,
                            msi_sha256=msi_state if msi else "", msi_ready=bool(msi),
-                           deb_name=agentpkg.deb_name(config.VERSION), rpm_name=agentpkg.rpm_name(config.VERSION))
+                           packages={kind: {"name": name(config.VERSION), "full": name(config.VERSION, True),
+                                            "repos": fleet.repos_available(kind)}
+                                     for kind, name in (("deb", agentpkg.deb_name), ("rpm", agentpkg.rpm_name))})

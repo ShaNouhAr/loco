@@ -215,6 +215,7 @@ main { max-width: var(--w); margin: 0 auto; padding: 32px 32px 96px; }
 .v { margin-top: 6px; font-size: 24px; font-weight: 600; line-height: 1.25; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .s { margin-top: 2px; font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .v.small-v { font-size: 18px; line-height: 30px; letter-spacing: -.01em; }
+.v-unit { margin-left: 5px; font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-3); }
 
 .meter { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; margin-top: 12px; }
 .meter > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--text-2); }
@@ -581,6 +582,13 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .device-meta { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 6px; color: var(--text-2); font-size: 13.5px; }
 .device-meta .mono { font-size: 12.5px; }
 .device-groups { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* ------------------------------------------------------------------ système */
+
+.system-commands { border-top: 1px solid var(--line); }
+.system-commands > * + * { margin-top: 8px; }
+.system-ca .tabs { margin-bottom: 12px; }
+.system-ca .tab-panel > * + * { margin-top: 8px; }
 
 /* ------------------------------------------------------------------ enrôlement */
 

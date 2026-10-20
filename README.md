@@ -289,10 +289,14 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de
   certificats du poste ; installeurs vérifiés par SHA-256 ; jetons stockés hachés côté serveur.
 - **Paquets .deb et .rpm** : produits par loco pour ce serveur (adresse, autorité épinglée et clé incluses), ils
-  s'installent par `sudo apt install ./loco-client_<version>_all.deb` ou `sudo dnf install ./loco-client-<version>-1.noarch.rpm`
-  et inscrivent le poste aussitôt ; désinstaller le paquet retire l'agent. Le paquet ne contient que le script
-  d'installation : l'agent se met ensuite à jour seul. Ils se téléchargent aussi depuis le poste
-  (`/agent/loco-client.deb?key=…`, `/agent/loco-client.rpm?key=…`).
+  s'installent par `sudo apt install ./loco-client_<version>+depots_all.deb` ou
+  `sudo dnf install ./loco-client-<version>-1.depots.noarch.rpm` et inscrivent le poste aussitôt. Cette variante
+  recommandée configure aussi les dépôts et le cache de loco (autorité confiée au système) ; la variante
+  « agent seul » (`loco-client_<version>_all.deb`, `loco-client-<version>-1.noarch.rpm`) ne touche pas aux dépôts.
+  Passer de l'agent seul au paquet complet est une mise à jour qui garde l'inscription ; désinstaller le paquet
+  retire l'agent (et, pour le paquet complet, la configuration des dépôts). Le paquet ne contient que les scripts
+  d'installation : l'agent se met ensuite à jour seul. Ils se téléchargent aussi depuis le poste, en HTTPS ou par
+  le port HTTP d'amorçage (`/agent/loco-client.deb?key=…`, `&depots=1` pour la variante complète).
 - **Windows, MSI téléchargé** : la page *Enrôlement* propose le MSI en téléchargement direct (lien public, également
   ouvrable depuis le navigateur du poste) et la commande `msiexec` à lancer en administrateur avec l'adresse, la clé
   et l'empreinte du serveur ; un simple double-clic installe le service sans l'inscrire.

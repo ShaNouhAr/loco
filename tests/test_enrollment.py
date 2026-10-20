@@ -8,9 +8,10 @@ import struct
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 from test_fleet import Agent, FleetTest
-from loco import agentpkg, config, debpkg, rpmpkg
+from loco import agentpkg, config, debpkg, fleet, rpmpkg
 
 SCRIPT = "#!/bin/sh\necho 'installation de l agent'\n"
 
@@ -67,8 +68,9 @@ class TestAgentPackages(unittest.TestCase):
             prerm = tar.extractfile("./prerm").read().decode()
             self.assertEqual(tar.getmember("./postinst").mode, 0o755)
             md5sums = tar.extractfile("./md5sums").read().decode()
-        self.assertIn("configure) sh /usr/share/loco-client/install.sh", postinst)
-        self.assertIn("remove) if [ -x /usr/local/lib/loco-client/loco-client.py ]", prerm)
+        self.assertIn("configure)\n        sh /usr/share/loco-client/install.sh\n", postinst)
+        self.assertIn("remove)\n        if [ -x /usr/local/lib/loco-client/loco-client.py ]", prerm)
+        self.assertNotIn("repos.sh", postinst + prerm)                                # agent seul : dépôts intacts
         with tarfile.open(fileobj=io.BytesIO(members["data.tar.gz"])) as tar:
             script = tar.extractfile("./usr/share/loco-client/install.sh").read()
             self.assertEqual({m.uname for m in tar.getmembers()}, {"root"})
@@ -108,10 +110,12 @@ class TestEnrollmentPage(FleetTest):
         for tab in ('data-tab="windows"', 'data-tab="debian"', 'data-tab="redhat"'):
             self.assertIn(tab, page)
         self.assertIn("Télécharger le MSI", page)
-        self.assertIn(f'href="/agent/loco-client.deb?key={key}" download', page)
-        self.assertIn(f'href="/agent/loco-client.rpm?key={key}" download', page)
-        self.assertIn(f"sudo apt install ./loco-client_{config.VERSION}_all.deb", page)
-        self.assertIn(f"sudo dnf install ./loco-client-{config.VERSION}-1.noarch.rpm", page)
+        self.assertIn(f'href="/agent/loco-client.deb?key={key}" download', page)          # agent seul
+        self.assertIn(f'href="/agent/loco-client.deb?key={key}&amp;depots=1" download', page)  # agent et dépôts
+        self.assertIn(f'href="/agent/loco-client.rpm?key={key}&amp;depots=1" download', page)
+        self.assertIn(f"sudo apt install ./loco-client_{config.VERSION}+depots_all.deb", page)
+        self.assertIn(f"sudo dnf install ./loco-client-{config.VERSION}-1.depots.noarch.rpm", page)
+        self.assertIn("Dépôts seuls, sans agent", page)
         self.assertIn("/linux/setup.sh | sudo sh", page)
         self.assertIn('href="/enrolement" class="nav-enroll on"', page)
         self.assertNotIn("Brancher un poste", self.admin.c.get("/").get_data(as_text=True))
@@ -131,6 +135,41 @@ class TestEnrollmentPage(FleetTest):
         rpm = anonymous.get(f"/agent/loco-client.rpm?key={key}")
         self.assertEqual((rpm.status_code, rpm.mimetype), (200, "application/x-rpm"))
         self.assertEqual(rpm.data[:4], b"\xed\xab\xee\xdb")
+
+    def test_full_package_also_configures_the_repositories(self):
+        key = Agent.key()
+        with mock.patch.object(fleet, "_ca_pem", return_value="-----BEGIN CERTIFICATE-----\nAUTORITE\n"):
+            deb = self.admin.c.get(f"/agent/loco-client.deb?key={key}&depots=1")
+        self.assertIn(f'filename="loco-client_{config.VERSION}+depots_all.deb"', deb.headers["Content-Disposition"])
+        members = deb_members(deb.data)
+        with tarfile.open(fileobj=io.BytesIO(members["data.tar.gz"])) as tar:
+            repos = tar.extractfile("./usr/share/loco-client/repos.sh").read().decode()
+            ca = tar.extractfile("./usr/share/loco-client/loco-ca.crt").read().decode()
+        with tarfile.open(fileobj=io.BytesIO(members["control.tar.gz"])) as tar:
+            control = tar.extractfile("./control").read().decode()
+            postinst = tar.extractfile("./postinst").read().decode()
+            prerm = tar.extractfile("./prerm").read().decode()
+        self.assertIn(f'BASE="{config.HTTPS_URL}"', repos)                       # l'autorité est confiée au système
+        self.assertIn("--from-package) FROM_PACKAGE=1", repos)
+        self.assertIn("AUTORITE", ca)
+        self.assertIn(f"Version: {config.VERSION}+depots", control)
+        self.assertIn("ca-certificates, curl | wget", control)
+        self.assertLess(postinst.index("update-ca-certificates"), postinst.index("repos.sh --from-package"))
+        self.assertLess(postinst.index("repos.sh --from-package --cache-only"), postinst.index("install.sh"))
+        self.assertLess(prerm.index("repos.sh --remove --from-package"), prerm.index("loco-client.py remove"))
+        rpm = self.admin.c.get(f"/agent/loco-client.rpm?key={key}&depots=1")
+        self.assertIn(f'filename="loco-client-{config.VERSION}-1.depots.noarch.rpm"', rpm.headers["Content-Disposition"])
+        path = saved(rpm.data, ".rpm")
+        self.addCleanup(os.unlink, path)
+        header = rpmpkg.read_rpm(path)[0]
+        self.assertEqual(header[1002], "1.depots")
+        self.assertIn("repos.sh --from-package --no-local", header[1024])
+        self.assertIn("update-ca-trust extract", header[1024])
+        with mock.patch.object(config, "RPM_ENABLED", False):
+            self.assertEqual(self.admin.c.get(f"/agent/loco-client.rpm?key={key}&depots=1").status_code, 404)
+            page = self.admin.c.get("/enrolement").get_data(as_text=True)
+        self.assertNotIn(f"loco-client.rpm?key={key}&amp;depots=1", page)
+        self.assertIn(f"loco-client.rpm?key={key}", page)                         # l'agent seul reste proposé
 
     def test_page_follows_rights_and_features(self):
         import test_permissions

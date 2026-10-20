@@ -2,23 +2,97 @@
 {% from "_macros.html" import cmd, service %}
 {% block title %}Système{% endblock %}
 {% block content %}
+{% set backup_cmd = 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') %}
+{% set ca_url = (http_url or https_url) ~ '/ca.crt' %}
 <div class="head">
   <div>
     <h1>Système</h1>
-    <p>Certificat HTTPS, services et emplacements sur <span class="mono">{{ host }}</span>.</p>
+    <p>État du serveur loco <span class="mono">{{ host }}</span> : services, certificat HTTPS, stockage et sauvegardes.</p>
   </div>
 </div>
 
 <div class="stack">
-  <div class="cols">
+  {% if stopped %}<p class="note err">{{ 'Service arrêté' if stopped|length == 1 else 'Services arrêtés' }} : <span class="mono">{{ stopped|join(', ') }}</span>. Les postes peuvent ne plus joindre les caches ou le portail ; consultez le journal du service sur le serveur.</p>{% endif %}
+  {% if not cert %}<p class="note err">Certificat HTTPS introuvable dans <span class="mono">{{ paths['Certificats'] }}</span> : {% if container %}redémarrez le conteneur{% else %}relancez install.sh{% endif %}.</p>{% endif %}
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="k">Services</div>
+      <div class="v">{{ services|length - stopped|length }}<span class="v-unit">/ {{ services|length }}</span></div>
+      <div class="s">{% if stopped %}<span class="st err">{{ stopped|length }} arrêté{{ 's' if stopped|length > 1 }}</span>{% else %}<span class="st ok">tous actifs</span>{% endif %}</div>
+    </div>
+    <div class="metric">
+      <div class="k">Certificat HTTPS</div>
+      {% if cert and cert.end.days is not none %}
+      <div class="v">{{ cert.end.days }}<span class="v-unit">jours</span></div>
+      <div class="s"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">jusqu'au {{ cert.end.text }}</span></div>
+      {% else %}
+      <div class="v">—</div>
+      <div class="s"><span class="st err">{{ 'introuvable' if not cert else 'validité inconnue' }}</span></div>
+      {% endif %}
+    </div>
+    <div class="metric">
+      <div class="k">Disque des données</div>
+      <div class="v">{{ disk.free|human }}</div>
+      <div class="s">libres sur {{ disk.total|human }}</div>
+      <div class="meter {{ 'err' if disk.pct >= 90 else 'warn' if disk.pct >= 80 }}"><i data-width="{{ disk.pct }}"></i></div>
+    </div>
+    <div class="metric">
+      <div class="k">Dernière sauvegarde</div>
+      {% if last_backup %}
+      <div class="v small-v">{{ last_backup.text }}</div>
+      <div class="s">{% if last_backup.late %}<span class="st warn">sauvegarde quotidienne en retard</span>{% else %}{{ backups|length }} conservée{{ 's' if backups|length > 1 }}{% endif %}</div>
+      {% else %}
+      <div class="v small-v">aucune</div>
+      <div class="s"><span class="st warn">la première arrive cette nuit</span></div>
+      {% endif %}
+    </div>
+    <div class="metric">
+      <div class="k">Version</div>
+      <div class="v">{{ version }}</div>
+      <div class="s">{% if appliance and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">mises à jour de loco</a>{% else %}suivie par les agents{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="cols even">
+    <section class="panel">
+      <div class="panel-h"><h2>Services</h2><div class="aside">{{ services|length - stopped|length }} sur {{ services|length }} actifs</div></div>
+      <div class="table-wrap">
+        <table>
+          <tbody>
+          {% for unit, desc, active in services %}
+            <tr><td><span class="mono">{{ unit }}</span><span class="sub">{{ desc }}</span></td><td class="right nowrap">{{ service(active) }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2>Sauvegardes</h2><div class="aside">quotidiennes, hors caches</div></div>
+      {% if backups %}
+      <div class="table-wrap">
+        <table>
+          <tbody>
+          {% for b in backups %}<tr><td><span>{{ b.when|date_fr }}</span><span class="sub mono">{{ b.name }}</span></td><td class="num muted">{{ b.size|human }}</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty">Aucune sauvegarde pour l'instant.</div>
+      {% endif %}
+      <div class="panel-b system-commands">
+        <p class="small muted">Configuration, comptes, clés, dépôts et catalogue, dans <span class="mono">{{ backup_dir }}</span>. Sur le serveur :</p>
+        {{ cmd('backup-create', backup_cmd ~ ' create', '#' if not windows else 'PS>') }}
+        {{ cmd('backup-restore', backup_cmd ~ ' restore ARCHIVE', '#' if not windows else 'PS>') }}
+      </div>
+    </section>
+  </div>
+
+  <div class="cols even">
     <section class="panel">
       <div class="panel-h"><h2>Certificat HTTPS</h2>
-        <div class="aside">
-          {% if cert and cert.end.days is not none %}
-            {% if cert.end.days < 30 %}<span class="st err">expire dans {{ cert.end.days }} j</span>
-            {% else %}<span class="st ok">valide</span>{% endif %}
-          {% endif %}
-        </div>
+        {% if cert and cert.end.days is not none %}<div class="aside"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ 'expire dans ' ~ cert.end.days ~ ' j' if cert.end.days < 60 else 'valide' }}</span></div>{% endif %}
       </div>
       {% if cert %}
       <dl class="kv">
@@ -29,72 +103,55 @@
         <dt>Empreinte SHA-256</dt><dd class="mono small break">{{ cert.sha256 }}</dd>
       </dl>
       {% else %}
-      <div class="panel-b"><p class="note err">Certificat introuvable dans <span class="mono">/etc/loco/tls</span> : {% if container %}redémarrez le conteneur{% else %}relancez install.sh{% endif %}.</p></div>
+      <div class="empty">Certificat introuvable.</div>
       {% endif %}
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Autorité de certification locale</h2><div class="aside"><a href="{{ https_url }}/ca.crt">ca.crt</a></div></div>
+      <div class="panel-h"><h2>Autorité de certification locale</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ https_url }}/ca.crt" download>Télécharger ca.crt</a></div>{% endif %}</div>
       {% if ca %}
       <div class="panel-b">
-        <p class="muted">Le certificat du portail est signé par cette autorité, créée à l'installation. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat.</p>
-        <div>
-          <span class="cmd-label">Windows, PowerShell administrateur</span>
-          {{ cmd('ca-win', "Invoke-WebRequest -UseBasicParsing " ~ (http_url or https_url) ~ "/ca.crt -OutFile $env:TEMP\\loco-ca.crt; Import-Certificate -FilePath $env:TEMP\\loco-ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root", 'PS>') }}
+        <p class="muted">Elle signe le certificat du portail. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat. Les paquets de la page <a href="{{ url_for('enrollment') }}">Enrôlement</a> s'en chargent ; l'agent seul l'épingle sans l'importer.</p>
+        <p class="small"><span class="muted">Empreinte SHA-256 à vérifier avant import</span><br><span class="mono break">{{ ca.sha256 }}</span></p>
+        <div class="system-ca">
+          <div class="tabs" role="tablist">
+            <button type="button" data-tab="ca-win" aria-selected="true">Windows</button>
+            <button type="button" data-tab="ca-deb" aria-selected="false">Debian, Ubuntu</button>
+            <button type="button" data-tab="ca-rpm" aria-selected="false">Rocky, AlmaLinux, RHEL</button>
+          </div>
+          <div class="tab-panel on" data-panel="ca-win">
+            {{ cmd('ca-win', "Invoke-WebRequest -UseBasicParsing " ~ ca_url ~ " -OutFile $env:TEMP\\loco-ca.crt; Import-Certificate -FilePath $env:TEMP\\loco-ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root", 'PS>') }}
+            <span class="hint">PowerShell administrateur. Sur un domaine : déploiement par GPO.</span>
+          </div>
+          <div class="tab-panel" data-panel="ca-deb">
+            {{ cmd('ca-deb', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /usr/local/share/ca-certificates/loco.crt >/dev/null && sudo update-ca-certificates') }}
+            <span class="hint">Firefox sous Linux utilise son propre magasin (Paramètres › Certificats › Importer).</span>
+          </div>
+          <div class="tab-panel" data-panel="ca-rpm">
+            {{ cmd('ca-rpm', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /etc/pki/ca-trust/source/anchors/loco.crt >/dev/null && sudo update-ca-trust') }}
+          </div>
         </div>
-        <div>
-          <span class="cmd-label">Debian / Ubuntu</span>
-          {{ cmd('ca-linux', 'curl -fsSL ' ~ (http_url or https_url) ~ '/ca.crt | sudo tee /usr/local/share/ca-certificates/loco.crt >/dev/null && sudo update-ca-certificates') }}
-        </div>
-        <p class="hint">Vérifier l'empreinte avant d'importer : <span class="mono break">{{ ca.sha256 }}</span>. Firefox sous Linux utilise son propre magasin (Paramètres › Certificats › Importer). Sur un domaine, l'autorité peut aussi être déployée par GPO.</p>
       </div>
       {% else %}
-      <div class="panel-b"><p class="muted">Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.</p></div>
+      <div class="empty">Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.</div>
       {% endif %}
     </section>
   </div>
 
-  <div class="cols">
+  <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>Services</h2></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Service</th><th class="hide-sm">Rôle</th><th>État</th></tr></thead>
-          <tbody>
-          {% for unit, desc, active in services %}
-            <tr><td class="mono nowrap">{{ unit }}</td><td class="muted hide-sm">{{ desc }}</td><td>{{ service(active) }}</td></tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      <div class="panel-h"><h2>Emplacements</h2>{% if stats.updated %}<div class="aside">tailles du {{ stats.updated|date_fr }}</div>{% endif %}</div>
+      <dl class="kv">
+        {% for label, path in paths.items() %}<dt>{{ label }}</dt><dd class="mono break">{{ path }}</dd>{% endfor %}
+      </dl>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Stockage et versions</h2></div>
+      <div class="panel-h"><h2>Versions</h2></div>
       <dl class="kv">
-        <dt>Disque</dt><dd><span class="num">{{ disk.free|human }}</span> libres sur <span class="num">{{ disk.total|human }}</span></dd>
-        {% for label, path in paths.items() %}<dt>{{ label }}</dt><dd class="mono">{{ path }}</dd>{% endfor %}
-        {% for name, version in versions.items() %}<dt>{{ name }}</dt><dd class="mono">{{ version or '—' }}</dd>{% endfor %}
-        <dt>Tailles mises à jour</dt><dd>{{ stats.updated|date_fr if stats.updated else '—' }}</dd>
+        {% for name, value in versions.items() %}<dt>{{ name }}</dt><dd class="mono">{{ value or '—' }}</dd>{% endfor %}
       </dl>
     </section>
   </div>
-
-  <section class="panel">
-    <div class="panel-h"><h2>Sauvegardes</h2><div class="aside mono">{{ backup_dir }}</div></div>
-    {% if backups %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Archive</th><th>Date</th><th class="num">Taille</th></tr></thead>
-        <tbody>
-        {% for b in backups %}<tr><td class="mono">{{ b.name }}</td><td class="muted">{{ b.when|date_fr }}</td><td class="num">{{ b.size|human }}</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% else %}
-    <div class="empty">Aucune sauvegarde pour l'instant.</div>
-    {% endif %}
-    <div class="panel-f">Quotidienne (configuration, comptes, clés, dépôt et catalogue ; hors caches). À la main : <code>{{ 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') }} create</code> ; restauration : <code>{{ 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') }} restore ARCHIVE</code>.</div>
-  </section>
 </div>
 {% endblock %}

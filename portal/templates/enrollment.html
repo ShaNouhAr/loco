@@ -5,11 +5,11 @@
 {% macro step(ns, title, aside='') -%}
 {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ title }}</h2>{% if aside %}<div class="aside">{{ aside }}</div>{% endif %}</div>
 {%- endmacro %}
-{% macro download(icon, name, meta, href, label) -%}
+{% macro download(icon, name, meta, href, label, cls='btn primary') -%}
 <div class="download">
   <span class="download-icon">{{ nav_icon(icon) }}</span>
   <div class="download-text"><strong class="mono">{{ name }}</strong><span>{{ meta }}</span></div>
-  <a class="btn primary" href="{{ href }}" download>{{ label }}</a>
+  <a class="{{ cls }}" href="{{ href }}" download>{{ label }}</a>
 </div>
 {%- endmacro %}
 {% macro flatpak_step(ns) -%}
@@ -23,24 +23,31 @@
   </div>
 </section>
 {%- endmacro %}
-{% macro linux_agent(ns, kind, name, label, path, install, fetch, fetch_http, remove) -%}
+{% macro linux_agent(ns, kind, system, cache, tool) -%}
+{% set pkg = packages[kind] %}{% set full = '_full' if pkg.repos else '' %}
 <section class="panel">
-  {{ step(ns, "Installer l'agent", "inscrit le poste dans Mon parc") }}
+  {{ step(ns, "Installer loco sur le poste", "inscrit le poste dans Mon parc") }}
   <div class="panel-b">
-    {{ download('package', name, label ~ ' · version ' ~ version ~ ' · Python 3 et systemd requis', path, 'Télécharger le .' ~ kind) }}
+    {% if pkg.repos %}
+    {{ download('package', pkg.full, 'Agent et ' ~ cache ~ ' · recommandé · version ' ~ version, commands[kind ~ '_full_path'], 'Télécharger') }}
+    {{ download('package', pkg.name, 'Agent seul, sans toucher aux dépôts du poste', commands[kind ~ '_path'], 'Télécharger', 'btn') }}
+    {% else %}
+    {{ download('package', pkg.name, system ~ ' · version ' ~ version ~ ' · Python 3 et systemd requis', commands[kind ~ '_path'], 'Télécharger') }}
+    {% endif %}
     <span class="cmd-label">Copiez le fichier sur le poste, puis dans son dossier :</span>
-    {{ cmd('enroll-' ~ kind, install) }}
+    {{ cmd('enroll-' ~ kind, commands[kind ~ full ~ '_install']) }}
+    {% if pkg.repos %}<span class="hint">Le paquet complet confie l'autorité de loco au système, branche le poste sur le cache et le dépôt local de sa version (le cache seul si ce dépôt n'existe pas encore), puis installe l'agent. Passer de l'agent seul au paquet complet est une mise à jour : l'inscription est conservée.</span>{% endif %}
     <details class="hint"><summary>Autres méthodes</summary>
       <div class="stack-sm">
         <span class="cmd-label">Télécharger et installer directement depuis le poste :</span>
-        {{ cmd('enroll-' ~ kind ~ '-fetch', fetch) }}
-        {% if fetch_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ fetch_http }}</code></span>{% endif %}
-        <span class="cmd-label">Sans paquet, par le script d'installation :</span>
+        {{ cmd('enroll-' ~ kind ~ '-fetch', commands[kind ~ full ~ '_fetch']) }}
+        {% if commands[kind ~ full ~ '_fetch_http'] %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands[kind ~ full ~ '_fetch_http'] }}</code></span>{% endif %}
+        <span class="cmd-label">Agent seul, sans paquet, par le script d'installation :</span>
         {{ cmd('enroll-' ~ kind ~ '-script', commands.linux) }}
         {% if commands.linux_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.linux_http }}</code></span>{% endif %}
       </div>
     </details>
-    <span class="hint">Le poste apparaît dans <a href="{{ url_for('fleet') }}">Mon parc</a> dès l'installation ; l'agent se met ensuite à jour seul. <code>{{ remove }}</code> le retire du poste.</span>
+    <span class="hint">Le poste apparaît dans <a href="{{ url_for('fleet') }}">Mon parc</a> dès l'installation ; l'agent se met ensuite à jour seul. <code>sudo {{ tool }} remove loco-client</code> retire l'agent{% if pkg.repos %} et, pour le paquet complet, la configuration des dépôts{% endif %}.</span>
   </div>
 </section>
 {%- endmacro %}
@@ -109,10 +116,10 @@
 
   {% set ns = namespace(n=0) %}
   <div class="tab-panel enroll-panel {{ 'on' if first == 'debian' }}" data-panel="debian">
-    {% if key %}{{ linux_agent(ns, 'deb', deb_name, 'Paquet Debian / Ubuntu', commands.deb_path, commands.deb_install, commands.deb_fetch, commands.deb_fetch_http, 'sudo apt remove loco-client') }}{% endif %}
+    {% if key %}{{ linux_agent(ns, 'deb', 'Paquet Debian / Ubuntu', 'dépôts APT', 'apt') }}{% endif %}
     {% if apt %}
     <section class="panel">
-      {{ step(ns, "Dépôts et cache APT", "recommandé") }}
+      {{ step(ns, "Dépôts seuls, sans agent" if key and packages.deb.repos else "Dépôts et cache APT", "inclus dans le paquet complet" if key and packages.deb.repos else "recommandé") }}
       <div class="panel-b">
         <p class="muted">Paquets Debian / Ubuntu via le cache de loco, et dépôt local de la version du poste (détectée automatiquement).</p>
         {{ cmd('enroll-apt', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
@@ -126,10 +133,10 @@
 
   {% set ns = namespace(n=0) %}
   <div class="tab-panel enroll-panel {{ 'on' if first == 'redhat' }}" data-panel="redhat">
-    {% if key %}{{ linux_agent(ns, 'rpm', rpm_name, 'Paquet Rocky Linux / AlmaLinux / RHEL 8 et plus', commands.rpm_path, commands.rpm_install, commands.rpm_fetch, commands.rpm_fetch_http, 'sudo dnf remove loco-client') }}{% endif %}
+    {% if key %}{{ linux_agent(ns, 'rpm', 'Paquet Rocky Linux / AlmaLinux / RHEL 8 et plus', 'dépôts DNF', 'dnf') }}{% endif %}
     {% if rpm %}
     <section class="panel">
-      {{ step(ns, "Dépôts et cache DNF", "recommandé") }}
+      {{ step(ns, "Dépôts seuls, sans agent" if key and packages.rpm.repos else "Dépôts et cache DNF", "inclus dans le paquet complet" if key and packages.rpm.repos else "recommandé") }}
       <div class="panel-b">
         <p class="muted">Dépôts officiels via le cache de loco, et dépôt local <code>elN</code> de la version du poste.</p>
         {{ cmd('enroll-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.22.0 — 2026-10-20
+
+- **Paquet « agent et dépôts »** (page Enrôlement, Debian/Ubuntu et Rocky/AlmaLinux/RHEL) : le même paquet `loco-client` confie l'autorité de loco au système, branche le poste sur le cache et le dépôt local de sa version — le cache seul si ce dépôt n'existe pas encore — puis installe l'agent. C'est désormais le choix recommandé ; « agent seul » reste proposé. Sa version est un cran au-dessus (`+depots`, `1.depots`) : passer de l'agent seul au paquet complet est une mise à jour qui conserve l'inscription du poste, et désinstaller le paquet complet retire aussi la configuration des dépôts (dépôts du système rétablis sur Red Hat). Les scripts de dépôts gagnent l'option `--from-package` (aucun appel à APT ni à DNF, occupés par l'installation). Validé par des installations, mises à jour et désinstallations réelles sur Debian 13 et Rocky Linux 9.
+- **Paquets de l'agent servis aussi en HTTP** (port d'amorçage), comme le script : les commandes « autorité pas encore importée » de la page Enrôlement fonctionnent.
+- **Agent Red Hat** : l'inventaire (`dnf check-update`, `updateinfo`) accepte l'import de la clé d'un dépôt signé ajouté depuis ; sans terminal, dnf refusait et signalait à tort une « mauvaise signature » jusqu'à ce que quelqu'un lance dnf à la main.
+- **Page Système repensée** : bilan en tête (services actifs, jours de validité du certificat, disque, dernière sauvegarde avec alerte si la sauvegarde quotidienne manque, version), service arrêté et certificat absent signalés en haut de page ; panneaux appariés (services et sauvegardes, certificat et autorité, emplacements et versions) ; bouton de téléchargement de l'autorité et commandes d'import par système, Rocky / AlmaLinux / RHEL compris.
+
 ## 2.21.0 — 2026-10-20
 
 - **Page Enrôlement** (barre de navigation) : tout ce qui rattache un poste à loco, un onglet par système (Windows ; Debian, Ubuntu ; Rocky, AlmaLinux, RHEL), en étapes numérotées — installer l'agent, configurer les dépôts et caches (APT, DNF, Flatpak), Windows Update et logiciels du catalogue sous Windows. Elle remplace le bloc « Brancher un poste » de la vue d'ensemble et la fenêtre « Ajouter un poste » de Mon parc (dont le bouton mène désormais à la page). Chaque section suit les droits et fonctionnalités du compte ; la clé d'inscription reste réservée au droit d'inscription.

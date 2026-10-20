@@ -725,20 +725,41 @@ def _linux_script(key):
                            agent=_agent_source("loco-client.py"))
 
 
+def repos_available(kind):
+    """Le paquet « agent et dépôts » suppose la fonctionnalité correspondante active sur ce serveur."""
+    return features.enabled("apt") if kind == "deb" else config.RPM_ENABLED and features.enabled("rpm")
+
+
+def _repos_script(kind):
+    """Configuration des dépôts embarquée dans le paquet : adresse HTTPS, le paquet confiant l'autorité au système."""
+    if not repos_available(kind):
+        abort(404)
+    if kind == "deb":
+        return render_template("setup.sh", base=config.HTTPS_URL, https_url=config.HTTPS_URL,
+                               host=config.HOST, acng_port=config.ACNG_PORT)
+    return render_template("rpm-setup.sh", base=config.HTTPS_URL, https_url=config.HTTPS_URL)
+
+
+def _agent_package(kind):
+    key = _check_key()
+    repos = _repos_script(kind) if request.args.get("depots") == "1" else None
+    build, name, mime = {"deb": (agentpkg.build_deb, agentpkg.deb_name, "application/vnd.debian.binary-package"),
+                         "rpm": (agentpkg.build_rpm, agentpkg.rpm_name, "application/x-rpm")}[kind]
+    data = build(_linux_script(key), config.VERSION, config.HTTPS_URL, repos=repos, ca=_ca_pem() if repos else "")
+    return Response(data, mimetype=mime,
+                    headers={"Content-Disposition": f'attachment; filename="{name(config.VERSION, bool(repos))}"'})
+
+
 @app.route("/agent/loco-client.deb")
 def agent_deb():
-    """Paquet Debian / Ubuntu de l'agent : il exécute le script d'installation (clé d'inscription incluse)."""
-    data = agentpkg.build_deb(_linux_script(_check_key()), config.VERSION, config.HTTPS_URL)
-    return Response(data, mimetype="application/vnd.debian.binary-package",
-                    headers={"Content-Disposition": f'attachment; filename="{agentpkg.deb_name(config.VERSION)}"'})
+    """Paquet Debian / Ubuntu de l'agent (clé d'inscription incluse) ; avec depots=1, configure aussi APT."""
+    return _agent_package("deb")
 
 
 @app.route("/agent/loco-client.rpm")
 def agent_rpm():
-    """Paquet Rocky Linux / AlmaLinux / RHEL de l'agent, sur le même principe que le paquet Debian."""
-    data = agentpkg.build_rpm(_linux_script(_check_key()), config.VERSION, config.HTTPS_URL)
-    return Response(data, mimetype="application/x-rpm",
-                    headers={"Content-Disposition": f'attachment; filename="{agentpkg.rpm_name(config.VERSION)}"'})
+    """Paquet Rocky Linux / AlmaLinux / RHEL de l'agent ; avec depots=1, configure aussi DNF."""
+    return _agent_package("rpm")
 
 
 @app.route("/agent/windows.ps1")
@@ -788,7 +809,7 @@ def _rows(apps=None):
 def _commands(key):
     base, http = config.HTTPS_URL, config.HTTP_URL
     ca = _ca_fingerprint()
-    return {
+    commands = {
         "windows": f"irm '{base}/agent/windows.ps1?key={key}' | iex",
         "windows_http": f"irm '{http}/agent/windows.ps1?key={key}' | iex" if http else "",
         # MSI téléchargé à la main : sans ces paramètres, il installe le service sans l'inscrire.
@@ -797,16 +818,18 @@ def _commands(key):
         "msi_urls": [u + "/agent/files/loco-client.msi" for u in (base, http) if u],
         "linux": f"curl -fsSL '{base}/agent/linux.sh?key={key}' | sudo sh",
         "linux_http": f"curl -fsSL '{http}/agent/linux.sh?key={key}' | sudo sh" if http else "",
-        # Paquets : téléchargés depuis le portail puis copiés sur le poste, ou récupérés directement par le poste.
-        "deb_path": f"/agent/loco-client.deb?key={key}", "rpm_path": f"/agent/loco-client.rpm?key={key}",
-        "deb_install": f"sudo apt install ./{agentpkg.deb_name(config.VERSION)}",
-        "rpm_install": f"sudo dnf install ./{agentpkg.rpm_name(config.VERSION)}",
-        **{f"{kind}_fetch{suffix}": (f"curl -fsSLo {name} '{url}/agent/loco-client.{kind}?key={key}' && sudo {tool} install ./{name}"
-                                     if url else "")
-           for kind, name, tool in (("deb", agentpkg.deb_name(config.VERSION), "apt"),
-                                    ("rpm", agentpkg.rpm_name(config.VERSION), "dnf"))
-           for suffix, url in (("", base), ("_http", http))},
     }
+    # Paquets de l'agent, seuls ou avec les dépôts (« _full ») : téléchargés depuis le portail puis copiés sur le
+    # poste, ou récupérés directement par le poste.
+    for kind, tool, name in (("deb", "apt", agentpkg.deb_name), ("rpm", "dnf", agentpkg.rpm_name)):
+        for full in (False, True):
+            tag, file = kind + ("_full" if full else ""), name(config.VERSION, full)
+            path = f"/agent/loco-client.{kind}?key={key}" + ("&depots=1" if full else "")
+            commands.update({f"{tag}_path": path, f"{tag}_install": f"sudo {tool} install ./{file}",
+                             f"{tag}_fetch": f"curl -fsSLo {file} '{base}{path}' && sudo {tool} install ./{file}",
+                             f"{tag}_fetch_http": f"curl -fsSLo {file} '{http}{path}' && sudo {tool} install ./{file}"
+                             if http else ""})
+    return commands
 
 
 SEVERITY = {"red": 0, "orange": 1, "grey": 2, "green": 3}

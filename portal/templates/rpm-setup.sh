@@ -6,6 +6,8 @@
 #   ... | sudo sh -s -- --no-cache   dépôt local seulement (dépôts du système en accès direct)
 #   ... | sudo sh -s -- --no-local   cache seulement, sans le dépôt local
 #   ... | sudo sh -s -- --remove     annule la configuration et rétablit les dépôts du système
+#   --from-package : lancé par le paquet loco-client (agent et dépôts) : aucun appel à dnf, occupé par
+#                    l'installation ; dnf rafraîchit ses métadonnées de lui-même à la prochaine utilisation.
 # Rocky Linux et AlmaLinux : BaseOS, AppStream, CRB/PowerTools et extras passent par le cache, avec les
 # clés GPG d'origine. RHEL : ses dépôts exigent un abonnement et restent en direct ; seuls EPEL et le
 # dépôt local passent par ce serveur.
@@ -19,7 +21,7 @@ CACHE=/etc/yum.repos.d/loco-cache.repo
 STATE=/etc/loco-rpm.state
 CA=/etc/pki/ca-trust/source/anchors/loco.crt
 
-USE_CACHE=1 USE_LOCAL=1 TRUST_CA=0 EPEL=0 REMOVE=0
+USE_CACHE=1 USE_LOCAL=1 TRUST_CA=0 EPEL=0 REMOVE=0 FROM_PACKAGE=0
 for arg in "$@"; do
     case "$arg" in
         --trust-ca) TRUST_CA=1 ;;
@@ -27,6 +29,7 @@ for arg in "$@"; do
         --no-cache) USE_CACHE=0 ;;
         --no-local) USE_LOCAL=0 ;;
         --remove) REMOVE=1 ;;
+        --from-package) FROM_PACKAGE=1 ;;
         *) echo "Option inconnue : $arg" >&2; exit 1 ;;
     esac
 done
@@ -87,7 +90,7 @@ if [ "$REMOVE" = 1 ]; then
     rm -f "$LOCAL"
     rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
     if [ -f "$CA" ]; then rm -f "$CA"; update-ca-trust extract; fi
-    dnf clean all >/dev/null 2>&1 || true
+    [ "$FROM_PACKAGE" = 1 ] || dnf clean all >/dev/null 2>&1 || true
     echo "Configuration loco retirée ; dépôts du système rétablis."
     exit 0
 fi
@@ -194,6 +197,10 @@ fi
 
 # Les nouveaux dépôts ont été vérifiés et écrits : l'ancien nom peut être retiré.
 rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
-dnf -y -q makecache
-echo "Poste configuré pour loco ($BASE) :"
-dnf repolist --enabled
+if [ "$FROM_PACKAGE" = 1 ]; then
+    echo "Poste configuré pour loco ($BASE)."
+else
+    dnf -y -q makecache
+    echo "Poste configuré pour loco ($BASE) :"
+    dnf repolist --enabled
+fi

@@ -99,6 +99,25 @@ class TestSystemInfo(unittest.TestCase):
         self.assertIn("memory", info)
 
 
+class TestRhelScanIsNonInteractive(unittest.TestCase):
+    def test_scan_accepts_repository_keys_without_a_terminal(self):
+        calls = []
+
+        def run(cmd, timeout=7200):
+            calls.append(cmd)
+            return 0, ""
+        with mock.patch.object(agent, "family", lambda: "rhel"), mock.patch.object(agent, "run", run), \
+             mock.patch.object(agent.shutil, "which", lambda name: "/usr/bin/dnf" if name == "dnf" else None), \
+             mock.patch.object(agent, "installed_packages", lambda fam: []), \
+             mock.patch.object(agent, "installed_flatpaks", lambda: []), \
+             mock.patch.object(agent, "system_info", lambda: {}), \
+             mock.patch.object(agent, "flatpak_updates", lambda: 0), \
+             mock.patch.object(agent, "reboot_required", lambda: False):
+            agent.scan()
+        self.assertIn(["dnf", "-y", "-q", "--refresh", "check-update"], calls)
+        self.assertIn(["dnf", "-y", "-q", "updateinfo", "list", "--security", "--available"], calls)
+
+
 class TestScanIncludesInventory(unittest.TestCase):
     def test_scan_adds_packages_flatpaks_and_system(self):
         with mock.patch.object(agent, "family", lambda: "debian"), \

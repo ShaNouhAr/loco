@@ -155,12 +155,22 @@ def list_backups():
     return out
 
 
+def _age(mtime):
+    """Ancienneté d'une sauvegarde en clair, et retard si la sauvegarde quotidienne a manqué (plus de 2 jours)."""
+    hours = max(0, (datetime.datetime.now().timestamp() - mtime) / 3600)
+    text = "il y a moins d'une heure" if hours < 1 else f"il y a {int(hours)} h" if hours < 48 else f"il y a {int(hours // 24)} j"
+    return {"text": text, "late": hours > 48}
+
+
 @app.route("/systeme")
 @login_required
 def system():
+    services = [(unit, desc, service_active(unit)) for unit, desc in UNITS]
+    backups = list_backups()
     return render_template(
         "system.html",
-        services=[(unit, desc, service_active(unit)) for unit, desc in UNITS],
+        services=services, stopped=[unit for unit, _, active in services if not active],
+        last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
         ca=cert_info(os.path.join(config.TLS_DIR, "ca.crt")),
         versions=({"loco": config.VERSION, "nginx": package_version("nginx"),
@@ -176,7 +186,7 @@ def system():
                    "Flask": package_version("python3-flask")}),
         disk=disk_usage(),
         stats=read_stats(),
-        backups=list_backups(),
+        backups=backups,
         backup_dir=config.BACKUP_DIR,
         paths={"Données": config.DATA, "État et base": config.STATE, "Configuration": config.ETC,
                "Certificats": config.TLS_DIR, "Sauvegardes": config.BACKUP_DIR},

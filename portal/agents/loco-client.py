@@ -323,11 +323,13 @@ def scan():
                                        "security": "-security" in m.group(3) or "Security" in m.group(3)})
     elif fam == "rhel":
         tool = "dnf" if shutil.which("dnf") else "yum"
-        code, out = run([tool, "-q", "--refresh", "check-update"], timeout=1800)
+        # -y : accepte l'import de la clé d'un dépôt signé ajouté depuis (dépôt loco du paquet complet, par exemple) ;
+        # sans terminal, dnf répondrait non et signalerait une « mauvaise signature ». Rien n'est installé ici.
+        code, out = run([tool, "-y", "-q", "--refresh", "check-update"], timeout=1800)
         if code not in (0, 100):
             inv["error"] = f"{tool} check-update : code {code}"
         security = set()
-        scode, sout = run([tool, "-q", "updateinfo", "list", "--security", "--available"], timeout=600)
+        scode, sout = run([tool, "-y", "-q", "updateinfo", "list", "--security", "--available"], timeout=600)
         if scode == 0:
             for line in sout.splitlines():
                 fields = line.split()

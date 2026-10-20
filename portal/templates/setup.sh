@@ -7,6 +7,8 @@
 #   ... | sudo sh -s -- --distribution debian --suite trixie   choix explicite (dérivées)
 #   ... | sudo sh -s -- --legacy           ancien dépôt, sans isolation par version
 #   ... | sudo sh -s -- --remove           annule la configuration
+#   --from-package : lancé par le paquet loco-client (agent et dépôts) : ni apt-get clean ni apt-get update,
+#                    APT étant occupé par l'installation ; l'agent rafraîchit les listes juste après.
 set -eu
 [ "$(id -u)" -eq 0 ] || { echo "Lancez ce script en root (sudo)." >&2; exit 1; }
 BASE="{{ base }}"
@@ -16,7 +18,7 @@ LIST=/etc/apt/sources.list.d/loco.list
 SOURCE=/etc/apt/sources.list.d/loco.sources
 PROXY=/etc/apt/apt.conf.d/01loco-proxy
 CA=/usr/local/share/ca-certificates/loco.crt
-USE_PROXY=1 TRUST_CA=0 REMOVE=0 CACHE_ONLY=0 LEGACY=0 DIST="" SUITE=""
+USE_PROXY=1 TRUST_CA=0 REMOVE=0 CACHE_ONLY=0 LEGACY=0 FROM_PACKAGE=0 DIST="" SUITE=""
 need() { if [ "$#" -lt 2 ] || [ -z "$2" ]; then echo "L'option $1 attend une valeur." >&2; exit 1; fi; }
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -27,6 +29,7 @@ while [ "$#" -gt 0 ]; do
         --distribution) need "$@"; DIST=$2; shift 2 ;;
         --suite) need "$@"; SUITE=$2; shift 2 ;;
         --remove) REMOVE=1; shift ;;
+        --from-package) FROM_PACKAGE=1; shift ;;
         *) echo "Option inconnue : $1" >&2; exit 1 ;;
     esac
 done
@@ -100,7 +103,7 @@ if [ "$CACHE_ONLY" = 0 ]; then
     printf 'Types: deb\nURIs: %s/%s/\nSuites: ./\nSigned-By: %s\n' "$BASE" "$PATH_REPO" "$KEY" > "$TMP/final-source"
     # Le cache des .deb est partagé par nom/version/architecture, même entre dépôts.
     # Éviter de réutiliser un ancien binaire après un changement de distribution ou de dépôt.
-    if ! grep -Fxq "URIs: $BASE/$PATH_REPO/" "$SOURCE" 2>/dev/null; then apt-get clean; fi
+    if ! grep -Fxq "URIs: $BASE/$PATH_REPO/" "$SOURCE" 2>/dev/null && [ "$FROM_PACKAGE" = 0 ]; then apt-get clean; fi
     install -m 644 "$TMP/final-source" "$SOURCE"
     rm -f "$LIST"
 else
@@ -123,5 +126,5 @@ CONF
 else
     rm -f "$PROXY"
 fi
-apt-get update -o APT::Update::Error-Mode=any
+if [ "$FROM_PACKAGE" = 0 ]; then apt-get update -o APT::Update::Error-Mode=any; fi
 if [ "$CACHE_ONLY" = 1 ]; then echo "Cache APT configuré ($BASE)."; else echo "Poste configuré : dépôt $PATH_REPO ($BASE)."; fi
