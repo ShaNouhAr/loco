@@ -332,6 +332,15 @@ MIGRATIONS = [
     UPDATE sso_providers SET enabled=0;
     DELETE FROM sso_flows;
     """,
+    # 14 : paquets installés, applications Flatpak et caractéristiques système remontés par l'agent Linux. Table à part :
+    # la liste du parc relit l'inventaire de chaque appareil et n'a pas à porter des milliers de paquets.
+    """
+    CREATE TABLE device_software (
+        device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+        data TEXT NOT NULL DEFAULT '{}',
+        updated_at TEXT NOT NULL DEFAULT ''
+    );
+    """,
 ]
 
 

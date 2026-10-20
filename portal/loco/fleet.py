@@ -276,6 +276,13 @@ def _text(value, limit=200):
     return str(value or "").replace("\x00", "")[:limit]
 
 
+def _int(value):
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _device():
     """Poste authentifié par « Authorization: Bearer UID.JETON » (jamais par son adresse)."""
     auth = request.headers.get("Authorization", "")
@@ -353,6 +360,44 @@ def _store_inventory(dev, inv):
     db().execute("UPDATE devices SET inventory=?, last_scan=?, updates=?, security_updates=?, reboot_required=? "
                  "WHERE id=?", (json.dumps(clean), _now(), total, sum(u["security"] for u in clean["updates"]),
                                 int(bool(inv.get("reboot_required"))), dev["id"]))
+    _store_software(dev, inv)
+
+
+def _store_software(dev, inv):
+    """Inventaire détaillé des postes Linux (paquets, Flatpak, caractéristiques) rangé à part : la liste du parc relit
+    l'inventaire de chaque appareil et n'a pas à porter des milliers de paquets. Les postes Windows n'en remontent pas."""
+    packages = [p for p in (inv.get("packages") or []) if isinstance(p, dict)][:10000]
+    flatpaks = [f for f in (inv.get("flatpaks") or []) if isinstance(f, dict)][:500]
+    system = inv.get("system") if isinstance(inv.get("system"), dict) else {}
+    if not packages and not flatpaks and not system:
+        return
+    clean = {
+        "packages": [{"name": _text(p.get("name"), 120), "version": _text(p.get("version"), 80),
+                      "arch": _text(p.get("arch"), 30), "manual": bool(p.get("manual")),
+                      "size": _int(p.get("size"))} for p in packages],
+        "flatpaks": [{"id": _text(f.get("id"), 200), "name": _text(f.get("name"), 120),
+                      "version": _text(f.get("version"), 80), "branch": _text(f.get("branch"), 60),
+                      "origin": _text(f.get("origin"), 60)} for f in flatpaks],
+        "system": {
+            "kernel": _text(system.get("kernel"), 120), "arch": _text(system.get("arch"), 30),
+            "cpu": _text(system.get("cpu"), 120), "virtualization": _text(system.get("virtualization"), 40),
+            "cores": _int(system.get("cores")), "memory": _int(system.get("memory")),
+            "memory_available": _int(system.get("memory_available")), "disk": _int(system.get("disk")),
+            "disk_free": _int(system.get("disk_free")), "boot": _int(system.get("boot")),
+        },
+    }
+    db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "
+                 "ON CONFLICT(device_id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at",
+                 (dev["id"], json.dumps(clean), _now()))
+
+
+def software(dev):
+    row = db().execute("SELECT data FROM device_software WHERE device_id=?", (dev["id"],)).fetchone()
+    try:
+        data = json.loads(row["data"]) if row else {}
+        return data if isinstance(data, dict) else {}
+    except ValueError:
+        return {}
 
 
 def _expire(dev_id):
@@ -853,6 +898,16 @@ def fleet_device(dev_id):
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
     updates = inv.get("updates") or []
+    soft = software(dev) if dev["os_family"] != "windows" else {}
+    pkg_updates = {u.get("name"): u.get("version") for u in updates if u.get("name")}
+    pkgs = soft.get("packages") or []
+    pkg_stats = {"total": len(pkgs), "manual": sum(1 for p in pkgs if p.get("manual")),
+                 "outdated": sum(1 for p in pkgs if p.get("name") in pkg_updates)}
+    boot = (soft.get("system") or {}).get("boot")
+    try:
+        boot_text = ago_text(datetime.datetime.fromtimestamp(boot).strftime("%Y-%m-%d %H:%M:%S")) if boot else ""
+    except (OverflowError, OSError, ValueError):                              # horodatage de démarrage incohérent
+        boot_text = ""
     summary = {"updates": len(updates) + int(inv.get("flatpak") or 0), "security": sum(1 for u in updates if u.get("security")),
                "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
                "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
@@ -861,6 +916,7 @@ def fleet_device(dev_id):
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            action_label=action_label,
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
+                           soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
                            label=status_label(dev, color))
 

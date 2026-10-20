@@ -625,7 +625,7 @@ label.check { display: inline-flex; align-items: center; gap: 6px; margin-right:
 .fleet-filters { display: flex; justify-content: space-between; align-items: center; gap: 10px 16px; flex-wrap: wrap; }
 .fleet-filters > .row { gap: 10px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--text-2); font-size: 13px; text-decoration: none; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 999px; background: none; color: var(--text-2); font: 13px var(--sans); cursor: pointer; text-decoration: none; white-space: nowrap; }
 .chip:hover { color: var(--text); border-color: var(--text-3); }
 .chip b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }

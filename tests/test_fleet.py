@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -597,6 +598,79 @@ class TestSoftwareStore(FleetTest):
         with mock.patch.object(winget, "INDEX", self.index), \
                 mock.patch.object(winget, "refresh_index", side_effect=OSError("hors ligne")):
             self.assertEqual(winget.browse(query="Example")[1], 1)
+
+
+class TestLinuxInventory(FleetTest):
+    """Postes Linux : paquets, applications Flatpak et caractéristiques, stockés à part et affichés sur la fiche."""
+
+    FULL = {
+        "updates": [{"name": "curl", "version": "8.14.1", "security": True}],
+        "flatpak": 0,
+        "packages": [
+            {"name": "bash", "version": "5.2-2", "arch": "amd64", "manual": True, "size": 1843200},
+            {"name": "curl", "version": "8.13", "arch": "amd64", "manual": True, "size": 500000},
+            {"name": "libc6", "version": "2.37-1", "arch": "amd64", "manual": False, "size": 12288000},
+        ],
+        "flatpaks": [{"id": "org.mozilla.firefox", "name": "Firefox", "version": "123.0",
+                      "branch": "stable", "origin": "flathub"}],
+        "system": {"kernel": "6.1.0-18-amd64", "arch": "x86_64", "cpu": "Intel Xeon", "cores": 4,
+                   "memory": 8 * 1024 ** 3, "memory_available": 4 * 1024 ** 3, "disk": 50 * 1024 ** 3,
+                   "disk_free": 30 * 1024 ** 3, "boot": 1700000000, "virtualization": "kvm"},
+    }
+
+    def soft(self, uid):
+        with transaction() as conn:
+            row = conn.execute("SELECT data FROM device_software WHERE device_id=(SELECT id FROM devices WHERE uid=?)",
+                               (uid,)).fetchone()
+        return json.loads(row["data"]) if row else None
+
+    def test_packages_are_stored_apart_and_shown_on_the_device_page(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        a.checkin(self.FULL)
+        data = self.soft(a.uid)
+        self.assertEqual(len(data["packages"]), 3)
+        self.assertEqual(data["system"]["virtualization"], "kvm")
+        self.assertNotIn("packages", json.loads(device(a.uid)["inventory"]))     # inventaire du parc : sans les paquets
+        page = self.admin.c.get(f"/parc/{device(a.uid)['id']}").get_data(as_text=True)
+        self.assertIn('data-tab="paquets"', page)
+        self.assertIn('data-tab="flatpak"', page)
+        self.assertIn("libc6", page)
+        self.assertIn("Firefox", page)
+        self.assertIn("Intel Xeon", page)
+        self.assertIn("dépendance", page)                                        # libc6 : pas installé volontairement
+        self.assertIn("→ 8.14.1", page)                                          # curl : version candidate en vis-à-vis
+        self.assertIn('data-update="1"', page)
+
+    def test_windows_devices_have_no_package_tab(self):
+        a = Agent(WINDOWS, "192.168.43.50")
+        a.enroll()
+        a.checkin({"updates": [], "apps": [{"name": "7-Zip", "version": "24.09"}]})
+        self.assertIsNone(self.soft(a.uid))
+        page = self.admin.c.get(f"/parc/{device(a.uid)['id']}").get_data(as_text=True)
+        self.assertNotIn('data-tab="paquets"', page)
+
+    def test_oversized_inventory_is_capped(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        a.checkin({"updates": [],
+                   "packages": [{"name": f"p{i}", "version": "1", "arch": "amd64", "manual": False, "size": 10}
+                                for i in range(10050)],
+                   "flatpaks": [{"id": f"org.x.A{i}", "name": "A", "version": "1"} for i in range(600)]})
+        data = self.soft(a.uid)
+        self.assertEqual(len(data["packages"]), 10000)
+        self.assertEqual(len(data["flatpaks"]), 500)
+
+    def test_a_later_scan_replaces_the_previous_inventory(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        a.checkin(self.FULL)
+        a.checkin({"updates": [],
+                   "packages": [{"name": "bash", "version": "5.2-3", "arch": "amd64", "manual": True, "size": 10}],
+                   "system": {"kernel": "6.2"}})
+        data = self.soft(a.uid)
+        self.assertEqual(len(data["packages"]), 1)                               # remplacement, pas d'accumulation
+        self.assertEqual(data["system"]["kernel"], "6.2")
 
 
 if __name__ == "__main__":

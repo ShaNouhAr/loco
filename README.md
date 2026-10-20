@@ -270,7 +270,10 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 ```
 
 - L'agent contacte loco toutes les deux minutes et envoie l'inventaire des mises à jour (Windows Update avec les
-  correctifs de sécurité, APT, DNF, Flatpak) et, sous Windows, des logiciels installés.
+  correctifs de sécurité, APT, DNF, Flatpak). L'inventaire des logiciels installés est aussi remonté, sous Windows
+  (logiciels installés) comme sous Linux (paquets APT/RPM avec version, architecture et taille, applications Flatpak,
+  et caractéristiques du poste : processeur, mémoire, disque, noyau, virtualisation) ; il s'affiche sur la fiche du
+  poste dans Mon parc.
 - **Voyants** : vert, aucune mise à jour ; orange, 1 à 9 mises à jour ; rouge, 10 mises à jour ou plus.
   Le total additionne système, Flatpak et logiciels du catalogue. Le seuil rouge est réglable dans Mon parc.
   Un inventaire manquant, incomplet ou un poste sans contact récent est gris, sans fausser le comptage.

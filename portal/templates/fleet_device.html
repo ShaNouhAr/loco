@@ -89,6 +89,8 @@
     <div class="tabs device-tabs" role="tablist" data-hash>
       <button type="button" data-tab="maj" aria-selected="true">Mises à jour{% if summary.updates or summary.apps %} <span class="h-count">{{ summary.updates + summary.apps }}</span>{% endif %}</button>
       {% if inv.apps %}<button type="button" data-tab="logiciels" aria-selected="false">Logiciels installés <span class="h-count">{{ inv.apps|length }}</span></button>{% endif %}
+      {% if soft.packages %}<button type="button" data-tab="paquets" aria-selected="false">Paquets installés <span class="h-count">{{ soft.packages|length }}</span></button>{% endif %}
+      {% if soft.flatpaks %}<button type="button" data-tab="flatpak" aria-selected="false">Flatpak <span class="h-count">{{ soft.flatpaks|length }}</span></button>{% endif %}
       <button type="button" data-tab="historique" aria-selected="false">Historique{% if history %} <span class="h-count">{{ history|length }}</span>{% endif %}</button>
       <button type="button" data-tab="details" aria-selected="false">Détails</button>
     </div>
@@ -147,6 +149,48 @@
     </div>
     {% endif %}
 
+    {% if soft.packages %}
+    <div class="tab-panel" data-panel="paquets" data-pkgs="#packages" data-empty="#packages-empty">
+      <div class="panel-h sub"><h2>Paquets installés sur le poste</h2>
+        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" aria-label="Filtrer les paquets"></div></div>
+      <div class="chips" role="group" aria-label="Filtrer les paquets">
+        <button type="button" class="chip on" data-chip="all" aria-pressed="true">Tous <b>{{ pkg_stats.total }}</b></button>
+        <button type="button" class="chip" data-chip="manual" aria-pressed="false">Installés volontairement <b>{{ pkg_stats.manual }}</b></button>
+        {% if pkg_stats.outdated %}<button type="button" class="chip" data-chip="update" aria-pressed="false">À mettre à jour <b>{{ pkg_stats.outdated }}</b></button>{% endif %}
+      </div>
+      <div class="table-wrap">
+        <table id="packages">
+          <thead><tr><th>Paquet</th><th>Version</th><th class="hide-sm">Arch.</th><th class="right">Taille</th></tr></thead>
+          <tbody>
+          {% for p in soft.packages|sort(attribute='name') %}
+            <tr{% if p.manual %} data-manual="1"{% endif %}{% if p.name in pkg_updates %} data-update="1"{% endif %}>
+              <td>{{ p.name }}{% if not p.manual %} <span class="faint small">dépendance</span>{% endif %}</td>
+              <td class="mono muted small">{{ p.version }}{% if p.name in pkg_updates %} <span class="tag">→ {{ pkg_updates[p.name] }}</span>{% endif %}</td>
+              <td class="mono muted small hide-sm">{{ p.arch }}</td>
+              <td class="mono muted small right">{{ p.size|human if p.size else '—' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <div id="packages-empty" class="empty hidden">Aucun paquet ne correspond.</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if soft.flatpaks %}
+    <div class="tab-panel" data-panel="flatpak">
+      <div class="panel-h sub"><h2>Applications Flatpak</h2>
+        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#flatpaks tbody tr" aria-label="Filtrer les applications Flatpak"></div></div>
+      <div class="table-wrap"><table id="flatpaks">
+        <thead><tr><th>Application</th><th>Version</th><th class="hide-sm">Origine</th></tr></thead>
+        <tbody>
+        {% for f in soft.flatpaks|sort(attribute='name') %}
+          <tr><td>{{ f.name or f.id }}<span class="sub mono">{{ f.id }}</span></td><td class="mono muted small">{{ f.version }}{% if f.branch %} <span class="faint">({{ f.branch }})</span>{% endif %}</td><td class="mono muted small hide-sm">{{ f.origin }}</td></tr>
+        {% endfor %}
+        </tbody></table></div>
+    </div>
+    {% endif %}
+
     <div class="tab-panel" data-panel="historique">
       {% if history %}
       <div class="table-wrap">
@@ -182,6 +226,17 @@
         <dt>Inscrit</dt><dd>{{ summary.enrolled }} <span class="mono muted small">{{ dev.enrolled_at }}</span></dd>
         <dt>Identifiant</dt><dd class="mono small break">{{ dev.uid }}</dd>
       </dl>
+      {% if soft.system and (soft.system.kernel or soft.system.cpu) %}
+      <div class="panel-h sub"><h2>Caractéristiques</h2></div>
+      <dl class="kv">
+        {% if soft.system.cpu %}<dt>Processeur</dt><dd>{{ soft.system.cpu }}{% if soft.system.cores %} <span class="muted small">— {{ soft.system.cores }} cœur{{ 's' if soft.system.cores > 1 }}</span>{% endif %}</dd>{% endif %}
+        {% if soft.system.memory %}<dt>Mémoire</dt><dd>{{ soft.system.memory|human }}{% if soft.system.memory_available %} <span class="muted small">— {{ soft.system.memory_available|human }} disponible</span>{% endif %}</dd>{% endif %}
+        {% if soft.system.disk %}<dt>Disque (racine)</dt><dd>{{ soft.system.disk|human }}{% if soft.system.disk_free %} <span class="muted small">— {{ soft.system.disk_free|human }} libre</span>{% endif %}</dd>{% endif %}
+        {% if soft.system.kernel %}<dt>Noyau</dt><dd class="mono small">{{ soft.system.kernel }}{% if soft.system.arch %} · {{ soft.system.arch }}{% endif %}</dd>{% endif %}
+        {% if soft.system.virtualization and soft.system.virtualization != 'none' %}<dt>Virtualisation</dt><dd>{{ soft.system.virtualization }}</dd>{% endif %}
+        {% if boot_text %}<dt>Démarré</dt><dd>{{ boot_text }}</dd>{% endif %}
+      </dl>
+      {% endif %}
       <div class="panel-h sub"><h2>Groupes de machines</h2></div>
       <div class="panel-b">
         {% if can('fleet.groups') and device_groups %}

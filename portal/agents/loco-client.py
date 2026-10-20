@@ -221,8 +221,94 @@ def reboot_required():
     return False
 
 
+def installed_packages(fam):
+    """Paquets installés (nom, version, architecture, taille en octets) ; « manual » : installé à la demande d'un
+    administrateur, les autres n'étant que des dépendances. Commandes locales seulement, sans accès réseau."""
+    packages = []
+    if fam == "debian":
+        code, out = run(["dpkg-query", "-W", "-f", "${Package}\t${Version}\t${Architecture}\t${db:Status-Abbrev}\t${Installed-Size}\n"],
+                        timeout=300)
+        if code != 0:
+            return []
+        mcode, mout = run(["apt-mark", "showmanual"], timeout=300)
+        manual = set(mout.split()) if mcode == 0 else set()
+        for line in out.splitlines():
+            f = line.split("\t")
+            if len(f) < 5 or not f[3].startswith("ii"):
+                continue
+            packages.append({"name": f[0], "version": f[1], "arch": f[2], "manual": f[0] in manual or f"{f[0]}:{f[2]}" in manual,
+                             "size": int(f[4]) * 1024 if f[4].strip().isdigit() else 0})
+    elif fam == "rhel":
+        code, out = run(["rpm", "-qa", "--qf", "%{NAME}\t%{EPOCHNUM}\t%{VERSION}-%{RELEASE}\t%{ARCH}\t%{SIZE}\n"], timeout=300)
+        if code != 0:
+            return []
+        tool = "dnf" if shutil.which("dnf") else "yum"
+        mcode, mout = run([tool, "-q", "-C", "--disablerepo=*", "repoquery", "--userinstalled", "--qf", "%{name}\n"], timeout=300)
+        manual = set(mout.split()) if mcode == 0 else set()
+        for line in out.splitlines():
+            f = line.split("\t")
+            if len(f) < 5 or f[0] == "gpg-pubkey":
+                continue
+            packages.append({"name": f[0], "version": f[2] if f[1] in ("", "0", "(none)") else f"{f[1]}:{f[2]}", "arch": f[3],
+                             "manual": f[0] in manual, "size": int(f[4]) if f[4].strip().isdigit() else 0})
+    return packages[:10000]
+
+
+def installed_flatpaks():
+    """Applications Flatpak installées pour tout le système (identifiant, nom, version, branche, dépôt d'origine)."""
+    if not shutil.which("flatpak"):
+        return []
+    code, out = run(["flatpak", "list", "--app", "--system", "--columns=application,name,version,branch,origin"], timeout=300)
+    if code != 0:
+        return []
+    apps = []
+    for line in out.splitlines():
+        f = line.split("\t")
+        if len(f) >= 5 and "." in f[0]:
+            apps.append({"id": f[0], "name": f[1], "version": f[2], "branch": f[3], "origin": f[4]})
+    return apps[:500]
+
+
+def system_info():
+    """Caractéristiques du poste : noyau, processeur, mémoire, disque racine, démarrage et virtualisation."""
+    info = {"kernel": platform.release(), "arch": platform.machine(), "cores": os.cpu_count() or 0}
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith(("model name", "Hardware", "cpu model")):   # x86, ARM, autres architectures
+                    info["cpu"] = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    try:
+        mem = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, value = line.partition(":")
+                if value.split():
+                    mem[key] = int(value.split()[0]) * 1024
+        info["memory"], info["memory_available"] = mem.get("MemTotal", 0), mem.get("MemAvailable", 0)
+    except (OSError, ValueError):
+        pass
+    try:
+        st = os.statvfs("/")
+        info["disk"], info["disk_free"] = st.f_blocks * st.f_frsize, st.f_bavail * st.f_frsize
+    except OSError:
+        pass
+    try:
+        with open("/proc/uptime") as f:
+            info["boot"] = int(time.time() - float(f.read().split()[0]))
+    except (OSError, ValueError, IndexError):
+        pass
+    if shutil.which("systemd-detect-virt"):
+        code, out = run(["systemd-detect-virt"], timeout=30)
+        info["virtualization"] = out.strip().splitlines()[0] if code == 0 and out.strip() else "none"
+    return info
+
+
 def scan():
-    """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire."""
+    """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
+    installés, caractéristiques du poste."""
     inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": ""}
     fam = family()
     if fam == "debian":
@@ -258,6 +344,9 @@ def scan():
         inv["error"] = "gestionnaire de paquets non reconnu"
     inv["flatpak"] = flatpak_updates()
     inv["reboot_required"] = reboot_required()
+    inv["packages"] = installed_packages(fam)
+    inv["flatpaks"] = installed_flatpaks()
+    inv["system"] = system_info()
     return inv
 
 
@@ -371,10 +460,12 @@ def service():
     state = load(STATE)
     data = identity()
     last = state.get("last_scan", 0)
-    # Inventaire refait après un redémarrage : celui d'avant ne reflète plus les mises à jour installées.
-    if time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last):
+    # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
+    # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).
+    if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
+            or state.get("inventory_version") != VERSION):
         data["inventory"] = scan()
-        state.update(last_scan=time.time(), rescan=False)
+        state.update(last_scan=time.time(), rescan=False, inventory_version=VERSION)
     try:
         answer = checkin(conf, data)
     except urllib.error.HTTPError as e:

@@ -1,7 +1,8 @@
 # Journal des versions
 
-## 2.17.2 — 2026-10-20
+## 2.18.0 — 2026-10-20
 
+- **Paquets installés des postes Linux** (*Mon parc › fiche du poste*) : l'agent Linux remonte maintenant les paquets installés (nom, version, architecture, taille), les applications Flatpak et les caractéristiques du poste (processeur, mémoire, disque, noyau, architecture, virtualisation, démarrage). Un onglet *Paquets installés* les liste, avec une recherche et des filtres (tous, installés volontairement, à mettre à jour — la version candidate est alors montrée en vis-à-vis) ; un onglet *Flatpak* et un bloc *Caractéristiques* dans *Détails* complètent la fiche. L'inventaire détaillé est rangé dans une table à part, pour que la liste du parc reste légère. Debian/Ubuntu (`dpkg-query`/`apt-mark`) et Red Hat (`rpm`/`dnf repoquery`) ; relevé au rythme habituel de l'inventaire et refait une fois après la mise à jour de l'agent.
 - **Les déploiements vivent dans Mon parc** : un déploiement est une action sur les appareils (cibles, avancement poste par poste), comme les scripts. L'onglet *Déploiements* de Mon parc reste désormais dans Mon parc (sous-menu du parc, entrée « Mon parc » active) au lieu de basculer vers Windows. *Windows › Logiciels* garde le catalogue local, le centre de logiciels et les groupes de logiciels ; leurs boutons *Déployer* ouvrent la préparation dans Mon parc. Nouvelles adresses `/parc/deploiements…` ; les anciennes (`/windows-apps/deploiements…`, `/windows-apps/deployer`) redirigent, paramètres compris.
 - L'entrée « Mon parc » est aussi active sur les pages Scripts.
 

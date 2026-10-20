@@ -316,6 +316,39 @@
     });
   });
 
+  /* ------------------------------------------------- paquets : recherche + pastilles */
+
+  $$("[data-pkgs]").forEach(function (box) {
+    var rows = $$(box.dataset.pkgs + " tbody tr");
+    var search = $("input[type=search]", box);
+    var chips = $$("[data-chip]", box);
+    var empty = box.dataset.empty ? $(box.dataset.empty) : null;
+    var mode = "all";
+    var apply = function () {
+      var q = (search ? search.value : "").trim().toLowerCase();
+      var shown = 0;
+      rows.forEach(function (row) {
+        var okText = !q || (row.dataset.search || row.textContent).toLowerCase().indexOf(q) >= 0;
+        var okChip = mode === "all" || (mode === "manual" && row.dataset.manual) || (mode === "update" && row.dataset.update);
+        var hit = okText && okChip;
+        row.classList.toggle("hidden", !hit);
+        if (hit) shown++;
+      });
+      if (empty) empty.classList.toggle("hidden", shown > 0);
+    };
+    if (search) search.addEventListener("input", apply);
+    chips.forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        mode = chip.dataset.chip;
+        chips.forEach(function (c) {
+          c.classList.toggle("on", c === chip);
+          c.setAttribute("aria-pressed", String(c === chip));
+        });
+        apply();
+      });
+    });
+  });
+
   /* ---------------------------------------------------------------- sélection des logiciels */
 
   var selbar = $(".selbar");
