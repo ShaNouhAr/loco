@@ -730,5 +730,49 @@ class TestLinuxInventory(FleetTest):
         self.assertEqual(data["system"]["kernel"], "6.2")
 
 
+class TestScheduling(FleetTest):
+    def setUp(self):
+        super().setUp()
+        self.a = Agent(LINUX, "192.168.43.60")
+        self.a.enroll()
+        self.dev = device(self.a.uid)["id"]
+
+    def queue(self, uid, action, **form):
+        d = device(uid)
+        return self.admin.post(f"/parc/{d['id']}/action", dict(form, action=action), page=f"/parc/{d['id']}")
+
+    def _set_run_after(self, value):
+        with transaction() as conn:
+            conn.execute("UPDATE device_commands SET run_after=? WHERE device_id=?", (value, self.dev))
+
+    def test_scheduled_update_is_withheld_until_its_time(self):
+        future = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+        self.assertEqual(self.queue(self.a.uid, "update", run_after=future).status_code, 302)
+        with transaction() as conn:
+            self.assertTrue(conn.execute("SELECT run_after FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0])
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])          # pas avant l'heure
+        self._set_run_after((datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"))
+        self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["update"])
+
+    def test_past_or_invalid_schedule_queues_nothing(self):
+        self.queue(self.a.uid, "update", run_after="2000-01-01T00:00")
+        self.queue(self.a.uid, "update", run_after="pas une date")
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0], 0)
+
+    def test_scheduled_command_can_be_cancelled_before_it_is_sent(self):
+        future = (datetime.datetime.now() + datetime.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M")
+        self.queue(self.a.uid, "update", run_after=future)
+        with transaction() as conn:
+            cid = conn.execute("SELECT id FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0]
+        self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 302)
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT state FROM device_commands WHERE id=?", (cid,)).fetchone()[0], "cancelled")
+        self._set_run_after((datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"))
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])          # annulée : jamais transmise
+        # une commande déjà transmise n'est plus annulable ici
+        self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

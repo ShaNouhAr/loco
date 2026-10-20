@@ -348,6 +348,11 @@ MIGRATIONS = [
     UPDATE users SET last_ip = COALESCE((SELECT ip FROM audit WHERE audit.username = users.username
                                          AND action IN ('connexion', 'sso.connexion') ORDER BY id DESC LIMIT 1), '');
     """,
+    # 16 : planification ponctuelle d'une commande. Vide = tout de suite ; sinon horodatage local « après lequel »
+    # la commande est transmise à l'agent (mises à jour et exécutions de scripts planifiées).
+    """
+    ALTER TABLE device_commands ADD COLUMN run_after TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

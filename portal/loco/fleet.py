@@ -271,14 +271,33 @@ def pending(dev_id):
                         "ORDER BY id", (dev_id,)).fetchall()
 
 
-def queue(dev, action, params=None, user=None):
-    """Ajoute une action (sans doublon d'une action identique déjà en attente) ; renvoie True si ajoutée."""
+def _schedule_time(raw):
+    """Horodatage « datetime-local » du navigateur (heure du serveur) → « AAAA-MM-JJ HH:MM:SS », ou '' si immédiat.
+    Lève ValueError si le format est invalide ou si l'instant est déjà passé (petite marge d'une minute)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        when = datetime.datetime.strptime(raw.replace("T", " ")[:16], "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise ValueError("Date et heure de planification invalides.")
+    if when < datetime.datetime.now() - datetime.timedelta(minutes=1):
+        raise ValueError("L'instant planifié est déjà passé.")
+    if when > datetime.datetime.now() + datetime.timedelta(days=366):
+        raise ValueError("La planification ne peut pas dépasser un an.")
+    return when.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def queue(dev, action, params=None, user=None, run_after=""):
+    """Ajoute une action (sans doublon d'une action identique déjà en attente) ; renvoie True si ajoutée.
+    run_after non vide = commande transmise seulement à partir de cet instant (planification ponctuelle)."""
     params = json.dumps(params or {}, sort_keys=True)
     for c in pending(dev["id"]):
-        if c["action"] == action and c["params"] == params:
+        if c["action"] == action and c["params"] == params and c["run_after"] == run_after:
             return False
-    db().execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by) VALUES (?,?,?,?,?)",
-                 (dev["id"], action, params, _now(), user if user is not None else g.user["username"]))
+    db().execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by, run_after) "
+                 "VALUES (?,?,?,?,?,?)",
+                 (dev["id"], action, params, _now(), user if user is not None else g.user["username"], run_after))
     if action == "uninstall":
         db().execute("UPDATE devices SET state='removing' WHERE id=?", (dev["id"],))
     return True
@@ -473,8 +492,8 @@ def agent_checkin():
     _expire(dev["id"])
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     commands = []
-    for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' ORDER BY id",
-                          (dev["id"],)).fetchall():
+    for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
+                          "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
         if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
                 or c["action"] == "run-script" and "scripts" in features.disabled(conn)):
             continue                # fonctionnalité coupée : la commande attend sa réactivation
@@ -1011,6 +1030,11 @@ def fleet_action(dev_id):
         return back("fleet")
     if action not in ACTIONS or dev["state"] != "active":
         abort(400)
+    try:
+        run_after = _schedule_time(request.form.get("run_after")) if action in ("update", "scan", "reboot") else ""
+    except ValueError as e:
+        flash(str(e), "error")
+        return back("fleet_device", dev_id=dev_id)
     params = {}
     if action == "update":
         params["reboot"] = request.form.get("reboot") == "1"
@@ -1020,13 +1044,35 @@ def fleet_action(dev_id):
                 "SELECT 1 FROM win_apps WHERE slug=? AND status='ready'", (slug,)).fetchone():
             abort(400)
         params["slug"] = slug
-    if queue(dev, action, params):
+    if queue(dev, action, params, run_after=run_after):
         db().commit()
-        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}")
-        flash(f"{ACTIONS[action]} demandée sur {dev['hostname']} : exécutée au prochain contact "
-              f"(moins de {CHECKIN // 60} min).", "ok")
+        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}"
+                                f"{' (planifiée pour ' + run_after + ')' if run_after else ''}")
+        if run_after:
+            flash(f"{ACTIONS[action]} planifiée sur {dev['hostname']} pour le {run_after} (heure du serveur).", "ok")
+        else:
+            flash(f"{ACTIONS[action]} demandée sur {dev['hostname']} : exécutée au prochain contact "
+                  f"(moins de {CHECKIN // 60} min).", "ok")
     else:
         flash("Action déjà en attente sur ce poste.", "error")
+    return back("fleet_device", dev_id=dev_id)
+
+
+@app.route("/parc/<int:dev_id>/annuler/<int:cmd_id>", methods=["POST"])
+@login_required
+def fleet_cancel_command(dev_id, cmd_id):
+    dev = _get(dev_id)
+    cmd = db().execute("SELECT * FROM device_commands WHERE id=? AND device_id=?", (cmd_id, dev_id)).fetchone()
+    if cmd is None or cmd["state"] != "queued":
+        abort(404)                              # déjà transmise à l'agent ou terminée : plus annulable ici
+    require(permissions.ACTION_PERMISSIONS.get(cmd["action"], "fleet.view"))
+    db().execute("UPDATE device_commands SET state='cancelled', finished_at=?, output=? WHERE id=?",
+                 (_now(), "Annulée avant transmission à l'agent.", cmd_id))
+    if cmd["action"] == "uninstall":
+        db().execute("UPDATE devices SET state='active' WHERE id=? AND state='removing'", (dev_id,))
+    db().commit()
+    audit(f"parc.{cmd['action']}.annulation", dev["hostname"])
+    flash("Action planifiée annulée.", "ok")
     return back("fleet_device", dev_id=dev_id)
 
 
@@ -1044,15 +1090,26 @@ def fleet_update_all():
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
+    try:
+        run_after = _schedule_time(request.form.get("run_after"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return back("fleet", **({"group": group_id} if group_id else {}))
     count = 0
     for r in _rows(apps):
         if member_ids is not None and r["d"]["id"] not in member_ids:
             continue
-        if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}):
+        if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}, run_after=run_after):
             count += 1
     db().commit()
-    audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
-    flash(f"Mise à jour demandée sur {count} poste(s)." if count else "Aucun poste à mettre à jour.", "ok")
+    audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}"
+                                     f"{' (planifiée pour ' + run_after + ')' if run_after else ''}")
+    if not count:
+        flash("Aucun poste à mettre à jour.", "ok")
+    elif run_after:
+        flash(f"Mise à jour planifiée sur {count} poste(s) pour le {run_after} (heure du serveur).", "ok")
+    else:
+        flash(f"Mise à jour demandée sur {count} poste(s).", "ok")
     return back("fleet", **({"group": group_id} if group_id else {}))
 
 

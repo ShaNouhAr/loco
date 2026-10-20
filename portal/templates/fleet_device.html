@@ -45,6 +45,15 @@
         {% if active %}
         {% if can('fleet.update') and can('fleet.reboot') %}{{ action('update', 'Mettre à jour puis redémarrer si nécessaire', reboot=True) }}{% endif %}
         {% if can('fleet.scan') %}{{ action('scan', 'Refaire l\'inventaire') }}{% endif %}
+        {% if can('fleet.update') %}
+        <div class="menu-label">Planifier une mise à jour</div>
+        <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" class="menu-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">
+          <input type="datetime-local" name="run_after" required aria-label="Date et heure (heure du serveur)">
+          {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1"> Redémarrer si nécessaire</label>{% endif %}
+          <button class="btn sm">Planifier</button>
+        </form>
+        {% endif %}
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">Déployer des logiciels…</a>{% endif %}
         {% if can('fleet.reboot') %}{{ action('reboot', 'Redémarrer', confirm='Redémarrer ' ~ dev.hostname ~ ' ?', text='Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.', ok='Redémarrer') }}{% endif %}
         {% if can('fleet.remove') %}<hr>{{ action('uninstall', 'Retirer l\'agent…', 'menu-item danger', confirm='Retirer l\'agent de ' ~ dev.hostname ~ ' ?', text='Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.', ok='Retirer') }}{% endif %}
@@ -58,7 +67,14 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
-  {% if pending %}<p class="note warn">En attente : {% for c in pending %}{{ action_label(c)|lower }} ({% set live = progress_view(c.progress) if c.state == 'running' else None %}{{ live.label|lower if live else ('transmise à l\'agent' if c.state != 'queued' else 'au prochain contact') }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  {% if pending %}<div class="note warn pending-list">{% for c in pending %}
+    <div class="pending-item"><span>{{ action_label(c) }} —
+      {% if c.state == 'running' %}{% set live = progress_view(c.progress) %}{{ live.label|lower }}
+      {% elif c.state == 'sent' %}transmise à l'agent
+      {% elif c.run_after %}planifiée pour <span class="mono">{{ c.run_after }}</span> (heure du serveur)
+      {% else %}au prochain contact{% endif %}</span>
+      {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Annuler</button></form>{% endif %}
+    </div>{% endfor %}</div>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
 
   <div class="device-update-state">

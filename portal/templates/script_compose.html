@@ -35,7 +35,10 @@
   </div>
   <section class="panel sticky-actions compose-bar"><div class="panel-b compose-bar-in row-between">
     <span class="muted">La sortie et le code de retour de chaque poste s’affichent sur la page de suivi.</span>
-    <button class="btn primary"><span class="spin"></span>Exécuter</button>
+    <div class="row">
+      <label class="head-option" title="Vide = au prochain contact ; sinon à l'heure indiquée (heure du serveur)">Planifier <input type="datetime-local" name="run_after"></label>
+      <button class="btn primary"><span class="spin"></span>Exécuter</button>
+    </div>
   </div></section>
 </form>
 {% endblock %}

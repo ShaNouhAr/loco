@@ -33,8 +33,8 @@
       <tbody>{% for t in targets %}{% set cls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
         <tr>
           <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}</td>
-          <td class="nowrap"><span class="st {{ cls }}">{{ states.get(t.state, t.state) }}</span>{% if t.exit_code is not none and t.state in ('success', 'failed') %}<span class="sub sans">code {{ t.exit_code }}</span>{% endif %}</td>
-          <td>{% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>Sortie du script</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ 'Exécution en cours…' if t.state == 'running' else 'En attente du poste' }}</span>{% endif %}</td>
+          <td class="nowrap"><span class="st {{ cls }}">{{ states.get(t.state, t.state) }}</span>{% if t.exit_code is not none and t.state in ('success', 'failed') %}<span class="sub sans">code {{ t.exit_code }}</span>{% elif t.state == 'queued' and t.run_after %}<span class="sub sans">planifié pour {{ t.run_after }}</span>{% endif %}</td>
+          <td>{% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>Sortie du script</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ 'Exécution en cours…' if t.state == 'running' else ('Planifié pour ' ~ t.run_after ~ ' (heure du serveur)' if t.run_after else 'En attente du poste') }}</span>{% endif %}</td>
         </tr>
       {% endfor %}</tbody>
     </table></div>

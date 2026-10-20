@@ -1,4 +1,5 @@
 """Scripts : bibliothèque versionnée, exécution figée par poste compatible, droits revérifiés, agent Linux réel."""
+import datetime
 import hashlib
 import importlib.util
 import os
@@ -30,6 +31,28 @@ class TestScripts(FleetTest):
         r = self.admin.post(path, values, page="/parc/scripts")
         self.assertEqual(r.status_code, 302, r.get_data(as_text=True)[:300])
         return int(r.headers["Location"].rstrip("/").split("/")[-1])
+
+    def test_scheduled_run_is_withheld_until_its_time(self):
+        sid = self.save(platform="linux", content="echo bonjour")
+        future = (datetime.datetime.now() + datetime.timedelta(hours=3)).strftime("%Y-%m-%dT%H:%M")
+        r = self.admin.post(f"/parc/scripts/{sid}/executer",
+                            {"version": "1", "device": str(device(self.lin.uid)["id"]), "run_after": future},
+                            page="/parc/scripts")
+        self.assertEqual(r.status_code, 302)
+        with transaction() as conn:
+            self.assertTrue(conn.execute("SELECT run_after FROM device_commands WHERE action='run-script'").fetchone()[0])
+        self.assertEqual(self.lin.checkin().get_json()["commands"], [])         # pas avant l'heure
+        with transaction() as conn:
+            conn.execute("UPDATE device_commands SET run_after=? WHERE action='run-script'",
+                         ((datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S"),))
+        self.assertEqual([c["action"] for c in self.lin.checkin().get_json()["commands"]], ["run-script"])
+
+    def test_past_schedule_is_refused(self):
+        sid = self.save(platform="linux", content="echo bonjour")
+        r = self.admin.post(f"/parc/scripts/{sid}/executer",
+                            {"version": "1", "device": str(device(self.lin.uid)["id"]), "run_after": "2000-01-01T00:00"},
+                            page="/parc/scripts")
+        self.assertEqual(r.status_code, 400)
 
     def test_versions_follow_content_and_runs_keep_their_snapshot(self):
         sid = self.save()

@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.24.0 — 2026-10-20
+
+- **Planification ponctuelle des mises à jour et des scripts** : choisir une date et une heure (heure du serveur) au lieu de « au prochain contact ». La commande reste en attente et n'est transmise à l'agent qu'à partir de l'instant choisi. Disponible pour *Mettre à jour* (un poste depuis sa fiche, via « Planifier une mise à jour »), *Tout mettre à jour* (parc ou groupe) et l'exécution d'un script (page d'exécution). Une action planifiée en attente peut être **annulée** avant d'être transmise (bouton *Annuler* sur la fiche du poste, *Annuler les postes en attente* pour un script). La fiche du poste et le suivi d'exécution affichent l'instant planifié. Champ laissé vide = comportement actuel (dès le prochain contact).
+
 ## 2.23.0 — 2026-10-20
 
 - **Gestionnaire de fichiers du poste** (onglet *Fichiers* de la fiche d'un appareil) : parcourir l'arborescence, téléverser (bouton ou glisser-déposer), télécharger, créer un dossier, renommer, copier, déplacer, supprimer, modifier un fichier texte dans l'éditeur intégré, et ajuster les droits (octal) sous Linux. Fil d'Ariane, raccourcis vers la racine et le dossier personnel, affichage optionnel des fichiers cachés et progression par transfert. Comme les terminaux et le bureau, tout passe par le relais HTTPS — l'agent exécute chaque opération en root (SYSTEM sous Windows) et le serveur ne se connecte jamais au poste ; aucune adresse ni aucun jeton de poste n'arrive au navigateur. Nouveau droit *Gérer les fichiers du poste* (réservé à l'administrateur par défaut), agent 2.23 minimum ; le rafraîchissement automatique de la fiche est suspendu tant que l'onglet est ouvert, pour ne pas interrompre un transfert ou une édition.

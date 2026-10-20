@@ -30,7 +30,7 @@ def _compatible(dev, platform):
 
 def _targets(run_id):
     rows = db().execute("SELECT t.*, c.state AS command_state, COALESCE(c.output, t.last_output) AS output, c.exit_code, "
-                        "c.finished_at, c.sent_at FROM script_run_targets t LEFT JOIN device_commands c ON c.id=t.command_id "
+                        "c.finished_at, c.sent_at, c.run_after FROM script_run_targets t LEFT JOIN device_commands c ON c.id=t.command_id "
                         "WHERE t.run_id=? ORDER BY t.hostname COLLATE NOCASE", (run_id,)).fetchall()
     return [{**dict(r), "state": r["command_state"] or r["last_state"] or "cancelled"} for r in rows]
 
@@ -130,6 +130,10 @@ def script_run_start(script_id):
         abort(404)
     if request.form.get("version") != str(script["version"]):
         abort(409, "Le script a été modifié entre-temps : vérifiez-le avant de l'exécuter.")
+    try:
+        run_after = fleet._schedule_time(request.form.get("run_after"))
+    except ValueError as e:
+        abort(400, str(e))
     ids = set(groups.identifiers(request.form.getlist("device"), MAX_TARGETS))
     for gid in groups.identifiers(request.form.getlist("device_group")):
         ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (gid,))}
@@ -143,15 +147,21 @@ def script_run_start(script_id):
                           "VALUES (?,?,?,?,?,?,?,?)", (script_id, script["name"], script["version"], script["platform"],
                                                         script["content"], sha, user, now)).lastrowid
     for dev in targets:
-        command_id = conn.execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by) "
-                                  "VALUES (?, 'run-script', ?, ?, ?)", (dev["id"], json.dumps({"run_id": run_id}), now, user)).lastrowid
+        command_id = conn.execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by, run_after) "
+                                  "VALUES (?, 'run-script', ?, ?, ?, ?)",
+                                  (dev["id"], json.dumps({"run_id": run_id}), now, user, run_after)).lastrowid
         conn.execute("INSERT INTO script_run_targets (run_id, device_id, hostname, command_id) VALUES (?,?,?,?)",
                      (run_id, dev["id"], dev["hostname"] or dev["uid"][:8], command_id))
-    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)", commit=False)
+    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)"
+                               f"{' (planifié pour ' + run_after + ')' if run_after else ''}", commit=False)
     conn.commit()
     skipped = len(devices) - len(targets)
-    flash(f"Script envoyé à {len(targets)} poste(s) au prochain contact de leur agent"
-          + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
+    if run_after:
+        flash(f"Script planifié sur {len(targets)} poste(s) pour le {run_after} (heure du serveur)"
+              + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
+    else:
+        flash(f"Script envoyé à {len(targets)} poste(s) au prochain contact de leur agent"
+              + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
     return back("script_run", run_id=run_id)
 
 

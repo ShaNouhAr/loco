@@ -284,6 +284,10 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 - **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
   facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
   Ces actions utilisent une liste fermée ; les administrateurs disposent aussi du terminal interactif décrit ci-dessous.
+- **Planifier** : les mises à jour (un poste, le parc ou un groupe) et l'exécution d'un script acceptent une **date et
+  heure** (heure du serveur) ; la commande attend et n'est transmise à l'agent qu'à partir de cet instant. Une action
+  planifiée se voit sur la fiche du poste (et la page de suivi d'un script) et s'**annule** tant qu'elle n'a pas été
+  transmise. Laisser le champ vide garde le comportement habituel (dès le prochain contact).
 - **Identité** : chaque poste a un identifiant et un jeton propres, indépendants de son adresse. Un poste qui change
   d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache.
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de

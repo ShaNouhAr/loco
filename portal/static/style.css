@@ -948,6 +948,13 @@ label.f > span.password-field { display: flex; align-items: center; gap: 10px; m
 @media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn > span { display: inline; } }
 @media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } .remote-display { border: 0; padding: 0; } }
 
+/* ------------------------------------------------------------------ actions planifiées (en attente) */
+.pending-list { display: flex; flex-direction: column; gap: 6px; }
+.pending-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pending-item > span { min-width: 0; }
+.pending-cancel { flex: none; }
+.compose-bar-in .row { align-items: center; gap: 12px; }
+
 /* ------------------------------------------------------------------ gestionnaire de fichiers */
 .files { display: flex; flex-direction: column; gap: 12px; }
 .files-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
