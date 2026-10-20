@@ -1,4 +1,4 @@
-<!doctype html>
+{% from "_logo.html" import logo %}<!doctype html>
 <html lang="fr" data-theme="oled">
 <head>
   <meta charset="utf-8">
@@ -6,7 +6,7 @@
   <title>{% block title %}{% endblock %} · loco</title>
   <script src="{{ url_for('static', filename='theme.js') }}?v={{ asset_v }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23161616'/%3E%3Crect x='4' y='4' width='8' height='8' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 {% block body %}
@@ -14,7 +14,7 @@
 {% from '_nav_icons.html' import nav_icon, theme_toggle %}
 <header class="top">
   <div class="top-in">
-    <a class="brand" href="{{ url_for('index') }}"><b>loco</b><span>{{ host }}</span></a>
+    <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
     <nav class="nav" aria-label="Navigation principale">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="Vue d'ensemble" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>Vue d'ensemble</span></a>{% endif %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>Mon parc</span></a>{% endif %}

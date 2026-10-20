@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% from "_logo.html" import logo %}
 {% block title %}Connexion{% endblock %}
 {% block body %}
 {% from '_nav_icons.html' import theme_toggle %}
 <div class="login">
   <div class="login-box">
-    <div class="brand"><b>loco</b><span>{{ host }}</span></div>
+    <div class="brand">{{ logo() }}<b>loco</b><span>{{ host }}</span></div>
     {% for category, message in get_flashed_messages(with_categories=true) %}<p class="note {{ category }}" role="status">{{ message }}</p>{% endfor %}
     <form method="post" class="panel">
       <div class="panel-h"><h2>Connexion</h2></div>

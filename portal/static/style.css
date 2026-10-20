@@ -129,7 +129,8 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand b { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
-.brand b::before { content: ""; width: 12px; height: 12px; border-radius: 3px; background: var(--accent); }
+/* Logo : silhouette transparente teintée par la couleur d'accent (= couleur du texte du thème par défaut). */
+.brand-logo { flex: none; display: block; height: 30px; width: auto; color: var(--accent); }
 .brand span { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
 .nav { display: flex; align-items: stretch; height: 100%; gap: 4px; }
 .nav > a, .nav-group > summary { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 10px; color: var(--text-2); font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .12s; }
@@ -474,7 +475,8 @@ details.menu[open] > .menu-list { animation: nav-reveal .12s ease-out; }
 
 .login { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
 .login-box { width: min(380px, 100%); }
-.login-box .brand { justify-content: center; margin-bottom: 24px; }
+.login-box .brand { flex-direction: column; justify-content: center; gap: 8px; margin-bottom: 24px; }
+.login-box .brand-logo { height: 72px; margin-bottom: 6px; }
 .login-box .brand b { font-size: 18px; }
 .login-box .panel { box-shadow: var(--shadow-pop); }
 .login-box .panel-h { padding: 24px 24px 0; min-height: 0; border-bottom: 0; }

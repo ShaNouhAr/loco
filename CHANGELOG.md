@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.27.0 — 2026-10-20
+
+- **Nouveau logo de l'application** (bâtiment, main et souris) : vectorisé (SVG), fond transparent, il prend la couleur du thème (clair, sombre doux, OLED) et suit la couleur d'accent choisie. Il remplace le carré dans la barre de navigation et apparaît en grand sur les écrans de connexion et de premier mot de passe. L'icône de l'onglet du navigateur utilise le même logo et s'adapte au mode clair ou sombre du navigateur.
+
 ## 2.26.0 — 2026-10-20
 
 - **Proxy Windows Update activé par défaut**, et réglable dans *Administration › Fonctionnalités* (« Proxy Windows Update (sans DNS) »). Les postes Windows gérés sont dirigés vers le cache par leur proxy WinHTTP dès l'installation, sans aucune redirection DNS ; couper la fonctionnalité fait retirer le proxy par les agents. La page *Windows Update* montre l'état au lieu d'un interrupteur dédié.

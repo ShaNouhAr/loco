@@ -43,7 +43,7 @@ app.config.update(
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(message)s")
 app.logger.setLevel(logging.INFO)
 
-STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js")
+STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js", "logo.svg")
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))
 
 # Politique de contenu stricte : aucun script ni style en ligne.
