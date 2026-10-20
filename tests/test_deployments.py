@@ -68,7 +68,7 @@ class TestDeployments(FleetTest):
 
     def preview(self, data=None, browser=None):
         values = data if data is not None else {'app': self.app['slug'], 'device': str(device(self.agent.uid)['id'])}
-        response = self.post('/windows-apps/deploiements/preparer', values, browser)
+        response = self.post('/parc/deploiements/preparer', values, browser)
         self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
         self.assertIn('/deploiements/', response.location)
         return response.location
@@ -194,9 +194,9 @@ class TestDeployments(FleetTest):
     def test_bulk_permissions_and_browser_ownership_are_enforced_on_the_server(self):
         operator = self.account('operator')
         ids = [str(device(self.agent.uid)['id']), str(device(self.other.uid)['id'])]
-        self.assertEqual(self.post('/windows-apps/deploiements/preparer', {'app': self.app['slug'], 'device': ids}, operator).status_code, 403)
+        self.assertEqual(self.post('/parc/deploiements/preparer', {'app': self.app['slug'], 'device': ids}, operator).status_code, 403)
         group = self.group('device', 'Un seul poste', [int(ids[0])])
-        self.assertEqual(self.post('/windows-apps/deploiements/preparer', {'app': self.app['slug'], 'device_group': group}, operator).status_code, 403)
+        self.assertEqual(self.post('/parc/deploiements/preparer', {'app': self.app['slug'], 'device_group': group}, operator).status_code, 403)
         path = self.preview(browser=operator)
         self.assertEqual(self.admin.c.get(path).status_code, 404)
         self.assertEqual(self.post(path + '/confirmer').status_code, 404)
@@ -295,17 +295,34 @@ class TestDeployments(FleetTest):
         self.post(failed + '/confirmer')
         cmd = self.agent.checkin().get_json()['commands'][0]
         self.agent.result(cmd['id'], 'failed', 'Installeur en échec : code 1603')
-        html = self.admin.c.get('/windows-apps/deploiements').get_data(as_text=True)
+        html = self.admin.c.get('/parc/deploiements').get_data(as_text=True)
         self.assertIn('Avec erreurs <b>1</b>', html)
         self.assertIn('À confirmer <b>1</b>', html)
         self.assertIn('0/1 réussi', html)
         self.assertIn('class="prog-failed"', html)
-        html = self.admin.c.get('/windows-apps/deploiements?etat=erreurs').get_data(as_text=True)
+        html = self.admin.c.get('/parc/deploiements?etat=erreurs').get_data(as_text=True)
         self.assertIn(failed.rsplit('/', 1)[-1], html)
         self.assertNotIn(draft.rsplit('/', 1)[-1], html)
         html = self.admin.c.get(failed).get_data(as_text=True)
         self.assertIn('Échecs', html)
         self.assertIn('<details class="output-details" open>', html)        # journal d'un échec déplié
+
+    def test_deployments_live_in_mon_parc_and_old_addresses_redirect(self):
+        """Une action sur les appareils, comme les scripts : sous-menu et entrée « Mon parc », plus d'onglet côté Logiciels."""
+        detail = self.preview()
+        for page in ('/parc/deploiements', '/parc/deploiements/nouveau', detail):
+            html = self.admin.c.get(page).get_data(as_text=True)
+            self.assertIn('aria-label="Gestion du parc"', html)                 # sous-menu de Mon parc
+            self.assertNotIn('aria-label="Gestion des logiciels"', html)
+            self.assertRegex(html, r'<a href="/parc" class="on" aria-current="page">')   # « Mon parc » actif en haut
+        catalog = self.admin.c.get('/windows-apps').get_data(as_text=True)
+        self.assertIn('aria-label="Gestion des logiciels"', catalog)
+        self.assertNotIn('href="/parc/deploiements"', catalog.split('aria-label="Gestion des logiciels"')[1].split('</nav>')[0])
+        for old, new in (('/windows-apps/deploiements?etat=erreurs', '/parc/deploiements?etat=erreurs'),
+                         ('/windows-apps/deployer?app=x', '/parc/deploiements/nouveau?app=x'),
+                         ('/windows-apps/deploiements/' + detail.rsplit('/', 1)[-1], detail)):
+            response = self.admin.c.get(old)
+            self.assertEqual((response.status_code, response.location), (308, new))
 
     def test_live_install_steps_are_shown_while_the_agent_works(self):
         path = self.preview()
@@ -342,7 +359,7 @@ class TestDeployments(FleetTest):
             conn.execute('UPDATE deployments SET expires=0')
         self.assertEqual(self.post(path + '/confirmer').status_code, 409)
         with mock.patch.object(winget, 'import_package') as importer:
-            response = self.post('/windows-apps/deploiements/preparer', {'package_id': 'Vendor.App', 'device': str(device(self.linux.uid)['id'])})
+            response = self.post('/parc/deploiements/preparer', {'package_id': 'Vendor.App', 'device': str(device(self.linux.uid)['id'])})
             self.assertEqual(response.status_code, 400)
             importer.assert_not_called()
         self.assertEqual(self.commands(), [])

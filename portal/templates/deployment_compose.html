@@ -11,7 +11,7 @@
   <span><strong class="mono">{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} · non compatible (logiciels Windows){% elif device.state != 'active' %} · agent en cours de retrait{% endif %}</small></span></label>
 {%- endmacro %}
 {% block content %}
-{% include '_software_nav.html' %}
+{% include '_fleet_nav.html' %}
 <p class="small back-link"><a href="{{ url_for('deployments') }}">← Déploiements</a></p>
 <div class="head">
   <div>

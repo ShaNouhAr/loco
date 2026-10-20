@@ -12,7 +12,7 @@ import tempfile
 import time
 import zipfile
 
-from flask import abort, flash, g, render_template, request, session, url_for
+from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
 from . import app, config, fleet, groups, winget
 from .auth import audit, can, lock_access, login_required, require
@@ -94,7 +94,7 @@ def _require_bulk(selection, devices):
     return bulk
 
 
-@app.route('/windows-apps/deployer')
+@app.route('/parc/deploiements/nouveau')
 @login_required
 def deployment_compose():
     selected = _selection(request.args)
@@ -119,7 +119,7 @@ def deployment_compose():
                            devices=db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall())
 
 
-@app.route('/windows-apps/deploiements/preparer', methods=['POST'])
+@app.route('/parc/deploiements/preparer', methods=['POST'])
 @login_required
 def deployment_preview():
     selected = _selection(request.form)
@@ -220,7 +220,7 @@ def _progress(targets):
     return counts
 
 
-@app.route('/windows-apps/deploiements')
+@app.route('/parc/deploiements')
 @login_required
 def deployments():
     db().execute("BEGIN IMMEDIATE")
@@ -252,7 +252,7 @@ def deployments():
                            pages=pages, all_count=len(rows), counts=counts, filters=FILTERS, wanted=wanted)
 
 
-@app.route('/windows-apps/deploiements/<deployment_id>')
+@app.route('/parc/deploiements/<deployment_id>')
 @login_required
 def deployment_detail(deployment_id):
     row = _get(deployment_id)
@@ -369,7 +369,7 @@ def _pending_apps(dev):
     return result
 
 
-@app.route('/windows-apps/deploiements/<deployment_id>/confirmer', methods=['POST'])
+@app.route('/parc/deploiements/<deployment_id>/confirmer', methods=['POST'])
 @login_required
 def deployment_confirm(deployment_id):
     conn = lock_access('fleet.install')
@@ -435,7 +435,7 @@ def deployment_confirm(deployment_id):
     return back('deployment_detail', deployment_id=deployment_id)
 
 
-@app.route('/windows-apps/deploiements/<deployment_id>/annuler', methods=['POST'])
+@app.route('/parc/deploiements/<deployment_id>/annuler', methods=['POST'])
 @login_required
 def deployment_cancel(deployment_id):
     conn = lock_access('fleet.install')
@@ -454,3 +454,15 @@ def deployment_cancel(deployment_id):
     conn.commit()
     flash('Commandes non transmises annulées. Les installations déjà reçues par un agent peuvent se terminer.', 'ok')
     return back('deployment_detail', deployment_id=deployment_id)
+
+
+# Les déploiements vivent dans Mon parc (actions sur les appareils, comme les scripts) ; anciennes adresses redirigées.
+@app.route('/windows-apps/deploiements', defaults={'deployment_id': ''})
+@app.route('/windows-apps/deploiements/<deployment_id>')
+@app.route('/windows-apps/deployer', defaults={'deployment_id': 'nouveau'})
+@login_required
+def deployments_legacy(deployment_id):
+    target = (url_for('deployment_compose') if deployment_id == 'nouveau' else
+              url_for('deployment_detail', deployment_id=deployment_id) if deployment_id else url_for('deployments'))
+    query = request.query_string.decode()
+    return redirect(target + ('?' + query if query else ''), 308)

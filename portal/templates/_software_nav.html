@@ -2,5 +2,4 @@
   {% if can('windows.view') %}<a href="{{ url_for('windows_apps') }}" class="{{ 'on' if request.endpoint in ('windows_apps','software_detail') }}">Catalogue local</a>{% endif %}
   {% if can('store.view') %}<a href="{{ url_for('software_store') }}" class="{{ 'on' if request.endpoint.startswith(('software_store','winget')) }}">Centre de logiciels</a>{% endif %}
   {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" class="{{ 'on' if request.endpoint.startswith('software_group') }}">Groupes de logiciels</a>{% endif %}
-  {% if can_any('deployments.view','fleet.install') %}<a href="{{ url_for('deployments') }}" class="{{ 'on' if request.endpoint.startswith(('deployment','deployments')) }}">Déploiements</a>{% endif %}
 </nav>

@@ -2,7 +2,7 @@
 {% from "_charts.html" import progress %}
 {% block title %}Déploiements{% endblock %}
 {% block content %}
-{% include '_software_nav.html' %}
+{% include '_fleet_nav.html' %}
 {% set labels = {'draft': 'À confirmer', 'expired': 'Préparation expirée', 'running': 'En cours', 'cancelling': 'Annulation demandée', 'success': 'Terminé', 'failed': 'Terminé avec erreurs', 'cancelled': 'Annulé'} %}
 <div class="head">
   <div>

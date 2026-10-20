@@ -17,7 +17,7 @@
     <a class="brand" href="{{ url_for('index') }}"><b>loco</b><span>{{ host }}</span></a>
     <nav class="nav" aria-label="Navigation principale">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="Vue d'ensemble" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>Vue d'ensemble</span></a>{% endif %}
-      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote')) }}" {% if ep.startswith(('fleet', 'remote')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>Mon parc</span></a>{% endif %}
+      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>Mon parc</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
         <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
@@ -31,12 +31,12 @@
       </details>
       {% endif %}
       {% if can_any("wu.view", "windows.view", "store.view") %}
-      <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'deployment')) }}">
+      <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail')) }}">
         <summary aria-expanded="false" aria-controls="nav-windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-windows">
           <div class="nav-panel">
             {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>Cache des mises à jour</small></span></a>{% endif %}
-            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_','deployment')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>Logiciels</strong><small>Catalogue, centre de logiciels, groupes, déploiements</small></span></a>{% endif %}
+            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>Logiciels</strong><small>Catalogue, centre de logiciels, groupes de logiciels</small></span></a>{% endif %}
           </div>
         </div>
       </details>

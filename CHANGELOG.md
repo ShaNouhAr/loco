@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.17.2 — 2026-10-20
+
+- **Les déploiements vivent dans Mon parc** : un déploiement est une action sur les appareils (cibles, avancement poste par poste), comme les scripts. L'onglet *Déploiements* de Mon parc reste désormais dans Mon parc (sous-menu du parc, entrée « Mon parc » active) au lieu de basculer vers Windows. *Windows › Logiciels* garde le catalogue local, le centre de logiciels et les groupes de logiciels ; leurs boutons *Déployer* ouvrent la préparation dans Mon parc. Nouvelles adresses `/parc/deploiements…` ; les anciennes (`/windows-apps/deploiements…`, `/windows-apps/deployer`) redirigent, paramètres compris.
+- L'entrée « Mon parc » est aussi active sur les pages Scripts.
+
 ## 2.17.1 — 2026-10-20
 
 - **Résolution du poste toujours rétablie à la fermeture de la console** (agent Windows) : en 2.17.0, quand le navigateur fermait la session pendant qu'une demande d'image attendait un changement d'écran, le compagnon de bureau ne voyait pas la fermeture du canal ; il était arrêté de force au bout de 5 secondes, sans rétablir la résolution d'origine (le poste restait par exemple en 848 × 480). Le canal fermé est maintenant constaté aussitôt : le compagnon se termine proprement et rend la résolution initiale. Vérifié sur une suite de sessions avec changements de résolution, plein écran et zoom.

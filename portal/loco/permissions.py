@@ -124,6 +124,7 @@ ENDPOINTS = {
     "deployments": ("deployments.view", "fleet.install"), "deployment_detail": ("deployments.view", "fleet.install"),
     "deployment_compose": "fleet.install", "deployment_preview": "fleet.install",
     "deployment_confirm": "fleet.install", "deployment_cancel": "fleet.install",
+    "deployments_legacy": ("deployments.view", "fleet.install"),
     "software_icon": ("windows.view", "store.view", "fleet.view"),
     "windows_update": "wu.view", "api_wu": "wu.view", "windows_update_dns": "wu.view",
     "windows_update_domains": "wu.configure",

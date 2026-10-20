@@ -2,7 +2,7 @@
 {% from "_charts.html" import progress as progress_bar %}
 {% block title %}{{ deployment.title }}{% endblock %}
 {% block content %}
-{% include '_software_nav.html' %}
+{% include '_fleet_nav.html' %}
 {% set labels = {'draft': 'Préparation à confirmer · aucune installation lancée', 'expired': 'Préparation expirée', 'running': 'Déploiement en cours', 'cancelling': 'Annulation demandée', 'success': 'Déploiement terminé', 'failed': 'Déploiement terminé avec erreurs', 'cancelled': 'Déploiement annulé'} %}
 {% set cls = 'ok' if state == 'success' else 'err' if state == 'failed' else 'warn' if state in ('running', 'draft', 'cancelling') else '' %}
 {% set draft = deployment.state == 'draft' %}
