@@ -18,6 +18,7 @@
     <nav class="nav" aria-label="Navigation principale">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="Vue d'ensemble" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>Vue d'ensemble</span></a>{% endif %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>Mon parc</span></a>{% endif %}
+      {% if can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="Enrôlement" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>Enrôlement</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
         <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>

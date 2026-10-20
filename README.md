@@ -256,8 +256,12 @@ Les droits **Gérer les groupes de logiciels**, **Gérer les groupes de machines
 
 ## Mon parc : agent des postes
 
-La page **Mon parc** liste les postes équipés de l'agent `loco-client`. Pour en ajouter un, copiez la commande
-affichée (elle contient la clé d'inscription du serveur) :
+La page **Mon parc** liste les postes équipés de l'agent `loco-client`. Pour en ajouter un, ouvrez **Enrôlement**
+(barre de navigation, ou *Ajouter un poste* dans Mon parc) : un onglet par système (Windows ; Debian, Ubuntu ;
+Rocky, AlmaLinux, RHEL) avec l'installeur de l'agent à télécharger — **MSI**, paquet **.deb** ou **.rpm** — et sa
+commande d'installation, puis la configuration des dépôts et caches (APT, DNF, Flatpak) et, sous Windows, les
+logiciels du catalogue. Les fichiers et commandes de l'agent contiennent la clé d'inscription du serveur. Sans
+paquet, la commande reste disponible :
 
 ```powershell
 # Windows 10/11, Windows Server 2016+ (PowerShell administrateur) : installe le MSI, service « loco-client »
@@ -284,9 +288,14 @@ curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
   d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache.
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de
   certificats du poste ; installeurs vérifiés par SHA-256 ; jetons stockés hachés côté serveur.
-- **Windows, MSI téléchargé** : la fenêtre *Ajouter un poste* propose aussi le MSI en téléchargement direct (lien
-  public, également ouvrable depuis le navigateur du poste) et la commande `msiexec` à lancer en administrateur avec
-  l'adresse, la clé et l'empreinte du serveur ; un simple double-clic installe le service sans l'inscrire.
+- **Paquets .deb et .rpm** : produits par loco pour ce serveur (adresse, autorité épinglée et clé incluses), ils
+  s'installent par `sudo apt install ./loco-client_<version>_all.deb` ou `sudo dnf install ./loco-client-<version>-1.noarch.rpm`
+  et inscrivent le poste aussitôt ; désinstaller le paquet retire l'agent. Le paquet ne contient que le script
+  d'installation : l'agent se met ensuite à jour seul. Ils se téléchargent aussi depuis le poste
+  (`/agent/loco-client.deb?key=…`, `/agent/loco-client.rpm?key=…`).
+- **Windows, MSI téléchargé** : la page *Enrôlement* propose le MSI en téléchargement direct (lien public, également
+  ouvrable depuis le navigateur du poste) et la commande `msiexec` à lancer en administrateur avec l'adresse, la clé
+  et l'empreinte du serveur ; un simple double-clic installe le service sans l'inscrire.
 - **Windows en masse** : distribuer `loco-client.msi` (GPO, Intune, SCCM) et définir `Server`, `Key` et `CaSha256`
   sous `HKLM\SOFTWARE\Policies\loco\Client`, ou `msiexec /i loco-client.msi SERVER=… KEY=… CA_SHA256=… /qn`.
   Le MSI est publié avec chaque version ; le serveur le télécharge depuis GitHub à la première installation

@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "_macros.html" import cmd %}
 {% block title %}Mon parc{% endblock %}
 {% macro filter_url(statut=None, os=None) -%}
 {{ url_for('fleet', group=selected_group.id if selected_group else None,
@@ -14,7 +13,7 @@
     <p>Postes équipés de l'agent loco, du plus urgent au plus à jour.</p>
   </div>
   <div class="actions">
-    {% if can('fleet.enroll') %}<button type="button" class="btn" data-open="#enroll">Ajouter un poste</button>{% endif %}
+    {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">Ajouter un poste</a>{% endif %}
     {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">Déployer sur ce groupe</a>{% endif %}
     {% if can('fleet.bulk_update') and total %}
     <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="Mettre à jour {{ to_update }} poste(s) ?" data-confirm-text="Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.{% if can('fleet.reboot') %} Cochez « redémarrer si nécessaire » pour terminer les mises à jour qui l'exigent.{% endif %}" data-confirm-ok="Mettre à jour">
@@ -101,52 +100,10 @@
     {% elif total %}
     <div class="empty">Aucun poste dans cet état. <a href="{{ filter_url(statut='', os='') }}">Tout afficher</a></div>
     {% else %}
-    <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant{% if can('fleet.enroll') %} : <button type="button" class="linkbtn" data-open="#enroll">ajoutez-en un</button>{% endif %}.{% endif %}</div>
+    <div class="empty">{% if selected_group %}Aucun appareil dans ce groupe.{% else %}Aucun poste pour l'instant{% if can('fleet.enroll') %} : <a href="{{ url_for('enrollment') }}">ajoutez-en un</a>{% endif %}.{% endif %}</div>
     {% endif %}
     <div class="panel-f">Près du nom : vert si l'agent a contacté loco dans les {{ online_minutes }} dernières minutes, rouge sinon.<br>Mises à jour : vert sans mise à jour, orange jusqu'à {{ red_threshold - 1 }}, rouge à partir de {{ red_threshold }} (système, Flatpak et catalogue), gris si l'état est inconnu. Contact toutes les {{ checkin // 60 }} minutes : une action part au contact suivant.</div>
   </section>
 </div>
 
-{% if can("fleet.enroll") %}
-<dialog id="enroll" class="wide-dialog">
-  <div class="dlg-h"><h2>Ajouter un poste</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
-  <div class="dlg-b client-panel">
-    <div class="tabs" role="tablist">
-      <button type="button" data-tab="agent-win" aria-selected="true">Windows</button>
-      <button type="button" data-tab="agent-linux" aria-selected="false">Debian, Ubuntu, Rocky, AlmaLinux</button>
-    </div>
-    <div class="tab-panel client-panel on" data-panel="agent-win">
-      <p class="muted">Windows 10/11 et Windows Server 2016 et plus, dans PowerShell administrateur.</p>
-      {{ cmd('agent-win', commands.windows, 'PS>') }}
-      {% if commands.windows_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.windows_http }}</code></span>{% endif %}
-      <span class="hint">Installe le service Windows <code>loco-client</code> (MSI, visible dans Programmes et fonctionnalités). L'agent épingle l'autorité de loco sans modifier les certificats du poste.</span>
-
-      <div class="msi-direct">
-        <div class="row-between">
-          <div><h3 class="pick-title">Ou télécharger l'installeur</h3>
-            <span class="small muted">loco-client.msi · version {{ msi_version }}{% if msi_sha256 %} · <span title="SHA-256 {{ msi_sha256 }}">SHA-256 {{ msi_sha256[:12] }}…</span>{% elif msi_error %} · {{ msi_error }}{% endif %}</span></div>
-          <a class="btn primary" href="{{ url_for('agent_file', name='loco-client.msi') }}" download>Télécharger le MSI</a>
-        </div>
-        <span class="hint">Depuis le navigateur du poste : {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}{% if commands.msi_urls|length > 1 %} (sans avertissement de certificat si l'autorité loco n'est pas importée){% endif %}.</span>
-        <p class="small muted">Puis, dans une invite de commandes en administrateur, pour l'installer et l'inscrire :</p>
-        {{ cmd('agent-msi', commands.msiexec, '>') }}
-        <span class="hint">Un simple double-clic installe le service sans l'inscrire : la commande lui donne l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité.</span>
-      </div>
-
-      <details class="hint"><summary>Déploiement en masse (GPO, Intune, SCCM)</summary>
-        <p>Distribuer <a href="{{ url_for('agent_file', name='loco-client.msi') }}">loco-client.msi</a>{% if msi_error %} <span class="faint">({{ msi_error }})</span>{% endif %} et créer, par GPO (préférences de registre), sous <code>HKLM\SOFTWARE\Policies\loco\Client</code> les valeurs chaîne :</p>
-        <p><code>Server</code> = <code>{{ https_url }}</code><br><code>Key</code> = <code>{{ enroll_key }}</code><br><code>CaSha256</code> = <code>{{ ca_sha256 or '(vide : certificat public)' }}</code></p>
-        <p>Ou en ligne de commande : <code>msiexec /i loco-client.msi SERVER={{ https_url }} KEY={{ enroll_key }} CA_SHA256={{ ca_sha256 }} /qn</code></p>
-      </details>
-    </div>
-    <div class="tab-panel client-panel" data-panel="agent-linux">
-      <p class="muted">Postes avec systemd et APT ou DNF.</p>
-      {{ cmd('agent-linux', commands.linux) }}
-      {% if commands.linux_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.linux_http }}</code></span>{% endif %}
-      <span class="hint">Retrait local : <code>sudo loco-client remove</code>.</span>
-    </div>
-    <p class="hint">La commande contient la clé d'inscription de ce serveur : ne la partagez qu'avec les personnes qui installent les postes.{% if can('fleet.settings') %} Changer de clé : <a href="{{ url_for('fleet_settings') }}">Réglages</a>.{% endif %}</p>
-  </div>
-</dialog>
-{% endif %}
 {% endblock %}

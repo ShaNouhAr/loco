@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_macros.html" import cmd %}
+{% from "_nav_icons.html" import nav_icon %}
+{% block title %}Enrôlement{% endblock %}
+{% macro step(ns, title, aside='') -%}
+{% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ title }}</h2>{% if aside %}<div class="aside">{{ aside }}</div>{% endif %}</div>
+{%- endmacro %}
+{% macro download(icon, name, meta, href, label) -%}
+<div class="download">
+  <span class="download-icon">{{ nav_icon(icon) }}</span>
+  <div class="download-text"><strong class="mono">{{ name }}</strong><span>{{ meta }}</span></div>
+  <a class="btn primary" href="{{ href }}" download>{{ label }}</a>
+</div>
+{%- endmacro %}
+{% macro flatpak_step(ns) -%}
+<section class="panel">
+  {{ step(ns, "Applications Flatpak", "facultatif") }}
+  <div class="panel-b">
+    <p class="muted">Flathub via le cache de loco{% if not windows %}, et dépôt local « loco » des applications internes{% endif %}.</p>
+    {{ cmd('enroll-flatpak-' ~ ns.n, 'curl -fsSL ' ~ client_url ~ '/flatpak/setup.sh | sudo sh') }}
+    {% if http_url %}<span class="hint">Autorité loco pas encore importée : remplacer l'adresse par <code>{{ http_url }}</code>.</span>{% endif %}
+    <span class="hint">Retrait et applications internes : <a href="{{ url_for('flatpak') }}">Linux › Flatpak</a>.</span>
+  </div>
+</section>
+{%- endmacro %}
+{% macro linux_agent(ns, kind, name, label, path, install, fetch, fetch_http, remove) -%}
+<section class="panel">
+  {{ step(ns, "Installer l'agent", "inscrit le poste dans Mon parc") }}
+  <div class="panel-b">
+    {{ download('package', name, label ~ ' · version ' ~ version ~ ' · Python 3 et systemd requis', path, 'Télécharger le .' ~ kind) }}
+    <span class="cmd-label">Copiez le fichier sur le poste, puis dans son dossier :</span>
+    {{ cmd('enroll-' ~ kind, install) }}
+    <details class="hint"><summary>Autres méthodes</summary>
+      <div class="stack-sm">
+        <span class="cmd-label">Télécharger et installer directement depuis le poste :</span>
+        {{ cmd('enroll-' ~ kind ~ '-fetch', fetch) }}
+        {% if fetch_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ fetch_http }}</code></span>{% endif %}
+        <span class="cmd-label">Sans paquet, par le script d'installation :</span>
+        {{ cmd('enroll-' ~ kind ~ '-script', commands.linux) }}
+        {% if commands.linux_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.linux_http }}</code></span>{% endif %}
+      </div>
+    </details>
+    <span class="hint">Le poste apparaît dans <a href="{{ url_for('fleet') }}">Mon parc</a> dès l'installation ; l'agent se met ensuite à jour seul. <code>{{ remove }}</code> le retire du poste.</span>
+  </div>
+</section>
+{%- endmacro %}
+{% block content %}
+{% set apt = can('linux.view') and feature('apt') %}
+{% set rpm = rpm_enabled and can('rpm.view') and feature('rpm') %}
+{% set flat = flatpak_enabled and can('flatpak.view') and feature('flatpak') %}
+{% set wu = can('wu.view') and feature('wu') %}
+{% set winapps = can('windows.view') and feature('windows_apps') %}
+{% set tabs = [('windows', 'Windows', 'windows', key or wu or winapps), ('debian', 'Debian, Ubuntu', 'linux', key or apt or flat),
+               ('redhat', 'Rocky, AlmaLinux, RHEL', 'linux', key or rpm or flat)]|selectattr(3)|list %}
+<div class="head">
+  <div>
+    <h1>Enrôlement</h1>
+    <p>Rattacher un poste à loco : l'agent l'inscrit dans Mon parc (inventaire, mises à jour, actions), les dépôts et caches lui servent ensuite paquets et mises à jour depuis le réseau local.</p>
+  </div>
+</div>
+
+{% if tabs %}
+<div class="enroll">
+  <div class="tabs enroll-tabs" role="tablist" data-hash>
+    {% for id, label, icon, _ in tabs %}<button type="button" data-tab="{{ id }}" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ nav_icon(icon) }}{{ label }}</button>{% endfor %}
+  </div>
+
+  {% set first = tabs[0][0] %}
+  {% set ns = namespace(n=0) %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'windows' }}" data-panel="windows">
+    {% if key %}
+    <section class="panel">
+      {{ step(ns, "Installer l'agent", "Windows 10/11, Windows Server 2016 et plus") }}
+      <div class="panel-b">
+        {{ download('windows', 'loco-client.msi', 'Service Windows · version ' ~ version ~ (' · SHA-256 ' ~ msi_sha256[:12] ~ '…' if msi_sha256 else ' · récupéré depuis GitHub au premier téléchargement'), url_for('agent_file', name='loco-client.msi'), 'Télécharger le MSI') }}
+        <span class="cmd-label">Puis, dans une invite de commandes en administrateur, pour l'installer et inscrire le poste :</span>
+        {{ cmd('enroll-msi', commands.msiexec, '>') }}
+        <span class="hint">Un double-clic installe le service sans l'inscrire : la commande lui donne l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité.</span>
+        <details class="hint"><summary>Autres méthodes</summary>
+          <div class="stack-sm">
+            <span class="cmd-label">En une commande PowerShell (administrateur), sans téléchargement préalable :</span>
+            {{ cmd('enroll-ps', commands.windows, 'PS>') }}
+            {% if commands.windows_http %}<span class="hint">Autorité loco pas encore importée sur le poste : <code>{{ commands.windows_http }}</code></span>{% endif %}
+            <span class="hint">MSI depuis le navigateur du poste : {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}.</span>
+            <span class="cmd-label">Déploiement en masse (GPO, Intune, SCCM) : distribuer le MSI et créer sous <code>HKLM\SOFTWARE\Policies\loco\Client</code> les valeurs chaîne <code>Server</code> = <code>{{ https_url }}</code>, <code>Key</code> = <code>{{ key }}</code> et <code>CaSha256</code> = <code>{{ ca_sha256 or '(vide : certificat public)' }}</code>, ou en ligne de commande :</span>
+            {{ cmd('enroll-msi-mass', 'msiexec /i loco-client.msi SERVER=' ~ https_url ~ ' KEY=' ~ key ~ (' CA_SHA256=' ~ ca_sha256 if ca_sha256 else '') ~ ' /qn', '>') }}
+          </div>
+        </details>
+      </div>
+    </section>
+    {% endif %}
+    {% if wu %}
+    <section class="panel">
+      {{ step(ns, "Windows Update", "rien à installer") }}
+      <div class="panel-b"><p class="muted">Le DNS du réseau redirige les téléchargements de Windows Update vers loco : aucun réglage sur les postes. Domaines et script DNS pour Active Directory : <a href="{{ url_for('windows_update') }}">Windows › Windows Update</a>.</p></div>
+    </section>
+    {% endif %}
+    {% if winapps %}
+    <section class="panel">
+      {{ step(ns, "Logiciels du catalogue", "facultatif") }}
+      <div class="panel-b">
+        <p class="muted">Installer un logiciel du catalogue local, dans PowerShell administrateur (plusieurs : <code>7-zip,vlc</code>).</p>
+        {{ cmd('enroll-win-apps', "irm '" ~ client_url ~ "/win/i/<logiciel>' | iex", 'PS>') }}
+        <span class="hint">Identifiants dans <a href="{{ url_for('windows_apps') }}">Windows › Logiciels</a>. Pour plusieurs postes équipés de l'agent, préférez les <a href="{{ url_for('deployments') if can_any('deployments.view', 'fleet.install') else url_for('fleet') }}">déploiements</a>.</span>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  {% set ns = namespace(n=0) %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'debian' }}" data-panel="debian">
+    {% if key %}{{ linux_agent(ns, 'deb', deb_name, 'Paquet Debian / Ubuntu', commands.deb_path, commands.deb_install, commands.deb_fetch, commands.deb_fetch_http, 'sudo apt remove loco-client') }}{% endif %}
+    {% if apt %}
+    <section class="panel">
+      {{ step(ns, "Dépôts et cache APT", "recommandé") }}
+      <div class="panel-b">
+        <p class="muted">Paquets Debian / Ubuntu via le cache de loco, et dépôt local de la version du poste (détectée automatiquement).</p>
+        {{ cmd('enroll-apt', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
+        {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/linux/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
+        <span class="hint">Cache seul, retrait et autres options : <a href="{{ url_for('linux') }}">Linux › Paquets APT</a>.</span>
+      </div>
+    </section>
+    {% endif %}
+    {% if flat %}{{ flatpak_step(ns) }}{% endif %}
+  </div>
+
+  {% set ns = namespace(n=0) %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'redhat' }}" data-panel="redhat">
+    {% if key %}{{ linux_agent(ns, 'rpm', rpm_name, 'Paquet Rocky Linux / AlmaLinux / RHEL 8 et plus', commands.rpm_path, commands.rpm_install, commands.rpm_fetch, commands.rpm_fetch_http, 'sudo dnf remove loco-client') }}{% endif %}
+    {% if rpm %}
+    <section class="panel">
+      {{ step(ns, "Dépôts et cache DNF", "recommandé") }}
+      <div class="panel-b">
+        <p class="muted">Dépôts officiels via le cache de loco, et dépôt local <code>elN</code> de la version du poste.</p>
+        {{ cmd('enroll-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
+        {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/rpm/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
+        <span class="hint">EPEL, retrait et autres options : <a href="{{ url_for('rpm') }}">Linux › Paquets RPM</a>.</span>
+      </div>
+    </section>
+    {% endif %}
+    {% if flat %}{{ flatpak_step(ns) }}{% endif %}
+  </div>
+</div>
+{% if key %}<p class="hint enroll-foot">Les fichiers et commandes de l'agent contiennent la clé d'inscription de ce serveur : ne les partagez qu'avec les personnes qui installent les postes.{% if can('fleet.settings') %} Changer de clé : <a href="{{ url_for('fleet_settings') }}">Mon parc › Réglages</a>.{% endif %}</p>{% endif %}
+{% else %}
+<div class="panel"><div class="empty">Aucune méthode d'enrôlement disponible avec vos droits ou les fonctionnalités activées.</div></div>
+{% endif %}
+{% endblock %}

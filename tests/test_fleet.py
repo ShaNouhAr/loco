@@ -410,11 +410,11 @@ class TestInstallers(FleetTest):
             self.assertIn("pas d'accès à GitHub", r.get_data(as_text=True))
             self.assertEqual(r.headers["Retry-After"], "30")
 
-    def test_enroll_dialog_offers_the_msi_with_its_install_command(self):
+    def test_enrollment_page_offers_the_msi_with_its_install_command(self):
         sha = "e" * 64
         with mock.patch.object(fleet, "agent_msi", return_value=("/nulle/part.msi", sha)), \
                 mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
-            page = self.admin.c.get("/parc").get_data(as_text=True)
+            page = self.admin.c.get("/enrolement").get_data(as_text=True)
         self.assertIn("Télécharger le MSI", page)
         self.assertIn('href="/agent/files/loco-client.msi" download', page)
         self.assertIn("https://repo.test:8443/agent/files/loco-client.msi", page)   # depuis le poste, en HTTPS

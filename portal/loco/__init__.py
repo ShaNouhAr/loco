@@ -55,7 +55,7 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_repository_source", "windows_install_s
                     "healthz", "metrics", "static",
                     # Agent des postes (loco-client) : authentifié par sa clé d'inscription puis son jeton.
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                    "agent_file", "remote_agent"}
+                    "agent_file", "agent_deb", "agent_rpm", "remote_agent"}
 
 
 @app.before_request
@@ -119,10 +119,10 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts)
+                 directories, groups, deployments, features, scripts, enrollment)
 
 
 def startup():

@@ -27,8 +27,8 @@ import zipfile
 
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
-from . import addresses, app, config, features, permissions
-from .auth import audit, login_required, can, require
+from . import addresses, agentpkg, app, config, features, permissions
+from .auth import audit, login_required, require
 from .db import db
 from .util import back
 
@@ -716,10 +716,29 @@ def _check_key():
 
 @app.route("/agent/linux.sh")
 def agent_linux_installer():
-    key = _check_key()
-    script = render_template("agent-linux.sh", server=config.HTTPS_URL, key=key, ca=_ca_pem(), version=config.VERSION,
-                             agent=_agent_source("loco-client.py"))
-    return Response(script, mimetype="text/x-shellscript")
+    return Response(_linux_script(_check_key()), mimetype="text/x-shellscript")
+
+
+def _linux_script(key):
+    """Script d'installation de l'agent Linux pour ce serveur : agent, autorité épinglée, adresse et clé."""
+    return render_template("agent-linux.sh", server=config.HTTPS_URL, key=key, ca=_ca_pem(), version=config.VERSION,
+                           agent=_agent_source("loco-client.py"))
+
+
+@app.route("/agent/loco-client.deb")
+def agent_deb():
+    """Paquet Debian / Ubuntu de l'agent : il exécute le script d'installation (clé d'inscription incluse)."""
+    data = agentpkg.build_deb(_linux_script(_check_key()), config.VERSION, config.HTTPS_URL)
+    return Response(data, mimetype="application/vnd.debian.binary-package",
+                    headers={"Content-Disposition": f'attachment; filename="{agentpkg.deb_name(config.VERSION)}"'})
+
+
+@app.route("/agent/loco-client.rpm")
+def agent_rpm():
+    """Paquet Rocky Linux / AlmaLinux / RHEL de l'agent, sur le même principe que le paquet Debian."""
+    data = agentpkg.build_rpm(_linux_script(_check_key()), config.VERSION, config.HTTPS_URL)
+    return Response(data, mimetype="application/x-rpm",
+                    headers={"Content-Disposition": f'attachment; filename="{agentpkg.rpm_name(config.VERSION)}"'})
 
 
 @app.route("/agent/windows.ps1")
@@ -778,6 +797,15 @@ def _commands(key):
         "msi_urls": [u + "/agent/files/loco-client.msi" for u in (base, http) if u],
         "linux": f"curl -fsSL '{base}/agent/linux.sh?key={key}' | sudo sh",
         "linux_http": f"curl -fsSL '{http}/agent/linux.sh?key={key}' | sudo sh" if http else "",
+        # Paquets : téléchargés depuis le portail puis copiés sur le poste, ou récupérés directement par le poste.
+        "deb_path": f"/agent/loco-client.deb?key={key}", "rpm_path": f"/agent/loco-client.rpm?key={key}",
+        "deb_install": f"sudo apt install ./{agentpkg.deb_name(config.VERSION)}",
+        "rpm_install": f"sudo dnf install ./{agentpkg.rpm_name(config.VERSION)}",
+        **{f"{kind}_fetch{suffix}": (f"curl -fsSLo {name} '{url}/agent/loco-client.{kind}?key={key}' && sudo {tool} install ./{name}"
+                                     if url else "")
+           for kind, name, tool in (("deb", agentpkg.deb_name(config.VERSION), "apt"),
+                                    ("rpm", agentpkg.rpm_name(config.VERSION), "dnf"))
+           for suffix, url in (("", base), ("_http", http))},
     }
 
 
@@ -829,16 +857,11 @@ def fleet():
                                             r["presence"]["online"], len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
-    key = enroll_key() if can("fleet.enroll") else ""
-    msi, msi_state = agent_msi()
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
                            counts=counts, systems=systems, total=total, state=state, system=system,
                            signature=signature, families=FAMILIES, actions=ACTIONS,
                            to_update=sum(1 for r in rows if r["needs_update"]),
-                           commands=_commands(key) if key else {}, checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, enroll_key=key,
-                           ca_sha256=_ca_fingerprint() if key else "", red_threshold=red_threshold(),
-                           msi_error="" if msi else "téléchargé depuis GitHub à la première installation",
-                           msi_sha256=msi_state if msi else "", msi_version=config.VERSION)
+                           checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 
 
 @app.route("/parc/reglages")

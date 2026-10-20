@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import cmd, service %}
+{% from "_macros.html" import service %}
 {% from "_charts.html" import daily_bars, status_bar, usage_bar %}
 {% block title %}Vue d'ensemble{% endblock %}
 {% block content %}
@@ -110,8 +110,7 @@
     </div>
   </section>
 
-  <div class="cols w21">
-    <div class="stack">
+  <div class="cols w21 even">
       <section class="panel">
         <div class="panel-h"><h2>Services</h2>{% if can('system.view') %}<div class="aside"><a href="{{ url_for('system') }}">Système</a></div>{% endif %}</div>
         <div class="table-wrap">
@@ -127,50 +126,6 @@
           </table>
         </div>
       </section>
-
-      {% if can("linux.view") or can("windows.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
-      {% set first_setup = 'debian' if can("linux.view") else 'redhat' if rpm_enabled and can("rpm.view") else 'flatpak' if flatpak_enabled and can("flatpak.view") else 'windows' %}
-      <section class="panel">
-        <div class="panel-h"><h2>Brancher un poste</h2><div class="aside">commande à lancer sur le poste</div></div>
-        <div class="panel-b">
-          <div class="tabs" role="tablist">
-            {% if can("linux.view") %}<button type="button" data-tab="debian" aria-selected="{{ 'true' if first_setup == 'debian' else 'false' }}">Debian / Ubuntu</button>{% endif %}
-            {% if rpm_enabled and can("rpm.view") %}<button type="button" data-tab="redhat" aria-selected="{{ 'true' if first_setup == 'redhat' else 'false' }}">Rocky, AlmaLinux, RHEL</button>{% endif %}
-            {% if flatpak_enabled and can("flatpak.view") %}<button type="button" data-tab="flatpak" aria-selected="{{ 'true' if first_setup == 'flatpak' else 'false' }}">Flatpak</button>{% endif %}
-            {% if can("windows.view") %}<button type="button" data-tab="windows" aria-selected="{{ 'true' if first_setup == 'windows' else 'false' }}">Windows</button>{% endif %}
-          </div>
-          {% if can("linux.view") %}<div class="tab-panel client-panel {{ 'on' if first_setup == 'debian' }}" data-panel="debian">
-            <p class="muted">Paquets Debian / Ubuntu via le cache, et dépôt local de la version du poste.</p>
-            {{ cmd('cmd-linux', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
-            {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/linux/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
-            <span class="hint">Cache seul, retrait et autres options : <a href="{{ url_for('linux') }}">Linux › Paquets APT</a>.</span>
-          </div>{% endif %}
-          {% if rpm_enabled and can("rpm.view") %}
-          <div class="tab-panel client-panel {{ 'on' if first_setup == 'redhat' }}" data-panel="redhat">
-            <p class="muted">Rocky Linux, AlmaLinux, RHEL 8 et plus : dépôts officiels via le cache, et dépôt local <code>elN</code>.</p>
-            {{ cmd('cmd-rpm-home', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
-            {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/rpm/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
-            <span class="hint">EPEL, retrait et autres options : <a href="{{ url_for('rpm') }}">Linux › Paquets RPM</a>.</span>
-          </div>
-          {% endif %}
-          {% if flatpak_enabled and can("flatpak.view") %}
-          <div class="tab-panel client-panel {{ 'on' if first_setup == 'flatpak' }}" data-panel="flatpak">
-            <p class="muted">Toute distribution avec Flatpak : Flathub via le cache{% if not windows %}, et dépôt local « loco »{% endif %}.</p>
-            {{ cmd('cmd-flatpak-home', 'curl -fsSL ' ~ client_url ~ '/flatpak/setup.sh | sudo sh') }}
-            {% if http_url %}<span class="hint">Autorité pas encore importée : remplacer l'adresse par <code>{{ http_url }}</code>.</span>{% endif %}
-            <span class="hint">Retrait et applications internes : <a href="{{ url_for('flatpak') }}">Linux › Flatpak</a>.</span>
-          </div>
-          {% endif %}
-          {% if can("windows.view") %}<div class="tab-panel client-panel {{ 'on' if first_setup == 'windows' }}" data-panel="windows">
-            <p class="muted">Logiciels du catalogue, dans PowerShell administrateur (plusieurs : <code>7-zip,vlc</code>).</p>
-            {{ cmd('cmd-win', "irm '" ~ client_url ~ "/win/i/<logiciel>' | iex", 'PS>') }}
-            <span class="hint">Identifiants dans <a href="{{ url_for('windows_apps') }}">Logiciels Windows</a>. Windows Update : rien à installer sur le poste, le DNS redirige les téléchargements {% if can("wu.view") %}(<a href="{{ url_for('windows_update') }}">Windows Update</a>){% endif %}.</span>
-            <span class="hint">L'autorité loco se déploie par GPO{% if can('system.view') %} (voir <a href="{{ url_for('system') }}">Système</a>){% endif %}.</span>
-          </div>{% endif %}
-        </div>
-      </section>
-      {% endif %}
-    </div>
 
     <section class="panel">
       <div class="panel-h"><h2>Derniers ajouts</h2></div>

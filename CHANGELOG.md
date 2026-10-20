@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.21.0 — 2026-10-20
+
+- **Page Enrôlement** (barre de navigation) : tout ce qui rattache un poste à loco, un onglet par système (Windows ; Debian, Ubuntu ; Rocky, AlmaLinux, RHEL), en étapes numérotées — installer l'agent, configurer les dépôts et caches (APT, DNF, Flatpak), Windows Update et logiciels du catalogue sous Windows. Elle remplace le bloc « Brancher un poste » de la vue d'ensemble et la fenêtre « Ajouter un poste » de Mon parc (dont le bouton mène désormais à la page). Chaque section suit les droits et fonctionnalités du compte ; la clé d'inscription reste réservée au droit d'inscription.
+- **Paquets .deb et .rpm de l'agent**, produits par loco pour ce serveur (adresse, autorité épinglée et clé d'inscription incluses) : `sudo apt install ./loco-client_<version>_all.deb` ou `sudo dnf install ./loco-client-<version>-1.noarch.rpm` inscrit le poste aussitôt, et désinstaller le paquet retire l'agent. Le paquet ne contient que le script d'installation (l'agent se met ensuite à jour seul). Validés avec dpkg-deb, rpm 4.14 et 4.16 (empreintes d'en-tête et de charge utile), puis par une installation et une désinstallation réelles sur Debian 13 et Rocky Linux 9.
+
 ## 2.20.1 — 2026-10-20
 
 - **Disponibilité et mises à jour distinctes dans Mon parc** : près du nom du poste, une pastille verte indique un contact de l’agent dans les six dernières minutes (trois cycles habituels) et une rouge l’absence de contact récent. Le voyant du volume de mises à jour se trouve désormais dans la colonne *Mises à jour*. La fiche reprend la disponibilité près du nom et le bilan des mises à jour près des compteurs. Le passage hors ligne est pris en compte par le rafraîchissement automatique, même sans nouvelle activité du poste.

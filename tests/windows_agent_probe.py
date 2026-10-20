@@ -66,7 +66,7 @@ if url.endswith('/compte'):
 assert url.rstrip('/') == base, f'Connexion refusée : {url}'
 
 # Commande d'installation affichée dans « Mon parc » : amorçage en HTTP (autorité pas encore importée).
-fleet = get('/parc')
+fleet = get('/enrolement')                                  # clé d'inscription : page Enrôlement
 key = re.search(r"/agent/windows\.ps1\?key=([A-Za-z0-9_-]+)", fleet).group(1)
 http_base = f"http://127.0.0.1:{cfg['http_port']}" if cfg.get('http_port') else base
 result = powershell(f"irm '{http_base}/agent/windows.ps1?key={key}' | iex")
