@@ -16,6 +16,12 @@ from loco import auth, config, deployments, winapps, winget
 from loco.db import transaction
 
 
+def _path(location):
+    """Chemin + query d'un en-tête Location, qu'il soit absolu (Werkzeug < 2.1) ou relatif (versions récentes)."""
+    parts = urlsplit(location)
+    return parts.path + ('?' + parts.query if parts.query else '')
+
+
 class TestDeployments(FleetTest):
     def setUp(self):
         super().setUp()
@@ -323,9 +329,7 @@ class TestDeployments(FleetTest):
                          ('/windows-apps/deployer?app=x', '/parc/deploiements/nouveau?app=x'),
                          ('/windows-apps/deploiements/' + detail.rsplit('/', 1)[-1], detail)):
             response = self.admin.c.get(old)
-            where = urlsplit(response.location)                                  # absolue ou relative selon Werkzeug
-            target = where.path + ('?' + where.query if where.query else '')
-            self.assertEqual((response.status_code, target), (308, new))
+            self.assertEqual((response.status_code, _path(response.location)), (308, _path(new)))
 
     def test_live_install_steps_are_shown_while_the_agent_works(self):
         path = self.preview()
