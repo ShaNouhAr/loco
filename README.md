@@ -82,6 +82,7 @@ Options principales (toutes : `sudo ./install.sh --help`) :
 | `--proxy http://hôte:port` | proxy d'entreprise pour sortir sur Internet |
 | `--no-http` | HTTPS seul (autorité déjà déployée sur les postes) |
 | `--no-wu`, `--no-flatpak`, `--no-rpm` | sans cache Windows Update, sans Flatpak, sans famille Red Hat |
+| `--wu-proxy-port P` | port du proxy-cache Windows Update (Squid, sans DNS ; 3128 par défaut) |
 | `--tls-cert F --tls-key F` | certificat d'entreprise au lieu de l'autorité locale |
 | `--backup-keep N` | sauvegardes quotidiennes gardées (défaut 3, 0 = aucune) |
 
@@ -147,6 +148,7 @@ Avec Docker, les mêmes commandes passent par le conteneur : `docker compose exe
 | nginx : interface et fichiers des postes (HTTPS) | `/etc/nginx/sites-available/loco-portal.conf` | 8443 |
 | nginx : amorçage HTTP (optionnel) | même fichier | 8088 |
 | nginx : cache Windows Update, relais HTTPS (SNI) | `loco-wucache.conf`, `modules-enabled/99-loco-stream.conf` | 80, 443 |
+| squid : proxy-cache Windows Update (sans DNS) | `/etc/squid/squid.conf`, cache `/srv/loco/wuproxy` | 3128 |
 | apt-cacher-ng | `/var/cache/apt-cacher-ng` | 3142 |
 | Données : dépôts, catalogue, caches | `/srv/loco` | — |
 | Base, clé GPG, statistiques | `/var/lib/loco` | — |
@@ -229,8 +231,12 @@ irm 'https://<ip>:8443/win/i/7-zip,vlc' | iex
 Le script Windows vérifie le SHA-256 de chaque installeur, laisse 30 minutes à chacun (`$env:LOCO_TIMEOUT`)
 et reconnaît les codes « redémarrage requis », « déjà installé » et « non applicable ».
 
-Pour Windows Update, le DNS doit renvoyer l'IP du serveur pour les domaines de mise à jour : la page
-*Windows Update* fournit le script pour un DNS Active Directory.
+Pour Windows Update, deux façons d'envoyer les téléchargements des postes vers loco, au choix sur la page
+*Windows Update* : **par DNS** (le DNS du réseau renvoie l'IP du serveur pour les domaines de mise à jour ; un
+script pour un DNS Active Directory est fourni) ou **par proxy, sans DNS** — loco embarque un proxy-cache (Squid) et
+l'agent règle le proxy WinHTTP des postes Windows gérés vers loco (par poste, réversible, retiré si loco devient
+injoignable). Les deux mettent en cache les mêmes fichiers immuables et relaient le HTTPS sans le déchiffrer. La
+commande manuelle `netsh winhttp set proxy` est aussi proposée (pages *Windows Update* et *Enrôlement*).
 
 Le script Linux lit `/etc/os-release` et sélectionne le dépôt correspondant au poste. Si ce dépôt
 n'existe pas, il s'arrête avant de remplacer la configuration. Les dérivées peuvent choisir explicitement

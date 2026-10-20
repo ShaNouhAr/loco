@@ -57,6 +57,7 @@ PYTHON=/usr/bin/python3
 GUNICORN=/usr/bin/gunicorn
 OS_MAJOR=${VERSION_ID%%.*}
 NGINX_USER=www-data
+SQUID_USER=proxy
 LOG_GROUP=adm
 CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 case "$ID" in
@@ -68,6 +69,7 @@ case "$ID" in
         PYTHON=/usr/local/lib/loco/venv/bin/python
         GUNICORN=/usr/local/lib/loco/venv/bin/gunicorn
         NGINX_USER=nginx
+        SQUID_USER=squid
         LOG_GROUP=nginx
         CA_BUNDLE=/etc/pki/tls/certs/ca-bundle.crt
         # shellcheck source=linux/lib/rocky.sh
@@ -76,6 +78,7 @@ case "$ID" in
     alpine)
         PLATFORM=alpine
         NGINX_USER=nginx
+        SQUID_USER=squid
         LOG_GROUP=nginx
         # shellcheck source=linux/lib/alpine.sh
         . "$SRC/lib/alpine.sh"
@@ -118,7 +121,7 @@ fi
 if [[ " $* " != *" --help "* && " $* " != *" -h "* ]]; then migrate_local_repo; fi
 # Valeurs par défaut, puis celles de l'installation précédente, puis les options.
 PORTAL_PORT=8088 HTTPS_PORT=8443 HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
-RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
+RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 WU_PROXY_PORT=3128 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
 MAX_UPLOAD=8g BACKUP_KEEP=3 BACKUP_DIR=/var/backups/loco FLATPAK_ENABLED=1 FLATPAK_CACHE_SIZE=""
 RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE=""
 # shellcheck disable=SC1091
@@ -138,6 +141,7 @@ while [ $# -gt 0 ]; do
         --no-proxy) UPSTREAM_PROXY=""; shift ;;
         --data) need "$@"; DATA="$2"; shift 2 ;;
         --wu-cache-size) need "$@"; WU_CACHE_SIZE="$2"; shift 2 ;;
+        --wu-proxy-port) need "$@"; WU_PROXY_PORT="$2"; shift 2 ;;
         --resolvers) need "$@"; RESOLVERS="$2"; shift 2 ;;
         --max-upload) need "$@"; MAX_UPLOAD="$2"; shift 2 ;;
         --backup-keep) need "$@"; BACKUP_KEEP="$2"; shift 2 ;;
@@ -167,6 +171,7 @@ num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-kee
 [ "$PORTAL_PORT" != "$HTTPS_PORT" ] || die "--http-port et --https-port doivent être différents."
 [[ "$MAX_UPLOAD" =~ ^[0-9]+[kKmMgG]?$ ]] || die "--max-upload : taille invalide (ex. 8g, 500m)."
 [[ "$WU_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--wu-cache-size : taille invalide (ex. 50g)."
+[[ "$WU_PROXY_PORT" =~ ^[0-9]+$ && "$WU_PROXY_PORT" -ge 1 && "$WU_PROXY_PORT" -le 65535 ]] || die "--wu-proxy-port : port invalide."
 [[ "$FLATPAK_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--flatpak-cache-size : taille invalide (ex. 20g)."
 [[ "$RPM_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--rpm-cache-size : taille invalide (ex. 30g)."
 [[ "$APT_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--apt-cache-size : taille invalide (ex. 50g)."
@@ -236,6 +241,7 @@ fi
 stash_self_client
 if [ "$FLATPAK_ENABLED" = 1 ]; then PACKAGES+=(flatpak ostree); fi
 if [ "$RPM_ENABLED" = 1 ]; then PACKAGES+=(createrepo-c rpm); fi
+if [ "$WU_ENABLED" = 1 ]; then PACKAGES+=(squid); fi
 mkdir -p "$STATE"
 if [ "$CONTAINER" = 0 ]; then
 say "Installation des paquets"
@@ -268,6 +274,9 @@ install -d -m 755 -o loco -g loco "$DATA" "$DATA/apt" "$DATA/apt/pool" "$DATA/wi
 install -d -m 700 -o loco -g loco "$DATA/.tmp" "$STATE/gnupg"
 install -d -m 755 -o loco -g loco "$STATE" "$STATE/nginx"
 install -d -m 700 -o "$NGINX_USER" -g "$NGINX_USER" "$DATA/wucache" "$DATA/flatpakcache" "$DATA/rpmcache"
+if [ "$WU_ENABLED" = 1 ] && id "$SQUID_USER" >/dev/null 2>&1; then
+    install -d -m 750 -o "$SQUID_USER" -g "$SQUID_USER" "$DATA/wuproxy"
+fi
 install -d -m 755 -o loco -g loco "$DATA/flatpak" "$DATA/rpm"
 chown -R loco:loco "$DATA/apt" "$DATA/win" "$STATE"
 install -d -m 755 "$ETC"
@@ -307,6 +316,7 @@ DATA=$DATA
 PYTHON=$PYTHON
 WU_ENABLED=$WU_ENABLED
 WU_CACHE_SIZE=$WU_CACHE_SIZE
+WU_PROXY_PORT=$WU_PROXY_PORT
 FLATPAK_ENABLED=$FLATPAK_ENABLED
 FLATPAK_CACHE_SIZE=$FLATPAK_CACHE_SIZE
 RPM_ENABLED=$RPM_ENABLED
@@ -458,6 +468,13 @@ GUNICORN_FLAGS=""
 # Les versions récentes ajoutent une socket de contrôle dans le dossier de travail (confiné en lecture seule).
 # Désactiver ce canal facultatif lorsqu'il existe ; les anciennes versions gardent leurs options habituelles.
 if "$GUNICORN" --help | grep -- '--no-control-socket' >/dev/null; then GUNICORN_FLAGS="--no-control-socket"; fi
+# Proxy Windows Update (Squid) : taille du cache en Mo et réseaux autorisés, pour la configuration rendue.
+WU_PROXY_CACHE_MB=$(python3 -c 'import sys,re
+m=re.match(r"(\d+)([kKmMgGtT]?)$", sys.argv[1] or "0"); n=int(m.group(1)); u=m.group(2).lower()
+print(max(1, {"":n//1048576,"k":n//1024,"m":n,"g":n*1024,"t":n*1048576}[u]))' "$WU_CACHE_SIZE")
+SQUID_SRC=$(for n in $ALLOW_LIST; do echo "acl loco_clients src $n"; done)
+export LRT_WU_PROXY_PORT="$WU_PROXY_PORT" LRT_WU_PROXY_CACHE_MB="$WU_PROXY_CACHE_MB" \
+       LRT_SQUID_USER="$SQUID_USER" LRT_SQUID_SRC="$SQUID_SRC"
 export LRT_PORTAL_PORT="$PORTAL_PORT" LRT_HTTPS_PORT="$HTTPS_PORT" LRT_APP_PORT="$APP_PORT" LRT_DATA="$DATA" \
        LRT_HOST="$HOST" LRT_HOSTNAME="$SHORT_HOSTNAME" LRT_ADMIN_URL="$ADMIN_URL" LRT_HTTP_URL="$HTTP_URL" \
        LRT_WU_CACHE_SIZE="$WU_CACHE_SIZE" LRT_RESOLVERS="$RESOLVERS" LRT_MAX_UPLOAD="$MAX_UPLOAD" \
@@ -471,6 +488,23 @@ export LRT_FLATPAK_LOCATIONS
 LRT_RPM_LOCATIONS=""
 if [ "$RPM_ENABLED" = 1 ]; then LRT_RPM_LOCATIONS=$(render "$PREFIX/conf/nginx-rpm-locations.conf"); fi
 export LRT_RPM_LOCATIONS
+# Programme Squid pour supervisord (conteneur et Alpine) : présent seulement si le cache WU est actif.
+LRT_SQUID_PROGRAM=""
+if [ "$WU_ENABLED" = 1 ]; then
+    LRT_SQUID_PROGRAM=$(cat <<'EOS'
+
+[program:squid]
+command=/usr/sbin/squid -N -f /etc/squid/squid.conf
+priority=35
+autorestart=true
+stopsignal=INT
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+EOS
+)
+fi
+export LRT_SQUID_PROGRAM
 
 # ---------------------------------------------------------------- nginx
 say "Configuration de nginx"
@@ -505,6 +539,15 @@ if [ "$WU_ENABLED" = 1 ]; then
 else
     rm -f /etc/nginx/sites-enabled/loco-wucache.conf /etc/nginx/sites-available/loco-wucache.conf \
           /etc/nginx/modules-enabled/99-loco-stream.conf
+fi
+
+# Proxy-cache Windows Update (Squid) : atteint par le réglage proxy WinHTTP des postes (sans DNS). Config autonome.
+if [ "$WU_ENABLED" = 1 ] && command -v squid >/dev/null 2>&1; then
+    install -d -m 755 /etc/squid
+    render "$PREFIX/conf/squid-wu.conf" > /etc/squid/squid.conf
+    install -d -m 755 -o "$SQUID_USER" -g "$SQUID_USER" /var/log/squid 2>/dev/null || install -d -m 755 /var/log/squid
+    install -d -m 755 /run/squid
+    if [ ! -d "$DATA/wuproxy/00" ]; then squid -z -f /etc/squid/squid.conf >/dev/null 2>&1 || true; fi
 fi
 if [ "$PLATFORM" = rocky ]; then rocky_nginx; rocky_access; fi
 if [ "$PLATFORM" = alpine ]; then alpine_nginx; fi
@@ -596,6 +639,12 @@ if systemctl is-active -q nginx; then
     systemctl reload nginx
 else
     systemctl start nginx || die "nginx ne démarre pas (journalctl -u nginx)."
+fi
+if [ "$WU_ENABLED" = 1 ] && command -v squid >/dev/null 2>&1; then
+    systemctl enable squid >/dev/null 2>&1
+    systemctl restart squid || warn "squid (proxy Windows Update) ne démarre pas (journalctl -u squid) ; le cache par proxy est indisponible."
+else
+    systemctl disable --now squid >/dev/null 2>&1 || true
 fi
 systemctl enable loco-portal loco-stats.timer loco-nginx.path >/dev/null 2>&1
 systemctl start loco-nginx.path

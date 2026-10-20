@@ -14,6 +14,7 @@ rocky_packages() {
     fi
     if [ "$FLATPAK_ENABLED" = 1 ]; then PACKAGES+=(flatpak ostree); fi
     if [ "$RPM_ENABLED" = 1 ]; then PACKAGES+=(createrepo_c rpm); fi
+    if [ "$WU_ENABLED" = 1 ]; then PACKAGES+=(squid); fi
     install -d -m 700 -o root -g root "$ROCKY_STATE"
     touch "$PACKAGE_RECORD"
     : > "$LOG"

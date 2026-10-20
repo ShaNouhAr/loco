@@ -666,10 +666,48 @@ namespace Loco
         {
             DesktopIndicator.StopSessions();
             try { File.Delete(DesktopStatus.FilePath); } catch (Exception) { }
+            try { if (File.Exists(WuProxyMarker)) { string o; RunCapture("netsh", "winhttp reset proxy", 20, out o); File.Delete(WuProxyMarker); } } catch (Exception) { }
             foreach (var f in new[] { ConfigPath, StatePath, CaPath }) try { File.Delete(f); } catch (Exception) { }
             string code = ProductCode();
             if (code != "") Detached("msiexec.exe", "/x " + code + " /qn /norestart");
             else Log("produit loco-client introuvable : désinstallation à faire à la main");
+        }
+
+        // Proxy WinHTTP du poste dirigé vers le cache Windows Update de loco (sans DNS), piloté par le portail.
+        // On ne touche au proxy que si loco l'a posé (marqueur local) : pas de collision avec un proxy d'entreprise.
+        static readonly string WuProxyMarker = Path.Combine(Root, "winhttp-proxy");
+
+        static void ApplyWuProxy(Dictionary<string, object> answer)
+        {
+            object v;
+            if (!answer.TryGetValue("wu_proxy", out v)) return;   // serveur plus ancien : ne rien changer
+            string marker = null;
+            try { if (File.Exists(WuProxyMarker)) marker = File.ReadAllText(WuProxyMarker).Trim(); } catch (Exception) { }
+            if (v is Dictionary<string, object>)
+            {
+                var d = (Dictionary<string, object>)v;
+                string target = Str(d, "host") + ":" + Convert.ToString(d["port"]);
+                string bypass = Str(d, "bypass");
+                string desired = target + "|" + bypass;
+                string output;
+                RunCapture("netsh", "winhttp show proxy", 20, out output);
+                if (marker == desired && output.Contains(target)) return;   // déjà en place
+                if (RunCapture("netsh", "winhttp set proxy proxy-server=\"" + target + "\" bypass-list=\"" + bypass + "\"", 20, out output) == 0)
+                {
+                    try { File.WriteAllText(WuProxyMarker, desired); } catch (Exception) { }
+                    Log("proxy WinHTTP dirigé vers " + target + " (cache Windows Update)");
+                }
+                else Log("proxy WinHTTP : échec du réglage (" + output.Replace("\n", " ").Trim() + ")");
+            }
+            else if (marker != null)   // false/null et c'est loco qui l'avait posé : on le retire
+            {
+                string output;
+                if (RunCapture("netsh", "winhttp reset proxy", 20, out output) == 0)
+                {
+                    try { File.Delete(WuProxyMarker); } catch (Exception) { }
+                    Log("proxy WinHTTP retiré (cache Windows Update par proxy désactivé)");
+                }
+            }
         }
 
         // Nouvelle version de loco : l'agent installe le MSI servi par le serveur (empreinte vérifiée).
@@ -815,6 +853,7 @@ namespace Loco
                     else Report(conf, id, "failed", "Action non prise en charge : " + action, 1, null);
                 }
                 SaveState(lastScan, scanHours, rescan);
+                ApplyWuProxy(answer);
                 SelfUpdate(conf, answer);
                 return true;
             }

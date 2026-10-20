@@ -73,6 +73,19 @@ def set_setting(key, value):
     db().commit()
 
 
+# Réseaux privés laissés en accès direct (jamais via le proxy) : le proxy ne sert qu'à atteindre Internet (Windows Update).
+_PROXY_BYPASS = ("<local>;10.*;192.168.*;169.254.*;"
+                 + ";".join(f"172.{n}.*" for n in range(16, 32)))
+
+
+def wu_proxy_directive():
+    """Réglage proxy WinHTTP à pousser aux postes Windows (cache WU sans DNS), ou False pour le retirer.
+    Piloté par le réglage du portail et désactivé si la fonction Windows Update est coupée."""
+    if setting("wu_proxy_push") != "1" or "windows_update" in features.disabled(db()):
+        return False
+    return {"host": config.HOST, "port": int(config.WU_PROXY_PORT), "bypass": config.HOST + ";" + _PROXY_BYPASS}
+
+
 def red_threshold():
     try:
         value = int(setting("fleet_red_threshold", "10"))
@@ -524,6 +537,7 @@ def agent_checkin():
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
+        answer["wu_proxy"] = wu_proxy_directive()
         path, sha = agent_msi()
         if path:
             answer["agent_msi"] = {"version": config.VERSION, "sha256": sha}

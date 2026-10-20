@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import service %}
+{% from "_macros.html" import service, cmd %}
 {% from "_charts.html" import daily_bars %}
 {% block title %}Windows Update{% endblock %}
 {% block content %}
@@ -60,6 +60,34 @@
       </div>
     </section>
   </div>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Diriger les postes vers le cache</h2><div class="aside">{{ service(proxy_active) }}</div></div>
+    <div class="panel-b">
+      <p class="muted">Deux façons d'envoyer les téléchargements Windows Update des postes vers loco :</p>
+      <div class="cols even">
+        <div>
+          <h3 class="pick-title">Par DNS</h3>
+          <p class="small muted">Le DNS du réseau répond <span class="mono">{{ host }}</span> pour les domaines redirigés : couvre tout le réseau, mais demande d'éditer le DNS.</p>
+          <a class="btn sm" href="{{ url_for('windows_update_dns') }}">Script DNS Active Directory</a>
+        </div>
+        <div>
+          <h3 class="pick-title">Par proxy, sans DNS <span class="badge-ro">via l'agent</span></h3>
+          <p class="small muted">L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.</p>
+          {% if can('wu.configure') %}
+          <form method="post" action="{{ url_for('windows_update_proxy') }}" class="row">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="push" value="{{ '' if proxy_push else '1' }}">
+            <button class="btn sm {{ '' if proxy_push else 'primary' }}">{{ 'Ne plus diriger' if proxy_push else 'Diriger les postes gérés' }}</button>
+            <span class="st {{ 'ok' if proxy_push else '' }}">{{ 'Actif : agents dirigés vers le proxy' if proxy_push else 'Inactif' }}</span>
+          </form>
+          {% else %}<p class="small"><span class="st {{ 'ok' if proxy_push else '' }}">{{ 'Actif' if proxy_push else 'Inactif' }}</span></p>{% endif %}
+          {% if proxy_push and not proxy_active %}<p class="hint">Le service proxy (squid) n'est pas actif sur loco{% if can('system.view') %} — voir <a href="{{ url_for('system') }}">Système</a>{% endif %}.</p>{% endif %}
+          <p class="small muted">Manuellement sur un poste (PowerShell administrateur) :</p>
+          {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
+        </div>
+      </div>
+    </div>
+  </section>
 
   <section class="panel">
     <div class="panel-h"><h2>Dernières requêtes</h2><div class="aside">en direct</div></div>

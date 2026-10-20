@@ -98,8 +98,14 @@
     {% endif %}
     {% if wu %}
     <section class="panel">
-      {{ step(ns, "Windows Update", "rien à installer") }}
-      <div class="panel-b"><p class="muted">Le DNS du réseau redirige les téléchargements de Windows Update vers loco : aucun réglage sur les postes. Domaines et script DNS pour Active Directory : <a href="{{ url_for('windows_update') }}">Windows › Windows Update</a>.</p></div>
+      {{ step(ns, "Windows Update", "deux méthodes au choix") }}
+      <div class="panel-b">
+        <p class="muted">Diriger les téléchargements Windows Update du poste vers le cache de loco, de deux façons :</p>
+        <p class="small"><strong>Par DNS</strong> (tout le réseau, aucun réglage sur les postes) : le DNS répond <span class="mono">{{ host }}</span> pour les domaines redirigés. Script et domaines : <a href="{{ url_for('windows_update') }}">Windows › Windows Update</a>.</p>
+        <p class="small"><strong>Par proxy, sans DNS</strong> (ce poste seulement). L'agent le fait automatiquement si vous l'activez au portail ; manuellement, en PowerShell administrateur :</p>
+        {{ cmd('enroll-wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
+        <p class="hint">Annuler : <span class="mono">netsh winhttp reset proxy</span>.</p>
+      </div>
     </section>
     {% endif %}
     {% if winapps %}

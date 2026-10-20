@@ -23,6 +23,7 @@ curl
 openssl
 ca-certificates
 supervisor
+squid
 logrotate
 tzdata
 flatpak

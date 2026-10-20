@@ -61,6 +61,9 @@ rm -f /etc/systemd/system/loco-portal.service /etc/systemd/system/loco-stats.ser
       /etc/systemd/system/loco-backup.timer
 rm -rf /etc/systemd/system/apt-cacher-ng.service.d/loco.conf
 rmdir /etc/systemd/system/apt-cacher-ng.service.d 2>/dev/null || true
+# Proxy-cache Windows Update : on arrête Squid et on retire la configuration loco (le paquet est retiré plus bas).
+if command -v squid >/dev/null 2>&1; then systemctl disable --now squid >/dev/null 2>&1 || true; fi
+rm -f /etc/squid/squid.conf
 rm -f /etc/apt-cacher-ng/zz-loco.conf /usr/local/sbin/loco-user /usr/local/sbin/loco-fleet /usr/local/sbin/loco-backup /usr/local/sbin/loco-apt
 for f in /etc/hosts.allow /etc/hosts.deny; do
     if [ -f "$f" ]; then sed -i '/# loco$/d' "$f"; fi

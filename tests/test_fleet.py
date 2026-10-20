@@ -730,6 +730,38 @@ class TestLinuxInventory(FleetTest):
         self.assertEqual(data["system"]["kernel"], "6.2")
 
 
+class TestWuProxy(FleetTest):
+    def setUp(self):
+        super().setUp()
+        self.win = Agent(WINDOWS, "192.168.43.50"); self.win.enroll()
+        self.lin = Agent(LINUX, "192.168.43.60"); self.lin.enroll()
+
+    def test_proxy_directive_pushed_to_windows_only_when_enabled(self):
+        # Par défaut : réglage absent → directive présente mais fausse (l'agent retire ce qu'il aurait posé).
+        self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
+        self.assertNotIn("wu_proxy", self.lin.checkin().get_json())            # Linux : pas de WinHTTP
+        # Activation par le portail.
+        self.assertEqual(self.admin.post("/windows-update/proxy", {"push": "1"}, page="/windows-update").status_code, 302)
+        directive = self.win.checkin().get_json()["wu_proxy"]
+        self.assertEqual(directive["port"], int(config.WU_PROXY_PORT))
+        self.assertTrue(directive["host"])
+        self.assertIn("<local>", directive["bypass"])
+        self.assertNotIn("wu_proxy", self.lin.checkin().get_json())
+        # Désactivation.
+        self.admin.post("/windows-update/proxy", {"push": ""}, page="/windows-update")
+        self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
+
+    def test_pages_show_the_manual_proxy_command(self):
+        target = f"{config.HOST}:{config.WU_PROXY_PORT}"
+        wu = self.admin.c.get("/windows-update").get_data(as_text=True)
+        self.assertIn("netsh winhttp set proxy", wu)
+        self.assertIn(target, wu)
+        self.assertIn("Diriger les postes vers le cache", wu)
+        enroll = self.admin.c.get("/enrolement").get_data(as_text=True)
+        self.assertIn("netsh winhttp set proxy", enroll)
+        self.assertIn(target, enroll)
+
+
 class TestScheduling(FleetTest):
     def setUp(self):
         super().setUp()

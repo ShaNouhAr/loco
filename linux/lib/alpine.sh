@@ -7,7 +7,7 @@
 
 ALPINE_PACKAGES=(bash coreutils findutils grep sed tar procps iproute2 util-linux runuser shadow
                  nginx nginx-mod-stream python3 py3-flask py3-gunicorn py3-cryptography py3-zstandard gnupg
-                 curl openssl ca-certificates supervisor logrotate tzdata)
+                 curl openssl ca-certificates supervisor squid logrotate tzdata)
 
 alpine_supported() {
     local major minor

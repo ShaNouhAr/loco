@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.25.0 — 2026-10-20
+
+- **Cache Windows Update par proxy, sans DNS** : loco embarque un proxy-cache (Squid) atteint par le réglage **proxy WinHTTP** des postes Windows. Nouvelle alternative à la redirection DNS : sur la page *Windows Update*, un interrupteur « Diriger les postes gérés » fait régler par l'agent loco le proxy WinHTTP de chaque poste Windows vers loco (par poste, réversible, l'agent le retire s'il n'arrive plus à joindre loco ou au retrait de l'agent) ; aucune zone DNS à éditer. Le proxy met en cache les mêmes fichiers immuables (HTTP) et relaie le HTTPS sans le déchiffrer — même couverture que la voie DNS. La commande manuelle (`netsh winhttp set proxy …`) est aussi proposée sur les pages *Windows Update* et *Enrôlement*. Le service est installé avec le cache Windows Update (option `--wu-proxy-port`, 3128 par défaut) sur Debian/Ubuntu, Rocky/AlmaLinux, Alpine, l'ISO et le conteneur, et apparaît dans la page *Système*. Validé en réel : Windows Update d'un poste passe par le proxy (recherche et téléchargement), fichier WU mis en cache (MISS puis HIT), et installation complète de loco amenant Squid actif.
+
 ## 2.24.0 — 2026-10-20
 
 - **Planification ponctuelle des mises à jour et des scripts** : choisir une date et une heure (heure du serveur) au lieu de « au prochain contact ». La commande reste en attente et n'est transmise à l'agent qu'à partir de l'instant choisi. Disponible pour *Mettre à jour* (un poste depuis sa fiche, via « Planifier une mise à jour »), *Tout mettre à jour* (parc ou groupe) et l'exécution d'un script (page d'exécution). Une action planifiée en attente peut être **annulée** avant d'être transmise (bouton *Annuler* sur la fiche du poste, *Annuler les postes en attente* pour un script). La fiche du poste et le suivi d'exécution affichent l'instant planifié. Champ laissé vide = comportement actuel (dès le prochain contact).

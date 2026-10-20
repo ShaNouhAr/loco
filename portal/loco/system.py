@@ -166,6 +166,8 @@ def _age(mtime):
 @login_required
 def system():
     services = [(unit, desc, service_active(unit)) for unit, desc in UNITS]
+    if not (config.CONTAINER or config.ALPINE or config.WINDOWS) and os.path.exists("/etc/squid/squid.conf"):
+        services.append(("squid", "Proxy cache Windows Update (sans DNS)", service_active("squid")))
     backups = list_backups()
     return render_template(
         "system.html",
