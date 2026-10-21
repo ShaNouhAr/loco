@@ -58,7 +58,7 @@
   <section class="panel">
     {% if rows %}
     <div class="table-wrap">
-      <table id="fleet-table" class="fleet-table table-cards">
+      <table id="fleet-table" class="fleet-table table-cards" data-row-links>
         <thead><tr><th>Poste</th><th>Adresse</th><th>Mises à jour</th><th class="hide-sm">Groupes</th><th class="hide-sm">Contact</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}

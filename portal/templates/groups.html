@@ -16,7 +16,7 @@
 <section class="panel">
   {% if groups %}
   <div class="table-wrap">
-    <table class="groups-table">
+    <table class="groups-table" data-row-links>
       <thead><tr><th>Groupe</th><th>{{ 'Logiciels' if software else 'Appareils' }}</th><th class="hide-sm">État</th><th></th></tr></thead>
       <tbody>
       {% for group in groups %}{% set o = overview.get(group.id, {'members': [], 'states': {}}) %}

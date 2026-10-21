@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.31.0 — 2026-10-21
+
+Interface plus moderne et plus rapide à parcourir, dans les trois thèmes :
+
+- **Profondeur** : la page a un fond légèrement teinté et le contenu est posé sur des cartes blanches (ou anthracite) aux coins plus arrondis, avec une ombre douce ; les indicateurs deviennent des tuiles séparées. Titres, marges et tableaux plus aérés.
+- **Navigation** : l'élément actif de l'en-tête est une pastille (son icône prend la couleur d'accent) ; les sous-menus (Mon parc, Administration, Logiciels) forment une barre où la page en cours ressort comme une carte ; onglets des fiches en pastilles ; filtres en pastilles arrondies, le filtre actif en plein.
+- **Aller à une page (Ctrl+K)** : bouton loupe dans l'en-tête ; une fenêtre de recherche liste toutes les pages accessibles (y compris Groupes, Déploiements, Scripts, Planifications, Centre de logiciels…) et s'ouvre en tapant quelques lettres, flèches et Entrée. **« / »** place le curseur dans la recherche de la page (parc, catalogue, journal…).
+- **Lignes cliquables** : dans les listes du parc, des scripts, des déploiements et des groupes, un clic n'importe où sur la ligne ouvre l'élément (Ctrl+clic : nouvel onglet) ; boutons, cases et liens de la ligne gardent leur action.
+- Boutons, champs et menus un peu plus grands et plus arrondis, fenêtres de dialogue au fond flouté, écran de connexion sur un dégradé discret.
+
 ## 2.30.0 — 2026-10-21
 
 - **Mises à jour du système du serveur depuis le portail**, sur toutes les installations Linux (Debian, Ubuntu, Rocky Linux, et l'appliance Alpine qui l'avait déjà) : *Administration → Mises à jour* liste les paquets en attente (noyau, OpenSSL, Squid, nginx, Python, glibc…), avec les **correctifs de sécurité en tête** (dépôt `-security` de Debian/Ubuntu, avis de sécurité DNF avec leur gravité sur Rocky) et les paquets importants repérés (« noyau », « service loco », « socle »). Filtres et recherche dans la liste.

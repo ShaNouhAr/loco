@@ -61,6 +61,7 @@
       {% endif %}
     </nav>
     <div class="top-r">
+      {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="Aller à une page (Ctrl+K)" title="Aller à une page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
       {{ theme_toggle() }}
       {% if current_user %}
       <div class="userbox">
@@ -90,6 +91,30 @@
   {% endif %}
   {% block content %}{% endblock %}
 </main>
+
+{% if current_user %}
+<dialog id="cmdk" class="cmdk" aria-label="Aller à une page">
+  <div class="cmdk-search">
+    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+    <input type="search" placeholder="Aller à… (parc, scripts, Windows Update, comptes…)" aria-label="Page recherchée" autocomplete="off" spellcheck="false" aria-controls="cmdk-list">
+    <kbd>Échap</kbd>
+  </div>
+  <div class="cmdk-list" id="cmdk-list" role="listbox"></div>
+  <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> choisir</span><span><kbd>Entrée</kbd> ouvrir</span><span><kbd>/</kbd> recherche de la page</span></div>
+</dialog>
+{# Pages des sous-menus absentes de l'en-tête : proposées par la palette. #}
+<template id="cmdk-links">
+  {% if can("fleet.view") %}
+  <a href="{{ url_for('fleet_groups') }}" data-group="Mon parc">Groupes de machines</a>
+  {% if can_any('deployments.view', 'fleet.install') %}<a href="{{ url_for('deployments') }}" data-group="Mon parc">Déploiements</a>{% endif %}
+  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" data-group="Mon parc">Scripts</a>{% endif %}
+  <a href="{{ url_for('schedules') }}" data-group="Mon parc">Planifications</a>
+  {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" data-group="Mon parc">Réglages du parc</a>{% endif %}
+  {% endif %}
+  {% if can('store.view') %}<a href="{{ url_for('software_store') }}" data-group="Logiciels Windows">Centre de logiciels</a>{% endif %}
+  {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" data-group="Logiciels Windows">Groupes de logiciels</a>{% endif %}
+</template>
+{% endif %}
 
 <dialog id="confirm">
   <div class="dlg-h"><h2></h2></div>

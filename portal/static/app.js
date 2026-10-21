@@ -191,6 +191,110 @@
     if (e.key === "Escape") $$("details.menu[open]").forEach(function (m) { m.open = false; $("summary", m).focus(); });
   });
 
+  /* ---------------------------------------------------------------- lignes cliquables */
+
+  // Listes (parc, scripts, déploiements, groupes) : toute la ligne ouvre l'élément, sauf les commandes qu'elle contient.
+  $$("table[data-row-links] tbody tr").forEach(function (row) {
+    var link = $("a.host, a.strong-link", row);
+    if (!link) return;
+    row.classList.add("row-link");
+    row.addEventListener("click", function (e) {
+      if (e.defaultPrevented || e.target.closest("a, button, input, select, textarea, label, summary, details, form")) return;
+      if (window.getSelection && String(window.getSelection())) return;      // sélection de texte : ne pas naviguer
+      if (e.ctrlKey || e.metaKey || e.button === 1) window.open(link.href, "_blank"); else link.click();
+    });
+  });
+
+  /* ---------------------------------------------------------------- aller à une page (Ctrl+K) */
+
+  var cmdk = $("#cmdk");
+  if (cmdk) {
+    var cmdkInput = $("input", cmdk);
+    var cmdkList = $(".cmdk-list", cmdk);
+    var cmdkPages = null, cmdkHits = [], cmdkCurrent = 0;
+    var cmdkFold = function (text) { return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); };
+    var cmdkCollect = function () {
+      var seen = {};
+      cmdkPages = [];
+      var add = function (a, group) {
+        var href = a.getAttribute("href");
+        if (!href || href.charAt(0) === "#" || seen[href]) return;
+        seen[href] = true;
+        var title = ($("strong", a) || a).textContent.replace(/\s+/g, " ").trim();
+        var sub = $("small", a);
+        cmdkPages.push({ href: href, title: title, sub: sub ? sub.textContent.trim() : group, key: cmdkFold(title + " " + group + " " + (sub ? sub.textContent : "")) });
+      };
+      $$(".nav > a").forEach(function (a) { add(a, "Navigation"); });
+      $$(".nav-group").forEach(function (g) {
+        var label = $(".nav-long", g) || $("summary span", g);
+        $$(".nav-panel a", g).forEach(function (a) { add(a, label ? label.textContent : ""); });
+      });
+      var extra = $("#cmdk-links");
+      if (extra) $$("a", extra.content).forEach(function (a) { add(a, a.dataset.group || ""); });
+      $$(".userbox a").forEach(function (a) { add(a, "Mon compte"); });
+    };
+    var cmdkRender = function () {
+      var words = cmdkFold(cmdkInput.value).split(/\s+/).filter(Boolean);
+      cmdkHits = cmdkPages.filter(function (p) { return words.every(function (w) { return p.key.indexOf(w) >= 0; }); });
+      cmdkCurrent = Math.min(cmdkCurrent, Math.max(cmdkHits.length - 1, 0));
+      cmdkList.textContent = "";
+      cmdkHits.forEach(function (p, i) {
+        var a = document.createElement("a");
+        a.className = "cmdk-item" + (i === cmdkCurrent ? " on" : "");
+        a.href = p.href;
+        a.setAttribute("role", "option");
+        a.setAttribute("aria-selected", String(i === cmdkCurrent));
+        var t = document.createElement("strong"); t.textContent = p.title;
+        var s = document.createElement("span"); s.textContent = p.sub;
+        a.appendChild(t); a.appendChild(s);
+        a.addEventListener("mousemove", function () { if (cmdkCurrent !== i) { cmdkCurrent = i; cmdkRender(); } });
+        cmdkList.appendChild(a);
+      });
+      if (!cmdkHits.length) {
+        var none = document.createElement("div");
+        none.className = "cmdk-empty";
+        none.textContent = "Aucune page ne correspond.";
+        cmdkList.appendChild(none);
+      }
+      var on = $(".cmdk-item.on", cmdkList);
+      if (on) on.scrollIntoView({ block: "nearest" });
+    };
+    var cmdkOpen = function () {
+      if (cmdk.open) return;
+      if (!cmdkPages) cmdkCollect();
+      cmdkInput.value = "";
+      cmdkCurrent = 0;
+      cmdkRender();
+      cmdk.showModal();
+      cmdkInput.focus();
+    };
+    $$("[data-cmdk]").forEach(function (b) { b.addEventListener("click", cmdkOpen); });
+    cmdkInput.addEventListener("input", function () { cmdkCurrent = 0; cmdkRender(); });
+    cmdkInput.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (cmdkHits.length) { cmdkCurrent = (cmdkCurrent + (e.key === "ArrowDown" ? 1 : cmdkHits.length - 1)) % cmdkHits.length; cmdkRender(); }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (cmdkHits[cmdkCurrent]) window.location.href = cmdkHits[cmdkCurrent].href;
+      }
+    });
+    cmdk.addEventListener("click", function (e) { if (e.target === cmdk) cmdk.close(); });   // clic hors de la fenêtre
+    document.addEventListener("keydown", function (e) {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (cmdk.open) cmdk.close(); else cmdkOpen();
+        return;
+      }
+      // « / » : champ de recherche de la page, sauf pendant une saisie.
+      var typing = e.target.closest && e.target.closest("input, textarea, select, [contenteditable], .remote-display");
+      if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !$("dialog[open]")) {
+        var search = $$("main input[type=search]").filter(function (i) { return i.offsetParent !== null; })[0];
+        if (search) { e.preventDefault(); search.focus(); search.select(); }
+      }
+    });
+  }
+
   /* ---------------------------------------------------------------- confirmation */
 
   function confirmDialog(title, text, okLabel) {
