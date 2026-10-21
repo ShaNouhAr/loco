@@ -282,6 +282,8 @@ def check(log=print):
     except (OSError, ValueError, KeyError) as e:
         values["errors"].append(f"Version publiée de loco introuvable : {e}")
     values.update(system_state())
+    # État du système publié tout de suite : la liste des paquets peut prendre plusieurs minutes (miroirs lents).
+    _update_status(**{k: v for k, v in values.items() if k not in ("checked", "errors")})
     try:
         packages = pending_packages()
         values.update(packages=packages, system_updates=[p["name"] for p in packages],
@@ -315,6 +317,8 @@ APT_OPTS = ["-q", "-o", "APT::Update::Error-Mode=any", "-o", "DPkg::Lock::Timeou
 APT_INST_RE = re.compile(r"^Inst (\S+) (?:\[([^\]]+)\] )?\((\S+) (.*?) \[[^\]]+\]\)")
 RPM_ARCH_RE = re.compile(r"\.(x86_64|aarch64|noarch|i686|ppc64le|s390x)$")
 SEVERITIES = ("Critical", "Important", "Moderate", "Low")
+# Miroir injoignable : abandon rapide plutôt que plusieurs minutes d'essais par dépôt.
+DNF_NET = ["--setopt=timeout=20", "--setopt=retries=2"]
 # Paquets à repérer dans la liste : noyau, services que loco fait tourner, socle de sécurité du système.
 KEY_PACKAGES = (
     ("noyau", re.compile(r"^(linux-image-.+|linux-(lts|virt|edge)|linux-firmware.*|kernel(-core|-modules.*)?)$")),
@@ -489,7 +493,7 @@ def _rpm_name(nevra):
 
 def _dnf_pending():
     env = _system_env()
-    r = subprocess.run(["dnf", "-q", "--refresh", "check-update"], capture_output=True, text=True, timeout=600, env=env)
+    r = subprocess.run(["dnf", "-q", "--refresh", *DNF_NET, "check-update"], capture_output=True, text=True, timeout=600, env=env)
     if r.returncode not in (0, 100):
         raise ValueError("dépôts DNF injoignables")
     found = {}
@@ -501,7 +505,7 @@ def _dnf_pending():
             name = RPM_ARCH_RE.sub("", fields[0])
             found.setdefault(name, {"name": name, "current": "", "new": fields[1], "origin": fields[2],
                                     "security": False, "severity": ""})
-    r = subprocess.run(["dnf", "-q", "updateinfo", "list", "--updates", "--security"], capture_output=True, text=True,
+    r = subprocess.run(["dnf", "-q", *DNF_NET, "updateinfo", "list", "--updates", "--security"], capture_output=True, text=True,
                        timeout=300, env=env)
     for line in r.stdout.splitlines():
         fields = line.replace("/", " ").split()
