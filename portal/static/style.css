@@ -572,6 +572,8 @@ details.menu[open] > .menu-list { animation: nav-reveal .12s ease-out; }
 .chip .chip-sub { font-size: 12px; color: var(--text-3); }
 .chip.on .chip-sub { color: color-mix(in srgb, var(--bg) 70%, transparent); }
 .chip-add { border-style: dashed; color: var(--text-2); }
+.repo-group { margin: 0 2px 0 6px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
+.repo-group:first-child { margin-left: 0; }
 .pkg-name { font-weight: 500; font-family: var(--sans); }
 .row-tools { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .row-tools form { display: inline-flex; }

@@ -202,7 +202,7 @@ dans `%ProgramData%\loco`. Ports : 8443 (HTTPS), 8088 (amorçage HTTP), 3142 (ca
 
 ## Brancher les postes
 
-Dans **Linux › Paquets APT**, créez d'abord les dépôts nécessaires : distribution, numéro de version
+Dans **Linux › Paquets**, créez d'abord les dépôts nécessaires : distribution, numéro de version
 facultatif et nom de code (par exemple `debian/trixie` ou `ubuntu/noble`). Une future version s'ajoute
 depuis cette page, sans modifier le code. Chaque dépôt a ses propres fichiers et index signés.
 

@@ -125,7 +125,7 @@ fi
 # Dépôt local : vérifié avant toute modification du poste.
 if [ "$USE_LOCAL" = 1 ]; then
     if ! $GET "$BASE/rpm/$EL/repodata/repomd.xml" > /dev/null; then
-        echo "Dépôt $EL indisponible : créez-le dans Linux › Paquets RPM, ou utilisez --no-local." >&2
+        echo "Dépôt $EL indisponible : créez-le dans Linux › Paquets, ou utilisez --no-local." >&2
         exit 1
     fi
     cat > "$WORK/local" <<EOF

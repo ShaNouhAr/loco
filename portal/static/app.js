@@ -595,6 +595,9 @@
 
   // [data-show-for="nom:v1 v2"] : visible (et ses champs envoyés) seulement si le bouton radio « nom » coché vaut v1 ou v2.
   function syncSwitches(form) {
+    // Choix qui change la destination du formulaire (nouveau dépôt APT ou RPM).
+    var target = form.querySelector("input[data-action]:checked");
+    if (target) form.setAttribute("action", target.dataset.action);
     $$("[data-show-for]", form).forEach(function (el) {
       var spec = el.dataset.showFor.split(":"), checked = form.querySelector('input[name="' + spec[0] + '"]:checked');
       var on = !!checked && spec[1].split(" ").indexOf(checked.value) >= 0;

@@ -10,13 +10,13 @@ import tempfile
 import threading
 import xml.etree.ElementTree as ET
 
-from flask import abort, flash, render_template, request
+from flask import abort, flash, request
 from werkzeug.utils import secure_filename
 
 from . import app, config, rpmpkg, signing
 from .auth import audit, login_required
 from .db import transaction
-from .util import back, download, explain, read_stats, sha256_of
+from .util import back, download, explain, sha256_of
 
 _lock = threading.RLock()
 # Sans rpm ni createrepo_c (serveur Windows), lecture des paquets et métadonnées en Python (rpmpkg).
@@ -73,9 +73,17 @@ def list_rpms(name=None):
                 "arch": pkg.findtext("common:arch", "", _NS),
                 "size": int(pkg.find("common:size", _NS).get("package", "0")),
                 "file": os.path.basename(location),
+                "mtime": _mtime(os.path.join(root, location)),
                 "url": f"/rpm/{repo}/{location}",
             })
     return sorted(out, key=lambda p: (p["repository"], p["name"], p["version"], p["release"]))
+
+
+def _mtime(path):
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0
 
 
 def rpm_fields(path):
@@ -177,12 +185,8 @@ def rpm():
     selected = request.args.get("repository", repos[-1]["name"] if repos else "")
     if repos and not any(r["name"] == selected for r in repos):
         abort(404)
-    for r in repos:
-        r["count"] = len(list_rpms(r["name"]))
-    current = next((r for r in repos if r["name"] == selected), None)
-    return render_template("rpm.html", repositories=repos, selected=selected, current=current,
-                           packages=list_rpms(selected) if repos else [], stats=read_stats(),
-                           upstreams=config.RPM_UPSTREAMS, devices=_devices_on(current))
+    from .linux import packages_page
+    return packages_page("rpm", selected)
 
 
 RED_HAT_FAMILY = ("rocky", "almalinux", "red hat", "rhel", "centos", "oracle linux")

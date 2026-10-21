@@ -155,14 +155,14 @@ postes n'ont rien à refaire. Pensez à mettre à jour le DNS (Windows Update) s
 | Poste Linux : erreur de certificat | Autorité non importée : `setup.sh … --trust-ca` ou GPO |
 | Windows : `irm` échoue en HTTPS | Autorité absente du magasin « Racines de confiance » de la machine |
 | Logiciel Windows bloqué | Pas d'argument silencieux : le renseigner (souvent `/S`) ; délai : `$env:LOCO_TIMEOUT` |
-| Poste Red Hat : « Dépôt elN indisponible » | Créer la version dans *Linux › Paquets RPM*, ou `--no-local` |
+| Poste Red Hat : « Dépôt elN indisponible » | Créer la version dans *Linux › Paquets*, ou `--no-local` |
 | Poste Red Hat : paquet introuvable après `--remove` | Normal : les dépôts d'origine sont rétablis ; `dnf makecache` |
 | Flatpak sur Ubuntu 24.04 **en conteneur LXC** : « Couldn't connect » | Le profil AppArmor `flatpak` d'Ubuntu bloque le réseau sous un noyau Proxmox : `ln -s /etc/apparmor.d/flatpak /etc/apparmor.d/disable/ && apparmor_parser -R /etc/apparmor.d/flatpak`, ou utiliser une VM |
 | Journaux | `journalctl -u loco-portal -u nginx -u apt-cacher-ng`, `/var/log/nginx/loco-*.log` |
 
 ## 11. Dépôts APT et nouvelles versions de Linux
 
-Dans **Linux › Paquets APT**, ajoutez un dépôt avec sa distribution (`debian` ou `ubuntu`), son nom
+Dans **Linux › Paquets**, ajoutez un dépôt avec sa distribution (`debian` ou `ubuntu`), son nom
 **de code exact** et, facultativement, le numéro de version affiché. Par exemple `debian/trixie` ou
 `ubuntu/noble`. Le dépôt commence vide ; envoyez les `.deb` compatibles dans le dépôt sélectionné.
 Les index signés et les fichiers sont indépendants sous `/srv/loco/apt/repositories/DISTRIBUTION/SUITE/`.
@@ -234,7 +234,7 @@ sort en direct, y compris avec `--proxy` : autoriser ces trois miroirs sur le po
 
 **Dépôts locaux.** Un dépôt par version majeure, commun à toute la famille : `el9` sert RHEL 9, Rocky
 Linux 9 et AlmaLinux 9. `el8`, `el9` et `el10` sont créés à l'installation ; une future version s'ajoute
-dans *Linux › Paquets RPM* (« Ajouter une version majeure »), sans modifier l'application. Les métadonnées
+dans *Linux › Paquets* (« + Nouveau dépôt », Rocky, AlmaLinux, RHEL), sans modifier l'application. Les métadonnées
 (`repomd.xml`) sont signées par la clé du dépôt et contrôlées par dnf (`repo_gpgcheck=1`) ; elles contiennent
 l'empreinte de chaque paquet. Un paquet marqué pour une autre version (`.el8` envoyé dans `el9`) est refusé,
 de même qu'un paquet de même nom/version au contenu différent.

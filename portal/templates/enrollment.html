@@ -132,7 +132,7 @@
         <p class="muted">Paquets Debian / Ubuntu via le cache de loco, et dépôt local de la version du poste (détectée automatiquement).</p>
         {{ cmd('enroll-apt', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
         {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/linux/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
-        <span class="hint">Cache seul, retrait et autres options : <a href="{{ url_for('linux') }}">Linux › Paquets APT</a>.</span>
+        <span class="hint">Cache seul, retrait et autres options : <a href="{{ url_for('linux') }}">Linux › Paquets</a>.</span>
       </div>
     </section>
     {% endif %}
@@ -149,7 +149,7 @@
         <p class="muted">Dépôts officiels via le cache de loco, et dépôt local <code>elN</code> de la version du poste.</p>
         {{ cmd('enroll-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
         {% if http_url %}<span class="hint">Premier branchement, autorité pas encore importée : <code>curl -fsSL {{ http_url }}/rpm/setup.sh | sudo sh -s -- --trust-ca</code></span>{% endif %}
-        <span class="hint">EPEL, retrait et autres options : <a href="{{ url_for('rpm') }}">Linux › Paquets RPM</a>.</span>
+        <span class="hint">EPEL, retrait et autres options : <a href="{{ url_for('rpm') }}">Linux › Paquets</a>.</span>
       </div>
     </section>
     {% endif %}

@@ -73,7 +73,7 @@ if [ "$CACHE_ONLY" = 0 ]; then
         printf 'Types: deb\nURIs: %s/apt/\nSuites: ./\nSigned-By: %s\n' "$BASE" "$KEY" > "$TMP/source"
     else
         if ! $GET "$BASE/linux/repositories/$DIST/$SUITE.sources" > "$TMP/source"; then
-            echo "Dépôt $DIST/$SUITE indisponible : créez-le dans Linux > Paquets APT, ou utilisez --cache-only." >&2
+            echo "Dépôt $DIST/$SUITE indisponible : créez-le dans Linux > Paquets, ou utilisez --cache-only." >&2
             exit 1
         fi
         EXPECTED=$(printf 'Types: deb\nURIs: %s/apt/repositories/%s/%s/\nSuites: ./\nSigned-By: %s\n' "$BASE" "$DIST" "$SUITE" "$KEY")

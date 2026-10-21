@@ -24,8 +24,7 @@
         <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-linux">
           <div class="nav-panel">
-            {% if can("linux.view") %}<a href="{{ url_for('linux') }}" {% if ep.startswith('linux') %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>Paquets APT</strong><small>Cache et dépôt local</small></span></a>{% endif %}
-            {% if rpm_enabled and can("rpm.view") %}<a href="{{ url_for('rpm') }}" {% if ep.startswith('rpm') %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>Paquets RPM</strong><small>RHEL, Rocky, AlmaLinux</small></span></a>{% endif %}
+            {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>Paquets</strong><small>{{ 'Debian, Ubuntu, Red Hat : caches et dépôts' if rpm_enabled and can('rpm.view') else 'Debian, Ubuntu : cache et dépôts' }}</small></span></a>{% endif %}
             {% if flatpak_enabled and can("flatpak.view") %}<a href="{{ url_for('flatpak') }}" {% if ep.startswith('flatpak') %}aria-current="page"{% endif %}>{{ nav_icon('layers') }}<span><strong>Flatpak</strong><small>{{ "Cache Flathub" if windows else "Flathub et applications internes" }}</small></span></a>{% endif %}
           </div>
         </div>

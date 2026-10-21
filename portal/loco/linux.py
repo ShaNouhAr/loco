@@ -193,16 +193,45 @@ def linux():
         require_repository(selected)
     except ValueError:
         abort(404)
-    current = next((r for r in repos if r["key"] == selected), None)
-    for r in repos:
-        r["count"] = len(list_debs(r["key"]))
-    debs = list_debs(selected)
-    for d in debs:
-        d["added"] = datetime.datetime.fromtimestamp(d["mtime"]).strftime("%Y-%m-%d %H:%M")
-    return render_template("linux.html", repositories=repos, selected=selected, current=current, legacy=LEGACY,
-                           legacy_count=len(list_debs(LEGACY)),
-                           distributions=config.APT_DISTRIBUTIONS, debs=debs,
-                           devices=_devices_on(current), stats=read_stats(), acng=service_active("apt-cacher-ng"))
+    return packages_page("apt", selected)
+
+
+def packages_page(family, selected):
+    """Page « Paquets Linux » commune : dépôts APT (Debian, Ubuntu) et RPM (famille Red Hat) dans une même barre ;
+    le contenu (cache, paquets, commande de branchement, ajout) suit la famille du dépôt affiché."""
+    from . import rpmrepo
+    from .auth import can
+    apt_repos, rpm_repos, legacy_count = [], [], 0
+    if can("linux.view"):
+        apt_repos = repositories()
+        for r in apt_repos:
+            r["count"] = len(list_debs(r["key"]))
+        legacy_count = len(list_debs(LEGACY))
+    if config.RPM_ENABLED and can("rpm.view"):
+        rpm_repos = rpmrepo.repositories()
+        for r in rpm_repos:
+            r["count"] = len(rpmrepo.list_rpms(r["name"]))
+    if family == "apt":
+        current = next((r for r in apt_repos if r["key"] == selected), None)
+        label = current["label"] if current else "Dépôt historique"
+        packages = [{"name": d["package"], "version": d["version"], "arch": d["arch"], "size": d["size"],
+                     "desc": d["description"], "mtime": d["mtime"], "url": d["url"], "file": d["file"]}
+                    for d in list_debs(selected)]
+        devices = _devices_on(current)
+    else:
+        current = next((r for r in rpm_repos if r["name"] == selected), None)
+        label = f"Red Hat {current['major']} ({current['name']})" if current else "aucun dépôt"
+        packages = [{"name": p["name"], "version": (p["epoch"] + ":" if p["epoch"] != "0" else "") + f"{p['version']}-{p['release']}",
+                     "arch": p["arch"], "size": p["size"], "desc": p["summary"], "mtime": p["mtime"], "url": p["url"],
+                     "file": p["file"]} for p in (rpmrepo.list_rpms(selected) if current else [])]
+        devices = rpmrepo._devices_on(current)
+    for p in packages:
+        p["added"] = datetime.datetime.fromtimestamp(p["mtime"]).strftime("%Y-%m-%d %H:%M") if p["mtime"] else ""
+    return render_template("packages.html", family=family, selected=selected, current=current, label=label,
+                           apt_repos=apt_repos, rpm_repos=rpm_repos, legacy=LEGACY, legacy_count=legacy_count,
+                           distributions=config.APT_DISTRIBUTIONS, packages=packages, devices=devices,
+                           stats=read_stats(), acng=service_active("apt-cacher-ng") if family == "apt" else None,
+                           upstreams=config.RPM_UPSTREAMS)
 
 
 def _devices_on(repo):

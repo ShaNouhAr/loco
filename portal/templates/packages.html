@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% from "_macros.html" import cmd, service %}
+{% block title %}Paquets Linux{% endblock %}
+{% block content %}
+{% set apt = family == 'apt' %}
+{% set can_upload = can('linux.upload') if apt else can('rpm.upload') and current %}
+{% set can_delete = can('linux.delete') if apt else can('rpm.delete') %}
+{% set can_create_apt = can('linux.create') %}
+{% set can_create_rpm = rpm_enabled and can('rpm.create') %}
+{% set ext = '.deb' if apt else '.rpm' %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+<div class="head">
+  <div>
+    <h1>Paquets Linux</h1>
+    <p>Caches des dépôts officiels pour les postes du réseau, et dépôts signés de vos propres paquets, un par distribution et version : <code>.deb</code> pour Debian et Ubuntu, <code>.rpm</code> pour Rocky Linux, AlmaLinux et RHEL.</p>
+  </div>
+  <div class="actions">
+    {% if apt and not apt_nginx %}<a class="btn" href="http://{{ host }}:{{ acng_port }}/acng-report.html" target="_blank" rel="noopener">Rapport du cache</a>{% endif %}
+    {% if can_upload %}<button type="button" class="btn primary" data-open="#pkg-add">Ajouter des paquets</button>{% endif %}
+  </div>
+</div>
+
+<div class="stack">
+  <nav class="repo-bar" aria-label="Dépôts par distribution et version">
+    {% if apt_repos or legacy_count %}<span class="repo-group">Debian, Ubuntu</span>{% endif %}
+    {% for r in apt_repos %}
+    <a class="chip {{ 'on' if apt and selected == r.key }}" href="{{ url_for('linux', repository=r.key) }}" {% if apt and selected == r.key %}aria-current="page"{% endif %}>
+      {{ distributions.get(r.distribution, r.distribution) }} {{ r.version }}<span class="chip-sub">{{ r.suite }}</span><b>{{ r.count }}</b></a>
+    {% endfor %}
+    {% if legacy_count or (apt and selected == legacy) %}
+    <a class="chip {{ 'on' if apt and selected == legacy }}" href="{{ url_for('linux', repository=legacy) }}" title="Dépôt d'avant la séparation par version">Historique<b>{{ legacy_count }}</b></a>
+    {% endif %}
+    {% if rpm_repos %}<span class="repo-group">Red Hat</span>{% endif %}
+    {% for r in rpm_repos %}
+    <a class="chip {{ 'on' if not apt and selected == r.name }}" href="{{ url_for('rpm', repository=r.name) }}" {% if not apt and selected == r.name %}aria-current="page"{% endif %}>
+      Red Hat {{ r.major }}<span class="chip-sub">{{ r.name }}</span><b>{{ r.count }}</b></a>
+    {% endfor %}
+    {% if can_create_apt or can_create_rpm %}<button type="button" class="chip chip-add" data-open="#repo-add">+ Nouveau dépôt</button>{% endif %}
+  </nav>
+
+  {% if apt and selected == legacy %}
+  <p class="note">Dépôt historique, sans séparation par version : il reste servi aux postes déjà branchés. Copiez les paquets compatibles vers le dépôt de leur version (bouton de copie sur chaque ligne), puis rebranchez les postes.</p>
+  {% elif apt and legacy_count %}
+  <p class="hint">{{ legacy_count }} paquet{{ 's' if legacy_count > 1 }} encore dans le <a href="{{ url_for('linux', repository=legacy) }}">dépôt historique</a> : copiez-les vers leur version après avoir vérifié leur compatibilité.</p>
+  {% endif %}
+
+  <div class="metrics">
+    {% if apt %}
+    <div class="metric"><div class="k">{{ 'Cache APT (nginx)' if apt_nginx else 'Cache APT' }}</div><div class="v">{{ stats.get('acng', 0)|human }}</div><div class="s">{{ service(acng) }} · port <span class="mono">{{ acng_port }}</span></div></div>
+    {% else %}
+    <div class="metric"><div class="k">Cache des miroirs Red Hat</div><div class="v">{{ stats.get('rpmcache', 0)|human }}</div><div class="s">Rocky, AlmaLinux, EPEL · gardés 6 mois</div></div>
+    {% endif %}
+    <div class="metric"><div class="k">{{ label }}</div><div class="v">{{ packages|length }}<span class="v-unit">paquet{{ 's' if packages|length != 1 }}</span></div><div class="s">{{ packages|sum(attribute='size')|human }} · signé GPG</div></div>
+    {% if devices is not none %}
+    <div class="metric"><div class="k">Postes du parc</div><div class="v">{{ devices }}</div><div class="s">sur cette version, d'après leur système</div></div>
+    {% else %}
+    <div class="metric"><div class="k">Dépôts</div><div class="v">{{ apt_repos|length + rpm_repos|length }}</div><div class="s">distributions et versions</div></div>
+    {% endif %}
+  </div>
+
+  <section class="panel">
+    <div class="panel-h">
+      <h2>Paquets · {{ label }}</h2>
+      {% if packages %}<div class="aside"><input type="search" placeholder="Filtrer les paquets" aria-label="Filtrer les paquets" data-filter="#pkgs tbody tr" data-empty="#pkgs-none" class="search-sm"></div>{% endif %}
+    </div>
+    {% if packages %}
+    <div class="table-wrap">
+      <table id="pkgs" class="table-cards">
+        <thead><tr><th>Paquet</th><th>Version</th><th class="hide-sm">Arch.</th><th class="num">Taille</th><th class="hide-sm">Ajouté</th><th></th></tr></thead>
+        <tbody>
+        {% for p in packages %}
+          <tr data-search="{{ p.name }} {{ p.version }} {{ p.arch }} {{ p.desc }}">
+            <td><strong class="pkg-name">{{ p.name }}</strong>{% if p.desc %}<span class="sub">{{ p.desc }}</span>{% endif %}</td>
+            <td class="mono" data-label="Version">{{ p.version }}</td>
+            <td class="mono muted hide-sm">{{ p.arch }}</td>
+            <td class="num nowrap" data-label="Taille">{{ p.size|human }}</td>
+            <td class="muted nowrap hide-sm">{{ p.added|date_fr if p.added else '—' }}</td>
+            <td class="right card-action">
+              <div class="row-tools">
+                <a class="btn icon sm ghost" href="{{ client_url }}{{ p.url }}" title="Télécharger {{ p.file }}" aria-label="Télécharger {{ p.name }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg></a>
+                {% if apt and can('linux.copy') and apt_repos|rejectattr('key', 'equalto', selected)|list %}
+                <button type="button" class="btn icon sm ghost" data-open="#pkg-copy" data-fill='{{ {"file": p.file, "pkg": p.name ~ " " ~ p.version}|tojson|forceescape }}' title="Copier vers un autre dépôt" aria-label="Copier {{ p.name }} vers un autre dépôt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg></button>
+                {% endif %}
+                {% if can_delete %}<form method="post" action="{{ url_for('linux_delete' if apt else 'rpm_delete') }}" data-ajax data-confirm="Supprimer {{ p.name }} {{ p.version }} ?" data-confirm-text="Le paquet est retiré du dépôt {{ label }}. Les postes qui l'ont installé le gardent." data-confirm-ok="Supprimer">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <input type="hidden" name="repository" value="{{ selected }}">
+                  <input type="hidden" name="file" value="{{ p.file }}">
+                  <button class="btn icon sm ghost danger" title="Supprimer" aria-label="Supprimer {{ p.name }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+                </form>{% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div id="pkgs-none" class="empty hidden">Aucun paquet ne correspond.</div>
+    </div>
+    {% elif not apt and not current %}
+    <div class="empty">Aucun dépôt Red Hat : {% if container %}redémarrez le conteneur{% else %}relancez install.sh{% endif %} pour créer el8, el9 et el10.</div>
+    {% else %}
+    <div class="empty empty-cta">
+      <strong>Aucun paquet dans {{ label }}</strong>
+      <span>Vos paquets <code>{{ ext }}</code> déposés ici s'installent sur les postes {{ label }} avec <code>{{ 'apt install' if apt else 'dnf install' }}</code>, comme ceux de la distribution.</span>
+      {% if can_upload %}<button type="button" class="btn" data-open="#pkg-add">Ajouter des paquets</button>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>Brancher un poste {{ 'Debian ou Ubuntu' if apt else 'Rocky, AlmaLinux ou RHEL' }}</h2><div class="aside">à lancer sur la machine, en root</div></div>
+    <div class="panel-b">
+      {% if apt %}
+      <div class="tabs seg-tabs" role="tablist" data-target="#cmd-setup">
+        <button type="button" data-tab="full" aria-selected="true" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh">Cache et dépôts</button>
+        <button type="button" data-tab="repo" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh -s -- --no-proxy">Dépôts seuls</button>
+        <button type="button" data-tab="remove" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh -s -- --remove">Retirer</button>
+      </div>
+      {{ cmd('cmd-setup', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
+      <p class="hint">Le poste trouve seul son dépôt (distribution et nom de version) : créez-le d'abord ici. Pour gérer aussi ses mises à jour depuis Mon parc, installez plutôt l'agent depuis <a href="{{ url_for('enrollment') }}">Enrôlement</a>.</p>
+      <details class="more">
+        <summary>Options et cas particuliers</summary>
+        <ul class="hint-list">
+          <li>Cache seul, sans les dépôts loco : ajoutez <code>--cache-only</code> ; garder l'ancien dépôt unique : <code>--legacy</code>.</li>
+          {% if http_url %}<li>Poste qui n'a pas encore l'autorité loco : <code>curl -fsSL {{ http_url }}/linux/setup.sh | sudo sh -s -- --trust-ca</code> (importe l'autorité, puis passe en HTTPS).</li>{% endif %}
+          <li>Sans curl : remplacez <code>curl -fsSL</code> par <code>wget -qO-</code>.</li>
+          <li>Les dépôts HTTPS des éditeurs restent en accès direct ; les dépôts HTTP passent par le cache. Clé de signature : <a href="{{ client_url }}/apt/loco.gpg">loco.gpg</a>.</li>
+        </ul>
+      </details>
+      {% else %}
+      <div class="tabs seg-tabs" role="tablist" data-target="#cmd-rpm">
+        <button type="button" data-tab="full" aria-selected="true" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh">Cache et dépôt</button>
+        <button type="button" data-tab="epel" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --epel">Avec EPEL</button>
+        <button type="button" data-tab="local" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --no-cache">Dépôt seul</button>
+        <button type="button" data-tab="remove" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --remove">Retirer</button>
+      </div>
+      {{ cmd('cmd-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
+      <p class="hint">Le poste choisit le dépôt de sa version majeure (<code>el9</code> pour Rocky 9, AlmaLinux 9 ou RHEL 9). Pour gérer aussi ses mises à jour depuis Mon parc, installez plutôt l'agent depuis <a href="{{ url_for('enrollment') }}">Enrôlement</a>.</p>
+      <details class="more">
+        <summary>Options, miroirs et cas particuliers</summary>
+        <ul class="hint-list">
+          <li>Rocky Linux et AlmaLinux : BaseOS, AppStream, CRB et extras passent par le cache en gardant les clés GPG de la distribution ; <code>--remove</code> rétablit les dépôts d'origine.</li>
+          <li>RHEL : ses dépôts exigent un abonnement Red Hat et restent en accès direct ; seuls EPEL et le dépôt local passent par loco.</li>
+          {% if http_url %}<li>Poste qui n'a pas encore l'autorité loco : <code>curl -fsSL {{ http_url }}/rpm/setup.sh | sudo sh -s -- --trust-ca</code> (importe l'autorité, affiche son empreinte, puis passe en HTTPS).</li>{% endif %}
+          <li>Clé de signature : <a href="{{ client_url }}/rpm/loco.asc">loco.asc</a>.</li>
+        </ul>
+        <div class="table-wrap mirrors">
+          <table>
+            <thead><tr><th>Miroir en cache</th><th>Origine</th><th class="hide-sm">Adresse pour les postes</th></tr></thead>
+            <tbody>
+            {% for key, upstream in upstreams.items() %}
+              <tr><td>{{ upstream[0] }}</td><td class="mono muted">{{ upstream[1] }}</td><td class="mono hide-sm">{{ client_url }}/rpmcache/{{ key }}/</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+  </section>
+</div>
+
+{% if can_upload %}
+<dialog id="pkg-add">
+  <form method="post" action="{{ url_for('linux_upload' if apt else 'rpm_upload') }}" enctype="multipart/form-data" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="repository" value="{{ selected }}">
+    <div class="dlg-h">
+      <div><h2>Ajouter des paquets</h2><p>Dans le dépôt <strong>{{ label }}</strong>, signé et publié aussitôt.</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <div class="tabs seg-tabs" role="tablist" aria-label="Origine des paquets">
+        <button type="button" data-tab="file" aria-selected="true">Fichiers {{ ext }}</button>
+        <button type="button" data-tab="url" aria-selected="false">Lien de téléchargement</button>
+      </div>
+      <div class="tab-panel on" data-panel="file">
+        <div class="drop"><input type="file" name="files" accept="{{ ext }}" multiple aria-label="Paquets {{ ext }}"><div class="files"></div></div>
+      </div>
+      <div class="tab-panel" data-panel="url">
+        <input type="url" name="url" placeholder="{{ 'https://…/paquet_1.0_amd64.deb' if apt else 'https://…/paquet-1.0-1.' ~ selected ~ '.x86_64.rpm' }}" aria-label="Lien direct vers un {{ ext }}">
+      </div>
+      <p class="hint">{% if apt %}Vérifiez qu'ils conviennent à {{ label }} : un paquet compilé pour une autre version peut casser ses dépendances.{% else %}Paquets binaires uniquement. Un paquet marqué pour une autre version (<code>.el8</code> dans <code>el9</code>…) est refusé.{% endif %}</p>
+      <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button class="btn primary"><span class="spin"></span>Ajouter au dépôt</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+{% if apt and can('linux.copy') %}
+<dialog id="pkg-copy">
+  <form method="post" action="{{ url_for('linux_copy') }}" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="repository" value="{{ selected }}"><input type="hidden" name="file" value="">
+    <div class="dlg-h">
+      <div><h2>Copier vers un autre dépôt</h2><p><span class="mono" data-fill-text="pkg"></span> · l'original reste dans {{ label }}.</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <label class="f"><span>Dépôt de destination</span><select name="destination" required>
+        {% for r in apt_repos if r.key != selected %}<option value="{{ r.key }}">{{ r.label }}</option>{% endfor %}
+      </select></label>
+      <p class="hint">Vérifiez la compatibilité du paquet avec la distribution de destination.</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button class="btn primary"><span class="spin"></span>Copier</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+{% if can_create_apt or can_create_rpm %}
+<dialog id="repo-add">
+  <form method="post" action="{{ url_for('linux_repository_create' if can_create_apt else 'rpm_repository_create') }}" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>Nouveau dépôt</h2><p>Un dépôt par distribution et version : les postes s'y rattachent seuls selon leur système.</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <div class="f"><span class="f-label">Distribution</span>
+        <div class="seg" role="radiogroup" aria-label="Distribution">
+          {% if can_create_apt %}{% for value, name in distributions.items() %}<label><input type="radio" name="distribution" value="{{ value }}" data-action="{{ url_for('linux_repository_create') }}" {{ 'checked' if loop.first and (apt or not can_create_rpm) }}><span>{{ name }}</span></label>{% endfor %}{% endif %}
+          {% if can_create_rpm %}<label><input type="radio" name="distribution" value="redhat" data-action="{{ url_for('rpm_repository_create') }}" {{ 'checked' if not apt or not can_create_apt }}><span>Rocky, AlmaLinux, RHEL</span></label>{% endif %}
+        </div>
+      </div>
+      {% if can_create_apt %}
+      <div class="grid2" data-show-for="distribution:{{ distributions.keys()|join(' ') }}">
+        <label class="f"><span>Version affichée</span><input type="text" name="version" maxlength="32" placeholder="13, 24.04… (facultatif)"></label>
+        <label class="f"><span>Nom de code</span><input type="text" name="suite" required pattern="[a-z][a-z0-9-]{0,39}" maxlength="40" placeholder="trixie, noble…"></label>
+        <span class="hint wide">Exactement celui de la distribution (<code>VERSION_CODENAME</code> dans <code>/etc/os-release</code>).</span>
+      </div>
+      {% endif %}
+      {% if can_create_rpm %}
+      <div data-show-for="distribution:redhat">
+        <label class="f field-md"><span>Version majeure</span><input type="text" name="major" required pattern="[1-9][0-9]?" maxlength="2" placeholder="11" inputmode="numeric"></label>
+        <span class="hint">Crée le dépôt <code>elN</code>, commun à RHEL, Rocky Linux et AlmaLinux de cette version.</span>
+      </div>
+      {% endif %}
+      <p class="hint">Une version future s'ajoute ici, sans mise à jour de loco.</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>Annuler</button>
+      <button class="btn primary"><span class="spin"></span>Créer le dépôt</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
