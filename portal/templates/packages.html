@@ -12,27 +12,103 @@
 <div class="head">
   <div>
     <h1>Paquets Linux</h1>
-    <p>Caches des dépôts officiels pour les postes du réseau, et dépôts signés de vos propres paquets, un par distribution et version : <code>.deb</code> pour Debian et Ubuntu, <code>.rpm</code> pour Rocky Linux, AlmaLinux et RHEL.</p>
+    <p>Deux services pour les postes Linux du réseau : un <strong>cache</strong> des mises à jour officielles (téléchargées une fois chez Debian, Ubuntu ou Red Hat, puis servies en local) et <strong>vos dépôts</strong> de paquets maison.</p>
   </div>
   <div class="actions">
     {% if apt and not apt_nginx %}<a class="btn" href="http://{{ host }}:{{ acng_port }}/acng-report.html" target="_blank" rel="noopener">Rapport du cache</a>{% endif %}
-    {% if can_upload %}<button type="button" class="btn primary" data-open="#pkg-add">Ajouter des paquets</button>{% endif %}
   </div>
 </div>
 
 <div class="stack">
+  <div class="metrics">
+    {% if apt_repos or legacy_count or apt %}<div class="metric"><div class="k">Cache Debian, Ubuntu</div><div class="v">{{ stats.get('acng', 0)|human }}</div><div class="s">{% if acng is not none %}{{ service(acng) }} · {% endif %}paquets officiels gardés</div></div>{% endif %}
+    {% if rpm_enabled and (rpm_repos or not apt) %}<div class="metric"><div class="k">Cache Rocky, AlmaLinux, RHEL</div><div class="v">{{ stats.get('rpmcache', 0)|human }}</div><div class="s">miroirs et EPEL, gardés 6 mois</div></div>{% endif %}
+    <div class="metric"><div class="k">Vos paquets</div><div class="v">{{ own_packages }}</div><div class="s">dans {{ apt_repos|length + rpm_repos|length }} dépôt{{ 's' if apt_repos|length + rpm_repos|length != 1 }}, signés GPG</div></div>
+    {% if linux_devices is not none %}<div class="metric"><div class="k">Postes Linux du parc</div><div class="v">{{ linux_devices }}</div><div class="s"><a href="{{ url_for('fleet') }}">voir Mon parc</a></div></div>{% endif %}
+  </div>
+
+  <section class="panel setup" data-setup data-https="{{ client_url }}" data-http="{{ http_url or '' }}">
+    <div class="panel-h"><h2>Brancher un poste Linux</h2><div class="aside">une commande, à lancer en root sur le poste</div></div>
+    <div class="panel-b setup-steps">
+      <div class="setup-step">
+        <span class="step-n">1</span>
+        <div class="step-b">
+          <h3>Système du poste</h3>
+          <div class="seg" role="radiogroup" aria-label="Système du poste">
+            <label><input type="radio" name="setup_os" value="apt" {{ 'checked' if apt or not rpm_enabled }}><span>Debian, Ubuntu</span></label>
+            {% if rpm_enabled %}<label><input type="radio" name="setup_os" value="rpm" {{ 'checked' if not apt }}><span>Rocky Linux, AlmaLinux, RHEL</span></label>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="setup-step">
+        <span class="step-n">2</span>
+        <div class="step-b">
+          <h3>Ce que loco lui fournit</h3>
+          <div class="choice-list" role="radiogroup" aria-label="Ce que loco fournit au poste">
+            <label class="choice"><input type="radio" name="setup_mode" value="full" checked><span><strong>Cache et vos dépôts <em>recommandé</em></strong><small>Les mises à jour officielles passent par le cache de loco (téléchargées une fois pour tout le réseau) et vos paquets s'installent comme les autres.</small></span></label>
+            <label class="choice"><input type="radio" name="setup_mode" value="repos"><span><strong>Vos dépôts seulement</strong><small>Le poste garde ses miroirs habituels ; seuls vos paquets viennent de loco.</small></span></label>
+            <label class="choice"><input type="radio" name="setup_mode" value="cache"><span><strong>Cache seulement</strong><small>Les mises à jour officielles passent par loco, sans vos dépôts.</small></span></label>
+            <label class="choice"><input type="radio" name="setup_mode" value="remove"><span><strong>Retirer loco du poste</strong><small>Rétablit les dépôts d'origine du système.</small></span></label>
+          </div>
+          <div class="setup-opts">
+            {% if rpm_enabled %}<label class="check" data-setup-epel><input type="checkbox" name="setup_epel"> Ajouter EPEL <span class="faint">(paquets supplémentaires pour Red Hat, via le cache)</span></label>{% endif %}
+            {% if http_url %}<label class="check" data-setup-trust><input type="checkbox" name="setup_trust"> Le poste n'a pas encore l'autorité de loco <span class="faint">(première fois : la commande l'importe, puis passe en HTTPS)</span></label>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="setup-step">
+        <span class="step-n">3</span>
+        <div class="step-b">
+          <h3>Commande à lancer</h3>
+          {{ cmd('cmd-setup', 'curl -fsSL ' ~ client_url ~ ('/linux/setup.sh' if apt or not rpm_enabled else '/rpm/setup.sh') ~ ' | sudo sh', '#') }}
+          <p class="hint" data-setup-hint="apt">Le poste trouve seul son dépôt d'après sa version (Debian 13 → <code>trixie</code>, Ubuntu 24.04 → <code>noble</code>). Si elle n'apparaît pas dans <a href="#depots">Vos dépôts</a>, créez-la d'abord.</p>
+          <p class="hint" data-setup-hint="rpm" hidden>Le poste trouve seul son dépôt d'après sa version majeure (Rocky 9, AlmaLinux 9 ou RHEL 9 → <code>el9</code>). RHEL : ses dépôts exigent un abonnement et restent en direct ; seuls EPEL et vos paquets passent par loco.</p>
+        </div>
+      </div>
+    </div>
+    <div class="panel-f row-between">
+      <span>Pour suivre aussi ses mises à jour et lui envoyer des scripts depuis Mon parc, installez plutôt l'agent : <a href="{{ url_for('enrollment') }}">Enrôlement</a>.</span>
+      <details class="more more-inline">
+        <summary>Cas particuliers</summary>
+        <ul class="hint-list">
+          <li>Distribution dérivée (Linux Mint, Pop!_OS…) : ajoutez <code>--distribution ubuntu --suite noble</code> (celle d'origine).</li>
+          <li>Ancien dépôt unique, sans séparation par version : <code>--legacy</code>.</li>
+          <li>Sans curl : remplacez <code>curl -fsSL</code> par <code>wget -qO-</code>.</li>
+          <li>Les dépôts HTTPS des éditeurs (Docker, Microsoft…) restent en accès direct ; les dépôts HTTP passent par le cache.</li>
+          <li>Clés de signature de vos dépôts : <a href="{{ client_url }}/apt/loco.gpg">loco.gpg</a> (APT){% if rpm_enabled %}, <a href="{{ client_url }}/rpm/loco.asc">loco.asc</a> (RPM){% endif %}.</li>
+        </ul>
+        {% if rpm_enabled %}
+        <div class="table-wrap mirrors">
+          <table>
+            <thead><tr><th>Miroir Red Hat en cache</th><th>Origine</th><th class="hide-sm">Adresse pour les postes</th></tr></thead>
+            <tbody>
+            {% for key, upstream in upstreams.items() %}
+              <tr><td>{{ upstream[0] }}</td><td class="mono muted">{{ upstream[1] }}</td><td class="mono hide-sm">{{ client_url }}/rpmcache/{{ key }}/</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </details>
+    </div>
+  </section>
+
+  <div class="section-h" id="depots">
+    <div><h2>Vos dépôts</h2><p>Vos propres paquets, publiés et signés par loco, un dépôt par distribution et version. Les postes branchés ci-dessus les installent avec <code>apt</code> ou <code>dnf</code>.</p></div>
+    {% if can_upload %}<div class="actions"><button type="button" class="btn primary" data-open="#pkg-add">Ajouter des paquets à {{ label }}</button></div>{% endif %}
+  </div>
   <nav class="repo-bar" aria-label="Dépôts par distribution et version">
     {% if apt_repos or legacy_count %}<span class="repo-group">Debian, Ubuntu</span>{% endif %}
     {% for r in apt_repos %}
-    <a class="chip {{ 'on' if apt and selected == r.key }}" href="{{ url_for('linux', repository=r.key) }}" {% if apt and selected == r.key %}aria-current="page"{% endif %}>
+    <a class="chip {{ 'on' if apt and selected == r.key }}" href="{{ url_for('linux', repository=r.key) }}#depots" {% if apt and selected == r.key %}aria-current="page"{% endif %}>
       {{ distributions.get(r.distribution, r.distribution) }} {{ r.version }}<span class="chip-sub">{{ r.suite }}</span><b>{{ r.count }}</b></a>
     {% endfor %}
     {% if legacy_count or (apt and selected == legacy) %}
-    <a class="chip {{ 'on' if apt and selected == legacy }}" href="{{ url_for('linux', repository=legacy) }}" title="Dépôt d'avant la séparation par version">Historique<b>{{ legacy_count }}</b></a>
+    <a class="chip {{ 'on' if apt and selected == legacy }}" href="{{ url_for('linux', repository=legacy) }}#depots" title="Dépôt d'avant la séparation par version">Historique<b>{{ legacy_count }}</b></a>
     {% endif %}
     {% if rpm_repos %}<span class="repo-group">Red Hat</span>{% endif %}
     {% for r in rpm_repos %}
-    <a class="chip {{ 'on' if not apt and selected == r.name }}" href="{{ url_for('rpm', repository=r.name) }}" {% if not apt and selected == r.name %}aria-current="page"{% endif %}>
+    <a class="chip {{ 'on' if not apt and selected == r.name }}" href="{{ url_for('rpm', repository=r.name) }}#depots" {% if not apt and selected == r.name %}aria-current="page"{% endif %}>
       Red Hat {{ r.major }}<span class="chip-sub">{{ r.name }}</span><b>{{ r.count }}</b></a>
     {% endfor %}
     {% if can_create_apt or can_create_rpm %}<button type="button" class="chip chip-add" data-open="#repo-add">+ Nouveau dépôt</button>{% endif %}
@@ -41,26 +117,12 @@
   {% if apt and selected == legacy %}
   <p class="note">Dépôt historique, sans séparation par version : il reste servi aux postes déjà branchés. Copiez les paquets compatibles vers le dépôt de leur version (bouton de copie sur chaque ligne), puis rebranchez les postes.</p>
   {% elif apt and legacy_count %}
-  <p class="hint">{{ legacy_count }} paquet{{ 's' if legacy_count > 1 }} encore dans le <a href="{{ url_for('linux', repository=legacy) }}">dépôt historique</a> : copiez-les vers leur version après avoir vérifié leur compatibilité.</p>
+  <p class="hint">{{ legacy_count }} paquet{{ 's' if legacy_count > 1 }} encore dans le <a href="{{ url_for('linux', repository=legacy) }}#depots">dépôt historique</a> : copiez-les vers leur version après avoir vérifié leur compatibilité.</p>
   {% endif %}
-
-  <div class="metrics">
-    {% if apt %}
-    <div class="metric"><div class="k">{{ 'Cache APT (nginx)' if apt_nginx else 'Cache APT' }}</div><div class="v">{{ stats.get('acng', 0)|human }}</div><div class="s">{{ service(acng) }} · port <span class="mono">{{ acng_port }}</span></div></div>
-    {% else %}
-    <div class="metric"><div class="k">Cache des miroirs Red Hat</div><div class="v">{{ stats.get('rpmcache', 0)|human }}</div><div class="s">Rocky, AlmaLinux, EPEL · gardés 6 mois</div></div>
-    {% endif %}
-    <div class="metric"><div class="k">{{ label }}</div><div class="v">{{ packages|length }}<span class="v-unit">paquet{{ 's' if packages|length != 1 }}</span></div><div class="s">{{ packages|sum(attribute='size')|human }} · signé GPG</div></div>
-    {% if devices is not none %}
-    <div class="metric"><div class="k">Postes du parc</div><div class="v">{{ devices }}</div><div class="s">sur cette version, d'après leur système</div></div>
-    {% else %}
-    <div class="metric"><div class="k">Dépôts</div><div class="v">{{ apt_repos|length + rpm_repos|length }}</div><div class="s">distributions et versions</div></div>
-    {% endif %}
-  </div>
 
   <section class="panel">
     <div class="panel-h">
-      <h2>Paquets · {{ label }}</h2>
+      <h2>{{ label }} <span class="h-count">{{ packages|length }} paquet{{ 's' if packages|length != 1 }}{% if packages %} · {{ packages|sum(attribute='size')|human }}{% endif %}{% if devices is not none %} · {{ devices }} poste{{ 's' if devices != 1 }} du parc sur cette version{% endif %}</span></h2>
       {% if packages %}<div class="aside"><input type="search" placeholder="Filtrer les paquets" aria-label="Filtrer les paquets" data-filter="#pkgs tbody tr" data-empty="#pkgs-none" class="search-sm"></div>{% endif %}
     </div>
     {% if packages %}
@@ -106,57 +168,6 @@
     {% endif %}
   </section>
 
-  <section class="panel">
-    <div class="panel-h"><h2>Brancher un poste {{ 'Debian ou Ubuntu' if apt else 'Rocky, AlmaLinux ou RHEL' }}</h2><div class="aside">à lancer sur la machine, en root</div></div>
-    <div class="panel-b">
-      {% if apt %}
-      <div class="tabs seg-tabs" role="tablist" data-target="#cmd-setup">
-        <button type="button" data-tab="full" aria-selected="true" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh">Cache et dépôts</button>
-        <button type="button" data-tab="repo" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh -s -- --no-proxy">Dépôts seuls</button>
-        <button type="button" data-tab="remove" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/linux/setup.sh | sudo sh -s -- --remove">Retirer</button>
-      </div>
-      {{ cmd('cmd-setup', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
-      <p class="hint">Le poste trouve seul son dépôt (distribution et nom de version) : créez-le d'abord ici. Pour gérer aussi ses mises à jour depuis Mon parc, installez plutôt l'agent depuis <a href="{{ url_for('enrollment') }}">Enrôlement</a>.</p>
-      <details class="more">
-        <summary>Options et cas particuliers</summary>
-        <ul class="hint-list">
-          <li>Cache seul, sans les dépôts loco : ajoutez <code>--cache-only</code> ; garder l'ancien dépôt unique : <code>--legacy</code>.</li>
-          {% if http_url %}<li>Poste qui n'a pas encore l'autorité loco : <code>curl -fsSL {{ http_url }}/linux/setup.sh | sudo sh -s -- --trust-ca</code> (importe l'autorité, puis passe en HTTPS).</li>{% endif %}
-          <li>Sans curl : remplacez <code>curl -fsSL</code> par <code>wget -qO-</code>.</li>
-          <li>Les dépôts HTTPS des éditeurs restent en accès direct ; les dépôts HTTP passent par le cache. Clé de signature : <a href="{{ client_url }}/apt/loco.gpg">loco.gpg</a>.</li>
-        </ul>
-      </details>
-      {% else %}
-      <div class="tabs seg-tabs" role="tablist" data-target="#cmd-rpm">
-        <button type="button" data-tab="full" aria-selected="true" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh">Cache et dépôt</button>
-        <button type="button" data-tab="epel" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --epel">Avec EPEL</button>
-        <button type="button" data-tab="local" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --no-cache">Dépôt seul</button>
-        <button type="button" data-tab="remove" aria-selected="false" data-cmd="curl -fsSL {{ client_url }}/rpm/setup.sh | sudo sh -s -- --remove">Retirer</button>
-      </div>
-      {{ cmd('cmd-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
-      <p class="hint">Le poste choisit le dépôt de sa version majeure (<code>el9</code> pour Rocky 9, AlmaLinux 9 ou RHEL 9). Pour gérer aussi ses mises à jour depuis Mon parc, installez plutôt l'agent depuis <a href="{{ url_for('enrollment') }}">Enrôlement</a>.</p>
-      <details class="more">
-        <summary>Options, miroirs et cas particuliers</summary>
-        <ul class="hint-list">
-          <li>Rocky Linux et AlmaLinux : BaseOS, AppStream, CRB et extras passent par le cache en gardant les clés GPG de la distribution ; <code>--remove</code> rétablit les dépôts d'origine.</li>
-          <li>RHEL : ses dépôts exigent un abonnement Red Hat et restent en accès direct ; seuls EPEL et le dépôt local passent par loco.</li>
-          {% if http_url %}<li>Poste qui n'a pas encore l'autorité loco : <code>curl -fsSL {{ http_url }}/rpm/setup.sh | sudo sh -s -- --trust-ca</code> (importe l'autorité, affiche son empreinte, puis passe en HTTPS).</li>{% endif %}
-          <li>Clé de signature : <a href="{{ client_url }}/rpm/loco.asc">loco.asc</a>.</li>
-        </ul>
-        <div class="table-wrap mirrors">
-          <table>
-            <thead><tr><th>Miroir en cache</th><th>Origine</th><th class="hide-sm">Adresse pour les postes</th></tr></thead>
-            <tbody>
-            {% for key, upstream in upstreams.items() %}
-              <tr><td>{{ upstream[0] }}</td><td class="mono muted">{{ upstream[1] }}</td><td class="mono hide-sm">{{ client_url }}/rpmcache/{{ key }}/</td></tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </details>
-      {% endif %}
-    </div>
-  </section>
 </div>
 
 {% if can_upload %}

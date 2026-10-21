@@ -567,6 +567,34 @@ details.menu[open] > .menu-list { animation: nav-reveal .12s ease-out; }
 .repo-create { padding-top: 14px; border-top: 1px solid var(--line); }
 .repo-create > summary { font-weight: 500; }
 .repo-create > form { margin-top: 16px; display: grid; gap: 12px; }
+/* Paquets Linux : brancher un poste en trois étapes. */
+.setup-steps { display: grid; gap: 0; }
+.setup-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 4px 0 20px; }
+.setup-step + .setup-step { border-top: 1px solid var(--line); padding-top: 20px; }
+.setup-step:last-child { padding-bottom: 0; }
+.step-n { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--bg-3); color: var(--text-2); font: 600 13px var(--sans); }
+.step-b > h3 { margin: 3px 0 12px; font-size: 14px; font-weight: 600; }
+.step-b > * + p { margin-top: 10px; }
+.choice-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.choice { position: relative; display: block; cursor: pointer; }
+.choice input { position: absolute; top: 14px; left: 14px; }
+.choice > span { display: block; height: 100%; padding: 11px 14px 11px 40px; border: 1px solid var(--line-2); border-radius: var(--r-sm); transition: border-color .12s, background .12s; }
+.choice:hover > span { background: var(--bg-2); }
+.choice input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); box-shadow: 0 0 0 1px var(--accent); }
+.choice strong { display: block; font-weight: 500; }
+.choice strong em { margin-left: 6px; padding: 1px 6px; border-radius: 4px; background: var(--bg-3); font: 500 11.5px var(--sans); font-style: normal; color: var(--text-2); }
+.choice small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+.setup-opts { display: grid; gap: 8px; margin-top: 12px; }
+.setup-opts label.check { display: block; margin: 0; }
+.setup-opts label.check input { margin-right: 6px; vertical-align: -3px; }
+.setup-opts [hidden], .setup .hint[hidden] { display: none; }
+.section-h { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin-top: 36px; }
+.section-h h2 { font-size: 18px; }
+.section-h p { margin-top: 4px; max-width: 760px; font-size: 13.5px; color: var(--text-2); }
+.stack > .section-h + * { margin-top: 14px; }
+details.more-inline { margin-top: 0; }
+@media (max-width: 720px) { .choice-list { grid-template-columns: 1fr; } .setup-step { grid-template-columns: minmax(0, 1fr); } .step-n { display: none; } }
+
 /* Paquets Linux : barre des dépôts, outils de ligne, état vide avec action. */
 .repo-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chip .chip-sub { font-size: 12px; color: var(--text-3); }

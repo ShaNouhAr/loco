@@ -48,11 +48,12 @@ LABELS = {
     "rpm.depot.ajout": "Dépôt RPM créé", "flatpak.ajout": "Application Flatpak ajoutée",
     "flatpak.suppression": "Application Flatpak supprimée", "windows_update.domaines": "Domaines Windows Update modifiés",
     "systeme.configuration": "Configuration du serveur", "systeme.fonctionnalites": "Fonctionnalités activées ou désactivées", "systeme.check": "Recherche de mises à jour",
-    "systeme.update-loco": "Mise à jour de loco", "systeme.update-system": "Mise à jour du système",
+    "systeme.update-loco": "Mise à jour de loco", "systeme.update-system": "Mise à jour du système", "systeme.update-security": "Correctifs de sécurité du serveur",
     "systeme.reboot": "Redémarrage du serveur", "systeme.configure": "Réglages du serveur", "journal.export": "Journal exporté",
     "journal.conservation": "Conservation du journal modifiée",
     "scripts.ajout": "Script créé", "scripts.modification": "Script modifié", "scripts.suppression": "Script supprimé",
     "scripts.execution": "Script exécuté sur des postes",
+    "scripts.historique": "Historique des scripts nettoyé",
 }
 FAILURES = ("echec", "bloquee")
 PERIODS = {"jour": ("Aujourd'hui", 0), "7j": ("7 jours", 6), "30j": ("30 jours", 29), "tout": ("Tout", None)}

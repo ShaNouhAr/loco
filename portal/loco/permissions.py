@@ -151,7 +151,8 @@ ENDPOINTS = {
     "journal_export": "audit.export", "journal_retention": "audit.configure",
     "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",
     "script_compose": "scripts.run", "script_run_start": "scripts.run", "script_run": "scripts.view",
-    "script_run_cancel": "scripts.run",
+    "script_run_cancel": "scripts.run", "script_runs_cancel_all": "scripts.run", "script_history_clear": "scripts.edit",
+    "script_run_delete": "scripts.edit",
     # Réservé en plus au compte « admin » de l'installation (vérifié par la page).
     "features": "system.view", "features_save": "system.view",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",

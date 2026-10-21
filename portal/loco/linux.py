@@ -227,18 +227,28 @@ def packages_page(family, selected):
         devices = rpmrepo._devices_on(current)
     for p in packages:
         p["added"] = datetime.datetime.fromtimestamp(p["mtime"]).strftime("%Y-%m-%d %H:%M") if p["mtime"] else ""
+    linux_devices = None
+    if _fleet_visible():
+        with transaction() as conn:
+            linux_devices = conn.execute("SELECT COUNT(*) FROM devices WHERE state='active' AND os_family='linux'").fetchone()[0]
+    own = sum(r["count"] for r in apt_repos) + legacy_count + sum(r["count"] for r in rpm_repos)
     return render_template("packages.html", family=family, selected=selected, current=current, label=label,
                            apt_repos=apt_repos, rpm_repos=rpm_repos, legacy=LEGACY, legacy_count=legacy_count,
                            distributions=config.APT_DISTRIBUTIONS, packages=packages, devices=devices,
+                           linux_devices=linux_devices, own_packages=own,
                            stats=read_stats(), acng=service_active("apt-cacher-ng") if family == "apt" else None,
                            upstreams=config.RPM_UPSTREAMS)
 
 
-def _devices_on(repo):
-    """Postes Linux du parc sur cette distribution et version (d'après le système annoncé par l'agent)."""
+def _fleet_visible():
     from . import features
     from .auth import can
-    if not repo or not features.enabled("fleet") or not can("fleet.view"):
+    return features.enabled("fleet") and can("fleet.view")
+
+
+def _devices_on(repo):
+    """Postes Linux du parc sur cette distribution et version (d'après le système annoncé par l'agent)."""
+    if not repo or not _fleet_visible():
         return None
     with transaction() as conn:
         names = [r["os_name"].lower() for r in conn.execute(

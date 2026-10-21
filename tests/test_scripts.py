@@ -19,6 +19,7 @@ class TestScripts(FleetTest):
         super().setUp()
         with transaction() as conn:
             conn.execute("DELETE FROM scripts"); conn.execute("DELETE FROM script_runs")
+            conn.execute("DELETE FROM audit WHERE action LIKE 'scripts.%'")         # tests indépendants les uns des autres
             conn.execute("DELETE FROM settings WHERE key=?", (features.SETTING,))
         self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
         self.win = Agent(WINDOWS, "192.168.43.50"); self.win.enroll()
@@ -72,6 +73,51 @@ class TestScripts(FleetTest):
             sched = conn.execute("SELECT enabled, last_result FROM schedules").fetchone()
         self.assertEqual(sched["enabled"], 0)
         self.assertTrue(sched["last_result"].startswith("Script modifié"))
+
+    def run_now(self, sid, agent):
+        r = self.admin.post(f"/parc/scripts/{sid}/executer", {"version": "1", "device": str(device(agent.uid)["id"])},
+                            page="/parc/scripts")
+        self.assertEqual(r.status_code, 302)
+        return int(r.headers["Location"].rstrip("/").split("/")[-1])
+
+    def test_queue_can_be_emptied_and_history_cleared(self):
+        sid = self.save(platform="linux", content="echo bonjour")
+        done, waiting = self.run_now(sid, self.lin), self.run_now(sid, self.lin)
+        with transaction() as conn:                                     # la première est terminée, la seconde attend
+            conn.execute("UPDATE device_commands SET state='success', exit_code=0 WHERE id IN "
+                         "(SELECT command_id FROM script_run_targets WHERE run_id=?)", (done,))
+        page = self.admin.c.get("/parc/scripts").get_data(as_text=True)
+        self.assertIn("Vider la file (1)", page)
+        self.assertIn("Tout vider", page)
+        # Une exécution en cours ne se supprime pas ; vider l'historique la garde.
+        self.assertEqual(self.admin.post(f"/parc/scripts/executions/{waiting}/supprimer", page="/parc/scripts").status_code, 302)
+        self.assertEqual(self.admin.post("/parc/scripts/historique/vider", page="/parc/scripts").status_code, 302)
+        with transaction() as conn:
+            self.assertEqual([r["id"] for r in conn.execute("SELECT id FROM script_runs")], [waiting])
+        # Vider la file : l'envoi en attente est annulé, l'exécution devient supprimable.
+        self.assertEqual(self.admin.post("/parc/scripts/executions/annuler-tout", page="/parc/scripts").status_code, 302)
+        self.assertEqual(self.lin.checkin().get_json()["commands"], [])
+        self.assertEqual(self.admin.post(f"/parc/scripts/executions/{waiting}/supprimer", page="/parc/scripts").status_code, 302)
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM script_runs").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM script_run_targets").fetchone()[0], 0)
+
+    def test_history_filters_and_clearing_rights(self):
+        sid = self.save(platform="linux", content="echo bonjour")
+        run = self.run_now(sid, self.lin)
+        with transaction() as conn:
+            conn.execute("UPDATE device_commands SET state='failed', exit_code=1 WHERE id IN "
+                         "(SELECT command_id FROM script_run_targets WHERE run_id=?)", (run,))
+        page = self.admin.c.get("/parc/scripts?historique=echecs").get_data(as_text=True)
+        self.assertIn(f"/parc/scripts/executions/{run}", page)
+        self.assertNotIn(f"/parc/scripts/executions/{run}\"", self.admin.c.get("/parc/scripts?historique=reussies").get_data(as_text=True))
+        runner = test_permissions.TestPermissions.browser(
+            self, "script-runner", test_permissions.TestPermissions.profile(self, "script-runner", {"scripts.view", "scripts.run", "fleet.view"}))
+        self.assertNotIn("Tout vider", runner.c.get("/parc/scripts").get_data(as_text=True))
+        self.assertEqual(runner.post("/parc/scripts/historique/vider", page="/parc/scripts").status_code, 403)
+        self.assertEqual(runner.post(f"/parc/scripts/executions/{run}/supprimer", page="/parc/scripts").status_code, 403)
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM script_runs").fetchone()[0], 1)
 
     def test_past_schedule_is_refused(self):
         sid = self.save(platform="linux", content="echo bonjour")

@@ -44,15 +44,96 @@ def _summary(targets):
     return counts
 
 
+HISTORY_LIMIT = 100
+HISTORY_FILTERS = {"": "Toutes", "en-cours": "En cours", "echecs": "Avec échecs", "reussies": "Réussies"}
+
+
+def _run_state(p):
+    return "active" if p["active"] else "failed" if p["failed"] else "success" if p["success"] == p["total"] and p["total"] else "other"
+
+
 @app.route("/parc/scripts")
 @login_required
 def scripts():
     rows = db().execute("SELECT s.*, (SELECT MAX(created_at) FROM script_runs r WHERE r.script_id=s.id) AS last_run, "
                         "(SELECT COUNT(*) FROM script_runs r WHERE r.script_id=s.id) AS runs FROM scripts s "
                         "ORDER BY s.name COLLATE NOCASE").fetchall()
-    recent = db().execute("SELECT * FROM script_runs ORDER BY id DESC LIMIT 10").fetchall()
-    return render_template("scripts.html", scripts=rows, platforms=PLATFORMS,
-                           recent=[{"run": r, "summary": _summary(_targets(r["id"]))} for r in recent])
+    history = []
+    for r in db().execute("SELECT * FROM script_runs ORDER BY id DESC LIMIT ?", (HISTORY_LIMIT,)).fetchall():
+        summary = _summary(_targets(r["id"]))
+        history.append({"run": r, "summary": summary, "state": _run_state(summary)})
+    total_runs = db().execute("SELECT COUNT(*) FROM script_runs").fetchone()[0]
+    counts = {"": len(history), "en-cours": sum(h["state"] == "active" for h in history),
+              "echecs": sum(h["summary"]["failed"] > 0 for h in history), "reussies": sum(h["state"] == "success" for h in history)}
+    wanted = request.args.get("historique", "")
+    if wanted not in HISTORY_FILTERS:
+        wanted = ""
+    keep = {"": lambda h: True, "en-cours": lambda h: h["state"] == "active", "echecs": lambda h: h["summary"]["failed"] > 0,
+            "reussies": lambda h: h["state"] == "success"}[wanted]
+    shown = [h for h in history if keep(h)]
+    waiting = db().execute("SELECT COUNT(*) FROM device_commands WHERE state='queued' AND id IN "
+                           "(SELECT command_id FROM script_run_targets)").fetchone()[0]
+    return render_template("scripts.html", scripts=rows, platforms=PLATFORMS, history=shown, counts=counts,
+                           filters=HISTORY_FILTERS, wanted=wanted, total_runs=total_runs, waiting=waiting,
+                           running=sum(h["summary"]["active"] for h in history), limit=HISTORY_LIMIT)
+
+
+@app.route("/parc/scripts/executions/annuler-tout", methods=["POST"])
+@login_required
+def script_runs_cancel_all():
+    """Vider la file : aucun poste ne recevra plus les scripts encore en attente (déjà transmis : ils se terminent)."""
+    conn = lock_access("scripts.run")
+    cur = conn.execute("UPDATE device_commands SET state='cancelled', finished_at=?, output='Annulé avant transmission à l’agent.' "
+                       "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets)", (fleet._now(),))
+    audit("scripts.execution", f"file vidée : {cur.rowcount} poste(s) en attente annulé(s)", commit=False)
+    conn.commit()
+    flash(f"File vidée : {cur.rowcount} envoi{'s' if cur.rowcount != 1 else ''} en attente annulé{'s' if cur.rowcount != 1 else ''}."
+          if cur.rowcount else "Aucun envoi en attente.", "ok")
+    return back("scripts")
+
+
+def _finished_runs(conn, run_ids=None):
+    """Exécutions sans poste en attente ni en cours (les autres restent dans l'historique)."""
+    rows = conn.execute("SELECT id FROM script_runs").fetchall() if run_ids is None else [{"id": i} for i in run_ids]
+    return [r["id"] for r in rows if not _summary(_targets(r["id"]))["active"]]
+
+
+def _delete_runs(conn, run_ids):
+    for run_id in run_ids:
+        conn.execute("DELETE FROM script_run_targets WHERE run_id=?", (run_id,))
+        conn.execute("DELETE FROM script_runs WHERE id=?", (run_id,))
+        conn.execute("UPDATE schedules SET last_ref=0 WHERE action='run-script' AND last_ref=?", (run_id,))   # plus de lien mort
+
+
+@app.route("/parc/scripts/historique/vider", methods=["POST"])
+@login_required
+def script_history_clear():
+    conn = lock_access("scripts.edit")
+    done = _finished_runs(conn)
+    _delete_runs(conn, done)
+    kept = conn.execute("SELECT COUNT(*) FROM script_runs").fetchone()[0]
+    audit("scripts.historique", f"historique vidé : {len(done)} exécution(s) supprimée(s)", commit=False)
+    conn.commit()
+    flash(f"Historique vidé : {len(done)} exécution{'s' if len(done) != 1 else ''} supprimée{'s' if len(done) != 1 else ''}"
+          + (f" ; {kept} encore en cours conservée{'s' if kept != 1 else ''}." if kept else "."), "ok")
+    return back("scripts")
+
+
+@app.route("/parc/scripts/executions/<int:run_id>/supprimer", methods=["POST"])
+@login_required
+def script_run_delete(run_id):
+    conn = lock_access("scripts.edit")
+    run = conn.execute("SELECT * FROM script_runs WHERE id=?", (run_id,)).fetchone()
+    if run is None:
+        abort(404)
+    if not _finished_runs(conn, [run_id]):
+        flash("Exécution en cours : annulez d'abord les postes en attente.", "error")
+        return back("script_run", run_id=run_id)
+    _delete_runs(conn, [run_id])
+    audit("scripts.historique", f"exécution supprimée : {run['name']} v{run['version']} du {run['created_at']}", commit=False)
+    conn.commit()
+    flash("Exécution retirée de l'historique.", "ok")
+    return back("scripts")
 
 
 @app.route("/parc/scripts/nouveau", defaults={"script_id": 0})

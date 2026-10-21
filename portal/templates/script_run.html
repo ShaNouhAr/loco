@@ -9,13 +9,18 @@
     <h1>{{ run.name }} <span class="faint">v{{ run.version }}</span></h1>
     <p><span class="tag">{{ platforms[run.platform] }}</span> · lancé le {{ run.created_at|date_fr }} par {{ run.created_by }}{% if not script %} · script supprimé depuis{% endif %}</p>
   </div>
-  {% if summary.active and can('scripts.run') %}
   <div class="actions">
+    {% if summary.active and can('scripts.run') %}
     <form method="post" action="{{ url_for('script_run_cancel', run_id=run.id) }}" data-confirm="Annuler les postes en attente ?" data-confirm-text="Les postes qui n’ont pas encore reçu le script ne l’exécuteront pas. Un script déjà reçu peut se terminer." data-confirm-ok="Annuler">
       <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Annuler les postes en attente</button>
     </form>
+    {% elif not summary.active and can('scripts.edit') %}
+    <form method="post" action="{{ url_for('script_run_delete', run_id=run.id) }}" data-ajax data-confirm="Retirer cette exécution de l’historique ?" data-confirm-text="Sa sortie poste par poste est supprimée." data-confirm-ok="Supprimer">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger">Retirer de l’historique</button>
+    </form>
+    {% endif %}
+    {% if script and can('scripts.run') %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id) }}">Relancer…</a>{% endif %}
   </div>
-  {% endif %}
 </div>
 
 <div class="stack" data-poll="{{ url_for('script_run', run_id=run.id) }}" data-poll-kind="reload" data-poll-every="3000" data-signature="{{ signature }}">

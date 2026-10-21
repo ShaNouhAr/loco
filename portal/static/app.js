@@ -191,6 +191,31 @@
     if (e.key === "Escape") $$("details.menu[open]").forEach(function (m) { m.open = false; $("summary", m).focus(); });
   });
 
+  /* ---------------------------------------------------------------- brancher un poste Linux */
+
+  // Commande composée à partir des choix (système, ce que loco fournit, EPEL, autorité à importer).
+  $$("[data-setup]").forEach(function (box) {
+    var FLAGS = { apt: { repos: "--no-proxy", cache: "--cache-only" }, rpm: { repos: "--no-cache", cache: "--no-local" } };
+    var update = function () {
+      var os = ($('input[name="setup_os"]:checked', box) || {}).value || "apt";
+      var mode = ($('input[name="setup_mode"]:checked', box) || {}).value || "full";
+      var epel = $('input[name="setup_epel"]', box), trust = $('input[name="setup_trust"]', box);
+      var epelRow = $("[data-setup-epel]", box);
+      if (epelRow) epelRow.hidden = os !== "rpm" || mode === "remove";
+      var args = [];
+      if (trust && trust.checked && mode !== "remove") args.push("--trust-ca");
+      if (mode === "remove") args.push("--remove");
+      else if (FLAGS[os][mode]) args.push(FLAGS[os][mode]);
+      if (os === "rpm" && epel && epel.checked && mode !== "remove") args.push("--epel");
+      var base = trust && trust.checked && mode !== "remove" && box.dataset.http ? box.dataset.http : box.dataset.https;
+      $("#cmd-setup").textContent = "curl -fsSL " + base + (os === "rpm" ? "/rpm/setup.sh" : "/linux/setup.sh") +
+        " | sudo sh" + (args.length ? " -s -- " + args.join(" ") : "");
+      $$("[data-setup-hint]", box).forEach(function (h) { h.hidden = h.dataset.setupHint !== os; });
+    };
+    box.addEventListener("change", update);
+    update();
+  });
+
   /* ---------------------------------------------------------------- lignes cliquables */
 
   // Listes (parc, scripts, déploiements, groupes) : toute la ligne ouvre l'élément, sauf les commandes qu'elle contient.

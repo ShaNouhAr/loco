@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.33.0 — 2026-10-21
+
+- **Paquets Linux plus clairs** : la page est en deux parties. **Brancher un poste Linux**, en trois étapes valables pour toutes les familles : le système du poste (Debian, Ubuntu ou Rocky, AlmaLinux, RHEL), ce que loco lui fournit (cache et vos dépôts, vos dépôts seulement, cache seulement, ou retirer loco), avec les options EPEL et « le poste n'a pas encore l'autorité de loco » en cases à cocher ; la commande à copier se compose seule. Puis **Vos dépôts** : la barre des versions, l'ajout de paquets au dépôt affiché et la liste. En tête, les tailles des deux caches, vos paquets et les postes Linux du parc. Cas particuliers (distributions dérivées, `wget`, clés, miroirs) regroupés.
+- **Scripts** : compteurs (bibliothèque, postes en attente, exécutions avec échecs) ; bibliothèque filtrable (recherche, Windows / Linux) ; historique des 100 dernières exécutions avec filtres (en cours, avec échecs, réussies) et état de chaque exécution. **Vider la file** annule tous les envois pas encore reçus par les postes (planifiés compris), **Tout vider** supprime l'historique des exécutions terminées (celles en cours sont gardées), et chaque exécution terminée se retire de l'historique (aussi depuis sa page, qui propose en plus « Relancer… »). Le Journal garde la trace de ces nettoyages.
+
 ## 2.32.0 — 2026-10-21
 
 - **Ajouter / modifier un logiciel Windows** : fenêtre réorganisée en étapes (installeur, puis nom et version), le type est **détecté** depuis le lien ou le fichier, et les réglages rarement utiles (type, arguments silencieux, nom dans Windows) sont repliés dans « Options d'installation », avec leur résumé. Pour un `.exe` sans arguments silencieux, les options s'ouvrent seules avec un avertissement (sinon l'installation attend un clic sur chaque poste).

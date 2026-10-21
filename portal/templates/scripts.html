@@ -3,50 +3,112 @@
 {% block title %}Scripts{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
+{% set n_win = scripts|selectattr('platform', 'equalto', 'windows')|list|length %}
+{% set n_lin = scripts|length - n_win %}
 <div class="head">
   <div>
     <h1>Scripts</h1>
-    <p>Bibliothèque de scripts PowerShell (Windows) et shell (Linux) exécutés par l’agent en SYSTEM ou root sur les postes choisis, avec la sortie de chaque poste.</p>
+    <p>Vos scripts PowerShell (Windows) et shell (Linux), exécutés par l’agent en SYSTEM ou root sur les postes choisis, maintenant ou planifiés, avec la sortie de chaque poste.</p>
   </div>
   {% if can('scripts.edit') %}<div class="actions"><a class="btn primary" href="{{ url_for('script_editor', script_id=0) }}">Nouveau script</a></div>{% endif %}
 </div>
 
 <div class="stack">
-  <section class="panel">
+  <div class="metrics">
+    <div class="metric"><div class="k">Bibliothèque</div><div class="v">{{ scripts|length }}<span class="v-unit">script{{ 's' if scripts|length != 1 }}</span></div><div class="s">{{ n_win }} Windows · {{ n_lin }} Linux</div></div>
+    <div class="metric"><div class="k">En cours</div><div class="v">{{ running }}</div><div class="s">{% if running %}<span class="st warn">poste{{ 's' if running > 1 }} en attente ou en cours</span>{% else %}rien en attente{% endif %}</div></div>
+    <div class="metric"><div class="k">Avec échecs</div><div class="v">{{ counts['echecs'] }}</div><div class="s">{% if counts['echecs'] %}<a href="{{ url_for('scripts', historique='echecs') }}#historique">voir les exécutions</a>{% else %}parmi les dernières exécutions{% endif %}</div></div>
+    <div class="metric"><div class="k">Exécutions</div><div class="v">{{ total_runs }}</div><div class="s">dans l’historique</div></div>
+  </div>
+
+  <section class="panel" data-pkgs="#scripts-list" data-empty="#scripts-none">
+    <div class="panel-h">
+      <h2>Bibliothèque</h2>
+      {% if scripts %}<div class="aside"><input type="search" class="search-sm" placeholder="Filtrer les scripts" aria-label="Filtrer les scripts"></div>{% endif %}
+    </div>
     {% if scripts %}
+    {% if n_win and n_lin %}
+    <div class="chips-bar"><div class="chips" role="group" aria-label="Filtrer par système">
+      <button type="button" class="chip on" data-chip="all" aria-pressed="true">Tous <b>{{ scripts|length }}</b></button>
+      <button type="button" class="chip" data-chip="windows" aria-pressed="false">Windows <b>{{ n_win }}</b></button>
+      <button type="button" class="chip" data-chip="linux" aria-pressed="false">Linux <b>{{ n_lin }}</b></button>
+    </div></div>
+    {% endif %}
     <div class="table-wrap">
-      <table class="scripts-table" data-row-links>
+      <table id="scripts-list" class="scripts-table table-cards" data-row-links>
         <thead><tr><th>Script</th><th>Système</th><th class="hide-sm">Version</th><th class="hide-sm">Dernière exécution</th><th></th></tr></thead>
         <tbody>
         {% for s in scripts %}
-          <tr>
+          <tr data-{{ s.platform }}="1" data-search="{{ s.name }} {{ s.description }}">
             <td><a href="{{ url_for('script_editor', script_id=s.id) }}" class="strong-link">{{ s.name }}</a><span class="sub sans">{{ s.description or 'Sans description' }}</span></td>
-            <td class="nowrap"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else 'Linux' }}</span></td>
+            <td class="nowrap" data-label="Système"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else 'Linux' }}</span></td>
             <td class="hide-sm">v{{ s.version }}<span class="sub">{{ s.updated_at|date_fr }} · {{ s.updated_by }}</span></td>
             <td class="hide-sm nowrap">{% if s.last_run %}{{ s.last_run|date_fr }}<span class="sub sans">{{ s.runs }} exécution{{ 's' if s.runs > 1 }}</span>{% else %}<span class="faint">jamais</span>{% endif %}</td>
-            <td class="right nowrap">{% if can('scripts.run') %}<a class="btn sm" href="{{ url_for('script_compose', script_id=s.id) }}">Exécuter</a>{% endif %}</td>
+            <td class="right nowrap card-action">{% if can('scripts.run') %}<a class="btn sm" href="{{ url_for('script_compose', script_id=s.id) }}">Exécuter…</a>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
+      <div id="scripts-none" class="empty hidden">Aucun script ne correspond.</div>
     </div>
     {% else %}
-    <div class="empty">Aucun script.{% if can('scripts.edit') %} <a href="{{ url_for('script_editor', script_id=0) }}">Créez-en un</a> : nettoyage de fichiers temporaires, réglage du registre, redémarrage d’un service…{% endif %}</div>
+    <div class="empty empty-cta">
+      <strong>Aucun script pour l’instant</strong>
+      <span>Nettoyage de fichiers temporaires, réglage du registre, redémarrage d’un service, inventaire maison… : écrivez-le une fois, lancez-le sur un poste, un groupe ou tout le parc.</span>
+      {% if can('scripts.edit') %}<a class="btn" href="{{ url_for('script_editor', script_id=0) }}">Créer un script</a>{% endif %}
+    </div>
     {% endif %}
   </section>
 
-  {% if recent %}
-  <section class="panel">
-    <div class="panel-h"><h2>Exécutions récentes</h2></div>
-    <div class="table-wrap"><table class="deployments-table"><tbody>
-      {% for item in recent %}{% set r = item.run %}{% set p = item.summary %}
+  <section class="panel" id="historique">
+    <div class="panel-h">
+      <h2>Historique des exécutions</h2>
+      <div class="aside">
+        {% if waiting and can('scripts.run') %}
+        <form method="post" action="{{ url_for('script_runs_cancel_all') }}" data-ajax data-confirm="Vider la file d’attente ?" data-confirm-text="{{ waiting }} envoi{{ 's' if waiting > 1 }} pas encore reçu{{ 's' if waiting > 1 }} par les postes {{ 'seront annulés' if waiting > 1 else 'sera annulé' }}, planifiés compris. Un script déjà reçu par un agent se termine normalement." data-confirm-ok="Annuler les envois">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Vider la file ({{ waiting }})</button>
+        </form>
+        {% endif %}
+        {% if total_runs and can('scripts.edit') %}
+        <form method="post" action="{{ url_for('script_history_clear') }}" data-ajax data-confirm="Vider l’historique ?" data-confirm-text="Les exécutions terminées et leurs sorties sont supprimées ; celles encore en cours sont gardées. Le Journal conserve la trace des lancements." data-confirm-ok="Supprimer l’historique">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger">Tout vider</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% if total_runs %}
+    <div class="chips-bar"><nav class="chips" aria-label="Filtrer l’historique">
+      {% for key, name in filters.items() %}
+      <a class="chip {{ 'on' if wanted == key }}" href="{{ url_for('scripts', historique=key or None) }}#historique">{% if key == 'en-cours' %}<span class="st warn"></span>{% elif key == 'echecs' %}<span class="st err"></span>{% elif key == 'reussies' %}<span class="st ok"></span>{% endif %}{{ name }} <b>{{ counts[key] }}</b></a>
+      {% endfor %}
+    </nav></div>
+    {% endif %}
+    {% if history %}
+    <div class="table-wrap"><table class="deployments-table history-table table-cards" data-row-links>
+      <thead><tr><th>Exécution</th><th>Avancement</th><th class="hide-sm">État</th><th></th></tr></thead>
+      <tbody>
+      {% for item in history %}{% set r = item.run %}{% set p = item.summary %}
       <tr>
-        <td><a href="{{ url_for('script_run', run_id=r.id) }}">{{ r.name }}</a> <span class="faint">v{{ r.version }}</span><span class="sub">{{ r.created_at|date_fr }} · {{ r.created_by }}</span></td>
-        <td class="deploy-progress">{{ progress(p) }}<span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span></td>
+        <td><a href="{{ url_for('script_run', run_id=r.id) }}" class="strong-link">{{ r.name }}</a> <span class="faint">v{{ r.version }}</span><span class="sub">{{ r.created_at|date_fr }} · {{ r.created_by }} · {{ p.total }} poste{{ 's' if p.total > 1 }}</span></td>
+        <td class="deploy-progress" data-label="Avancement">{{ progress(p) }}<span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span></td>
+        <td class="nowrap hide-sm">{% if item.state == 'active' %}<span class="pill warn">en cours</span>{% elif item.state == 'failed' %}<span class="pill err">échecs</span>{% elif item.state == 'success' %}<span class="pill ok">réussie</span>{% else %}<span class="pill">annulée</span>{% endif %}</td>
+        <td class="right card-action">
+          {% if can('scripts.edit') and item.state != 'active' %}
+          <form method="post" action="{{ url_for('script_run_delete', run_id=r.id) }}" data-ajax data-confirm="Retirer cette exécution de l’historique ?" data-confirm-text="Sa sortie poste par poste est supprimée." data-confirm-ok="Supprimer">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn icon sm ghost danger" title="Retirer de l’historique" aria-label="Retirer {{ r.name }} du {{ r.created_at|date_fr }} de l’historique"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody></table></div>
+    {% if total_runs > limit and not wanted %}<div class="panel-f">Les {{ limit }} dernières exécutions sur {{ total_runs }}.</div>{% endif %}
+    {% elif total_runs %}
+    <div class="empty">Aucune exécution {{ filters[wanted]|lower }} parmi les dernières.</div>
+    {% else %}
+    <div class="empty">Aucune exécution pour l’instant{% if scripts and can('scripts.run') %} : bouton « Exécuter… » d’un script{% endif %}.</div>
+    {% endif %}
   </section>
-  {% endif %}
 </div>
 {% endblock %}
