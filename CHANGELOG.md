@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.29.1 — 2026-10-21
+
+- Gestionnaire de fichiers : le fil d'Ariane ne double plus le « / » de la racine (« / root » au lieu de « / / root »), et un dossier qui ne contient que des fichiers cachés n'est plus annoncé « vide » : le nombre d'éléments cachés est indiqué, avec un lien pour les afficher.
+
 ## 2.29.0 — 2026-10-21
 
 - **Planifications repensées, et récurrentes** : nouvel onglet *Mon parc → Planifications* (liste avec action, cibles, récurrence en clair, prochaine et dernière exécution, état ; modifier, mettre en pause, reprendre, supprimer). Mises à jour et scripts se planifient **une fois, chaque jour, chaque semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour du mois), sur tout le parc, des groupes (membres résolus à chaque exécution) ou des appareils. Un composant « Quand » commun (choix segmenté, jours en pastilles, résumé en clair avec la prochaine exécution) remplace les champs date/heure. En contexte : bouton calendrier à côté de *Mettre à jour* sur la fiche d'un poste et *Planifier…* à côté de *Tout mettre à jour* (fenêtre de planification), choix « Maintenant / Planifier » à l'exécution d'un script ; la fiche d'un poste affiche les planifications qui le concernent.

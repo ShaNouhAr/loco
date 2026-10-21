@@ -159,7 +159,8 @@ function renderCrumbs(path, parent) {
   });
   crumbs.innerHTML = parts.map((p, i) =>
     '<button type="button" class="files-crumb" data-path="' + esc(p.path) + '">' + esc(p.label) + '</button>' +
-    (i < parts.length - 1 ? '<span class="files-crumb-sep" aria-hidden="true">' + (windows ? '\\' : '/') + '</span>' : '')
+    // Pas de séparateur après la racine « / » : le chemin se lit « /root/Documents », pas « / / root ».
+    (i < parts.length - 1 && p.path !== '/' ? '<span class="files-crumb-sep" aria-hidden="true">' + (windows ? '\\' : '/') + '</span>' : '')
   ).join('');
   root.querySelector('[data-files="up"]').disabled = !parent;
 }
@@ -172,6 +173,11 @@ function renderList(entries, truncated) {
   listing = entries;
   const rows = entries.filter(e => showHidden || !e.name.startsWith('.'));
   emptyEl.classList.toggle('hidden', rows.length > 0);
+  const masked = entries.length - rows.length;      // fichiers cachés (commençant par « . ») non affichés
+  emptyEl.innerHTML = masked
+    ? 'Aucun élément visible : ' + masked + ' élément' + (masked > 1 ? 's cachés' : ' caché') +
+      '. <button type="button" class="linkbtn" data-show-hidden>Les afficher</button>'
+    : 'Dossier vide.';
   truncEl.classList.toggle('hidden', !truncated);
   tbody.innerHTML = rows.map(e => {
     const isDir = e.type === 'dir';
@@ -339,6 +345,7 @@ async function saveEditor() {
 
 // ---------------------------------------------------------------- événements
 root.addEventListener('click', async e => {
+  if (e.target.closest('[data-show-hidden]')) { hiddenToggle.click(); return; }
   const crumb = e.target.closest('.files-crumb, .files-root');
   if (crumb) { navigate(crumb.dataset.path); return; }
   const nav = e.target.closest('[data-files]');
