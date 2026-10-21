@@ -633,8 +633,9 @@ ln -sf "$PREFIX/bin/loco-update" /usr/local/sbin/loco-update
 render "$PREFIX/conf/loco-portal.service" > /etc/systemd/system/loco-portal.service
 cp "$PREFIX/conf/loco-stats.service" "$PREFIX/conf/loco-stats.timer" \
    "$PREFIX/conf/loco-nginx.service" "$PREFIX/conf/loco-nginx.path" \
-   "$PREFIX/conf/loco-backup.service" "$PREFIX/conf/loco-backup.timer" \
-   "$PREFIX/conf/loco-agent.service" /etc/systemd/system/
+   "$PREFIX/conf/loco-backup.service" "$PREFIX/conf/loco-backup.timer" /etc/systemd/system/
+# Même interpréteur que le portail (Rocky 8 : le python3 du système, 3.6, est trop ancien).
+LRT_PYTHON="$PYTHON" render "$PREFIX/conf/loco-agent.service" > /etc/systemd/system/loco-agent.service
 systemctl daemon-reload
 if [ "$PLATFORM" = rocky ] && [ "$OS_MAJOR" = 10 ]; then
     systemctl enable --now loco-acng-maintenance.timer >/dev/null 2>&1

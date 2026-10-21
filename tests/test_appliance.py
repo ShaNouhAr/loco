@@ -237,6 +237,7 @@ grub2-tools.x86_64                1:2.06-104.el9_6            baseos
 
 DNF_SECURITY = """RLSA-2025:1234 Important/Sec.  kernel-5.14.0-570.25.1.el9_6.x86_64
 RLSA-2025:1301 Moderate/Sec.   openssl-libs-1:3.2.2-6.el9_5.1.x86_64
+RLSA-2025:1302 Low/Sec.        kernel-5.14.0-570.25.1.el9_6.x86_64
 """
 
 

@@ -509,7 +509,10 @@ def _dnf_pending():
         pkg = found.get(_rpm_name(nevra)) if nevra else None
         if pkg:
             pkg["security"] = True
-            pkg["severity"] = next((s for s in SEVERITIES if s in fields), pkg["severity"])
+            # Plusieurs avis pour un paquet : la gravité la plus haute.
+            severity = next((s for s in SEVERITIES if s in fields), "")
+            if severity and (not pkg["severity"] or SEVERITIES.index(severity) < SEVERITIES.index(pkg["severity"])):
+                pkg["severity"] = severity
     if found:
         r = subprocess.run(["rpm", "-q", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\\n", *found], capture_output=True,
                            text=True, timeout=60)

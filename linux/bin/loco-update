@@ -1,3 +1,6 @@
 #!/bin/sh
-# Mises à jour de l'appliance Alpine (loco et paquets du système) : voir loco-update --help.
-exec /usr/bin/python3 -I /opt/loco/portal/locoadmin.py update "$@"
+# Mises à jour du serveur (paquets du système ; loco sur l'appliance Alpine) : voir loco-update --help.
+# Interpréteur du portail (loco.conf) : sur Rocky 8, le python3 du système (3.6) est trop ancien.
+py=$(sed -n 's/^PYTHON=//p' /etc/loco/loco.conf 2>/dev/null | tail -n 1)
+case "$py" in /*) [ -x "$py" ] || py=/usr/bin/python3 ;; *) py=/usr/bin/python3 ;; esac
+exec "$py" -I /opt/loco/portal/locoadmin.py update "$@"

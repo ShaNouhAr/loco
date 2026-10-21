@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Service]
 # Root : apt/dnf, relance des services, redémarrage. Les demandes du portail sont revalidées (portal/locoadmin.py).
-ExecStart=/usr/bin/python3 -I /opt/loco/portal/locoadmin.py agent
+ExecStart=@PYTHON@ -I /opt/loco/portal/locoadmin.py agent
 Restart=always
 RestartSec=3
 # Une opération en cours (processus détaché) survit à la relance de l'agent, par exemple après une mise à jour de Python.
