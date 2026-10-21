@@ -69,7 +69,7 @@ namespace Loco
         /// <summary>Pseudo-rectangle « curseur VMware alpha » (0x574d5664) : point chaud et pixels RGBA non prémultipliés.</summary>
         public static byte[] CursorRect(int hotX, int hotY, int w, int h, byte[] rgba)
         {
-            if (w < 1 || h < 1 || w > 256 || h > 256 || rgba.Length != w * h * 4) throw new ArgumentException("Curseur invalide");
+            if (w < 1 || h < 1 || w > 256 || h > 256 || rgba.Length != w * h * 4) throw new ArgumentException(Lang.T("Curseur invalide", "Invalid cursor"));
             using (var rect = new MemoryStream())
             {
                 U16(rect, Math.Min(hotX, w - 1)); U16(rect, Math.Min(hotY, h - 1)); U16(rect, w); U16(rect, h); U32(rect, 0x574d5664u);
@@ -127,7 +127,7 @@ namespace Loco
         /// <param name="mask">Tuiles à comparer (zones signalées par la capture) ; null : toutes.</param>
         public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null, bool[] mask = null)
         {
-            if (pixels.Length != width * height * 4) throw new ArgumentException("Taille de capture invalide");
+            if (pixels.Length != width * height * 4) throw new ArgumentException(Lang.T("Taille de capture invalide", "Invalid capture size"));
             var tiles = new List<int[]>();
             int index = 0;
             for (int y = 0; y < height; y += Tile)

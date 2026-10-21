@@ -36,7 +36,7 @@ namespace Loco
                 {
                     string frames = String.Join(" < ", (e.StackTrace ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Take(3));
                     File.AppendAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "loco-client", "loco-client.log"),
-                        DateTime.Now.ToString("s") + " bureau distant interrompu : " + e.GetType().Name + " : " + e.Message + " | " + frames + Environment.NewLine);
+                        DateTime.Now.ToString("s") + Lang.T(" bureau distant interrompu : ", " remote desktop interrupted: ") + e.GetType().Name + " : " + e.Message + " | " + frames + Environment.NewLine);
                 }
                 catch (Exception) { }
                 return 1;
@@ -71,7 +71,7 @@ namespace Loco
         public RfbDesktop(Stream stream)
         {
             this.stream = stream; bounds = SystemInformation.VirtualScreen;
-            if (bounds.Width <= 0 || bounds.Height <= 0 || (long)bounds.Width * bounds.Height > 16777216) throw new IOException("Bureau indisponible");
+            if (bounds.Width <= 0 || bounds.Height <= 0 || (long)bounds.Width * bounds.Height > 16777216) throw new IOException(Lang.T("Bureau indisponible", "Desktop unavailable"));
             width = bounds.Width; height = bounds.Height;
             framebuffer = new RfbFramebuffer(width, height);
             captureArea = new Rectangle(0, 0, width, height);

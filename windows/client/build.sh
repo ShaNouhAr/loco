@@ -14,13 +14,13 @@ printf '[assembly: System.Reflection.AssemblyVersion("%s.0")]\n[assembly: System
     "$VERSION" "$VERSION" > "$WORK/version.cs"
 mcs -nologo -target:exe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-client.exe" \
     -r:System.ServiceProcess.dll -r:System.Management.dll -r:System.Web.Extensions.dll -r:Microsoft.CSharp.dll \
-    -r:System.Core.dll "$WORK/version.cs" "$HERE/LocoClient.cs" "$HERE/DesktopIndicator.cs" "$HERE/DesktopStatus.cs" \
+    -r:System.Core.dll "$WORK/version.cs" "$HERE/Lang.cs" "$HERE/LocoClient.cs" "$HERE/DesktopIndicator.cs" "$HERE/DesktopStatus.cs" \
     "$HERE/RemoteControl.cs" "$HERE/RemoteFiles.cs" "$HERE/NativeTerminal.cs"
 mcs -nologo -target:winexe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-tray.exe" \
     -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Web.Extensions.dll \
-    "$WORK/version.cs" "$HERE/LocoTray.cs" "$HERE/DesktopStatus.cs"
+    "$WORK/version.cs" "$HERE/Lang.cs" "$HERE/LocoTray.cs" "$HERE/DesktopStatus.cs"
 mcs -nologo -target:winexe -platform:anycpu -optimize+ -warnaserror+ -sdk:4.6.2 -out:"$WORK/loco-desktop.exe" \
-    -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Core.dll "$WORK/version.cs" "$HERE/LocoDesktop.cs" "$HERE/DesktopResolution.cs" "$HERE/RfbFramebuffer.cs" "$HERE/DesktopDuplication.cs"
+    -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Core.dll "$WORK/version.cs" "$HERE/Lang.cs" "$HERE/LocoDesktop.cs" "$HERE/DesktopResolution.cs" "$HERE/RfbFramebuffer.cs" "$HERE/DesktopDuplication.cs"
 cp "$HERE/loco-client.exe.config" "$WORK/"
 cp "$HERE/loco-client.exe.config" "$WORK/loco-tray.exe.config"
 cp "$HERE/loco-client.exe.config" "$WORK/loco-desktop.exe.config"

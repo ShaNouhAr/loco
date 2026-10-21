@@ -186,7 +186,7 @@ namespace Loco
         }
         void CopyRegions(IntPtr source, int pitch, byte[] pixels)
         {
-            if (pixels.Length < Width * Height * 4) throw new InvalidOperationException("Tampon de capture trop petit");
+            if (pixels.Length < Width * Height * 4) throw new InvalidOperationException(Lang.T("Tampon de capture trop petit", "Capture buffer too small"));
             foreach (var r in regions)
                 for (int y = r.Top; y < r.Bottom; y++)
                     Marshal.Copy(IntPtr.Add(source, y * pitch + r.Left * 4), pixels, (y * Width + r.Left) * 4, r.Width * 4);

@@ -12,7 +12,7 @@ namespace Loco
         public static readonly string DirectoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "loco-client-status");
         public static readonly string FilePath = Path.Combine(DirectoryPath, "status.json");
         public string Color = "grey";
-        public string Reason = "En attente des informations de loco";
+        public string Reason = Lang.T("En attente des informations de loco", "Awaiting information from loco");
         public string UpdatedAt = "";
 
         public static DesktopStatus Load()
@@ -28,7 +28,7 @@ namespace Loco
                 result.UpdatedAt = updated.ToUniversalTime().ToString("o");
                 if (DateTime.UtcNow - updated.ToUniversalTime() > TimeSpan.FromMinutes(10) || updated.ToUniversalTime() > DateTime.UtcNow.AddMinutes(2))
                 {
-                    result.Reason = "Informations anciennes : contact avec loco à vérifier";
+                    result.Reason = Lang.T("Informations anciennes : contact avec loco à vérifier", "Stale information: check-in with loco to verify");
                     return result;
                 }
                 string color = Convert.ToString(data["color"]);

@@ -30,7 +30,7 @@ namespace Loco
         internal static string Str(Dictionary<string, object> d, string key) { object v; return d.TryGetValue(key, out v) && v != null ? Convert.ToString(v) : ""; }
         internal static int Number(Dictionary<string, object> d, string key, int min, int max)
         {
-            int n; if (!int.TryParse(Str(d, key), out n) || n < min || n > max) throw new InvalidDataException("Valeur de session invalide : " + key);
+            int n; if (!int.TryParse(Str(d, key), out n) || n < min || n > max) throw new InvalidDataException(Lang.T("Valeur de session invalide : ", "Invalid session value: ") + key);
             return n;
         }
         internal static IEnumerable<Dictionary<string, object>> Items(Dictionary<string, object> d, string key)
@@ -179,7 +179,7 @@ namespace Loco
                 if (kind == "terminal") { terminal = new NativeTerminal(cols, rows); reader = terminal.Output; writer = terminal.Input; }
                 else if (kind == "desktop") { OpenDesktop(stopping); }
                 else if (kind == "files") { files = new FileRelay(); reader = files.Reader; writer = files.Writer; }
-                else throw new InvalidDataException("Type de session inconnu");
+                else throw new InvalidDataException(Lang.T("Type de session inconnu", "Unknown session type"));
                 readThread = new Thread(Read) { IsBackground = true, Name = "loco-remote-output" }; readThread.Start();
                 writeThread = new Thread(Write) { IsBackground = true, Name = "loco-remote-input" }; writeThread.Start();
             }
@@ -199,11 +199,11 @@ namespace Loco
             IAsyncResult ready = pipe.BeginWaitForConnection(null, null);
             try
             {
-                if (WaitHandle.WaitAny(new[] { ready.AsyncWaitHandle, stopping }, 15000) != 0) throw new IOException("Le bureau du poste n'est pas disponible.");
+                if (WaitHandle.WaitAny(new[] { ready.AsyncWaitHandle, stopping }, 15000) != 0) throw new IOException(Lang.T("Le bureau du poste n'est pas disponible.", "The machine's desktop is not available."));
                 pipe.EndWaitForConnection(ready);
                 uint pid;
                 if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out pid) || pid != desktop.Id)
-                    throw new IOException("Compagnon de bureau non reconnu.");
+                    throw new IOException(Lang.T("Compagnon de bureau non reconnu.", "Desktop companion not recognised."));
             }
             finally { ready.AsyncWaitHandle.Close(); }
         }
@@ -223,7 +223,7 @@ namespace Loco
                     RemoteControl.Activity.Set();
                 }
             }
-            catch (Exception e) { lock (gate) if (!disposed) error = kind == "desktop" ? "Session graphique inaccessible ou fermée." : e.Message; }
+            catch (Exception e) { lock (gate) if (!disposed) error = kind == "desktop" ? Lang.T("Session graphique inaccessible ou fermée.", "Graphical session inaccessible or closed.") : e.Message; }
             finally { lock (gate) eof = true; }
         }
         void Write()
@@ -248,14 +248,14 @@ namespace Loco
         {
             lock (gate)
             {
-                long ack; if (!long.TryParse(RemoteControl.Str(descriptor, "ack"), out ack) || ack < 0 || ack > outputSeq) throw new InvalidDataException("Acquittement invalide");
+                long ack; if (!long.TryParse(RemoteControl.Str(descriptor, "ack"), out ack) || ack < 0 || ack > outputSeq) throw new InvalidDataException(Lang.T("Acquittement invalide", "Invalid acknowledgement"));
                 if (ack == outputSeq) pending = null;
                 if (disposed || eof) return;
                 foreach (var p in RemoteControl.Items(descriptor, "packets"))
                 {
-                    long seq; if (!long.TryParse(RemoteControl.Str(p, "seq"), out seq)) throw new InvalidDataException("Séquence invalide");
+                    long seq; if (!long.TryParse(RemoteControl.Str(p, "seq"), out seq)) throw new InvalidDataException(Lang.T("Séquence invalide", "Invalid sequence"));
                     if (seq <= inputQueued) continue;
-                    if (seq != inputQueued + 1) throw new InvalidDataException("Séquence manquante");
+                    if (seq != inputQueued + 1) throw new InvalidDataException(Lang.T("Séquence manquante", "Missing sequence"));
                     byte[] data = Convert.FromBase64String(RemoteControl.Str(p, "data"));
                     if (data.Length > 256 * 1024 || inputBytes + data.Length > 2 * 1024 * 1024) throw new InvalidDataException("Saisie trop volumineuse");
                     input.Enqueue(new InputPacket { Seq = seq, Data = data }); inputBytes += data.Length; inputQueued = seq;

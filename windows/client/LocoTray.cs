@@ -50,10 +50,10 @@ namespace Loco
         public TrayContext()
         {
             var menu = new ContextMenuStrip();
-            menu.Items.Add(new ToolStripMenuItem("loco · État du poste") { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem(Lang.T("loco · État du poste", "loco · Machine status")) { Enabled = false });
             menu.Items.Add(summary);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Détails…", null, delegate { ShowDetails(); });
+            menu.Items.Add(Lang.T("Détails…", "Details…"), null, delegate { ShowDetails(); });
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += delegate { ShowDetails(); };
             Refresh();
@@ -69,14 +69,14 @@ namespace Loco
 
         string Heading()
         {
-            return status.Color == "green" ? "À jour" : status.Color == "red" ? "Beaucoup de mises à jour" : status.Color == "orange" ? "Mises à jour disponibles" : "Informations indisponibles";
+            return status.Color == "green" ? Lang.T("À jour", "Up to date") : status.Color == "red" ? Lang.T("Beaucoup de mises à jour", "Many updates") : status.Color == "orange" ? Lang.T("Mises à jour disponibles", "Updates available") : Lang.T("Informations indisponibles", "Status unavailable");
         }
 
         string DetailsText()
         {
-            string when = status.UpdatedAt == "" ? "Aucun contact connu" : "Dernier contact : " + DateTime.Parse(status.UpdatedAt).ToLocalTime().ToString("g");
+            string when = status.UpdatedAt == "" ? Lang.T("Aucun contact connu", "No check-in yet") : Lang.T("Dernier contact : ", "Last check-in: ") + DateTime.Parse(status.UpdatedAt).ToLocalTime().ToString("g");
             return Heading() + "\r\n\r\n" + status.Reason + "\r\n\r\n" + when +
-                "\r\n\r\nCet indicateur est informatif. Les mises à jour sont pilotées par votre administrateur depuis loco.";
+                Lang.T("\r\n\r\nCet indicateur est informatif. Les mises à jour sont pilotées par votre administrateur depuis loco.", "\r\n\r\nThis indicator is informational. Updates are managed by your administrator from loco.");
         }
 
         void Refresh()
@@ -122,11 +122,11 @@ namespace Loco
         void ShowDetails()
         {
             if (details != null && !details.IsDisposed) { details.Activate(); return; }
-            details = new Form { Text = "loco · État des mises à jour", ClientSize = new Size(460, 260),
+            details = new Form { Text = Lang.T("loco · État des mises à jour", "loco · Update status"), ClientSize = new Size(460, 260),
                 StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false, MinimizeBox = false, Icon = icon };
             description = new Label { Text = DetailsText(), Dock = DockStyle.Fill, Padding = new Padding(22), AutoSize = false };
-            var close = new Button { Text = "Fermer", Dock = DockStyle.Bottom, Height = 36, DialogResult = DialogResult.Cancel };
+            var close = new Button { Text = Lang.T("Fermer", "Close"), Dock = DockStyle.Bottom, Height = 36, DialogResult = DialogResult.Cancel };
             close.Click += delegate { details.Close(); };
             details.Controls.Add(description);
             details.Controls.Add(close);
