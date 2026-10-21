@@ -13,6 +13,7 @@ tests/test_i18n.py vérifie que chaque texte marqué a sa traduction anglaise.
 
 import json
 import os
+import re
 
 from flask import g, has_request_context, request
 from markupsafe import escape
@@ -115,6 +116,42 @@ def L_(message):
     return LazyText(message)
 
 
+# ---------------------------------------------------------------- scripts servis aux postes
+# Les scripts (shell, PowerShell) parlent la langue du poste qui les exécute : le serveur y écrit les deux versions
+# de chaque message, et une petite fonction du script choisit (LANG sous Linux, langue de Windows).
+_SLOT = re.compile(r"%\((\w+)\)s")
+
+
+def _both(message, escape, values):
+    out = []
+    for text in (message, catalog("en").get(message) or message):
+        parts, pos = [], 0
+        for m in _SLOT.finditer(text):
+            parts.append(escape(text[pos:m.start()].replace("%%", "%")))
+            parts.append(values[m.group(1)])
+            pos = m.end()
+        parts.append(escape(text[pos:].replace("%%", "%")))
+        out.append("".join(parts))
+    return out
+
+
+def sh_t(message, **values):
+    """Message d'un script shell : « t "français" "english" » (la fonction t du script écrit la bonne langue,
+    suivie d'un saut de ligne ; valeurs = expressions shell, ex. "$1")."""
+    def escape(text):
+        return text.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
+    fr, en = _both(message, escape, values)
+    return f't "{fr}" "{en}"'
+
+
+def ps_t(message, **values):
+    """Message d'un script PowerShell : « (T "français" "english") » (valeurs = expressions PowerShell)."""
+    def escape(text):
+        return text.replace("`", "``").replace('"', '`"').replace("$", "`$")
+    fr, en = _both(message, escape, values)
+    return f'(T "{fr}" "{en}")'
+
+
 def js_catalog():
     """Textes des scripts du navigateur, pour la langue de la requête (vide en français)."""
     lang = locale()
@@ -131,7 +168,6 @@ def js_messages():
     """Textes marqués t("…") dans les scripts du portail (lus une fois)."""
     global _js_messages
     if _js_messages is None:
-        import re
         static = os.path.join(os.path.dirname(CATALOG_DIR), "static")
         found = set()
         for name in os.listdir(static):

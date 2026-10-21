@@ -3,6 +3,7 @@
 ## 2.34.0 — 2026-10-21
 
 - **Portail en anglais** : chaque personne choisit **Français** ou **English** dans le menu *Apparence* (icône palette, en haut à droite, aussi sur l'écran de connexion) ; le choix est gardé dans son compte. Sans choix, le portail suit la langue du navigateur. Tout est traduit : pages, fenêtres, confirmations, messages après une action et erreurs, libellés (droits, journal, états, récurrences, profils intégrés), gestionnaire de fichiers, console à distance, recherche Ctrl+K. Dates, tailles (Go/GB) et nombres suivent la langue ; les récurrences des planifications sont rédigées dans l'ordre de chaque langue (« Every Tuesday and Thursday at 02:00 »).
+- **Scripts des postes bilingues** : les commandes servies aux postes (configuration APT `setup.sh`, RPM `rpm-setup.sh`, Flatpak, installation de logiciels Windows `install.ps1`, zones DNS, agents Linux et Windows) écrivent leurs messages dans la langue du poste — français si le système est en français (`LANG` sous Linux, langue d'affichage de Windows), anglais sinon. Le serveur place les deux versions dans le script ; la commande affichée dans le portail ne change pas.
 - Le français reste la langue de référence : les textes du code servent de clés et l'anglais est dans `portal/i18n/en.json`. Un test refuse tout texte affiché sans sa traduction anglaise, avec les mêmes valeurs à insérer.
 
 ## 2.33.0 — 2026-10-21

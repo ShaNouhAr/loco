@@ -1,14 +1,17 @@
 # loco : installation depuis le catalogue {{ base }}
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Langue du poste : francais si Windows est en francais, sinon anglais.
+$LocoEn = (Get-UICulture).TwoLetterISOLanguageName -ne 'fr'
+function T($fr, $en) { if ($LocoEn) { $en } else { $fr } }
 
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Warning 'Relancez PowerShell en tant qu''administrateur.'
+    Write-Warning {{ ps_t("Relancez PowerShell en tant qu'administrateur.") }}
     return
 }
 {% for s in missing %}
-Write-Warning 'Absent du catalogue (ou pas encore pret) : {{ s }}'
+Write-Warning {{ ps_t('Absent du catalogue (ou pas encore pret) : %(name)s', name=s) }}
 {% endfor %}
 $apps = @(
 {% for a in apps %}    @{ Name = {{ q(a.name) }}; Url = {{ q(base ~ '/win/files/' ~ a.slug ~ '/' ~ quote(a.filename)) }}; File = {{ q(a.filename) }}; Sha = {{ q(a.sha256) }}; Kind = {{ q(a.kind) }}; Args = {{ q(a.args) }} }{% if not loop.last %},{% endif %}
@@ -24,7 +27,7 @@ function Start-Installer($file, $arguments) {
     $null = $p.Handle  # nécessaire pour lire le code de sortie ensuite
     if (-not $p.WaitForExit($timeout * 1000)) {
         try { $p.Kill() } catch {}
-        throw "pas termine apres $timeout s : l'installeur attend sans doute une action (verifiez les arguments silencieux)"
+        throw {{ ps_t("pas termine apres %(timeout)s s : l'installeur attend sans doute une action (verifiez les arguments silencieux)", timeout='$timeout') }}
     }
     return $p
 }
@@ -38,7 +41,7 @@ foreach ($a in $apps) {
     try {
         $dest = Join-Path $dir $a.File
         Invoke-WebRequest -UseBasicParsing -Uri $a.Url -OutFile $dest
-        if ((Get-FileHash $dest -Algorithm SHA256).Hash -ne $a.Sha) { throw 'somme SHA256 invalide' }
+        if ((Get-FileHash $dest -Algorithm SHA256).Hash -ne $a.Sha) { throw {{ ps_t('somme SHA256 invalide') }} }
         $p = $null
         switch ($a.Kind) {
             'msi' { $p = Start-Installer msiexec.exe "/i `"$dest`" $($a.Args)" }
@@ -48,15 +51,15 @@ foreach ($a in $apps) {
             default {
                 $target = Join-Path $env:PUBLIC 'Downloads'
                 Copy-Item $dest $target -Force
-                Write-Host "    Fichier copie dans $target" -ForegroundColor Green
+                Write-Host {{ ps_t('    Fichier copie dans %(path)s', path='$target') }} -ForegroundColor Green
             }
         }
         if ($p) {
             $code = $p.ExitCode
-            if ($code -eq 3010 -or $code -eq 1641) { Write-Host '    OK (redemarrage necessaire)' -ForegroundColor Yellow }
-            elseif ($code -eq 2359302 -or $code -eq 1638) { Write-Host '    Deja installe' -ForegroundColor Green }
-            elseif ($code -eq -2145124329) { Write-Host '    Non applicable a ce systeme' -ForegroundColor Yellow }
-            elseif ($code -ne 0) { throw "code de sortie $code" }
+            if ($code -eq 3010 -or $code -eq 1641) { Write-Host {{ ps_t('    OK (redemarrage necessaire)') }} -ForegroundColor Yellow }
+            elseif ($code -eq 2359302 -or $code -eq 1638) { Write-Host {{ ps_t('    Deja installe') }} -ForegroundColor Green }
+            elseif ($code -eq -2145124329) { Write-Host {{ ps_t('    Non applicable a ce systeme') }} -ForegroundColor Yellow }
+            elseif ($code -ne 0) { throw {{ ps_t('code de sortie %(code)s', code='$code') }} }
             else { Write-Host '    OK' -ForegroundColor Green }
         }
     } catch {
@@ -66,4 +69,4 @@ foreach ($a in $apps) {
 }
 
 Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-if ($failed) { Write-Warning "$failed installation(s) en echec." } else { Write-Host 'Termine.' -ForegroundColor Green }
+if ($failed) { Write-Warning {{ ps_t('%(n)s installation(s) en echec.', n='$failed') }} } else { Write-Host {{ ps_t('Termine.') }} -ForegroundColor Green }

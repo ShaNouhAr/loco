@@ -18,11 +18,12 @@ def template_messages():
     found = {}
     folder = os.path.join(ROOT, "templates")
     for name in sorted(os.listdir(folder)):
-        if not name.endswith(".html"):
+        if not name.endswith((".html", ".sh", ".ps1")):
             continue
         with open(os.path.join(folder, name), encoding="utf-8") as f:
             source = f.read()
-        for lineno, _func, message in app.jinja_env.extract_translations(source):
+        for lineno, _func, message in app.jinja_env.extract_translations(
+                source, gettext_functions=("_", "gettext", "ngettext", "sh_t", "ps_t")):
             for text in (message if isinstance(message, tuple) else (message,)):
                 if text:
                     found.setdefault(text, f"templates/{name}:{lineno}")

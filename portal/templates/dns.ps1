@@ -4,13 +4,16 @@
 #   .\loco-dns.ps1 -Remove    -> supprime les zones (retour arriere)
 param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
+# Langue du poste : francais si Windows est en francais, sinon anglais.
+$LocoEn = (Get-UICulture).TwoLetterISOLanguageName -ne 'fr'
+function T($fr, $en) { if ($LocoEn) { $en } else { $fr } }
 $ip = '{{ host }}'
 $domains = @({% for d in domains %}'{{ d }}'{% if not loop.last %}, {% endif %}{% endfor %})
 
 foreach ($d in $domains) {
     $zone = Get-DnsServerZone -Name $d -ErrorAction SilentlyContinue
     if ($Remove) {
-        if ($zone) { Remove-DnsServerZone -Name $d -Force; Write-Host "Zone supprimee : $d" }
+        if ($zone) { Remove-DnsServerZone -Name $d -Force; Write-Host {{ ps_t('Zone supprimee : %(zone)s', zone='$d') }} }
         continue
     }
     if (-not $zone) { Add-DnsServerPrimaryZone -Name $d -ReplicationScope Forest }

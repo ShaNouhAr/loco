@@ -123,6 +123,8 @@ app.jinja_env.add_extension("jinja2.ext.i18n")
 app.jinja_env.install_gettext_callables(i18n.gettext, i18n.ngettext, newstyle=True)
 # Valeur enregistrée (libellé de profil intégré…) : {{ valeur|tr }} traduit sans mise en forme.
 app.jinja_env.filters["tr"] = i18n.gettext
+# Scripts servis aux postes : messages dans les deux langues, choisis sur le poste (voir i18n.sh_t / ps_t).
+app.jinja_env.globals.update(sh_t=i18n.sh_t, ps_t=i18n.ps_t)
 
 from . import db as _db  # noqa: E402
 

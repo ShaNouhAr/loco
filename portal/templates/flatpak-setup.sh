@@ -4,7 +4,10 @@
 #   ... | sudo sh -s -- --remove     Flathub en accès direct, dépôt local retiré
 # Les signatures GPG (clé de Flathub, clé du dépôt local) restent vérifiées par Flatpak.
 set -e
-[ "$(id -u)" -eq 0 ] || { echo "Lancez ce script en root (sudo)." >&2; exit 1; }
+# Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
+[ "$(id -u)" -eq 0 ] || { {{ sh_t('Lancez ce script en root (sudo).') }} >&2; exit 1; }
 BASE="{{ base }}"
 FLATHUB="{{ flathub_url }}"
 LOCAL='{{ "1" if local else "0" }}'
@@ -17,10 +20,10 @@ if [ "${1:-}" = "--remove" ]; then
         flatpak remote-delete --system --force loco 2>/dev/null || true
         flatpak remote-delete --system --force local-repo 2>/dev/null || true
     fi
-    echo "Configuration Flatpak loco retirée (Flathub en accès direct)."
+    {{ sh_t('Configuration Flatpak loco retirée (Flathub en accès direct).') }}
     exit 0
 fi
-[ -z "${1:-}" ] || { echo "Option inconnue : $1" >&2; exit 1; }
+[ -z "${1:-}" ] || { {{ sh_t('Option inconnue : %(opt)s', opt='$1') }} >&2; exit 1; }
 
 if ! command -v flatpak >/dev/null 2>&1; then
     apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q flatpak
@@ -50,4 +53,4 @@ fi
 fi
 
 flatpak remotes --system --show-details
-echo "Flatpak configuré pour loco ($BASE)."
+{{ sh_t('Flatpak configuré pour loco (%(base)s).', base='$BASE') }}
