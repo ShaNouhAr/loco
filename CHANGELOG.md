@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.34.0 — 2026-10-21
+
+- **Portail en anglais** : chaque personne choisit **Français** ou **English** dans le menu *Apparence* (icône palette, en haut à droite, aussi sur l'écran de connexion) ; le choix est gardé dans son compte. Sans choix, le portail suit la langue du navigateur. Tout est traduit : pages, fenêtres, confirmations, messages après une action et erreurs, libellés (droits, journal, états, récurrences, profils intégrés), gestionnaire de fichiers, console à distance, recherche Ctrl+K. Dates, tailles (Go/GB) et nombres suivent la langue ; les récurrences des planifications sont rédigées dans l'ordre de chaque langue (« Every Tuesday and Thursday at 02:00 »).
+- Le français reste la langue de référence : les textes du code servent de clés et l'anglais est dans `portal/i18n/en.json`. Un test refuse tout texte affiché sans sa traduction anglaise, avec les mêmes valeurs à insérer.
+
 ## 2.33.0 — 2026-10-21
 
 - **Paquets Linux plus clairs** : la page est en deux parties. **Brancher un poste Linux**, en trois étapes valables pour toutes les familles : le système du poste (Debian, Ubuntu ou Rocky, AlmaLinux, RHEL), ce que loco lui fournit (cache et vos dépôts, vos dépôts seulement, cache seulement, ou retirer loco), avec les options EPEL et « le poste n'a pas encore l'autorité de loco » en cases à cocher ; la commande à copier se compose seule. Puis **Vos dépôts** : la barre des versions, l'ajout de paquets au dépôt affiché et la liste. En tête, les tailles des deux caches, vos paquets et les postes Linux du parc. Cas particuliers (distributions dérivées, `wget`, clés, miroirs) regroupés.

@@ -28,9 +28,10 @@ import zipfile
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 
 from . import addresses, agentpkg, app, config, features, permissions
+from .i18n import L_, _
 from .auth import audit, can, login_required, require
 from .db import db
-from .util import back
+from .util import back, date_fr
 
 CHECKIN = 120                   # secondes entre deux contacts de l'agent
 ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles avant de déclarer le poste hors ligne
@@ -39,9 +40,9 @@ STALE_DAYS = 1                  # sans contact depuis : orange
 SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
-FAMILIES = {"windows": "Windows", "debian": "Debian / Ubuntu", "rhel": "Red Hat"}
-ACTIONS = {"scan": "Inventaire", "update": "Mise à jour", "install-app": "Installation", "run-script": "Script", "reboot": "Redémarrage",
-           "uninstall": "Retrait de l'agent"}
+FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat")}
+ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "run-script": L_("Script"), "reboot": L_("Redémarrage"),
+           "uninstall": L_("Retrait de l'agent")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -194,10 +195,10 @@ def presence(dev):
     seen = _ago(dev["last_seen"])
     online = (dev["state"] != "removed" and seen is not None
               and datetime.timedelta(0) <= seen <= datetime.timedelta(seconds=ONLINE_SECONDS))
-    label = "En ligne" if online else "Hors ligne"
-    detail = (f"Contact de l'agent dans les {ONLINE_SECONDS // 60} dernières minutes" if online
-              else f"Aucun contact de l'agent depuis {ONLINE_SECONDS // 60} minutes"
-              if seen is not None else "Aucun contact de l'agent enregistré")
+    label = _("En ligne") if online else _("Hors ligne")
+    detail = (_("Contact de l'agent dans les %(n)s dernières minutes", n=ONLINE_SECONDS // 60) if online
+              else _("Aucun contact de l'agent depuis %(n)s minutes", n=ONLINE_SECONDS // 60)
+              if seen is not None else _("Aucun contact de l'agent enregistré"))
     return {"online": online, "label": label, "detail": detail}
 
 
@@ -215,46 +216,47 @@ def status(dev, apps=None):
     """Voyant du volume de mises à jour : aucune / quelques-unes / au moins le seuil rouge.
     Une information de santé (sécurité, échec, redémarrage) ne change pas ce comptage."""
     if dev["state"] == "removing":
-        return "grey", "retrait de l'agent demandé"
+        return "grey", _("retrait de l'agent demandé")
     seen = _ago(dev["last_seen"])
     pending_apps = len(app_updates(dev, apps))
     reasons = []
     if dev["security_updates"]:
-        reasons.append(f"{dev['security_updates']} mise(s) à jour de sécurité en attente")
+        reasons.append(_("%(n)s mise(s) à jour de sécurité en attente", n=dev["security_updates"]))
     other = dev["updates"] - dev["security_updates"]
     if other > 0:
-        reasons.append(f"{other} {'autre(s) ' if dev['security_updates'] else ''}mise(s) à jour du système")
+        reasons.append(_("%(n)s autre(s) mise(s) à jour du système", n=other) if dev["security_updates"]
+                       else _("%(n)s mise(s) à jour du système", n=other))
     if pending_apps:
-        reasons.append(f"{pending_apps} logiciel(s) à mettre à jour")
+        reasons.append(_("%(n)s logiciel(s) à mettre à jour", n=pending_apps))
     if dev["reboot_required"]:
-        reasons.append("redémarrage nécessaire")
+        reasons.append(_("redémarrage nécessaire"))
     last = last_result(dev["id"])
     if last and last["state"] == "failed":
-        reasons.append(f"échec : {ACTIONS.get(last['action'], last['action']).lower()}")
+        reasons.append(_("échec : %(action)s", action=ACTIONS.get(last["action"], last["action"]).lower()))
     error = inventory(dev).get("error")
     if error:
-        reasons.append(f"inventaire incomplet : {error}")
+        reasons.append(_("inventaire incomplet : %(error)s", error=error))
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
-        reasons.append("poste sans contact récent")
+        reasons.append(_("poste sans contact récent"))
     if error or not dev["last_scan"] or seen is None or seen > datetime.timedelta(days=STALE_DAYS):
-        return "grey", ", ".join(reasons) or "inventaire en cours"
+        return "grey", ", ".join(reasons) or _("inventaire en cours")
     total = dev["updates"] + pending_apps
     color = "green" if total == 0 else "red" if total >= red_threshold() else "orange"
-    return color, ", ".join(reasons) or "à jour"
+    return color, ", ".join(reasons) or _("à jour")
 
 
 def status_label(dev, color):
     """Libellé court du voyant (pastille de la fiche) ; le détail reste dans l'explication complète."""
     if color != "grey":
-        return {"green": "à jour", "orange": "mises à jour en attente", "red": "à traiter"}[color]
+        return {"green": _("à jour"), "orange": _("mises à jour en attente"), "red": _("à traiter")}[color]
     seen = _ago(dev["last_seen"])
     if dev["state"] == "removing":
-        return "retrait demandé"
+        return _("retrait demandé")
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
-        return "sans contact récent"
+        return _("sans contact récent")
     if inventory(dev).get("error"):
-        return "inventaire incomplet"
-    return "inventaire en cours"
+        return _("inventaire incomplet")
+    return _("inventaire en cours")
 
 
 def action_label(cmd):
@@ -266,12 +268,12 @@ def action_label(cmd):
         params = {}
     if params.get("slug"):
         row = db().execute("SELECT name FROM win_apps WHERE slug=?", (params["slug"],)).fetchone()
-        label += " : " + (row["name"] if row else params["slug"])
+        label = _("%(action)s : %(name)s", action=label, name=row["name"] if row else params["slug"])
     if params.get("app_snapshots"):
         names = [a.get("name", a.get("slug", "")) for a in params["app_snapshots"]]
-        label += " : " + ", ".join(names[:3]) + ("…" if len(names) > 3 else "")
+        label = _("%(action)s : %(name)s", action=label, name=", ".join(names[:3]) + ("…" if len(names) > 3 else ""))
     if params.get("reboot"):
-        label += " (avec redémarrage)"
+        label = _("%(action)s (avec redémarrage)", action=label)
     return label
 
 
@@ -531,8 +533,8 @@ def agent_checkin():
     return answer
 
 
-PROGRESS_STEPS = {"download": "Téléchargement", "verify": "Vérification de l'empreinte", "install": "Installation",
-                  "windows_update": "Mises à jour Windows"}
+PROGRESS_STEPS = {"download": L_("Téléchargement"), "verify": L_("Vérification de l'empreinte"), "install": L_("Installation"),
+                  "windows_update": L_("Mises à jour Windows")}
 
 
 def _progress(value):
@@ -922,15 +924,14 @@ def fleet_server_address():
         if request.form.get("action") == "forget":
             if addresses.forget(conn, url):
                 audit("parc.adresse-retiree", url, commit=False)
-                flash(f"{url} n'est plus annoncée aux agents.", "ok")
+                flash(_("%(url)s n'est plus annoncée aux agents.", url=url), "ok")
         else:
             url = addresses.announce(conn, url)
             audit("parc.adresse-annoncee", url, commit=False)
-            flash(f"{url} annoncée : chaque agent la reçoit à son prochain contact (moins de {CHECKIN // 60} min). "
-                  "Changez l'adresse du serveur quand tous les postes sont prévenus.", "ok")
+            flash(_("%(url)s annoncée : chaque agent la reçoit à son prochain contact (moins de %(v)s min). Changez l'adresse du serveur quand tous les postes sont prévenus.", url=url, v=CHECKIN // 60), "ok")
         conn.commit()
     except ValueError as e:
-        flash(f"Adresse refusée : {e}.", "error")
+        flash(_('Adresse refusée : %(e)s.', e=e), "error")
     return back("fleet_settings")
 
 
@@ -942,11 +943,11 @@ def fleet_threshold():
         if not 2 <= value <= 10000:
             raise ValueError
     except ValueError:
-        flash("Le seuil rouge doit être compris entre 2 et 10000 mises à jour.", "error")
+        flash(_('Le seuil rouge doit être compris entre 2 et 10000 mises à jour.'), "error")
         return back("fleet_settings")
     set_setting("fleet_red_threshold", str(value))
     audit("parc.seuil", f"rouge à partir de {value} mises à jour")
-    flash(f"Pastille rouge à partir de {value} mises à jour (système et logiciels).", "ok")
+    flash(_('Pastille rouge à partir de %(value)s mises à jour (système et logiciels).', value=value), "ok")
     return back("fleet_settings")
 
 
@@ -954,15 +955,15 @@ def ago_text(stamp):
     """« à l'instant », « il y a 5 min », « il y a 3 h », sinon la date : plus parlant qu'un horodatage brut."""
     delta = _ago(stamp)
     if delta is None:
-        return "jamais"
+        return _("jamais")
     minutes = int(delta.total_seconds() // 60)
     if minutes < 1:
-        return "à l'instant"
+        return _("à l'instant")
     if minutes < 60:
-        return f"il y a {minutes} min"
+        return _("il y a %(n)s min", n=minutes)
     if minutes < 24 * 60:
-        return f"il y a {minutes // 60} h"
-    return "le " + stamp[8:10] + "/" + stamp[5:7] + " à " + stamp[11:16]
+        return _("il y a %(n)s h", n=minutes // 60)
+    return _("le %(date)s", date=date_fr(stamp[:16]))
 
 
 def _get(dev_id):
@@ -1026,7 +1027,7 @@ def fleet_action(dev_id):
         db().execute("DELETE FROM devices WHERE id=?", (dev_id,))
         db().commit()
         audit("parc.oubli", dev["hostname"])
-        flash(f"{dev['hostname']} retiré de la liste (l'agent éventuel n'est plus accepté).", "ok")
+        flash(_("%(dev)s retiré de la liste (l'agent éventuel n'est plus accepté).", dev=dev['hostname']), "ok")
         return back("fleet")
     if action not in ACTIONS or dev["state"] != "active":
         abort(400)
@@ -1042,10 +1043,9 @@ def fleet_action(dev_id):
     if queue(dev, action, params):
         db().commit()
         audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}")
-        flash(f"{ACTIONS[action]} demandée sur {dev['hostname']} : exécutée au prochain contact "
-              f"(moins de {CHECKIN // 60} min).", "ok")
+        flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
-        flash("Action déjà en attente sur ce poste.", "error")
+        flash(_('Action déjà en attente sur ce poste.'), "error")
     return back("fleet_device", dev_id=dev_id)
 
 
@@ -1063,7 +1063,7 @@ def fleet_cancel_command(dev_id, cmd_id):
         db().execute("UPDATE devices SET state='active' WHERE id=? AND state='removing'", (dev_id,))
     db().commit()
     audit(f"parc.{cmd['action']}.annulation", dev["hostname"])
-    flash("Action planifiée annulée.", "ok")
+    flash(_('Action planifiée annulée.'), "ok")
     return back("fleet_device", dev_id=dev_id)
 
 
@@ -1089,7 +1089,7 @@ def fleet_update_all():
             count += 1
     db().commit()
     audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
-    flash(f"Mise à jour demandée sur {count} poste(s)." if count else "Aucun poste à mettre à jour.", "ok")
+    flash((_('Mise à jour demandée sur %(count)s poste(s).', count=count) if count else _('Aucun poste à mettre à jour.')), "ok")
     return back("fleet", **({"group": group_id} if group_id else {}))
 
 
@@ -1098,5 +1098,5 @@ def fleet_update_all():
 def fleet_rotate_key():
     set_setting("enroll_key", secrets.token_urlsafe(18))
     audit("parc.cle", "nouvelle clé d'inscription")
-    flash("Nouvelle clé d'inscription : les postes déjà inscrits ne sont pas concernés.", "ok")
+    flash(_("Nouvelle clé d'inscription : les postes déjà inscrits ne sont pas concernés."), "ok")
     return redirect(url_for("fleet_settings"))

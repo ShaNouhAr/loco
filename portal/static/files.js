@@ -15,6 +15,9 @@ const base64 = typeof Uint8Array.prototype.toBase64 === 'function' ? d => d.toBa
 };
 const human = window.lrBytes || (n => n + ' o');
 const toast = window.lrToast || (m => {});
+// Traductions (app.js) : tr("Texte", { valeur }) ; « t » désigne ici les transferts en cours.
+const tr = window.t || ((s, v) => Object.keys(v || {}).reduce((o, k) => o.split('%(' + k + ')s').join(v[k]), s));
+const LANG = document.documentElement.lang === 'en' ? 'en-US' : 'fr-FR';
 const confirmDialog = window.lrConfirm || ((t, x, ok) => Promise.resolve(window.confirm(x || t)));
 
 // ---------------------------------------------------------------- transport (octets relayés, acquittés)
@@ -39,7 +42,7 @@ function frame(header, data) {
   return out;
 }
 function request(op, extra, data) {
-  if (!running) return Promise.reject(new Error('Session fermée.'));
+  if (!running) return Promise.reject(new Error(tr('Session fermée.')));
   const id = nextId++;
   return new Promise((resolve, reject) => {
     waiting.set(id, { resolve, reject });
@@ -56,14 +59,14 @@ function feed(chunk) {
     if (inbuf.length < 8 + hlen + dlen) break;
     let header;
     try { header = JSON.parse(dec.decode(inbuf.subarray(8, 8 + hlen))); }
-    catch { stop('Réponse du poste illisible.'); return; }
+    catch { stop(tr('Réponse du poste illisible.')); return; }
     const data = inbuf.slice(8 + hlen, 8 + hlen + dlen);
     inbuf = inbuf.slice(8 + hlen + dlen);
     const r = waiting.get(header.id);
     if (!r) continue;
     waiting.delete(header.id);
     if (header.ok) r.resolve({ header, data });
-    else r.reject(new Error(header.error || 'Opération refusée par le poste.'));
+    else r.reject(new Error(header.error || tr('Opération refusée par le poste.')));
   }
 }
 async function poll() {
@@ -78,16 +81,16 @@ async function poll() {
   try {
     const response = await fetch(io, { method: 'POST', body, credentials: 'same-origin',
       headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(20000) });
-    if ([401, 403, 404, 409, 413].includes(response.status)) { stop('Session de fichiers indisponible ou accès révoqué.', true); return; }
+    if ([401, 403, 404, 409, 413].includes(response.status)) { stop(tr('Session de fichiers indisponible ou accès révoqué.'), true); return; }
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const d = await response.json();
     if (!running) return;
     failures = 0; busy = d.packets.length > 0;
     if (pending && d.ack >= pending.seq) pending = null;
     for (const packet of d.packets) { if (packet.seq <= outputAck) continue; feed(bytes(packet.data)); outputAck = packet.seq; }
-    if (d.state === 'closed' && !d.packets.length) { stop(d.error || 'Session fermée.'); return; }
+    if (d.state === 'closed' && !d.packets.length) { stop(d.error || tr('Session fermée.')); return; }
   } catch (error) {
-    if (++failures >= 10) { stop('Connexion au serveur interrompue.', true); return; }
+    if (++failures >= 10) { stop(tr('Connexion au serveur interrompue.'), true); return; }
   } finally { inFlight = false; }
   if (!running) return;
   if (busy || pending || queue.length) { quiet = 0; schedulePoll(0); }
@@ -101,9 +104,9 @@ function closeRequest(beacon = false) {
 function stop(text, notify = false) {
   if (!running) return;
   running = false; clearTimeout(pollTimer);
-  waiting.forEach(r => r.reject(new Error(text || 'Session fermée.'))); waiting.clear();
+  waiting.forEach(r => r.reject(new Error(text || tr('Session fermée.')))); waiting.clear();
   document.body.removeAttribute('data-no-reload');
-  setStatus(text || 'Session fermée.', 'err');
+  setStatus(text || tr('Session fermée.'), 'err');
   if (notify) closeRequest();
 }
 
@@ -130,8 +133,8 @@ function setStatus(text, kind) { statusEl.textContent = text || ''; statusEl.dat
 function fmtDate(ts) {
   if (!ts) return '—';
   const d = new Date(ts * 1000);
-  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
-    d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString(LANG, { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+    d.toLocaleTimeString(LANG, { hour: '2-digit', minute: '2-digit' });
 }
 function sep() { return info && info.sep ? info.sep : '/'; }
 function join(dir, name) {
@@ -175,9 +178,10 @@ function renderList(entries, truncated) {
   emptyEl.classList.toggle('hidden', rows.length > 0);
   const masked = entries.length - rows.length;      // fichiers cachés (commençant par « . ») non affichés
   emptyEl.innerHTML = masked
-    ? 'Aucun élément visible : ' + masked + ' élément' + (masked > 1 ? 's cachés' : ' caché') +
-      '. <button type="button" class="linkbtn" data-show-hidden>Les afficher</button>'
-    : 'Dossier vide.';
+    ? esc(masked > 1 ? tr('Aucun élément visible : %(num)s éléments cachés.', { num: masked })
+                     : tr('Aucun élément visible : %(num)s élément caché.', { num: masked })) +
+      ' <button type="button" class="linkbtn" data-show-hidden>' + esc(tr('Les afficher')) + '</button>'
+    : esc(tr('Dossier vide.'));
   truncEl.classList.toggle('hidden', !truncated);
   // Tout ce qui vient de l'agent est contrôlé ici : un poste compromis ne doit rien pouvoir injecter dans la page.
   tbody.innerHTML = rows.map(e => {
@@ -190,15 +194,15 @@ function renderList(entries, truncated) {
     const canEdit = type === 'file' && isText(String(e.name)) && Number(e.size) <= EDIT_MAX;
     const windows = Number(root.dataset.windows) === 1;
     const menu =
-      '<details class="menu files-menu"><summary class="btn icon sm" aria-label="Actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>' +
+      '<details class="menu files-menu"><summary class="btn icon sm" aria-label="' + esc(tr('Actions')) + '"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>' +
       '<div class="menu-list" role="menu">' +
-      (type === 'file' ? '<button type="button" class="menu-item" data-act="download">Télécharger</button>' : '') +
-      (canEdit ? '<button type="button" class="menu-item" data-act="edit">Modifier le texte</button>' : '') +
-      '<button type="button" class="menu-item" data-act="rename">Renommer</button>' +
-      '<button type="button" class="menu-item" data-act="copy">Copier</button>' +
-      '<button type="button" class="menu-item" data-act="cut">Déplacer…</button>' +
-      (windows ? '' : '<button type="button" class="menu-item" data-act="chmod">Droits…</button>') +
-      '<button type="button" class="menu-item danger" data-act="delete">Supprimer</button>' +
+      (type === 'file' ? '<button type="button" class="menu-item" data-act="download">' + esc(tr('Télécharger')) + '</button>' : '') +
+      (canEdit ? '<button type="button" class="menu-item" data-act="edit">' + esc(tr('Modifier le texte')) + '</button>' : '') +
+      '<button type="button" class="menu-item" data-act="rename">' + esc(tr('Renommer')) + '</button>' +
+      '<button type="button" class="menu-item" data-act="copy">' + esc(tr('Copier')) + '</button>' +
+      '<button type="button" class="menu-item" data-act="cut">' + esc(tr('Déplacer…')) + '</button>' +
+      (windows ? '' : '<button type="button" class="menu-item" data-act="chmod">' + esc(tr('Droits…')) + '</button>') +
+      '<button type="button" class="menu-item danger" data-act="delete">' + esc(tr('Supprimer')) + '</button>' +
       '</div></details>';
     return '<tr data-name="' + esc(e.name) + '" data-type="' + type + '">' +
       '<td>' + nameCell + '</td>' +
@@ -210,7 +214,7 @@ function renderList(entries, truncated) {
 }
 
 async function navigate(path) {
-  setStatus('Chargement…');
+  setStatus(tr('Chargement…'));
   try {
     const { header } = await request('list', { path });
     current = header.path;
@@ -257,7 +261,7 @@ async function download(name) {
     const a = document.createElement('a');
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    t.done('terminé');
+    t.done(tr('terminé'));
   } catch (e) { t.done(e.message, 'err'); }
 }
 async function upload(file) {
@@ -274,7 +278,7 @@ async function upload(file) {
       t.set(offset, file.size);
       if (final) break;
     }
-    t.done('terminé');
+    t.done(tr('terminé'));
     refresh();
   } catch (e) {
     t.done(e.message, 'err');
@@ -288,7 +292,7 @@ function prompt(title, label, value) {
     const dlg = document.createElement('dialog');
     dlg.className = 'files-prompt';
     dlg.innerHTML = '<form method="dialog"><div class="dlg-h"><h2></h2></div><div class="dlg-b"><label class="field"><span></span><input type="text"></label></div>' +
-      '<div class="dlg-f"><button type="button" class="btn" value="cancel">Annuler</button><button type="button" class="btn primary" value="ok">Valider</button></div></form>';
+      '<div class="dlg-f"><button type="button" class="btn" value="cancel">' + esc(tr('Annuler')) + '</button><button type="button" class="btn primary" value="ok">' + esc(tr('Valider')) + '</button></div></form>';
     dlg.querySelector('h2').textContent = title;
     dlg.querySelector('.field span').textContent = label;
     const input = dlg.querySelector('input');
@@ -307,7 +311,7 @@ let editing = null;
 async function openEditor(name) {
   const path = join(current, name);
   editorPath.textContent = path;
-  editorArea.value = ''; editorNote.textContent = 'Chargement…';
+  editorArea.value = ''; editorNote.textContent = tr('Chargement…');
   editor.querySelector('h2').textContent = 'Modifier ' + name;
   editing = path;
   editor.showModal();
@@ -331,7 +335,7 @@ function concat(parts) {
 async function saveEditor() {
   if (!editing) return;
   const data = enc.encode(editorArea.value);
-  editorNote.textContent = 'Enregistrement…';
+  editorNote.textContent = tr('Enregistrement…');
   try {
     let offset = 0;
     do {
@@ -340,8 +344,8 @@ async function saveEditor() {
       await request('write', { path: editing, offset, final }, slice);
       offset += slice.length;
     } while (offset < data.length);
-    editorNote.textContent = 'Enregistré.';
-    toast('Fichier enregistré.', 'ok');
+    editorNote.textContent = tr('Enregistré.');
+    toast(tr('Fichier enregistré.'), 'ok');
     editor.close(); editing = null; refresh();
   } catch (e) { editorNote.textContent = e.message; }
 }
@@ -370,7 +374,7 @@ function navigateUp() {
   if (parts.length >= 2) navigate(parts[parts.length - 2].dataset.path);
 }
 async function makeDir() {
-  const name = await prompt('Nouveau dossier', 'Nom du dossier', '');
+  const name = await prompt(tr('Nouveau dossier'), tr('Nom du dossier'), '');
   if (!name) return;
   try { await request('mkdir', { path: join(current, name) }); refresh(); }
   catch (err) { toast(err.message, 'error'); }
@@ -380,7 +384,7 @@ async function handleAction(act, row) {
   if (act === 'download') return download(name);
   if (act === 'edit') return openEditor(name);
   if (act === 'rename') {
-    const next = await prompt('Renommer', 'Nouveau nom', name);
+    const next = await prompt(tr('Renommer'), tr('Nouveau nom'), name);
     if (!next || next === name) return;
     try { await request('rename', { path, name: next }); refresh(); } catch (e) { toast(e.message, 'error'); }
     return;
@@ -388,20 +392,21 @@ async function handleAction(act, row) {
   if (act === 'copy' || act === 'cut') {
     clip = { path, name, type, mode: act === 'copy' ? 'copy' : 'move' };
     pasteBtn.hidden = false;
-    pasteBtn.textContent = (act === 'copy' ? 'Coller' : 'Déplacer') + ' « ' + name + ' »';
-    toast((act === 'copy' ? 'Copié' : 'À déplacer') + ' : ' + name + '. Ouvrez le dossier cible puis « ' + (act === 'copy' ? 'Coller' : 'Déplacer') + ' ».', 'ok');
+    pasteBtn.textContent = act === 'copy' ? tr('Coller « %(name)s »', { name }) : tr('Déplacer « %(name)s »', { name });
+    toast(act === 'copy' ? tr('Copié : %(name)s. Ouvrez le dossier cible puis « Coller ».', { name })
+                         : tr('À déplacer : %(name)s. Ouvrez le dossier cible puis « Déplacer ».', { name }), 'ok');
     return;
   }
   if (act === 'chmod') {
-    const mode = await prompt('Droits (octal)', 'Mode, par exemple 644 ou 755', (row.querySelector('.mono') || {}).textContent || '644');
+    const mode = await prompt(tr('Droits (octal)'), tr('Mode, par exemple 644 ou 755'), (row.querySelector('.mono') || {}).textContent || '644');
     if (!mode) return;
     try { await request('chmod', { path, mode: parseInt(mode, 8) }); refresh(); } catch (e) { toast(e.message, 'error'); }
     return;
   }
   if (act === 'delete') {
-    const ok = await confirmDialog('Supprimer ' + name, type === 'dir'
-      ? 'Supprimer le dossier « ' + name +' » et tout son contenu sur le poste ? Cette action est définitive.'
-      : 'Supprimer « ' + name + ' » sur le poste ? Cette action est définitive.', 'Supprimer');
+    const ok = await confirmDialog(tr('Supprimer %(name)s', { name }), type === 'dir'
+      ? tr('Supprimer le dossier « %(name)s » et tout son contenu sur le poste ? Cette action est définitive.', { name })
+      : tr('Supprimer « %(name)s » sur le poste ? Cette action est définitive.', { name }), tr('Supprimer'));
     if (!ok) return;
     try { await request('delete', { path }); refresh(); } catch (e) { toast(e.message, 'error'); }
   }
@@ -410,13 +415,13 @@ async function doPaste() {
   if (!clip) return;
   try {
     await request(clip.mode, { path: clip.path, to: current });
-    toast((clip.mode === 'copy' ? 'Copié' : 'Déplacé') + ' : ' + clip.name, 'ok');
+    toast(clip.mode === 'copy' ? tr('Copié : %(name)s', { name: clip.name }) : tr('Déplacé : %(name)s', { name: clip.name }), 'ok');
     clip = null; pasteBtn.hidden = true; refresh();
   } catch (e) { toast(e.message, 'error'); }
 }
 hiddenToggle.addEventListener('click', () => {
   showHidden = !showHidden;
-  const label = showHidden ? 'Masquer les fichiers cachés' : 'Afficher les fichiers cachés';
+  const label = showHidden ? tr('Masquer les fichiers cachés') : tr('Afficher les fichiers cachés');
   hiddenToggle.setAttribute('aria-pressed', String(showHidden)); hiddenToggle.setAttribute('aria-label', label); hiddenToggle.title = label;
   renderList(listing, !truncEl.classList.contains('hidden'));
 });
@@ -437,12 +442,12 @@ pane.addEventListener('drop', e => {
 // ---------------------------------------------------------------- cycle de vie : ouverture paresseuse à l'onglet
 async function openSession() {
   if (running || io) return;
-  setStatus('Ouverture de la session…');
+  setStatus(tr('Ouverture de la session…'));
   document.body.dataset.noReload = '1';
   try {
     const body = new URLSearchParams({ csrf: root.dataset.csrf, kind: 'files' });
     const response = await fetch(root.dataset.open, { method: 'POST', body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
-    if (!response.ok) throw new Error(response.status === 409 ? 'Agent trop ancien ou trop de sessions ouvertes.' : 'Ouverture refusée (' + response.status + ').');
+    if (!response.ok) throw new Error(response.status === 409 ? tr('Agent trop ancien ou trop de sessions ouvertes.') : tr('Ouverture refusée (%(status)s).', { status: response.status }));
     const d = await response.json();
     io = d.io; running = true; failures = 0;
     root.hidden = false;
@@ -464,4 +469,4 @@ function maybeOpen() { if (isActive() && !io) openSession(); }
 // Les onglets basculent via app.js (clic ou #ancre) ; on surveille la classe « on » du panneau.
 new MutationObserver(maybeOpen).observe(root.closest('.tab-panel'), { attributes: true, attributeFilter: ['class'] });
 maybeOpen();
-window.addEventListener('pagehide', () => { if (running) { stop('Session fermée.'); closeRequest(true); } });
+window.addEventListener('pagehide', () => { if (running) { stop(tr('Session fermée.')); closeRequest(true); } });

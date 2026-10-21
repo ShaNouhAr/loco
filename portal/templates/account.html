@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Mon compte{% endblock %}
+{% block title %}{{ _("Mon compte") }}{% endblock %}
 {% set local = current_user.auth_source == 'local' %}
 {% block content %}
 <div class="head account-head">
@@ -7,60 +7,60 @@
     <span class="avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>
     <div>
       <h1>{{ current_user.username }}</h1>
-      <p><span class="pill">{{ roles.get(current_user.role, "Profil indisponible") }}</span>
-        <span class="muted">· {{ 'compte local' if local else 'connexion par un fournisseur d’identité' }}{% if current_user.last_login %} · session ouverte le {{ current_user.last_login|date_fr }}{% endif %}{% if current_user.created_at %} · créé le {{ current_user.created_at[:10] }}{% endif %}</span></p>
+      <p><span class="pill">{{ roles.get(current_user.role, _("Profil indisponible")) }}</span>
+        <span class="muted">· {{ _('compte local') if local else _('connexion par un fournisseur d’identité') }}{% if current_user.last_login %} {{ _("· session ouverte le %(last_login)s", last_login=current_user.last_login|date_fr) }}{% endif %}{% if current_user.created_at %} {{ _("· créé le %(v)s", v=current_user.created_at[:10]) }}{% endif %}</span></p>
     </div>
   </div>
 </div>
 
 <div class="tabs" role="tablist" data-hash>
-  <button type="button" data-tab="securite" aria-selected="true">Sécurité</button>
-  <button type="button" data-tab="apparence" aria-selected="false">Apparence</button>
-  <button type="button" data-tab="droits" aria-selected="false">Mes droits <span class="tab-count">{{ granted_count }}</span></button>
-  <button type="button" data-tab="activite" aria-selected="false">Activité récente</button>
+  <button type="button" data-tab="securite" aria-selected="true">{{ _("Sécurité") }}</button>
+  <button type="button" data-tab="apparence" aria-selected="false">{{ _("Apparence") }}</button>
+  <button type="button" data-tab="droits" aria-selected="false">{{ _("Mes droits") }} <span class="tab-count">{{ granted_count }}</span></button>
+  <button type="button" data-tab="activite" aria-selected="false">{{ _("Activité récente") }}</button>
 </div>
 
 <div class="tab-panel on" data-panel="securite">
   {% if local %}
   <div class="cols w21">
     <section class="panel">
-      <div class="panel-h"><h2>Changer de mot de passe</h2></div>
+      <div class="panel-h"><h2>{{ _("Changer de mot de passe") }}</h2></div>
       <form class="panel-b password-form" method="post" data-password-form data-username="{{ current_user.username }}" data-min="{{ min_password }}">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>Mot de passe actuel</span>
+        <label class="f"><span>{{ _("Mot de passe actuel") }}</span>
           <span class="password-field"><input type="password" name="current" required autocomplete="current-password"></span></label>
-        <label class="f"><span>Nouveau mot de passe</span>
+        <label class="f"><span>{{ _("Nouveau mot de passe") }}</span>
           <span class="password-field"><input type="password" name="new" required minlength="{{ min_password }}" autocomplete="new-password"></span></label>
-        <label class="f"><span>Confirmation</span>
+        <label class="f"><span>{{ _("Confirmation") }}</span>
           <span class="password-field"><input type="password" name="confirm" required minlength="{{ min_password }}" autocomplete="new-password"></span></label>
         <ul class="password-rules" aria-live="polite">
-          <li data-rule="length">Au moins {{ min_password }} caractères</li>
-          <li data-rule="username">Sans le nom du compte</li>
-          <li data-rule="variety">Au moins 5 caractères différents</li>
-          <li data-rule="match">Confirmation identique</li>
+          <li data-rule="length">{{ _("Au moins %(min_password)s caractères", min_password=min_password) }}</li>
+          <li data-rule="username">{{ _("Sans le nom du compte") }}</li>
+          <li data-rule="variety">{{ _("Au moins 5 caractères différents") }}</li>
+          <li data-rule="match">{{ _("Confirmation identique") }}</li>
         </ul>
-        <div class="row"><button class="btn primary"><span class="spin"></span>Changer le mot de passe</button></div>
+        <div class="row"><button class="btn primary"><span class="spin"></span>{{ _("Changer le mot de passe") }}</button></div>
       </form>
     </section>
     <section class="panel">
-      <div class="panel-h"><h2>Bon à savoir</h2></div>
+      <div class="panel-h"><h2>{{ _("Bon à savoir") }}</h2></div>
       <div class="panel-b"><ul class="plain-list account-notes">
-        <li>Changer de mot de passe ferme vos autres sessions ouvertes.</li>
-        <li>Une session inactive pendant 8 heures est fermée.</li>
-        <li>Après plusieurs échecs, la connexion est bloquée quelques minutes.</li>
+        <li>{{ _("Changer de mot de passe ferme vos autres sessions ouvertes.") }}</li>
+        <li>{{ _("Une session inactive pendant 8 heures est fermée.") }}</li>
+        <li>{{ _("Après plusieurs échecs, la connexion est bloquée quelques minutes.") }}</li>
       </ul></div>
     </section>
   </div>
   {% else %}
-  <section class="panel"><div class="panel-b"><p>Votre mot de passe est géré par votre fournisseur d’identité : changez-le auprès de celui-ci. Les règles de session de loco s’appliquent (inactivité de 8 heures, blocage après plusieurs échecs).</p></div></section>
+  <section class="panel"><div class="panel-b"><p>{{ _("Votre mot de passe est géré par votre fournisseur d’identité : changez-le auprès de celui-ci. Les règles de session de loco s’appliquent (inactivité de 8 heures, blocage après plusieurs échecs).") }}</p></div></section>
   {% endif %}
 </div>
 
 <div class="tab-panel" data-panel="apparence">
   <section class="panel">
-    <div class="panel-h"><h2>Thème</h2><div class="aside">mémorisé dans ce navigateur</div></div>
+    <div class="panel-h"><h2>{{ _("Thème") }}</h2><div class="aside">{{ _("mémorisé dans ce navigateur") }}</div></div>
     <div class="panel-b theme-cards">
-      {% for key, label, hint in [('oled', 'OLED', 'Noir pur, idéal pour les écrans OLED et le soir'), ('dim', 'Sombre doux', 'Anthracite, moins contrasté, reposant sur un écran classique'), ('light', 'Clair', 'Fond blanc, pour les pièces lumineuses')] %}
+      {% for key, label, hint in [('oled', 'OLED', _('Noir pur, idéal pour les écrans OLED et le soir')), ('dim', _('Sombre doux'), _('Anthracite, moins contrasté, reposant sur un écran classique')), ('light', 'Clair', _('Fond blanc, pour les pièces lumineuses'))] %}
       <button type="button" class="theme-card" data-set-theme="{{ key }}" role="radio" aria-checked="false">
         <span class="theme-preview preview-{{ key }}" aria-hidden="true"><i></i><i></i><i></i></span>
         <strong>{{ label }}</strong><small>{{ hint }}</small>
@@ -69,35 +69,35 @@
     </div>
   </section>
   <section class="panel">
-    <div class="panel-h"><h2>Couleur d’accent</h2><div class="aside">boutons principaux, sélections, onglets</div></div>
+    <div class="panel-h"><h2>{{ _("Couleur d’accent") }}</h2><div class="aside">{{ _("boutons principaux, sélections, onglets") }}</div></div>
     <div class="panel-b accent-cards">
       {% for key, label in [('neutral', 'Neutre'), ('blue', 'Bleu'), ('green', 'Vert'), ('violet', 'Violet'), ('orange', 'Orange'), ('pink', 'Rose')] %}
       <button type="button" class="accent-card" data-set-accent="{{ key }}" role="radio" aria-checked="false"><span class="accent-choice accent-{{ key }}" aria-hidden="true"></span>{{ label }}</button>
       {% endfor %}
     </div>
-    <div class="panel-f">Aperçu : <button type="button" class="btn primary sm">Bouton principal</button> <span class="chip on">Sélection <b>3</b></span></div>
+    <div class="panel-f">{{ _("Aperçu :") }} <button type="button" class="btn primary sm">{{ _("Bouton principal") }}</button> <span class="chip on">{{ _("Sélection") }} <b>3</b></span></div>
   </section>
 </div>
 
 <div class="tab-panel" data-panel="droits">
   <section class="panel">
-    <div class="panel-h"><h2>Mes droits</h2><div class="aside">{{ granted_count }} sur {{ total_permissions }} · profil {{ roles.get(current_user.role, "indisponible") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Mes droits") }}</h2><div class="aside">{{ _("%(granted_count)s sur %(total_permissions)s · profil %(v)s", granted_count=granted_count, total_permissions=total_permissions, v=roles.get(current_user.role, "indisponible")) }}</div></div>
     {% set ns = namespace(any=false) %}
     <div class="panel-b rights-list">
       {% for label, grants in granted_groups if grants %}{% set ns.any = true %}
       <details class="rights-group">
-        <summary><strong>{{ label }}</strong><span class="faint">{{ grants|length }} droit{{ 's' if grants|length > 1 }}</span></summary>
+        <summary><strong>{{ label }}</strong><span class="faint">{{ _("%(grants)s droit%(v)s", grants=grants|length, v='s' if grants|length > 1) }}</span></summary>
         <ul class="plain-list">{% for grant in grants %}<li>{{ grant.label }}{% if grant.description %}<span class="sub sans">{{ grant.description }}</span>{% endif %}</li>{% endfor %}</ul>
       </details>
       {% endfor %}
-      {% if not ns.any %}<p class="muted">Aucun accès fonctionnel attribué. Votre compte reste disponible pour changer votre mot de passe ; demandez un profil à un administrateur.</p>{% endif %}
+      {% if not ns.any %}<p class="muted">{{ _("Aucun accès fonctionnel attribué. Votre compte reste disponible pour changer votre mot de passe ; demandez un profil à un administrateur.") }}</p>{% endif %}
     </div>
   </section>
 </div>
 
 <div class="tab-panel" data-panel="activite">
   <section class="panel">
-    <div class="panel-h"><h2>Activité récente</h2>{% if can('audit.view') %}<div class="aside"><a href="{{ url_for('journal', compte=current_user.username) }}">Tout le journal de ce compte</a></div>{% endif %}</div>
+    <div class="panel-h"><h2>{{ _("Activité récente") }}</h2>{% if can('audit.view') %}<div class="aside"><a href="{{ url_for('journal', compte=current_user.username) }}">{{ _("Tout le journal de ce compte") }}</a></div>{% endif %}</div>
     {% if activity %}
     <div class="table-wrap"><table>
       <tbody>{% for e in activity %}{% set r = e.r %}
@@ -106,8 +106,8 @@
           <td class="mono muted nowrap hide-sm">{{ r.ip }}</td></tr>
       {% endfor %}</tbody>
     </table></div>
-    {% else %}<div class="empty">Aucune activité enregistrée pour ce compte.</div>{% endif %}
-    <div class="panel-f">Une connexion ou une action inattendue ? Changez votre mot de passe et prévenez un administrateur.</div>
+    {% else %}<div class="empty">{{ _("Aucune activité enregistrée pour ce compte.") }}</div>{% endif %}
+    <div class="panel-f">{{ _("Une connexion ou une action inattendue ? Changez votre mot de passe et prévenez un administrateur.") }}</div>
   </section>
 </div>
 {% endblock %}

@@ -11,6 +11,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 from . import app, config, permissions, PUBLIC_ENDPOINTS
+from .i18n import _, gettext
 from . import journal as journal_view
 from .db import db
 from .util import back, safe_next
@@ -44,17 +45,17 @@ def generate_password():
 
 def password_problem(password, username=""):
     if len(password) < config.MIN_PASSWORD:
-        return f"Le mot de passe doit faire au moins {config.MIN_PASSWORD} caractères."
+        return _("Le mot de passe doit faire au moins %(n)s caractères.", n=config.MIN_PASSWORD)
     if username and username.lower() in password.lower():
-        return "Le mot de passe ne doit pas contenir le nom du compte."
+        return _("Le mot de passe ne doit pas contenir le nom du compte.")
     if len(set(password)) < 5:
-        return "Le mot de passe est trop répétitif."
+        return _("Le mot de passe est trop répétitif.")
     return None
 
 
 def create_user(conn, username, password=None, role="admin", must_change=True, password_hash=None):
     if role not in permissions.role_labels(conn):
-        raise ValueError("Profil inconnu.")
+        raise ValueError(_('Profil inconnu.'))
     conn.execute(
         "INSERT INTO users (username, password_hash, role, must_change, created_at) VALUES (?,?,?,?,?)",
         (username.lower(), password_hash or generate_password_hash(password), role, int(must_change),
@@ -220,7 +221,7 @@ def login():
         ip = request.remote_addr or ""
         if _blocked(ip, username):
             audit("connexion.bloquee", f"compte « {username} »", username="")
-            flash("Trop de tentatives. Réessayez dans quelques minutes.", "error")
+            flash(_('Trop de tentatives. Réessayez dans quelques minutes.'), "error")
             return render_template("login.html", username=username), 429
         row = db().execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         valid = check_password_hash(row["password_hash"] if row else _DUMMY_HASH, password)
@@ -254,7 +255,7 @@ def login():
         _record_failure(ip, username)
         audit("connexion.echec", f"compte « {username} »", username="")
         time.sleep(0.5)
-        flash("Identifiant ou mot de passe incorrect.", "error")
+        flash(_('Identifiant ou mot de passe incorrect.'), "error")
         return render_template("login.html", username=username), 401
     return render_template("login.html", username="")
 
@@ -275,6 +276,24 @@ def logout():
 
 # --------------------------------------------------------------------------- mon compte
 
+@app.route("/langue", methods=["POST"])
+def set_language():
+    """Langue de l'interface : gardée dans le compte (et un cookie, pour l'écran de connexion)."""
+    from . import i18n
+    lang = i18n.valid(request.form.get("lang", ""))
+    if not lang:
+        abort(400)
+    if g.get("user") is not None:
+        db().execute("UPDATE users SET lang=? WHERE id=?", (lang, g.user["id"]))
+        db().commit()
+    target = safe_next(request.form.get("next", "")) or "/"
+    resp = {"redirect": target} if request.headers.get("X-Requested-With") == "fetch" else redirect(target)
+    resp = app.make_response(resp)
+    resp.set_cookie(i18n.COOKIE, lang, max_age=3 * 365 * 86400, samesite="Strict", httponly=True,
+                    secure=app.config["SESSION_COOKIE_SECURE"])
+    return resp
+
+
 @app.route("/compte", methods=["GET", "POST"])
 @login_required
 def account():
@@ -284,11 +303,11 @@ def account():
         current = request.form.get("current", "")
         new = request.form.get("new", "")
         if not check_password_hash(g.user["password_hash"], current):
-            flash("Mot de passe actuel incorrect.", "error")
+            flash(_('Mot de passe actuel incorrect.'), "error")
         elif new != request.form.get("confirm", ""):
-            flash("Les deux saisies du nouveau mot de passe diffèrent.", "error")
+            flash(_('Les deux saisies du nouveau mot de passe diffèrent.'), "error")
         elif new == current:
-            flash("Le nouveau mot de passe doit être différent de l'actuel.", "error")
+            flash(_("Le nouveau mot de passe doit être différent de l'actuel."), "error")
         elif (problem := password_problem(new, g.user["username"])):
             flash(problem, "error")
         else:
@@ -297,9 +316,9 @@ def account():
             session["pwv"] = g.user["pw_version"] + 1
             audit("compte.mot_de_passe")
             if g.user["must_change"]:
-                flash("Mot de passe enregistré. Bienvenue sur loco.", "ok")
+                flash(_('Mot de passe enregistré. Bienvenue sur loco.'), "ok")
             else:
-                flash("Mot de passe changé. Les autres sessions de ce compte sont fermées.", "ok")
+                flash(_('Mot de passe changé. Les autres sessions de ce compte sont fermées.'), "ok")
             return redirect(url_for("index"))
         return redirect(url_for("account"))
     # Mot de passe temporaire : page dédiée, sans la navigation, qui ne mène nulle part avant le changement.
@@ -346,9 +365,9 @@ def users_add():
     if not can_assign(role):
         abort(403)
     if not config.USERNAME_RE.match(username):
-        flash("Identifiant invalide : 2 à 32 caractères, minuscules, chiffres, point, tiret.", "error")
+        flash(_('Identifiant invalide : 2 à 32 caractères, minuscules, chiffres, point, tiret.'), "error")
     elif conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
-        flash(f"Le compte « {username} » existe déjà.", "error")
+        flash(_('Le compte « %(username)s » existe déjà.', username=username), "error")
     else:
         password = generate_password()
         create_user(conn, username, password, role, must_change=True)
@@ -381,7 +400,7 @@ def users_update(user_id):
     conn = lock_access("users.edit")
     row = _get_user(user_id)
     if row["pending"]:
-        abort(400, "Ce compte doit être approuvé avant son activation.")
+        abort(400, _('Ce compte doit être approuvé avant son activation.'))
     role = request.form.get("role", row["role"])
     disabled = request.form.get("disabled") == "1"
     if role not in permissions.role_labels(conn):
@@ -389,11 +408,11 @@ def users_update(user_id):
     if not can_manage_user(row) or not can_assign(role):
         abort(403)
     if row["id"] == g.user["id"] and (role != row["role"] or disabled):
-        flash("Vous ne pouvez pas modifier le profil ni désactiver votre propre compte.", "error")
+        flash(_('Vous ne pouvez pas modifier le profil ni désactiver votre propre compte.'), "error")
         return back("users")
     losing_admin = row["role"] == "admin" and not row["disabled"] and (role != "admin" or disabled)
     if losing_admin and (active_admins(conn) <= 1 or last_local_admin(conn, row)):
-        flash("Il doit rester au moins un administrateur local actif.", "error")
+        flash(_('Il doit rester au moins un administrateur local actif.'), "error")
         return back("users")
     changes = []
     if role != row["role"]:
@@ -404,7 +423,7 @@ def users_update(user_id):
         conn.execute("UPDATE users SET role=?, disabled=? WHERE id=?", (role, int(disabled), row["id"]))
         permissions.revoke(conn, row["id"])
         audit("comptes.modification", f"{row['username']} : {', '.join(changes)}", commit=False)
-        flash(f"Compte {row['username']} : {', '.join(changes)}. Ses connexions ont été fermées.", "ok")
+        flash(_('Compte %(row)s : %(v)s. Ses connexions ont été fermées.', row=row['username'], v=', '.join(changes)), "ok")
     conn.commit()
     return back("users")
 
@@ -417,14 +436,14 @@ def users_delete(user_id):
     if not can_manage_user(row):
         abort(403)
     if row["id"] == g.user["id"]:
-        flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
+        flash(_('Vous ne pouvez pas supprimer votre propre compte.'), "error")
     elif row["role"] == "admin" and not row["disabled"] and (active_admins(conn) <= 1 or last_local_admin(conn, row)):
-        flash("Il doit rester au moins un administrateur local actif.", "error")
+        flash(_('Il doit rester au moins un administrateur local actif.'), "error")
     else:
         permissions.revoke(conn, row["id"])
         conn.execute("DELETE FROM users WHERE id=?", (row["id"],))
         audit("comptes.suppression", row["username"], commit=False)
-        flash(f"Compte {row['username']} supprimé.", "ok")
+        flash(_('Compte %(row)s supprimé.', row=row['username']), "ok")
     conn.commit()
     return back("users")
 
@@ -467,8 +486,10 @@ def roles_editor(role_id):
     editable = bool(can("roles.manage") and (row is None or _editable_role(row)))
     duplicable = bool(row and can("roles.manage") and can_assign(row["id"]))
     return render_template("role_editor.html", profile=row, selected=grants, editable=editable, duplicable=duplicable,
-                           initial_label="Copie de " + model["label"] if model else "",
-                           initial_description=model["description"] if model else "",
+                           initial_label=_("Copie de %(label)s", label=gettext(model["label"]) if model["builtin"] else model["label"])
+                           if model else "",
+                           initial_description=(gettext(model["description"]) if model["builtin"] else model["description"])
+                           if model else "",
                            permission_groups=permissions.GROUPS, permission_catalog=permissions.PERMISSIONS)
 
 
@@ -476,7 +497,7 @@ def _role_values():
     label = request.form.get("label", "").strip()
     description = request.form.get("description", "").strip()
     if not 2 <= len(label) <= 64 or len(description) > 300 or any(ord(c) < 32 for c in label + description):
-        abort(400, "Nom de profil (2 à 64 caractères) ou description invalide.")
+        abort(400, _('Nom de profil (2 à 64 caractères) ou description invalide.'))
     try:
         grants = permissions.expand(request.form.getlist("permissions"))
     except ValueError as exc:
@@ -504,7 +525,7 @@ def roles_add():
     conn = lock_access("roles.manage")
     label, description, grants = _role_values()
     if conn.execute("SELECT 1 FROM access_roles WHERE label_key=?", (permissions.role_key(label),)).fetchone():
-        flash("Un profil porte déjà ce nom.", "error")
+        flash(_('Un profil porte déjà ce nom.'), "error")
         return back("roles")
     role_id = "r_" + secrets.token_hex(8)
     conn.execute("INSERT INTO access_roles (id,label,label_key,description,permissions) VALUES (?,?,?,?,?)",
@@ -512,7 +533,7 @@ def roles_add():
     audit("profils.ajout", f"{role_id} : {label}", commit=False)
     _audit_grants(role_id, frozenset(), grants)
     conn.commit()
-    flash(f"Profil « {label} » créé.", "ok")
+    flash(_('Profil « %(label)s » créé.', label=label), "ok")
     return redirect(url_for("roles_editor", role_id=role_id))
 
 
@@ -526,7 +547,7 @@ def roles_update(role_id):
     label, description, grants = _role_values()
     before = permissions.role_permissions(conn, role_id)
     if conn.execute("SELECT 1 FROM access_roles WHERE label_key=? AND id!=?", (permissions.role_key(label), role_id)).fetchone():
-        flash("Un profil porte déjà ce nom.", "error")
+        flash(_('Un profil porte déjà ce nom.'), "error")
         return back("roles_editor", role_id=role_id)
     conn.execute("UPDATE access_roles SET label=?,label_key=?,description=?,permissions=? WHERE id=?",
                  (label, permissions.role_key(label), description, json.dumps(sorted(grants)), role_id))
@@ -536,7 +557,7 @@ def roles_update(role_id):
     audit("profils.modification", f"{role_id} : {row['label']} → {label}", commit=False)
     _audit_grants(role_id, before, grants)
     conn.commit()
-    flash("Profil enregistré. Les comptes concernés doivent se reconnecter si leurs droits ont changé.", "ok")
+    flash(_('Profil enregistré. Les comptes concernés doivent se reconnecter si leurs droits ont changé.'), "ok")
     return back("roles_editor", role_id=role_id)
 
 
@@ -548,12 +569,12 @@ def roles_delete(role_id):
     if not _editable_role(row):
         abort(403)
     if conn.execute("SELECT 1 FROM users WHERE role=?", (role_id,)).fetchone():
-        flash("Réaffectez les comptes à un autre profil avant de supprimer celui-ci.", "error")
+        flash(_('Réaffectez les comptes à un autre profil avant de supprimer celui-ci.'), "error")
         return back("roles")
     conn.execute("DELETE FROM access_roles WHERE id=?", (role_id,))
     audit("profils.suppression", f"{role_id} : {row['label']}", commit=False)
     conn.commit()
-    flash("Profil supprimé.", "ok")
+    flash(_('Profil supprimé.'), "ok")
     return back("roles")
 
 
@@ -598,7 +619,7 @@ def journal():
     try:
         sql, values = journal_view.where(args)
     except ValueError:
-        flash("Période invalide : dates attendues au format AAAA-MM-JJ, la première avant la seconde.", "err")
+        flash(_('Période invalide : dates attendues au format AAAA-MM-JJ, la première avant la seconde.'), "err")
         return redirect(url_for("journal"))
     before = request.args.get("avant", type=int)
     page_sql = sql + (" AND" if sql else " WHERE") + " id < ?" if before else sql
@@ -637,7 +658,7 @@ def journal_export():
         start, end = journal_view.bounds(args)
         sql, values = journal_view.where(args)
     except ValueError:
-        abort(400, "Dates attendues au format AAAA-MM-JJ, la date de début avant la date de fin.")
+        abort(400, _('Dates attendues au format AAAA-MM-JJ, la date de début avant la date de fin.'))
     rows = db().execute("SELECT id, at, username, ip, action, detail FROM audit" + sql + " ORDER BY id",
                         values).fetchall()
     period = f"{(start or 'début')[:10]}_{(end or 'fin')[:10]}"
@@ -672,8 +693,7 @@ def journal_retention():
     removed = purge_audit(db())
     audit("journal.conservation", f"{days} jour(s)" if days else "illimitée", commit=False)
     db().commit()
-    flash((f"Journal conservé {days} jours" if days else "Journal conservé sans limite")
-          + (f" ; {removed} événement(s) plus ancien(s) supprimé(s)." if removed else "."), "ok")
+    flash((_('Journal conservé %(days)s jours', days=days) if days else _('Journal conservé sans limite')) + (_(' ; %(removed)s événement(s) plus ancien(s) supprimé(s).', removed=removed) if removed else "."), "ok")
     return back("journal")
 
 

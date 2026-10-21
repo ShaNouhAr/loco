@@ -1,21 +1,21 @@
 {% extends 'base.html' %}
 {% from "_charts.html" import progress %}
-{% block title %}Déploiements{% endblock %}
+{% block title %}{{ _("Déploiements") }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
-{% set labels = {'draft': 'À confirmer', 'expired': 'Préparation expirée', 'running': 'En cours', 'cancelling': 'Annulation demandée', 'success': 'Terminé', 'failed': 'Terminé avec erreurs', 'cancelled': 'Annulé'} %}
+{% set labels = {'draft': _('À confirmer'), 'expired': _('Préparation expirée'), 'running': _('En cours'), 'cancelling': _('Annulation demandée'), 'success': _('Terminé'), 'failed': _('Terminé avec erreurs'), 'cancelled': _('Annulé')} %}
 <div class="head">
   <div>
-    <h1>Déploiements</h1>
-    <p>Installations de logiciels Windows demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.</p>
+    <h1>{{ _("Déploiements") }}</h1>
+    <p>{{ _("Installations de logiciels Windows demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.") }}</p>
   </div>
-  {% if can('fleet.install') %}<div class="actions"><a class="btn primary" href="{{ url_for('deployment_compose') }}">Nouveau déploiement</a></div>{% endif %}
+  {% if can('fleet.install') %}<div class="actions"><a class="btn primary" href="{{ url_for('deployment_compose') }}">{{ _("Nouveau déploiement") }}</a></div>{% endif %}
 </div>
 
 <div class="stack">
   {% if all_count %}
-  <nav class="chips" aria-label="Filtrer par état">
-    <a class="chip {{ 'on' if not wanted }}" href="{{ url_for('deployments') }}">Tous <b>{{ all_count }}</b></a>
+  <nav class="chips" aria-label="{{ _('Filtrer par état') }}">
+    <a class="chip {{ 'on' if not wanted }}" href="{{ url_for('deployments') }}">{{ _("Tous") }} <b>{{ all_count }}</b></a>
     {% for key, (label, _states, cls) in filters.items() if counts[key] or wanted == key %}
     <a class="chip {{ 'on' if wanted == key }}" href="{{ url_for('deployments', etat=key) }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
     {% endfor %}
@@ -26,7 +26,7 @@
     {% if campaigns %}
     <div class="table-wrap">
       <table class="deployments-table" data-row-links>
-        <thead><tr><th>Déploiement</th><th class="hide-sm">Logiciels</th><th>Avancement</th><th>État</th></tr></thead>
+        <thead><tr><th>{{ _("Déploiement") }}</th><th class="hide-sm">{{ _("Logiciels") }}</th><th>{{ _("Avancement") }}</th><th>{{ _("État") }}</th></tr></thead>
         <tbody>
         {% for item in campaigns %}{% set p = item.progress %}
           <tr>
@@ -34,10 +34,10 @@
               <span class="sub sans">{{ item.row.created_at|date_fr }} · {{ item.row.created_by }}</span></td>
             <td class="hide-sm"><span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
             <td class="deploy-progress">
-              {% if item.state in ('draft', 'expired') %}<span class="faint small">{{ item.devices }} poste{{ 's' if item.devices > 1 }} prévu{{ 's' if item.devices > 1 }}</span>
+              {% if item.state in ('draft', 'expired') %}<span class="faint small">{{ _("%(devices)s poste%(v)s prévu%(v)s", devices=item.devices, v='s' if item.devices > 1) }}</span>
               {% else %}
               {{ progress(p) }}
-              <span class="small muted">{{ p.success }}/{{ p.total }} réussi{{ 's' if p.success > 1 }}{% if p.active %} · {{ p.active }} en attente{% endif %}{% if p.failed %} · <span class="err-text">{{ p.failed }} échec{{ 's' if p.failed > 1 }}</span>{% endif %}</span>
+              <span class="small muted">{{ _("%(success)s/%(total)s réussi%(v)s", success=p.success, total=p.total, v='s' if p.success > 1) }}{% if p.active %} {{ _("· %(active)s en attente", active=p.active) }}{% endif %}{% if p.failed %} · <span class="err-text">{{ _("%(failed)s échec%(v)s", failed=p.failed, v='s' if p.failed > 1) }}</span>{% endif %}</span>
               {% endif %}
             </td>
             <td class="nowrap"><span class="st {{ 'ok' if item.state == 'success' else 'err' if item.state == 'failed' else 'warn' if item.state in ('running', 'draft', 'cancelling') else '' }}">{{ labels[item.state] }}</span></td>
@@ -47,17 +47,17 @@
       </table>
     </div>
     {% elif wanted %}
-    <div class="empty">Aucun déploiement dans cet état. <a href="{{ url_for('deployments') }}">Tout afficher</a></div>
+    <div class="empty">{{ _("Aucun déploiement dans cet état.") }} <a href="{{ url_for('deployments') }}">{{ _("Tout afficher") }}</a></div>
     {% else %}
-    <div class="empty">Aucun déploiement. {% if can('fleet.install') %}<a href="{{ url_for('deployment_compose') }}">Préparez-en un</a>, ou partez d'un logiciel du catalogue, du centre de logiciels ou d'un groupe.{% endif %}</div>
+    <div class="empty">{{ _("Aucun déploiement.") }} {% if can('fleet.install') %}<a href="{{ url_for('deployment_compose') }}">{{ _("Préparez-en un") }}</a>{{ _(", ou partez d'un logiciel du catalogue, du centre de logiciels ou d'un groupe.") }}{% endif %}</div>
     {% endif %}
   </section>
 
   {% if pages > 1 %}
-  <nav class="row store-pagination" aria-label="Pages des déploiements">
-    {% if page > 1 %}<a class="btn sm" href="{{ url_for('deployments', page=page-1, etat=wanted or None) }}">Précédente</a>{% endif %}
-    <span class="muted small">Page {{ page }} sur {{ pages }} · {{ total }} déploiement{{ 's' if total > 1 }}</span>
-    {% if page < pages %}<a class="btn sm" href="{{ url_for('deployments', page=page+1, etat=wanted or None) }}">Suivante</a>{% endif %}
+  <nav class="row store-pagination" aria-label="{{ _('Pages des déploiements') }}">
+    {% if page > 1 %}<a class="btn sm" href="{{ url_for('deployments', page=page-1, etat=wanted or None) }}">{{ _("Précédente") }}</a>{% endif %}
+    <span class="muted small">{{ _("Page %(page)s sur %(pages)s · %(total)s déploiement%(v)s", page=page, pages=pages, total=total, v='s' if total > 1) }}</span>
+    {% if page < pages %}<a class="btn sm" href="{{ url_for('deployments', page=page+1, etat=wanted or None) }}">{{ _("Suivante") }}</a>{% endif %}
   </nav>
   {% endif %}
 </div>

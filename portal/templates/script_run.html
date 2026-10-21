@@ -1,49 +1,49 @@
 {% extends "base.html" %}
 {% from "_charts.html" import progress as progress_bar %}
-{% block title %}{{ run.name }} · exécution{% endblock %}
+{% block title %}{{ _("%(name)s · exécution", name=run.name) }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <p class="small back-link"><a href="{{ url_for('script_editor', script_id=run.script_id) if script else url_for('scripts') }}">← {{ run.name if script else 'Scripts' }}</a></p>
 <div class="head">
   <div>
-    <h1>{{ run.name }} <span class="faint">v{{ run.version }}</span></h1>
-    <p><span class="tag">{{ platforms[run.platform] }}</span> · lancé le {{ run.created_at|date_fr }} par {{ run.created_by }}{% if not script %} · script supprimé depuis{% endif %}</p>
+    <h1>{{ run.name }} <span class="faint">{{ _("v%(version)s", version=run.version) }}</span></h1>
+    <p><span class="tag">{{ platforms[run.platform] }}</span> {{ _("· lancé le %(created_at)s par %(created_by)s", created_at=run.created_at|date_fr, created_by=run.created_by) }}{% if not script %} {{ _("· script supprimé depuis") }}{% endif %}</p>
   </div>
   <div class="actions">
     {% if summary.active and can('scripts.run') %}
-    <form method="post" action="{{ url_for('script_run_cancel', run_id=run.id) }}" data-confirm="Annuler les postes en attente ?" data-confirm-text="Les postes qui n’ont pas encore reçu le script ne l’exécuteront pas. Un script déjà reçu peut se terminer." data-confirm-ok="Annuler">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">Annuler les postes en attente</button>
+    <form method="post" action="{{ url_for('script_run_cancel', run_id=run.id) }}" data-confirm="{{ _('Annuler les postes en attente ?') }}" data-confirm-text="{{ _('Les postes qui n’ont pas encore reçu le script ne l’exécuteront pas. Un script déjà reçu peut se terminer.') }}" data-confirm-ok="{{ _('Annuler') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ _("Annuler les postes en attente") }}</button>
     </form>
     {% elif not summary.active and can('scripts.edit') %}
-    <form method="post" action="{{ url_for('script_run_delete', run_id=run.id) }}" data-ajax data-confirm="Retirer cette exécution de l’historique ?" data-confirm-text="Sa sortie poste par poste est supprimée." data-confirm-ok="Supprimer">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger">Retirer de l’historique</button>
+    <form method="post" action="{{ url_for('script_run_delete', run_id=run.id) }}" data-ajax data-confirm="{{ _('Retirer cette exécution de l’historique ?') }}" data-confirm-text="{{ _('Sa sortie poste par poste est supprimée.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger">{{ _("Retirer de l’historique") }}</button>
     </form>
     {% endif %}
-    {% if script and can('scripts.run') %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id) }}">Relancer…</a>{% endif %}
+    {% if script and can('scripts.run') %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id) }}">{{ _("Relancer…") }}</a>{% endif %}
   </div>
 </div>
 
 <div class="stack" data-poll="{{ url_for('script_run', run_id=run.id) }}" data-poll-kind="reload" data-poll-every="3000" data-signature="{{ signature }}">
   <div class="metrics">
-    <div class="metric"><div class="k">Réussis</div><div class="v">{{ summary.success }}</div><div class="s">sur {{ summary.total }} poste{{ 's' if summary.total > 1 }}</div></div>
-    <div class="metric"><div class="k">En attente</div><div class="v {{ 'warn-text' if summary.active }}">{{ summary.active }}</div><div class="s">au prochain contact de l’agent</div></div>
-    <div class="metric"><div class="k">Échecs</div><div class="v {{ 'err-text' if summary.failed }}">{{ summary.failed }}</div><div class="s">code de retour non nul</div></div>
-    <div class="metric"><div class="k">Annulés</div><div class="v">{{ summary.other }}</div><div class="s">avant transmission</div></div>
+    <div class="metric"><div class="k">{{ _("Réussis") }}</div><div class="v">{{ summary.success }}</div><div class="s">{{ _("sur %(total)s poste%(v)s", total=summary.total, v='s' if summary.total > 1) }}</div></div>
+    <div class="metric"><div class="k">{{ _("En attente") }}</div><div class="v {{ 'warn-text' if summary.active }}">{{ summary.active }}</div><div class="s">{{ _("au prochain contact de l’agent") }}</div></div>
+    <div class="metric"><div class="k">{{ _("Échecs") }}</div><div class="v {{ 'err-text' if summary.failed }}">{{ summary.failed }}</div><div class="s">{{ _("code de retour non nul") }}</div></div>
+    <div class="metric"><div class="k">{{ _("Annulés") }}</div><div class="v">{{ summary.other }}</div><div class="s">{{ _("avant transmission") }}</div></div>
   </div>
   {{ progress_bar(summary) }}
   <section class="panel">
-    <div class="panel-h"><h2>Postes <span class="h-count">{{ targets|length }}</span></h2></div>
+    <div class="panel-h"><h2>{{ _("Postes") }} <span class="h-count">{{ targets|length }}</span></h2></div>
     <div class="table-wrap"><table class="deploy-targets">
-      <thead><tr><th>Poste</th><th>État</th><th>Sortie</th></tr></thead>
+      <thead><tr><th>{{ _("Poste") }}</th><th>{{ _("État") }}</th><th>{{ _("Sortie") }}</th></tr></thead>
       <tbody>{% for t in targets %}{% set cls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
         <tr>
           <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}</td>
-          <td class="nowrap"><span class="st {{ cls }}">{{ states.get(t.state, t.state) }}</span>{% if t.exit_code is not none and t.state in ('success', 'failed') %}<span class="sub sans">code {{ t.exit_code }}</span>{% elif t.state == 'queued' and t.run_after %}<span class="sub sans">planifié pour {{ t.run_after }}</span>{% endif %}</td>
-          <td>{% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>Sortie du script</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ 'Exécution en cours…' if t.state == 'running' else ('Planifié pour ' ~ t.run_after ~ ' (heure du serveur)' if t.run_after else 'En attente du poste') }}</span>{% endif %}</td>
+          <td class="nowrap"><span class="st {{ cls }}">{{ states.get(t.state, t.state) }}</span>{% if t.exit_code is not none and t.state in ('success', 'failed') %}<span class="sub sans">{{ _("code %(exit_code)s", exit_code=t.exit_code) }}</span>{% elif t.state == 'queued' and t.run_after %}<span class="sub sans">{{ _("planifié pour %(run_after)s", run_after=t.run_after) }}</span>{% endif %}</td>
+          <td>{% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>{{ _("Sortie du script") }}</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ _('Exécution en cours…') if t.state == 'running' else (_('Planifié pour ') ~ t.run_after ~ ' (heure du serveur)' if t.run_after else _('En attente du poste')) }}</span>{% endif %}</td>
         </tr>
       {% endfor %}</tbody>
     </table></div>
   </section>
-  <details class="panel script-snapshot"><summary class="panel-h"><h2>Contenu exécuté</h2></summary><pre class="script-preview">{{ run.content }}</pre></details>
+  <details class="panel script-snapshot"><summary class="panel-h"><h2>{{ _("Contenu exécuté") }}</h2></summary><pre class="script-preview">{{ run.content }}</pre></details>
 </div>
 {% endblock %}

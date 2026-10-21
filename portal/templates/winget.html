@@ -1,39 +1,39 @@
 {% extends "base.html" %}
-{% block title %}Catalogue winget{% endblock %}
+{% block title %}{{ _("Catalogue winget") }}{% endblock %}
 {% block content %}
 <div class="head">
   <div>
-    <p class="small"><a href="{{ url_for('windows_apps') }}">Logiciels Windows</a></p>
-    <h1>Catalogue winget</h1>
-    <p>Logiciels du catalogue public de Microsoft (winget). L'import télécharge l'installeur officiel sur loco, vérifie son empreinte SHA-256 et renseigne les options silencieuses et la détection sur le parc.</p>
+    <p class="small"><a href="{{ url_for('windows_apps') }}">{{ _("Logiciels Windows") }}</a></p>
+    <h1>{{ _("Catalogue winget") }}</h1>
+    <p>{{ _("Logiciels du catalogue public de Microsoft (winget). L'import télécharge l'installeur officiel sur loco, vérifie son empreinte SHA-256 et renseigne les options silencieuses et la détection sur le parc.") }}</p>
   </div>
 </div>
 
 <div class="stack">
   <form method="get" action="{{ url_for('winget_search') }}" class="row">
-    <input type="search" name="q" value="{{ query }}" placeholder="7-Zip, Firefox, Notepad++, VLC…" aria-label="Rechercher un logiciel" autofocus>
-    <button class="btn primary"><span class="spin"></span>Rechercher</button>
+    <input type="search" name="q" value="{{ query }}" placeholder="{{ _('7-Zip, Firefox, Notepad++, VLC…') }}" aria-label="{{ _('Rechercher un logiciel') }}" autofocus>
+    <button class="btn primary"><span class="spin"></span>{{ _("Rechercher") }}</button>
   </form>
   {% if error %}<p class="note err">{{ error }}</p>{% endif %}
 
   {% if query and not error %}
   <section class="panel">
-    <div class="panel-h"><h2>Résultats <span class="h-count">{{ results|length }}</span></h2></div>
+    <div class="panel-h"><h2>{{ _("Résultats") }} <span class="h-count">{{ results|length }}</span></h2></div>
     {% if results %}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Logiciel</th><th>Dernière version</th><th></th></tr></thead>
+        <thead><tr><th>{{ _("Logiciel") }}</th><th>{{ _("Dernière version") }}</th><th></th></tr></thead>
         <tbody>
         {% for r in results %}
           <tr>
             <td>{{ r.name }}<span class="sub">{{ r.id }}</span></td>
             <td class="mono">{{ r.version }}</td>
             <td class="right">
-              {% if r.id in known %}<span class="st ok">dans le catalogue</span>
+              {% if r.id in known %}<span class="st ok">{{ _("dans le catalogue") }}</span>
               {% elif can("store.import") %}
               <form method="post" action="{{ url_for('winget_add') }}" data-ajax>
                 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ r.id }}"><input type="hidden" name="q" value="{{ query }}">
-                <button class="btn sm"><span class="spin"></span>Ajouter</button>
+                <button class="btn sm"><span class="spin"></span>{{ _("Ajouter") }}</button>
               </form>
               {% endif %}
             </td>
@@ -43,9 +43,9 @@
       </table>
     </div>
     {% else %}
-    <div class="empty">Aucun logiciel ne correspond à « {{ query }} ».</div>
+    <div class="empty">{{ _("Aucun logiciel ne correspond à « %(query)s ».", query=query) }}</div>
     {% endif %}
-    <div class="panel-f">Seuls les installeurs Windows x64 ou x86 utilisables en silence (MSI, Inno Setup, NSIS, WiX, Burn ou options silencieuses déclarées) peuvent être importés. Index winget renouvelé chaque jour.</div>
+    <div class="panel-f">{{ _("Seuls les installeurs Windows x64 ou x86 utilisables en silence (MSI, Inno Setup, NSIS, WiX, Burn ou options silencieuses déclarées) peuvent être importés. Index winget renouvelé chaque jour.") }}</div>
   </section>
   {% endif %}
 </div>

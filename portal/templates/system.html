@@ -1,62 +1,62 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd, service %}
-{% block title %}Système{% endblock %}
+{% block title %}{{ _("Système") }}{% endblock %}
 {% block content %}
 {% set backup_cmd = 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') %}
 {% set ca_url = (http_url or https_url) ~ '/ca.crt' %}
 <div class="head">
   <div>
-    <h1>Système</h1>
-    <p>État du serveur loco <span class="mono">{{ host }}</span> : services, certificat HTTPS, stockage et sauvegardes.</p>
+    <h1>{{ _("Système") }}</h1>
+    <p>{{ _("État du serveur loco <span class=\"mono\">%(host)s</span> : services, certificat HTTPS, stockage et sauvegardes.", host=host) }}</p>
   </div>
 </div>
 
 <div class="stack">
-  {% if stopped %}<p class="note err">{{ 'Service arrêté' if stopped|length == 1 else 'Services arrêtés' }} : <span class="mono">{{ stopped|join(', ') }}</span>. Les postes peuvent ne plus joindre les caches ou le portail ; consultez le journal du service sur le serveur.</p>{% endif %}
-  {% if not cert %}<p class="note err">Certificat HTTPS introuvable dans <span class="mono">{{ paths['Certificats'] }}</span> : {% if container %}redémarrez le conteneur{% else %}relancez install.sh{% endif %}.</p>{% endif %}
+  {% if stopped %}<p class="note err">{{ _("%(v)s : <span class=\"mono\">%(stopped)s</span>. Les postes peuvent ne plus joindre les caches ou le portail ; consultez le journal du service sur le serveur.", v=_('Service arrêté') if stopped|length == 1 else _('Services arrêtés'), stopped=stopped|join(', ')) }}</p>{% endif %}
+  {% if not cert %}<p class="note err">{{ _("Certificat HTTPS introuvable dans <span class=\"mono\">%(v)s</span> :", v=paths['Certificats']) }}{% if container %}{{ _("redémarrez le conteneur") }}{% else %}{{ _("relancez install.sh") }}{% endif %}.</p>{% endif %}
 
   <div class="metrics">
     <div class="metric">
-      <div class="k">Services</div>
+      <div class="k">{{ _("Services") }}</div>
       <div class="v">{{ services|length - stopped|length }}<span class="v-unit">/ {{ services|length }}</span></div>
-      <div class="s">{% if stopped %}<span class="st err">{{ stopped|length }} arrêté{{ 's' if stopped|length > 1 }}</span>{% else %}<span class="st ok">tous actifs</span>{% endif %}</div>
+      <div class="s">{% if stopped %}<span class="st err">{{ _("%(stopped)s arrêté%(v)s", stopped=stopped|length, v='s' if stopped|length > 1) }}</span>{% else %}<span class="st ok">{{ _("tous actifs") }}</span>{% endif %}</div>
     </div>
     <div class="metric">
-      <div class="k">Certificat HTTPS</div>
+      <div class="k">{{ _("Certificat HTTPS") }}</div>
       {% if cert and cert.end.days is not none %}
-      <div class="v">{{ cert.end.days }}<span class="v-unit">jours</span></div>
-      <div class="s"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">jusqu'au {{ cert.end.text }}</span></div>
+      <div class="v">{{ cert.end.days }}<span class="v-unit">{{ _("jours") }}</span></div>
+      <div class="s"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ _("jusqu'au %(text)s", text=cert.end.text) }}</span></div>
       {% else %}
       <div class="v">—</div>
-      <div class="s"><span class="st err">{{ 'introuvable' if not cert else 'validité inconnue' }}</span></div>
+      <div class="s"><span class="st err">{{ _('introuvable') if not cert else _('validité inconnue') }}</span></div>
       {% endif %}
     </div>
     <div class="metric">
-      <div class="k">Disque des données</div>
+      <div class="k">{{ _("Disque des données") }}</div>
       <div class="v">{{ disk.free|human }}</div>
-      <div class="s">libres sur {{ disk.total|human }}</div>
+      <div class="s">{{ _("libres sur %(total)s", total=disk.total|human) }}</div>
       <div class="meter {{ 'err' if disk.pct >= 90 else 'warn' if disk.pct >= 80 }}"><i data-width="{{ disk.pct }}"></i></div>
     </div>
     <div class="metric">
-      <div class="k">Dernière sauvegarde</div>
+      <div class="k">{{ _("Dernière sauvegarde") }}</div>
       {% if last_backup %}
       <div class="v small-v">{{ last_backup.text }}</div>
-      <div class="s">{% if last_backup.late %}<span class="st warn">sauvegarde quotidienne en retard</span>{% else %}{{ backups|length }} conservée{{ 's' if backups|length > 1 }}{% endif %}</div>
+      <div class="s">{% if last_backup.late %}<span class="st warn">{{ _("sauvegarde quotidienne en retard") }}</span>{% else %}{{ _("%(backups)s conservée%(v)s", backups=backups|length, v='s' if backups|length > 1) }}{% endif %}</div>
       {% else %}
-      <div class="v small-v">aucune</div>
-      <div class="s"><span class="st warn">la première arrive cette nuit</span></div>
+      <div class="v small-v">{{ _("aucune") }}</div>
+      <div class="s"><span class="st warn">{{ _("la première arrive cette nuit") }}</span></div>
       {% endif %}
     </div>
     <div class="metric">
-      <div class="k">Version</div>
+      <div class="k">{{ _("Version") }}</div>
       <div class="v">{{ version }}</div>
-      <div class="s">{% if server_updates and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">mises à jour du serveur</a>{% else %}suivie par les agents{% endif %}</div>
+      <div class="s">{% if server_updates and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">{{ _("mises à jour du serveur") }}</a>{% else %}{{ _("suivie par les agents") }}{% endif %}</div>
     </div>
   </div>
 
   <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>Services</h2><div class="aside">{{ services|length - stopped|length }} sur {{ services|length }} actifs</div></div>
+      <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>
       <div class="table-wrap">
         <table>
           <tbody>
@@ -69,7 +69,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Sauvegardes</h2><div class="aside">quotidiennes, hors caches</div></div>
+      <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
       {% if backups %}
       <div class="table-wrap">
         <table>
@@ -79,10 +79,10 @@
         </table>
       </div>
       {% else %}
-      <div class="empty">Aucune sauvegarde pour l'instant.</div>
+      <div class="empty">{{ _("Aucune sauvegarde pour l'instant.") }}</div>
       {% endif %}
       <div class="panel-b system-commands">
-        <p class="small muted">Configuration, comptes, clés, dépôts et catalogue, dans <span class="mono">{{ backup_dir }}</span>. Sur le serveur :</p>
+        <p class="small muted">{{ _("Configuration, comptes, clés, dépôts et catalogue, dans <span class=\"mono\">%(backup_dir)s</span>. Sur le serveur :", backup_dir=backup_dir) }}</p>
         {{ cmd('backup-create', backup_cmd ~ ' create', '#' if not windows else 'PS>') }}
         {{ cmd('backup-restore', backup_cmd ~ ' restore ARCHIVE', '#' if not windows else 'PS>') }}
       </div>
@@ -91,41 +91,41 @@
 
   <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>Certificat HTTPS</h2>
-        {% if cert and cert.end.days is not none %}<div class="aside"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ 'expire dans ' ~ cert.end.days ~ ' j' if cert.end.days < 60 else 'valide' }}</span></div>{% endif %}
+      <div class="panel-h"><h2>{{ _("Certificat HTTPS") }}</h2>
+        {% if cert and cert.end.days is not none %}<div class="aside"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ _('expire dans %(n)s j', n=cert.end.days) if cert.end.days < 60 else _('valide') }}</span></div>{% endif %}
       </div>
       {% if cert %}
       <dl class="kv">
-        <dt>Adresse</dt><dd class="mono"><a href="{{ https_url }}">{{ https_url }}</a></dd>
-        <dt>Noms couverts</dt><dd class="mono">{{ cert.san|join(', ') }}</dd>
-        <dt>Émis par</dt><dd>{{ cert.issuer }}</dd>
-        <dt>Validité</dt><dd>du {{ cert.start.text }} au {{ cert.end.text }}</dd>
-        <dt>Empreinte SHA-256</dt><dd class="mono small break">{{ cert.sha256 }}</dd>
+        <dt>{{ _("Adresse") }}</dt><dd class="mono"><a href="{{ https_url }}">{{ https_url }}</a></dd>
+        <dt>{{ _("Noms couverts") }}</dt><dd class="mono">{{ cert.san|join(', ') }}</dd>
+        <dt>{{ _("Émis par") }}</dt><dd>{{ cert.issuer }}</dd>
+        <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=cert.start.text, text2=cert.end.text) }}</dd>
+        <dt>{{ _("Empreinte SHA-256") }}</dt><dd class="mono small break">{{ cert.sha256 }}</dd>
       </dl>
       {% else %}
-      <div class="empty">Certificat introuvable.</div>
+      <div class="empty">{{ _("Certificat introuvable.") }}</div>
       {% endif %}
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Autorité de certification locale</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ https_url }}/ca.crt" download>Télécharger ca.crt</a></div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ _("Autorité de certification locale") }}</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ https_url }}/ca.crt" download>{{ _("Télécharger ca.crt") }}</a></div>{% endif %}</div>
       {% if ca %}
       <div class="panel-b">
-        <p class="muted">Elle signe le certificat du portail. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat. Les paquets de la page <a href="{{ url_for('enrollment') }}">Enrôlement</a> s'en chargent ; l'agent seul l'épingle sans l'importer.</p>
-        <p class="small"><span class="muted">Empreinte SHA-256 à vérifier avant import</span><br><span class="mono break">{{ ca.sha256 }}</span></p>
+        <p class="muted">{{ _("Elle signe le certificat du portail. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat. Les paquets de la page <a href=\"%(v)s\">Enrôlement</a> s'en chargent ; l'agent seul l'épingle sans l'importer.", v=url_for('enrollment')) }}</p>
+        <p class="small"><span class="muted">{{ _("Empreinte SHA-256 à vérifier avant import") }}</span><br><span class="mono break">{{ ca.sha256 }}</span></p>
         <div class="system-ca">
           <div class="tabs" role="tablist">
             <button type="button" data-tab="ca-win" aria-selected="true">Windows</button>
-            <button type="button" data-tab="ca-deb" aria-selected="false">Debian, Ubuntu</button>
-            <button type="button" data-tab="ca-rpm" aria-selected="false">Rocky, AlmaLinux, RHEL</button>
+            <button type="button" data-tab="ca-deb" aria-selected="false">{{ _("Debian, Ubuntu") }}</button>
+            <button type="button" data-tab="ca-rpm" aria-selected="false">{{ _("Rocky, AlmaLinux, RHEL") }}</button>
           </div>
           <div class="tab-panel on" data-panel="ca-win">
             {{ cmd('ca-win', "Invoke-WebRequest -UseBasicParsing " ~ ca_url ~ " -OutFile $env:TEMP\\loco-ca.crt; Import-Certificate -FilePath $env:TEMP\\loco-ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root", 'PS>') }}
-            <span class="hint">PowerShell administrateur. Sur un domaine : déploiement par GPO.</span>
+            <span class="hint">{{ _("PowerShell administrateur. Sur un domaine : déploiement par GPO.") }}</span>
           </div>
           <div class="tab-panel" data-panel="ca-deb">
             {{ cmd('ca-deb', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /usr/local/share/ca-certificates/loco.crt >/dev/null && sudo update-ca-certificates') }}
-            <span class="hint">Firefox sous Linux utilise son propre magasin (Paramètres › Certificats › Importer).</span>
+            <span class="hint">{{ _("Firefox sous Linux utilise son propre magasin (Paramètres › Certificats › Importer).") }}</span>
           </div>
           <div class="tab-panel" data-panel="ca-rpm">
             {{ cmd('ca-rpm', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /etc/pki/ca-trust/source/anchors/loco.crt >/dev/null && sudo update-ca-trust') }}
@@ -133,21 +133,21 @@
         </div>
       </div>
       {% else %}
-      <div class="empty">Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.</div>
+      <div class="empty">{{ _("Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.") }}</div>
       {% endif %}
     </section>
   </div>
 
   <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>Emplacements</h2>{% if stats.updated %}<div class="aside">tailles du {{ stats.updated|date_fr }}</div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ _("Emplacements") }}</h2>{% if stats.updated %}<div class="aside">{{ _("tailles du %(updated)s", updated=stats.updated|date_fr) }}</div>{% endif %}</div>
       <dl class="kv">
         {% for label, path in paths.items() %}<dt>{{ label }}</dt><dd class="mono break">{{ path }}</dd>{% endfor %}
       </dl>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Versions</h2></div>
+      <div class="panel-h"><h2>{{ _("Versions") }}</h2></div>
       <dl class="kv">
         {% for name, value in versions.items() %}<dt>{{ name }}</dt><dd class="mono">{{ value or '—' }}</dd>{% endfor %}
       </dl>

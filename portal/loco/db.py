@@ -378,6 +378,10 @@ MIGRATIONS = [
     );
     CREATE INDEX schedules_due ON schedules(enabled, next_run);
     """,
+    # 18 : langue de l'interface choisie par chaque compte (vide = celle du navigateur).
+    """
+    ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

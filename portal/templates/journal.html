@@ -1,64 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Journal{% endblock %}
+{% block title %}{{ _("Journal") }}{% endblock %}
 {% macro retention_text(d) -%}
-{% if d == 0 %}sans limite{% elif d % 365 == 0 %}{{ d // 365 }} an{{ 's' if d > 365 }}{% else %}{{ d }} jours{% endif %}
+{% if d == 0 %}{{ _("sans limite") }}{% elif d % 365 == 0 %}{{ _("%(v)s an%(v2)s", v=d // 365, v2='s' if d > 365) }}{% else %}{{ _("%(d)s jours", d=d) }}{% endif %}
 {%- endmacro %}
 {% block content %}
 <div class="head">
   <div>
-    <h1>Journal</h1>
-    <p>Connexions et modifications, avec le compte et l'adresse d'origine. Événements gardés {{ retention_text(retention) }}.</p>
+    <h1>{{ _("Journal") }}</h1>
+    <p>{{ _("Connexions et modifications, avec le compte et l'adresse d'origine. Événements gardés %(v)s.", v=retention_text(retention)) }}</p>
   </div>
   <div class="actions">
-    {% if can('audit.configure') %}<button type="button" class="btn" data-open="#retention">Conservation : {{ retention_text(retention) }}</button>{% endif %}
-    {% if can('audit.export') %}<button type="button" class="btn primary" data-open="#export">Exporter en JSON</button>{% endif %}
+    {% if can('audit.configure') %}<button type="button" class="btn" data-open="#retention">{{ _("Conservation : %(v)s", v=retention_text(retention)) }}</button>{% endif %}
+    {% if can('audit.export') %}<button type="button" class="btn primary" data-open="#export">{{ _("Exporter en JSON") }}</button>{% endif %}
   </div>
 </div>
 
 <div class="stack">
   {% if failures and args.get('echecs') != '1' %}
   <div class="note err row-between">
-    <span>{{ failures }} échec{{ 's' if failures > 1 }} de connexion ces dernières 24 heures.</span>
-    <a href="{{ url_for('journal', echecs='1') }}">Voir</a>
+    <span>{{ _("%(failures)s échec%(v)s de connexion ces dernières 24 heures.", failures=failures, v='s' if failures > 1) }}</span>
+    <a href="{{ url_for('journal', echecs='1') }}">{{ _("Voir") }}</a>
   </div>
   {% endif %}
 
   <div class="journal-filters">
   <div class="fleet-filters">
-    <nav class="chips" aria-label="Période">
+    <nav class="chips" aria-label="{{ _('Période') }}">
       {% set custom = args.get('debut') or args.get('fin') %}
       {% for key, (label, _n) in periods.items() %}
       <a class="chip {{ 'on' if (args.get('periode') == key) or (key == 'tout' and not args.get('periode') and not custom) }}" href="{{ link(periode=None if key == 'tout' else key, debut=None, fin=None) }}">{{ label }}</a>
       {% endfor %}
       <details class="menu">
-        <summary class="chip {{ 'on' if custom }}">{% if custom %}{{ args.get('debut', '…') }} → {{ args.get('fin', "aujourd'hui") }}{% else %}Autre période{% endif %}</summary>
+        <summary class="chip {{ 'on' if custom }}">{% if custom %}{{ args.get('debut', '…') }} → {{ args.get('fin', "aujourd'hui") }}{% else %}{{ _("Autre période") }}{% endif %}</summary>
         <div class="menu-list menu-left">
           <form method="get" class="menu-form" data-clean>
             {% for k, v in args.items() if k not in ('periode', 'debut', 'fin') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
             <div class="grid2">
-              <label class="f"><span>Du</span><input type="date" name="debut" max="{{ today }}" value="{{ args.get('debut', '') }}"></label>
-              <label class="f"><span>Au</span><input type="date" name="fin" max="{{ today }}" value="{{ args.get('fin', '') }}"></label>
+              <label class="f"><span>{{ _("Du") }}</span><input type="date" name="debut" max="{{ today }}" value="{{ args.get('debut', '') }}"></label>
+              <label class="f"><span>{{ _("Au") }}</span><input type="date" name="fin" max="{{ today }}" value="{{ args.get('fin', '') }}"></label>
             </div>
-            <button class="btn sm primary">Afficher</button>
+            <button class="btn sm primary">{{ _("Afficher") }}</button>
           </form>
         </div>
       </details>
     </nav>
     <form method="get" class="row" role="search" data-clean>
       {% for k, v in args.items() if k not in ('compte', 'echecs', 'q') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
-      <label class="small muted nowrap"><input type="checkbox" name="echecs" value="1" data-autosubmit {{ 'checked' if args.get('echecs') == '1' }}> échecs seulement</label>
+      <label class="small muted nowrap"><input type="checkbox" name="echecs" value="1" data-autosubmit {{ 'checked' if args.get('echecs') == '1' }}> {{ _("échecs seulement") }}</label>
       {% if accounts %}
-      <select name="compte" aria-label="Compte" data-autosubmit>
-        <option value="">Tous les comptes</option>
+      <select name="compte" aria-label="{{ _('Compte') }}" data-autosubmit>
+        <option value="">{{ _("Tous les comptes") }}</option>
         {% for a in accounts %}<option {{ 'selected' if args.get('compte') == a }}>{{ a }}</option>{% endfor %}
       </select>
       {% endif %}
-      <input type="search" name="q" class="search-sm" value="{{ args.get('q', '') }}" placeholder="Rechercher (Entrée)" aria-label="Rechercher dans le journal">
+      <input type="search" name="q" class="search-sm" value="{{ args.get('q', '') }}" placeholder="{{ _('Rechercher (Entrée)') }}" aria-label="{{ _('Rechercher dans le journal') }}">
     </form>
   </div>
 
-  <nav class="chips" aria-label="Catégorie">
-    <a class="chip {{ 'on' if not args.get('categorie') }}" href="{{ link(categorie=None) }}">Toutes <b>{{ counts.values()|sum }}</b></a>
+  <nav class="chips" aria-label="{{ _('Catégorie') }}">
+    <a class="chip {{ 'on' if not args.get('categorie') }}" href="{{ link(categorie=None) }}">{{ _("Toutes") }} <b>{{ counts.values()|sum }}</b></a>
     {% for key, (label, _p) in categories.items() if counts[key] or args.get('categorie') == key %}
     <a class="chip {{ 'on' if args.get('categorie') == key }}" href="{{ link(categorie=key) }}">{{ label }} <b>{{ counts[key] }}</b></a>
     {% endfor %}
@@ -69,7 +69,7 @@
     {% if days %}
     <div class="table-wrap">
       <table class="journal-table">
-        <thead><tr><th>Heure</th><th>Action</th><th>Compte</th><th class="hide-sm">Adresse</th><th class="hide-sm">Détail</th></tr></thead>
+        <thead><tr><th>{{ _("Heure") }}</th><th>{{ _("Action") }}</th><th>{{ _("Compte") }}</th><th class="hide-sm">{{ _("Adresse") }}</th><th class="hide-sm">{{ _("Détail") }}</th></tr></thead>
         {% for day in days %}
         <tbody>
           <tr class="day-row"><th colspan="5">{{ day.label }}</th></tr>
@@ -78,7 +78,7 @@
             <td class="muted nowrap" title="{{ r.at }}">{{ r.at[11:16] }}</td>
             <td><span class="nowrap" title="{{ r.action }}">{% if e.failure %}<span class="st err"></span>{% endif %}{{ e.label }}</span>
               <span class="sub">{{ e.category_label }}</span>{% if r.detail %}<span class="sub only-sm">{{ r.detail }}</span>{% endif %}</td>
-            <td class="nowrap">{% if r.username %}<a href="{{ link(compte=r.username) }}" class="quiet-link" title="Événements de ce compte">{{ r.username }}</a>{% else %}—{% endif %}</td>
+            <td class="nowrap">{% if r.username %}<a href="{{ link(compte=r.username) }}" class="quiet-link" title="{{ _('Événements de ce compte') }}">{{ r.username }}</a>{% else %}—{% endif %}</td>
             <td class="mono muted nowrap hide-sm">{{ r.ip }}</td>
             <td class="detail-cell hide-sm">{{ r.detail }}</td>
           </tr>
@@ -88,15 +88,15 @@
       </table>
     </div>
     {% elif args %}
-    <div class="empty">Aucun événement ne correspond à ces filtres. <a href="{{ url_for('journal') }}">Tout afficher</a></div>
+    <div class="empty">{{ _("Aucun événement ne correspond à ces filtres.") }} <a href="{{ url_for('journal') }}">{{ _("Tout afficher") }}</a></div>
     {% else %}
-    <div class="empty">Aucun événement.</div>
+    <div class="empty">{{ _("Aucun événement.") }}</div>
     {% endif %}
     <div class="panel-f row-between">
-      <span>{{ matching }} événement{{ 's' if matching != 1 }}{% if args %} sur {{ stats.n }}{% endif %}{% if stats.first %} · le plus ancien du {{ stats.first[:10] }}{% endif %} · {% if container %}aussi dans <code>docker compose logs loco</code>{% elif alpine %}aussi dans <code>/var/log/loco/portal.log</code>{% else %}aussi dans <code>journalctl -u loco-portal</code>{% endif %}</span>
+      <span>{{ _("%(matching)s événement%(v)s", matching=matching, v='s' if matching != 1) }}{% if args %} {{ _("sur %(n)s", n=stats.n) }}{% endif %}{% if stats.first %} {{ _("· le plus ancien du %(v)s", v=stats.first[:10]) }}{% endif %} · {% if container %}{{ _("aussi dans") }} <code>{{ _("docker compose logs loco") }}</code>{% elif alpine %}{{ _("aussi dans") }} <code>{{ _("/var/log/loco/portal.log") }}</code>{% else %}{{ _("aussi dans") }} <code>{{ _("journalctl -u loco-portal") }}</code>{% endif %}</span>
       <span class="row">
-        {% if before %}<a class="btn sm" href="{{ link() }}">Plus récents</a>{% endif %}
-        {% if more %}<a class="btn sm" href="{{ link(avant=last_id) }}">Plus anciens</a>{% endif %}
+        {% if before %}<a class="btn sm" href="{{ link() }}">{{ _("Plus récents") }}</a>{% endif %}
+        {% if more %}<a class="btn sm" href="{{ link(avant=last_id) }}">{{ _("Plus anciens") }}</a>{% endif %}
       </span>
     </div>
   </section>
@@ -104,39 +104,39 @@
 
 {% if can('audit.export') %}
 <dialog id="export">
-  <div class="dlg-h"><h2>Exporter en JSON</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="dlg-h"><h2>{{ _("Exporter en JSON") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="dlg-b dlg-stack">
     {% if args %}
     <div class="row-between">
-      <span>Vue affichée, avec ses filtres <span class="faint">({{ matching }} événement{{ 's' if matching != 1 }})</span></span>
-      <a class="btn primary" href="{{ url_for('journal_export', **args) }}">Exporter</a>
+      <span>{{ _("Vue affichée, avec ses filtres") }} <span class="faint">{{ _("(%(matching)s événement%(v)s)", matching=matching, v='s' if matching != 1) }}</span></span>
+      <a class="btn primary" href="{{ url_for('journal_export', **args) }}">{{ _("Exporter") }}</a>
     </div>
     <hr class="sep">
     {% endif %}
     <form method="get" action="{{ url_for('journal_export') }}" class="dlg-stack">
       <div class="grid2">
-        <label class="f"><span>Du</span><input type="date" name="debut" max="{{ today }}" value="{{ (stats.first or today)[:10] }}"></label>
-        <label class="f"><span>Au</span><input type="date" name="fin" max="{{ today }}" value="{{ today }}"></label>
+        <label class="f"><span>{{ _("Du") }}</span><input type="date" name="debut" max="{{ today }}" value="{{ (stats.first or today)[:10] }}"></label>
+        <label class="f"><span>{{ _("Au") }}</span><input type="date" name="fin" max="{{ today }}" value="{{ today }}"></label>
       </div>
       <div class="row">
-        <button class="btn {{ '' if args else 'primary' }}">Exporter la période</button>
-        <a class="btn" href="{{ url_for('journal_export') }}">Tout exporter ({{ stats.n }})</a>
+        <button class="btn {{ '' if args else 'primary' }}">{{ _("Exporter la période") }}</button>
+        <a class="btn" href="{{ url_for('journal_export') }}">{{ _("Tout exporter (%(n)s)", n=stats.n) }}</a>
       </div>
     </form>
-    <p class="hint">Dates incluses. Le fichier contient le serveur, la période, l'auteur de l'export et les événements (date, compte, adresse, action, détail). L'export est lui-même journalisé.</p>
+    <p class="hint">{{ _("Dates incluses. Le fichier contient le serveur, la période, l'auteur de l'export et les événements (date, compte, adresse, action, détail). L'export est lui-même journalisé.") }}</p>
   </div>
 </dialog>
 {% endif %}
 
 {% if can('audit.configure') %}
 <dialog id="retention">
-  <div class="dlg-h"><h2>Conservation du journal</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
-  <form method="post" action="{{ url_for('journal_retention') }}" class="dlg-b dlg-stack" data-ajax data-confirm="Modifier la conservation du journal ?" data-confirm-text="Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d'abord si vous devez les garder." data-confirm-ok="Appliquer">
+  <div class="dlg-h"><h2>{{ _("Conservation du journal") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <form method="post" action="{{ url_for('journal_retention') }}" class="dlg-b dlg-stack" data-ajax data-confirm="{{ _('Modifier la conservation du journal ?') }}" data-confirm-text="{{ _('Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d\'abord si vous devez les garder.') }}" data-confirm-ok="{{ _('Appliquer') }}">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label class="f"><span>Garder les événements</span>
-      <select name="days">{% for d in choices %}<option value="{{ d }}" {{ 'selected' if d == retention }}>{{ retention_text(d) }}{% if d == 30 %} (par défaut){% endif %}</option>{% endfor %}</select></label>
-    <p class="hint">Rotation automatique : les événements plus anciens sont supprimés au démarrage du portail puis au plus une fois par heure.</p>
-    <div class="row"><button class="btn primary"><span class="spin"></span>Appliquer</button></div>
+    <label class="f"><span>{{ _("Garder les événements") }}</span>
+      <select name="days">{% for d in choices %}<option value="{{ d }}" {{ 'selected' if d == retention }}>{{ retention_text(d) }}{% if d == 30 %} {{ _("(par défaut)") }}{% endif %}</option>{% endfor %}</select></label>
+    <p class="hint">{{ _("Rotation automatique : les événements plus anciens sont supprimés au démarrage du portail puis au plus une fois par heure.") }}</p>
+    <div class="row"><button class="btn primary"><span class="spin"></span>{{ _("Appliquer") }}</button></div>
   </form>
 </dialog>
 {% endif %}

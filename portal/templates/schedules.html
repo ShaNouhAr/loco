@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 {% from "_schedule.html" import icon with context %}
-{% block title %}Planifications{% endblock %}
+{% block title %}{{ _("Planifications") }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <div class="head">
   <div>
-    <h1>Planifications</h1>
-    <p>Mises à jour et scripts lancés automatiquement, une fois ou de façon récurrente, à l'heure du serveur ({{ tz }}).</p>
+    <h1>{{ _("Planifications") }}</h1>
+    <p>{{ _("Mises à jour et scripts lancés automatiquement, une fois ou de façon récurrente, à l'heure du serveur (%(tz)s).", tz=tz) }}</p>
   </div>
-  {% if can_any('fleet.update', 'scripts.run') %}<div class="actions"><a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ icon('calendar') }}<span>Nouvelle planification</span></a></div>{% endif %}
+  {% if can_any('fleet.update', 'scripts.run') %}<div class="actions"><a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ icon('calendar') }}<span>{{ _("Nouvelle planification") }}</span></a></div>{% endif %}
 </div>
 
 <div class="stack">
@@ -16,7 +16,7 @@
     {% if items %}
     <div class="table-wrap">
       <table class="schedules-table">
-        <thead><tr><th>Planification</th><th>Quand</th><th>Prochaine exécution</th><th class="hide-sm">Dernière</th><th>État</th><th aria-label="Actions"></th></tr></thead>
+        <thead><tr><th>{{ _("Planification") }}</th><th>{{ _("Quand") }}</th><th>{{ _("Prochaine exécution") }}</th><th class="hide-sm">{{ _("Dernière") }}</th><th>{{ _("État") }}</th><th aria-label="{{ _('Actions') }}"></th></tr></thead>
         <tbody>
         {% for p in items %}
           {% set manage = can('fleet.update') if p.action == 'update' else can('scripts.run') %}
@@ -24,21 +24,21 @@
             <td><strong>{{ p.name or p.label }}</strong><span class="sub sans">{% if p.name %}{{ p.label }} · {% endif %}{{ p.targets }}</span></td>
             <td><span class="when">{{ icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span>{{ p.when }}</span></span></td>
             <td class="nowrap">{% if p.state == 'active' %}{{ p.next }}{% else %}<span class="faint">—</span>{% endif %}</td>
-            <td class="hide-sm">{% if p.last %}{{ p.last }}<span class="sub sans {{ 'err-text' if p.state == 'paused' and p.last_result.startswith('Script modifié') }}">{% if p.last_ref and p.action == 'run-script' %}<a href="{{ url_for('script_run', run_id=p.last_ref) }}">{{ p.last_result }}</a>{% else %}{{ p.last_result }}{% endif %}</span>{% else %}<span class="faint">jamais</span>{% endif %}</td>
-            <td class="nowrap">{% if p.state == 'active' %}<span class="st ok">Active</span>{% elif p.state == 'paused' %}<span class="st warn">En pause</span>{% else %}<span class="st">Terminée</span>{% endif %}</td>
+            <td class="hide-sm">{% if p.last %}{{ p.last }}<span class="sub sans {{ 'err-text' if p.state == 'paused' and p.script_changed }}">{% if p.last_ref and p.action == 'run-script' %}<a href="{{ url_for('script_run', run_id=p.last_ref) }}">{{ p.last_result }}</a>{% else %}{{ p.last_result }}{% endif %}</span>{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
+            <td class="nowrap">{% if p.state == 'active' %}<span class="st ok">{{ _("Active") }}</span>{% elif p.state == 'paused' %}<span class="st warn">{{ _("En pause") }}</span>{% else %}<span class="st">{{ _("Terminée") }}</span>{% endif %}</td>
             <td class="right">
               {% if manage %}
               <details class="menu">
-                <summary class="btn icon sm" aria-label="Actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>
+                <summary class="btn icon sm" aria-label="{{ _('Actions') }}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>
                 <div class="menu-list" role="menu">
-                  <a class="menu-item" href="{{ url_for('schedule_editor', sched_id=p.id) }}">Modifier</a>
+                  <a class="menu-item" href="{{ url_for('schedule_editor', sched_id=p.id) }}">{{ _("Modifier") }}</a>
                   {% if p.state != 'done' %}
                   <form method="post" action="{{ url_for('schedule_toggle', sched_id=p.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}">
-                    <button class="menu-item">{{ 'Mettre en pause' if p.state == 'active' else ('Reprendre avec la version actuelle du script' if p.action == 'run-script' else 'Reprendre') }}</button></form>
+                    <button class="menu-item">{{ _('Mettre en pause') if p.state == 'active' else (_('Reprendre avec la version actuelle du script') if p.action == 'run-script' else _('Reprendre')) }}</button></form>
                   {% endif %}
                   <hr>
-                  <form method="post" action="{{ url_for('schedule_delete', sched_id=p.id) }}" data-confirm="Supprimer cette planification ?" data-confirm-text="{{ p.label }} — {{ p.when }}. Les commandes déjà envoyées aux postes ne sont pas annulées." data-confirm-ok="Supprimer">
-                    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger">Supprimer</button></form>
+                  <form method="post" action="{{ url_for('schedule_delete', sched_id=p.id) }}" data-confirm="{{ _('Supprimer cette planification ?') }}" data-confirm-text="{{ _('%(label)s — %(when)s. Les commandes déjà envoyées aux postes ne sont pas annulées.', label=p.label, when=p.when) }}" data-confirm-ok="{{ _('Supprimer') }}">
+                    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger">{{ _("Supprimer") }}</button></form>
                 </div>
               </details>
               {% endif %}
@@ -51,12 +51,12 @@
     {% else %}
     <div class="empty empty-rich">
       {{ icon('calendar') }}
-      <strong>Aucune planification</strong>
-      <span>Planifiez une mise à jour depuis la fiche d'un poste ou Mon parc, un script depuis sa page d'exécution, ou créez-en une ici : une fois, chaque jour, chaque semaine ou chaque mois.</span>
-      {% if can_any('fleet.update', 'scripts.run') %}<a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">Nouvelle planification</a>{% endif %}
+      <strong>{{ _("Aucune planification") }}</strong>
+      <span>{{ _("Planifiez une mise à jour depuis la fiche d'un poste ou Mon parc, un script depuis sa page d'exécution, ou créez-en une ici : une fois, chaque jour, chaque semaine ou chaque mois.") }}</span>
+      {% if can_any('fleet.update', 'scripts.run') %}<a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ _("Nouvelle planification") }}</a>{% endif %}
     </div>
     {% endif %}
   </section>
-  <p class="hint">Une planification due devient une action envoyée aux postes à leur prochain contact (toutes les 2 minutes). Les groupes sont résolus à chaque exécution : un poste ajouté au groupe est pris en compte la fois suivante. Un script modifié après la planification la met en pause, pour n'exécuter que ce qui a été relu.</p>
+  <p class="hint">{{ _("Une planification due devient une action envoyée aux postes à leur prochain contact (toutes les 2 minutes). Les groupes sont résolus à chaque exécution : un poste ajouté au groupe est pris en compte la fois suivante. Un script modifié après la planification la met en pause, pour n'exécuter que ce qui a été relu.") }}</p>
 </div>
 {% endblock %}

@@ -17,44 +17,58 @@ from flask import redirect, request, url_for
 from werkzeug.utils import secure_filename
 
 from . import config
+from .i18n import _
 
 
 def now():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+UNITS = {"fr": ("o", "Ko", "Mo", "Go", "To"), "en": ("B", "KB", "MB", "GB", "TB")}
+MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
 def human(n):
+    from .i18n import locale
+    lang = locale()
     n = float(n or 0)
-    for unit in ("o", "Ko", "Mo", "Go", "To"):
-        if n < 1024 or unit == "To":
-            if unit == "o":
+    units = UNITS.get(lang, UNITS["fr"])
+    for unit in units:
+        if n < 1024 or unit == units[-1]:
+            if unit == units[0]:
                 return f"{n:.0f} {unit}"
-            return (f"{n:.2f}" if n < 10 else f"{n:.1f}").replace(".", ",") + f" {unit}"
+            text = f"{n:.2f}" if n < 10 else f"{n:.1f}"
+            return (text if lang == "en" else text.replace(".", ",")) + f" {unit}"
         n /= 1024
     return ""
 
 
 def date_fr(value):
-    """« 2026-10-12 20:57 » -> « 12/10 20:57 »."""
+    """« 2026-10-12 20:57 » -> « 12/10 20:57 » (en anglais : « Oct 12 20:57 »)."""
+    from .i18n import locale
     m = re.match(r"\d{4}-(\d{2})-(\d{2}) (\d{2}:\d{2})", value or "")
-    return f"{m.group(2)}/{m.group(1)} {m.group(3)}" if m else (value or "")
+    if not m:
+        return value or ""
+    if locale() == "en":
+        return f"{MONTHS_EN[int(m.group(1)) - 1]} {int(m.group(2))} {m.group(3)}"
+    return f"{m.group(2)}/{m.group(1)} {m.group(3)}"
 
 
 def explain(exc):
     """Message d'erreur lisible pour un téléchargement raté."""
     if isinstance(exc, urllib.error.HTTPError):
-        return f"Le serveur a répondu HTTP {exc.code} ({exc.reason})."
+        return _("Le serveur a répondu HTTP %(code)s (%(reason)s).", code=exc.code, reason=exc.reason)
     if isinstance(exc, urllib.error.URLError):
         reason = str(exc.reason)
         if "Name or service not known" in reason or "Temporary failure in name resolution" in reason:
-            return "Adresse introuvable : vérifiez le lien."
+            return _("Adresse introuvable : vérifiez le lien.")
         if "timed out" in reason:
-            return "Le serveur n'a pas répondu à temps."
+            return _("Le serveur n'a pas répondu à temps.")
         if "CERTIFICATE" in reason.upper():
-            return "Certificat HTTPS invalide sur le site source."
-        return f"Connexion impossible : {reason}"
+            return _("Certificat HTTPS invalide sur le site source.")
+        return _("Connexion impossible : %(reason)s", reason=reason)
     if isinstance(exc, TimeoutError):
-        return "Le serveur n'a pas répondu à temps."
+        return _("Le serveur n'a pas répondu à temps.")
     return str(exc)[:300] or exc.__class__.__name__
 
 
@@ -228,7 +242,7 @@ CANCELLED = set()  # clés dont le téléchargement doit s'arrêter
 def download(url, dest_dir, progress_key=None):
     """Télécharge url dans dest_dir. Retourne (chemin temporaire, nom de fichier)."""
     if not url.lower().startswith(("http://", "https://")):
-        raise ValueError("Le lien doit commencer par http:// ou https://.")
+        raise ValueError(_('Le lien doit commencer par http:// ou https://.'))
     req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
     with urllib.request.urlopen(req, timeout=60) as resp:
         name = ""

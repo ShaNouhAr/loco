@@ -13,6 +13,7 @@ import time
 from flask import abort, g, redirect, render_template, request, session, url_for
 
 from . import app, fleet, permissions
+from .i18n import _
 from .auth import audit, can, login_required, require
 from .db import db
 
@@ -137,15 +138,15 @@ def remote_open(dev_id):
     require("remote." + kind)
     minimum = (2, 23) if kind == "files" else (2, 4)
     if fleet.version_key(dev["agent_version"]) < minimum:
-        abort(409, f"L'agent doit être mis à jour vers la version {'.'.join(map(str, minimum))}.0.")
+        abort(409, _("L'agent doit être mis à jour vers la version %(v)s.0.", v='.'.join(map(str, minimum))))
     conn = db()
     conn.execute("BEGIN IMMEDIATE")
     _prune()
     if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= 8:
-        abort(409, "Huit sessions sont déjà ouvertes.")
+        abort(409, _('Huit sessions sont déjà ouvertes.'))
     if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE device_id=? AND kind=? AND state IN ('waiting','active')",
                     (dev_id, kind)).fetchone()[0] >= 2:
-        abort(409, "Deux sessions de ce type sont déjà ouvertes sur ce poste.")
+        abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
     sid, now = secrets.token_hex(16), time.time()
     conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,expires,terminal_fallback) "
                  "VALUES (?,?,?,?,?,?,?,?,?,?)", (sid, dev_id, g.user["id"], _owner(), g.user["pw_version"], kind,

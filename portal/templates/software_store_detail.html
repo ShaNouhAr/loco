@@ -1,55 +1,53 @@
 {% extends "base.html" %}
 {% from "_software_logo.html" import software_logo %}
 {% set name = doc.get('PackageName') or package_id %}
-{% block title %}{{ name }} · Centre de logiciels{% endblock %}
+{% block title %}{{ _("%(name)s · Centre de logiciels", name=name) }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
-<p class="small back-link"><a href="{{ url_for('software_store') }}">← Centre de logiciels</a></p>
+<p class="small back-link"><a href="{{ url_for('software_store') }}">{{ _("← Centre de logiciels") }}</a></p>
 <div class="head">
   <div class="store-card-top">{{ software_logo(package_id, name, 'large') }}
     <div><h1>{{ name }}</h1>
-      <p>{{ doc.get('Publisher') or 'Éditeur non renseigné' }}{% if doc.get('PackageVersion') %} · <span class="mono">{{ doc.get('PackageVersion') }}</span>{% endif %} · <span class="mono faint">{{ package_id }}</span></p></div>
+      <p>{{ doc.get('Publisher') or _('Éditeur non renseigné') }}{% if doc.get('PackageVersion') %} · <span class="mono">{{ doc.get('PackageVersion') }}</span>{% endif %} · <span class="mono faint">{{ package_id }}</span></p></div>
   </div>
   <div class="actions">
     {% if known %}
-      <a class="btn" href="{{ url_for('software_detail', slug=known.slug) }}">Voir dans le catalogue local</a>
-      {% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose', package_id=package_id) }}">Déployer sur le parc</a>{% endif %}
+      <a class="btn" href="{{ url_for('software_detail', slug=known.slug) }}">{{ _("Voir dans le catalogue local") }}</a>
+      {% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose', package_id=package_id) }}">{{ _("Déployer sur le parc") }}</a>{% endif %}
     {% elif info %}
-      {% if can('fleet.install') and can('store.import') %}<a class="btn" href="{{ url_for('deployment_compose', package_id=package_id) }}">Déployer sur le parc</a>{% endif %}
+      {% if can('fleet.install') and can('store.import') %}<a class="btn" href="{{ url_for('deployment_compose', package_id=package_id) }}">{{ _("Déployer sur le parc") }}</a>{% endif %}
       {% if can('store.import') %}<form method="post" action="{{ url_for('winget_add') }}" data-ajax>
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="id" value="{{ package_id }}">
-        <button class="btn primary"><span class="spin"></span>Ajouter à loco</button>
+        <button class="btn primary"><span class="spin"></span>{{ _("Ajouter à loco") }}</button>
       </form>{% endif %}
     {% endif %}
   </div>
 </div>
 
 <div class="stack">
-  {% if error %}<p class="note warn">Ajout impossible depuis le centre de logiciels : {{ error }}.</p>{% endif %}
+  {% if error %}<p class="note warn">{{ _("Ajout impossible depuis le centre de logiciels : %(error)s.", error=error) }}</p>{% endif %}
   {% if known %}
   <div class="note {{ 'warn' if newer or known.status == 'error' else '' }}">
-    {% if known.status == 'error' %}Dans le catalogue local, mais le téléchargement de l'installeur a échoué : voir la <a href="{{ url_for('software_detail', slug=known.slug) }}">fiche du logiciel</a>.
-    {% elif newer %}Le catalogue local a la version {{ known.version }} ; le centre de logiciels propose {{ doc.get('PackageVersion') }}. « Chercher des mises à jour WinGet » dans le <a href="{{ url_for('windows_apps') }}">catalogue local</a> la télécharge.
-    {% elif known.status == 'ready' %}Dans le catalogue local (version {{ known.version }}), prêt à être déployé.
-    {% else %}Ajouté au catalogue local : téléchargement de l'installeur en cours.{% endif %}
+    {% if known.status == 'error' %}{{ _("Dans le catalogue local, mais le téléchargement de l'installeur a échoué : voir la <a href=\"%(v)s\">fiche du logiciel</a>.", v=url_for('software_detail', slug=known.slug)) }}{% elif newer %}{{ _("Le catalogue local a la version %(version)s ; le centre de logiciels propose %(v)s. « Chercher des mises à jour WinGet » dans le <a href=\"%(v2)s\">catalogue local</a> la télécharge.", version=known.version, v=doc.get('PackageVersion'), v2=url_for('windows_apps')) }}{% elif known.status == 'ready' %}{{ _("Dans le catalogue local (version %(version)s), prêt à être déployé.", version=known.version) }}
+    {% else %}{{ _("Ajouté au catalogue local : téléchargement de l'installeur en cours.") }}{% endif %}
   </div>
   {% endif %}
 
   <div class="cols">
     <section class="panel">
-      <div class="panel-h"><h2>Description</h2>{% if homepage %}<div class="aside"><a href="{{ homepage }}" target="_blank" rel="noopener noreferrer">Site de l'éditeur</a></div>{% endif %}</div>
-      <div class="panel-b"><p class="store-description">{{ doc.get('Description') or doc.get('ShortDescription') or 'Aucune description fournie par le catalogue.' }}</p></div>
+      <div class="panel-h"><h2>{{ _("Description") }}</h2>{% if homepage %}<div class="aside"><a href="{{ homepage }}" target="_blank" rel="noopener noreferrer">{{ _("Site de l'éditeur") }}</a></div>{% endif %}</div>
+      <div class="panel-b"><p class="store-description">{{ doc.get('Description') or doc.get('ShortDescription') or _('Aucune description fournie par le catalogue.') }}</p></div>
     </section>
 
     <div class="stack">
       <section class="panel">
-        <div class="panel-h"><h2>Installation</h2></div>
+        <div class="panel-h"><h2>{{ _("Installation") }}</h2></div>
         <div class="panel-b"><dl class="kv">
-          <dt>Version</dt><dd class="mono">{{ doc.get('PackageVersion') or '—' }}</dd>
-          <dt>Licence</dt><dd>{{ doc.get('License') or 'non renseignée' }}</dd>
+          <dt>{{ _("Version") }}</dt><dd class="mono">{{ doc.get('PackageVersion') or '—' }}</dd>
+          <dt>{{ _("Licence") }}</dt><dd>{{ doc.get('License') or _('non renseignée') }}</dd>
           {% if info %}
-          <dt>Installeur</dt><dd>{{ info.type }}, silencieux</dd>
-          <dt>Arguments</dt><dd class="mono break">{{ info.args or '—' }}</dd>
+          <dt>{{ _("Installeur") }}</dt><dd>{{ _("%(type)s, silencieux", type=info.type) }}</dd>
+          <dt>{{ _("Arguments") }}</dt><dd class="mono break">{{ info.args or '—' }}</dd>
           <dt>SHA-256</dt><dd class="mono break">{{ info.sha256 }}</dd>
           {% endif %}
         </dl></div>
@@ -57,18 +55,18 @@
 
       {% if can('windows.groups') and software_groups and (known or (info and can('store.import'))) %}
       <section class="panel">
-        <div class="panel-h"><h2>Groupes de logiciels</h2></div>
+        <div class="panel-h"><h2>{{ _("Groupes de logiciels") }}</h2></div>
         <form class="panel-b row" method="post" action="{{ url_for('store_group_attach', package_id=package_id) }}">
           <input type="hidden" name="csrf" value="{{ csrf }}">
-          <select name="group_id" aria-label="Groupe de logiciels">{% for group in software_groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select>
-          <button class="btn">Ajouter au groupe</button>
-          {% if not known %}<p class="hint">Le logiciel est d'abord ajouté à loco.</p>{% endif %}
+          <select name="group_id" aria-label="{{ _('Groupe de logiciels') }}">{% for group in software_groups %}<option value="{{ group.id }}">{{ group.name }}</option>{% endfor %}</select>
+          <button class="btn">{{ _("Ajouter au groupe") }}</button>
+          {% if not known %}<p class="hint">{{ _("Le logiciel est d'abord ajouté à loco.") }}</p>{% endif %}
         </form>
       </section>
       {% endif %}
     </div>
   </div>
 
-  <p class="hint">« Ajouter à loco » télécharge l'installeur sur le serveur et vérifie son empreinte. Aucune installation ne part sur les postes avant un déploiement confirmé.</p>
+  <p class="hint">{{ _("« Ajouter à loco » télécharge l'installeur sur le serveur et vérifie son empreinte. Aucune installation ne part sur les postes avant un déploiement confirmé.") }}</p>
 </div>
 {% endblock %}

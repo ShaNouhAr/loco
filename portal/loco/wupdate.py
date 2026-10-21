@@ -12,6 +12,7 @@ import urllib.parse
 from flask import Response, flash, render_template, request
 
 from . import app, config
+from .i18n import _
 from .auth import audit, can, login_required
 from .db import db
 from .fleet import ago_text
@@ -258,7 +259,7 @@ def windows_update_domains():
         if d:
             (domains if config.DOMAIN_RE.match(d) else bad).append(d)
     if bad:
-        flash("Domaines ignorés (invalides) : " + ", ".join(bad), "error")
+        flash(_('Domaines ignorés (invalides) : ') + ", ".join(bad), "error")
     if domains:
         domains = list(dict.fromkeys(domains))
         before = read_wu_domains()
@@ -267,7 +268,7 @@ def windows_update_domains():
         write_wu_maps(domains)
         if domains != before:
             audit("windows_update.domaines", ", ".join(domains))
-        flash("Domaines enregistrés et appliqués au cache.", "ok")
+        flash(_('Domaines enregistrés et appliqués au cache.'), "ok")
     return back("windows_update")
 
 

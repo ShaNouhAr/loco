@@ -10,6 +10,7 @@ from flask import abort, flash, render_template, request
 from werkzeug.utils import secure_filename
 
 from . import app, config
+from .i18n import L_, _
 from .auth import audit, login_required, can
 from .db import db, transaction
 from .util import CANCELLED, PROGRESS, Cancelled, back, download, explain, kind_for, now, sha256_of, slugify
@@ -53,7 +54,7 @@ def fetch_app(row_id, slug, url, expected_sha256="", filename=""):
             return
         filename = filename or name
         if expected_sha256 and sha256_of(tmp) != expected_sha256.lower():
-            raise ValueError("Empreinte SHA-256 différente de celle du catalogue winget : fichier refusé.")
+            raise ValueError(_('Empreinte SHA-256 différente de celle du catalogue winget : fichier refusé.'))
         with transaction() as conn:
             still_there = conn.execute("SELECT 1 FROM win_apps WHERE id=?", (row_id,)).fetchone()
         if not still_there:  # supprimé pendant le téléchargement
@@ -110,8 +111,8 @@ def get_app(slug):
 
 
 # Filtres de la liste : clé -> (libellé, classe de la pastille).
-ATTENTION = {"parc": ("Mises à jour à déployer", "warn"), "arguments": ("Arguments manquants", "warn"),
-             "erreur": ("Erreurs", "err"), "telechargement": ("En téléchargement", "")}
+ATTENTION = {"parc": (L_("Mises à jour à déployer"), "warn"), "arguments": (L_("Arguments manquants"), "warn"),
+             "erreur": (L_("Erreurs"), "err"), "telechargement": (L_("En téléchargement"), "")}
 
 
 def attention(row, used):
@@ -173,16 +174,16 @@ def windows_apps_add():
     upload = request.files.get("file")
     has_upload = bool(upload and upload.filename)
     if not name or not config.SLUG_RE.match(slug):
-        flash("Nom invalide.", "error")
+        flash(_('Nom invalide.'), "error")
         return back("windows_apps")
     if not url and not has_upload:
-        flash("Indiquez un lien ou envoyez un fichier.", "error")
+        flash(_('Indiquez un lien ou envoyez un fichier.'), "error")
         return back("windows_apps")
     if url and not url.startswith(("http://", "https://")):
-        flash("Le lien doit commencer par http:// ou https://.", "error")
+        flash(_('Le lien doit commencer par http:// ou https://.'), "error")
         return back("windows_apps")
     if db().execute("SELECT 1 FROM win_apps WHERE slug=?", (slug,)).fetchone():
-        flash(f"L'identifiant « {slug} » existe déjà.", "error")
+        flash(_("L'identifiant « %(slug)s » existe déjà.", slug=slug), "error")
         return back("windows_apps")
 
     kind = request.form.get("kind") or "auto"
@@ -199,10 +200,10 @@ def windows_apps_add():
     audit("windows.ajout", f"{slug} ({url or 'fichier envoyé'})")
     if has_upload:
         error = save_upload(row, upload, secure_filename(upload.filename))
-        flash(error or f"{name} ajouté au catalogue.", "error" if error else "ok")
+        flash(error or _("%(name)s ajouté au catalogue.", name=name), "error" if error else "ok")
     else:
         start_fetch(row)
-        flash(f"Téléchargement de {name} lancé.", "ok")
+        flash(_('Téléchargement de %(name)s lancé.', name=name), "ok")
     return back("windows_apps")
 
 
@@ -215,7 +216,7 @@ def windows_apps_edit(slug):
         kind = row["kind"]
     url = request.form.get("url", "").strip()
     if url and not url.startswith(("http://", "https://")):
-        flash("Le lien doit commencer par http:// ou https://.", "error")
+        flash(_('Le lien doit commencer par http:// ou https://.'), "error")
         return _back_to(slug)
     upload = request.files.get("file")
     if url != row["source_url"] or upload and upload.filename:
@@ -235,7 +236,7 @@ def windows_apps_edit(slug):
             return _back_to(slug)
         detail += " (nouveau fichier)"
     audit("windows.modification", detail)
-    flash(f"{row['name']} mis à jour.", "ok")
+    flash(_('%(row)s mis à jour.', row=row['name']), "ok")
     return _back_to(slug)
 
 
@@ -244,11 +245,11 @@ def windows_apps_edit(slug):
 def windows_apps_refresh(slug):
     row = get_app(slug)
     if not row["source_url"]:
-        flash("Pas de lien source : renvoyez le fichier depuis « Modifier ».", "error")
+        flash(_('Pas de lien source : renvoyez le fichier depuis « Modifier ».'), "error")
     elif row["status"] != "downloading":
         start_fetch(row)
         audit("windows.actualisation", slug)
-        flash(f"Nouveau téléchargement de {row['name']} lancé.", "ok")
+        flash(_('Nouveau téléchargement de %(row)s lancé.', row=row['name']), "ok")
     return _back_to(slug)
 
 
@@ -262,7 +263,7 @@ def windows_apps_delete(slug):
     db().execute("DELETE FROM win_apps WHERE id=?", (row["id"],))
     db().commit()
     audit("windows.suppression", slug)
-    flash(f"{row['name']} supprimé.", "ok")
+    flash(_('%(row)s supprimé.', row=row['name']), "ok")
     return back("windows_apps")
 
 

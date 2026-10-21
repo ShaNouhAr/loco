@@ -4,6 +4,7 @@ import json
 from flask import abort, flash, g, render_template, request, session
 
 from . import app, config
+from .i18n import L_, _
 from .auth import audit, login_required
 from .db import db
 from .util import back
@@ -12,16 +13,16 @@ SETTING = "features_disabled"
 
 # clé -> (libellé, description, dépend de, interrupteur de service de l'appliance)
 FEATURES = {
-    "apt": ("Paquets APT", "Cache des paquets Debian/Ubuntu, dépôt local et script de configuration des postes.", (), ""),
-    "rpm": ("Paquets RPM", "Cache et dépôts locaux RHEL, Rocky et AlmaLinux.", (), "RPM_ENABLED"),
-    "flatpak": ("Flatpak", "Cache Flathub et applications Flatpak internes.", (), "FLATPAK_ENABLED"),
-    "wu": ("Cache Windows Update", "Mises à jour Windows téléchargées une fois puis servies en local.", (), "WU_ENABLED"),
-    "wu_proxy": ("Proxy Windows Update (sans DNS)", "Dirige automatiquement les postes Windows gérés vers le cache par leur proxy WinHTTP (Squid), sans redirection DNS. L'agent pose et retire le réglage.", ("wu", "fleet"), ""),
-    "fleet": ("Mon parc et agents", "Postes équipés de l'agent : inventaire, mises à jour, actions, groupes de machines.", (), ""),
-    "windows_apps": ("Logiciels Windows", "Catalogue local, centre de logiciels, groupes de logiciels et déploiements.", (), ""),
-    "remote": ("Accès distant", "Terminal et bureau à distance (console noVNC) par l'agent.", ("fleet",), ""),
-    "scripts": ("Scripts", "Bibliothèque de scripts PowerShell et shell exécutés sur les postes par l'agent.", ("fleet",), ""),
-    "directories": ("Annuaires LDAP et RADIUS", "Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles.", (), ""),
+    "apt": (L_("Paquets APT"), L_("Cache des paquets Debian/Ubuntu, dépôt local et script de configuration des postes."), (), ""),
+    "rpm": (L_("Paquets RPM"), L_("Cache et dépôts locaux RHEL, Rocky et AlmaLinux."), (), "RPM_ENABLED"),
+    "flatpak": (L_("Flatpak"), L_("Cache Flathub et applications Flatpak internes."), (), "FLATPAK_ENABLED"),
+    "wu": (L_("Cache Windows Update"), L_("Mises à jour Windows téléchargées une fois puis servies en local."), (), "WU_ENABLED"),
+    "wu_proxy": (L_("Proxy Windows Update (sans DNS)"), L_("Dirige automatiquement les postes Windows gérés vers le cache par leur proxy WinHTTP (Squid), sans redirection DNS. L'agent pose et retire le réglage."), ("wu", "fleet"), ""),
+    "fleet": (L_("Mon parc et agents"), L_("Postes équipés de l'agent : inventaire, mises à jour, actions, groupes de machines."), (), ""),
+    "windows_apps": (L_("Logiciels Windows"), L_("Catalogue local, centre de logiciels, groupes de logiciels et déploiements."), (), ""),
+    "remote": (L_("Accès distant"), L_("Terminal et bureau à distance (console noVNC) par l'agent."), ("fleet",), ""),
+    "scripts": (L_("Scripts"), L_("Bibliothèque de scripts PowerShell et shell exécutés sur les postes par l'agent."), ("fleet",), ""),
+    "directories": (L_("Annuaires LDAP et RADIUS"), L_("Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles."), (), ""),
 }
 
 # Module de la page -> fonctionnalités nécessaires ; quelques pages partagées sont précisées par leur nom.
@@ -104,7 +105,7 @@ def block_disabled_features():
         return ({"error": f"Fonctionnalité désactivée sur ce serveur : {label}."}, 503, {"Retry-After": "600"})
     if not session.get("uid") and endpoint not in ENDPOINTS:
         return              # visiteur non connecté : redirigé vers la connexion comme ailleurs, sans rien révéler
-    abort(403, f"Fonctionnalité désactivée par l'administrateur : {label}.")
+    abort(403, _("Fonctionnalité désactivée par l'administrateur : %(label)s.", label=label))
 
 
 app.before_request_funcs[None].remove(block_disabled_features)
@@ -116,7 +117,7 @@ app.jinja_env.globals.update(feature=enabled, is_super_admin=is_super_admin)
 @login_required
 def features():
     if not is_super_admin():
-        abort(403, "Réservé au compte « admin » de l'installation.")
+        abort(403, _("Réservé au compte « admin » de l'installation."))
     off = disabled()
     manual = set()
     row = db().execute("SELECT value FROM settings WHERE key=?", (SETTING,)).fetchone()
@@ -139,7 +140,7 @@ def features():
 @login_required
 def features_save():
     if not is_super_admin():
-        abort(403, "Réservé au compte « admin » de l'installation.")
+        abort(403, _("Réservé au compte « admin » de l'installation."))
     wanted_off = sorted(k for k in FEATURES if request.form.get(k) != "1")
     conn = db()
     previous = disabled(conn)
@@ -161,8 +162,8 @@ def features_save():
                 clean = appliance.locoadmin.validate(switches)
             except ValueError as e:
                 clean = {}
-                flash(f"Services réseau inchangés : {e}.", "error")
+                flash(_('Services réseau inchangés : %(e)s.', e=e), "error")
             if clean:
                 appliance._submit("configure", clean)
-    flash("Fonctionnalités enregistrées." if changes else "Aucun changement.", "ok")
+    flash((_('Fonctionnalités enregistrées.') if changes else _('Aucun changement.')), "ok")
     return back("features")

@@ -48,6 +48,10 @@ tests/      tests unitaires et de bout en bout (VM Linux, Windows Server)
 install.sh  raccourci vers linux/install.sh
 ```
 
+
+**Langues** : interface en français ou en anglais, au choix de chaque compte (menu *Apparence*), sinon selon le
+navigateur. Traductions : `portal/i18n/en.json` (texte français -> anglais), vérifiées par `tests/test_i18n.py`.
+
 ## Serveur Linux
 
 ### Installation native (recommandée)

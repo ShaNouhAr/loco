@@ -13,15 +13,20 @@ import time
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from . import app, fleet, groups
+from .i18n import L_, N_, _, locale
 from .auth import audit, login_required, require
 from .db import db
 from .util import safe_next
 
-RECURRENCES = {"once": "Une fois", "daily": "Chaque jour", "weekly": "Chaque semaine", "monthly": "Chaque mois"}
-ACTIONS = {"update": "Mise à jour", "run-script": "Script"}
+RECURRENCES = {"once": L_("Une fois"), "daily": L_("Chaque jour"), "weekly": L_("Chaque semaine"), "monthly": L_("Chaque mois")}
+ACTIONS = {"update": L_("Mise à jour"), "run-script": L_("Script")}
 DAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
 MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre",
           "décembre")
+# Anglais : phrases construites dans l'ordre de la langue (jours et mois en majuscule, ordinaux 1st, 2nd…).
+DAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+             "November", "December")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 FMT = "%Y-%m-%d %H:%M:%S"
 MAX_TARGETS = 500
@@ -44,7 +49,7 @@ def next_occurrence(s, after):
     day = max(start, after.date())
     if s["recurrence"] == "monthly":
         year, month = day.year, day.month
-        for _ in range(25):
+        for _attempt in range(25):
             last = calendar.monthrange(year, month)[1]
             when = datetime.datetime.combine(datetime.date(year, month, min(int(s["monthday"]), last)), at)
             if when > after and when.date() >= start:
@@ -60,40 +65,58 @@ def next_occurrence(s, after):
     return None
 
 
+def _english():
+    return locale() == "en"
+
+
 def _join(items):
-    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " et " + items[-1]
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + (" and " if _english() else " et ") + items[-1]
+
+
+def _ordinal(day):
+    if _english():
+        return f"{day}{'th' if 11 <= day % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')}"
+    return "1er" if day == 1 else str(day)
 
 
 def when_text(when):
-    """« mardi 21 octobre à 02:00 » (année seulement si elle diffère de l'année en cours)."""
+    """« mardi 21 octobre à 02:00 » / « Tuesday, October 21 at 02:00 » (année si elle diffère de l'année en cours)."""
     if isinstance(when, str):
         when = datetime.datetime.strptime(when, FMT)
-    text = f"{DAYS[when.weekday()]} {'1er' if when.day == 1 else when.day} {MONTHS[when.month - 1]}"
-    if when.year != datetime.date.today().year:
-        text += f" {when.year}"
-    return f"{text} à {when:%H:%M}"
+    year = f" {when.year}" if when.year != datetime.date.today().year else ""
+    if _english():
+        return f"{DAYS_EN[when.weekday()]}, {MONTHS_EN[when.month - 1]} {when.day}{',' if year else ''}{year} at {when:%H:%M}"
+    return f"{DAYS[when.weekday()]} {_ordinal(when.day)} {MONTHS[when.month - 1]}{year} à {when:%H:%M}"
+
+
+def result_text(text):
+    """Résultat d'une exécution, enregistré en français, dans la langue de la page."""
+    m = re.fullmatch(r"(\d+) poste\(s\)", text or "")
+    return _("%(num)s poste(s)", num=m.group(1)) if m else _(text) if text else ""
 
 
 def describe(s):
-    """Récurrence en toutes lettres : « Chaque mardi et jeudi à 02:00 »."""
+    """Récurrence en toutes lettres : « Chaque mardi et jeudi à 02:00 » / « Every Tuesday and Thursday at 02:00 »."""
     at = s["at_time"]
     if s["recurrence"] == "once":
-        return "Le " + when_text(datetime.datetime.combine(datetime.date.fromisoformat(s["start_date"]), _at(s)))
+        return _("Le %(when)s", when=when_text(datetime.datetime.combine(datetime.date.fromisoformat(s["start_date"]), _at(s))))
     if s["recurrence"] == "daily":
-        return f"Chaque jour à {at}"
+        return _("Chaque jour à %(at)s", at=at)
     if s["recurrence"] == "weekly":
         days = sorted(int(d) for d in s["weekdays"].split(",") if d != "")
         if days == list(range(7)):
-            return f"Chaque jour à {at}"
+            return _("Chaque jour à %(at)s", at=at)
         if days == list(range(5)):
-            return f"Du lundi au vendredi à {at}"
+            return _("Du lundi au vendredi à %(at)s", at=at)
         if days == [5, 6]:
-            return f"Le week-end à {at}"
-        return f"Chaque {_join([DAYS[d] for d in days])} à {at}"
+            return _("Le week-end à %(at)s", at=at)
+        return _("Chaque %(days)s à %(at)s", days=_join([(DAYS_EN if _english() else DAYS)[d] for d in days]), at=at)
     day = int(s["monthday"])
     if day == LAST_DAY:
-        return f"Le dernier jour de chaque mois à {at}"
-    return f"Le {'1er' if day == 1 else day} de chaque mois à {at}"
+        return _("Le dernier jour de chaque mois à %(at)s", at=at)
+    return _("Le %(day)s de chaque mois à %(at)s", day=_ordinal(day), at=at)
 
 
 def parse(form, now=None):
@@ -101,21 +124,21 @@ def parse(form, now=None):
     now = now or datetime.datetime.now()
     recurrence = form.get("recurrence", "once")
     if recurrence not in RECURRENCES:
-        raise ValueError("Récurrence inconnue.")
+        raise ValueError(_('Récurrence inconnue.'))
     at = (form.get("at_time") or "").strip()[:5]
     if not TIME_RE.match(at):
-        raise ValueError("Heure invalide.")
+        raise ValueError(_('Heure invalide.'))
     try:
         start = datetime.date.fromisoformat((form.get("start_date") or "").strip())
     except ValueError:
-        raise ValueError("Date invalide.") from None
+        raise ValueError(_('Date invalide.')) from None
     if start > now.date() + datetime.timedelta(days=366):
-        raise ValueError("La planification ne peut pas commencer dans plus d'un an.")
+        raise ValueError(_("La planification ne peut pas commencer dans plus d'un an."))
     weekdays, monthday = "", 0
     if recurrence == "weekly":
         days = sorted({int(d) for d in form.getlist("weekdays") if d.isdigit() and int(d) < 7})
         if not days:
-            raise ValueError("Choisissez au moins un jour de la semaine.")
+            raise ValueError(_('Choisissez au moins un jour de la semaine.'))
         weekdays = ",".join(map(str, days))
     if recurrence == "monthly":
         try:
@@ -123,12 +146,12 @@ def parse(form, now=None):
         except ValueError:
             monthday = 0
         if not (1 <= monthday <= 28 or monthday == LAST_DAY):
-            raise ValueError("Jour du mois invalide.")
+            raise ValueError(_('Jour du mois invalide.'))
     fields = {"recurrence": recurrence, "at_time": at, "start_date": start.isoformat(), "weekdays": weekdays,
               "monthday": monthday}
     upcoming = next_occurrence(fields, now)
     if upcoming is None:
-        raise ValueError("L'instant planifié est déjà passé.")
+        raise ValueError(_("L'instant planifié est déjà passé."))
     fields["next_run"] = upcoming.strftime(FMT)
     return fields
 
@@ -174,29 +197,28 @@ def resolve(conn, s):
 
 def targets_text(conn, targets):
     if targets.get("all"):
-        return "Tout le parc"
+        return _("Tout le parc")
     parts = []
     for gid in targets.get("groups", []):
         row = conn.execute("SELECT name FROM device_groups WHERE id=?", (int(gid),)).fetchone()
         if row:
-            parts.append(f"groupe {row['name']}")
+            # « Groupe Serveurs » en tête, « groupe Serveurs » ensuite ; un nom de poste garde sa casse.
+            parts.append(_("Groupe %(name)s", name=row["name"]) if not parts else _("groupe %(name)s", name=row["name"]))
     names = [r["hostname"] or r["uid"][:8] for r in
              (conn.execute("SELECT hostname, uid FROM devices WHERE id=? AND state!='removed'", (int(i),)).fetchone()
               for i in targets.get("devices", [])) if r]
     if len(names) <= 2:
         parts += names
     else:
-        parts.append(f"{len(names)} appareils")
-    if parts and parts[0].startswith("groupe "):
-        parts[0] = "G" + parts[0][1:]                  # « Groupe Serveurs » ; un nom de poste garde sa casse
-    return " + ".join(parts) or "Aucun appareil"
+        parts.append(_("%(num)s appareils", num=len(names)))
+    return " + ".join(parts) or _("Aucun appareil")
 
 
 def action_text(conn, action, params):
     if action == "update":
-        return "Mise à jour" + (", redémarrage si nécessaire" if params.get("reboot") else "")
+        return _("Mise à jour, redémarrage si nécessaire") if params.get("reboot") else _("Mise à jour")
     script = conn.execute("SELECT name FROM scripts WHERE id=?", (params.get("script_id"),)).fetchone()
-    return f"Script « {script['name'] if script else 'supprimé'} »"
+    return _("Script « %(name)s »", name=script["name"]) if script else _("Script supprimé")
 
 
 def covers(conn, s, dev_id):
@@ -219,7 +241,8 @@ def view(conn, s):
     return {"id": s["id"], "name": s["name"], "action": s["action"], "label": action_text(conn, s["action"], params),
             "targets": targets_text(conn, _targets(s)), "when": describe(s), "recurrence": s["recurrence"],
             "next": when_text(s["next_run"]) if s["next_run"] else "", "next_raw": s["next_run"],
-            "last": when_text(s["last_run"]) if s["last_run"] else "", "last_result": s["last_result"],
+            "last": when_text(s["last_run"]) if s["last_run"] else "", "last_result": result_text(s["last_result"]),
+            "script_changed": s["last_result"].startswith("Script modifié"),
             "last_ref": s["last_ref"], "state": state, "created_by": s["created_by"]}
 
 
@@ -238,7 +261,7 @@ def _require(action, params, targets):
 
 def _check_targets(targets):
     if not (targets.get("all") or targets.get("groups") or targets.get("devices")):
-        raise ValueError("Choisissez au moins un appareil ou un groupe.")
+        raise ValueError(_('Choisissez au moins un appareil ou un groupe.'))
 
 
 def create(conn, action, params, targets, form):
@@ -275,20 +298,21 @@ def materialize(conn):
             added = sum(1 for dev in devices
                         if fleet.queue(dev, "update", {"reboot": bool(params.get("reboot"))}, user=s["created_by"],
                                        run_after=s["next_run"]))
+            # Résultat gardé en français dans la base, traduit à l'affichage (result_text).
             result = (f"{added} poste(s)" if added else
-                      "Déjà en attente sur les postes" if devices else "Aucun poste actif concerné")
+                      N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
         else:
             script = conn.execute("SELECT * FROM scripts WHERE id=?", (params.get("script_id"),)).fetchone()
             if script is None or script["version"] != params.get("version"):
                 conn.execute("UPDATE schedules SET enabled=0, last_result=? WHERE id=?",
-                             ("Script modifié ou supprimé depuis la planification : mise en pause, à revoir.", s["id"]))
+                             (N_("Script modifié ou supprimé depuis la planification : mise en pause, à revoir."), s["id"]))
                 audit("planifications.pause", f"planification {s['id']} : script modifié ou supprimé",
                       username=s["created_by"], commit=False)
                 continue
             targets = [d for d in devices if scripts._compatible(d, script["platform"])]
             if targets:
                 ref = scripts.start_run(conn, script, targets, s["created_by"], s["next_run"])
-            result = f"{len(targets)} poste(s)" if targets else "Aucun poste compatible actif"
+            result = f"{len(targets)} poste(s)" if targets else N_("Aucun poste compatible actif")
         conn.execute("UPDATE schedules SET last_result=?, last_ref=? WHERE id=?", (result, ref, s["id"]))
         audit("planifications.execution", f"{action_text(conn, s['action'], params)} : {result}",
               username=s["created_by"], commit=False)
@@ -360,7 +384,7 @@ def _form_params(conn, action, form):
     except ValueError:
         script = None
     if script is None:
-        raise ValueError("Choisissez un script.")
+        raise ValueError(_('Choisissez un script.'))
     return {"script_id": script["id"], "version": script["version"]}
 
 
@@ -397,7 +421,7 @@ def schedule_save(sched_id):
             return _back()
         return redirect(url_for("schedule_editor", sched_id=sched_id))
     conn.commit()
-    flash("Planification enregistrée : " + describe(_row(sched_id)) + ".", "ok")
+    flash(_('Planification enregistrée : ') + describe(_row(sched_id)) + ".", "ok")
     return _back()
 
 
@@ -409,7 +433,7 @@ def schedule_toggle(sched_id):
     if s["enabled"]:
         conn.execute("UPDATE schedules SET enabled=0, updated_at=? WHERE id=?", (fleet._now(), sched_id))
         audit("planifications.pause", describe(s), commit=False)
-        flash("Planification mise en pause.", "ok")
+        flash(_('Planification mise en pause.'), "ok")
     else:
         upcoming = next_occurrence(s, datetime.datetime.now())     # les occurrences manquées sont sautées
         conn.execute("UPDATE schedules SET enabled=1, next_run=?, last_result=CASE WHEN last_result LIKE 'Script modifié%' "
@@ -418,11 +442,11 @@ def schedule_toggle(sched_id):
         if s["action"] == "run-script":                            # reprise = contenu actuel relu et accepté
             script = conn.execute("SELECT version FROM scripts WHERE id=?", (_params(s).get("script_id"),)).fetchone()
             if script is None:
-                abort(409, "Le script de cette planification a été supprimé.")
+                abort(409, _('Le script de cette planification a été supprimé.'))
             conn.execute("UPDATE schedules SET params=? WHERE id=?",
                          (json.dumps(dict(_params(s), version=script["version"])), sched_id))
         audit("planifications.reprise", describe(s), commit=False)
-        flash("Planification reprise." if upcoming else "Planification ponctuelle déjà passée : modifiez sa date.", "ok")
+        flash((_('Planification reprise.') if upcoming else _('Planification ponctuelle déjà passée : modifiez sa date.')), "ok")
     conn.commit()
     return _back()
 
@@ -435,7 +459,7 @@ def schedule_delete(sched_id):
     conn.execute("DELETE FROM schedules WHERE id=?", (sched_id,))
     audit("planifications.suppression", f"{action_text(conn, s['action'], _params(s))} — {describe(s)}", commit=False)
     conn.commit()
-    flash("Planification supprimée.", "ok")
+    flash(_('Planification supprimée.'), "ok")
     return _back()
 
 

@@ -904,8 +904,8 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 
 .theme-menu > summary.theme-toggle::after { display: none; }
 .theme-menu .menu-list { min-width: 230px; }
-.theme-choice[aria-checked="true"] { font-weight: 500; }
-.theme-choice[aria-checked="true"]::after { content: ""; width: 8px; height: 4px; margin-left: auto; border-left: 1.5px solid var(--text); border-bottom: 1.5px solid var(--text); transform: rotate(-45deg) translateY(-2px); }
+.theme-choice[aria-checked="true"], .lang-choice[aria-checked="true"] { font-weight: 500; }
+.theme-choice[aria-checked="true"]::after, .lang-choice[aria-checked="true"]::after { content: ""; width: 8px; height: 4px; margin-left: auto; border-left: 1.5px solid var(--text); border-bottom: 1.5px solid var(--text); transform: rotate(-45deg) translateY(-2px); }
 .theme-swatch { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line-2); flex: none; }
 .swatch-oled { background: #000; }
 .swatch-dim { background: #232327; }

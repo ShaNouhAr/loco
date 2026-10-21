@@ -1,67 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Comptes{% endblock %}
+{% block title %}{{ _("Comptes") }}{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Comptes</h1><p>Attribuez un profil à chaque utilisateur. Les droits s'appliquent aux pages comme aux actions.</p></div>
-  {% if can('roles.view') %}<a class="btn" href="{{ url_for('roles') }}">Profils d'accès</a>{% endif %}
+  <div><h1>{{ _("Comptes") }}</h1><p>{{ _("Attribuez un profil à chaque utilisateur. Les droits s'appliquent aux pages comme aux actions.") }}</p></div>
+  {% if can('roles.view') %}<a class="btn" href="{{ url_for('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
 </div>
 <div class="stack">
   {% if issued %}
   <section class="panel">
-    <div class="panel-h"><h2>Mot de passe temporaire</h2><div class="aside">affiché une seule fois</div></div>
-    <div class="panel-b issued"><span>Compte <b class="mono">{{ issued.username }}</b></span>
-      <div class="cmd"><code id="issued-pw" data-prompt="">{{ issued.password }}</code><button type="button" class="copy">Copier</button></div>
-      <span class="hint">À transmettre à la personne : il devra être changé à la première connexion.</span>
+    <div class="panel-h"><h2>{{ _("Mot de passe temporaire") }}</h2><div class="aside">{{ _("affiché une seule fois") }}</div></div>
+    <div class="panel-b issued"><span>{{ _("Compte") }} <b class="mono">{{ issued.username }}</b></span>
+      <div class="cmd"><code id="issued-pw" data-prompt="">{{ issued.password }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+      <span class="hint">{{ _("À transmettre à la personne : il devra être changé à la première connexion.") }}</span>
     </div>
   </section>
   {% endif %}
   <div class="{{ 'cols w21' if can('users.create') else 'stack' }}">
     <section class="panel">
-      <div class="panel-h"><h2>Comptes <span class="h-count">{{ users|length }}</span></h2>
-        <div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#users-table tbody tr" aria-label="Filtrer les comptes"></div>
+      <div class="panel-h"><h2>{{ _("Comptes") }} <span class="h-count">{{ users|length }}</span></h2>
+        <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#users-table tbody tr" aria-label="{{ _('Filtrer les comptes') }}"></div>
       </div>
       <div class="table-wrap"><table id="users-table">
-        <thead><tr><th>Identifiant</th><th>Profil et état</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
+        <thead><tr><th>{{ _("Identifiant") }}</th><th>{{ _("Profil et état") }}</th><th>{{ _("Dernière connexion") }}</th><th></th></tr></thead><tbody>
         {% for u in users %}
         {% set me = u.id == current_user.id %}{% set manageable = can_manage_user(u) %}
         <tr>
-          <td class="user-cell">{% if u.auth_source == "directory" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub">{{ 'RADIUS' if u.directory_kind == 'radius' else 'LDAP' }} · {{ u.provider_label or "annuaire supprimé" }}{% if u.subject and u.subject != u.username %} · identifiant d'annuaire {{ u.subject }}{% endif %}</span>{% if u.email %}<span class="sub">{{ u.email }}</span>{% endif %}{% elif u.auth_source == "sso" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub warn-text">Ancienne connexion OpenID Connect, retirée : donnez-lui un mot de passe local pour la réactiver.</span>{% endif %}<span>{{ u.username }}</span>{% if me %} <span class="faint small">(vous)</span>{% endif %}<span class="sub">créé le {{ u.created_at|date_fr }}</span></td>
+          <td class="user-cell">{% if u.auth_source == "directory" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub">{{ 'RADIUS' if u.directory_kind == 'radius' else 'LDAP' }} · {{ u.provider_label or _("annuaire supprimé") }}{% if u.subject and u.subject != u.username %} {{ _("· identifiant d'annuaire %(subject)s", subject=u.subject) }}{% endif %}</span>{% if u.email %}<span class="sub">{{ u.email }}</span>{% endif %}{% elif u.auth_source == "sso" %}<strong>{{ u.display_name or u.username }}</strong><span class="sub warn-text">{{ _("Ancienne connexion OpenID Connect, retirée : donnez-lui un mot de passe local pour la réactiver.") }}</span>{% endif %}<span>{{ u.username }}</span>{% if me %} <span class="faint small">{{ _("(vous)") }}</span>{% endif %}<span class="sub">{{ _("créé le %(created_at)s", created_at=u.created_at|date_fr) }}</span></td>
           <td>
             {% if u.pending %}
-            <span class="st warn">En attente d'approbation · aucun accès</span>
-            {% if manageable and can('users.approve') and feature('directories') %}<form method="post" action="{{ url_for('users_approve', user_id=u.id) }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="role" aria-label="Profil après approbation">{% for key, label in assignable_roles.items() if key != 'pending' %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select><button class="btn sm primary">Approuver</button></form>{% endif %}
+            <span class="st warn">{{ _("En attente d'approbation · aucun accès") }}</span>
+            {% if manageable and can('users.approve') and feature('directories') %}<form method="post" action="{{ url_for('users_approve', user_id=u.id) }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="role" aria-label="{{ _('Profil après approbation') }}">{% for key, label in assignable_roles.items() if key != 'pending' %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select><button class="btn sm primary">{{ _("Approuver") }}</button></form>{% endif %}
             {% elif not me and manageable and can('users.edit') %}
             <form method="post" action="{{ url_for('users_update', user_id=u.id) }}" class="inline-form" data-ajax>
               <input type="hidden" name="csrf" value="{{ csrf }}">
-              <select name="role" aria-label="Profil de {{ u.username }}">{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if u.role == key }}>{{ label }}</option>{% endfor %}</select>
-              <select name="disabled" aria-label="État de {{ u.username }}"><option value="0" {{ 'selected' if not u.disabled }}>actif</option><option value="1" {{ 'selected' if u.disabled }}>désactivé</option></select>
-              <button class="btn sm">Appliquer</button>
+              <select name="role" aria-label="{{ _('Profil de %(username)s', username=u.username) }}">{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if u.role == key }}>{{ label }}</option>{% endfor %}</select>
+              <select name="disabled" aria-label="{{ _('État de %(username)s', username=u.username) }}"><option value="0" {{ 'selected' if not u.disabled }}>{{ _("actif") }}</option><option value="1" {{ 'selected' if u.disabled }}>{{ _("désactivé") }}</option></select>
+              <button class="btn sm">{{ _("Appliquer") }}</button>
             </form>
-            {% else %}<span class="role">{{ roles.get(u.role, 'Profil indisponible') }}</span>{% endif %}
-            {% if u.disabled and not u.pending %}<span class="st err small">désactivé</span>{% elif u.must_change %}<span class="st warn small">mot de passe temporaire</span>{% endif %}
+            {% else %}<span class="role">{{ roles.get(u.role, _('Profil indisponible')) }}</span>{% endif %}
+            {% if u.disabled and not u.pending %}<span class="st err small">{{ _("désactivé") }}</span>{% elif u.must_change %}<span class="st warn small">{{ _("mot de passe temporaire") }}</span>{% endif %}
           </td>
-          <td>{% if u.last_login %}{{ u.last_login|date_fr }}{% if u.last_ip %}<span class="sub nowrap">depuis <span class="mono">{{ u.last_ip }}</span></span>{% endif %}{% if can('audit.view') %}<a class="sub nowrap" href="{{ url_for('journal', compte=u.username, categorie='connexions') }}" title="Connexions de {{ u.username }} dans le journal">historique</a>{% endif %}{% else %}<span class="faint">jamais</span>{% endif %}</td>
+          <td>{% if u.last_login %}{{ u.last_login|date_fr }}{% if u.last_ip %}<span class="sub nowrap">{{ _("depuis") }} <span class="mono">{{ u.last_ip }}</span></span>{% endif %}{% if can('audit.view') %}<a class="sub nowrap" href="{{ url_for('journal', compte=u.username, categorie='connexions') }}" title="{{ _('Connexions de %(username)s dans le journal', username=u.username) }}">{{ _("historique") }}</a>{% endif %}{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
           <td class="right">{% if not me and manageable %}<div class="acts">
-            {% if can('users.reset') and u.auth_source in ('local', 'sso') %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="{{ 'Donner un mot de passe local à ' ~ u.username ~ ' ?' if u.auth_source == 'sso' else 'Réinitialiser le mot de passe de ' ~ u.username ~ ' ?' }}" data-confirm-text="{{ 'Le compte devient un compte local avec un mot de passe temporaire à changer à la première connexion.' if u.auth_source == 'sso' else 'Ses connexions seront fermées et ses commandes non transmises aux agents annulées.' }}" data-confirm-ok="{{ 'Donner un mot de passe' if u.auth_source == 'sso' else 'Réinitialiser' }}">
-              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ 'Mot de passe local' if u.auth_source == 'sso' else 'Réinitialiser' }}</button>
+            {% if can('users.reset') and u.auth_source in ('local', 'sso') %}<form method="post" action="{{ url_for('users_reset', user_id=u.id) }}" data-ajax data-confirm="{{ _('Donner un mot de passe local à %(name)s ?', name=u.username) if u.auth_source == 'sso' else _('Réinitialiser le mot de passe de %(name)s ?', name=u.username) }}" data-confirm-text="{{ _('Le compte devient un compte local avec un mot de passe temporaire à changer à la première connexion.') if u.auth_source == 'sso' else _('Ses connexions seront fermées et ses commandes non transmises aux agents annulées.') }}" data-confirm-ok="{{ _('Donner un mot de passe') if u.auth_source == 'sso' else _('Réinitialiser') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _('Mot de passe local') if u.auth_source == 'sso' else _('Réinitialiser') }}</button>
             </form>{% endif %}
-            {% if can('users.delete') %}<form method="post" action="{{ url_for('users_delete', user_id=u.id) }}" data-ajax data-confirm="Supprimer le compte {{ u.username }} ?" data-confirm-text="Ses actions restent dans le journal. Ses connexions sont fermées et ses commandes non transmises annulées." data-confirm-ok="Supprimer">
-              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">Supprimer</button>
+            {% if can('users.delete') %}<form method="post" action="{{ url_for('users_delete', user_id=u.id) }}" data-ajax data-confirm="{{ _('Supprimer le compte %(username)s ?', username=u.username) }}" data-confirm-text="{{ _('Ses actions restent dans le journal. Ses connexions sont fermées et ses commandes non transmises annulées.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">{{ _("Supprimer") }}</button>
             </form>{% endif %}
-          </div>{% elif not me and not manageable %}<span class="small muted">Droits hors de votre profil</span>{% endif %}</td>
+          </div>{% elif not me and not manageable %}<span class="small muted">{{ _("Droits hors de votre profil") }}</span>{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody></table></div>
-      <div class="panel-f">Vous pouvez gérer uniquement les comptes dont vous possédez tous les droits. Le profil Administrateur est réservé aux administrateurs complets. Votre propre profil et le dernier administrateur local actif sont protégés.</div>
+      <div class="panel-f">{{ _("Vous pouvez gérer uniquement les comptes dont vous possédez tous les droits. Le profil Administrateur est réservé aux administrateurs complets. Votre propre profil et le dernier administrateur local actif sont protégés.") }}</div>
     </section>
     {% if can('users.create') %}
-    <section class="panel"><div class="panel-h"><h2>Nouveau compte</h2></div>
+    <section class="panel"><div class="panel-h"><h2>{{ _("Nouveau compte") }}</h2></div>
       <form class="panel-b" method="post" action="{{ url_for('users_add') }}" data-ajax>
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>Identifiant</span><input type="text" name="username" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="prenom.nom" autocapitalize="none" spellcheck="false"></label>
-        <label class="f"><span>Profil d'accès</span><select name="role" required>{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select></label>
-        <button class="btn primary"><span class="spin"></span>Créer le compte</button>
-        <p class="hint">Un mot de passe temporaire est généré ; il devra être changé à la première connexion. Seuls les profils que vous pouvez attribuer sont proposés.</p>
+        <label class="f"><span>{{ _("Identifiant") }}</span><input type="text" name="username" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="{{ _('prenom.nom') }}" autocapitalize="none" spellcheck="false"></label>
+        <label class="f"><span>{{ _("Profil d'accès") }}</span><select name="role" required>{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select></label>
+        <button class="btn primary"><span class="spin"></span>{{ _("Créer le compte") }}</button>
+        <p class="hint">{{ _("Un mot de passe temporaire est généré ; il devra être changé à la première connexion. Seuls les profils que vous pouvez attribuer sont proposés.") }}</p>
       </form>
     </section>
     {% endif %}

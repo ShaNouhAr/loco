@@ -22,6 +22,7 @@ import zipfile
 from flask import flash, render_template, request, send_file
 
 from . import app, config
+from .i18n import L_, _
 from .auth import audit, login_required, can, lock_access, require
 from .db import db
 from .util import back, now, slugify
@@ -138,7 +139,7 @@ def parse_yaml(text):
             line = lines[pos[0]].strip()
             m = re.match(r'^("(?:[^"\\]|\\.)*"|[^:]+?):(?:\s+(.*))?$', line) or re.match(r"^(.+?):$", line)
             if not m:
-                raise ValueError(f"YAML non pris en charge : {line[:60]}")
+                raise ValueError(_('YAML non pris en charge : %(line)s', line=line[:60]))
             key = _scalar(m.group(1))
             rest = (m.group(2) if m.re.groups >= 2 else "") or ""
             pos[0] += 1
@@ -149,7 +150,7 @@ def parse_yaml(text):
         return {}
     result = node(indent(lines[0]))
     if pos[0] != len(lines):
-        raise ValueError(f"YAML non pris en charge : {lines[pos[0]].strip()[:60]}")
+        raise ValueError(_('YAML non pris en charge : %(lines)s', lines=lines[pos[0]].strip()[:60]))
     return result
 
 
@@ -160,7 +161,7 @@ def _fetch(url, limit, timeout=120):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         data = r.read(limit + 1)
     if len(data) > limit:
-        raise ValueError("réponse trop volumineuse")
+        raise ValueError(_('réponse trop volumineuse'))
     return data
 
 
@@ -179,7 +180,7 @@ def refresh_index(force=False):
             with zipfile.ZipFile(tmp) as z:
                 info = z.getinfo("Public/index.db")
                 if info.file_size > MAX_INDEX:
-                    raise ValueError("index winget trop volumineux")
+                    raise ValueError(_('index winget trop volumineux'))
                 with z.open(info) as src, open(INDEX + ".new", "wb") as out:
                     shutil.copyfileobj(src, out)
             with sqlite3.connect(f"file:{INDEX}.new?mode=ro", uri=True) as conn:
@@ -252,21 +253,21 @@ def search(query, limit=25):
 def manifest(package_id):
     """Manifeste fusionné de la dernière version, vérifié par l'empreinte de l'index."""
     if not ID_RE.match(package_id):
-        raise ValueError("identifiant winget invalide")
+        raise ValueError(_('identifiant winget invalide'))
     with _connect() as conn:
         rows = conn.execute(QUERY + " WHERE i.id = ?", (package_id,)).fetchall()
         if not rows:
-            raise ValueError(f"{package_id} absent du catalogue winget")
+            raise ValueError(_('%(package_id)s absent du catalogue winget', package_id=package_id))
         row = max(rows, key=lambda r: _version_key(r["version"]))
         path = _path(conn, row["pathpart"])
     if not path.startswith("manifests/") or ".." in path.split("/") or re.search(r"[\x00-\x1f\\?#]", path):
-        raise ValueError("chemin de manifeste inattendu")
+        raise ValueError(_('chemin de manifeste inattendu'))
     data = _fetch(SOURCE + urllib.parse.quote(path, safe="/+"), MAX_MANIFEST)
     if row["hash"] and hashlib.sha256(data).hexdigest() != row["hash"]:
-        raise ValueError("empreinte du manifeste winget incorrecte")
+        raise ValueError(_('empreinte du manifeste winget incorrecte'))
     doc = parse_yaml(data.decode("utf-8-sig"))
     if not isinstance(doc, dict):
-        raise ValueError("manifeste winget illisible")
+        raise ValueError(_('manifeste winget illisible'))
     return doc
 
 
@@ -303,7 +304,7 @@ def choose_installer(doc):
                                    "args": silent.strip(), "display_name": entry.get("DisplayName") or "",
                                    "display_version": entry.get("DisplayVersion") or "", "type": kind}))
     if not candidates:
-        raise ValueError("aucun installeur Windows x64/x86 installable en silence dans ce manifeste")
+        raise ValueError(_('aucun installeur Windows x64/x86 installable en silence dans ce manifeste'))
     return max(candidates, key=lambda c: c[0])[1]
 
 
@@ -370,7 +371,7 @@ def package_icon(package_id):
                     continue
                 data = _fetch(url, MAX_ICON, timeout=15)
                 if not _icon_valid(data, kind) or hashlib.sha256(data).hexdigest() != expected:
-                    raise ValueError("logo winget invalide ou empreinte incorrecte")
+                    raise ValueError(_('logo winget invalide ou empreinte incorrecte'))
                 name = expected + "." + kind
                 break
             if not name and package_id in PUBLISHER_ICONS:
@@ -417,20 +418,20 @@ def software_icon(package_id):
 
 # Sélections éditoriales : les versions et installeurs viennent toujours de l'index Microsoft.
 CATEGORIES = {
-    "selection": ("À découvrir", ("7zip.7zip", "Mozilla.Firefox", "Google.Chrome", "VideoLAN.VLC",
+    "selection": (L_("À découvrir"), ("7zip.7zip", "Mozilla.Firefox", "Google.Chrome", "VideoLAN.VLC",
                                   "Notepad++.Notepad++", "TheDocumentFoundation.LibreOffice", "Microsoft.VisualStudioCode",
                                   "Git.Git", "SumatraPDF.SumatraPDF", "GIMP.GIMP.3", "Inkscape.Inkscape",
                                   "KeePassXCTeam.KeePassXC", "Audacity.Audacity", "BlenderFoundation.Blender")),
-    "navigateurs": ("Navigateurs", ("Mozilla.Firefox", "Google.Chrome", "Microsoft.Edge", "Brave.Brave", "Vivaldi.Vivaldi")),
-    "bureautique": ("Bureautique", ("TheDocumentFoundation.LibreOffice", "SumatraPDF.SumatraPDF", "PDFsam.PDFsam",
+    "navigateurs": (L_("Navigateurs"), ("Mozilla.Firefox", "Google.Chrome", "Microsoft.Edge", "Brave.Brave", "Vivaldi.Vivaldi")),
+    "bureautique": (L_("Bureautique"), ("TheDocumentFoundation.LibreOffice", "SumatraPDF.SumatraPDF", "PDFsam.PDFsam",
                                    "Mozilla.Thunderbird", "Notepad++.Notepad++")),
-    "outils": ("Outils", ("7zip.7zip", "Microsoft.PowerToys", "WinSCP.WinSCP", "PuTTY.PuTTY", "WiresharkFoundation.Wireshark")),
-    "creation": ("Création et médias", ("VideoLAN.VLC", "GIMP.GIMP.3", "Inkscape.Inkscape", "Audacity.Audacity",
+    "outils": (L_("Outils"), ("7zip.7zip", "Microsoft.PowerToys", "WinSCP.WinSCP", "PuTTY.PuTTY", "WiresharkFoundation.Wireshark")),
+    "creation": (L_("Création et médias"), ("VideoLAN.VLC", "GIMP.GIMP.3", "Inkscape.Inkscape", "Audacity.Audacity",
                                         "BlenderFoundation.Blender", "OBSProject.OBSStudio")),
-    "developpement": ("Développement", ("Microsoft.VisualStudioCode", "Git.Git", "Python.Python.3.13",
+    "developpement": (L_("Développement"), ("Microsoft.VisualStudioCode", "Git.Git", "Python.Python.3.13",
                                         "OpenJS.NodeJS.LTS", "Docker.DockerDesktop")),
-    "securite": ("Sécurité", ("KeePassXCTeam.KeePassXC", "Bitwarden.Bitwarden", "Cryptomator.Cryptomator")),
-    "all": ("Tout le catalogue", ()),
+    "securite": (L_("Sécurité"), ("KeePassXCTeam.KeePassXC", "Bitwarden.Bitwarden", "Cryptomator.Cryptomator")),
+    "all": (L_("Tout le catalogue"), ()),
 }
 
 
@@ -488,11 +489,11 @@ def software_store():
     try:
         results, total, page, pages = browse(query, category, page)
     except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as e:
-        error = f"Le catalogue est momentanément indisponible : {e}"
+        error = _("Le catalogue est momentanément indisponible : %(e)s", e=e)
     known = {r["winget_id"]: dict(r) for r in db().execute("SELECT slug, winget_id, status FROM win_apps WHERE winget_id != ''")}
     if not can("windows.view"):
         known = {}
-    updated = time.strftime("%d/%m/%Y à %H:%M", time.localtime(os.path.getmtime(INDEX))) if os.path.isfile(INDEX) else ""
+    updated = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(INDEX))) if os.path.isfile(INDEX) else ""
     return render_template("software_store.html", query=query, category=category, categories=CATEGORIES,
                            results=results, total=total, page=page, pages=pages, known=known, error=error, updated=updated)
 
@@ -524,9 +525,9 @@ def software_store_detail(package_id):
 def software_store_refresh():
     try:
         refresh_index(force=True)
-        flash("Catalogue Microsoft WinGet actualisé.", "ok")
+        flash(_('Catalogue Microsoft WinGet actualisé.'), "ok")
     except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as e:
-        flash(f"Actualisation impossible : {e}. Le dernier index valide reste disponible.", "error")
+        flash(_('Actualisation impossible : %(e)s. Le dernier index valide reste disponible.', e=e), "error")
     return back("software_store")
 
 
@@ -588,9 +589,9 @@ def winget_add():
     try:
         row = import_package(request.form.get("id", ""))
     except (OSError, ValueError, sqlite3.Error) as e:
-        flash(f"Import impossible : {e}", "error")
+        flash(_('Import impossible : %(e)s', e=e), "error")
         return back("software_store", q=request.form.get("q", ""))
-    flash(f"{row['name']} figure dans le catalogue local. Son installeur est vérifié avant tout déploiement.", "ok")
+    flash(_('%(row)s figure dans le catalogue local. Son installeur est vérifié avant tout déploiement.', row=row['name']), "ok")
     if request.form.get("retour") == "store":          # ajout depuis la liste : on y reste pour en ajouter d'autres
         return back("software_store", **{k: request.form[k] for k in ("q", "category", "page") if request.form.get(k)})
     return back("software_detail", slug=row["slug"])
@@ -618,7 +619,7 @@ def winget_update():
     try:
         updates = check_updates()
     except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as e:
-        flash(f"Catalogue winget indisponible : {e}", "error")
+        flash(_('Catalogue winget indisponible : %(e)s', e=e), "error")
         return back("windows_apps")
     for row, info in updates:
         if row["status"] == "downloading":
@@ -631,7 +632,6 @@ def winget_update():
                     expected_sha256=info["sha256"], filename=_filename(info))
         audit("windows.winget-maj", f"{row['winget_id']} {row['version']} -> {info['version']}")
     names = ", ".join(f"{r['name']} {i['version']}" for r, i in updates)
-    flash(f"Nouvelles versions : {names}. Les postes concernés passent en orange dans Mon parc." if updates
-          else "Les logiciels issus de winget sont à jour.", "ok")
+    flash((_('Nouvelles versions : %(names)s. Les postes concernés passent en orange dans Mon parc.', names=names) if updates else _('Les logiciels issus de winget sont à jour.')), "ok")
     return back("windows_apps")
 

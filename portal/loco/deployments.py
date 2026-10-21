@@ -15,6 +15,7 @@ import zipfile
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
 from . import app, config, fleet, groups, winget
+from .i18n import L_, _
 from .auth import audit, can, lock_access, login_required, require
 from .db import db
 from .util import back, sha256_of
@@ -22,8 +23,8 @@ from .util import back, sha256_of
 MAX_APPS = 100
 MAX_DEVICES = 500
 ACTIVE = ('queued', 'sent', 'running')
-STATES = {'queued': 'En attente du poste', 'sent': 'Transmis à l’agent', 'running': 'Installation en cours',
-          'success': 'Réussi', 'failed': 'Échec', 'cancelled': 'Annulé', 'skipped': 'Non déployé'}
+STATES = {'queued': L_('En attente du poste'), 'sent': L_('Transmis à l’agent'), 'running': L_('Installation en cours'),
+          'success': L_('Réussi'), 'failed': L_('Échec'), 'cancelled': L_('Annulé'), 'skipped': L_('Non déployé')}
 FIELDS = ('id', 'slug', 'name', 'version', 'kind', 'args', 'detect', 'source_url', 'expected_sha256')
 
 
@@ -41,7 +42,7 @@ def _get(deployment_id):
 def _selection(values):
     apps = list(dict.fromkeys(values.getlist('app')))
     if len(apps) > MAX_APPS or any(not config.SLUG_RE.fullmatch(slug) for slug in apps):
-        abort(400, 'Sélection de logiciels invalide.')
+        abort(400, _('Sélection de logiciels invalide.'))
     return {'apps': apps, 'software_groups': groups.identifiers(values.getlist('software_group')),
             'devices': groups.identifiers(values.getlist('device')),
             'device_groups': groups.identifiers(values.getlist('device_group'))}
@@ -53,7 +54,7 @@ def _resolve(selection):
     for slug in selection['apps']:
         row = db().execute('SELECT * FROM win_apps WHERE slug=?', (slug,)).fetchone()
         if row is None:
-            abort(400, 'Un logiciel sélectionné a été supprimé.')
+            abort(400, _('Un logiciel sélectionné a été supprimé.'))
         selected_apps[row['id']] = row
     for gid in selection['software_groups']:
         group = groups._group('software', gid)
@@ -61,7 +62,7 @@ def _resolve(selection):
         members = db().execute('SELECT a.* FROM win_apps a JOIN software_group_members m ON m.app_id=a.id '
                                'WHERE m.group_id=? ORDER BY m.position,a.name', (gid,)).fetchall()
         if not members:
-            abort(400, f"Le groupe de logiciels « {group['name']} » est vide.")
+            abort(400, _('Le groupe de logiciels « %(group)s » est vide.', group=group['name']))
         selected_apps.update((row['id'], row) for row in members)
     for dev_id in selection['devices']:
         row = fleet._get(dev_id)
@@ -72,18 +73,18 @@ def _resolve(selection):
         members = db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
                                "WHERE m.group_id=? AND d.state!='removed' ORDER BY d.hostname", (gid,)).fetchall()
         if not members:
-            abort(400, f"Le groupe de machines « {group['name']} » est vide.")
+            abort(400, _('Le groupe de machines « %(group)s » est vide.', group=group['name']))
         selected_devices.update((row['id'], row) for row in members)
     if len(selected_apps) > MAX_APPS or len(selected_devices) > MAX_DEVICES:
-        abort(400, 'Ce déploiement est trop volumineux : répartissez-le en plusieurs groupes.')
+        abort(400, _('Ce déploiement est trop volumineux : répartissez-le en plusieurs groupes.'))
     return list(selected_apps.values()), list(selected_devices.values()), origins
 
 
 def _target_reason(device):
     if device['os_family'] != 'windows':
-        return 'Logiciels Windows : système non compatible'
+        return _('Logiciels Windows : système non compatible')
     if device['state'] != 'active':
-        return 'Agent en cours de retrait'
+        return _('Agent en cours de retrait')
     return ''
 
 
@@ -125,7 +126,7 @@ def deployment_preview():
     selected = _selection(request.form)
     apps, devices, origins = _resolve(selected)
     if not devices or not any(not _target_reason(device) for device in devices):
-        abort(400, 'Sélectionnez au moins un appareil Windows actif.')
+        abort(400, _('Sélectionnez au moins un appareil Windows actif.'))
     bulk = _require_bulk(selected, devices)
     package_id = request.form.get('package_id', '')
     if package_id:
@@ -135,11 +136,11 @@ def deployment_preview():
         try:
             imported = winget.import_package(package_id)
         except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as e:
-            flash(f'Import impossible : {e}', 'error')
+            flash(_('Import impossible : %(e)s', e=e), 'error')
             return back('deployment_compose', package_id=package_id)
         apps = list({a['id']: a for a in [*apps, imported]}.values())
     if not apps or len(apps) > MAX_APPS:
-        abort(400, 'Sélectionnez entre un et cent logiciels.')
+        abort(400, _('Sélectionnez entre un et cent logiciels.'))
     conn = lock_access('fleet.install')
     if bulk:
         require('fleet.bulk_install')
@@ -148,7 +149,7 @@ def deployment_preview():
     for selected_app in apps:
         row = conn.execute('SELECT * FROM win_apps WHERE id=?', (selected_app['id'],)).fetchone()
         if row is None:
-            abort(409, 'Un logiciel a changé : préparez à nouveau le déploiement.')
+            abort(409, _('Un logiciel a changé : préparez à nouveau le déploiement.'))
         snapshot = {key: row[key] for key in FIELDS}
         snapshot.update(sha256=row['sha256'] or row['expected_sha256'],
                         filename=row['filename'] or row['source_filename'])
@@ -206,8 +207,8 @@ def _targets(deployment_id):
 
 
 # Filtres de la liste : clé -> (libellé, états de déploiement retenus, classe de la pastille).
-FILTERS = {'en-cours': ('En cours', ('running', 'cancelling'), 'warn'), 'a-confirmer': ('À confirmer', ('draft',), 'warn'),
-           'erreurs': ('Avec erreurs', ('failed',), 'err'), 'termines': ('Terminés', ('success', 'cancelled', 'expired'), 'ok')}
+FILTERS = {'en-cours': (L_('En cours'), ('running', 'cancelling'), 'warn'), 'a-confirmer': (L_('À confirmer'), ('draft',), 'warn'),
+           'erreurs': (L_('Avec erreurs'), ('failed',), 'err'), 'termines': (L_('Terminés'), ('success', 'cancelled', 'expired'), 'ok')}
 
 
 def _progress(targets):
@@ -287,10 +288,10 @@ def _pin(row):
     """Version adressée par son contenu : une mise à jour/suppression du catalogue ne remplace pas l'installeur confirmé."""
     digest = row['sha256']
     if not re.fullmatch('[0-9a-f]{64}', digest):
-        raise ValueError('Installeur sans empreinte SHA-256 valide.')
+        raise ValueError(_('Installeur sans empreinte SHA-256 valide.'))
     source = Path(config.WIN_DIR, row['slug'], row['filename'])
     if not source.is_file() or sha256_of(str(source)) != digest:
-        raise ValueError(f"Installeur de {row['name']} absent ou altéré.")
+        raise ValueError(_('Installeur de %(row)s absent ou altéré.', row=row['name']))
     directory = Path(config.WIN_DIR, '_deployments', digest)
     directory.mkdir(parents=True, exist_ok=True)
     name = 'installer' + (Path(row['filename']).suffix.lower() or '.bin')
@@ -315,7 +316,7 @@ def _pin(row):
             if os.path.exists(temporary):
                 os.unlink(temporary)
     if sha256_of(str(destination)) != digest:
-        raise ValueError('Version conservée altérée : déploiement refusé.')
+        raise ValueError(_('Version conservée altérée : déploiement refusé.'))
     payload = fleet.app_payload(row)
     payload.update(url=f'/win/files/_deployments/{digest}/{name}', detect=row['detect'])
     return payload
@@ -379,7 +380,7 @@ def deployment_confirm(deployment_id):
     if row['state'] != 'draft':
         return back('deployment_detail', deployment_id=deployment_id)
     if row['expires'] < time.time():
-        abort(409, 'Prévisualisation expirée : préparez à nouveau le déploiement.')
+        abort(409, _('Prévisualisation expirée : préparez à nouveau le déploiement.'))
     plan = json.loads(row['plan'])
     if plan['bulk']:
         require('fleet.bulk_install')
@@ -396,7 +397,7 @@ def deployment_confirm(deployment_id):
             continue
         dev = conn.execute('SELECT * FROM devices WHERE id=?', (target['id'],)).fetchone()
         if dev is None or dev['uid'] != target['uid'] or _target_reason(dev):
-            abort(409, 'Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.')
+            abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
         devices.append((target, dev))
     pinned = {}
     queued_count = 0
@@ -425,13 +426,13 @@ def deployment_confirm(deployment_id):
                          target['os_family'], command_id, json.dumps(required), json.dumps(skipped), target['reason']))
     except (OSError, ValueError) as e:
         conn.rollback()
-        flash(f'Déploiement non lancé : {e}', 'error')
+        flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
         return back('deployment_detail', deployment_id=deployment_id)
     conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
     cleanup_artifacts(conn)
     audit('deploiement.confirmation', f"{row['title']} : {queued_count} poste(s), {len(ready)} logiciel(s), {deployment_id}", commit=False)
     conn.commit()
-    flash(f'Déploiement confirmé sur {queued_count} poste(s). Les agents exécutent les installations à leur prochain contact.', 'ok')
+    flash(_('Déploiement confirmé sur %(queued_count)s poste(s). Les agents exécutent les installations à leur prochain contact.', queued_count=queued_count), 'ok')
     return back('deployment_detail', deployment_id=deployment_id)
 
 
@@ -452,7 +453,7 @@ def deployment_cancel(deployment_id):
     cleanup_artifacts(conn)
     audit('deploiement.annulation', f"{row['title']} : {deployment_id}", commit=False)
     conn.commit()
-    flash('Commandes non transmises annulées. Les installations déjà reçues par un agent peuvent se terminer.', 'ok')
+    flash(_('Commandes non transmises annulées. Les installations déjà reçues par un agent peuvent se terminer.'), 'ok')
     return back('deployment_detail', deployment_id=deployment_id)
 
 

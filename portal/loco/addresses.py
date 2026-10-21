@@ -11,6 +11,7 @@ import re
 import urllib.parse
 
 from . import config
+from .i18n import _
 
 SETTING = "announced_servers"
 MAX_ANNOUNCED = 4
@@ -22,10 +23,10 @@ def normalize(url):
     """« https://hôte[:port] » sans chemin ni barre finale ; ValueError sinon."""
     url = (url or "").strip().rstrip("/")
     if not URL_RE.match(url):
-        raise ValueError("adresse attendue : https://hôte:port (IP ou nom DNS, sans chemin)")
+        raise ValueError(_('adresse attendue : https://hôte:port (IP ou nom DNS, sans chemin)'))
     port = urllib.parse.urlsplit(url).port
     if port is not None and not 1 <= port <= 65535:
-        raise ValueError("port invalide")
+        raise ValueError(_('port invalide'))
     return url
 
 
@@ -64,7 +65,7 @@ def announce(conn, url):
     if url == config.HTTPS_URL.rstrip("/") or url in values:
         return url
     if len(values) >= MAX_ANNOUNCED:
-        raise ValueError(f"{MAX_ANNOUNCED} adresses annoncées au plus : retirez-en une")
+        raise ValueError(_('%(MAX_ANNOUNCED)s adresses annoncées au plus : retirez-en une', MAX_ANNOUNCED=MAX_ANNOUNCED))
     _save(conn, values + [url])
     return url
 

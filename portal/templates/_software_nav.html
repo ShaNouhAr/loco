@@ -1,5 +1,5 @@
-<nav class="tabs subnav" aria-label="Gestion des logiciels">
-  {% if can('windows.view') %}<a href="{{ url_for('windows_apps') }}" class="{{ 'on' if request.endpoint in ('windows_apps','software_detail') }}">Catalogue local</a>{% endif %}
-  {% if can('store.view') %}<a href="{{ url_for('software_store') }}" class="{{ 'on' if request.endpoint.startswith(('software_store','winget')) }}">Centre de logiciels</a>{% endif %}
-  {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" class="{{ 'on' if request.endpoint.startswith('software_group') }}">Groupes de logiciels</a>{% endif %}
+<nav class="tabs subnav" aria-label="{{ _('Gestion des logiciels') }}">
+  {% if can('windows.view') %}<a href="{{ url_for('windows_apps') }}" class="{{ 'on' if request.endpoint in ('windows_apps','software_detail') }}">{{ _("Catalogue local") }}</a>{% endif %}
+  {% if can('store.view') %}<a href="{{ url_for('software_store') }}" class="{{ 'on' if request.endpoint.startswith(('software_store','winget')) }}">{{ _("Centre de logiciels") }}</a>{% endif %}
+  {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" class="{{ 'on' if request.endpoint.startswith('software_group') }}">{{ _("Groupes de logiciels") }}</a>{% endif %}
 </nav>

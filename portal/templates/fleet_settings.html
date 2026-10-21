@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-{% block title %}Réglages du parc{% endblock %}
+{% block title %}{{ _("Réglages du parc") }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 <div class="head">
   <div>
-    <h1>Réglages du parc</h1>
-    <p>Adresse du serveur connue des agents, seuil des pastilles et clé d'inscription des postes.</p>
+    <h1>{{ _("Réglages du parc") }}</h1>
+    <p>{{ _("Adresse du serveur connue des agents, seuil des pastilles et clé d'inscription des postes.") }}</p>
   </div>
 </div>
 
 <div class="stack">
   <section class="panel">
-    <div class="panel-h"><h2>Adresse du serveur pour les agents</h2>{% if server_coverage|length > 1 %}<div class="aside"><span class="st warn">changement annoncé</span></div>{% endif %}</div>
+    <div class="panel-h"><h2>{{ _("Adresse du serveur pour les agents") }}</h2>{% if server_coverage|length > 1 %}<div class="aside"><span class="st warn">{{ _("changement annoncé") }}</span></div>{% endif %}</div>
     <div class="table-wrap">
       <table>
         <tbody>
         {% for url, known, total in server_coverage %}
           <tr>
-            <td class="mono">{{ url }} <span class="tag">{{ 'actuelle' if loop.first else 'annoncée' }}</span></td>
-            <td>{% if not loop.first %}<span class="st {{ 'ok' if known == total else 'warn' }}">{{ known }}/{{ total }} poste(s) prévenu(s)</span>{% else %}<span class="muted small">{{ known }}/{{ total }} poste(s) l'ont confirmée</span>{% endif %}</td>
+            <td class="mono">{{ url }} <span class="tag">{{ _('actuelle') if loop.first else _('annoncée') }}</span></td>
+            <td>{% if not loop.first %}<span class="st {{ 'ok' if known == total else 'warn' }}">{{ _("%(known)s/%(total)s poste(s) prévenu(s)", known=known, total=total) }}</span>{% else %}<span class="muted small">{{ _("%(known)s/%(total)s poste(s) l'ont confirmée", known=known, total=total) }}</span>{% endif %}</td>
             <td class="right">{% if not loop.first %}
               <form method="post" action="{{ url_for('fleet_server_address') }}" data-ajax>
                 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="forget"><input type="hidden" name="url" value="{{ url }}">
-                <button class="linkbtn del">Retirer</button>
+                <button class="linkbtn del">{{ _("Retirer") }}</button>
               </form>{% endif %}</td>
           </tr>
         {% endfor %}
@@ -31,29 +31,29 @@
     </div>
     <form method="post" action="{{ url_for('fleet_server_address') }}" class="panel-b row" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="text" name="url" required placeholder="https://192.168.1.20:8443" aria-label="Future adresse du serveur" spellcheck="false" class="mono field-md">
-      <button class="btn sm"><span class="spin"></span>Annoncer aux agents</button>
+      <input type="text" name="url" required placeholder="{{ _('https://192.168.1.20:8443') }}" aria-label="{{ _('Future adresse du serveur') }}" spellcheck="false" class="mono field-md">
+      <button class="btn sm"><span class="spin"></span>{{ _("Annoncer aux agents") }}</button>
     </form>
-    <p class="panel-f">Avant de changer l'adresse du serveur, annoncez la nouvelle : chaque agent la reçoit à son prochain contact (toutes les {{ checkin // 60 }} minutes). Une fois tous les postes prévenus, changez l'adresse (<code>setup-loco</code> sur l'appliance le fait pour vous, sinon <code>install.sh --host</code>) : les agents qui ne joignent plus l'ancienne adresse passent seuls à la nouvelle, après vérification de l'autorité HTTPS de loco. Un poste éteint pendant toute l'annonce se réinscrit avec la commande d'installation (il garde son identité).</p>
+    <p class="panel-f">{{ _("Avant de changer l'adresse du serveur, annoncez la nouvelle : chaque agent la reçoit à son prochain contact (toutes les %(v)s minutes). Une fois tous les postes prévenus, changez l'adresse (<code>setup-loco</code> sur l'appliance le fait pour vous, sinon <code>install.sh --host</code>) : les agents qui ne joignent plus l'ancienne adresse passent seuls à la nouvelle, après vérification de l'autorité HTTPS de loco. Un poste éteint pendant toute l'annonce se réinscrit avec la commande d'installation (il garde son identité).", v=checkin // 60) }}</p>
   </section>
 
   <div class="cols">
     <section class="panel">
-      <div class="panel-h"><h2>Seuil des pastilles</h2></div>
+      <div class="panel-h"><h2>{{ _("Seuil des pastilles") }}</h2></div>
       <form method="post" action="{{ url_for('fleet_threshold') }}" class="panel-b row" data-ajax>
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label>Rouge à partir de <input type="number" name="threshold" min="2" max="10000" value="{{ red_threshold }}" required class="field-xs"> mises à jour</label>
-        <button class="btn sm">Enregistrer</button>
+        <label>{{ _("Rouge à partir de") }} <input type="number" name="threshold" min="2" max="10000" value="{{ red_threshold }}" required class="field-xs"> {{ _("mises à jour") }}</label>
+        <button class="btn sm">{{ _("Enregistrer") }}</button>
       </form>
-      <p class="panel-f">Verte : aucune mise à jour. Orange : de 1 à {{ red_threshold - 1 }}. Rouge : {{ red_threshold }} ou plus (système, Flatpak et logiciels du catalogue).</p>
+      <p class="panel-f">{{ _("Verte : aucune mise à jour. Orange : de 1 à %(v)s. Rouge : %(red_threshold)s ou plus (système, Flatpak et logiciels du catalogue).", v=red_threshold - 1, red_threshold=red_threshold) }}</p>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Clé d'inscription</h2></div>
+      <div class="panel-h"><h2>{{ _("Clé d'inscription") }}</h2></div>
       <div class="panel-b">
-        <p class="muted">Incluse dans les commandes d'installation de l'agent. En changer rend les commandes déjà copiées inutilisables ; les postes inscrits restent rattachés.</p>
-        <form method="post" action="{{ url_for('fleet_rotate_key') }}" data-confirm="Changer la clé d'inscription ?" data-confirm-text="Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés." data-confirm-ok="Changer">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">Nouvelle clé d'inscription</button>
+        <p class="muted">{{ _("Incluse dans les commandes d'installation de l'agent. En changer rend les commandes déjà copiées inutilisables ; les postes inscrits restent rattachés.") }}</p>
+        <form method="post" action="{{ url_for('fleet_rotate_key') }}" data-confirm="{{ _('Changer la clé d\'inscription ?') }}" data-confirm-text="{{ _('Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés.') }}" data-confirm-ok="{{ _('Changer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Nouvelle clé d'inscription") }}</button>
         </form>
       </div>
     </section>

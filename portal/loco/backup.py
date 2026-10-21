@@ -5,6 +5,7 @@ import re
 import shutil
 import sys
 import tarfile
+from .i18n import _
 
 
 def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
@@ -14,11 +15,11 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
         configs = ['etc/loco/loco.conf', 'etc/local-repo/local-repo.conf']
         config = next((name for name in configs if name in names), None)
         if 'portal.db' not in names or config is None:
-            raise ValueError('Sauvegarde Linux loco ou local-repo attendue.')
+            raise ValueError(_('Sauvegarde Linux loco ou local-repo attendue.'))
         with tar.extractfile(config) as source:
             match = re.search(r'^DATA=([/A-Za-z0-9._-]+)$', source.read().decode(), re.M)
         if not match:
-            raise ValueError('Chemin des données absent de la sauvegarde.')
+            raise ValueError(_('Chemin des données absent de la sauvegarde.'))
         old_data = match.group(1).lstrip('/')
         roots = [('etc/loco', Path(etc)), ('etc/local-repo', Path(etc)),
                  ('var/lib/loco', Path(state)), ('var/lib/local-repo', Path(state))]
@@ -29,7 +30,7 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
             path = PurePosixPath(name)
             if (path.is_absolute() or '..' in path.parts or '\\' in name or ':' in name
                     or not (member.isdir() or member.isfile())):
-                raise ValueError('Chemin ou type de fichier invalide dans la sauvegarde.')
+                raise ValueError(_('Chemin ou type de fichier invalide dans la sauvegarde.'))
             if name in configs or any(name.startswith(p + '/install-state') for p, _ in roots[:2]):
                 continue
             target = Path(state) / 'portal.db' if name == 'portal.db' else None
@@ -38,9 +39,9 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
                     target = destination / name[len(prefix):].lstrip('/')
                     break
             if target is None:
-                raise ValueError('Fichier étranger aux données de loco dans la sauvegarde.')
+                raise ValueError(_('Fichier étranger aux données de loco dans la sauvegarde.'))
             if any(p.is_symlink() for p in (target, *target.parents)):
-                raise ValueError('Destination contenant un lien symbolique.')
+                raise ValueError(_('Destination contenant un lien symbolique.'))
             plan.append((member, target))
         # Tous les chemins sont vérifiés avant la première écriture.
         for member, target in plan:

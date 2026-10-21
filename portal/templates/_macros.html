@@ -1,7 +1,7 @@
 {% macro cmd(id, text, prompt='$') -%}
-<div class="cmd"><code id="{{ id }}" data-prompt="{{ prompt }}">{{ text }}</code><button type="button" class="copy">Copier</button></div>
+<div class="cmd"><code id="{{ id }}" data-prompt="{{ prompt }}">{{ text }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
 {%- endmacro %}
 
 {% macro service(active) -%}
-<span class="st {{ 'ok' if active else 'err' }}">{{ 'actif' if active else 'arrêté' }}</span>
+<span class="st {{ 'ok' if active else 'err' }}">{{ _('actif') if active else _('arrêté') }}</span>
 {%- endmacro %}

@@ -5,87 +5,88 @@ explicites. Le profil admin reste protégé et reçoit les futurs droits d'admin
 """
 import json
 import unicodedata
+from .i18n import L_, N_, _, gettext
 
 # clé, libellé, description, prérequis, droit sensible
 GROUPS = [
-    ("Vue d'ensemble", [
-        ("dashboard.view", "Consulter la vue d'ensemble", "Indicateurs globaux des caches, dépôts et services.", (), False),
+    (L_("Vue d'ensemble"), [
+        ("dashboard.view", L_("Consulter la vue d'ensemble"), L_("Indicateurs globaux des caches, dépôts et services."), (), False),
     ]),
-    ("Parc et accès distant", [
-        ("fleet.view", "Consulter les appareils", "Inventaires, logiciels remontés et historique des actions.", (), False),
-        ("fleet.enroll", "Inscrire des appareils", "Afficher la clé et les commandes d'installation de l'agent.", ("fleet.view",), True),
-        ("fleet.scan", "Demander un inventaire", "Actualiser les informations d'un appareil.", ("fleet.view",), False),
-        ("fleet.update", "Mettre à jour un appareil", "Système, Flatpak et logiciels du catalogue déjà installés.", ("fleet.view",), True),
-        ("fleet.bulk_update", "Mettre à jour tout le parc", "Lancer les mises à jour sur tous les appareils concernés.", ("fleet.update",), True),
-        ("fleet.install", "Déployer un logiciel", "Installer ou mettre à jour un logiciel du catalogue sur un appareil.", ("fleet.view", "windows.view"), True),
-        ("fleet.bulk_install", "Déployer sur des groupes ou plusieurs postes", "Déploiements de logiciels sur plusieurs appareils ou sur un groupe.", ("fleet.install",), True),
-        ("fleet.groups", "Gérer les groupes de machines", "Créer les groupes et organiser leurs membres, sans déployer de logiciel.", ("fleet.view",), False),
-        ("deployments.view", "Consulter les déploiements", "Versions, cibles confirmées, avancement et résultats par poste.", ("fleet.view", "windows.view"), False),
-        ("fleet.reboot", "Redémarrer les appareils", "Redémarrage direct ou après une mise à jour.", ("fleet.view",), True),
-        ("fleet.remove", "Retirer les agents et appareils", "Désinstaller l'agent ou oublier un appareil.", ("fleet.view",), True),
-        ("fleet.settings", "Configurer le parc", "Seuil des pastilles, clé d'inscription et adresses du serveur annoncées aux agents.", ("fleet.view",), True),
-        ("remote.terminal", "Ouvrir un terminal distant", "Shell root ou PowerShell SYSTEM : contrôle privilégié du poste.", ("fleet.view",), True),
-        ("remote.desktop", "Ouvrir le bureau noVNC", "Contrôler le bureau, y compris l’UAC et l’écran verrouillé sous Windows (SYSTEM).", ("fleet.view",), True),
-        ("remote.files", "Gérer les fichiers du poste", "Parcourir, téléverser, modifier et supprimer les fichiers du poste (accès complet, en root ou SYSTEM).", ("fleet.view",), True),
+    (L_("Parc et accès distant"), [
+        ("fleet.view", L_("Consulter les appareils"), L_("Inventaires, logiciels remontés et historique des actions."), (), False),
+        ("fleet.enroll", L_("Inscrire des appareils"), L_("Afficher la clé et les commandes d'installation de l'agent."), ("fleet.view",), True),
+        ("fleet.scan", L_("Demander un inventaire"), L_("Actualiser les informations d'un appareil."), ("fleet.view",), False),
+        ("fleet.update", L_("Mettre à jour un appareil"), L_("Système, Flatpak et logiciels du catalogue déjà installés."), ("fleet.view",), True),
+        ("fleet.bulk_update", L_("Mettre à jour tout le parc"), L_("Lancer les mises à jour sur tous les appareils concernés."), ("fleet.update",), True),
+        ("fleet.install", L_("Déployer un logiciel"), L_("Installer ou mettre à jour un logiciel du catalogue sur un appareil."), ("fleet.view", "windows.view"), True),
+        ("fleet.bulk_install", L_("Déployer sur des groupes ou plusieurs postes"), L_("Déploiements de logiciels sur plusieurs appareils ou sur un groupe."), ("fleet.install",), True),
+        ("fleet.groups", L_("Gérer les groupes de machines"), L_("Créer les groupes et organiser leurs membres, sans déployer de logiciel."), ("fleet.view",), False),
+        ("deployments.view", L_("Consulter les déploiements"), L_("Versions, cibles confirmées, avancement et résultats par poste."), ("fleet.view", "windows.view"), False),
+        ("fleet.reboot", L_("Redémarrer les appareils"), L_("Redémarrage direct ou après une mise à jour."), ("fleet.view",), True),
+        ("fleet.remove", L_("Retirer les agents et appareils"), L_("Désinstaller l'agent ou oublier un appareil."), ("fleet.view",), True),
+        ("fleet.settings", L_("Configurer le parc"), L_("Seuil des pastilles, clé d'inscription et adresses du serveur annoncées aux agents."), ("fleet.view",), True),
+        ("remote.terminal", L_("Ouvrir un terminal distant"), L_("Shell root ou PowerShell SYSTEM : contrôle privilégié du poste."), ("fleet.view",), True),
+        ("remote.desktop", L_("Ouvrir le bureau noVNC"), L_("Contrôler le bureau, y compris l’UAC et l’écran verrouillé sous Windows (SYSTEM)."), ("fleet.view",), True),
+        ("remote.files", L_("Gérer les fichiers du poste"), L_("Parcourir, téléverser, modifier et supprimer les fichiers du poste (accès complet, en root ou SYSTEM)."), ("fleet.view",), True),
     ]),
-    ("Paquets APT", [
-        ("linux.view", "Consulter les dépôts APT", "Paquets et commandes de branchement.", (), False),
-        ("linux.create", "Créer un dépôt APT", "Ajouter une distribution ou une version.", ("linux.view",), False),
-        ("linux.upload", "Importer des paquets APT", "Ajouter des fichiers .deb.", ("linux.view",), True),
-        ("linux.copy", "Copier des paquets APT", "Copier entre les dépôts locaux.", ("linux.view",), True),
-        ("linux.delete", "Supprimer des paquets APT", "Retirer des paquets du dépôt.", ("linux.view",), True),
+    (L_("Paquets APT"), [
+        ("linux.view", L_("Consulter les dépôts APT"), L_("Paquets et commandes de branchement."), (), False),
+        ("linux.create", L_("Créer un dépôt APT"), L_("Ajouter une distribution ou une version."), ("linux.view",), False),
+        ("linux.upload", L_("Importer des paquets APT"), L_("Ajouter des fichiers .deb."), ("linux.view",), True),
+        ("linux.copy", L_("Copier des paquets APT"), L_("Copier entre les dépôts locaux."), ("linux.view",), True),
+        ("linux.delete", L_("Supprimer des paquets APT"), L_("Retirer des paquets du dépôt."), ("linux.view",), True),
     ]),
-    ("Paquets RPM", [
-        ("rpm.view", "Consulter les dépôts RPM", "Paquets et commandes de branchement.", (), False),
-        ("rpm.create", "Créer un dépôt RPM", "Ajouter une version majeure.", ("rpm.view",), False),
-        ("rpm.upload", "Importer des paquets RPM", "Ajouter des fichiers .rpm.", ("rpm.view",), True),
-        ("rpm.delete", "Supprimer des paquets RPM", "Retirer des paquets du dépôt.", ("rpm.view",), True),
+    (L_("Paquets RPM"), [
+        ("rpm.view", L_("Consulter les dépôts RPM"), L_("Paquets et commandes de branchement."), (), False),
+        ("rpm.create", L_("Créer un dépôt RPM"), L_("Ajouter une version majeure."), ("rpm.view",), False),
+        ("rpm.upload", L_("Importer des paquets RPM"), L_("Ajouter des fichiers .rpm."), ("rpm.view",), True),
+        ("rpm.delete", L_("Supprimer des paquets RPM"), L_("Retirer des paquets du dépôt."), ("rpm.view",), True),
     ]),
-    ("Flatpak", [
-        ("flatpak.view", "Consulter Flatpak", "Cache, dépôt local et commandes de branchement.", (), False),
-        ("flatpak.upload", "Importer une application Flatpak", "Ajouter un bundle au dépôt local.", ("flatpak.view",), True),
-        ("flatpak.delete", "Supprimer une application Flatpak", "Retirer une référence du dépôt local.", ("flatpak.view",), True),
+    (L_("Flatpak"), [
+        ("flatpak.view", L_("Consulter Flatpak"), L_("Cache, dépôt local et commandes de branchement."), (), False),
+        ("flatpak.upload", L_("Importer une application Flatpak"), L_("Ajouter un bundle au dépôt local."), ("flatpak.view",), True),
+        ("flatpak.delete", L_("Supprimer une application Flatpak"), L_("Retirer une référence du dépôt local."), ("flatpak.view",), True),
     ]),
-    ("Logiciels Windows et centre de logiciels", [
-        ("windows.view", "Consulter le catalogue local", "Logiciels Windows et installeurs disponibles.", (), False),
-        ("windows.groups", "Gérer les groupes de logiciels", "Regrouper les logiciels du catalogue pour les déployer ensemble.", ("windows.view",), False),
-        ("windows.add", "Ajouter un logiciel au catalogue", "Téléverser un installeur ou le télécharger depuis une URL.", ("windows.view",), True),
-        ("windows.edit", "Modifier un logiciel", "Version, détection et arguments d'installation silencieuse.", ("windows.view",), True),
-        ("windows.refresh", "Actualiser les installeurs", "Retélécharger et rechercher les nouvelles versions WinGet.", ("windows.view",), True),
-        ("windows.delete", "Supprimer un logiciel", "Retirer son installeur du catalogue local.", ("windows.view",), True),
-        ("store.view", "Parcourir le centre de logiciels", "Rechercher et consulter les fiches publiques WinGet.", (), False),
-        ("store.refresh", "Actualiser l'index du centre de logiciels", "Télécharger à nouveau l'index WinGet.", ("store.view",), False),
-        ("store.import", "Importer depuis le centre de logiciels", "Ajouter un installeur vérifié au catalogue local.", ("store.view", "windows.add"), True),
+    (L_("Logiciels Windows et centre de logiciels"), [
+        ("windows.view", L_("Consulter le catalogue local"), L_("Logiciels Windows et installeurs disponibles."), (), False),
+        ("windows.groups", L_("Gérer les groupes de logiciels"), L_("Regrouper les logiciels du catalogue pour les déployer ensemble."), ("windows.view",), False),
+        ("windows.add", L_("Ajouter un logiciel au catalogue"), L_("Téléverser un installeur ou le télécharger depuis une URL."), ("windows.view",), True),
+        ("windows.edit", L_("Modifier un logiciel"), L_("Version, détection et arguments d'installation silencieuse."), ("windows.view",), True),
+        ("windows.refresh", L_("Actualiser les installeurs"), L_("Retélécharger et rechercher les nouvelles versions WinGet."), ("windows.view",), True),
+        ("windows.delete", L_("Supprimer un logiciel"), L_("Retirer son installeur du catalogue local."), ("windows.view",), True),
+        ("store.view", L_("Parcourir le centre de logiciels"), L_("Rechercher et consulter les fiches publiques WinGet."), (), False),
+        ("store.refresh", L_("Actualiser l'index du centre de logiciels"), L_("Télécharger à nouveau l'index WinGet."), ("store.view",), False),
+        ("store.import", L_("Importer depuis le centre de logiciels"), L_("Ajouter un installeur vérifié au catalogue local."), ("store.view", "windows.add"), True),
     ]),
-    ("Cache Windows Update", [
-        ("wu.view", "Consulter le cache Windows Update", "Statistiques, domaines et commandes DNS.", (), False),
-        ("wu.configure", "Modifier les domaines du cache", "Changer les destinations relayées par le serveur.", ("wu.view",), True),
+    (L_("Cache Windows Update"), [
+        ("wu.view", L_("Consulter le cache Windows Update"), L_("Statistiques, domaines et commandes DNS."), (), False),
+        ("wu.configure", L_("Modifier les domaines du cache"), L_("Changer les destinations relayées par le serveur."), ("wu.view",), True),
     ]),
-    ("Serveur loco", [
-        ("system.view", "Consulter le système", "Services, certificats, versions et état des sauvegardes.", (), False),
-        ("system.configure", "Configurer le serveur", "Réseaux autorisés, fonctions, proxy et stockage de l'appliance.", ("system.view",), True),
-        ("system.update", "Mettre à jour le serveur", "Paquets du système (noyau, correctifs de sécurité) et, sur l'appliance, loco.", ("system.view",), True),
-        ("system.reboot", "Redémarrer le serveur", "Demander un redémarrage du serveur loco.", ("system.view",), True),
+    (L_("Serveur loco"), [
+        ("system.view", L_("Consulter le système"), L_("Services, certificats, versions et état des sauvegardes."), (), False),
+        ("system.configure", L_("Configurer le serveur"), L_("Réseaux autorisés, fonctions, proxy et stockage de l'appliance."), ("system.view",), True),
+        ("system.update", L_("Mettre à jour le serveur"), L_("Paquets du système (noyau, correctifs de sécurité) et, sur l'appliance, loco."), ("system.view",), True),
+        ("system.reboot", L_("Redémarrer le serveur"), L_("Demander un redémarrage du serveur loco."), ("system.view",), True),
     ]),
-    ("Scripts", [
-        ("scripts.view", "Consulter les scripts", "Bibliothèque de scripts et résultats de leurs exécutions.", (), False),
-        ("scripts.edit", "Gérer les scripts", "Créer, modifier et supprimer des scripts PowerShell ou shell.", ("scripts.view",), True),
-        ("scripts.run", "Exécuter un script sur des postes", "Lancer un script en SYSTEM (Windows) ou root (Linux) sur des appareils ou groupes.",
+    (L_("Scripts"), [
+        ("scripts.view", L_("Consulter les scripts"), L_("Bibliothèque de scripts et résultats de leurs exécutions."), (), False),
+        ("scripts.edit", L_("Gérer les scripts"), L_("Créer, modifier et supprimer des scripts PowerShell ou shell."), ("scripts.view",), True),
+        ("scripts.run", L_("Exécuter un script sur des postes"), L_("Lancer un script en SYSTEM (Windows) ou root (Linux) sur des appareils ou groupes."),
          ("scripts.view", "fleet.view"), True),
     ]),
-    ("Utilisateurs, profils et audit", [
-        ("users.view", "Consulter les comptes", "Identifiants, profils, état et dernière connexion.", (), False),
-        ("users.approve", "Approuver les comptes d'annuaire", "Attribuer un profil à une nouvelle identité LDAP ou RADIUS et l'autoriser à accéder à loco.", ("users.view",), True),
-        ("sso.manage", "Gérer les annuaires", "Ajouter, tester et configurer les annuaires LDAP et RADIUS ; révoquer leurs connexions.", ("users.view",), True),
-        ("users.create", "Créer des comptes", "Attribuer uniquement des profils dont vous possédez tous les droits.", ("users.view",), True),
-        ("users.edit", "Modifier les comptes", "Changer le profil, activer ou désactiver les comptes que vous pouvez gérer.", ("users.view",), True),
-        ("users.reset", "Réinitialiser les mots de passe", "Comptes que vous pouvez gérer ; leurs sessions sont fermées.", ("users.view",), True),
-        ("users.delete", "Supprimer des comptes", "Comptes que vous pouvez gérer, sauf votre propre compte.", ("users.view",), True),
-        ("roles.view", "Consulter les profils d'accès", "Voir les droits accordés par chaque profil.", (), False),
-        ("roles.manage", "Gérer les profils d'accès", "Créer, modifier ou supprimer des profils dans la limite de vos droits.", ("roles.view", "users.view"), True),
-        ("audit.view", "Consulter le journal", "Historique des connexions et actions d'administration.", (), False),
-        ("audit.export", "Exporter le journal", "Télécharger le journal en JSON, sur une période ou en entier.", ("audit.view",), True),
-        ("audit.configure", "Configurer la conservation du journal", "Durée de conservation des événements.", ("audit.view",), True),
+    (L_("Utilisateurs, profils et audit"), [
+        ("users.view", L_("Consulter les comptes"), L_("Identifiants, profils, état et dernière connexion."), (), False),
+        ("users.approve", L_("Approuver les comptes d'annuaire"), L_("Attribuer un profil à une nouvelle identité LDAP ou RADIUS et l'autoriser à accéder à loco."), ("users.view",), True),
+        ("sso.manage", L_("Gérer les annuaires"), L_("Ajouter, tester et configurer les annuaires LDAP et RADIUS ; révoquer leurs connexions."), ("users.view",), True),
+        ("users.create", L_("Créer des comptes"), L_("Attribuer uniquement des profils dont vous possédez tous les droits."), ("users.view",), True),
+        ("users.edit", L_("Modifier les comptes"), L_("Changer le profil, activer ou désactiver les comptes que vous pouvez gérer."), ("users.view",), True),
+        ("users.reset", L_("Réinitialiser les mots de passe"), L_("Comptes que vous pouvez gérer ; leurs sessions sont fermées."), ("users.view",), True),
+        ("users.delete", L_("Supprimer des comptes"), L_("Comptes que vous pouvez gérer, sauf votre propre compte."), ("users.view",), True),
+        ("roles.view", L_("Consulter les profils d'accès"), L_("Voir les droits accordés par chaque profil."), (), False),
+        ("roles.manage", L_("Gérer les profils d'accès"), L_("Créer, modifier ou supprimer des profils dans la limite de vos droits."), ("roles.view", "users.view"), True),
+        ("audit.view", L_("Consulter le journal"), L_("Historique des connexions et actions d'administration."), (), False),
+        ("audit.export", L_("Exporter le journal"), L_("Télécharger le journal en JSON, sur une période ou en entier."), ("audit.view",), True),
+        ("audit.configure", L_("Configurer la conservation du journal"), L_("Durée de conservation des événements."), ("audit.view",), True),
     ]),
 ]
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],
@@ -93,14 +94,14 @@ PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2
                for _, items in GROUPS for item in items}
 VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view", "deployments.view"}
 DEFAULTS = {
-    "pending": ("Sans accès", "Aucun droit. Les nouvelles identités d'annuaire attendent une approbation administrative.", set()),
-    "admin": ("Administrateur", "Accès complet, y compris aux futurs droits. Profil protégé.", set(PERMISSIONS)),
-    "viewer": ("Lecture seule", "Consultation des appareils, caches et catalogues locaux.", VIEWER),
-    "operator": ("Opérateur", "Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage.",
+    "pending": (N_("Sans accès"), N_("Aucun droit. Les nouvelles identités d'annuaire attendent une approbation administrative."), set()),
+    "admin": (N_("Administrateur"), N_("Accès complet, y compris aux futurs droits. Profil protégé."), set(PERMISSIONS)),
+    "viewer": (N_("Lecture seule"), N_("Consultation des appareils, caches et catalogues locaux."), VIEWER),
+    "operator": (N_("Opérateur"), N_("Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage."),
                  VIEWER | {"fleet.scan", "fleet.update", "fleet.install"}),
-    "repository_manager": ("Gestionnaire des dépôts", "Gestion des paquets et installeurs. Aucun déploiement sur les postes.",
+    "repository_manager": (N_("Gestionnaire des dépôts"), N_("Gestion des paquets et installeurs. Aucun déploiement sur les postes."),
                            {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
-    "auditor": ("Auditeur", "Consultation, journal et son export, comptes et profils. Aucune modification.",
+    "auditor": (N_("Auditeur"), N_("Consultation, journal et son export, comptes et profils. Aucune modification."),
                 VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view", "audit.export"}),
 }
 
@@ -158,7 +159,7 @@ ENDPOINTS = {
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }
-ACCOUNT_ENDPOINTS = {"login", "account", "logout"}
+ACCOUNT_ENDPOINTS = {"login", "account", "logout", "set_language"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "run-script": "scripts.run",
                       "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 
@@ -166,7 +167,7 @@ ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-a
 def expand(values):
     selected = set(values)
     if not selected <= PERMISSIONS.keys():
-        raise ValueError("Droit inconnu.")
+        raise ValueError(_('Droit inconnu.'))
     while True:
         complete = selected | {r for key in selected for r in PERMISSIONS[key]["requires"]}
         if complete == selected:
@@ -212,7 +213,9 @@ def role_permissions(conn, role):
 
 
 def role_labels(conn):
-    return {r["id"]: r["label"] for r in conn.execute("SELECT id,label FROM access_roles ORDER BY builtin DESC,label COLLATE NOCASE")}
+    # Profils intégrés : libellé enregistré en français, traduit à l'affichage ; les profils créés restent tels quels.
+    return {r["id"]: gettext(r["label"]) if r["builtin"] else r["label"]
+            for r in conn.execute("SELECT id,label,builtin FROM access_roles ORDER BY builtin DESC,label COLLATE NOCASE")}
 
 
 def revoke(conn, user_id):

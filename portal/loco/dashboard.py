@@ -6,13 +6,14 @@ import time
 from flask import render_template
 
 from . import app
+from .i18n import L_, _
 from .auth import login_required, can
 from .db import db
 from .linux import list_debs
 from .util import disk_usage, net_counters, read_stats, service_active
 from .wupdate import wu_chart, wu_stats
 
-STATUS_LABELS = {"ready": "prêt", "downloading": "téléchargement", "error": "erreur", "pending": "en attente"}
+STATUS_LABELS = {"ready": L_("prêt"), "downloading": L_("téléchargement"), "error": L_("erreur"), "pending": L_("en attente")}
 
 
 def dashboard_data():
@@ -42,7 +43,7 @@ def recent_activity(limit=6):
                        "kind": "linux", "title": d["package"], "detail": f"{d['version']} · {d['arch']}"})
     for r in db().execute("SELECT name, version, kind, status, updated_at FROM win_apps") if can("windows.view") else []:
         events.append({"when": r["updated_at"], "kind": "windows", "title": r["name"],
-                       "detail": " · ".join(x for x in (r["version"], r["kind"], STATUS_LABELS.get(r["status"], "")) if x)})
+                       "detail": " · ".join(str(x) for x in (r["version"], r["kind"], STATUS_LABELS.get(r["status"], "")) if x)})
     events.sort(key=lambda e: e["when"], reverse=True)
     return events[:limit]
 
@@ -53,9 +54,9 @@ def chart_data(d):
     charts = {}
     charts["wu"] = wu_chart(14)
     disk = d["disk"]
-    parts = [("Cache APT", stats.get("acng", 0), "c1"), ("Cache Windows Update", stats.get("wucache", 0), "c2"),
-             ("Cache RPM", stats.get("rpmcache", 0), "c3"), ("Cache Flathub", stats.get("flatpakcache", 0), "c4"),
-             ("Dépôts et logiciels locaux", sum(stats.get(k, 0) for k in ("apt", "rpm", "flatpak", "win")), "c5")]
+    parts = [(_("Cache APT"), stats.get("acng", 0), "c1"), (_("Cache Windows Update"), stats.get("wucache", 0), "c2"),
+             (_("Cache RPM"), stats.get("rpmcache", 0), "c3"), (_("Cache Flathub"), stats.get("flatpakcache", 0), "c4"),
+             (_("Dépôts et logiciels locaux"), sum(stats.get(k, 0) for k in ("apt", "rpm", "flatpak", "win")), "c5")]
     parts = [p for p in parts if p[1] > 0]
     other = max(0, disk["used"] - sum(p[1] for p in parts))
     total = max(disk["total"], sum(p[1] for p in parts) + other + disk["free"]) or 1
@@ -75,7 +76,8 @@ def chart_data(d):
         n = sum(counts.values())
         ring, offset = [], 0.0
         circumference = 301.59                       # 2π × 48 : rayon de l'anneau
-        for key, label in (("green", "à jour"), ("orange", "mises à jour en attente"), ("red", "à traiter"), ("grey", "état inconnu")):
+        for key, label in (("green", _("à jour")), ("orange", _("mises à jour en attente")), ("red", _("à traiter")),
+                           ("grey", _("état inconnu"))):
             length = circumference * counts[key] / n if n else 0
             ring.append({"key": key, "label": label, "count": counts[key], "len": round(length, 2),
                          "gap": round(circumference - length, 2), "offset": round(-offset, 2)})

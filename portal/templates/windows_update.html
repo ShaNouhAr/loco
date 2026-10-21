@@ -6,55 +6,55 @@
 <div class="head">
   <div>
     <h1>Windows Update</h1>
-    <p>Chaque mise à jour est téléchargée une fois chez Microsoft, puis servie en local aux autres postes.</p>
+    <p>{{ _("Chaque mise à jour est téléchargée une fois chez Microsoft, puis servie en local aux autres postes.") }}</p>
   </div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('windows_update_dns') }}">Script DNS Active Directory</a>
+    <a class="btn" href="{{ url_for('windows_update_dns') }}">{{ _("Script DNS Active Directory") }}</a>
   </div>
 </div>
 
 <div class="stack" data-poll="{{ url_for('api_wu') }}" data-poll-kind="wu" data-poll-every="5000">
   {% if not nginx %}
-  <div class="note err">Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.{% if can('system.view') %} Voir <a href="{{ url_for('system') }}">Système</a>.{% endif %}</div>
+  <div class="note err">{{ _("Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.") }}{% if can('system.view') %}{{ _("Voir <a href=\"%(v)s\">Système</a>.", v=url_for('system')) }}{% endif %}</div>
   {% elif not wu.last %}
-  <div class="note warn">Aucun poste n'est encore passé par loco. Faites répondre <span class="mono">{{ host }}</span> par le DNS du réseau pour les domaines redirigés (script DNS ci-dessus pour Active Directory).</div>
+  <div class="note warn">{{ _("Aucun poste n'est encore passé par loco. Faites répondre <span class=\"mono\">%(host)s</span> par le DNS du réseau pour les domaines redirigés (script DNS ci-dessus pour Active Directory).", host=host) }}</div>
   {% endif %}
 
   <div class="metrics">
-    <div class="metric"><div class="k">Servi par le cache</div><div class="v" data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</div><div class="s"><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> du trafic, 14 jours</div></div>
-    <div class="metric"><div class="k">Pris sur Internet</div><div class="v" data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</div><div class="s">premiers téléchargements, 14 jours</div></div>
-    <div class="metric"><div class="k">En cache</div><div class="v" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</div><div class="s">{{ service(nginx) }}</div></div>
-    <div class="metric"><div class="k">Dernière requête</div><div class="v small-v" data-bind="last_text">{{ wu.last_text or 'aucune' }}</div><div class="s"><span data-bind="clients">{{ wu.clients }}</span> poste(s) dans le journal récent</div></div>
+    <div class="metric"><div class="k">{{ _("Servi par le cache") }}</div><div class="v" data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</div><div class="s"><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> {{ _("du trafic, 14 jours") }}</div></div>
+    <div class="metric"><div class="k">{{ _("Pris sur Internet") }}</div><div class="v" data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</div><div class="s">{{ _("premiers téléchargements, 14 jours") }}</div></div>
+    <div class="metric"><div class="k">{{ _("En cache") }}</div><div class="v" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</div><div class="s">{{ service(nginx) }}</div></div>
+    <div class="metric"><div class="k">{{ _("Dernière requête") }}</div><div class="v small-v" data-bind="last_text">{{ wu.last_text or _('aucune') }}</div><div class="s"><span data-bind="clients">{{ wu.clients }}</span> {{ _("poste(s) dans le journal récent") }}</div></div>
   </div>
 
   <div class="cols w21">
     <section class="panel">
-      <div class="panel-h"><h2>14 derniers jours</h2><div class="aside">{% if chart.hit or chart.miss %}{{ chart.ratio }} % servis par le cache{% endif %}</div></div>
+      <div class="panel-h"><h2>{{ _("14 derniers jours") }}</h2><div class="aside">{% if chart.hit or chart.miss %}{{ _("%(ratio)s %% servis par le cache", ratio=chart.ratio) }}{% endif %}</div></div>
       <div class="panel-b">
         {% if chart.hit or chart.miss %}
         {{ daily_bars(chart) }}
         <ul class="legend">
-          <li><i class="key bar-hit"></i>Depuis le cache <span class="num">{{ chart.hit|human }}</span></li>
-          <li><i class="key bar-miss"></i>Depuis Internet <span class="num">{{ chart.miss|human }}</span></li>
+          <li><i class="key bar-hit"></i>{{ _("Depuis le cache") }} <span class="num">{{ chart.hit|human }}</span></li>
+          <li><i class="key bar-miss"></i>{{ _("Depuis Internet") }} <span class="num">{{ chart.miss|human }}</span></li>
         </ul>
         {% else %}
-        <p class="empty">Aucun téléchargement sur la période.</p>
+        <p class="empty">{{ _("Aucun téléchargement sur la période.") }}</p>
         {% endif %}
       </div>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>Domaines redirigés</h2>
-        {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">Modifier</button></div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ _("Domaines redirigés") }}</h2>
+        {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">{{ _("Modifier") }}</button></div>{% endif %}</div>
       <div class="panel-b wu-domains">
         <ul class="plain-list">{% for d in domains %}<li class="mono">{{ d }}</li>{% endfor %}</ul>
-        <p class="hint">Sous-domaines compris. Le DNS du réseau doit répondre <span class="mono">{{ host }}</span> pour ces domaines.</p>
+        <p class="hint">{{ _("Sous-domaines compris. Le DNS du réseau doit répondre <span class=\"mono\">%(host)s</span> pour ces domaines.", host=host) }}</p>
         <details class="hint">
-          <summary>Fonctionnement</summary>
+          <summary>{{ _("Fonctionnement") }}</summary>
           <ol class="steps">
-            <li><span>Les postes Windows envoient leurs téléchargements à loco au lieu de Microsoft.</span></li>
-            <li><span>Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.</span></li>
-            <li><span>Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache : seuls les fichiers immuables sont gardés.</span></li>
+            <li><span>{{ _("Les postes Windows envoient leurs téléchargements à loco au lieu de Microsoft.") }}</span></li>
+            <li><span>{{ _("Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.") }}</span></li>
+            <li><span>{{ _("Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache : seuls les fichiers immuables sont gardés.") }}</span></li>
           </ol>
         </details>
       </div>
@@ -62,24 +62,24 @@
   </div>
 
   <section class="panel">
-    <div class="panel-h"><h2>Diriger les postes vers le cache</h2><div class="aside">{{ service(proxy_active) }}</div></div>
+    <div class="panel-h"><h2>{{ _("Diriger les postes vers le cache") }}</h2><div class="aside">{{ service(proxy_active) }}</div></div>
     <div class="panel-b">
-      <p class="muted">Deux façons d'envoyer les téléchargements Windows Update des postes vers loco :</p>
+      <p class="muted">{{ _("Deux façons d'envoyer les téléchargements Windows Update des postes vers loco :") }}</p>
       <div class="cols even">
         <div>
-          <h3 class="pick-title">Par DNS</h3>
-          <p class="small muted">Le DNS du réseau répond <span class="mono">{{ host }}</span> pour les domaines redirigés : couvre tout le réseau, mais demande d'éditer le DNS.</p>
-          <a class="btn sm" href="{{ url_for('windows_update_dns') }}">Script DNS Active Directory</a>
+          <h3 class="pick-title">{{ _("Par DNS") }}</h3>
+          <p class="small muted">{{ _("Le DNS du réseau répond <span class=\"mono\">%(host)s</span> pour les domaines redirigés : couvre tout le réseau, mais demande d'éditer le DNS.", host=host) }}</p>
+          <a class="btn sm" href="{{ url_for('windows_update_dns') }}">{{ _("Script DNS Active Directory") }}</a>
         </div>
         <div>
-          <h3 class="pick-title">Par proxy, sans DNS <span class="badge-ro">via l'agent</span> <span class="st ok">activé par défaut</span></h3>
-          <p class="small muted">L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.</p>
-          {% if not proxy_available %}<p class="small"><span class="st">Non disponible sur ce serveur</span></p>
-          <p class="hint">Le proxy-cache (Squid) n'est installé qu'avec le cache Windows Update d'un serveur Linux ; ici, utilisez la redirection DNS. Aucun proxy n'est envoyé aux postes.</p>
+          <h3 class="pick-title">{{ _("Par proxy, sans DNS") }} <span class="badge-ro">{{ _("via l'agent") }}</span> <span class="st ok">{{ _("activé par défaut") }}</span></h3>
+          <p class="small muted">{{ _("L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
+          {% if not proxy_available %}<p class="small"><span class="st">{{ _("Non disponible sur ce serveur") }}</span></p>
+          <p class="hint">{{ _("Le proxy-cache (Squid) n'est installé qu'avec le cache Windows Update d'un serveur Linux ; ici, utilisez la redirection DNS. Aucun proxy n'est envoyé aux postes.") }}</p>
           {% else %}
-          <p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ 'Actif : les postes gérés sont dirigés vers le proxy' if proxy_on else 'Désactivé dans Fonctionnalités' }}</span></p>
-          <p class="hint">Activé par défaut ; se coupe {% if is_super_admin() %}dans <a href="{{ url_for('features') }}">Administration › Fonctionnalités</a>{% else %}dans Administration › Fonctionnalités{% endif %} (« Proxy Windows Update »).{% if proxy_on and not proxy_active %} Le service proxy (squid) n'est pas actif{% if can('system.view') %} — voir <a href="{{ url_for('system') }}">Système</a>{% endif %}.{% endif %} Les postes doivent pouvoir joindre <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span>.</p>
-          <p class="small muted">Manuellement sur un poste (PowerShell administrateur) :</p>
+          <p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ _('Actif : les postes gérés sont dirigés vers le proxy') if proxy_on else _('Désactivé dans Fonctionnalités') }}</span></p>
+          <p class="hint">{{ _("Activé par défaut ; se coupe") }} {% if is_super_admin() %}{{ _("dans") }} <a href="{{ url_for('features') }}">{{ _("Administration › Fonctionnalités") }}</a>{% else %}{{ _("dans Administration › Fonctionnalités") }}{% endif %} {{ _("(« Proxy Windows Update »).") }}{% if proxy_on and not proxy_active %} {{ _("Le service proxy (squid) n'est pas actif") }}{% if can('system.view') %} {{ _("— voir") }} <a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}.{% endif %}{{ _("Les postes doivent pouvoir joindre <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span>.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
+          <p class="small muted">{{ _("Manuellement sur un poste (PowerShell administrateur) :") }}</p>
           {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
           {% endif %}
         </div>
@@ -88,35 +88,35 @@
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>Dernières requêtes</h2><div class="aside">en direct</div></div>
+    <div class="panel-h"><h2>{{ _("Dernières requêtes") }}</h2><div class="aside">{{ _("en direct") }}</div></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Heure</th><th>Poste</th><th>Fichier</th><th class="num">Taille</th><th>Source</th></tr></thead>
+        <thead><tr><th>{{ _("Heure") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Fichier") }}</th><th class="num">{{ _("Taille") }}</th><th>{{ _("Source") }}</th></tr></thead>
         <tbody id="wu-log">
         {% for r in wu.recent %}
           <tr data-key="{{ r.time }}{{ r.client }}{{ r.file }}">
             <td class="muted nowrap">{{ r.time }}</td>
-            <td class="nowrap">{% if r.name %}<span>{{ r.name }}</span><span class="sub mono">{{ r.client }}{% if r.shared %} · adresse partagée (NAT){% endif %}</span>{% else %}<span class="mono">{{ r.client }}</span>{% endif %}</td>
+            <td class="nowrap">{% if r.name %}<span>{{ r.name }}</span><span class="sub mono">{{ r.client }}{% if r.shared %} {{ _("· adresse partagée (NAT)") }}{% endif %}</span>{% else %}<span class="mono">{{ r.client }}</span>{% endif %}</td>
             <td><span class="mono">{{ r.file[:70] }}{{ '…' if r.file|length > 70 }}</span><span class="sub">{{ r.host }}</span></td>
             <td class="num nowrap">{{ r.size|human if r.size else '—' }}</td>
-            <td class="nowrap" title="{{ r.cache }}">{% if r.source == 'cache' %}<span class="st ok">cache</span>{% else %}<span class="st">{{ r.source }}</span>{% endif %}</td>
+            <td class="nowrap" title="{{ r.cache }}">{% if r.source == 'cache' %}<span class="st ok">{{ _("cache") }}</span>{% else %}<span class="st">{{ r.source }}</span>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
-      <div id="wu-none" class="empty {{ 'hidden' if wu.recent }}">Aucune requête pour l'instant.</div>
+      <div id="wu-none" class="empty {{ 'hidden' if wu.recent }}">{{ _("Aucune requête pour l'instant.") }}</div>
     </div>
   </section>
 </div>
 
 {% if can('wu.configure') %}
 <dialog id="domains">
-  <div class="dlg-h"><h2>Domaines redirigés</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="dlg-h"><h2>{{ _("Domaines redirigés") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <form class="dlg-b dlg-stack" method="post" action="{{ url_for('windows_update_domains') }}" data-ajax>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <textarea name="domains" rows="6" spellcheck="false" aria-label="Un domaine par ligne">{{ domains|join('\n') }}</textarea>
-    <p class="hint">Un domaine par ligne, sous-domaines compris. Appliqué au cache dès l'enregistrement ; relancez ensuite le script DNS (<code>-Remove</code> annule).</p>
-    <div class="row"><button class="btn primary"><span class="spin"></span>Enregistrer</button></div>
+    <p class="hint">{{ _("Un domaine par ligne, sous-domaines compris. Appliqué au cache dès l'enregistrement ; relancez ensuite le script DNS (<code>-Remove</code> annule).") }}</p>
+    <div class="row"><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>
   </form>
 </dialog>
 {% endif %}

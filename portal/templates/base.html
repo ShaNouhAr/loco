@@ -1,9 +1,9 @@
 {% from "_logo.html" import logo %}<!doctype html>
-<html lang="fr" data-theme="oled">
+<html lang="{{ lang }}" data-theme="oled">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{% endblock %} · loco</title>
+  <title>{% block title %}{% endblock %} {{ _("· loco") }}</title>
   <script src="{{ url_for('static', filename='theme.js') }}?v={{ asset_v }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}">
@@ -11,21 +11,21 @@
 <body class="{% block body_class %}{% endblock %}">
 {% block body %}
 {% set ep = request.endpoint or '' %}
-{% from '_nav_icons.html' import nav_icon, theme_toggle %}
+{% from '_nav_icons.html' import nav_icon, theme_toggle with context %}
 <header class="top">
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
-    <nav class="nav" aria-label="Navigation principale">
-      {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="Vue d'ensemble" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>Vue d'ensemble</span></a>{% endif %}
-      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>Mon parc</span></a>{% endif %}
-      {% if can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="Enrôlement" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>Enrôlement</span></a>{% endif %}
+    <nav class="nav" aria-label="{{ _('Navigation principale') }}">
+      {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
+      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
+      {% if can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
         <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-linux">
           <div class="nav-panel">
-            {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>Paquets</strong><small>{{ 'Debian, Ubuntu, Red Hat : caches et dépôts' if rpm_enabled and can('rpm.view') else 'Debian, Ubuntu : cache et dépôts' }}</small></span></a>{% endif %}
-            {% if flatpak_enabled and can("flatpak.view") %}<a href="{{ url_for('flatpak') }}" {% if ep.startswith('flatpak') %}aria-current="page"{% endif %}>{{ nav_icon('layers') }}<span><strong>Flatpak</strong><small>{{ "Cache Flathub" if windows else "Flathub et applications internes" }}</small></span></a>{% endif %}
+            {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>{{ _("Paquets") }}</strong><small>{{ _('Debian, Ubuntu, Red Hat : caches et dépôts') if rpm_enabled and can('rpm.view') else _('Debian, Ubuntu : cache et dépôts') }}</small></span></a>{% endif %}
+            {% if flatpak_enabled and can("flatpak.view") %}<a href="{{ url_for('flatpak') }}" {% if ep.startswith('flatpak') %}aria-current="page"{% endif %}>{{ nav_icon('layers') }}<span><strong>Flatpak</strong><small>{{ _("Cache Flathub") if windows else _("Flathub et applications internes") }}</small></span></a>{% endif %}
           </div>
         </div>
       </details>
@@ -35,39 +35,39 @@
         <summary aria-expanded="false" aria-controls="nav-windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-windows">
           <div class="nav-panel">
-            {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>Cache des mises à jour</small></span></a>{% endif %}
-            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>Logiciels</strong><small>Catalogue, centre de logiciels, groupes de logiciels</small></span></a>{% endif %}
+            {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>{{ _("Cache des mises à jour") }}</small></span></a>{% endif %}
+            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>{{ _("Logiciels") }}</strong><small>{{ _("Catalogue, centre de logiciels, groupes de logiciels") }}</small></span></a>{% endif %}
           </div>
         </div>
       </details>
       {% endif %}
       {% if can_any("users.view", "roles.view", "audit.view", "system.view") %}
       <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features')) or ep in ('journal', 'system') }}">
-        <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">Administration</span><span class="nav-short">Admin</span>{{ nav_icon('chevron') }}</summary>
+        <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">{{ _("Administration") }}</span><span class="nav-short">{{ _("Admin") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-admin">
           <div class="nav-panel">
-            {% if can("users.view") %}<a href="{{ url_for('users') }}" {% if ep.startswith('users') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>Comptes</strong><small>Utilisateurs et permissions</small></span></a>{% endif %}
-            {% if can("roles.view") %}<a href="{{ url_for('roles') }}" {% if ep.startswith('roles') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>Profils d'accès</strong><small>Droits par action</small></span></a>{% endif %}
-            {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" {% if ep.startswith(('sso', 'directory')) %}aria-current="page"{% endif %}>{{ nav_icon('user') }}<span><strong>Annuaires</strong><small>Connexion LDAP et RADIUS</small></span></a>{% endif %}
-            {% if can("audit.view") %}<a href="{{ url_for('journal') }}" {% if ep == 'journal' %}aria-current="page"{% endif %}>{{ nav_icon('journal') }}<span><strong>Journal</strong><small>Historique des actions</small></span></a>{% endif %}
-            {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>Système</strong><small>Services et sauvegardes</small></span></a>{% endif %}
-            {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Fonctionnalités</strong><small>Activer ou désactiver les fonctions</small></span></a>{% endif %}
-            {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Mises à jour</strong><small>{{ 'loco, système et sécurité' if appliance else 'Système, noyau et sécurité' }}</small></span></a>{% endif %}
-            {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Configuration</strong><small>Accès, fonctions et stockage</small></span></a>{% endif %}
+            {% if can("users.view") %}<a href="{{ url_for('users') }}" {% if ep.startswith('users') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>{{ _("Comptes") }}</strong><small>{{ _("Utilisateurs et permissions") }}</small></span></a>{% endif %}
+            {% if can("roles.view") %}<a href="{{ url_for('roles') }}" {% if ep.startswith('roles') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>{{ _("Profils d'accès") }}</strong><small>{{ _("Droits par action") }}</small></span></a>{% endif %}
+            {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" {% if ep.startswith(('sso', 'directory')) %}aria-current="page"{% endif %}>{{ nav_icon('user') }}<span><strong>{{ _("Annuaires") }}</strong><small>{{ _("Connexion LDAP et RADIUS") }}</small></span></a>{% endif %}
+            {% if can("audit.view") %}<a href="{{ url_for('journal') }}" {% if ep == 'journal' %}aria-current="page"{% endif %}>{{ nav_icon('journal') }}<span><strong>{{ _("Journal") }}</strong><small>{{ _("Historique des actions") }}</small></span></a>{% endif %}
+            {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>{{ _("Système") }}</strong><small>{{ _("Services et sauvegardes") }}</small></span></a>{% endif %}
+            {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Fonctionnalités") }}</strong><small>{{ _("Activer ou désactiver les fonctions") }}</small></span></a>{% endif %}
+            {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>{{ _("Mises à jour") }}</strong><small>{{ _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité') }}</small></span></a>{% endif %}
+            {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Configuration") }}</strong><small>{{ _("Accès, fonctions et stockage") }}</small></span></a>{% endif %}
           </div>
         </div>
       </details>
       {% endif %}
     </nav>
     <div class="top-r">
-      {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="Aller à une page (Ctrl+K)" title="Aller à une page"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
+      {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="{{ _('Aller à une page (Ctrl+K)') }}" title="{{ _('Aller à une page') }}"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
       {{ theme_toggle() }}
       {% if current_user %}
       <div class="userbox">
-        <a href="{{ url_for('account') }}" class="{{ 'on' if ep == 'account' }}" title="{{ roles.get(current_user.role, "Profil indisponible") }}">{{ nav_icon('user') }}<span>{{ current_user.username }}</span></a>
+        <a href="{{ url_for('account') }}" class="{{ 'on' if ep == 'account' }}" title="{{ _(roles.get(current_user.role, _("Profil indisponible"))) }}">{{ nav_icon('user') }}<span>{{ current_user.username }}</span></a>
         <form method="post" action="{{ url_for('logout') }}">
           <input type="hidden" name="csrf" value="{{ csrf }}">
-          <button type="submit" class="linkbtn logout" aria-label="Déconnexion" title="Déconnexion">{{ nav_icon('logout') }}</button>
+          <button type="submit" class="linkbtn logout" aria-label="{{ _('Déconnexion') }}" title="{{ _('Déconnexion') }}">{{ nav_icon('logout') }}</button>
         </form>
       </div>
       {% endif %}
@@ -77,41 +77,41 @@
 
 <main>
   {% if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features')) or ep in ('journal', 'system') %}
-  <div class="tabs subnav">
-    {% if can("users.view") %}<a href="{{ url_for('users') }}" class="{{ 'on' if ep.startswith('users') }}">Comptes</a>{% endif %}
-    {% if can("roles.view") %}<a href="{{ url_for('roles') }}" class="{{ 'on' if ep.startswith('roles') }}">Profils d'accès</a>{% endif %}
-    {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" class="{{ 'on' if ep.startswith(('sso', 'directory')) }}">Annuaires</a>{% endif %}
-    {% if can("audit.view") %}<a href="{{ url_for('journal') }}" class="{{ 'on' if ep == 'journal' }}">Journal</a>{% endif %}
-    {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">Système</a>{% endif %}
-    {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">Fonctionnalités</a>{% endif %}
-    {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">Mises à jour</a>{% endif %}
-    {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">Configuration</a>{% endif %}
+  <div class="tabs subnav" aria-label="{{ _('Administration') }}">
+    {% if can("users.view") %}<a href="{{ url_for('users') }}" class="{{ 'on' if ep.startswith('users') }}">{{ _("Comptes") }}</a>{% endif %}
+    {% if can("roles.view") %}<a href="{{ url_for('roles') }}" class="{{ 'on' if ep.startswith('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
+    {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" class="{{ 'on' if ep.startswith(('sso', 'directory')) }}">{{ _("Annuaires") }}</a>{% endif %}
+    {% if can("audit.view") %}<a href="{{ url_for('journal') }}" class="{{ 'on' if ep == 'journal' }}">{{ _("Journal") }}</a>{% endif %}
+    {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">{{ _("Système") }}</a>{% endif %}
+    {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">{{ _("Fonctionnalités") }}</a>{% endif %}
+    {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">{{ _("Mises à jour") }}</a>{% endif %}
+    {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">{{ _("Configuration") }}</a>{% endif %}
   </div>
   {% endif %}
   {% block content %}{% endblock %}
 </main>
 
 {% if current_user %}
-<dialog id="cmdk" class="cmdk" aria-label="Aller à une page">
+<dialog id="cmdk" class="cmdk" aria-label="{{ _('Aller à une page') }}">
   <div class="cmdk-search">
     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
-    <input type="search" placeholder="Aller à… (parc, scripts, Windows Update, comptes…)" aria-label="Page recherchée" autocomplete="off" spellcheck="false" aria-controls="cmdk-list">
-    <kbd>Échap</kbd>
+    <input type="search" placeholder="{{ _('Aller à… (parc, scripts, Windows Update, comptes…)') }}" aria-label="{{ _('Page recherchée') }}" autocomplete="off" spellcheck="false" aria-controls="cmdk-list">
+    <kbd>{{ _("Échap") }}</kbd>
   </div>
   <div class="cmdk-list" id="cmdk-list" role="listbox"></div>
-  <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> choisir</span><span><kbd>Entrée</kbd> ouvrir</span><span><kbd>/</kbd> recherche de la page</span></div>
+  <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> {{ _("choisir") }}</span><span><kbd>{{ _("Entrée") }}</kbd> {{ _("ouvrir") }}</span><span><kbd>/</kbd> {{ _("recherche de la page") }}</span></div>
 </dialog>
 {# Pages des sous-menus absentes de l'en-tête : proposées par la palette. #}
 <template id="cmdk-links">
   {% if can("fleet.view") %}
-  <a href="{{ url_for('fleet_groups') }}" data-group="Mon parc">Groupes de machines</a>
-  {% if can_any('deployments.view', 'fleet.install') %}<a href="{{ url_for('deployments') }}" data-group="Mon parc">Déploiements</a>{% endif %}
-  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" data-group="Mon parc">Scripts</a>{% endif %}
-  <a href="{{ url_for('schedules') }}" data-group="Mon parc">Planifications</a>
-  {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" data-group="Mon parc">Réglages du parc</a>{% endif %}
+  <a href="{{ url_for('fleet_groups') }}" data-group="{{ _('Mon parc') }}">{{ _("Groupes de machines") }}</a>
+  {% if can_any('deployments.view', 'fleet.install') %}<a href="{{ url_for('deployments') }}" data-group="{{ _('Mon parc') }}">{{ _("Déploiements") }}</a>{% endif %}
+  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" data-group="{{ _('Mon parc') }}">{{ _("Scripts") }}</a>{% endif %}
+  <a href="{{ url_for('schedules') }}" data-group="{{ _('Mon parc') }}">{{ _("Planifications") }}</a>
+  {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" data-group="{{ _('Mon parc') }}">{{ _("Réglages du parc") }}</a>{% endif %}
   {% endif %}
-  {% if can('store.view') %}<a href="{{ url_for('software_store') }}" data-group="Logiciels Windows">Centre de logiciels</a>{% endif %}
-  {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" data-group="Logiciels Windows">Groupes de logiciels</a>{% endif %}
+  {% if can('store.view') %}<a href="{{ url_for('software_store') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Centre de logiciels") }}</a>{% endif %}
+  {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Groupes de logiciels") }}</a>{% endif %}
 </template>
 {% endif %}
 
@@ -119,8 +119,8 @@
   <div class="dlg-h"><h2></h2></div>
   <div class="dlg-b"><p class="muted"></p></div>
   <div class="dlg-f">
-    <button type="button" class="btn" data-cancel>Annuler</button>
-    <button type="button" class="btn danger" data-ok>Confirmer</button>
+    <button type="button" class="btn" data-cancel>{{ _("Annuler") }}</button>
+    <button type="button" class="btn danger" data-ok>{{ _("Confirmer") }}</button>
   </div>
 </dialog>
 {% endblock %}
@@ -129,6 +129,7 @@
   {% for cat, msg in messages %}<span hidden data-flash="{{ msg }}" data-kind="{{ cat }}"></span>{% endfor %}
 {% endwith %}
 <div class="toasts" aria-live="polite"></div>
+{% if js_i18n %}<script type="application/json" id="i18n-js">{{ js_i18n|tojson }}</script>{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_v }}"></script>
 {% block scripts %}{% endblock %}
 </body>

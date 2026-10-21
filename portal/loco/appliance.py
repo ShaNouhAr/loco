@@ -9,6 +9,7 @@ import subprocess
 from flask import abort, flash, g, render_template, request
 
 from . import app, config
+from .i18n import L_, _
 from .auth import audit, login_required, require
 from .system import _alpine_release
 from .util import back
@@ -16,10 +17,10 @@ from .util import back
 if config.SERVER_UPDATES:
     import locoadmin
 
-ACTION_LABELS = {"check": "Vérification des mises à jour", "update-loco": "Mise à jour de loco",
-                 "update-system": "Mise à jour du système", "update-security": "Correctifs de sécurité",
-                 "configure": "Réglages", "reboot": "Redémarrage"}
-TAG_LABELS = {"noyau": "noyau", "loco": "service loco", "socle": "socle"}
+ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": L_("Mise à jour de loco"),
+                 "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
+                 "configure": L_("Réglages"), "reboot": L_("Redémarrage")}
+TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
 SWITCHES = ("HTTP_ENABLED", "WU_ENABLED", "RPM_ENABLED", "FLATPAK_ENABLED")
 
 
@@ -40,10 +41,10 @@ def _agent_restart():
 def _submit(action, params=None):
     running = locoadmin.running_job()
     if running:
-        flash(f"Opération en cours : {ACTION_LABELS.get(running['action'], running['action'])}. Réessayez à la fin.", "error")
+        flash(_('Opération en cours : %(get)s. Réessayez à la fin.', get=ACTION_LABELS.get(running['action'], running['action'])), "error")
         return False
     if not locoadmin.agent_running():
-        flash(f"L'agent d'administration ne répond pas : sur le serveur, {_agent_restart()}.", "error")
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(_agent_restart)s.", _agent_restart=_agent_restart()), "error")
         return False
     try:
         locoadmin.request(action, params, user=_username())
@@ -111,7 +112,7 @@ def appliance_updates():
         job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS,
         update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
-        os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else "Système"),
+        os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
         packages=packages, security=[p for p in packages if p.get("security")],
         key_count=sum(1 for p in packages if p.get("tags")),
         security_supported=status.get("security_supported", False), kernel_short=_kernel_short,
@@ -148,9 +149,7 @@ def appliance_updates_post():
     require("system.view" if action == "check" else "system.reboot" if action == "reboot" else "system.update")
     if _submit(action):
         audit(f"systeme.{action}", ACTION_LABELS[action])
-        flash("Redémarrage demandé." if action == "reboot" else
-              "Installation des correctifs de sécurité lancée." if action == "update-security" else
-              f"{ACTION_LABELS[action]} lancée.", "ok")
+        flash((_('Redémarrage demandé.') if action == "reboot" else (_('Installation des correctifs de sécurité lancée.') if action == "update-security" else _('%(ACTION_LABELS)s lancée.', ACTION_LABELS=ACTION_LABELS[action]))), "ok")
     return back("appliance_updates")
 
 
@@ -180,15 +179,15 @@ def appliance_settings_post():
         flash(str(e) + ".", "error")
         return back("appliance_settings")
     if not clean:
-        flash("Aucun changement.", "ok")
+        flash(_('Aucun changement.'), "ok")
         return back("appliance_settings")
     # Ne pas se couper soi-même l'accès à l'interface.
     if "ADMIN_ALLOW" in clean and not _allowed(request.remote_addr, clean["ADMIN_ALLOW"]):
-        flash(f"Les réseaux de l'interface doivent inclure votre adresse ({request.remote_addr}).", "error")
+        flash(_("Les réseaux de l'interface doivent inclure votre adresse (%(remote_addr)s).", remote_addr=request.remote_addr), "error")
         return back("appliance_settings")
     if _submit("configure", clean):
         audit("systeme.configuration", ", ".join(f"{k}={v}" for k, v in clean.items()))
-        flash("Réglages en cours d'application : les services redémarrent quelques secondes.", "ok")
+        flash(_("Réglages en cours d'application : les services redémarrent quelques secondes."), "ok")
         return back("appliance_updates")
     return back("appliance_settings")
 

@@ -14,6 +14,7 @@ from flask import abort, flash, request
 from werkzeug.utils import secure_filename
 
 from . import app, config, rpmpkg, signing
+from .i18n import _
 from .auth import audit, login_required
 from .db import transaction
 from .util import back, download, explain, sha256_of
@@ -26,7 +27,7 @@ _NS = {"repo": "http://linux.duke.edu/metadata/repo", "common": "http://linux.du
 
 def repository_path(name):
     if not config.RPM_REPOSITORY_RE.fullmatch(name or ""):
-        raise ValueError("Dépôt invalide : el suivi de la version majeure (el9, el10…).")
+        raise ValueError(_('Dépôt invalide : el suivi de la version majeure (el9, el10…).'))
     return os.path.join(config.RPM_DIR, name)
 
 
@@ -40,7 +41,7 @@ def repositories():
 def require_repository(name):
     path = repository_path(name)
     if not any(r["name"] == name for r in repositories()):
-        raise ValueError("Ce dépôt n'existe pas. Créez-le avant d'y ajouter des paquets.")
+        raise ValueError(_("Ce dépôt n'existe pas. Créez-le avant d'y ajouter des paquets."))
     return path
 
 
@@ -95,10 +96,10 @@ def rpm_fields(path):
                          capture_output=True, text=True, timeout=30)
     lines = out.stdout.splitlines()
     if out.returncode != 0 or len(lines) < 5:
-        raise ValueError("ce fichier n'est pas un paquet .rpm valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .rpm valide"))
     name, version, release, arch, source = lines[:5]
     if source == "(none)" or arch in ("src", "nosrc"):
-        raise ValueError("les paquets source (.src.rpm) ne sont pas publiés")
+        raise ValueError(_('les paquets source (.src.rpm) ne sont pas publiés'))
     return {"name": name, "version": version, "release": release, "arch": arch}
 
 
@@ -137,7 +138,7 @@ def create_repository(name):
     root = repository_path(name)
     with _lock:
         if any(r["name"] == name for r in repositories()):
-            raise ValueError("Ce dépôt existe déjà.")
+            raise ValueError(_('Ce dépôt existe déjà.'))
         existed = os.path.exists(root)
         try:
             rebuild(name)
@@ -157,13 +158,13 @@ def add_rpm(tmp_path, name):
     # Un paquet marqué pour une autre version (.el8 dans el9…) ne doit pas atterrir dans ce dépôt.
     tag = re.search(r"\.el(\d+)", fields["release"])
     if tag and f"el{tag.group(1)}" != name:
-        raise ValueError(f"paquet construit pour el{tag.group(1)}, pas pour {name}")
+        raise ValueError(_('paquet construit pour el%(group)s, pas pour %(name)s', group=tag.group(1), name=name))
     filename = secure_filename(f"{fields['name']}-{fields['version']}-{fields['release']}.{fields['arch']}.rpm")
     with _lock:
         target = os.path.join(root, "Packages", filename)
         if os.path.isfile(target):
             if sha256_of(target) != sha256_of(tmp_path):
-                raise ValueError("Ce paquet et cette version existent avec un contenu différent. Publiez une nouvelle version.")
+                raise ValueError(_('Ce paquet et cette version existent avec un contenu différent. Publiez une nouvelle version.'))
             os.unlink(tmp_path)
             return filename
         os.chmod(tmp_path, 0o644)
@@ -220,7 +221,7 @@ def rpm_repository_create():
         flash(explain(e), "error")
         return back("rpm")
     audit("rpm.depot.ajout", name)
-    flash(f"Dépôt créé : {name}", "ok")
+    flash(_('Dépôt créé : %(name)s', name=name), "ok")
     return back("rpm", repository=name)
 
 
@@ -239,7 +240,7 @@ def rpm_upload():
     url = request.form.get("url", "").strip()
     try:
         if url:
-            tmp, _ = download(url, config.TMP_DIR)
+            tmp, _sha = download(url, config.TMP_DIR)
             try:
                 added.append(add_rpm(tmp, name))
             finally:
@@ -262,11 +263,11 @@ def rpm_upload():
         errors.append(explain(e))
     for filename in added:
         audit("rpm.ajout", f"{name}: {filename}")
-        flash(f"Paquet ajouté : {filename}", "ok")
+        flash(_('Paquet ajouté : %(filename)s', filename=filename), "ok")
     for err in errors:
         flash(err, "error")
     if not added and not errors:
-        flash("Aucun fichier ni lien fourni.", "error")
+        flash(_('Aucun fichier ni lien fourni.'), "error")
     return back("rpm", repository=name)
 
 
@@ -294,5 +295,5 @@ def rpm_delete():
                     os.replace(saved, path)
                     raise
             audit("rpm.suppression", f"{name}: {filename}")
-            flash("Paquet supprimé de ce dépôt.", "ok")
+            flash(_('Paquet supprimé de ce dépôt.'), "ok")
     return back("rpm", repository=name)

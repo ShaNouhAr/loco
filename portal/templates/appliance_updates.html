@@ -1,113 +1,112 @@
 {% extends "base.html" %}
-{% block title %}Mises à jour{% endblock %}
+{% block title %}{{ _("Mises à jour") }}{% endblock %}
 {% block content %}
 {% set busy = running or not agent %}
 <div class="head">
   <div>
-    <h1>Mises à jour du serveur</h1>
-    <p>{{ os_label }} : noyau, correctifs de sécurité et services de loco{% if appliance %}, et loco lui-même{% endif %}. En ligne de commande : <code class="nowrap">loco-update</code>.</p>
+    <h1>{{ _("Mises à jour du serveur") }}</h1>
+    <p>{{ _("%(os_label)s : noyau, correctifs de sécurité et services de loco", os_label=os_label) }}{% if appliance %}{{ _(", et loco lui-même") }}{% endif %}{{ _(". En ligne de commande : <code class=\"nowrap\">loco-update</code>.") }}</p>
   </div>
   <div class="actions">
     <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="check">
-      <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>Vérifier maintenant</button>
+      <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Vérifier maintenant") }}</button>
     </form>
   </div>
 </div>
 
 <div class="stack" data-operations="{{ url_for('appliance_operations_state') }}" data-signature="{{ signature }}">
   {% if not agent %}
-  <p class="note err">L'agent d'administration ne répond pas : les opérations sont indisponibles. Sur le serveur : <code>{{ agent_restart }}</code>.</p>
+  <p class="note err">{{ _("L'agent d'administration ne répond pas : les opérations sont indisponibles. Sur le serveur : <code>%(agent_restart)s</code>.", agent_restart=agent_restart) }}</p>
   {% endif %}
   {% for e in status.errors or [] %}<p class="note warn">{{ e }}</p>{% endfor %}
 
   <div class="metrics">
     <div class="metric">
-      <div class="k">Correctifs de sécurité</div>
+      <div class="k">{{ _("Correctifs de sécurité") }}</div>
       {% if security_supported %}
       <div class="v">{{ security|length }}</div>
-      <div class="s">{% if security %}<span class="st err">à installer</span>{% elif status.checked %}<span class="st ok">aucun en attente</span>{% else %}jamais vérifié{% endif %}</div>
+      <div class="s">{% if security %}<span class="st err">{{ _("à installer") }}</span>{% elif status.checked %}<span class="st ok">{{ _("aucun en attente") }}</span>{% else %}{{ _("jamais vérifié") }}{% endif %}</div>
       {% else %}
       <div class="v small-v">—</div>
-      <div class="s">{% if appliance %}branche stable : correctifs seulement{% else %}non signalés par ce système{% endif %}</div>
+      <div class="s">{% if appliance %}{{ _("branche stable : correctifs seulement") }}{% else %}{{ _("non signalés par ce système") }}{% endif %}</div>
       {% endif %}
     </div>
     <div class="metric">
-      <div class="k">Paquets à mettre à jour</div>
+      <div class="k">{{ _("Paquets à mettre à jour") }}</div>
       <div class="v">{{ packages|length }}</div>
-      <div class="s">{% if key_count %}dont {{ key_count }} noyau, service ou socle{% elif packages %}paquets courants{% elif status.checked %}<span class="st ok">système à jour</span>{% else %}jamais vérifié{% endif %}</div>
+      <div class="s">{% if key_count %}{{ _("dont %(key_count)s noyau, service ou socle", key_count=key_count) }}{% elif packages %}{{ _("paquets courants") }}{% elif status.checked %}<span class="st ok">{{ _("système à jour") }}</span>{% else %}{{ _("jamais vérifié") }}{% endif %}</div>
     </div>
     <div class="metric">
-      <div class="k">Noyau</div>
+      <div class="k">{{ _("Noyau") }}</div>
       <div class="v small-v mono" title="{{ status.kernel.running if status.kernel }}">{{ kernel_short(status.kernel.running) if status.kernel else '—' }}</div>
-      <div class="s">{% if status.container %}géré par l'hôte (conteneur){% elif status.kernel and status.kernel.installed and status.kernel.installed != status.kernel.running %}<span class="st warn" title="{{ status.kernel.installed }}">{{ kernel_short(status.kernel.installed) }} installé</span>{% elif status.kernel %}<span class="st ok">dernier installé</span>{% else %}—{% endif %}</div>
+      <div class="s">{% if status.container %}{{ _("géré par l'hôte (conteneur)") }}{% elif status.kernel and status.kernel.installed and status.kernel.installed != status.kernel.running %}<span class="st warn" title="{{ status.kernel.installed }}">{{ _("%(v)s installé", v=kernel_short(status.kernel.installed)) }}</span>{% elif status.kernel %}<span class="st ok">{{ _("dernier installé") }}</span>{% else %}—{% endif %}</div>
     </div>
     <div class="metric">
-      <div class="k">Redémarrage</div>
-      <div class="v small-v">{{ 'nécessaire' if status.reboot_required else 'non nécessaire' }}</div>
-      <div class="s">{% if status.reboot_required %}<span class="st warn">{{ status.reboot_reasons|length }} raison{{ 's' if status.reboot_reasons|length > 1 }}</span>{% elif status.stale_services %}<span class="st warn">{{ status.stale_services|length }} service{{ 's' if status.stale_services|length > 1 }} à relancer</span>{% else %}vérifié le {{ status.checked|date_fr if status.checked else 'jamais' }}{% endif %}</div>
+      <div class="k">{{ _("Redémarrage") }}</div>
+      <div class="v small-v">{{ _('nécessaire') if status.reboot_required else _('non nécessaire') }}</div>
+      <div class="s">{% if status.reboot_required %}<span class="st warn">{{ _("%(reboot_reasons)s raison%(v)s", reboot_reasons=status.reboot_reasons|length, v='s' if status.reboot_reasons|length > 1) }}</span>{% elif status.stale_services %}<span class="st warn">{{ _("%(stale_services)s service%(v)s à relancer", stale_services=status.stale_services|length, v='s' if status.stale_services|length > 1) }}</span>{% else %}{{ _("vérifié le %(checked)s", checked=status.checked|date_fr if status.checked else _('jamais')) }}{% endif %}</div>
     </div>
     <div class="metric">
       <div class="k">loco</div>
       <div class="v small-v mono">{{ version }}</div>
-      <div class="s">{% if update_available %}<span class="st warn">{{ latest.version }} disponible</span>{% elif latest %}<span class="st ok">dernière version</span>{% else %}version publiée inconnue{% endif %}</div>
+      <div class="s">{% if update_available %}<span class="st warn">{{ _("%(version)s disponible", version=latest.version) }}</span>{% elif latest %}<span class="st ok">{{ _("dernière version") }}</span>{% else %}{{ _("version publiée inconnue") }}{% endif %}</div>
     </div>
   </div>
 
   {% if status.reboot_required %}
   <div class="note warn">
-    <strong>Redémarrage nécessaire</strong> pour appliquer complètement les mises à jour :
+    <strong>{{ _("Redémarrage nécessaire") }}</strong> {{ _("pour appliquer complètement les mises à jour :") }}
     <ul>{% for r in status.reboot_reasons %}<li>{{ r }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
   {% if status.stale_services %}
   <div class="note warn">
-    <strong>Services qui utilisent d'anciennes bibliothèques</strong> (les correctifs ne les protègent qu'une fois relancés) :
-    <span class="mono small">{% for unit, names in status.stale_services|dictsort %}{{ unit }}{% if names and names|join(', ') != unit %} ({{ names|join(', ') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>.
-    Les services de loco sont relancés après chaque mise à jour faite ici ; pour les autres, redémarrez le serveur.
+    <strong>{{ _("Services qui utilisent d'anciennes bibliothèques") }}</strong> {{ _("(les correctifs ne les protègent qu'une fois relancés) :") }}
+    <span class="mono small">{% for unit, names in status.stale_services|dictsort %}{{ unit }}{% if names and names|join(', ') != unit %} ({{ names|join(', ') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{{ _(". Les services de loco sont relancés après chaque mise à jour faite ici ; pour les autres, redémarrez le serveur.") }}
   </div>
   {% endif %}
 
   {% if update_available %}
   <section class="panel">
-    <div class="panel-h"><h2>loco {{ latest.version }}</h2><div class="aside">{% if latest.published %}publiée le {{ latest.published[:10] }}{% endif %}</div></div>
+    <div class="panel-h"><h2>loco {{ latest.version }}</h2><div class="aside">{% if latest.published %}{{ _("publiée le %(v)s", v=latest.published[:10]) }}{% endif %}</div></div>
     <div class="panel-f row">
       {% if appliance %}
-      {% if can("system.update") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="Installer loco {{ latest.version }} ?" data-confirm-text="Archive vérifiée par SHA-256, puis installation : le portail redémarre quelques secondes. En cas d'échec, la version {{ version }} est rétablie automatiquement." data-confirm-ok="Mettre à jour">
+      {% if can("system.update") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer loco %(version)s ?', version=latest.version) }}" data-confirm-text="{{ _('Archive vérifiée par SHA-256, puis installation : le portail redémarre quelques secondes. En cas d\'échec, la version %(version)s est rétablie automatiquement.', version=version) }}" data-confirm-ok="{{ _('Mettre à jour') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-loco">
-        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>Installer {{ latest.version }}</button>
+        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer %(version)s", version=latest.version) }}</button>
       </form>{% endif %}
       {% else %}
-      <span class="muted">Sur le serveur, en root : <code>bash install.sh</code> depuis l'archive de la nouvelle version (réglages et données conservés).</span>
+      <span class="muted">{{ _("Sur le serveur, en root : <code>bash install.sh</code> depuis l'archive de la nouvelle version (réglages et données conservés).") }}</span>
       {% endif %}
-      {% if latest.url %}<a href="{{ latest.url }}" rel="noopener noreferrer" target="_blank">Notes de version</a>{% endif %}
+      {% if latest.url %}<a href="{{ latest.url }}" rel="noopener noreferrer" target="_blank">{{ _("Notes de version") }}</a>{% endif %}
     </div>
   </section>
   {% endif %}
 
   <section class="panel" data-pkgs="#sys-packages" data-empty="#sys-packages-empty">
     <div class="panel-h">
-      <h2>Paquets en attente</h2>
-      <div class="aside">{% if packages %}<input type="search" class="search-sm" placeholder="Filtrer les paquets" aria-label="Filtrer les paquets">{% endif %}</div>
+      <h2>{{ _("Paquets en attente") }}</h2>
+      <div class="aside">{% if packages %}<input type="search" class="search-sm" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}">{% endif %}</div>
     </div>
     {% if packages %}
     <div class="chips-bar">
-      <div class="chips" role="group" aria-label="Filtrer les paquets">
-        <button type="button" class="chip on" data-chip="all" aria-pressed="true">Tous <b>{{ packages|length }}</b></button>
-        {% if security %}<button type="button" class="chip" data-chip="security" aria-pressed="false"><span class="st err"></span>Sécurité <b>{{ security|length }}</b></button>{% endif %}
-        {% if key_count %}<button type="button" class="chip" data-chip="key" aria-pressed="false">Noyau, services et socle <b>{{ key_count }}</b></button>{% endif %}
+      <div class="chips" role="group" aria-label="{{ _('Filtrer les paquets') }}">
+        <button type="button" class="chip on" data-chip="all" aria-pressed="true">{{ _("Tous") }} <b>{{ packages|length }}</b></button>
+        {% if security %}<button type="button" class="chip" data-chip="security" aria-pressed="false"><span class="st err"></span>{{ _("Sécurité") }} <b>{{ security|length }}</b></button>{% endif %}
+        {% if key_count %}<button type="button" class="chip" data-chip="key" aria-pressed="false">{{ _("Noyau, services et socle") }} <b>{{ key_count }}</b></button>{% endif %}
       </div>
     </div>
     <div class="table-wrap">
       <table id="sys-packages">
-        <thead><tr><th>Paquet</th><th>Installé</th><th>Disponible</th><th class="hide-sm">Source</th></tr></thead>
+        <thead><tr><th>{{ _("Paquet") }}</th><th>{{ _("Installé") }}</th><th>{{ _("Disponible") }}</th><th class="hide-sm">{{ _("Source") }}</th></tr></thead>
         <tbody>
         {% for p in packages %}
           <tr{% if p.security %} data-security="1"{% endif %}{% if p.tags %} data-key="1"{% endif %}>
             <td>
               <span class="mono">{{ p.name }}</span>
               {% for t in p.tags or [] %} <span class="tag">{{ tag_labels.get(t, t) }}</span>{% endfor %}
-              {% if p.security %} <span class="pill err">sécurité{% if p.severity %} · {{ p.severity|lower }}{% endif %}</span>{% endif %}
+              {% if p.security %} <span class="pill err">{{ _("sécurité") }}{% if p.severity %} · {{ p.severity|lower }}{% endif %}</span>{% endif %}
             </td>
             <td class="mono muted nowrap">{{ p.current or ('nouveau' if p.new else '—') }}</td>
             <td class="mono nowrap">{{ p.new or '—' }}</td>
@@ -116,43 +115,43 @@
         {% endfor %}
         </tbody>
       </table>
-      <div id="sys-packages-empty" class="empty hidden">Aucun paquet ne correspond.</div>
+      <div id="sys-packages-empty" class="empty hidden">{{ _("Aucun paquet ne correspond.") }}</div>
     </div>
     {% else %}
-    <div class="empty">{% if status.checked %}Aucune mise à jour en attente (vérifié le {{ status.checked|date_fr }}).{% else %}Pas encore vérifié : « Vérifier maintenant ».{% endif %}</div>
+    <div class="empty">{% if status.checked %}{{ _("Aucune mise à jour en attente (vérifié le %(checked)s).", checked=status.checked|date_fr) }}{% else %}{{ _("Pas encore vérifié : « Vérifier maintenant ».") }}{% endif %}</div>
     {% endif %}
     <div class="panel-f row">
       {% if can("system.update") and packages %}
-      {% if security %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="Installer {{ security|length }} correctif{{ 's' if security|length > 1 }} de sécurité ?" data-confirm-text="Seuls les paquets signalés « sécurité » sont mis à jour (avec leurs dépendances). Les services de loco qui en dépendent sont relancés quelques secondes." data-confirm-ok="Installer">
+      {% if security %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer %(security)s correctif%(v)s de sécurité ?', security=security|length, v='s' if security|length > 1) }}" data-confirm-text="{{ _('Seuls les paquets signalés « sécurité » sont mis à jour (avec leurs dépendances). Les services de loco qui en dépendent sont relancés quelques secondes.') }}" data-confirm-ok="{{ _('Installer') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-security">
-        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>Installer les correctifs de sécurité</button>
+        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer les correctifs de sécurité") }}</button>
       </form>{% endif %}
-      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="Mettre à jour les {{ packages|length }} paquets ?" data-confirm-text="Tous les paquets en attente, noyau compris. Les services de loco concernés sont relancés quelques secondes ; un nouveau noyau demande un redémarrage." data-confirm-ok="Mettre à jour">
+      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Mettre à jour les %(packages)s paquets ?', packages=packages|length) }}" data-confirm-text="{{ _('Tous les paquets en attente, noyau compris. Les services de loco concernés sont relancés quelques secondes ; un nouveau noyau demande un redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-system">
-        <button class="btn {{ '' if security else 'primary' }}" {{ 'disabled' if busy }}><span class="spin"></span>Tout mettre à jour</button>
+        <button class="btn {{ '' if security else 'primary' }}" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Tout mettre à jour") }}</button>
       </form>
       {% endif %}
-      {% if can("system.reboot") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="Redémarrer le serveur ?" data-confirm-text="Les postes perdent l'accès aux dépôts et aux caches pendant le redémarrage (environ une minute)." data-confirm-ok="Redémarrer">
+      {% if can("system.reboot") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
-        <button class="btn {{ 'primary' if status.reboot_required and not packages }}" {{ 'disabled' if busy }}><span class="spin"></span>Redémarrer le serveur</button>
+        <button class="btn {{ 'primary' if status.reboot_required and not packages }}" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Redémarrer le serveur") }}</button>
       </form>{% endif %}
-      <span class="faint small">Vérification automatique chaque jour{% if status.checked %} · dernière le {{ status.checked|date_fr }}{% endif %}</span>
+      <span class="faint small">{{ _("Vérification automatique chaque jour") }}{% if status.checked %} {{ _("· dernière le %(checked)s", checked=status.checked|date_fr) }}{% endif %}</span>
     </div>
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>Opérations</h2><div class="aside">journal de chaque vérification et mise à jour</div></div>
+    <div class="panel-h"><h2>{{ _("Opérations") }}</h2><div class="aside">{{ _("journal de chaque vérification et mise à jour") }}</div></div>
     {% if jobs %}
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Date</th><th>Opération</th><th class="hide-sm">Par</th><th>État</th></tr></thead>
+        <thead><tr><th>{{ _("Date") }}</th><th>{{ _("Opération") }}</th><th class="hide-sm">{{ _("Par") }}</th><th>{{ _("État") }}</th></tr></thead>
         <tbody>
         {% for j in jobs %}
           <tr class="{{ 'sel' if job and j.id == job.id }}">
             <td class="muted nowrap"><a href="{{ url_for('appliance_updates', operation=j.id) }}">{{ (j.started or j.queued)|date_fr }}</a></td>
             <td>{{ labels.get(j.action, j.action) }}{% if j.params %}<span class="sub">{% for k, v in j.params.items() %}{{ k }}={{ v }}{{ ' ' if not loop.last }}{% endfor %}</span>{% endif %}</td>
             <td class="muted hide-sm">{{ j.user or '—' }}</td>
-            <td>{% if j.state == 'success' %}<span class="st ok">réussie</span>{% elif j.state == 'failed' %}<span class="st err">échec</span>{% else %}<span class="st warn">en cours</span>{% endif %}</td>
+            <td>{% if j.state == 'success' %}<span class="st ok">{{ _("réussie") }}</span>{% elif j.state == 'failed' %}<span class="st err">{{ _("échec") }}</span>{% else %}<span class="st warn">{{ _("en cours") }}</span>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -160,11 +159,11 @@
     </div>
     {% if job %}
     <div {% if job.state in ('queued', 'running') %}data-poll="{{ url_for('appliance_job', job_id=job.id) }}" data-poll-kind="job" data-poll-every="2000"{% endif %}>
-      <pre class="log" id="job-log">{{ job_log or 'Journal vide.' }}</pre>
+      <pre class="log" id="job-log">{{ job_log or _('Journal vide.') }}</pre>
     </div>
     {% endif %}
     {% else %}
-    <div class="empty">Aucune opération pour l'instant.</div>
+    <div class="empty">{{ _("Aucune opération pour l'instant.") }}</div>
     {% endif %}
   </section>
 </div>

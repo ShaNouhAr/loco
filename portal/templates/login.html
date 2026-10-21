@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 {% from "_logo.html" import logo %}
-{% block title %}Connexion{% endblock %}
+{% block title %}{{ _("Connexion") }}{% endblock %}
 {% block body %}
-{% from '_nav_icons.html' import theme_toggle %}
+{% from '_nav_icons.html' import theme_toggle with context %}
 <div class="login">
   <div class="login-box">
     <div class="brand">{{ logo() }}<b>loco</b><span>{{ host }}</span></div>
     {% for category, message in get_flashed_messages(with_categories=true) %}<p class="note {{ category }}" role="status">{{ message }}</p>{% endfor %}
     <form method="post" class="panel">
-      <div class="panel-h"><h2>Connexion</h2></div>
+      <div class="panel-h"><h2>{{ _("Connexion") }}</h2></div>
       <div class="panel-b">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>Identifiant</span>
+        <label class="f"><span>{{ _("Identifiant") }}</span>
           <input type="text" name="username" value="{{ username }}" required autocomplete="username" autocapitalize="none" spellcheck="false" {{ 'autofocus' if not username }}>
         </label>
-        <label class="f"><span>Mot de passe</span>
+        <label class="f"><span>{{ _("Mot de passe") }}</span>
           <input type="password" name="password" required autocomplete="current-password" {{ 'autofocus' if username }}>
         </label>
-        <button class="btn primary"><span class="spin"></span>Se connecter</button>
-        {% if login_directories %}<p class="hint">Compte local ou compte de l'annuaire ({{ login_directories|join(', ') }}). Première connexion avec un compte d'annuaire : l'accès doit être approuvé par un administrateur.</p>{% endif %}
+        <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
+        {% if login_directories %}<p class="hint">{{ _("Compte local ou compte de l'annuaire (%(login_directories)s). Première connexion avec un compte d'annuaire : l'accès doit être approuvé par un administrateur.", login_directories=login_directories|join(', ')) }}</p>{% endif %}
       </div>
     </form>
     <div class="foot">

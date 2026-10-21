@@ -12,6 +12,7 @@ from flask import Flask, abort, g, request, session
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from . import config
+from .i18n import _
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -67,7 +68,7 @@ def csrf_protect():
     if request.method == "POST":
         token = request.form.get("csrf", "")
         if not hmac.compare_digest(token, session["csrf"]):
-            abort(400, "Jeton CSRF invalide, rechargez la page.")
+            abort(400, _('Jeton CSRF invalide, rechargez la page.'))
 
 
 @app.after_request
@@ -94,7 +95,7 @@ def inject_globals():
         "acng_port": config.ACNG_PORT,
         "asset_v": ASSET_V,
         "version": config.VERSION,
-        "app_states": {"ready": "Prêt", "pending": "En attente", "downloading": "Téléchargement en cours", "error": "Erreur"},
+        "app_states": {"ready": _("Prêt"), "pending": _("En attente"), "downloading": _("Téléchargement en cours"), "error": _("Erreur")},
         "current_user": user,
         "can": auth.can,
         "can_any": auth.can_any,
@@ -107,13 +108,21 @@ def inject_globals():
         "apt_nginx": config.APT_NGINX,
         "appliance": config.APPLIANCE,
         "server_updates": config.SERVER_UPDATES,
+        "lang": i18n.locale(),
+        "langs": i18n.LANGS,
+        "js_i18n": i18n.js_catalog(),
     }
 
 
-from . import util  # noqa: E402
+from . import util, i18n  # noqa: E402
 
 app.jinja_env.filters["human"] = util.human
 app.jinja_env.filters["date_fr"] = util.date_fr
+# Traductions : {{ _("Texte") }}, {{ _("%(n)s postes", n=x) }}, {{ ngettext("…", "…", n) }} (valeurs échappées).
+app.jinja_env.add_extension("jinja2.ext.i18n")
+app.jinja_env.install_gettext_callables(i18n.gettext, i18n.ngettext, newstyle=True)
+# Valeur enregistrée (libellé de profil intégré…) : {{ valeur|tr }} traduit sans mise en forme.
+app.jinja_env.filters["tr"] = i18n.gettext
 
 from . import db as _db  # noqa: E402
 

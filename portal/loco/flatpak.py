@@ -9,6 +9,7 @@ import threading
 from flask import abort, flash, render_template, request
 
 from . import app, config
+from .i18n import _
 from .auth import audit, login_required
 from .util import back, read_stats
 
@@ -115,14 +116,14 @@ def flatpak_upload():
             added = import_bundle(tmp)
             done += 1
             audit("flatpak.ajout", ", ".join(added))
-            flash("Ajouté : " + ", ".join(added), "ok")
+            flash(_('Ajouté : ') + ", ".join(added), "ok")
         except (RuntimeError, OSError, subprocess.SubprocessError) as e:
-            flash(f"{f.filename} : import impossible ({e})", "error")
+            flash(_('%(filename)s : import impossible (%(e)s)', filename=f.filename, e=e), "error")
         finally:
             if os.path.exists(tmp):
                 os.unlink(tmp)
     if not done and not request.files.getlist("files"):
-        flash("Aucun fichier fourni.", "error")
+        flash(_('Aucun fichier fourni.'), "error")
     return back("flatpak")
 
 
@@ -139,7 +140,7 @@ def flatpak_delete():
             _run(["ostree", "refs", "--repo", config.FLATPAK_REPO, "--delete", ref])
             update_repo(prune=True)
         audit("flatpak.suppression", ref)
-        flash(f"Supprimé : {ref}", "ok")
+        flash(_('Supprimé : %(ref)s', ref=ref), "ok")
     except (RuntimeError, subprocess.SubprocessError) as e:
-        flash(f"Suppression impossible : {e}", "error")
+        flash(_('Suppression impossible : %(e)s', e=e), "error")
     return back("flatpak")

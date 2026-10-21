@@ -1,62 +1,63 @@
 """Journal d'audit : libellés lisibles, catégories et filtres (page Journal et export JSON)."""
 
 import datetime
+from .i18n import L_, _
 
 # Catégories : clé -> (libellé, préfixes « x. » ou codes exacts, sous-codes compris). Une action appartient à la
 # première catégorie qui la reconnaît, dans cet ordre : les sessions distantes avant le parc, les connexions par annuaire
 # avant les comptes.
 CATEGORIES = {
-    "connexions": ("Connexions", ("connexion", "deconnexion", "sso.connexion", "sso.echec")),
-    "distant": ("Accès distant", ("parc.session.",)),
-    "parc": ("Parc", ("parc.", "groupes.machines", "groupes.appartenance", "deploiement.")),
-    "logiciels": ("Logiciels Windows", ("windows.", "groupes.")),
-    "linux": ("Dépôts Linux", ("linux.", "rpm.", "flatpak.")),
-    "wu": ("Windows Update", ("windows_update.",)),
-    "comptes": ("Comptes et profils", ("comptes.", "compte.", "profils.", "sso.")),
-    "serveur": ("Serveur", ("systeme.",)),
-    "journal": ("Journal", ("journal.",)),
-    "scripts": ("Scripts", ("scripts.",)),
+    "connexions": (L_("Connexions"), ("connexion", "deconnexion", "sso.connexion", "sso.echec")),
+    "distant": (L_("Accès distant"), ("parc.session.",)),
+    "parc": (L_("Parc"), ("parc.", "groupes.machines", "groupes.appartenance", "deploiement.")),
+    "logiciels": (L_("Logiciels Windows"), ("windows.", "groupes.")),
+    "linux": (L_("Dépôts Linux"), ("linux.", "rpm.", "flatpak.")),
+    "wu": (L_("Windows Update"), ("windows_update.",)),
+    "comptes": (L_("Comptes et profils"), ("comptes.", "compte.", "profils.", "sso.")),
+    "serveur": (L_("Serveur"), ("systeme.",)),
+    "journal": (L_("Journal"), ("journal.",)),
+    "scripts": (L_("Scripts"), ("scripts.",)),
 }
 
 LABELS = {
-    "connexion": "Connexion", "deconnexion": "Déconnexion", "connexion.echec": "Échec de connexion",
-    "connexion.bloquee": "Connexion bloquée (trop d'échecs)", "sso.connexion": "Connexion par annuaire", "sso.echec": "Annuaire injoignable ou en erreur",
-    "sso.demande": "Demande d'accès (annuaire)", "sso.approbation": "Accès approuvé (annuaire)", "sso.test": "Test d'un annuaire",
-    "sso.fournisseur.ajout": "Annuaire ajouté", "sso.fournisseur.modification": "Annuaire modifié",
-    "sso.fournisseur.suppression": "Annuaire supprimé",
-    "comptes.ajout": "Compte créé", "comptes.modification": "Compte modifié", "comptes.suppression": "Compte supprimé",
-    "comptes.reinitialisation": "Mot de passe réinitialisé", "comptes.mot_de_passe": "Mot de passe défini",
-    "compte.mot_de_passe": "Mot de passe changé", "profils.ajout": "Profil créé", "profils.modification": "Profil modifié",
-    "profils.droits": "Droits d'un profil modifiés", "profils.suppression": "Profil supprimé",
-    "parc.inscription": "Poste inscrit", "parc.oubli": "Poste oublié", "parc.cle": "Nouvelle clé d'inscription",
-    "parc.seuil": "Seuil des pastilles", "parc.adresse-annoncee": "Adresse du serveur annoncée aux agents",
-    "parc.adresse-retiree": "Adresse annoncée retirée", "parc.tout-mettre-a-jour": "Mise à jour de tout le parc",
-    "parc.update": "Mise à jour demandée", "parc.scan": "Inventaire demandé", "parc.reboot": "Redémarrage demandé",
-    "parc.uninstall": "Retrait de l'agent demandé", "parc.install-app": "Installation demandée",
-    "parc.session.ouverture": "Session distante ouverte", "parc.session.fin": "Session distante terminée",
-    "parc.session.fermeture": "Session distante fermée",
-    "groupes.machines": "Groupe de machines modifié", "groupes.appartenance": "Groupes d'un poste modifiés",
-    "groupes.logiciels": "Groupe de logiciels modifié", "groupes.ajout-logiciel": "Logiciel ajouté à un groupe",
-    "groupes.suppression": "Groupe supprimé",
-    "deploiement.preparation": "Déploiement préparé", "deploiement.confirmation": "Déploiement confirmé",
-    "deploiement.annulation": "Déploiement annulé",
-    "windows.ajout": "Logiciel ajouté au catalogue", "windows.modification": "Logiciel modifié",
-    "windows.suppression": "Logiciel supprimé", "windows.actualisation": "Installeur retéléchargé",
-    "windows.winget": "Logiciel importé depuis WinGet", "windows.winget-maj": "Nouvelle version WinGet",
-    "linux.ajout": "Paquet APT ajouté", "linux.copie": "Paquet APT copié", "linux.suppression": "Paquet APT supprimé",
-    "linux.depot.ajout": "Dépôt APT créé", "rpm.ajout": "Paquet RPM ajouté", "rpm.suppression": "Paquet RPM supprimé",
-    "rpm.depot.ajout": "Dépôt RPM créé", "flatpak.ajout": "Application Flatpak ajoutée",
-    "flatpak.suppression": "Application Flatpak supprimée", "windows_update.domaines": "Domaines Windows Update modifiés",
-    "systeme.configuration": "Configuration du serveur", "systeme.fonctionnalites": "Fonctionnalités activées ou désactivées", "systeme.check": "Recherche de mises à jour",
-    "systeme.update-loco": "Mise à jour de loco", "systeme.update-system": "Mise à jour du système", "systeme.update-security": "Correctifs de sécurité du serveur",
-    "systeme.reboot": "Redémarrage du serveur", "systeme.configure": "Réglages du serveur", "journal.export": "Journal exporté",
-    "journal.conservation": "Conservation du journal modifiée",
-    "scripts.ajout": "Script créé", "scripts.modification": "Script modifié", "scripts.suppression": "Script supprimé",
-    "scripts.execution": "Script exécuté sur des postes",
-    "scripts.historique": "Historique des scripts nettoyé",
+    "connexion": L_("Connexion"), "deconnexion": L_("Déconnexion"), "connexion.echec": L_("Échec de connexion"),
+    "connexion.bloquee": L_("Connexion bloquée (trop d'échecs)"), "sso.connexion": L_("Connexion par annuaire"), "sso.echec": L_("Annuaire injoignable ou en erreur"),
+    "sso.demande": L_("Demande d'accès (annuaire)"), "sso.approbation": L_("Accès approuvé (annuaire)"), "sso.test": L_("Test d'un annuaire"),
+    "sso.fournisseur.ajout": L_("Annuaire ajouté"), "sso.fournisseur.modification": L_("Annuaire modifié"),
+    "sso.fournisseur.suppression": L_("Annuaire supprimé"),
+    "comptes.ajout": L_("Compte créé"), "comptes.modification": L_("Compte modifié"), "comptes.suppression": L_("Compte supprimé"),
+    "comptes.reinitialisation": L_("Mot de passe réinitialisé"), "comptes.mot_de_passe": L_("Mot de passe défini"),
+    "compte.mot_de_passe": L_("Mot de passe changé"), "profils.ajout": L_("Profil créé"), "profils.modification": L_("Profil modifié"),
+    "profils.droits": L_("Droits d'un profil modifiés"), "profils.suppression": L_("Profil supprimé"),
+    "parc.inscription": L_("Poste inscrit"), "parc.oubli": L_("Poste oublié"), "parc.cle": L_("Nouvelle clé d'inscription"),
+    "parc.seuil": L_("Seuil des pastilles"), "parc.adresse-annoncee": L_("Adresse du serveur annoncée aux agents"),
+    "parc.adresse-retiree": L_("Adresse annoncée retirée"), "parc.tout-mettre-a-jour": L_("Mise à jour de tout le parc"),
+    "parc.update": L_("Mise à jour demandée"), "parc.scan": L_("Inventaire demandé"), "parc.reboot": L_("Redémarrage demandé"),
+    "parc.uninstall": L_("Retrait de l'agent demandé"), "parc.install-app": L_("Installation demandée"),
+    "parc.session.ouverture": L_("Session distante ouverte"), "parc.session.fin": L_("Session distante terminée"),
+    "parc.session.fermeture": L_("Session distante fermée"),
+    "groupes.machines": L_("Groupe de machines modifié"), "groupes.appartenance": L_("Groupes d'un poste modifiés"),
+    "groupes.logiciels": L_("Groupe de logiciels modifié"), "groupes.ajout-logiciel": L_("Logiciel ajouté à un groupe"),
+    "groupes.suppression": L_("Groupe supprimé"),
+    "deploiement.preparation": L_("Déploiement préparé"), "deploiement.confirmation": L_("Déploiement confirmé"),
+    "deploiement.annulation": L_("Déploiement annulé"),
+    "windows.ajout": L_("Logiciel ajouté au catalogue"), "windows.modification": L_("Logiciel modifié"),
+    "windows.suppression": L_("Logiciel supprimé"), "windows.actualisation": L_("Installeur retéléchargé"),
+    "windows.winget": L_("Logiciel importé depuis WinGet"), "windows.winget-maj": L_("Nouvelle version WinGet"),
+    "linux.ajout": L_("Paquet APT ajouté"), "linux.copie": L_("Paquet APT copié"), "linux.suppression": L_("Paquet APT supprimé"),
+    "linux.depot.ajout": L_("Dépôt APT créé"), "rpm.ajout": L_("Paquet RPM ajouté"), "rpm.suppression": L_("Paquet RPM supprimé"),
+    "rpm.depot.ajout": L_("Dépôt RPM créé"), "flatpak.ajout": L_("Application Flatpak ajoutée"),
+    "flatpak.suppression": L_("Application Flatpak supprimée"), "windows_update.domaines": L_("Domaines Windows Update modifiés"),
+    "systeme.configuration": L_("Configuration du serveur"), "systeme.fonctionnalites": L_("Fonctionnalités activées ou désactivées"), "systeme.check": L_("Recherche de mises à jour"),
+    "systeme.update-loco": L_("Mise à jour de loco"), "systeme.update-system": L_("Mise à jour du système"), "systeme.update-security": L_("Correctifs de sécurité du serveur"),
+    "systeme.reboot": L_("Redémarrage du serveur"), "systeme.configure": L_("Réglages du serveur"), "journal.export": L_("Journal exporté"),
+    "journal.conservation": L_("Conservation du journal modifiée"),
+    "scripts.ajout": L_("Script créé"), "scripts.modification": L_("Script modifié"), "scripts.suppression": L_("Script supprimé"),
+    "scripts.execution": L_("Script exécuté sur des postes"),
+    "scripts.historique": L_("Historique des scripts nettoyé"),
 }
 FAILURES = ("echec", "bloquee")
-PERIODS = {"jour": ("Aujourd'hui", 0), "7j": ("7 jours", 6), "30j": ("30 jours", 29), "tout": ("Tout", None)}
+PERIODS = {"jour": (L_("Aujourd'hui"), 0), "7j": (L_("7 jours"), 6), "30j": (L_("30 jours"), 29), "tout": (L_("Tout"), None)}
 
 
 PAGE = 100
@@ -116,7 +117,7 @@ def bounds(args):
     start, end = (datetime.datetime.strptime(args[k], "%Y-%m-%d").strftime("%Y-%m-%d") if args.get(k) else None
                   for k in ("debut", "fin"))
     if start and end and start > end:
-        raise ValueError("La date de début doit précéder la date de fin.")
+        raise ValueError(_('La date de début doit précéder la date de fin.'))
     return (start + " 00:00:00" if start else None), (end + " 23:59:59" if end else None)
 
 

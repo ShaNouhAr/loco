@@ -45,7 +45,7 @@
 {# Avancement d'un déploiement : postes réussis, en attente, en échec, non concernés. #}
 {% macro progress(p) -%}
 {% set total = [p.total, 1]|max %}{% set ns = namespace(x=0) %}
-<svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="{{ p.success }} réussi(s), {{ p.active }} en attente, {{ p.failed }} en échec sur {{ p.total }} poste(s)">
+<svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" role="img" aria-label="{{ _('%(success)s réussi(s), %(active)s en attente, %(failed)s en échec sur %(total)s poste(s)', success=p.success, active=p.active, failed=p.failed, total=p.total) }}">
   <rect class="prog-bg" x="0" y="0" width="100" height="6"/>
   {% for key in ('success', 'failed', 'active', 'other') if p[key] %}{% set w = 100 * p[key] / total %}
   <rect class="prog-{{ key }}" x="{{ ns.x }}" y="0" width="{{ w }}" height="6"/>{% set ns.x = ns.x + w %}

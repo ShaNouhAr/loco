@@ -5,39 +5,36 @@
 <div class="head">
   <div>
     <h1>Flatpak</h1>
-    <p>Cache Flathub pour les postes{% if local %} et dépôt Flatpak local signé pour les applications de l'entreprise{% endif %}.</p>
+    <p>{{ _("Cache Flathub pour les postes") }}{% if local %} {{ _("et dépôt Flatpak local signé pour les applications de l'entreprise") }}{% endif %}.</p>
   </div>
 </div>
 
 <div class="stack">
   <div class="metrics">
-    <div class="metric"><div class="k">Cache Flathub</div><div class="v">{{ stats.get('flatpakcache', 0)|human }}</div><div class="s">objets immuables gardés 6 mois</div></div>
+    <div class="metric"><div class="k">{{ _("Cache Flathub") }}</div><div class="v">{{ stats.get('flatpakcache', 0)|human }}</div><div class="s">{{ _("objets immuables gardés 6 mois") }}</div></div>
     {% if local %}
-    <div class="metric"><div class="k">Dépôt local</div><div class="v">{{ refs|length }}</div><div class="s">référence(s) · {{ stats.get('flatpak', 0)|human }}</div></div>
-    <div class="metric"><div class="k">Signature</div><div class="v">GPG</div><div class="s">clé du dépôt loco</div></div>
+    <div class="metric"><div class="k">{{ _("Dépôt local") }}</div><div class="v">{{ refs|length }}</div><div class="s">{{ _("référence(s) · %(v)s", v=stats.get('flatpak', 0)|human) }}</div></div>
+    <div class="metric"><div class="k">{{ _("Signature") }}</div><div class="v">GPG</div><div class="s">{{ _("clé du dépôt loco") }}</div></div>
     {% else %}
-    <div class="metric"><div class="k">Dépôt local</div><div class="v">—</div><div class="s">indisponible sur un serveur Windows</div></div>
+    <div class="metric"><div class="k">{{ _("Dépôt local") }}</div><div class="v">—</div><div class="s">{{ _("indisponible sur un serveur Windows") }}</div></div>
     {% endif %}
   </div>
 
   <section class="panel">
-    <div class="panel-h"><h2>Brancher un poste</h2><div class="aside">installe Flatpak si besoin</div></div>
+    <div class="panel-h"><h2>{{ _("Brancher un poste") }}</h2><div class="aside">{{ _("installe Flatpak si besoin") }}</div></div>
     <div class="panel-b">
       {{ cmd('cmd-flatpak', 'curl -fsSL ' ~ client_url ~ '/flatpak/setup.sh | sudo sh') }}
-      <p class="hint">Flathub reste vérifié avec sa propre clé, ses téléchargements passent par le cache{% if local %} ; le dépôt local s'ajoute sous le nom <code>loco</code>
-        (<code>flatpak install loco org.exemple.App</code>){% endif %}.{% if http_url %} Sans l'autorité HTTPS : remplacer l'adresse par <code>{{ http_url }}</code>.{% endif %}
-        Annuler : <code>… | sudo sh -s -- --remove</code>.</p>
+      <p class="hint">{{ _("Flathub reste vérifié avec sa propre clé, ses téléchargements passent par le cache") }}{% if local %}{{ _("; le dépôt local s'ajoute sous le nom <code>loco</code> (<code>flatpak install loco org.exemple.App</code>)") }}{% endif %}.{% if http_url %}{{ _("Sans l'autorité HTTPS : remplacer l'adresse par <code>%(http_url)s</code>.", http_url=http_url) }}{% endif %}{{ _("Annuler : <code>… | sudo sh -s -- --remove</code>.") }}</p>
     </div>
   </section>
 
   {% if not local %}
-  <p class="note">Serveur Windows : le dépôt Flatpak local demande ostree, qui n'existe pas sous Windows. Le cache Flathub
-    fonctionne normalement ; pour publier des applications internes, utilisez un serveur loco Linux.</p>
+  <p class="note">{{ _("Serveur Windows : le dépôt Flatpak local demande ostree, qui n'existe pas sous Windows. Le cache Flathub fonctionne normalement ; pour publier des applications internes, utilisez un serveur loco Linux.") }}</p>
   {% else %}
   <div class="cols {{ 'w12' if can('flatpak.upload') else '' }}">
     {% if can('flatpak.upload') %}
     <section class="panel">
-      <div class="panel-h"><h2>Ajouter des applications</h2></div>
+      <div class="panel-h"><h2>{{ _("Ajouter des applications") }}</h2></div>
       <form class="panel-b" method="post" action="{{ url_for('flatpak_upload') }}" enctype="multipart/form-data" data-ajax>
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <div class="drop">
@@ -45,39 +42,39 @@
           <div class="files"></div>
         </div>
         <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
-        <button class="btn primary"><span class="spin"></span>Importer</button>
-        <p class="hint">Paquets <code>.flatpak</code> (<code>flatpak build-bundle</code>). Ils sont importés puis signés par la clé du dépôt.</p>
+        <button class="btn primary"><span class="spin"></span>{{ _("Importer") }}</button>
+        <p class="hint">{{ _("Paquets <code>.flatpak</code> (<code>flatpak build-bundle</code>). Ils sont importés puis signés par la clé du dépôt.") }}</p>
       </form>
     </section>
     {% endif %}
 
     <section class="panel">
-      <div class="panel-h"><h2>Dépôt local</h2>
-        {% if refs %}<div class="aside"><input type="search" class="search-sm" placeholder="Filtrer" data-filter="#refs tbody tr" data-empty="#refs-none"></div>{% endif %}
+      <div class="panel-h"><h2>{{ _("Dépôt local") }}</h2>
+        {% if refs %}<div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#refs tbody tr" data-empty="#refs-none"></div>{% endif %}
       </div>
       {% if error %}
       <div class="panel-b"><p class="note err">{{ error }}</p></div>
       {% elif not repo_ready %}
-      <div class="empty">Dépôt non initialisé : {% if container %}redémarrez le conteneur{% else %}relancez install.sh{% endif %}.</div>
+      <div class="empty">{{ _("Dépôt non initialisé :") }} {% if container %}{{ _("redémarrez le conteneur") }}{% else %}{{ _("relancez install.sh") }}{% endif %}.</div>
       {% elif refs %}
       <div class="table-wrap">
         <table id="refs">
-          <thead><tr><th>Identifiant</th><th>Type</th><th>Branche</th><th>Arch.</th><th>Publié</th><th></th></tr></thead>
+          <thead><tr><th>{{ _("Identifiant") }}</th><th>{{ _("Type") }}</th><th>{{ _("Branche") }}</th><th>{{ _("Arch.") }}</th><th>{{ _("Publié") }}</th><th></th></tr></thead>
           <tbody>
           {% for r in refs %}
             <tr>
               <td class="mono">{{ r.id }}</td>
-              <td class="muted">{{ 'application' if r.kind == 'app' else 'environnement' }}</td>
+              <td class="muted">{{ _('application') if r.kind == 'app' else _('environnement') }}</td>
               <td class="mono">{{ r.branch }}</td>
               <td class="mono muted">{{ r.arch }}</td>
               <td class="mono muted nowrap">{{ r.date }}</td>
               <td class="right">
                 {% if can('flatpak.delete') %}
                 <div class="acts">
-                <form method="post" action="{{ url_for('flatpak_delete') }}" data-ajax data-confirm="Supprimer {{ r.id }} ({{ r.branch }}) ?" data-confirm-text="La référence est retirée du dépôt local. Les postes qui l'ont installée la gardent." data-confirm-ok="Supprimer">
+                <form method="post" action="{{ url_for('flatpak_delete') }}" data-ajax data-confirm="{{ _('Supprimer %(id)s (%(branch)s) ?', id=r.id, branch=r.branch) }}" data-confirm-text="{{ _('La référence est retirée du dépôt local. Les postes qui l\'ont installée la gardent.') }}" data-confirm-ok="{{ _('Supprimer') }}">
                   <input type="hidden" name="csrf" value="{{ csrf }}">
                   <input type="hidden" name="ref" value="{{ r.ref }}">
-                  <button class="linkbtn del">Supprimer</button>
+                  <button class="linkbtn del">{{ _("Supprimer") }}</button>
                 </form>
                 </div>
                 {% endif %}
@@ -86,10 +83,10 @@
           {% endfor %}
           </tbody>
         </table>
-        <div id="refs-none" class="empty hidden">Aucune référence ne correspond.</div>
+        <div id="refs-none" class="empty hidden">{{ _("Aucune référence ne correspond.") }}</div>
       </div>
       {% else %}
-      <div class="empty">Dépôt vide.</div>
+      <div class="empty">{{ _("Dépôt vide.") }}</div>
       {% endif %}
     </section>
   </div>

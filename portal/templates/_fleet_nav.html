@@ -1,8 +1,8 @@
-<nav class="tabs subnav" aria-label="Gestion du parc">
-  <a href="{{ url_for('fleet') }}" class="{{ 'on' if request.endpoint in ('fleet','fleet_device') }}">Appareils</a>
-  <a href="{{ url_for('fleet_groups') }}" class="{{ 'on' if request.endpoint.startswith('fleet_group') }}">Groupes de machines</a>
-  {% if can_any('deployments.view','fleet.install') %}<a href="{{ url_for('deployments') }}" class="{{ 'on' if request.endpoint.startswith('deployment') }}">Déploiements</a>{% endif %}
-  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" class="{{ 'on' if request.endpoint.startswith('script') }}">Scripts</a>{% endif %}
-  <a href="{{ url_for('schedules') }}" class="{{ 'on' if request.endpoint.startswith('schedule') }}">Planifications</a>
-  {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" class="{{ 'on' if request.endpoint == 'fleet_settings' }}">Réglages</a>{% endif %}
+<nav class="tabs subnav" aria-label="{{ _('Gestion du parc') }}">
+  <a href="{{ url_for('fleet') }}" class="{{ 'on' if request.endpoint in ('fleet','fleet_device') }}">{{ _("Appareils") }}</a>
+  <a href="{{ url_for('fleet_groups') }}" class="{{ 'on' if request.endpoint.startswith('fleet_group') }}">{{ _("Groupes de machines") }}</a>
+  {% if can_any('deployments.view','fleet.install') %}<a href="{{ url_for('deployments') }}" class="{{ 'on' if request.endpoint.startswith('deployment') }}">{{ _("Déploiements") }}</a>{% endif %}
+  {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" class="{{ 'on' if request.endpoint.startswith('script') }}">{{ _("Scripts") }}</a>{% endif %}
+  <a href="{{ url_for('schedules') }}" class="{{ 'on' if request.endpoint.startswith('schedule') }}">{{ _("Planifications") }}</a>
+  {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" class="{{ 'on' if request.endpoint == 'fleet_settings' }}">{{ _("Réglages") }}</a>{% endif %}
 </nav>

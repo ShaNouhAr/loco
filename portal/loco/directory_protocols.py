@@ -11,6 +11,7 @@ import socket
 import ssl
 import struct
 import urllib.parse
+from .i18n import _
 
 USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._@-]{0,127}$")
 TIMEOUT = 10
@@ -108,7 +109,7 @@ def encode_filter(text):
     """Filtre texte -> BER. Gère (&…), (|…), (!…), (attr=valeur) et (attr=*)."""
     def node(i):
         if i >= len(text) or text[i] != "(":
-            raise ValueError("filtre LDAP : « ( » attendue")
+            raise ValueError(_('filtre LDAP : « ( » attendue'))
         op = text[i + 1:i + 2]
         if op in ("&", "|"):
             children, j = [], i + 2
@@ -116,28 +117,28 @@ def encode_filter(text):
                 child, j = node(j)
                 children.append(child)
             if j >= len(text) or text[j] != ")" or not children:
-                raise ValueError("filtre LDAP mal formé")
+                raise ValueError(_('filtre LDAP mal formé'))
             return sequence(*children, tag=0xa0 if op == "&" else 0xa1), j + 1
         if op == "!":
             child, j = node(i + 2)
             if j >= len(text) or text[j] != ")":
-                raise ValueError("filtre LDAP mal formé")
+                raise ValueError(_('filtre LDAP mal formé'))
             return tlv(0xa2, child), j + 1
         end = text.find(")", i)
         if end < 0:
-            raise ValueError("filtre LDAP : « ) » manquante")
+            raise ValueError(_('filtre LDAP : « ) » manquante'))
         item = text[i + 1:end]
         attr, sep, value = item.partition("=")
         if not sep or not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", attr) or attr.endswith(("~", ">", "<", ":")):
-            raise ValueError("filtre LDAP : seules l'égalité et la présence sont prises en charge")
+            raise ValueError(_("filtre LDAP : seules l'égalité et la présence sont prises en charge"))
         if value == "*":
             return octets(attr, tag=0x87), end + 1
         if "*" in value:
-            raise ValueError("filtre LDAP : jokers non pris en charge")
+            raise ValueError(_('filtre LDAP : jokers non pris en charge'))
         return sequence(octets(attr), octets(_unescape(value)), tag=0xa3), end + 1
     encoded, end = node(0)
     if end != len(text):
-        raise ValueError("filtre LDAP : texte après la fin du filtre")
+        raise ValueError(_('filtre LDAP : texte après la fin du filtre'))
     return encoded
 
 
@@ -147,9 +148,9 @@ class LdapConnection:
     def __init__(self, url, starttls=False, ca_pem="", timeout=TIMEOUT):
         parts = urllib.parse.urlsplit(url)
         if parts.scheme not in ("ldap", "ldaps") or not parts.hostname:
-            raise ValueError("adresse ldaps://hôte ou ldap://hôte attendue")
+            raise ValueError(_('adresse ldaps://hôte ou ldap://hôte attendue'))
         if parts.scheme == "ldap" and not starttls:
-            raise ValueError("le mot de passe ne circule jamais en clair : ldaps:// ou StartTLS requis")
+            raise ValueError(_('le mot de passe ne circule jamais en clair : ldaps:// ou StartTLS requis'))
         self.host, self.msgid = parts.hostname, 0
         context = ssl.create_default_context(cadata=ca_pem or None)
         try:
@@ -271,7 +272,7 @@ MESSAGE_AUTHENTICATOR = 80
 
 def _attribute(kind, value):
     if len(value) > 253:
-        raise ValueError("attribut RADIUS trop long")
+        raise ValueError(_('attribut RADIUS trop long'))
     return bytes([kind, len(value) + 2]) + value
 
 

@@ -3,25 +3,25 @@
 {% set software = kind == 'software' %}
 {% set editable = can('windows.groups' if software else 'fleet.groups') %}
 {% set can_deploy = group and selected and can('fleet.install') and (software or can('fleet.bulk_install')) %}
-{% block title %}{{ group.name if group else 'Nouveau groupe' }}{% endblock %}
+{% block title %}{{ group.name if group else _('Nouveau groupe') }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' if software else '_fleet_nav.html' %}
-<p class="small back-link"><a href="{{ url_for('software_groups' if software else 'fleet_groups') }}">← Groupes de {{ 'logiciels' if software else 'machines' }}</a></p>
+<p class="small back-link"><a href="{{ url_for('software_groups' if software else 'fleet_groups') }}">{{ _("← Groupes de %(v)s", v='logiciels' if software else 'machines') }}</a></p>
 <div class="head">
   <div>
-    <h1>{{ group.name if group else 'Nouveau groupe de ' ~ ('logiciels' if software else 'machines') }}</h1>
-    <p>{{ (group.description if group and group.description) or ('Cochez les ' ~ ('logiciels du catalogue local' if software else 'appareils') ~ ' qui font partie du groupe.') }}</p>
+    <h1>{{ group.name if group else (_('Nouveau groupe de logiciels') if software else _('Nouveau groupe de machines')) }}</h1>
+    <p>{{ (group.description if group and group.description) or (_('Cochez les logiciels du catalogue local qui font partie du groupe.') if software else _('Cochez les appareils qui font partie du groupe.')) }}</p>
   </div>
   {% if can_deploy or (group and editable) or (group and not software) %}
   <div class="actions">
-    {% if group and not software %}<a class="btn" href="{{ url_for('fleet', group=group.id) }}">Voir dans Mon parc</a>{% endif %}
-    {% if can_deploy %}<a class="btn primary" href="{{ url_for('deployment_compose', **({'software_group': group.id} if software else {'device_group': group.id})) }}">{{ 'Déployer ce groupe' if software else 'Déployer sur ce groupe' }}</a>{% endif %}
+    {% if group and not software %}<a class="btn" href="{{ url_for('fleet', group=group.id) }}">{{ _("Voir dans Mon parc") }}</a>{% endif %}
+    {% if can_deploy %}<a class="btn primary" href="{{ url_for('deployment_compose', **({'software_group': group.id} if software else {'device_group': group.id})) }}">{{ _('Déployer ce groupe') if software else _('Déployer sur ce groupe') }}</a>{% endif %}
     {% if group and editable %}
     <details class="menu">
-      <summary class="btn" aria-label="Autres actions">Plus</summary>
+      <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
       <div class="menu-list" role="menu">
-        <form method="post" action="{{ url_for('software_group_delete' if software else 'fleet_group_delete', group_id=group.id) }}" data-confirm="Supprimer le groupe {{ group.name }} ?" data-confirm-text="Seul le groupe disparaît : les {{ 'logiciels' if software else 'appareils' }} et les déploiements sont conservés." data-confirm-ok="Supprimer">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>Supprimer le groupe…</button>
+        <form method="post" action="{{ url_for('software_group_delete' if software else 'fleet_group_delete', group_id=group.id) }}" data-confirm="{{ _('Supprimer le groupe %(name)s ?', name=group.name) }}" data-confirm-text="{{ _('Seul le groupe disparaît : les %(v)s et les déploiements sont conservés.', v='logiciels' if software else 'appareils') }}" data-confirm-ok="{{ _('Supprimer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>{{ _("Supprimer le groupe…") }}</button>
         </form>
       </div>
     </details>
@@ -34,30 +34,30 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {% if editable %}
   <section class="panel"><div class="panel-b grid2">
-    <label class="f"><span>Nom du groupe</span><input type="text" name="name" required maxlength="80" value="{{ group.name if group else '' }}" placeholder="{{ 'Socle bureautique' if software else 'Comptabilité' }}"></label>
-    <label class="f"><span>Description</span><input type="text" name="description" maxlength="500" value="{{ group.description if group else '' }}" placeholder="facultatif"></label>
+    <label class="f"><span>{{ _("Nom du groupe") }}</span><input type="text" name="name" required maxlength="80" value="{{ group.name if group else '' }}" placeholder="{{ _('Socle bureautique') if software else _('Comptabilité') }}"></label>
+    <label class="f"><span>{{ _("Description") }}</span><input type="text" name="description" maxlength="500" value="{{ group.description if group else '' }}" placeholder="{{ _('facultatif') }}"></label>
   </div></section>
   {% endif %}
 
   <section class="panel">
     <div class="panel-h">
-      <h2>{{ 'Logiciels' if software else 'Appareils' }} <span class="h-count"><span data-checked-count="#group-members input[name=members]">{{ selected|length }}</span> dans le groupe{% if editable %} sur {{ items|length }}{% endif %}</span></h2>
+      <h2>{{ _('Logiciels') if software else _('Appareils') }} <span class="h-count"><span data-checked-count="#group-members input[name=members]">{{ selected|length }}</span> {{ _("dans le groupe") }}{% if editable %} {{ _("sur %(items)s", items=items|length) }}{% endif %}</span></h2>
       {% if items %}<div class="aside row">
-        {% if editable %}<label class="small muted nowrap"><input type="checkbox" data-only-checked="#group-members"> membres seulement</label>{% endif %}
-        <input class="search-sm" type="search" placeholder="Rechercher" data-filter="#group-members tr" aria-label="Rechercher">
+        {% if editable %}<label class="small muted nowrap"><input type="checkbox" data-only-checked="#group-members"> {{ _("membres seulement") }}</label>{% endif %}
+        <input class="search-sm" type="search" placeholder="{{ _('Rechercher') }}" data-filter="#group-members tr" aria-label="{{ _('Rechercher') }}">
       </div>{% endif %}
     </div>
     <div class="table-wrap">
       <table class="group-members-table">
-        <thead><tr>{% if editable %}<th class="chk"></th>{% endif %}<th>{{ 'Logiciel' if software else 'Appareil' }}</th><th>{{ 'Version' if software else 'Système' }}</th><th>État</th></tr></thead>
+        <thead><tr>{% if editable %}<th class="chk"></th>{% endif %}<th>{{ _('Logiciel') if software else _('Appareil') }}</th><th>{{ 'Version' if software else _('Système') }}</th><th>{{ _("État") }}</th></tr></thead>
         <tbody id="group-members">
         {% for i in items if editable or i.row.id in selected %}{% set r = i.row %}{% set picked = r.id in selected %}
           <tr class="{{ 'picked' if picked }}" data-search="{{ r.name if software else (r.hostname ~ ' ' ~ r.os_name) }}">
             {% if editable %}<td class="chk"><input type="checkbox" name="members" value="{{ r.id }}" {{ 'checked' if picked }} aria-label="{{ r.name if software else r.hostname }}"></td>{% endif %}
             {% if software %}
-            <td><div class="store-card-top">{{ software_logo(r.winget_id, r.name, 'small') }}<div><a href="{{ url_for('software_detail', slug=r.slug) }}">{{ r.name }}</a><span class="sub sans">{{ r.kind }} · {{ 'WinGet' if r.winget_id else 'ajouté manuellement' }}</span></div></div></td>
+            <td><div class="store-card-top">{{ software_logo(r.winget_id, r.name, 'small') }}<div><a href="{{ url_for('software_detail', slug=r.slug) }}">{{ r.name }}</a><span class="sub sans">{{ r.kind }} · {{ 'WinGet' if r.winget_id else _('ajouté manuellement') }}</span></div></div></td>
             <td class="mono nowrap">{{ r.version or '—' }}</td>
-            <td class="nowrap">{% if r.status == 'ready' %}<span class="st ok">prêt</span>{% elif r.status == 'error' %}<span class="st err">erreur</span>{% else %}<span class="st warn">téléchargement</span>{% endif %}</td>
+            <td class="nowrap">{% if r.status == 'ready' %}<span class="st ok">{{ _("prêt") }}</span>{% elif r.status == 'error' %}<span class="st err">{{ _("erreur") }}</span>{% else %}<span class="st warn">{{ _("téléchargement") }}</span>{% endif %}</td>
             {% else %}
             <td><a href="{{ url_for('fleet_device', dev_id=r.id) }}" >{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
             <td>{{ r.os_name or families.get(r.os_family, '') }}</td>
@@ -65,15 +65,15 @@
             {% endif %}
           </tr>
         {% else %}
-          <tr><td colspan="4" class="empty">{% if editable %}{{ 'Le catalogue local est vide.' if software else 'Aucun appareil dans le parc.' }}{% if software and can('store.view') %} <a href="{{ url_for('software_store') }}">Parcourir le centre de logiciels</a>{% endif %}{% else %}Ce groupe est vide.{% endif %}</td></tr>
+          <tr><td colspan="4" class="empty">{% if editable %}{{ _('Le catalogue local est vide.') if software else _('Aucun appareil dans le parc.') }}{% if software and can('store.view') %} <a href="{{ url_for('software_store') }}">{{ _("Parcourir le centre de logiciels") }}</a>{% endif %}{% else %}{{ _("Ce groupe est vide.") }}{% endif %}</td></tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
     {% if editable %}
     <div class="panel-f sticky-actions row-between">
-      <span>Les déploiements déjà confirmés gardent leur sélection d'origine.</span>
-      <span class="row"><a class="btn" href="{{ url_for('software_groups' if software else 'fleet_groups') }}">Annuler</a><button class="btn primary"><span class="spin"></span>{{ 'Enregistrer' if group else 'Créer le groupe' }}</button></span>
+      <span>{{ _("Les déploiements déjà confirmés gardent leur sélection d'origine.") }}</span>
+      <span class="row"><a class="btn" href="{{ url_for('software_groups' if software else 'fleet_groups') }}">{{ _("Annuler") }}</a><button class="btn primary"><span class="spin"></span>{{ _('Enregistrer') if group else _('Créer le groupe') }}</button></span>
     </div>
     {% endif %}
   </section>

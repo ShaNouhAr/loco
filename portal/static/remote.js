@@ -1,15 +1,17 @@
 import {resolutionFor, resizePacket} from './remote-sizing.js';
 /* Octets RFB/PTY relayés par HTTPS : aucune adresse ni aucun jeton de poste dans le navigateur. */
+// Traductions fournies par app.js (chargé avant ce module).
+const t = window.t || ((s, v) => Object.keys(v || {}).reduce((o, k) => o.split('%(' + k + ')s').join(v[k]), s));
 const root = document.getElementById('remote-session');
 const screen = document.getElementById('remote-screen');
 const status = document.getElementById('remote-status');
-status.title = 'État de la session ; la durée est la latence entre ce navigateur et le serveur loco.';
+status.title = t('État de la session ; la durée est la latence entre ce navigateur et le serveur loco.');
 const closeButton = document.getElementById('remote-close');
 const encoder = new TextEncoder();
 let running = true, inputSeq = 0, outputAck = 0, queue = new Uint8Array(), pending = null;
 let terminal, fit, rfb, channel, failures = 0, cols = 100, rows = 30;
 let pollTimer, inFlight = false, quiet = 0, rtt = 0, lastLabel = '';
-let remoteLabel = root.dataset.kind === 'terminal' ? 'terminal du poste' : 'bureau du poste';
+let remoteLabel = root.dataset.kind === 'terminal' ? t('terminal du poste') : t('bureau du poste'), secureDesktop = false;
 function schedulePoll(delay = 0) {
   if (!running || inFlight) return;
   clearTimeout(pollTimer); pollTimer = setTimeout(poll, delay);
@@ -20,8 +22,8 @@ function message(text, state = 'ok') {
   if (status.dataset.state !== state) status.dataset.state = state;
 }
 function connectedMessage() {
-  const label = 'Connecté · ' + remoteLabel + (rtt ? ` · ${Math.max(1, Math.round(rtt / 5) * 5)} ms` : '');
-  if (label !== lastLabel) { lastLabel = label; message(label, remoteLabel.startsWith('bureau sécurisé') ? 'warn' : 'ok'); }
+  const label = t('Connecté · %(what)s', { what: remoteLabel }) + (rtt ? ` · ${Math.max(1, Math.round(rtt / 5) * 5)} ms` : '');
+  if (label !== lastLabel) { lastLabel = label; message(label, secureDesktop ? 'warn' : 'ok'); }
 }
 // Superposition de la scène : attente de connexion, puis fin de session avec reprise en un clic.
 const overlay = document.getElementById('remote-overlay');
@@ -46,7 +48,7 @@ const base64 = typeof Uint8Array.prototype.toBase64 === 'function' ? data => dat
 };
 function send(data) {
   const part = data instanceof Uint8Array ? data : new Uint8Array(data);
-  if (queue.length + part.length > 512 * 1024) { stop('La saisie dépasse la capacité de la session.', true); return; }
+  if (queue.length + part.length > 512 * 1024) { stop(t('La saisie dépasse la capacité de la session.'), true); return; }
   const combined = new Uint8Array(queue.length + part.length); combined.set(queue); combined.set(part, queue.length); queue = combined;
   quiet = 0; schedulePoll();
 }
@@ -55,11 +57,11 @@ function closeRequest(beacon = false) {
   if (beacon) navigator.sendBeacon(root.dataset.io, data);
   else return fetch(root.dataset.io, { method: 'POST', body: data, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, keepalive: true });
 }
-function stop(text = 'Session fermée.', notify = false) {
+function stop(text = t('Session fermée.'), notify = false) {
   if (!running) return;
   running = false; clearTimeout(pollTimer); closeButton.disabled = true; message(text, 'closed');
   document.getElementById('remote-reconnect').hidden = false;
-  showEnd(text, 'La connexion au poste est fermée. Ouvrez une nouvelle session pour reprendre.');
+  showEnd(text, t('La connexion au poste est fermée. Ouvrez une nouvelle session pour reprendre.'));
   if (channel) { channel.readyState = 3; if (channel.onclose) channel.onclose({ code: 1000, reason: text }); }
   if (terminal) terminal.options.disableStdin = true;
   if (document.fullscreenElement === root) document.exitFullscreen().catch(() => {});
@@ -72,7 +74,7 @@ class RelayChannel {
     this.protocol = ''; this.onopen = null; this.onmessage = null; this.onclose = null; this.onerror = null;
   }
   send(data) { send(data); }
-  close() { stop('Session fermée.', true); }
+  close() { stop(t('Session fermée.'), true); }
 }
 async function poll() {
   if (!running || inFlight) return;
@@ -87,7 +89,7 @@ async function poll() {
     const started = performance.now();
     const response = await fetch(root.dataset.io, { method: 'POST', body, credentials: 'same-origin',
       headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(10000) });
-    if ([401,403,404,409,413].includes(response.status)) { stop('Session indisponible ou accès révoqué.', true); return; }
+    if ([401,403,404,409,413].includes(response.status)) { stop(t('Session indisponible ou accès révoqué.'), true); return; }
     if (!response.ok) throw new Error('HTTP ' + response.status);
     const data = await response.json();
     if (!running) return;
@@ -106,25 +108,25 @@ async function poll() {
       else if (channel.onmessage) channel.onmessage({ data: buffer.buffer });
       outputAck = packet.seq;
     }
-    if (data.state === 'closed' && !data.packets.length) { stop(data.error || 'Session terminée.'); return; }
+    if (data.state === 'closed' && !data.packets.length) { stop(data.error || t('Session terminée.')); return; }
   } catch (error) {
-    if (++failures >= 10) { stop('Connexion au serveur interrompue.', true); return; }
-    lastLabel = ''; message('Reconnexion au serveur…', 'warn');
+    if (++failures >= 10) { stop(t('Connexion au serveur interrompue.'), true); return; }
+    lastLabel = ''; message(t('Reconnexion au serveur…'), 'warn');
   } finally { inFlight = false; }
   // Interroger tout de suite tant que ça bouge ; au repos prolongé (> 1 s), espacer un peu pour soulager le serveur.
   if (failures) schedulePoll(1000);
   else if (busy || pending || queue.length) { quiet = 0; schedulePoll(0); }
   else schedulePoll(++quiet < 40 ? 25 : 80);
 }
-closeButton.addEventListener('click', () => stop('Session fermée.', true));
-window.addEventListener('pagehide', () => { if (running) { stop('Session fermée.'); closeRequest(true); } });
+closeButton.addEventListener('click', () => stop(t('Session fermée.'), true));
+window.addEventListener('pagehide', () => { if (running) { stop(t('Session fermée.')); closeRequest(true); } });
 const fullscreenButton = document.getElementById('remote-fullscreen');
 fullscreenButton.addEventListener('click', () => {
-  if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen().catch(() => message('Le navigateur a refusé le plein écran.', 'warn'));
+  if (document.fullscreenElement) document.exitFullscreen(); else root.requestFullscreen().catch(() => message(t('Le navigateur a refusé le plein écran.'), 'warn'));
 });
 document.addEventListener('fullscreenchange', () => {
   const full = document.fullscreenElement === root;
-  fullscreenButton.querySelector('span').textContent = full ? 'Quitter le plein écran' : 'Plein écran';
+  fullscreenButton.querySelector('span').textContent = full ? t('Quitter le plein écran') : t('Plein écran');
   fullscreenButton.setAttribute('aria-pressed', String(full));
   root.classList.toggle('is-fullscreen', full);
 });
@@ -246,19 +248,19 @@ if (root.dataset.kind === 'terminal') {
     clipArea.value = lastShared = e.detail.text || '';
     if (navigator.clipboard && navigator.clipboard.writeText)
       navigator.clipboard.writeText(clipArea.value).then(
-        () => { clipHint.textContent = 'Copié depuis le poste et placé dans votre presse-papiers local.'; },
-        () => { clipHint.textContent = 'Copié depuis le poste. Cliquez dans la zone puis Ctrl+C pour le récupérer localement.'; });
-    else clipHint.textContent = 'Copié depuis le poste.';
+        () => { clipHint.textContent = t('Copié depuis le poste et placé dans votre presse-papiers local.'); },
+        () => { clipHint.textContent = t('Copié depuis le poste. Cliquez dans la zone puis Ctrl+C pour le récupérer localement.'); });
+    else clipHint.textContent = t('Copié depuis le poste.');
   });
   document.getElementById('remote-clipboard-read').addEventListener('click', async () => {
     try { clipArea.value = await navigator.clipboard.readText(); clipArea.focus(); }
-    catch { clipHint.textContent = 'Lecture du presse-papiers local refusée par le navigateur ; collez (Ctrl+V) dans la zone, puis « Envoyer au poste ».'; clipArea.focus(); }
+    catch { clipHint.textContent = t('Lecture du presse-papiers local refusée par le navigateur ; collez (Ctrl+V) dans la zone, puis « Envoyer au poste ».'); clipArea.focus(); }
   });
   clip.addEventListener('submit', e => {
     e.preventDefault();
     if (!connected) return;
     rfb.clipboardPasteFrom(lastShared = clipArea.value.slice(0, 100000));
-    clipHint.textContent = 'Envoyé au presse-papiers du poste. Collez-y avec Ctrl+V.';
+    clipHint.textContent = t('Envoyé au presse-papiers du poste. Collez-y avec Ctrl+V.');
     rfb.focus();
   });
   // Synchronisation automatique (sur demande) : au clic dans le bureau, le presse-papiers local est envoyé s'il a changé ;
@@ -267,8 +269,8 @@ if (root.dataset.kind === 'terminal') {
   clipAuto.addEventListener('change', async () => {
     try { localStorage.setItem(CLIP, clipAuto.checked ? '1' : '0'); } catch { /* ignoré */ }
     if (!clipAuto.checked) return;
-    try { await navigator.clipboard.readText(); clipHint.textContent = 'Synchronisation activée : votre presse-papiers part vers le poste à chaque clic sur le bureau.'; }
-    catch { clipAuto.checked = false; clipHint.textContent = 'Le navigateur refuse l’accès au presse-papiers : synchronisation impossible ici.'; }
+    try { await navigator.clipboard.readText(); clipHint.textContent = t('Synchronisation activée : votre presse-papiers part vers le poste à chaque clic sur le bureau.'); }
+    catch { clipAuto.checked = false; clipHint.textContent = t('Le navigateur refuse l’accès au presse-papiers : synchronisation impossible ici.'); }
   });
   async function shareLocalClipboard() {
     if (!clipAuto.checked || !connected || !navigator.clipboard || !navigator.clipboard.readText) return;
@@ -362,17 +364,17 @@ if (root.dataset.kind === 'terminal') {
   });
   rfb.addEventListener('desktopname', e => {
     if (e.detail.name.startsWith('loco-secure:')) {
-      remoteLabel = 'bureau sécurisé Windows · UAC / verrouillage';
-      document.querySelector('.remote-description').textContent = 'Bureau sécurisé Windows · Via l’agent loco';
+      remoteLabel = t('bureau sécurisé Windows · UAC / verrouillage'); secureDesktop = true;
+      document.querySelector('.remote-description').textContent = t('Bureau sécurisé Windows · Via l’agent loco');
     } else if (e.detail.name.startsWith('loco-desktop:')) {
-      remoteLabel = 'bureau du poste';
-      document.querySelector('.remote-description').textContent = 'Session graphique du poste · clavier et souris · Via l’agent loco';
+      remoteLabel = t('bureau du poste'); secureDesktop = false;
+      document.querySelector('.remote-description').textContent = t('Session graphique du poste · clavier et souris · Via l’agent loco');
     } else if (e.detail.name.startsWith('loco-console root@')) {
-      document.querySelector('.remote-description').textContent = 'Console texte · Shell root · Via l’agent loco';
-      remoteLabel = 'console texte du poste · root';
+      document.querySelector('.remote-description').textContent = t('Console texte · Shell root · Via l’agent loco');
+      remoteLabel = t('console texte du poste · root'); secureDesktop = false;
     }
     lastLabel = ''; if (running) connectedMessage();
   });
-  rfb.addEventListener('disconnect', e => { if (running) stop(e.detail.clean ? 'Bureau déconnecté.' : 'La connexion au bureau a été interrompue.', true); });
+  rfb.addEventListener('disconnect', e => { if (running) stop(e.detail.clean ? t('Bureau déconnecté.') : t('La connexion au bureau a été interrompue.'), true); });
 }
 poll();

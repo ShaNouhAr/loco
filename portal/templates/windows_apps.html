@@ -2,21 +2,21 @@
 {% from "_macros.html" import cmd %}
 {% from "_software_logo.html" import software_logo %}
 {% from "_app_edit_dialog.html" import app_data with context %}
-{% block title %}Logiciels Windows{% endblock %}
+{% block title %}{{ _("Logiciels Windows") }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' %}
 <div class="head">
   <div>
-    <h1>Catalogue local</h1>
-    <p>Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.</p>
+    <h1>{{ _("Catalogue local") }}</h1>
+    <p>{{ _("Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.") }}</p>
   </div>
   {% if can_any("windows.add", "windows.refresh") %}
   <div class="actions">
     {% if winget and can("windows.refresh") %}<form method="post" action="{{ url_for('winget_update') }}" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button class="btn" title="Cherche dans WinGet une version plus récente des logiciels qui en sont issus et la télécharge"><span class="spin"></span>Chercher des mises à jour WinGet</button>
+      <button class="btn" title="{{ _('Cherche dans WinGet une version plus récente des logiciels qui en sont issus et la télécharge') }}"><span class="spin"></span>{{ _("Chercher des mises à jour WinGet") }}</button>
     </form>{% endif %}
-    {% if can("windows.add") %}<button type="button" class="btn primary" data-open="#add">Ajouter un logiciel</button>{% endif %}
+    {% if can("windows.add") %}<button type="button" class="btn primary" data-open="#add">{{ _("Ajouter un logiciel") }}</button>{% endif %}
   </div>
   {% endif %}
 </div>
@@ -24,8 +24,8 @@
 <div class="stack" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="1500">
   {% if total %}
   <div class="fleet-filters">
-    <nav class="chips" aria-label="Filtrer le catalogue">
-      <a class="chip {{ 'on' if not state }}" href="{{ url_for('windows_apps') }}">Tous <b>{{ total }}</b></a>
+    <nav class="chips" aria-label="{{ _('Filtrer le catalogue') }}">
+      <a class="chip {{ 'on' if not state }}" href="{{ url_for('windows_apps') }}">{{ _("Tous") }} <b>{{ total }}</b></a>
       {% for key, (label, cls) in filters.items() if counts[key] or state == key %}
       {% if key != 'parc' or show_usage %}
       <a class="chip {{ 'on' if state == key }}" href="{{ url_for('windows_apps', etat=key) }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
@@ -33,8 +33,8 @@
       {% endfor %}
     </nav>
     <div class="row">
-      <span class="muted small">{{ total_size|human }} au total</span>
-      {% if items %}<input type="search" class="search-sm" placeholder="Rechercher un logiciel" data-filter="#apps tbody tr:not(.note-row)" data-empty="#apps-none" aria-label="Rechercher un logiciel">{% endif %}
+      <span class="muted small">{{ _("%(total_size)s au total", total_size=total_size|human) }}</span>
+      {% if items %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher un logiciel') }}" data-filter="#apps tbody tr:not(.note-row)" data-empty="#apps-none" aria-label="{{ _('Rechercher un logiciel') }}">{% endif %}
     </div>
   </div>
   {% endif %}
@@ -44,8 +44,8 @@
     <div class="table-wrap">
       <table id="apps" class="apps-table">
         <thead><tr>
-          <th class="chk"><input type="checkbox" id="pick-all" aria-label="Tout sélectionner"></th>
-          <th>Logiciel</th><th>Version</th>{% if show_usage %}<th class="hide-sm">Sur le parc</th>{% endif %}<th class="num hide-sm">Taille</th><th>État</th><th></th>
+          <th class="chk"><input type="checkbox" id="pick-all" aria-label="{{ _('Tout sélectionner') }}"></th>
+          <th>{{ _("Logiciel") }}</th><th>{{ _("Version") }}</th>{% if show_usage %}<th class="hide-sm">{{ _("Sur le parc") }}</th>{% endif %}<th class="num hide-sm">{{ _("Taille") }}</th><th>{{ _("État") }}</th><th></th>
         </tr></thead>
         <tbody>
         {% for i in items %}{% set a = i.a %}
@@ -53,54 +53,54 @@
             <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}" {{ 'disabled' if a.status != 'ready' }}></td>
             <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div>
               <a href="{{ url_for('software_detail', slug=a.slug) }}">{{ a.name }}</a>
-              <span class="sub sans">{{ a.kind }} · {{ 'WinGet ' ~ a.winget_id if a.winget_id else 'ajouté manuellement' }}</span></div></div></td>
+              <span class="sub sans">{{ a.kind }} · {{ 'WinGet ' ~ a.winget_id if a.winget_id else _('ajouté manuellement') }}</span></div></div></td>
             <td class="mono nowrap">{{ a.version or '—' }}</td>
             {% if show_usage %}
             <td class="hide-sm nowrap">
-              {% if i.used and i.used[0] %}{{ i.used[0] }} poste{{ 's' if i.used[0] > 1 }}{% else %}<span class="faint">aucun poste</span>{% endif %}
-              {% if i.used and i.used[1] %}<span class="sub sans warn-text">{{ i.used[1] }} à mettre à jour{% if can('fleet.install') and a.status == 'ready' %} · <a href="{{ url_for('deployment_compose', app=a.slug) }}">déployer</a>{% endif %}</span>{% endif %}
+              {% if i.used and i.used[0] %}{{ _("%(v)s poste%(v2)s", v=i.used[0], v2='s' if i.used[0] > 1) }}{% else %}<span class="faint">{{ _("aucun poste") }}</span>{% endif %}
+              {% if i.used and i.used[1] %}<span class="sub sans warn-text">{{ _("%(v)s à mettre à jour", v=i.used[1]) }}{% if can('fleet.install') and a.status == 'ready' %} · <a href="{{ url_for('deployment_compose', app=a.slug) }}">{{ _("déployer") }}</a>{% endif %}</span>{% endif %}
             </td>
             {% endif %}
             <td class="num nowrap hide-sm">{{ a.size|human if a.size else '—' }}</td>
             <td class="nowrap">
-              {% if a.status == 'ready' %}<span class="st ok">prêt</span>
-              {% elif a.status == 'downloading' %}<span class="st warn" data-progress="{{ a.slug }}">téléchargement</span>
-              {% elif a.status == 'error' %}<span class="st err">erreur</span>
-              {% else %}<span class="st">en attente</span>{% endif %}
+              {% if a.status == 'ready' %}<span class="st ok">{{ _("prêt") }}</span>
+              {% elif a.status == 'downloading' %}<span class="st warn" data-progress="{{ a.slug }}">{{ _("téléchargement") }}</span>
+              {% elif a.status == 'error' %}<span class="st err">{{ _("erreur") }}</span>
+              {% else %}<span class="st">{{ _("en attente") }}</span>{% endif %}
             </td>
-            <td class="right nowrap">{% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit" data-app='{{ app_data(a) }}'>Modifier</button>{% endif %}</td>
+            <td class="right nowrap">{% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit" data-app='{{ app_data(a) }}'>{{ _("Modifier") }}</button>{% endif %}</td>
           </tr>
           {% if 'erreur' in i.flags %}
           <tr class="note-row err"><td></td><td colspan="{{ 6 if show_usage else 5 }}">
             <div class="row-between"><span>{{ a.error }}</span>
             {% if a.source_url and can("windows.refresh") %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=a.slug) }}" data-ajax>
-              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm"><span class="spin"></span>Réessayer</button>
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm"><span class="spin"></span>{{ _("Réessayer") }}</button>
             </form>{% endif %}</div></td></tr>
           {% elif 'arguments' in i.flags %}
           <tr class="note-row warn"><td></td><td colspan="{{ 6 if show_usage else 5 }}">
-            <div class="row-between"><span>Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).</span>
-            {% if can("windows.edit") %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(a) }}'>Renseigner</button>{% endif %}</div></td></tr>
+            <div class="row-between"><span>{{ _("Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).") }}</span>
+            {% if can("windows.edit") %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(a) }}'>{{ _("Renseigner") }}</button>{% endif %}</div></td></tr>
           {% endif %}
         {% endfor %}
         </tbody>
       </table>
-      <div id="apps-none" class="empty hidden">Aucun logiciel ne correspond à la recherche.</div>
+      <div id="apps-none" class="empty hidden">{{ _("Aucun logiciel ne correspond à la recherche.") }}</div>
     </div>
     {% elif total %}
-    <div class="empty">Rien à traiter ici. <a href="{{ url_for('windows_apps') }}">Tout afficher</a></div>
+    <div class="empty">{{ _("Rien à traiter ici.") }} <a href="{{ url_for('windows_apps') }}">{{ _("Tout afficher") }}</a></div>
     {% else %}
-    <div class="empty">Catalogue vide : {% if can("windows.add") %}<button type="button" class="linkbtn" data-open="#add">ajoutez un installeur</button> par lien ou par fichier{% endif %}{% if can("store.view") %}{{ ', ou ' if can("windows.add") }}importez-en un depuis le <a href="{{ url_for('software_store') }}">centre de logiciels</a>{% endif %}.</div>
+    <div class="empty">{{ _("Catalogue vide :") }} {% if can("windows.add") %}<button type="button" class="linkbtn" data-open="#add">{{ _("ajoutez un installeur") }}</button> {{ _("par lien ou par fichier") }}{% endif %}{% if can("store.view") %}{{ _("%(v)simportez-en un depuis le", v=_(', ou ') if can("windows.add")) }} <a href="{{ url_for('software_store') }}">{{ _("centre de logiciels") }}</a>{% endif %}.</div>
     {% endif %}
-    <div class="panel-f">Chaque installeur est vérifié par SHA-256 sur le poste avant installation et dispose de 30 minutes (<code>LOCO_TIMEOUT</code>). Commande PowerShell en HTTPS : autorité loco importée sur le poste (GPO){% if http_url %}, sinon remplacer l'adresse par <code>{{ http_url }}</code>{% endif %}.</div>
+    <div class="panel-f">{{ _("Chaque installeur est vérifié par SHA-256 sur le poste avant installation et dispose de 30 minutes (<code>LOCO_TIMEOUT</code>). Commande PowerShell en HTTPS : autorité loco importée sur le poste (GPO)") }}{% if http_url %}{{ _(", sinon remplacer l'adresse par") }} <code>{{ http_url }}</code>{% endif %}.</div>
   </section>
 </div>
 
 <div class="selbar" data-base="{{ client_url }}/win/i/">
   <div class="selbar-in">
-    <div class="software-selection-actions">{% if can('fleet.install') %}<a class="btn primary" data-deploy-selected href="{{ url_for('deployment_compose') }}">Déployer sur le parc</a>{% endif %}{% if can('windows.groups') %}<a class="btn" data-group-selected href="{{ url_for('software_group_editor',group_id=0) }}">Créer un groupe</a>{% endif %}</div>
-    <span class="count">0 sélectionné</span>
+    <div class="software-selection-actions">{% if can('fleet.install') %}<a class="btn primary" data-deploy-selected href="{{ url_for('deployment_compose') }}">{{ _("Déployer sur le parc") }}</a>{% endif %}{% if can('windows.groups') %}<a class="btn" data-group-selected href="{{ url_for('software_group_editor',group_id=0) }}">{{ _("Créer un groupe") }}</a>{% endif %}</div>
+    <span class="count">{{ _("0 sélectionné") }}</span>
     {{ cmd('cmd-sel', '', 'PS>') }}
-    <button type="button" class="btn" data-clear>Désélectionner</button>
+    <button type="button" class="btn" data-clear>{{ _("Désélectionner") }}</button>
   </div>
 </div>
 
@@ -109,57 +109,57 @@
   <form method="post" action="{{ url_for('windows_apps_add') }}" enctype="multipart/form-data" data-ajax data-app-form>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="dlg-h">
-      <div><h2>Ajouter un logiciel</h2><p>L'installeur est servi par loco aux postes Windows et vérifié par son empreinte.</p></div>
-      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div><h2>{{ _("Ajouter un logiciel") }}</h2><p>{{ _("L'installeur est servi par loco aux postes Windows et vérifié par son empreinte.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <div class="dlg-b">
       <section class="dlg-sec">
-        <h3>Installeur</h3>
-        <div class="tabs seg-tabs" role="tablist" aria-label="Origine de l'installeur">
-          <button type="button" data-tab="url" aria-selected="true">Lien de téléchargement</button>
-          <button type="button" data-tab="file" aria-selected="false">Fichier</button>
+        <h3>{{ _("Installeur") }}</h3>
+        <div class="tabs seg-tabs" role="tablist" aria-label="{{ _('Origine de l\'installeur') }}">
+          <button type="button" data-tab="url" aria-selected="true">{{ _("Lien de téléchargement") }}</button>
+          <button type="button" data-tab="file" aria-selected="false">{{ _("Fichier") }}</button>
         </div>
         <div class="tab-panel on" data-panel="url">
-          <input type="url" name="url" placeholder="https://www.7-zip.org/a/7z2600-x64.exe" aria-label="Lien de téléchargement">
-          <span class="hint">loco télécharge le fichier une fois ; « Actualiser » le reprend plus tard.</span>
+          <input type="url" name="url" placeholder="{{ _('https://www.7-zip.org/a/7z2600-x64.exe') }}" aria-label="{{ _('Lien de téléchargement') }}">
+          <span class="hint">{{ _("loco télécharge le fichier une fois ; « Actualiser » le reprend plus tard.") }}</span>
         </div>
         <div class="tab-panel" data-panel="file">
-          <div class="drop"><input type="file" name="file" aria-label="Installeur"><div class="files"></div></div>
+          <div class="drop"><input type="file" name="file" aria-label="{{ _('Installeur') }}"><div class="files"></div></div>
         </div>
         <span class="kind-badge" data-kind-badge></span>
       </section>
       <section class="dlg-sec">
-        <h3>Logiciel</h3>
+        <h3>{{ _("Logiciel") }}</h3>
         <div class="grid2">
-          <label class="f"><span>Nom</span><input type="text" name="name" required placeholder="7-Zip"></label>
-          <label class="f"><span>Version</span><input type="text" name="version" placeholder="facultatif"></label>
+          <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="name" required placeholder="{{ _('7-Zip') }}"></label>
+          <label class="f"><span>{{ _("Version") }}</span><input type="text" name="version" placeholder="{{ _('facultatif') }}"></label>
         </div>
       </section>
       <details class="dlg-adv" data-adv>
-        <summary>Options d'installation<small data-adv-summary>automatique</small></summary>
+        <summary>{{ _("Options d'installation") }}<small data-adv-summary>{{ _("automatique") }}</small></summary>
         <div class="adv-b">
           <div class="grid2">
-            <label class="f"><span>Type</span>
+            <label class="f"><span>{{ _("Type") }}</span>
               <select name="kind">
-                <option value="">Automatique (extension)</option>
-                <option value="exe">exe</option><option value="msi">msi</option>
-                <option value="msu">msu (mise à jour)</option><option value="ps1">ps1 (script)</option>
-                <option value="file">fichier (copié)</option>
+                <option value="">{{ _("Automatique (extension)") }}</option>
+                <option value="exe">{{ _("exe") }}</option><option value="msi">{{ _("msi") }}</option>
+                <option value="msu">{{ _("msu (mise à jour)") }}</option><option value="ps1">{{ _("ps1 (script)") }}</option>
+                <option value="file">{{ _("fichier (copié)") }}</option>
               </select>
             </label>
-            <label class="f"><span>Arguments silencieux</span><input type="text" name="args" placeholder="par défaut selon le type"></label>
+            <label class="f"><span>{{ _("Arguments silencieux") }}</span><input type="text" name="args" placeholder="{{ _('par défaut selon le type') }}"></label>
           </div>
-          <p class="hint warn-hint" data-args-warn hidden>Un .exe ne s'installe sans intervention qu'avec ses arguments silencieux : sinon il attend un clic sur chaque poste.</p>
-          <p class="hint">msi : <code>{{ default_args.msi }}</code> · msu : <code>{{ default_args.msu }}</code> · exe : selon l'éditeur, souvent <code>/S</code>, <code>/silent</code> ou <code>/quiet</code>.</p>
-          <label class="f"><span>Nom dans Windows</span><input type="text" name="detect" placeholder="par défaut : le nom du logiciel">
-            <span class="hint">Début du nom affiché dans « Programmes et fonctionnalités » (ou motif avec *) : repère les postes qui l'ont et ceux à mettre à jour.</span></label>
+          <p class="hint warn-hint" data-args-warn hidden>{{ _("Un .exe ne s'installe sans intervention qu'avec ses arguments silencieux : sinon il attend un clic sur chaque poste.") }}</p>
+          <p class="hint">{{ _("msi : <code>%(msi)s</code> · msu : <code>%(msu)s</code> · exe : selon l'éditeur, souvent <code>/S</code>, <code>/silent</code> ou <code>/quiet</code>.", msi=default_args.msi, msu=default_args.msu) }}</p>
+          <label class="f"><span>{{ _("Nom dans Windows") }}</span><input type="text" name="detect" placeholder="{{ _('par défaut : le nom du logiciel') }}">
+            <span class="hint">{{ _("Début du nom affiché dans « Programmes et fonctionnalités » (ou motif avec *) : repère les postes qui l'ont et ceux à mettre à jour.") }}</span></label>
         </div>
       </details>
       <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
     </div>
     <div class="dlg-f">
-      <button type="button" class="btn" data-close>Annuler</button>
-      <button class="btn primary"><span class="spin"></span>Ajouter au catalogue</button>
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Ajouter au catalogue") }}</button>
     </div>
   </form>
 </dialog>{% endif %}

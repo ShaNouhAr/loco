@@ -11,6 +11,7 @@ from flask import abort, flash, render_template, request
 from werkzeug.utils import secure_filename
 
 from . import app, config, debpkg, signing
+from .i18n import _
 from .auth import audit, login_required
 from .db import transaction
 from .util import back, download, explain, read_stats, service_active, sha256_of
@@ -27,7 +28,7 @@ def repository_path(repository=LEGACY):
         return config.APT_DIR
     parts = repository.split("/")
     if len(parts) != 2 or parts[0] not in config.APT_DISTRIBUTIONS or not config.APT_SUITE_RE.fullmatch(parts[1]):
-        raise ValueError("Dépôt invalide : distribution et nom de version attendus.")
+        raise ValueError(_('Dépôt invalide : distribution et nom de version attendus.'))
     return os.path.join(config.APT_REPOSITORIES_DIR, *parts)
 
 
@@ -42,7 +43,7 @@ def repositories():
 def require_repository(repository):
     path = repository_path(repository)
     if repository != LEGACY and not any(r["key"] == repository for r in repositories()):
-        raise ValueError("Ce dépôt n'existe pas. Créez-le avant d'y ajouter des paquets.")
+        raise ValueError(_("Ce dépôt n'existe pas. Créez-le avant d'y ajouter des paquets."))
     return path
 
 
@@ -83,10 +84,10 @@ def deb_fields(path):
     out = subprocess.run(["dpkg-deb", "-f", path, "Package", "Version", "Architecture"],
                          capture_output=True, text=True, timeout=30)
     if out.returncode != 0:
-        raise ValueError("ce fichier n'est pas un paquet .deb valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .deb valide"))
     fields = dict(line.split(": ", 1) for line in out.stdout.strip().splitlines() if ": " in line)
     if not all(k in fields for k in ("Package", "Version", "Architecture")):
-        raise ValueError("champs Package/Version/Architecture manquants")
+        raise ValueError(_('champs Package/Version/Architecture manquants'))
     return fields
 
 
@@ -145,10 +146,10 @@ def create_repository(distribution, suite, version=""):
     key = f"{distribution}/{suite}"
     root = repository_path(key)
     if len(version) > 32 or any(not (c.isalnum() or c in ". -") for c in version):
-        raise ValueError("Numéro de version invalide (32 caractères maximum).")
+        raise ValueError(_('Numéro de version invalide (32 caractères maximum).'))
     with _apt_lock:
         if any(r["key"] == key for r in repositories()):
-            raise ValueError("Ce dépôt existe déjà.")
+            raise ValueError(_('Ce dépôt existe déjà.'))
         existed = os.path.exists(root)
         try:
             rebuild_apt(key)
@@ -171,7 +172,7 @@ def add_deb(tmp_path, repository):
         target = os.path.join(root, "pool", name)
         if os.path.isfile(target):
             if sha256_of(target) != sha256_of(tmp_path):
-                raise ValueError("Ce paquet et cette version existent avec un contenu différent. Publiez une nouvelle version du paquet.")
+                raise ValueError(_('Ce paquet et cette version existent avec un contenu différent. Publiez une nouvelle version du paquet.'))
             os.unlink(tmp_path)
             return name
         os.chmod(tmp_path, 0o644)
@@ -270,7 +271,7 @@ def linux_repository_create():
         flash(explain(e), "error")
         return back("linux")
     audit("linux.depot.ajout", key)
-    flash(f"Dépôt créé : {key}", "ok")
+    flash(_('Dépôt créé : %(key)s', key=key), "ok")
     return back("linux", repository=key)
 
 
@@ -287,7 +288,7 @@ def linux_upload():
     url = request.form.get("url", "").strip()
     try:
         if url:
-            tmp, _ = download(url, config.TMP_DIR)
+            tmp, _sha = download(url, config.TMP_DIR)
             try:
                 added.append(add_deb(tmp, repository))
             finally:
@@ -310,11 +311,11 @@ def linux_upload():
         errors.append(explain(e))
     for name in added:
         audit("linux.ajout", f"{repository}: {name}")
-        flash(f"Paquet ajouté : {name}", "ok")
+        flash(_('Paquet ajouté : %(name)s', name=name), "ok")
     for err in errors:
         flash(err, "error")
     if not added and not errors:
-        flash("Aucun fichier ni lien fourni.", "error")
+        flash(_('Aucun fichier ni lien fourni.'), "error")
     return back("linux", repository=repository)
 
 
@@ -339,7 +340,7 @@ def linux_delete():
                     os.replace(saved, path)
                     raise
             audit("linux.suppression", f"{repository}: {name}")
-            flash("Paquet supprimé de ce dépôt.", "ok")
+            flash(_('Paquet supprimé de ce dépôt.'), "ok")
     return back("linux", repository=repository)
 
 
@@ -355,7 +356,7 @@ def linux_copy():
     try:
         require_repository(destination)
         if source == destination or name != secure_filename(name) or not name.endswith(".deb"):
-            raise ValueError("Source, destination ou fichier invalide.")
+            raise ValueError(_('Source, destination ou fichier invalide.'))
         with _apt_lock:
             path = os.path.join(root, "pool", name)
             if not os.path.isfile(path):
@@ -372,5 +373,5 @@ def linux_copy():
         flash(explain(e), "error")
         return back("linux", repository=source)
     audit("linux.copie", f"{source} → {destination}: {name}")
-    flash("Paquet copié. Le dépôt d'origine est conservé.", "ok")
+    flash(_("Paquet copié. Le dépôt d'origine est conservé."), "ok")
     return back("linux", repository=destination)

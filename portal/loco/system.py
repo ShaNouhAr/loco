@@ -8,6 +8,7 @@ import sys
 from flask import Response, render_template
 
 from . import app, config
+from .i18n import L_, _
 from .auth import login_required
 from .db import db
 from .linux import list_debs
@@ -15,12 +16,12 @@ from .util import disk_usage, read_stats, service_active
 from .wupdate import wu_stats
 
 UNITS = [
-    ("loco-portal", "Interface et scripts clients"),
-    ("nginx", "HTTPS, fichiers, cache Windows Update"),
-    ("apt-cacher-ng", "Cache des paquets Linux"),
-    ("loco-stats.timer", "Taille des caches, toutes les 15 min"),
-    ("loco-nginx.path", "Recharge nginx quand la liste des domaines change"),
-    ("loco-backup.timer", "Sauvegarde quotidienne"),
+    ("loco-portal", L_("Interface et scripts clients")),
+    ("nginx", L_("HTTPS, fichiers, cache Windows Update")),
+    ("apt-cacher-ng", L_("Cache des paquets Linux")),
+    ("loco-stats.timer", L_("Taille des caches, toutes les 15 min")),
+    ("loco-nginx.path", L_("Recharge nginx quand la liste des domaines change")),
+    ("loco-backup.timer", L_("Sauvegarde quotidienne")),
 ]
 if config.CONTAINER:
     UNITS = UNITS[:3] + [("loco-cron", "Tâches périodiques : taille des caches, rechargement nginx, sauvegarde")]
@@ -158,7 +159,8 @@ def list_backups():
 def _age(mtime):
     """Ancienneté d'une sauvegarde en clair, et retard si la sauvegarde quotidienne a manqué (plus de 2 jours)."""
     hours = max(0, (datetime.datetime.now().timestamp() - mtime) / 3600)
-    text = "il y a moins d'une heure" if hours < 1 else f"il y a {int(hours)} h" if hours < 48 else f"il y a {int(hours // 24)} j"
+    text = (_("il y a moins d'une heure") if hours < 1 else _("il y a %(n)s h", n=int(hours)) if hours < 48
+            else _("il y a %(n)s j", n=int(hours // 24)))
     return {"text": text, "late": hours > 48}
 
 
@@ -190,8 +192,8 @@ def system():
         stats=read_stats(),
         backups=backups,
         backup_dir=config.BACKUP_DIR,
-        paths={"Données": config.DATA, "État et base": config.STATE, "Configuration": config.ETC,
-               "Certificats": config.TLS_DIR, "Sauvegardes": config.BACKUP_DIR},
+        paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
+               _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
     )
 
 

@@ -1,35 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Fonctionnalités{% endblock %}
+{% block title %}{{ _("Fonctionnalités") }}{% endblock %}
 {% block content %}
 <div class="head">
   <div>
-    <h1>Fonctionnalités</h1>
-    <p>Activez ou désactivez les grandes fonctions de loco. Une fonctionnalité désactivée disparaît de l’interface, ses pages et API sont refusées et les agents n’en reçoivent plus de commandes ; ses données sont conservées pour une réactivation.</p>
+    <h1>{{ _("Fonctionnalités") }}</h1>
+    <p>{{ _("Activez ou désactivez les grandes fonctions de loco. Une fonctionnalité désactivée disparaît de l’interface, ses pages et API sont refusées et les agents n’en reçoivent plus de commandes ; ses données sont conservées pour une réactivation.") }}</p>
   </div>
 </div>
 
-<form method="post" class="stack" data-ajax data-confirm="Appliquer ces changements ?" data-confirm-text="Les utilisateurs perdent immédiatement l’accès aux fonctionnalités désactivées.{% if appliance %} Les services réseau correspondants (caches Windows Update, RPM, Flatpak) sont arrêtés ou relancés.{% endif %}" data-confirm-ok="Appliquer">
+<form method="post" class="stack" data-ajax data-confirm="{{ _('Appliquer ces changements ?') }}" data-confirm-text="{{ _('Les utilisateurs perdent immédiatement l’accès aux fonctionnalités désactivées.') }}{% if appliance %} {{ _('Les services réseau correspondants (caches Windows Update, RPM, Flatpak) sont arrêtés ou relancés.') }}{% endif %}" data-confirm-ok="{{ _('Appliquer') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <section class="panel">
-    <div class="panel-h"><h2>Fonctions de la solution</h2><div class="aside">réservé au compte « admin » de l’installation</div></div>
+    <div class="panel-h"><h2>{{ _("Fonctions de la solution") }}</h2><div class="aside">{{ _("réservé au compte « admin » de l’installation") }}</div></div>
     <div class="feature-list">
       {% for f in items %}
       <label class="feature-row {{ 'off' if not f.on }}">
         <span class="feature-text">
           <strong>{{ f.label }}</strong>
           <small>{{ f.description }}</small>
-          {% if f.install_off %}<small class="warn-text">Désactivée dès l’installation : réinstallez avec cette option pour l’utiliser.</small>
-          {% elif f.blocked_by %}<small class="warn-text">Inactive tant que {{ f.blocked_by|join(', ') }} est désactivé.</small>
-          {% elif f.depends %}<small class="faint">Nécessite {{ f.depends|join(', ') }}.</small>{% endif %}
-          {% if f.service %}<small class="faint">Arrête ou relance aussi le service réseau correspondant.</small>{% endif %}
+          {% if f.install_off %}<small class="warn-text">{{ _("Désactivée dès l’installation : réinstallez avec cette option pour l’utiliser.") }}</small>
+          {% elif f.blocked_by %}<small class="warn-text">{{ _("Inactive tant que %(blocked_by)s est désactivé.", blocked_by=f.blocked_by|join(', ')) }}</small>
+          {% elif f.depends %}<small class="faint">{{ _("Nécessite %(depends)s.", depends=f.depends|join(', ')) }}</small>{% endif %}
+          {% if f.service %}<small class="faint">{{ _("Arrête ou relance aussi le service réseau correspondant.") }}</small>{% endif %}
         </span>
         <span class="switch"><input type="checkbox" name="{{ f.key }}" value="1" role="switch" {{ 'checked' if f.chosen and not f.install_off }} {{ 'disabled' if f.install_off }}><i aria-hidden="true"></i></span>
       </label>
       {% endfor %}
     </div>
     <div class="panel-f sticky-actions row-between">
-      <span>{% if not appliance %}Sur cette installation, les services réseau (caches APT, Windows Update…) restent démarrés : seuls l’interface, les API et les agents sont coupés.{% else %}Chaque changement est inscrit au journal.{% endif %}</span>
-      <button class="btn primary"><span class="spin"></span>Enregistrer</button>
+      <span>{% if not appliance %}{{ _("Sur cette installation, les services réseau (caches APT, Windows Update…) restent démarrés : seuls l’interface, les API et les agents sont coupés.") }}{% else %}{{ _("Chaque changement est inscrit au journal.") }}{% endif %}</span>
+      <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
     </div>
   </section>
 </form>

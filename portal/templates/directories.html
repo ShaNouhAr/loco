@@ -1,113 +1,113 @@
 {% extends "base.html" %}
-{% block title %}Annuaires{% endblock %}
+{% block title %}{{ _("Annuaires") }}{% endblock %}
 {% macro ldap_fields(cfg=None) %}
 <div class="grid2">
-  <label class="f wide"><span>Adresse de l’annuaire</span><input type="text" name="url" required maxlength="300" value="{{ cfg.url if cfg else '' }}" placeholder="ldaps://dc1.entreprise.local:636"><span class="hint">ldaps:// (recommandé) ou ldap:// avec StartTLS : le mot de passe ne circule jamais en clair.</span></label>
-  <label class="f"><span>Base de recherche</span><input type="text" name="base_dn" maxlength="500" value="{{ cfg.base_dn if cfg else '' }}" placeholder="DC=entreprise,DC=local"></label>
-  <label class="f"><span>Filtre de recherche</span><input type="text" name="user_filter" maxlength="500" value="{{ cfg.user_filter if cfg else '(&(objectClass=user)(sAMAccountName={username}))' }}" class="mono"></label>
-  <label class="f"><span>Compte de service (DN)</span><input type="text" name="bind_dn" maxlength="500" value="{{ cfg.bind_dn if cfg else '' }}" placeholder="CN=svc-loco,OU=Services,DC=entreprise,DC=local"></label>
-  <label class="f"><span>Mot de passe du compte de service</span><input type="password" name="bind_password" maxlength="1024" autocomplete="new-password" placeholder="{{ 'inchangé si vide' if cfg and cfg.bind_password else '' }}"></label>
-  <label class="f wide"><span>Sans compte de service : modèle de liaison</span><input type="text" name="user_template" maxlength="500" value="{{ cfg.user_template if cfg and cfg.user_template != '{username}' else '' }}" placeholder="{username}@entreprise.local (Active Directory) ou uid={username},ou=people,dc=exemple,dc=org" class="mono"></label>
-  <label class="f"><span>Attribut du nom</span><input type="text" name="name_attr" maxlength="60" value="{{ cfg.name_attr if cfg else 'displayName' }}"></label>
-  <label class="f"><span>Attribut du courriel</span><input type="text" name="mail_attr" maxlength="60" value="{{ cfg.mail_attr if cfg else 'mail' }}"></label>
-  <label class="f wide"><span>Autorité de l’annuaire (PEM, facultatif)</span><textarea name="ca_pem" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----  (vide : autorités du système)">{{ cfg.ca_pem if cfg else '' }}</textarea></label>
-  <label class="check wide"><input type="checkbox" name="starttls" value="1" {{ 'checked' if cfg and cfg.starttls }}> StartTLS (avec une adresse ldap://)</label>
+  <label class="f wide"><span>{{ _("Adresse de l’annuaire") }}</span><input type="text" name="url" required maxlength="300" value="{{ cfg.url if cfg else '' }}" placeholder="{{ _('ldaps://dc1.entreprise.local:636') }}"><span class="hint">{{ _("ldaps:// (recommandé) ou ldap:// avec StartTLS : le mot de passe ne circule jamais en clair.") }}</span></label>
+  <label class="f"><span>{{ _("Base de recherche") }}</span><input type="text" name="base_dn" maxlength="500" value="{{ cfg.base_dn if cfg else '' }}" placeholder="{{ _('DC=entreprise,DC=local') }}"></label>
+  <label class="f"><span>{{ _("Filtre de recherche") }}</span><input type="text" name="user_filter" maxlength="500" value="{{ cfg.user_filter if cfg else '(&(objectClass=user)(sAMAccountName={username}))' }}" class="mono"></label>
+  <label class="f"><span>{{ _("Compte de service (DN)") }}</span><input type="text" name="bind_dn" maxlength="500" value="{{ cfg.bind_dn if cfg else '' }}" placeholder="{{ _('CN=svc-loco,OU=Services,DC=entreprise,DC=local') }}"></label>
+  <label class="f"><span>{{ _("Mot de passe du compte de service") }}</span><input type="password" name="bind_password" maxlength="1024" autocomplete="new-password" placeholder="{{ _('inchangé si vide') if cfg and cfg.bind_password else '' }}"></label>
+  <label class="f wide"><span>{{ _("Sans compte de service : modèle de liaison") }}</span><input type="text" name="user_template" maxlength="500" value="{{ cfg.user_template if cfg and cfg.user_template != '{username}' else '' }}" placeholder="{{ _('{username}@entreprise.local (Active Directory) ou uid={username},ou=people,dc=exemple,dc=org') }}" class="mono"></label>
+  <label class="f"><span>{{ _("Attribut du nom") }}</span><input type="text" name="name_attr" maxlength="60" value="{{ cfg.name_attr if cfg else 'displayName' }}"></label>
+  <label class="f"><span>{{ _("Attribut du courriel") }}</span><input type="text" name="mail_attr" maxlength="60" value="{{ cfg.mail_attr if cfg else 'mail' }}"></label>
+  <label class="f wide"><span>{{ _("Autorité de l’annuaire (PEM, facultatif)") }}</span><textarea name="ca_pem" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----  (vide : autorités du système)">{{ cfg.ca_pem if cfg else '' }}</textarea></label>
+  <label class="check wide"><input type="checkbox" name="starttls" value="1" {{ 'checked' if cfg and cfg.starttls }}> {{ _("StartTLS (avec une adresse ldap://)") }}</label>
 </div>
 {% endmacro %}
 {% macro radius_fields(cfg=None) %}
 <div class="grid2">
-  <label class="f"><span>Serveur RADIUS</span><input type="text" name="host" required maxlength="253" value="{{ cfg.host if cfg else '' }}" placeholder="radius.entreprise.local"></label>
-  <label class="f"><span>Port</span><input type="number" name="port" min="1" max="65535" value="{{ cfg.port if cfg else 1812 }}"></label>
-  <label class="f"><span>Secret partagé</span><input type="password" name="secret" maxlength="256" autocomplete="new-password" {{ '' if cfg else 'required' }} placeholder="{{ 'inchangé si vide' if cfg else '' }}"></label>
-  <label class="f"><span>Identifiant NAS</span><input type="text" name="nas_identifier" maxlength="64" value="{{ cfg.nas_identifier if cfg else 'loco' }}"></label>
-  <label class="f"><span>Délai de réponse (s)</span><input type="number" name="timeout" min="1" max="30" value="{{ cfg.timeout if cfg else 5 }}"></label>
-  <label class="f"><span>Nouvelles tentatives</span><input type="number" name="retries" min="0" max="5" value="{{ cfg.retries if cfg else 1 }}"></label>
-  <label class="check wide"><input type="checkbox" name="require_message_authenticator" value="1" {{ 'checked' if not cfg or cfg.require_message_authenticator }}> Exiger le Message-Authenticator dans les réponses (protection contre BlastRADIUS ; à décocher seulement pour un ancien serveur)</label>
+  <label class="f"><span>{{ _("Serveur RADIUS") }}</span><input type="text" name="host" required maxlength="253" value="{{ cfg.host if cfg else '' }}" placeholder="{{ _('radius.entreprise.local') }}"></label>
+  <label class="f"><span>{{ _("Port") }}</span><input type="number" name="port" min="1" max="65535" value="{{ cfg.port if cfg else 1812 }}"></label>
+  <label class="f"><span>{{ _("Secret partagé") }}</span><input type="password" name="secret" maxlength="256" autocomplete="new-password" {{ '' if cfg else 'required' }} placeholder="{{ _('inchangé si vide') if cfg else '' }}"></label>
+  <label class="f"><span>{{ _("Identifiant NAS") }}</span><input type="text" name="nas_identifier" maxlength="64" value="{{ cfg.nas_identifier if cfg else 'loco' }}"></label>
+  <label class="f"><span>{{ _("Délai de réponse (s)") }}</span><input type="number" name="timeout" min="1" max="30" value="{{ cfg.timeout if cfg else 5 }}"></label>
+  <label class="f"><span>{{ _("Nouvelles tentatives") }}</span><input type="number" name="retries" min="0" max="5" value="{{ cfg.retries if cfg else 1 }}"></label>
+  <label class="check wide"><input type="checkbox" name="require_message_authenticator" value="1" {{ 'checked' if not cfg or cfg.require_message_authenticator }}> {{ _("Exiger le Message-Authenticator dans les réponses (protection contre BlastRADIUS ; à décocher seulement pour un ancien serveur)") }}</label>
 </div>
 {% endmacro %}
 {% block content %}
 <div class="head">
   <div>
-    <h1>Annuaires</h1>
-    <p>Connexion à loco avec un compte de votre annuaire LDAP (Active Directory, OpenLDAP…) ou d’un serveur RADIUS, depuis le formulaire de connexion habituel. Chaque nouvelle identité attend une approbation dans <a href="{{ url_for('users') }}">Comptes</a>, sans aucun accès.</p>
+    <h1>{{ _("Annuaires") }}</h1>
+    <p>{{ _("Connexion à loco avec un compte de votre annuaire LDAP (Active Directory, OpenLDAP…) ou d’un serveur RADIUS, depuis le formulaire de connexion habituel. Chaque nouvelle identité attend une approbation dans <a href=\"%(v)s\">Comptes</a>, sans aucun accès.", v=url_for('users')) }}</p>
   </div>
   {% if can('sso.manage') %}
   <div class="actions">
-    <button type="button" class="btn" data-open="#add-radius">Ajouter un serveur RADIUS</button>
-    <button type="button" class="btn primary" data-open="#add-ldap">Ajouter un annuaire LDAP</button>
+    <button type="button" class="btn" data-open="#add-radius">{{ _("Ajouter un serveur RADIUS") }}</button>
+    <button type="button" class="btn primary" data-open="#add-ldap">{{ _("Ajouter un annuaire LDAP") }}</button>
   </div>
   {% endif %}
 </div>
 
 <div class="stack">
-  {% if legacy %}<div class="note warn">{{ legacy }} ancien{{ 's' if legacy > 1 }} compte{{ 's' if legacy > 1 }} OpenID Connect : cette connexion a été retirée. Dans <a href="{{ url_for('users') }}">Comptes</a>, donnez-leur un mot de passe local pour les réactiver, ou supprimez-les.</div>{% endif %}
-  <div class="note">Les comptes locaux restent toujours disponibles, et un compte local et un compte d’annuaire ne sont jamais rapprochés par leur nom. Un identifiant inconnu est essayé dans l’ordre des annuaires actifs ci-dessous.</div>
+  {% if legacy %}<div class="note warn">{{ _("%(legacy)s ancien%(v)s compte%(v)s OpenID Connect : cette connexion a été retirée. Dans <a href=\"%(v2)s\">Comptes</a>, donnez-leur un mot de passe local pour les réactiver, ou supprimez-les.", legacy=legacy, v='s' if legacy > 1, v2=url_for('users')) }}</div>{% endif %}
+  <div class="note">{{ _("Les comptes locaux restent toujours disponibles, et un compte local et un compte d’annuaire ne sont jamais rapprochés par leur nom. Un identifiant inconnu est essayé dans l’ordre des annuaires actifs ci-dessous.") }}</div>
 
   {% for item in directories %}{% set d = item.row %}{% set cfg = item.cfg %}
   <section class="panel">
     <div class="panel-h">
       <h2>{{ d.label }} <span class="tag">{{ 'RADIUS' if d.kind == 'radius' else 'LDAP' }}</span></h2>
       <div class="aside row">
-        <span class="st {{ 'ok' if d.enabled else '' }}">{{ 'actif' if d.enabled else 'désactivé' }}</span>
-        <span class="muted small">{{ d.accounts }} compte{{ 's' if d.accounts != 1 }}</span>
-        {% if not loop.first and can('sso.manage') %}<form method="post" action="{{ url_for('directory_move', directory_id=d.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm" title="Essayé avant l’annuaire précédent">Monter</button></form>{% endif %}
+        <span class="st {{ 'ok' if d.enabled else '' }}">{{ _('actif') if d.enabled else _('désactivé') }}</span>
+        <span class="muted small">{{ _("%(accounts)s compte%(v)s", accounts=d.accounts, v='s' if d.accounts != 1) }}</span>
+        {% if not loop.first and can('sso.manage') %}<form method="post" action="{{ url_for('directory_move', directory_id=d.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm" title="{{ _('Essayé avant l’annuaire précédent') }}">{{ _("Monter") }}</button></form>{% endif %}
       </div>
     </div>
     <div class="panel-b stack-sm">
-      <p class="mono small muted">{{ cfg.url if d.kind == 'ldap' else cfg.host ~ ':' ~ cfg.port }}{% if d.kind == 'ldap' %} · {{ 'compte de service ' ~ cfg.bind_dn if cfg.bind_dn else 'liaison directe ' ~ cfg.user_template }}{% endif %}</p>
+      <p class="mono small muted">{{ cfg.url if d.kind == 'ldap' else cfg.host ~ ':' ~ cfg.port }}{% if d.kind == 'ldap' %} · {{ _('compte de service %(dn)s', dn=cfg.bind_dn) if cfg.bind_dn else _('liaison directe %(template)s', template=cfg.user_template) }}{% endif %}</p>
       {% if can('sso.manage') %}
       <form method="post" action="{{ url_for('directory_test', directory_id=d.id) }}" class="row directory-test">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <input type="text" name="username" placeholder="identifiant de test" autocomplete="off" aria-label="Identifiant de test" required>
-        <input type="password" name="password" placeholder="mot de passe" autocomplete="new-password" aria-label="Mot de passe de test" required>
-        <button class="btn"><span class="spin"></span>Tester</button>
-        <span class="hint">Vérifie la connexion à l’annuaire et ce compte, sans créer de demande.</span>
+        <input type="text" name="username" placeholder="{{ _('identifiant de test') }}" autocomplete="off" aria-label="{{ _('Identifiant de test') }}" required>
+        <input type="password" name="password" placeholder="{{ _('mot de passe') }}" autocomplete="new-password" aria-label="{{ _('Mot de passe de test') }}" required>
+        <button class="btn"><span class="spin"></span>{{ _("Tester") }}</button>
+        <span class="hint">{{ _("Vérifie la connexion à l’annuaire et ce compte, sans créer de demande.") }}</span>
       </form>
-      <details class="hint"><summary>Modifier</summary>
+      <details class="hint"><summary>{{ _("Modifier") }}</summary>
         <form method="post" action="{{ url_for('directory_update', directory_id=d.id) }}" class="stack-sm">
           <input type="hidden" name="csrf" value="{{ csrf }}">
-          <label class="f"><span>Nom</span><input type="text" name="label" required maxlength="80" value="{{ d.label }}"></label>
+          <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="label" required maxlength="80" value="{{ d.label }}"></label>
           {{ ldap_fields(cfg) if d.kind == 'ldap' else radius_fields(cfg) }}
-          <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if d.enabled }}> Actif</label>
-          <div class="row-between"><button class="btn primary"><span class="spin"></span>Enregistrer</button><span class="hint">Enregistrer ferme les sessions de ses comptes.</span></div>
+          <label class="check"><input type="checkbox" name="enabled" value="1" {{ 'checked' if d.enabled }}> {{ _("Actif") }}</label>
+          <div class="row-between"><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button><span class="hint">{{ _("Enregistrer ferme les sessions de ses comptes.") }}</span></div>
         </form>
-        <form method="post" action="{{ url_for('directory_delete', directory_id=d.id) }}" data-confirm="Supprimer l’annuaire {{ d.label }} ?" data-confirm-text="Ses comptes sont désactivés et leurs sessions fermées ; ils restent dans le journal." data-confirm-ok="Supprimer"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">Supprimer cet annuaire</button></form>
+        <form method="post" action="{{ url_for('directory_delete', directory_id=d.id) }}" data-confirm="{{ _('Supprimer l’annuaire %(label)s ?', label=d.label) }}" data-confirm-text="{{ _('Ses comptes sont désactivés et leurs sessions fermées ; ils restent dans le journal.') }}" data-confirm-ok="{{ _('Supprimer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del">{{ _("Supprimer cet annuaire") }}</button></form>
       </details>
       {% endif %}
     </div>
   </section>
   {% else %}
-  <section class="panel"><div class="empty">Aucun annuaire. Seuls les comptes locaux peuvent se connecter.</div></section>
+  <section class="panel"><div class="empty">{{ _("Aucun annuaire. Seuls les comptes locaux peuvent se connecter.") }}</div></section>
   {% endfor %}
 </div>
 
 {% if can('sso.manage') %}
 <dialog id="add-ldap" class="wide-dialog">
   <form method="post" action="{{ url_for('directory_add') }}">
-    <div class="dlg-h"><h2>Ajouter un annuaire LDAP</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-h"><h2>{{ _("Ajouter un annuaire LDAP") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="ldap">
       <div class="grid2">
-        <label class="f"><span>Nom affiché</span><input type="text" name="label" required maxlength="80" placeholder="Active Directory de l’entreprise"></label>
-        <label class="f"><span>Modèle</span><select data-preset>{% for key, (name, filter_, name_attr, mail_attr) in presets.items() %}<option data-fill='{{ {"user_filter": filter_, "name_attr": name_attr, "mail_attr": mail_attr}|tojson|forceescape }}'>{{ name }}</option>{% endfor %}</select></label>
+        <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="label" required maxlength="80" placeholder="{{ _('Active Directory de l’entreprise') }}"></label>
+        <label class="f"><span>{{ _("Modèle") }}</span><select data-preset>{% for key, (name, filter_, name_attr, mail_attr) in presets.items() %}<option data-fill='{{ {"user_filter": filter_, "name_attr": name_attr, "mail_attr": mail_attr}|tojson|forceescape }}'>{{ name }}</option>{% endfor %}</select></label>
       </div>
       {{ ldap_fields() }}
-      <label class="check"><input type="checkbox" name="enabled" value="1" checked> Actif dès l’ajout</label>
+      <label class="check"><input type="checkbox" name="enabled" value="1" checked> {{ _("Actif dès l’ajout") }}</label>
     </div>
-    <div class="dlg-f"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary"><span class="spin"></span>Ajouter</button></div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Ajouter") }}</button></div>
   </form>
 </dialog>
 <dialog id="add-radius" class="wide-dialog">
   <form method="post" action="{{ url_for('directory_add') }}">
-    <div class="dlg-h"><h2>Ajouter un serveur RADIUS</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-h"><h2>{{ _("Ajouter un serveur RADIUS") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="radius">
-      <label class="f"><span>Nom affiché</span><input type="text" name="label" required maxlength="80" placeholder="NPS de l’entreprise"></label>
+      <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="label" required maxlength="80" placeholder="{{ _('NPS de l’entreprise') }}"></label>
       {{ radius_fields() }}
-      <p class="hint">Déclarez loco comme client RADIUS (son adresse et ce secret) sur le serveur. Authentification PAP ; les défis (OTP) ne sont pas pris en charge.</p>
-      <label class="check"><input type="checkbox" name="enabled" value="1" checked> Actif dès l’ajout</label>
+      <p class="hint">{{ _("Déclarez loco comme client RADIUS (son adresse et ce secret) sur le serveur. Authentification PAP ; les défis (OTP) ne sont pas pris en charge.") }}</p>
+      <label class="check"><input type="checkbox" name="enabled" value="1" checked> {{ _("Actif dès l’ajout") }}</label>
     </div>
-    <div class="dlg-f"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary"><span class="spin"></span>Ajouter</button></div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Ajouter") }}</button></div>
   </form>
 </dialog>
 {% endif %}

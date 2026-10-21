@@ -1,4 +1,6 @@
 /* Le serveur valide les droits et leurs prérequis ; le formulaire fonctionne aussi sans JS. */
+// Traductions fournies par app.js.
+const tr = window.t || ((s, v) => Object.keys(v || {}).reduce((o, k) => o.split('%(' + k + ')s').join(v[k]), s));
 (() => {
   const form = document.querySelector('[data-permission-form]');
   if (!form) return;
@@ -53,8 +55,8 @@
         toggle.checked = eligible.length > 0 && checked === eligible.length;
         toggle.indeterminate = checked > 0 && checked < eligible.length;
         toggle.disabled = eligible.length === 0;
-        toggle.nextElementSibling.textContent = toggle.checked ? 'Tout désélectionner' : 'Tout sélectionner';
-        toggle.title = 'Agit sur les droits visibles de cette catégorie.';
+        toggle.nextElementSibling.textContent = toggle.checked ? tr('Tout désélectionner') : tr('Tout sélectionner');
+        toggle.title = tr('Agit sur les droits visibles de cette catégorie.');
       }
     }
     form.querySelector('[data-permission-empty]').hidden = visible > 0;
@@ -75,7 +77,10 @@
       if (!target.checked) removeDependents();
     }
     const automatic = [...boxes].filter(([key, box]) => !directlyChanged.has(key) && before.get(key) !== box.checked).length;
-    if (directlyChanged.size) feedback.textContent = automatic ? `${automatic} ${automatic === 1 ? "droit lié ajusté" : "droits liés ajustés"} automatiquement, y compris dans les autres catégories.` : 'Les droits nécessaires à une action sont sélectionnés automatiquement.';
+    if (directlyChanged.size) feedback.textContent = automatic
+      ? (automatic === 1 ? tr('%(num)s droit lié ajusté automatiquement, y compris dans les autres catégories.', { num: automatic })
+                         : tr('%(num)s droits liés ajustés automatiquement, y compris dans les autres catégories.', { num: automatic }))
+      : tr('Les droits nécessaires à une action sont sélectionnés automatiquement.');
     refresh();
   });
   search.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });

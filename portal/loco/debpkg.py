@@ -8,6 +8,7 @@ import io
 import lzma
 import os
 import tarfile
+from .i18n import _
 
 try:  # Python 3.14 et plus, compilé avec zstd
     from compression import zstd as _zstd
@@ -27,22 +28,22 @@ _FIELD_ORDER = ("Package", "Source", "Version", "Architecture", "Maintainer", "I
 def _ar_members(stream):
     """Membres d'une archive ar (format des .deb)."""
     if stream.read(8) != b"!<arch>\n":
-        raise ValueError("ce fichier n'est pas un paquet .deb valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .deb valide"))
     pos = 8
     length = os.fstat(stream.fileno()).st_size
     while pos + 60 <= length:
         stream.seek(pos)
         header = stream.read(60)
         if len(header) != 60 or header[58:60] != b"`\n":
-            raise ValueError("en-tête ar invalide")
+            raise ValueError(_('en-tête ar invalide'))
         name = header[:16].decode("ascii", "replace").strip().rstrip("/")
         try:
             size = int(header[48:58].decode("ascii").strip())
         except ValueError:
-            raise ValueError("ce fichier n'est pas un paquet .deb valide") from None
+            raise ValueError(_("ce fichier n'est pas un paquet .deb valide")) from None
         start = pos + 60
         if size < 0 or start + size > length:
-            raise ValueError("membre ar tronqué")
+            raise ValueError(_('membre ar tronqué'))
         yield name, size
         pos = start + size + (size % 2)
 
@@ -59,11 +60,11 @@ def _decompress(name, blob):
         elif _zstandard is not None:
             reader = _zstandard.ZstdDecompressor().stream_reader(io.BytesIO(blob))
         else:
-            raise ValueError("paquet compressé en zstd : Python 3.14 avec zstd, ou le module zstandard, est requis")
+            raise ValueError(_('paquet compressé en zstd : Python 3.14 avec zstd, ou le module zstandard, est requis'))
     elif name.endswith(".tar"):
         reader = io.BytesIO(blob)
     else:
-        raise ValueError(f"compression non prise en charge : {name}")
+        raise ValueError(_('compression non prise en charge : %(name)s', name=name))
     chunks, total = [], 0
     with reader:
         # Lecture en boucle : certains lecteurs rendent moins que demandé avant la fin.
@@ -75,7 +76,7 @@ def _decompress(name, blob):
             total += len(chunk)
     control = b"".join(chunks)
     if len(control) > limit:
-        raise ValueError("archive de contrôle trop volumineuse (maximum 64 Mio)")
+        raise ValueError(_('archive de contrôle trop volumineuse (maximum 64 Mio)'))
     return control
 
 
@@ -89,16 +90,16 @@ def _control_text(path):
                 version = size <= 16 and f.read(size).strip() == b"2.0"
             elif name.startswith("control.tar"):
                 if size > 32 << 20:
-                    raise ValueError("archive de contrôle trop volumineuse (maximum 32 Mio compressés)")
+                    raise ValueError(_('archive de contrôle trop volumineuse (maximum 32 Mio compressés)'))
                 control = _decompress(name, f.read(size))
                 break
     if not version or control is None:
-        raise ValueError("ce fichier n'est pas un paquet .deb valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .deb valide"))
     with tarfile.open(fileobj=io.BytesIO(control)) as tar:
         for member in tar.getmembers():
             if member.name in ("./control", "control") and member.isfile():
                 return tar.extractfile(member).read().decode("utf-8")
-    raise ValueError("fichier control absent du paquet")
+    raise ValueError(_('fichier control absent du paquet'))
 
 
 def control_text(path):
@@ -111,7 +112,7 @@ def control_text(path):
     try:
         return _control_text(path)
     except errors as exc:
-        raise ValueError("archive de contrôle .deb invalide") from exc
+        raise ValueError(_('archive de contrôle .deb invalide')) from exc
 
 
 def parse_stanza(text):
@@ -134,7 +135,7 @@ def parse_stanza(text):
 def deb_fields(path):
     fields = parse_stanza(control_text(path))
     if not all(fields.get(k) for k in ("Package", "Version", "Architecture")):
-        raise ValueError("champs Package/Version/Architecture manquants")
+        raise ValueError(_('champs Package/Version/Architecture manquants'))
     return fields
 
 
@@ -189,7 +190,7 @@ def release_file(directory, origin, label, suite, codename):
         with open(os.path.join(directory, name), "rb") as f:
             data = f.read()
         entries.append((name, len(data), {label_: algo(data).hexdigest() for label_, algo in algorithms}))
-    for label_, _ in algorithms:
+    for label_, _algo in algorithms:
         lines.append(f"{label_}:")
         lines += [f" {digests[label_]} {size:>16} {name}" for name, size, digests in entries]
     return ("\n".join(lines) + "\n").encode("utf-8")

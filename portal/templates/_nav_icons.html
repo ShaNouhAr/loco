@@ -57,21 +57,29 @@
 {%- endmacro %}
 
 {% macro appearance_choices() -%}
-<div class="menu-label">Thème</div>
-{% for key, label in [('oled', 'OLED (noir)'), ('dim', 'Sombre doux'), ('light', 'Clair')] %}
+<div class="menu-label">{{ _("Thème") }}</div>
+{% for key, label in [('oled', _('OLED (noir)')), ('dim', _('Sombre doux')), ('light', _('Clair'))] %}
 <button type="button" class="menu-item theme-choice" data-set-theme="{{ key }}" role="menuitemradio" aria-checked="false"><span class="theme-swatch swatch-{{ key }}" aria-hidden="true"></span>{{ label }}</button>
 {% endfor %}
-<div class="menu-label">Couleur d'accent</div>
+<div class="menu-label">{{ _("Couleur d'accent") }}</div>
 <div class="accent-row">
-{% for key, label in [('neutral', 'Neutre'), ('blue', 'Bleu'), ('green', 'Vert'), ('violet', 'Violet'), ('orange', 'Orange'), ('pink', 'Rose')] %}
+{% for key, label in [('neutral', _('Neutre')), ('blue', _('Bleu')), ('green', _('Vert')), ('violet', _('Violet')), ('orange', _('Orange')), ('pink', _('Rose'))] %}
 <button type="button" class="accent-choice accent-{{ key }}" data-set-accent="{{ key }}" role="menuitemradio" aria-checked="false" aria-label="{{ label }}" title="{{ label }}"></button>
 {% endfor %}
 </div>
+<div class="menu-label">{{ _("Langue") }}</div>
+{% for key, name in langs.items() %}
+<form method="post" action="{{ url_for('set_language') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="lang" value="{{ key }}">
+  <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+  <button class="menu-item lang-choice" role="menuitemradio" aria-checked="{{ 'true' if lang == key else 'false' }}" lang="{{ key }}">{{ name }}</button>
+</form>
+{% endfor %}
 {%- endmacro %}
 
 {% macro theme_toggle() -%}
 <details class="menu theme-menu">
-  <summary class="theme-toggle" aria-label="Apparence : thème et couleur d'accent" title="Apparence">{{ nav_icon('palette') }}</summary>
+  <summary class="theme-toggle" aria-label="{{ _("Apparence : thème, couleur d'accent et langue") }}" title="{{ _("Apparence") }}">{{ nav_icon('palette') }}</summary>
   <div class="menu-list" role="menu">{{ appearance_choices() }}</div>
 </details>
 {%- endmacro %}

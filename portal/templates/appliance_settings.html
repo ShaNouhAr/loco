@@ -1,60 +1,60 @@
 {% extends "base.html" %}
-{% block title %}Configuration{% endblock %}
+{% block title %}{{ _("Configuration") }}{% endblock %}
 {% block content %}
 <div class="head">
   <div>
-    <h1>Configuration</h1>
-    <p>Réseaux autorisés, fonctions, caches et sauvegardes. Sur la console : <code>loco-config</code>.</p>
+    <h1>{{ _("Configuration") }}</h1>
+    <p>{{ _("Réseaux autorisés, fonctions, caches et sauvegardes. Sur la console : <code>loco-config</code>.") }}</p>
   </div>
 </div>
 
 <div class="stack">
   {% if not agent %}
-  <p class="note err">L'agent d'administration ne répond pas : les réglages ne peuvent pas être appliqués. Sur la console : <code>rc-service loco-agent restart</code>.</p>
+  <p class="note err">{{ _("L'agent d'administration ne répond pas : les réglages ne peuvent pas être appliqués. Sur la console : <code>rc-service loco-agent restart</code>.") }}</p>
   {% elif running %}
-  <p class="note warn">Une opération est en cours : <a href="{{ url_for('appliance_updates', operation=running.id) }}">suivre son journal</a>.</p>
+  <p class="note warn">{{ _("Une opération est en cours : <a href=\"%(v)s\">suivre son journal</a>.", v=url_for('appliance_updates', operation=running.id)) }}</p>
   {% endif %}
 
   <div class="cols w21">
-    <form class="panel appliance-form" method="post" action="{{ url_for('appliance_settings_post') }}" data-ajax data-confirm="Appliquer les réglages ?" data-confirm-text="L'installation est relancée avec les nouvelles valeurs : les services redémarrent quelques secondes." data-confirm-ok="Appliquer">
+    <form class="panel appliance-form" method="post" action="{{ url_for('appliance_settings_post') }}" data-ajax data-confirm="{{ _('Appliquer les réglages ?') }}" data-confirm-text="{{ _('L\'installation est relancée avec les nouvelles valeurs : les services redémarrent quelques secondes.') }}" data-confirm-ok="{{ _('Appliquer') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <div class="panel-h"><h2>Accès</h2></div>
+      <div class="panel-h"><h2>{{ _("Accès") }}</h2></div>
       <div class="panel-b grid2">
         <label class="f wide"><span>{{ settings.ALLOW[0] }}</span><input type="text" name="ALLOW" value="{{ conf.ALLOW }}" required spellcheck="false" class="mono">
-          <span class="hint">Postes autorisés à utiliser les dépôts et les caches, séparés par des espaces (ex. 192.168.10.0/24 10.0.0.0/8).</span></label>
+          <span class="hint">{{ _("Postes autorisés à utiliser les dépôts et les caches, séparés par des espaces (ex. 192.168.10.0/24 10.0.0.0/8).") }}</span></label>
         <label class="f wide"><span>{{ settings.ADMIN_ALLOW[0] }}</span><input type="text" name="ADMIN_ALLOW" value="{{ conf.ADMIN_ALLOW }}" required spellcheck="false" class="mono">
-          <span class="hint">Accès au portail et aux métriques. Doit inclure votre adresse : <span class="mono">{{ client_ip }}</span>.</span></label>
-        <label class="f"><span>{{ settings.HTTP_ENABLED[0] }}</span><select name="HTTP_ENABLED"><option value="1" {{ 'selected' if conf.HTTP_ENABLED == '1' }}>activé</option><option value="0" {{ 'selected' if conf.HTTP_ENABLED != '1' }}>désactivé (HTTPS seul)</option></select></label>
-        <label class="f"><span>{{ settings.UPSTREAM_PROXY[0] }}</span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="accès direct" spellcheck="false" class="mono"></label>
+          <span class="hint">{{ _("Accès au portail et aux métriques. Doit inclure votre adresse : <span class=\"mono\">%(client_ip)s</span>.", client_ip=client_ip) }}</span></label>
+        <label class="f"><span>{{ settings.HTTP_ENABLED[0] }}</span><select name="HTTP_ENABLED"><option value="1" {{ 'selected' if conf.HTTP_ENABLED == '1' }}>{{ _("activé") }}</option><option value="0" {{ 'selected' if conf.HTTP_ENABLED != '1' }}>{{ _("désactivé (HTTPS seul)") }}</option></select></label>
+        <label class="f"><span>{{ settings.UPSTREAM_PROXY[0] }}</span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="{{ _('accès direct') }}" spellcheck="false" class="mono"></label>
       </div>
-      <div class="panel-h"><h2>Fonctions</h2></div>
+      <div class="panel-h"><h2>{{ _("Fonctions") }}</h2></div>
       <div class="panel-b grid2">
         {% for key in ('WU_ENABLED', 'RPM_ENABLED', 'FLATPAK_ENABLED') %}
-        <label class="f"><span>{{ settings[key][0] }}</span><select name="{{ key }}"><option value="1" {{ 'selected' if conf[key] == '1' }}>activé</option><option value="0" {{ 'selected' if conf[key] != '1' }}>désactivé</option></select></label>
+        <label class="f"><span>{{ settings[key][0] }}</span><select name="{{ key }}"><option value="1" {{ 'selected' if conf[key] == '1' }}>{{ _("activé") }}</option><option value="0" {{ 'selected' if conf[key] != '1' }}>{{ _("désactivé") }}</option></select></label>
         {% endfor %}
         <label class="f"><span>{{ settings.RESOLVERS[0] }}</span><input type="text" name="RESOLVERS" value="{{ conf.RESOLVERS }}" required spellcheck="false" class="mono"></label>
       </div>
-      <div class="panel-h"><h2>Stockage</h2></div>
+      <div class="panel-h"><h2>{{ _("Stockage") }}</h2></div>
       <div class="panel-b grid2">
         {% for key in ('APT_CACHE_SIZE', 'WU_CACHE_SIZE', 'RPM_CACHE_SIZE', 'FLATPAK_CACHE_SIZE') %}
-        <label class="f"><span>{{ settings[key][0] }}</span><input type="text" name="{{ key }}" value="{{ conf[key] }}" placeholder="automatique" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono"></label>
+        <label class="f"><span>{{ settings[key][0] }}</span><input type="text" name="{{ key }}" value="{{ conf[key] }}" placeholder="{{ _('automatique') }}" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono"></label>
         {% endfor %}
         <label class="f"><span>{{ settings.MAX_UPLOAD[0] }}</span><input type="text" name="MAX_UPLOAD" value="{{ conf.MAX_UPLOAD }}" required pattern="[0-9]+[kKmMgG]?" spellcheck="false" class="mono"></label>
         <label class="f"><span>{{ settings.BACKUP_KEEP[0] }}</span><input type="text" name="BACKUP_KEEP" value="{{ conf.BACKUP_KEEP }}" required pattern="[0-9]{1,3}" inputmode="numeric" class="mono"></label>
       </div>
-      <div class="panel-f row"><button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>Appliquer</button><span class="hint">Tailles : 50g, 500m… Vide : automatique.</span></div>
+      <div class="panel-f row"><button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>{{ _("Appliquer") }}</button><span class="hint">{{ _("Tailles : 50g, 500m… Vide : automatique.") }}</span></div>
     </form>
 
     <section class="panel">
-      <div class="panel-h"><h2>Réseau</h2><div class="aside">lecture seule</div></div>
+      <div class="panel-h"><h2>{{ _("Réseau") }}</h2><div class="aside">{{ _("lecture seule") }}</div></div>
       <dl class="kv">
-        <dt>Nom</dt><dd class="mono">{{ network.hostname }}</dd>
-        <dt>Adresses</dt><dd class="mono">{% for a in network.addresses %}{{ a }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
-        <dt>Configuration</dt><dd>{{ network.mode or '—' }}</dd>
-        <dt>Passerelle</dt><dd class="mono">{{ network.gateway or '—' }}</dd>
+        <dt>{{ _("Nom") }}</dt><dd class="mono">{{ network.hostname }}</dd>
+        <dt>{{ _("Adresses") }}</dt><dd class="mono">{% for a in network.addresses %}{{ a }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
+        <dt>{{ _("Configuration") }}</dt><dd>{{ network.mode or '—' }}</dd>
+        <dt>{{ _("Passerelle") }}</dt><dd class="mono">{{ network.gateway or '—' }}</dd>
         <dt>DNS</dt><dd class="mono">{{ network.dns|join(' ') or '—' }}</dd>
       </dl>
-      <div class="panel-f">Adresse, nom et mot de passe root se changent sur la console du serveur : <code>setup-loco</code>. Changer l'adresse coupe cette page et impose de mettre à jour les postes.</div>
+      <div class="panel-f">{{ _("Adresse, nom et mot de passe root se changent sur la console du serveur : <code>setup-loco</code>. Changer l'adresse coupe cette page et impose de mettre à jour les postes.") }}</div>
     </section>
   </div>
 </div>

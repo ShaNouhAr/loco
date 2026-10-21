@@ -12,11 +12,12 @@ from flask import abort, flash, redirect, render_template, request, url_for
 from werkzeug.security import generate_password_hash
 
 from . import app, permissions
+from .i18n import L_, _
 from .auth import audit, can_assign, lock_access, login_required, require
 from .db import db
 from .directory_protocols import DirectoryError, USERNAME_RE, ldap_authenticate, radius_authenticate
 
-KINDS = {"ldap": "LDAP / Active Directory", "radius": "RADIUS"}
+KINDS = {"ldap": L_("LDAP / Active Directory"), "radius": "RADIUS"}
 # Modèles LDAP : filtre de recherche et attributs habituels.
 LDAP_PRESETS = {
     "ad": ("Active Directory", "(&(objectClass=user)(sAMAccountName={username}))", "displayName", "mail"),
@@ -146,15 +147,15 @@ def _values(kind, existing=None):
     old = json.loads(existing["config"]) if existing else {}
     label = request.form.get("label", "").strip()
     if not label or len(label) > 80 or any(ord(c) < 32 for c in label):
-        raise ValueError("Nom de 1 à 80 caractères requis.")
+        raise ValueError(_('Nom de 1 à 80 caractères requis.'))
     if kind == "ldap":
         url = request.form.get("url", "").strip()
         parts = urllib.parse.urlsplit(url)
         starttls = request.form.get("starttls") == "1"
         if parts.scheme not in ("ldap", "ldaps") or not parts.hostname or parts.path not in ("", "/") or parts.query:
-            raise ValueError("Adresse ldaps://hôte:636 ou ldap://hôte:389 attendue.")
+            raise ValueError(_('Adresse ldaps://hôte:636 ou ldap://hôte:389 attendue.'))
         if parts.scheme == "ldap" and not starttls:
-            raise ValueError("Sans ldaps://, activez StartTLS : le mot de passe ne doit jamais circuler en clair.")
+            raise ValueError(_('Sans ldaps://, activez StartTLS : le mot de passe ne doit jamais circuler en clair.'))
         cfg = {"url": url, "starttls": starttls and parts.scheme == "ldap", "base_dn": request.form.get("base_dn", "").strip()[:500],
                "user_filter": request.form.get("user_filter", "").strip()[:500] or "(uid={username})",
                "bind_dn": request.form.get("bind_dn", "").strip()[:500],
@@ -166,19 +167,19 @@ def _values(kind, existing=None):
         try:
             encode_filter(cfg["user_filter"].replace("{username}", "x"))
         except ValueError as e:
-            raise ValueError(f"Filtre de recherche : {e}.")
+            raise ValueError(_('Filtre de recherche : %(e)s.', e=e))
         if "{username}" not in cfg["user_filter"]:
-            raise ValueError("Le filtre doit contenir {username}.")
+            raise ValueError(_('Le filtre doit contenir {username}.'))
         if cfg["bind_dn"] and not cfg["base_dn"]:
-            raise ValueError("Avec un compte de service, la base de recherche est requise.")
+            raise ValueError(_('Avec un compte de service, la base de recherche est requise.'))
         if not cfg["bind_dn"] and "{username}" not in cfg["user_template"]:
-            raise ValueError("Sans compte de service, le modèle de liaison doit contenir {username}.")
+            raise ValueError(_('Sans compte de service, le modèle de liaison doit contenir {username}.'))
         if cfg["ca_pem"] and "BEGIN CERTIFICATE" not in cfg["ca_pem"]:
-            raise ValueError("Autorité : certificat PEM attendu.")
+            raise ValueError(_('Autorité : certificat PEM attendu.'))
         password = request.form.get("bind_password", "")
         cfg["bind_password"] = _seal(password) if password else old.get("bind_password", "")
         if cfg["bind_dn"] and not cfg["bind_password"]:
-            raise ValueError("Mot de passe du compte de service requis.")
+            raise ValueError(_('Mot de passe du compte de service requis.'))
     else:
         host = request.form.get("host", "").strip()
         try:
@@ -186,16 +187,16 @@ def _values(kind, existing=None):
             timeout = int(request.form.get("timeout") or 5)
             retries = int(request.form.get("retries") or 1)
         except ValueError:
-            raise ValueError("Port, délai et nouvelles tentatives : nombres attendus.")
+            raise ValueError(_('Port, délai et nouvelles tentatives : nombres attendus.'))
         if not re.fullmatch(r"[A-Za-z0-9.:-]{1,253}", host) or not 1 <= port <= 65535 or not 1 <= timeout <= 30 or not 0 <= retries <= 5:
-            raise ValueError("Serveur, port (1-65535), délai (1-30 s) ou nouvelles tentatives (0-5) invalides.")
+            raise ValueError(_('Serveur, port (1-65535), délai (1-30 s) ou nouvelles tentatives (0-5) invalides.'))
         secret = request.form.get("secret", "")
         cfg = {"host": host, "port": port, "timeout": timeout, "retries": retries,
                "nas_identifier": request.form.get("nas_identifier", "").strip()[:64] or "loco",
                "require_message_authenticator": request.form.get("require_message_authenticator") == "1",
                "secret": _seal(secret) if secret else old.get("secret", "")}
         if not cfg["secret"]:
-            raise ValueError("Secret partagé requis.")
+            raise ValueError(_('Secret partagé requis.'))
     return label, cfg
 
 
@@ -232,7 +233,7 @@ def directory_add():
                   datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
     audit("sso.fournisseur.ajout", f"{label} ({KINDS[kind]})", commit=False)
     conn.commit()
-    flash("Annuaire ajouté. Testez-le avec un compte de l'annuaire avant de l'annoncer aux utilisateurs.", "ok")
+    flash(_("Annuaire ajouté. Testez-le avec un compte de l'annuaire avant de l'annoncer aux utilisateurs."), "ok")
     return redirect(url_for("sso_settings"))
 
 
@@ -256,7 +257,7 @@ def directory_update(directory_id):
                  (label, json.dumps(cfg), int(request.form.get("enabled") == "1"), directory_id))
     audit("sso.fournisseur.modification", label, commit=False)
     conn.commit()
-    flash("Annuaire enregistré ; les sessions de ses comptes ont été fermées.", "ok")
+    flash(_('Annuaire enregistré ; les sessions de ses comptes ont été fermées.'), "ok")
     return redirect(url_for("sso_settings"))
 
 
@@ -271,7 +272,7 @@ def directory_delete(directory_id):
     conn.execute("DELETE FROM auth_directories WHERE id=?", (directory_id,))
     audit("sso.fournisseur.suppression", row["label"], commit=False)
     conn.commit()
-    flash("Annuaire supprimé ; ses comptes sont désactivés.", "ok")
+    flash(_('Annuaire supprimé ; ses comptes sont désactivés.'), "ok")
     return redirect(url_for("sso_settings"))
 
 
@@ -301,11 +302,12 @@ def directory_test(directory_id):
     try:
         accepted, info = authenticate(row, username, password)
     except (DirectoryError, ValueError, OSError) as e:
-        result = {"ok": False, "message": f"Annuaire injoignable ou mal configuré : {e}"}
+        result = {"ok": False, "message": _("Annuaire injoignable ou mal configuré : %(e)s", e=e)}
     else:
-        result = ({"ok": True, "message": "Identifiants acceptés" + (f" : {info['display_name']}" if info.get("display_name") else "")
-                   + (f" <{info['email']}>" if info.get("email") else "") + "."} if accepted
-                  else {"ok": False, "message": "Annuaire joint, mais identifiants refusés (ou compte introuvable)."})
+        who = (info.get("display_name") or "") + (f" <{info['email']}>" if info.get("email") else "")
+        result = ({"ok": True, "message": _("Identifiants acceptés : %(who)s.", who=who.strip()) if who.strip()
+                   else _("Identifiants acceptés.")} if accepted
+                  else {"ok": False, "message": _("Annuaire joint, mais identifiants refusés (ou compte introuvable).")})
     audit("sso.test", f"{row['label']} : {username or '—'} ({'accepté' if result['ok'] else 'refusé'})", commit=False)
     db().commit()
     flash(result["message"], "ok" if result["ok"] else "error")
@@ -326,11 +328,11 @@ def users_approve(user_id):
         abort(403)
     if not conn.execute("SELECT 1 FROM directory_identities i JOIN auth_directories d ON d.id=i.directory_id "
                         "WHERE i.user_id=? AND d.enabled=1", (user_id,)).fetchone():
-        abort(400, "L'annuaire doit être actif avant l'approbation.")
+        abort(400, _("L'annuaire doit être actif avant l'approbation."))
     conn.execute("UPDATE users SET role=?,disabled=0,pending=0 WHERE id=?", (role, user_id))
     permissions.revoke(conn, user_id)
     audit("sso.approbation", f"{row['username']} : {permissions.role_labels(conn)[role]}", commit=False)
     conn.commit()
-    flash("Compte approuvé. L'utilisateur peut maintenant se connecter avec son identifiant d'annuaire.", "ok")
+    flash(_("Compte approuvé. L'utilisateur peut maintenant se connecter avec son identifiant d'annuaire."), "ok")
     return redirect(url_for("users"))
 

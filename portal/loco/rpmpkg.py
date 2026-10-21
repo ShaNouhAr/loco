@@ -8,6 +8,7 @@ import re
 import struct
 import time
 from xml.sax.saxutils import escape, quoteattr
+from .i18n import _
 
 _LEAD = 96
 _HEADER_MAGIC = b"\x8e\xad\xe8\x01"
@@ -37,38 +38,38 @@ CHANGELOG_LIMIT = 10
 def _header(data, offset):
     """En-tête RPM à partir de offset : (dictionnaire étiquette → valeur, offset de fin)."""
     if len(data) < offset + 16 or data[offset:offset + 4] != _HEADER_MAGIC:
-        raise ValueError("ce fichier n'est pas un paquet .rpm valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .rpm valide"))
     count, size = struct.unpack(">II", data[offset + 8:offset + 16])
     index = offset + 16
     store = index + count * 16
     end = store + size
     if count > 100000 or end > len(data):
-        raise ValueError("ce fichier n'est pas un paquet .rpm valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .rpm valide"))
     tags = {}
     for i in range(count):
         tag, kind, off, n = struct.unpack(">IIII", data[index + i * 16:index + i * 16 + 16])
         pos = store + off
         if off > size:
-            raise ValueError("offset d'en-tête RPM invalide")
+            raise ValueError(_("offset d'en-tête RPM invalide"))
         if kind in (6, 8, 9):                                # chaîne(s)
             if n > size:
-                raise ValueError("tableau d'en-tête RPM invalide")
+                raise ValueError(_("tableau d'en-tête RPM invalide"))
             values = []
-            for _ in range(n if kind != 6 else 1):
+            for _item in range(n if kind != 6 else 1):
                 stop = data.find(b"\0", pos, end)
                 if stop < 0:
-                    raise ValueError("chaîne d'en-tête RPM tronquée")
+                    raise ValueError(_("chaîne d'en-tête RPM tronquée"))
                 values.append(data[pos:stop].decode("utf-8", "replace"))
                 pos = stop + 1
             tags[tag] = values[0] if kind == 6 else values
         elif kind in (2, 3, 4, 5):                           # entiers
             width, fmt = {2: (1, "B"), 3: (2, "H"), 4: (4, "I"), 5: (8, "Q")}[kind]
             if pos + width * n > end:
-                raise ValueError("tableau d'en-tête RPM tronqué")
+                raise ValueError(_("tableau d'en-tête RPM tronqué"))
             tags[tag] = list(struct.unpack(f">{n}{fmt}", data[pos:pos + width * n]))
         elif kind == 7:
             if pos + n > end:
-                raise ValueError("donnée d'en-tête RPM tronquée")
+                raise ValueError(_("donnée d'en-tête RPM tronquée"))
             tags[tag] = data[pos:pos + n]
     return tags, end
 
@@ -77,17 +78,17 @@ def read_rpm(path):
     """En-têtes d'un paquet : (en-tête principal, signature, début et fin de l'en-tête principal)."""
     with open(path, "rb") as f:
         if f.read(4) != b"\xed\xab\xee\xdb":
-            raise ValueError("ce fichier n'est pas un paquet .rpm valide")
+            raise ValueError(_("ce fichier n'est pas un paquet .rpm valide"))
 
         def read_header(offset):
             f.seek(offset)
             prefix = f.read(16)
             if len(prefix) != 16 or prefix[:4] != _HEADER_MAGIC:
-                raise ValueError("en-tête RPM tronqué ou invalide")
+                raise ValueError(_('en-tête RPM tronqué ou invalide'))
             count, size = struct.unpack(">II", prefix[8:16])
             length = count * 16 + size
             if count > 100000 or length > 64 << 20:
-                raise ValueError("en-tête RPM trop volumineux")
+                raise ValueError(_('en-tête RPM trop volumineux'))
             tags, end = _header(prefix + f.read(length), 0)
             return tags, offset + end
 
@@ -110,9 +111,9 @@ def rpm_fields(path):
     arch = _one(header, ARCH)
     source = _one(header, SOURCERPM, None)
     if not name or not version:
-        raise ValueError("ce fichier n'est pas un paquet .rpm valide")
+        raise ValueError(_("ce fichier n'est pas un paquet .rpm valide"))
     if not source or arch in ("src", "nosrc"):
-        raise ValueError("les paquets source (.src.rpm) ne sont pas publiés")
+        raise ValueError(_('les paquets source (.src.rpm) ne sont pas publiés'))
     return {"name": name, "version": version, "release": release, "arch": arch}
 
 

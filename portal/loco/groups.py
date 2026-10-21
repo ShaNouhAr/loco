@@ -5,6 +5,7 @@ import zipfile
 from flask import abort, flash, render_template, request
 
 from . import app, fleet
+from .i18n import _
 from .auth import audit, lock_access, login_required, require
 from .db import db
 from .util import back
@@ -12,11 +13,11 @@ from .util import back
 
 def identifiers(values, limit=500):
     if len(values) > limit:
-        abort(400, "Sélection trop volumineuse.")
+        abort(400, _('Sélection trop volumineuse.'))
     try:
         selected = list(dict.fromkeys(int(value) for value in values))
     except (ValueError, TypeError):
-        abort(400, "Identifiant de sélection invalide.")
+        abort(400, _('Identifiant de sélection invalide.'))
     if any(value <= 0 for value in selected):
         abort(400)
     return selected
@@ -99,13 +100,13 @@ def _save(kind, group_id):
         _group(kind, group_id)
     name, description = request.form.get("name", "").strip(), request.form.get("description", "").strip()
     if not name or len(name) > 80 or len(description) > 500 or any(ord(c) < 32 for c in name):
-        abort(400, "Indiquez un nom de groupe de 1 à 80 caractères.")
+        abort(400, _('Indiquez un nom de groupe de 1 à 80 caractères.'))
     selected = identifiers(request.form.getlist("members"))
     table, member_table, column, entities = (("software_groups", "software_group_members", "app_id", "win_apps") if software
                                            else ("device_groups", "device_group_members", "device_id", "devices"))
     valid = {r[0] for r in conn.execute(f"SELECT id FROM {entities}" + ("" if software else " WHERE state!='removed'"))}
     if not set(selected) <= valid:
-        abort(400, "Un membre a été supprimé : rechargez la page.")
+        abort(400, _('Un membre a été supprimé : rechargez la page.'))
     try:
         if group_id:
             conn.execute(f"UPDATE {table} SET name=?,description=?,updated_at=? WHERE id=?", (name, description, fleet._now(), group_id))
@@ -114,7 +115,7 @@ def _save(kind, group_id):
                                     (name, description, fleet._now())).lastrowid
     except sqlite3.IntegrityError:
         conn.rollback()
-        flash("Ce nom de groupe existe déjà.", "error")
+        flash(_('Ce nom de groupe existe déjà.'), "error")
         return back("software_groups" if software else "fleet_groups")
     conn.execute(f"DELETE FROM {member_table} WHERE group_id=?", (group_id,))
     for position, entity_id in enumerate(selected):
@@ -124,7 +125,7 @@ def _save(kind, group_id):
             conn.execute(f"INSERT INTO {member_table} (group_id,{column}) VALUES (?,?)", (group_id, entity_id))
     audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {len(selected)} membre(s)", commit=False)
     conn.commit()
-    flash("Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.", "ok")
+    flash(_('Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.'), "ok")
     return back("software_group_editor" if software else "fleet_group_editor", group_id=group_id)
 
 
@@ -136,7 +137,7 @@ def _delete(kind, group_id):
     conn.execute(f"DELETE FROM {table} WHERE id=?", (group_id,))
     audit("groupes.suppression", f"{kind} : {group['name']}", commit=False)
     conn.commit()
-    flash("Groupe supprimé. Les appareils, logiciels et déploiements sont conservés.", "ok")
+    flash(_('Groupe supprimé. Les appareils, logiciels et déploiements sont conservés.'), "ok")
     return back("software_groups" if software else "fleet_groups")
 
 
@@ -235,7 +236,7 @@ def store_group_attach(package_id):
         try:
             row = winget.import_package(package_id)
         except (OSError, ValueError, sqlite3.Error, zipfile.BadZipFile) as e:
-            flash(f"Import impossible : {e}", "error")
+            flash(_('Import impossible : %(e)s', e=e), "error")
             return back("software_store_detail", package_id=package_id)
     conn = lock_access("windows.groups")
     group = _group("software", group_id)

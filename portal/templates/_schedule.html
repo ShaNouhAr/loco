@@ -11,39 +11,39 @@
 {% set rec = plan.recurrence or 'once' %}
 {% set wdays = (plan.weekdays or planner_default_weekday()|string).split(',') %}
 <div class="planner" data-planner>
-  <div class="seg" role="radiogroup" aria-label="Fréquence">
+  <div class="seg" role="radiogroup" aria-label="{{ _('Fréquence') }}">
     {% for key, label in recurrence_labels.items() %}<label><input type="radio" name="recurrence" value="{{ key }}" {{ 'checked' if key == rec }}><span>{{ label }}</span></label>{% endfor %}
   </div>
   <div class="planner-fields">
-    <label class="f"><span data-date-label>{{ 'Date' if rec == 'once' else 'À partir du' }}</span><input type="date" name="start_date" value="{{ plan.start_date or planner_default_date() }}" required></label>
-    <label class="f"><span>Heure</span><input type="time" name="at_time" value="{{ plan.at_time or '02:00' }}" required></label>
-    <label class="f" data-show-for="recurrence:monthly"><span>Jour du mois</span>
-      <select name="monthday">{% for d in range(1, 29) %}<option value="{{ d }}" {{ 'selected' if (plan.monthday or 1)|int == d }}>{{ '1er' if d == 1 else d }}</option>{% endfor %}<option value="31" {{ 'selected' if (plan.monthday or 0)|int == 31 }}>Dernier jour du mois</option></select></label>
+    <label class="f"><span data-date-label>{{ _('Date') if rec == 'once' else _('À partir du') }}</span><input type="date" name="start_date" value="{{ plan.start_date or planner_default_date() }}" required></label>
+    <label class="f"><span>{{ _("Heure") }}</span><input type="time" name="at_time" value="{{ plan.at_time or '02:00' }}" required></label>
+    <label class="f" data-show-for="recurrence:monthly"><span>{{ _("Jour du mois") }}</span>
+      <select name="monthday">{% for d in range(1, 29) %}<option value="{{ d }}" {{ 'selected' if (plan.monthday or 1)|int == d }}>{{ '1er' if d == 1 else d }}</option>{% endfor %}<option value="31" {{ 'selected' if (plan.monthday or 0)|int == 31 }}>{{ _("Dernier jour du mois") }}</option></select></label>
   </div>
   <div class="planner-days" data-show-for="recurrence:weekly">
-    <span class="f-label">Jours</span>
-    <div class="day-chips" role="group" aria-label="Jours de la semaine">{% for d in planner_days %}<label class="day-chip" title="{{ d|capitalize }}"><input type="checkbox" name="weekdays" value="{{ loop.index0 }}" {{ 'checked' if loop.index0|string in wdays }}><span>{{ d[0]|upper }}</span></label>{% endfor %}</div>
+    <span class="f-label">{{ _("Jours") }}</span>
+    <div class="day-chips" role="group" aria-label="{{ _('Jours de la semaine') }}">{% for d in planner_days %}<label class="day-chip" title="{{ d|capitalize }}"><input type="checkbox" name="weekdays" value="{{ loop.index0 }}" {{ 'checked' if loop.index0|string in wdays }}><span>{{ d[0]|upper }}</span></label>{% endfor %}</div>
   </div>
   <p class="planner-summary" data-summary aria-live="polite">{{ icon('clock') }}<span></span></p>
-  <p class="hint">Heure du serveur loco ({{ planner_tz() }}). Une occurrence manquée (serveur ou poste éteint) n'est pas rattrapée : la suivante a lieu normalement.</p>
+  <p class="hint">{{ _("Heure du serveur loco (%(v)s). Une occurrence manquée (serveur ou poste éteint) n'est pas rattrapée : la suivante a lieu normalement.", v=planner_tz()) }}</p>
 </div>
 {%- endmacro %}
 
 {% macro schedule_dialog(id, title, action, hidden, next, reboot=False, intro='') -%}
 <dialog id="{{ id }}" class="wide-dialog">
   <form method="post" action="{{ url_for('schedule_save') }}">
-    <div class="dlg-h"><h2>{{ title }}</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-h"><h2>{{ title }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="next" value="{{ next }}">
       {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
       {% if intro %}<p class="muted">{{ intro }}</p>{% endif %}
       {{ planner({'recurrence': 'once'}) }}
-      {% if reboot %}<label class="check"><input type="checkbox" name="reboot" value="1"> Redémarrer si une mise à jour l'exige</label>{% endif %}
+      {% if reboot %}<label class="check"><input type="checkbox" name="reboot" value="1"> {{ _("Redémarrer si une mise à jour l'exige") }}</label>{% endif %}
     </div>
     <div class="dlg-f">
-      <a class="linkbtn dlg-more" href="{{ url_for('schedules') }}">Toutes les planifications</a>
-      <button type="button" class="btn" data-close>Annuler</button>
-      <button class="btn primary">Planifier</button>
+      <a class="linkbtn dlg-more" href="{{ url_for('schedules') }}">{{ _("Toutes les planifications") }}</a>
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary">{{ _("Planifier") }}</button>
     </div>
   </form>
 </dialog>

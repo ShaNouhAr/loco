@@ -5,16 +5,17 @@ import json
 from flask import abort, flash, g, render_template, request
 
 from . import app, fleet, groups
+from .i18n import L_, _
 from .auth import audit, lock_access, login_required
 from .db import db
 from .util import back
 
-PLATFORMS = {"windows": "Windows · PowerShell", "linux": "Linux · shell"}
+PLATFORMS = {"windows": L_("Windows · PowerShell"), "linux": L_("Linux · shell")}
 MAX_CONTENT = 64 * 1024
 MAX_TARGETS = 500
 ACTIVE = ("queued", "sent", "running")
-STATES = {"queued": "En attente du poste", "sent": "Transmis à l’agent", "running": "En cours", "success": "Réussi",
-          "failed": "Échec", "cancelled": "Annulé"}
+STATES = {"queued": L_("En attente du poste"), "sent": L_("Transmis à l’agent"), "running": L_("En cours"), "success": L_("Réussi"),
+          "failed": L_("Échec"), "cancelled": L_("Annulé")}
 
 
 def _script(script_id):
@@ -45,7 +46,7 @@ def _summary(targets):
 
 
 HISTORY_LIMIT = 100
-HISTORY_FILTERS = {"": "Toutes", "en-cours": "En cours", "echecs": "Avec échecs", "reussies": "Réussies"}
+HISTORY_FILTERS = {"": L_("Toutes"), "en-cours": L_("En cours"), "echecs": L_("Avec échecs"), "reussies": L_("Réussies")}
 
 
 def _run_state(p):
@@ -87,8 +88,7 @@ def script_runs_cancel_all():
                        "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets)", (fleet._now(),))
     audit("scripts.execution", f"file vidée : {cur.rowcount} poste(s) en attente annulé(s)", commit=False)
     conn.commit()
-    flash(f"File vidée : {cur.rowcount} envoi{'s' if cur.rowcount != 1 else ''} en attente annulé{'s' if cur.rowcount != 1 else ''}."
-          if cur.rowcount else "Aucun envoi en attente.", "ok")
+    flash((_('File vidée : %(rowcount)s envoi%(v)s en attente annulé%(v)s.', rowcount=cur.rowcount, v='s' if cur.rowcount != 1 else '') if cur.rowcount else _('Aucun envoi en attente.')), "ok")
     return back("scripts")
 
 
@@ -114,8 +114,7 @@ def script_history_clear():
     kept = conn.execute("SELECT COUNT(*) FROM script_runs").fetchone()[0]
     audit("scripts.historique", f"historique vidé : {len(done)} exécution(s) supprimée(s)", commit=False)
     conn.commit()
-    flash(f"Historique vidé : {len(done)} exécution{'s' if len(done) != 1 else ''} supprimée{'s' if len(done) != 1 else ''}"
-          + (f" ; {kept} encore en cours conservée{'s' if kept != 1 else ''}." if kept else "."), "ok")
+    flash(_('Historique vidé : %(len)s exécution%(v)s supprimée%(v)s', len=len(done), v='s' if len(done) != 1 else '') + (_(' ; %(kept)s encore en cours conservée%(v)s.', kept=kept, v='s' if kept != 1 else '') if kept else "."), "ok")
     return back("scripts")
 
 
@@ -127,12 +126,12 @@ def script_run_delete(run_id):
     if run is None:
         abort(404)
     if not _finished_runs(conn, [run_id]):
-        flash("Exécution en cours : annulez d'abord les postes en attente.", "error")
+        flash(_("Exécution en cours : annulez d'abord les postes en attente."), "error")
         return back("script_run", run_id=run_id)
     _delete_runs(conn, [run_id])
     audit("scripts.historique", f"exécution supprimée : {run['name']} v{run['version']} du {run['created_at']}", commit=False)
     conn.commit()
-    flash("Exécution retirée de l'historique.", "ok")
+    flash(_("Exécution retirée de l'historique."), "ok")
     return back("scripts")
 
 
@@ -156,9 +155,9 @@ def script_save(script_id):
     platform = request.form.get("platform", "")
     content = request.form.get("content", "").replace("\r\n", "\n")
     if not name or len(name) > 80 or any(ord(c) < 32 for c in name) or len(description) > 300 or platform not in PLATFORMS:
-        abort(400, "Nom (1 à 80 caractères), description (300 au plus) et système attendus.")
+        abort(400, _('Nom (1 à 80 caractères), description (300 au plus) et système attendus.'))
     if not content.strip() or len(content.encode()) > MAX_CONTENT:
-        abort(400, "Contenu du script vide ou trop long (64 Kio au plus).")
+        abort(400, _('Contenu du script vide ou trop long (64 Kio au plus).'))
     now, user = fleet._now(), g.user["username"]
     if script_id:
         old = conn.execute("SELECT * FROM scripts WHERE id=?", (script_id,)).fetchone()
@@ -173,7 +172,7 @@ def script_save(script_id):
                                  "VALUES (?,?,?,?,?,?,?)", (name, description, platform, content, now, now, user)).lastrowid
         audit("scripts.ajout", f"{name} ({PLATFORMS[platform]})", commit=False)
     conn.commit()
-    flash("Script enregistré.", "ok")
+    flash(_('Script enregistré.'), "ok")
     return back("script_editor", script_id=script_id)
 
 
@@ -187,7 +186,7 @@ def script_delete(script_id):
     conn.execute("DELETE FROM scripts WHERE id=?", (script_id,))
     audit("scripts.suppression", script["name"], commit=False)
     conn.commit()
-    flash("Script supprimé. Les résultats de ses exécutions restent consultables.", "ok")
+    flash(_('Script supprimé. Les résultats de ses exécutions restent consultables.'), "ok")
     return back("scripts")
 
 
@@ -227,7 +226,7 @@ def script_run_start(script_id):
     if script is None:
         abort(404)
     if request.form.get("version") != str(script["version"]):
-        abort(409, "Le script a été modifié entre-temps : vérifiez-le avant de l'exécuter.")
+        abort(409, _("Le script a été modifié entre-temps : vérifiez-le avant de l'exécuter."))
     device_ids = groups.identifiers(request.form.getlist("device"), MAX_TARGETS)
     group_ids = groups.identifiers(request.form.getlist("device_group"))
     ids = set(device_ids)
@@ -236,7 +235,7 @@ def script_run_start(script_id):
     devices = [d for d in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids)) if d]
     targets = [d for d in devices if _compatible(d, script["platform"])]
     if not targets or len(targets) > MAX_TARGETS:
-        abort(400, "Choisissez au moins un poste compatible avec ce script.")
+        abort(400, _('Choisissez au moins un poste compatible avec ce script.'))
     if request.form.get("when") == "schedule":
         # Planifié : les cibles restent dynamiques (membres actuels des groupes à chaque occurrence).
         try:
@@ -245,14 +244,13 @@ def script_run_start(script_id):
         except ValueError as e:
             abort(400, str(e))
         conn.commit()
-        flash(f"Planification créée : {script['name']}.", "ok")
+        flash(_('Planification créée : %(script)s.', script=script['name']), "ok")
         return back("schedules", _anchor=f"planif-{sched_id}")
     run_id = start_run(conn, script, targets, g.user["username"])
     audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)", commit=False)
     conn.commit()
     skipped = len(devices) - len(targets)
-    flash(f"Script envoyé à {len(targets)} poste(s) au prochain contact de leur agent"
-          + (f" ; {skipped} poste(s) incompatible(s) ou inactif(s) ignoré(s)." if skipped else "."), "ok")
+    flash(_('Script envoyé à %(len)s poste(s) au prochain contact de leur agent', len=len(targets)) + (_(' ; %(skipped)s poste(s) incompatible(s) ou inactif(s) ignoré(s).', skipped=skipped) if skipped else "."), "ok")
     return back("script_run", run_id=run_id)
 
 
@@ -279,6 +277,6 @@ def script_run_cancel(run_id):
                  "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets WHERE run_id=?)", (fleet._now(), run_id))
     audit("scripts.execution", f"annulation des postes en attente de l'exécution {run_id}", commit=False)
     conn.commit()
-    flash("Postes en attente annulés. Un script déjà reçu par un agent peut se terminer.", "ok")
+    flash(_('Postes en attente annulés. Un script déjà reçu par un agent peut se terminer.'), "ok")
     return back("script_run", run_id=run_id)
 

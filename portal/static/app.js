@@ -5,6 +5,16 @@
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
+  // Traductions : t(texte) renvoie la version de la langue de la page (textes fournis par le portail).
+  var I18N = {};
+  try { I18N = JSON.parse(($("#i18n-js") || {}).textContent || "{}"); } catch (e) { I18N = {}; }
+  var t = function (text, values) {
+    var out = I18N[text] || text;
+    if (values) Object.keys(values).forEach(function (k) { out = out.split("%(" + k + ")s").join(values[k]); });
+    return out;
+  };
+  window.t = t;
+
   function appLogo(img) {
     if (img.matches && img.matches("img[data-app-logo]")) {
       img.parentNode.classList.toggle("has-logo", img.complete && img.naturalWidth > 0);
@@ -56,12 +66,14 @@
 
   /* ---------------------------------------------------------------- formats */
 
-  var UNITS = ["o", "Ko", "Mo", "Go", "To"];
+  var LANG = document.documentElement.lang || "fr";
+  var UNITS = LANG === "en" ? ["B", "KB", "MB", "GB", "TB"] : ["o", "Ko", "Mo", "Go", "To"];
   function bytes(n) {
     n = Number(n) || 0;
     var i = 0;
     while (n >= 1024 && i < UNITS.length - 1) { n /= 1024; i++; }
-    return (i === 0 ? String(Math.round(n)) : n.toFixed(n < 10 ? 2 : 1).replace(".", ",")) + " " + UNITS[i];
+    var num = n.toFixed(n < 10 ? 2 : 1);
+    return (i === 0 ? String(Math.round(n)) : LANG === "en" ? num : num.replace(".", ",")) + " " + UNITS[i];
   }
   window.lrBytes = bytes;
 
@@ -80,9 +92,9 @@
         case "meter": el.style.width = Math.max(0, Math.min(100, v)) + "%"; break;
         case "service":
           el.className = "st " + (v ? "ok" : "err");
-          el.textContent = v ? "actif" : "arrêté";
+          el.textContent = v ? t("actif") : t("arrêté");
           break;
-        default: el.textContent = typeof v === "number" ? v.toLocaleString("fr-FR") : v;
+        default: el.textContent = typeof v === "number" ? v.toLocaleString(LANG === "en" ? "en-US" : "fr-FR") : v;
       }
     });
   }
@@ -116,8 +128,8 @@
     el.textContent = msg;
     box.appendChild(el);
     var close = function () { el.classList.add("out"); setTimeout(function () { el.remove(); }, 200); };
-    var t = setTimeout(close, kind === "error" ? 8000 : 4000);
-    el.addEventListener("click", function () { clearTimeout(t); close(); });
+    var timer = setTimeout(close, kind === "error" ? 8000 : 4000);
+    el.addEventListener("click", function () { clearTimeout(timer); close(); });
   }
   window.lrToast = toast;
   $$("[data-flash]").forEach(function (el) { toast(el.dataset.flash, el.dataset.kind); });
@@ -136,8 +148,8 @@
     var btn = e.target.closest(".copy");
     if (!btn) return;
     copyText($("code", btn.parentElement).textContent.trim()).then(function () {
-      btn.classList.add("done"); btn.textContent = "Copié";
-      setTimeout(function () { btn.classList.remove("done"); btn.textContent = "Copier"; }, 1500);
+      btn.classList.add("done"); btn.textContent = t("Copié");
+      setTimeout(function () { btn.classList.remove("done"); btn.textContent = t("Copier"); }, 1500);
     });
   });
 
@@ -269,16 +281,16 @@
         a.href = p.href;
         a.setAttribute("role", "option");
         a.setAttribute("aria-selected", String(i === cmdkCurrent));
-        var t = document.createElement("strong"); t.textContent = p.title;
+        var strong = document.createElement("strong"); strong.textContent = p.title;
         var s = document.createElement("span"); s.textContent = p.sub;
-        a.appendChild(t); a.appendChild(s);
+        a.appendChild(strong); a.appendChild(s);
         a.addEventListener("mousemove", function () { if (cmdkCurrent !== i) { cmdkCurrent = i; cmdkRender(); } });
         cmdkList.appendChild(a);
       });
       if (!cmdkHits.length) {
         var none = document.createElement("div");
         none.className = "cmdk-empty";
-        none.textContent = "Aucune page ne correspond.";
+        none.textContent = t("Aucune page ne correspond.");
         cmdkList.appendChild(none);
       }
       var on = $(".cmdk-item.on", cmdkList);
@@ -327,9 +339,9 @@
       var dlg = $("#confirm");
       $("h2", dlg).textContent = title;
       $(".dlg-b p", dlg).textContent = text || "";
-      $("[data-ok]", dlg).textContent = okLabel || "Confirmer";
+      $("[data-ok]", dlg).textContent = okLabel || t("Confirmer");
       // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
-      var danger = /^(Supprimer|Retirer|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser)/.test(okLabel || "");
+      var danger = /^(Supprimer|Retirer|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Delete|Remove|Forget|Abandon|Cancel|Restart|Reboot|Reset)/.test(okLabel || "");
       $("[data-ok]", dlg).classList.toggle("danger", danger);
       $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;
@@ -367,9 +379,9 @@
     xhr.onload = function () {
       var r = xhr.response;
       if (xhr.status < 400 && r && r.redirect) { window.location.href = r.redirect; return; }
-      fail(xhr.status === 400 ? "Session expirée : rechargez la page." : "Erreur " + xhr.status + ".");
+      fail(xhr.status === 400 ? t("Session expirée : rechargez la page.") : t("Erreur %(status)s.", { status: xhr.status }));
     };
-    xhr.onerror = function () { fail("Le serveur ne répond pas."); };
+    xhr.onerror = function () { fail(t("Le serveur ne répond pas.")); };
     xhr.send(new FormData(form));
   }
 
@@ -400,10 +412,10 @@
     var hint = document.createElement("span");
     var pick = document.createElement("button");
     ui.className = "drop-ui";
-    hint.textContent = input.multiple ? "Déposez les fichiers ici ou" : "Déposez le fichier ici ou";
+    hint.textContent = input.multiple ? t("Déposez les fichiers ici ou") : t("Déposez le fichier ici ou");
     pick.type = "button";
     pick.className = "btn sm";
-    pick.textContent = "Parcourir…";
+    pick.textContent = t("Parcourir…");
     pick.addEventListener("click", function () { input.click(); });
     ui.appendChild(hint);
     ui.appendChild(pick);
@@ -471,9 +483,9 @@
     var badge = $("[data-kind-badge]", form);
     badge.textContent = "";
     if (kind && !chosen) {
-      badge.appendChild(document.createTextNode("Type détecté : "));
+      badge.appendChild(document.createTextNode(t("Type détecté :") + " "));
       var b = document.createElement("b"); b.textContent = kind; badge.appendChild(b);
-      if (kind === "file") badge.appendChild(document.createTextNode(" (copié tel quel sur le poste)"));
+      if (kind === "file") badge.appendChild(document.createTextNode(" " + t("(copié tel quel sur le poste)")));
     }
     var needsArgs = kind === "exe" && !el.args.value.trim();
     var warn = $("[data-args-warn]", form);
@@ -481,8 +493,8 @@
     var adv = $("[data-adv]", form);
     if (adv && needsArgs && !adv.dataset.touched) adv.open = true;
     var summary = $("[data-adv-summary]", form);
-    if (summary) summary.textContent = (chosen || "type automatique") + " · " +
-      (el.args.value.trim() ? el.args.value.trim() : needsArgs ? "arguments à renseigner" : "arguments par défaut");
+    if (summary) summary.textContent = (chosen || t("type automatique")) + " · " +
+      (el.args.value.trim() ? el.args.value.trim() : needsArgs ? t("arguments à renseigner") : t("arguments par défaut"));
   }
   $$("form[data-app-form]").forEach(function (form) {
     ["input", "change"].forEach(function (type) { form.addEventListener(type, function () { appFormState(form); }); });
@@ -553,7 +565,7 @@
       picked.forEach(function (c) { c.closest("tr").classList.add("sel"); });
       boxes().filter(function (c) { return !c.checked; }).forEach(function (c) { c.closest("tr").classList.remove("sel"); });
       var slugs = picked.map(function (c) { return c.value; });
-      $(".count", selbar).textContent = slugs.length + (slugs.length > 1 ? " sélectionnés" : " sélectionné");
+      $(".count", selbar).textContent = slugs.length > 1 ? t("%(num)s sélectionnés", { num: slugs.length }) : t("%(num)s sélectionné", { num: slugs.length });
       $("code", selbar).textContent = "irm '" + base + slugs.join(",") + "' | iex";
       ["data-deploy-selected", "data-group-selected"].forEach(function (attribute) {
         var link = $("[" + attribute + "]", selbar);
@@ -613,7 +625,7 @@
     if ($(".reveal", wrap)) return;
     var b = document.createElement("button");
     b.type = "button"; b.className = "reveal"; b.innerHTML = EYE;
-    b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Afficher le mot de passe"); b.title = "Afficher le mot de passe";
+    b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", t("Afficher le mot de passe")); b.title = t("Afficher le mot de passe");
     wrap.appendChild(b);
   });
   /* ---------------------------------------------------------------- choix conditionnels et planification */
@@ -645,15 +657,23 @@
     }
     $$("[data-planner]", form).forEach(renderPlanner);
   }
-  var DAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
-  var MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  var EN = LANG === "en";
+  var DAYS_FR = EN ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                   : ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
+  var MONTHS_FR = EN ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+                     : ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+  function ordinal(n) {
+    if (!EN) return n === 1 ? "1er" : String(n);
+    var s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th";
+    return n + s;
+  }
   function pad2(n) { return (n < 10 ? "0" : "") + n; }
   function dayIndex(d) { return (d.getDay() + 6) % 7; }        // lundi = 0, comme côté serveur
-  function joinFr(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " et " + a[a.length - 1]; }
+  function joinFr(a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + (EN ? " and " : " et ") + a[a.length - 1]; }
   function whenFr(d) {
-    var t = DAYS_FR[dayIndex(d)] + " " + (d.getDate() === 1 ? "1er" : d.getDate()) + " " + MONTHS_FR[d.getMonth()];
-    if (d.getFullYear() !== new Date().getFullYear()) t += " " + d.getFullYear();
-    return t + " à " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    var year = d.getFullYear() !== new Date().getFullYear() ? " " + d.getFullYear() : "", hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    if (EN) return DAYS_FR[dayIndex(d)] + ", " + MONTHS_FR[d.getMonth()] + " " + d.getDate() + (year ? "," + year : "") + " at " + hm;
+    return DAYS_FR[dayIndex(d)] + " " + ordinal(d.getDate()) + " " + MONTHS_FR[d.getMonth()] + year + " à " + hm;
   }
   function plannerState(box) {
     var rec = box.querySelector('input[name="recurrence"]:checked'), date = box.querySelector('input[name="start_date"]').value;
@@ -684,26 +704,28 @@
     return null;
   }
   function describeFr(st) {
-    if (st.rec === "once") { var p = st.date.split("-").map(Number), h = st.time.split(":").map(Number); return "Le " + whenFr(new Date(p[0], p[1] - 1, p[2], h[0], h[1])); }
-    if (st.rec === "daily") return "Chaque jour à " + st.time;
+    var at = st.time;
+    if (st.rec === "once") { var p = st.date.split("-").map(Number), h = st.time.split(":").map(Number); return t("Le %(when)s", { when: whenFr(new Date(p[0], p[1] - 1, p[2], h[0], h[1])) }); }
+    if (st.rec === "daily") return t("Chaque jour à %(at)s", { at: at });
     if (st.rec === "weekly") {
       var days = st.days.slice().sort();
-      if (days.length === 7) return "Chaque jour à " + st.time;
-      if (days.join() === "0,1,2,3,4") return "Du lundi au vendredi à " + st.time;
-      if (days.join() === "5,6") return "Le week-end à " + st.time;
-      return "Chaque " + joinFr(days.map(function (d) { return DAYS_FR[d]; })) + " à " + st.time;
+      if (days.length === 7) return t("Chaque jour à %(at)s", { at: at });
+      if (days.join() === "0,1,2,3,4") return t("Du lundi au vendredi à %(at)s", { at: at });
+      if (days.join() === "5,6") return t("Le week-end à %(at)s", { at: at });
+      return t("Chaque %(days)s à %(at)s", { days: joinFr(days.map(function (d) { return DAYS_FR[d]; })), at: at });
     }
-    if (st.monthday === 31) return "Le dernier jour de chaque mois à " + st.time;
-    return "Le " + (st.monthday === 1 ? "1er" : st.monthday) + " de chaque mois à " + st.time;
+    if (st.monthday === 31) return t("Le dernier jour de chaque mois à %(at)s", { at: at });
+    return t("Le %(day)s de chaque mois à %(at)s", { day: ordinal(st.monthday), at: at });
   }
+
   function renderPlanner(box) {
     var st = plannerState(box), out = $("[data-summary]", box), text = $("span", out), label = $("[data-date-label]", box);
-    if (label) label.textContent = st.rec === "once" ? "Date" : "À partir du";
+    if (label) label.textContent = st.rec === "once" ? t("Date") : t("À partir du");
     var next = st.rec === "weekly" && !st.days.length ? null : nextRun(st);
     out.classList.toggle("warn", !next);
-    if (st.rec === "weekly" && !st.days.length) text.textContent = "Choisissez au moins un jour de la semaine.";
-    else if (!st.date || !st.time) text.textContent = "Indiquez une date et une heure.";
-    else text.textContent = describeFr(st) + (next ? (st.rec === "once" ? "" : " · prochaine exécution : " + whenFr(next)) : " · cet instant est déjà passé");
+    if (st.rec === "weekly" && !st.days.length) text.textContent = t("Choisissez au moins un jour de la semaine.");
+    else if (!st.date || !st.time) text.textContent = t("Indiquez une date et une heure.");
+    else text.textContent = describeFr(st) + (next ? (st.rec === "once" ? "" : " · " + t("prochaine exécution : %(when)s", { when: whenFr(next) })) : " · " + t("cet instant est déjà passé"));
   }
   $$("form").forEach(function (form) {
     if (!form.querySelector("[data-show-for], [data-planner], [data-alt-when]") && !form.dataset.altWhen) return;
@@ -715,7 +737,7 @@
   document.addEventListener("click", function (e) {
     var b = e.target.closest(".reveal");
     if (!b) return;
-    var input = $("input", b.parentElement), show = input.type === "password", label = show ? "Masquer le mot de passe" : "Afficher le mot de passe";
+    var input = $("input", b.parentElement), show = input.type === "password", label = show ? t("Masquer le mot de passe") : t("Afficher le mot de passe");
     input.type = show ? "text" : "password";
     b.setAttribute("aria-pressed", String(show)); b.setAttribute("aria-label", label); b.title = label;
   });
@@ -767,7 +789,7 @@
     body.innerHTML = d.recent.map(function (r) {
       var key = r.time + r.client + r.file;
       var file = r.file.length > 70 ? r.file.slice(0, 70) + "…" : r.file;
-      var who = r.name ? '<span>' + esc(r.name) + '</span><span class="sub mono">' + esc(r.client) + (r.shared ? ' · adresse partagée (NAT)' : '') + '</span>'
+      var who = r.name ? '<span>' + esc(r.name) + '</span><span class="sub mono">' + esc(r.client) + (r.shared ? ' · ' + esc(t('adresse partagée (NAT)')) : '') + '</span>'
                        : '<span class="mono">' + esc(r.client) + '</span>';
       var source = r.source === "cache" ? '<span class="st ok">cache</span>' : '<span class="st">' + esc(r.source) + '</span>';
       return '<tr' + (known[key] ? "" : ' class="new"') + ' data-key="' + esc(key) + '">' +
@@ -789,8 +811,8 @@
       var el = $("[data-progress]", row);
       if (!el || !a.progress.done) return;
       el.textContent = a.progress.total
-        ? "téléchargement " + Math.round(100 * a.progress.done / a.progress.total) + " %"
-        : "téléchargement " + bytes(a.progress.done);
+        ? t("téléchargement %(pct)s %%", { pct: Math.round(100 * a.progress.done / a.progress.total) }).replace("%%", "%")
+        : t("téléchargement %(size)s", { size: bytes(a.progress.done) });
     });
     if (changed) window.location.reload();
   }
@@ -800,7 +822,7 @@
   function renderJob(d) {
     var log = $("#job-log");
     var bottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-    log.textContent = d.log || "Journal vide.";
+    log.textContent = d.log || t("Journal vide.");
     if (bottom) log.scrollTop = log.scrollHeight;
     if (d.state !== "queued" && d.state !== "running") window.location.reload();
   }
@@ -815,11 +837,11 @@
       var units = ["bit/s", "kbit/s", "Mbit/s", "Gbit/s"], i = 0;
       while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
       var s = i === 0 ? String(Math.round(v)) : v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : String(Math.round(v));
-      return s.replace(".", ",") + " " + units[i];
+      return (LANG === "en" ? s : s.replace(".", ",")) + " " + units[i];
     };
     var note = function (cell, dir) {
       var peak = Math.max.apply(null, samples.map(function (p) { return p[dir]; }));
-      $("[data-net-note]", cell).textContent = "pic sur " + Math.round(samples.length * EVERY / 1000) + " s : " + bits(peak);
+      $("[data-net-note]", cell).textContent = t("pic sur %(s)s s : %(rate)s", { s: Math.round(samples.length * EVERY / 1000), rate: bits(peak) });
     };
     var render = function () {
       var top = Math.max(1000, Math.max.apply(null, samples.map(function (p) { return Math.max(p.rx, p.tx); })));
@@ -844,7 +866,7 @@
         var back = Math.round((box.right - e.clientX) / box.width * (SPAN - 1));
         var p = samples[Math.max(0, samples.length - 1 - back)];
         cell.dataset.hover = "1";
-        $("[data-net-note]", cell).textContent = "il y a " + Math.round((Date.now() - p.at) / 1000) + " s : " + bits(p[dir]);
+        $("[data-net-note]", cell).textContent = t("il y a %(s)s s : %(rate)s", { s: Math.round((Date.now() - p.at) / 1000), rate: bits(p[dir]) });
       });
       svg.addEventListener("mouseleave", function () { delete cell.dataset.hover; if (samples.length) note(cell, dir); });
     });
