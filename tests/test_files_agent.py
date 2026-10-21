@@ -14,6 +14,7 @@ SOURCE = Path(__file__).resolve().parents[1] / "portal" / "agents" / "loco-clien
 spec = importlib.util.spec_from_file_location("loco_client", str(SOURCE))
 agent = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(agent)
+agent.LANG_EN = False  # messages en français (langue de référence) pour des assertions stables
 
 
 class TestFileSession(unittest.TestCase):

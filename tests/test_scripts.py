@@ -188,6 +188,7 @@ class TestLinuxAgentScript(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("loco_client_scripts", ROOT / "portal/agents/loco-client.py")
         self.agent = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.agent)
+        self.agent.LANG_EN = False  # messages en français (langue de référence)
 
     def command(self, content, sha=None, platform="linux"):
         return {"script": {"platform": platform, "content": content, "sha256": sha or hashlib.sha256(content.encode()).hexdigest()}}

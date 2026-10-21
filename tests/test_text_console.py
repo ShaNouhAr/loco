@@ -179,6 +179,7 @@ class TestTextConsole(unittest.TestCase):
     def test_no_graphical_session_requires_explicit_terminal_permission_from_server(self):
         spec = importlib.util.spec_from_file_location('console_test_agent', ROOT / 'portal/agents/loco-client.py')
         agent = importlib.util.module_from_spec(spec); spec.loader.exec_module(agent)
+        agent.LANG_EN = False  # messages en français (langue de référence)
         with mock.patch.object(agent, 'x11_environment', side_effect=RuntimeError('Aucune session X11')), mock.patch.object(agent, 'text_console') as fallback:
             with self.assertRaisesRegex(RuntimeError, 'droit Terminal distant'):
                 agent.linux_desktop()
