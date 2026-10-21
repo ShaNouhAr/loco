@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.32.0 — 2026-10-21
+
+- **Ajouter / modifier un logiciel Windows** : fenêtre réorganisée en étapes (installeur, puis nom et version), le type est **détecté** depuis le lien ou le fichier, et les réglages rarement utiles (type, arguments silencieux, nom dans Windows) sont repliés dans « Options d'installation », avec leur résumé. Pour un `.exe` sans arguments silencieux, les options s'ouvrent seules avec un avertissement (sinon l'installation attend un clic sur chaque poste).
+- **Toutes les fenêtres** : titre et boutons restent visibles, seul le contenu défile ; fermeture par une croix ; un seul anneau de focus sur les champs (fini le double contour).
+- **Paquets Linux (APT)** repensés : les dépôts se choisissent d'un clic dans une barre (avec leur nombre de paquets) au lieu d'une liste et d'un bouton « Afficher » ; la liste des paquets occupe toute la largeur, avec la **description** de chaque paquet, sa date d'ajout et des actions en icônes (télécharger, copier vers un autre dépôt, supprimer). Ajout de paquets et création d'un dépôt dans des fenêtres dédiées ; nombre de **postes du parc** sur la version affichée ; état vide explicatif ; options de branchement regroupées.
+- **Paquets RPM** : même présentation (barre des versions, résumé des paquets, actions en icônes, fenêtres d'ajout), miroirs en cache regroupés avec les options de branchement.
+
 ## 2.31.0 — 2026-10-21
 
 Interface plus moderne et plus rapide à parcourir, dans les trois thèmes :

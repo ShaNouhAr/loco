@@ -111,7 +111,7 @@
 
 {% if can('wu.configure') %}
 <dialog id="domains">
-  <div class="dlg-h"><h2>Domaines redirigés</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <div class="dlg-h"><h2>Domaines redirigés</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <form class="dlg-b dlg-stack" method="post" action="{{ url_for('windows_update_domains') }}" data-ajax>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <textarea name="domains" rows="6" spellcheck="false" aria-label="Un domaine par ligne">{{ domains|join('\n') }}</textarea>

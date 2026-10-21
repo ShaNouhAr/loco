@@ -32,7 +32,7 @@
 {% macro schedule_dialog(id, title, action, hidden, next, reboot=False, intro='') -%}
 <dialog id="{{ id }}" class="wide-dialog">
   <form method="post" action="{{ url_for('schedule_save') }}">
-    <div class="dlg-h"><h2>{{ title }}</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-h"><h2>{{ title }}</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ action }}"><input type="hidden" name="next" value="{{ next }}">
       {% for name, value in hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}

@@ -71,6 +71,7 @@ def list_debs(repository=None):
             if not os.path.isfile(path):
                 continue
             debs.append({"file": name, "package": fields.get("Package", ""), "version": fields.get("Version", ""),
+                         "description": fields.get("Description", "")[:160],
                          "arch": fields.get("Architecture", ""), "size": os.path.getsize(path),
                          "mtime": os.path.getmtime(path), "repository": key, "url": repository_url(key) + "pool/" + name})
     return sorted(debs, key=lambda d: (d["repository"], d["package"], d["version"]))
@@ -192,10 +193,29 @@ def linux():
         require_repository(selected)
     except ValueError:
         abort(404)
-    return render_template("linux.html", repositories=repos, selected=selected, legacy=LEGACY,
+    current = next((r for r in repos if r["key"] == selected), None)
+    for r in repos:
+        r["count"] = len(list_debs(r["key"]))
+    debs = list_debs(selected)
+    for d in debs:
+        d["added"] = datetime.datetime.fromtimestamp(d["mtime"]).strftime("%Y-%m-%d %H:%M")
+    return render_template("linux.html", repositories=repos, selected=selected, current=current, legacy=LEGACY,
                            legacy_count=len(list_debs(LEGACY)),
-                           distributions=config.APT_DISTRIBUTIONS, debs=list_debs(selected),
-                           stats=read_stats(), acng=service_active("apt-cacher-ng"))
+                           distributions=config.APT_DISTRIBUTIONS, debs=debs,
+                           devices=_devices_on(current), stats=read_stats(), acng=service_active("apt-cacher-ng"))
+
+
+def _devices_on(repo):
+    """Postes Linux du parc sur cette distribution et version (d'après le système annoncé par l'agent)."""
+    from . import features
+    from .auth import can
+    if not repo or not features.enabled("fleet") or not can("fleet.view"):
+        return None
+    with transaction() as conn:
+        names = [r["os_name"].lower() for r in conn.execute(
+            "SELECT os_name FROM devices WHERE state='active' AND os_family='linux'")]
+    suite, version, dist = repo["suite"].lower(), (repo["version"] or "").lower(), repo["distribution"].lower()
+    return sum(1 for n in names if f"({suite})" in n or (dist in n and version and f" {version}" in n))
 
 
 @app.route("/linux/repositories", methods=["POST"])

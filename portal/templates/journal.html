@@ -104,7 +104,7 @@
 
 {% if can('audit.export') %}
 <dialog id="export">
-  <div class="dlg-h"><h2>Exporter en JSON</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <div class="dlg-h"><h2>Exporter en JSON</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <div class="dlg-b dlg-stack">
     {% if args %}
     <div class="row-between">
@@ -130,7 +130,7 @@
 
 {% if can('audit.configure') %}
 <dialog id="retention">
-  <div class="dlg-h"><h2>Conservation du journal</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+  <div class="dlg-h"><h2>Conservation du journal</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <form method="post" action="{{ url_for('journal_retention') }}" class="dlg-b dlg-stack" data-ajax data-confirm="Modifier la conservation du journal ?" data-confirm-text="Les événements plus anciens que la nouvelle durée sont supprimés immédiatement, puis chaque heure. Exportez-les d'abord si vous devez les garder." data-confirm-ok="Appliquer">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label class="f"><span>Garder les événements</span>

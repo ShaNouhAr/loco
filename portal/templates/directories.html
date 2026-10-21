@@ -84,7 +84,7 @@
 {% if can('sso.manage') %}
 <dialog id="add-ldap" class="wide-dialog">
   <form method="post" action="{{ url_for('directory_add') }}">
-    <div class="dlg-h"><h2>Ajouter un annuaire LDAP</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-h"><h2>Ajouter un annuaire LDAP</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="ldap">
       <div class="grid2">
@@ -99,7 +99,7 @@
 </dialog>
 <dialog id="add-radius" class="wide-dialog">
   <form method="post" action="{{ url_for('directory_add') }}">
-    <div class="dlg-h"><h2>Ajouter un serveur RADIUS</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-h"><h2>Ajouter un serveur RADIUS</h2><button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="radius">
       <label class="f"><span>Nom affiché</span><input type="text" name="label" required maxlength="80" placeholder="NPS de l’entreprise"></label>

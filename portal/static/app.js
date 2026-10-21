@@ -403,6 +403,7 @@
     if (open) {
       var dlg = $(open.dataset.open);
       if (open.dataset.app) fillEdit(dlg, JSON.parse(open.dataset.app));
+      if (open.dataset.fill) fillForm(dlg, JSON.parse(open.dataset.fill));
       dlg.showModal();
       var first = $("input[type=text], input[type=url]", dlg);
       if (first) first.focus();
@@ -412,6 +413,15 @@
     if (close) close.closest("dialog").close();
   });
 
+  // Fenêtre partagée par plusieurs lignes : champs et textes repris de data-fill (clé -> champ du formulaire ou [data-fill-text]).
+  function fillForm(dlg, values) {
+    var form = $("form", dlg);
+    Object.keys(values).forEach(function (k) {
+      if (form && form.elements[k]) form.elements[k].value = values[k];
+      $$('[data-fill-text="' + k + '"]', dlg).forEach(function (el) { el.textContent = values[k]; });
+    });
+  }
+
   function fillEdit(dlg, app) {
     var form = $("form", dlg);
     form.setAttribute("action", form.dataset.base.replace("__slug__", app.slug));
@@ -420,7 +430,41 @@
     $("[data-file]", dlg).textContent = app.filename ? app.filename + "  sha256:" + app.sha256.slice(0, 16) : "";
     $('input[type="file"]', form).value = "";
     $(".files", form).textContent = "";
+    appFormState(form);
   }
+
+  // Ajout / modification d'un logiciel : type déduit du lien ou du fichier, rappel des arguments silencieux d'un exe.
+  var KINDS = { exe: "exe", msi: "msi", msu: "msu", ps1: "ps1" };
+  function appFormState(form) {
+    var el = form.elements;
+    var file = el.file && el.file.files && el.file.files[0];
+    var source = file ? file.name : (el.url && el.url.value) || "";
+    var ext = (source.split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i) || [])[1];
+    ext = ext ? ext.toLowerCase() : "";
+    var chosen = el.kind.value && el.kind.value !== "auto" ? el.kind.value : "";
+    var kind = chosen || KINDS[ext] || (ext ? "file" : "");
+    var badge = $("[data-kind-badge]", form);
+    badge.textContent = "";
+    if (kind && !chosen) {
+      badge.appendChild(document.createTextNode("Type détecté : "));
+      var b = document.createElement("b"); b.textContent = kind; badge.appendChild(b);
+      if (kind === "file") badge.appendChild(document.createTextNode(" (copié tel quel sur le poste)"));
+    }
+    var needsArgs = kind === "exe" && !el.args.value.trim();
+    var warn = $("[data-args-warn]", form);
+    if (warn) warn.hidden = !needsArgs;
+    var adv = $("[data-adv]", form);
+    if (adv && needsArgs && !adv.dataset.touched) adv.open = true;
+    var summary = $("[data-adv-summary]", form);
+    if (summary) summary.textContent = (chosen || "type automatique") + " · " +
+      (el.args.value.trim() ? el.args.value.trim() : needsArgs ? "arguments à renseigner" : "arguments par défaut");
+  }
+  $$("form[data-app-form]").forEach(function (form) {
+    ["input", "change"].forEach(function (type) { form.addEventListener(type, function () { appFormState(form); }); });
+    var adv = $("[data-adv]", form);
+    if (adv) $("summary", adv).addEventListener("click", function () { adv.dataset.touched = "1"; });
+    appFormState(form);
+  });
 
   /* ---------------------------------------------------------------- filtre */
 

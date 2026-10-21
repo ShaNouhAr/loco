@@ -105,45 +105,61 @@
 </div>
 
 {# ------------------------------------------------------------ ajout #}
-{% if can("windows.add") %}<dialog id="add">
-  <form method="post" action="{{ url_for('windows_apps_add') }}" enctype="multipart/form-data" data-ajax>
+{% if can("windows.add") %}<dialog id="add" class="app-dialog">
+  <form method="post" action="{{ url_for('windows_apps_add') }}" enctype="multipart/form-data" data-ajax data-app-form>
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="dlg-h"><h2>Ajouter un logiciel</h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-h">
+      <div><h2>Ajouter un logiciel</h2><p>L'installeur est servi par loco aux postes Windows et vérifié par son empreinte.</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
     <div class="dlg-b">
-      <div class="grid2">
-        <label class="f"><span>Nom</span><input type="text" name="name" required placeholder="7-Zip"></label>
-        <label class="f"><span>Version</span><input type="text" name="version" placeholder="facultatif"></label>
-        <div class="wide">
-          <div class="tabs" role="tablist">
-            <button type="button" data-tab="url" aria-selected="true">Lien</button>
-            <button type="button" data-tab="file" aria-selected="false">Fichier</button>
-          </div>
-          <div class="tab-panel on" data-panel="url">
-            <input type="url" name="url" placeholder="https://www.7-zip.org/a/7z2600-x64.exe" aria-label="Lien de téléchargement">
-            <span class="hint">Le serveur télécharge le fichier ; « Actualiser » le retélécharge plus tard.</span>
-          </div>
-          <div class="tab-panel" data-panel="file">
-            <div class="drop"><input type="file" name="file" aria-label="Installeur"><div class="files"></div></div>
-          </div>
+      <section class="dlg-sec">
+        <h3>Installeur</h3>
+        <div class="tabs seg-tabs" role="tablist" aria-label="Origine de l'installeur">
+          <button type="button" data-tab="url" aria-selected="true">Lien de téléchargement</button>
+          <button type="button" data-tab="file" aria-selected="false">Fichier</button>
         </div>
-        <label class="f"><span>Type</span>
-          <select name="kind">
-            <option value="">Automatique</option>
-            <option value="exe">exe</option><option value="msi">msi</option>
-            <option value="msu">msu (mise à jour)</option><option value="ps1">ps1 (script)</option>
-            <option value="file">fichier (copié)</option>
-          </select>
-        </label>
-        <label class="f"><span>Arguments silencieux</span><input type="text" name="args" placeholder="/S"></label>
-        <label class="f wide"><span>Nom dans Windows (détection sur le parc)</span><input type="text" name="detect" placeholder="7-Zip (par défaut : le nom ci-dessus)">
-          <span class="hint">Début du nom affiché dans « Programmes et fonctionnalités », ou motif avec * ; avec la version, sert à repérer les postes à mettre à jour.</span></label>
-        <p class="hint wide hint-tight">Par défaut : msi <code>{{ default_args.msi }}</code>, msu <code>{{ default_args.msu }}</code>. Pour un exe, selon l'éditeur : <code>/S</code>, <code>/silent</code>, <code>/quiet</code>…</p>
-      </div>
+        <div class="tab-panel on" data-panel="url">
+          <input type="url" name="url" placeholder="https://www.7-zip.org/a/7z2600-x64.exe" aria-label="Lien de téléchargement">
+          <span class="hint">loco télécharge le fichier une fois ; « Actualiser » le reprend plus tard.</span>
+        </div>
+        <div class="tab-panel" data-panel="file">
+          <div class="drop"><input type="file" name="file" aria-label="Installeur"><div class="files"></div></div>
+        </div>
+        <span class="kind-badge" data-kind-badge></span>
+      </section>
+      <section class="dlg-sec">
+        <h3>Logiciel</h3>
+        <div class="grid2">
+          <label class="f"><span>Nom</span><input type="text" name="name" required placeholder="7-Zip"></label>
+          <label class="f"><span>Version</span><input type="text" name="version" placeholder="facultatif"></label>
+        </div>
+      </section>
+      <details class="dlg-adv" data-adv>
+        <summary>Options d'installation<small data-adv-summary>automatique</small></summary>
+        <div class="adv-b">
+          <div class="grid2">
+            <label class="f"><span>Type</span>
+              <select name="kind">
+                <option value="">Automatique (extension)</option>
+                <option value="exe">exe</option><option value="msi">msi</option>
+                <option value="msu">msu (mise à jour)</option><option value="ps1">ps1 (script)</option>
+                <option value="file">fichier (copié)</option>
+              </select>
+            </label>
+            <label class="f"><span>Arguments silencieux</span><input type="text" name="args" placeholder="par défaut selon le type"></label>
+          </div>
+          <p class="hint warn-hint" data-args-warn hidden>Un .exe ne s'installe sans intervention qu'avec ses arguments silencieux : sinon il attend un clic sur chaque poste.</p>
+          <p class="hint">msi : <code>{{ default_args.msi }}</code> · msu : <code>{{ default_args.msu }}</code> · exe : selon l'éditeur, souvent <code>/S</code>, <code>/silent</code> ou <code>/quiet</code>.</p>
+          <label class="f"><span>Nom dans Windows</span><input type="text" name="detect" placeholder="par défaut : le nom du logiciel">
+            <span class="hint">Début du nom affiché dans « Programmes et fonctionnalités » (ou motif avec *) : repère les postes qui l'ont et ceux à mettre à jour.</span></label>
+        </div>
+      </details>
       <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
     </div>
     <div class="dlg-f">
       <button type="button" class="btn" data-close>Annuler</button>
-      <button class="btn primary"><span class="spin"></span>Ajouter</button>
+      <button class="btn primary"><span class="spin"></span>Ajouter au catalogue</button>
     </div>
   </form>
 </dialog>{% endif %}

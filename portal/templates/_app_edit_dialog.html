@@ -2,27 +2,42 @@
 {% macro app_data(a) -%}
 {{ {"slug": a.slug, "name": a.name, "version": a.version, "kind": a.kind, "args": a.args, "url": a.source_url, "filename": a.filename, "sha256": a.sha256, "detect": a.detect}|tojson|forceescape }}
 {%- endmacro %}
-{% if can("windows.edit") %}<dialog id="edit">
-  <form method="post" action="" data-base="{{ url_for('windows_apps_edit', slug='__slug__') }}" enctype="multipart/form-data" data-ajax>
+{% if can("windows.edit") %}<dialog id="edit" class="app-dialog">
+  <form method="post" action="" data-base="{{ url_for('windows_apps_edit', slug='__slug__') }}" enctype="multipart/form-data" data-ajax data-app-form>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     {% if retour %}<input type="hidden" name="retour" value="{{ retour }}">{% endif %}
-    <div class="dlg-h"><h2>Modifier <span data-title></span></h2><button type="button" class="linkbtn" data-close>Fermer</button></div>
+    <div class="dlg-h">
+      <div><h2>Modifier <span data-title></span></h2><p>Les postes reçoivent la nouvelle version au prochain déploiement.</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="Fermer" title="Fermer (Échap)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
     <div class="dlg-b">
-      <div class="grid2">
-        <label class="f"><span>Nom</span><input type="text" name="name" required></label>
-        <label class="f"><span>Version</span><input type="text" name="version"></label>
-        <label class="f wide"><span>Lien source</span><input type="url" name="url"></label>
-        <label class="f"><span>Type</span>
-          <select name="kind"><option value="auto">Automatique</option>{% for k in ['exe', 'msi', 'msu', 'ps1', 'file'] %}<option>{{ k }}</option>{% endfor %}</select>
-        </label>
-        <label class="f"><span>Arguments</span><input type="text" name="args"></label>
-        <label class="f wide"><span>Nom dans Windows (détection sur le parc)</span><input type="text" name="detect" placeholder="par défaut : le nom"></label>
-        <div class="wide">
-          <span class="cmd-label">Remplacer le fichier</span>
-          <div class="drop"><input type="file" name="file" aria-label="Nouveau fichier"><div class="files"></div></div>
-          <span class="hint mono" data-file></span>
+      <section class="dlg-sec">
+        <h3>Logiciel</h3>
+        <div class="grid2">
+          <label class="f"><span>Nom</span><input type="text" name="name" required></label>
+          <label class="f"><span>Version</span><input type="text" name="version"></label>
         </div>
-      </div>
+      </section>
+      <section class="dlg-sec">
+        <h3>Installeur</h3>
+        <p class="file-current"><span class="mono" data-file></span></p>
+        <label class="f"><span>Lien source</span><input type="url" name="url" placeholder="aucun : fichier envoyé"></label>
+        <div><span class="f-label">Remplacer le fichier</span>
+          <div class="drop"><input type="file" name="file" aria-label="Nouveau fichier"><div class="files"></div></div></div>
+        <span class="kind-badge" data-kind-badge></span>
+      </section>
+      <section class="dlg-sec">
+        <h3>Installation silencieuse et détection</h3>
+        <div class="grid2">
+          <label class="f"><span>Type</span>
+            <select name="kind"><option value="auto">Automatique (extension)</option>{% for k in ['exe', 'msi', 'msu', 'ps1', 'file'] %}<option>{{ k }}</option>{% endfor %}</select>
+          </label>
+          <label class="f"><span>Arguments silencieux</span><input type="text" name="args"></label>
+        </div>
+        <p class="hint warn-hint" data-args-warn hidden>Un .exe ne s'installe sans intervention qu'avec ses arguments silencieux : sinon il attend un clic sur chaque poste.</p>
+        <p class="hint">Pour un exe, selon l'éditeur : <code>/S</code>, <code>/silent</code>, <code>/quiet</code>… ; msi et msu : arguments par défaut si vide.</p>
+        <label class="f"><span>Nom dans Windows</span><input type="text" name="detect" placeholder="par défaut : le nom du logiciel"></label>
+      </section>
       <div class="progress"><div class="meter"><i></i></div><div class="row"><span data-size></span><span data-pct></span></div></div>
     </div>
     <div class="dlg-f">

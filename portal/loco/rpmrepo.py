@@ -68,6 +68,7 @@ def list_rpms(name=None):
             out.append({
                 "repository": repo,
                 "name": pkg.findtext("common:name", "", _NS),
+                "summary": pkg.findtext("common:summary", "", _NS)[:160],
                 "version": ver.get("ver"), "release": ver.get("rel"), "epoch": ver.get("epoch", "0"),
                 "arch": pkg.findtext("common:arch", "", _NS),
                 "size": int(pkg.find("common:size", _NS).get("package", "0")),
@@ -176,9 +177,28 @@ def rpm():
     selected = request.args.get("repository", repos[-1]["name"] if repos else "")
     if repos and not any(r["name"] == selected for r in repos):
         abort(404)
-    return render_template("rpm.html", repositories=repos, selected=selected,
+    for r in repos:
+        r["count"] = len(list_rpms(r["name"]))
+    current = next((r for r in repos if r["name"] == selected), None)
+    return render_template("rpm.html", repositories=repos, selected=selected, current=current,
                            packages=list_rpms(selected) if repos else [], stats=read_stats(),
-                           upstreams=config.RPM_UPSTREAMS)
+                           upstreams=config.RPM_UPSTREAMS, devices=_devices_on(current))
+
+
+RED_HAT_FAMILY = ("rocky", "almalinux", "red hat", "rhel", "centos", "oracle linux")
+
+
+def _devices_on(repo):
+    """Postes du parc de la famille Red Hat sur cette version majeure (d'après le système annoncé par l'agent)."""
+    from . import features
+    from .auth import can
+    if not repo or not features.enabled("fleet") or not can("fleet.view"):
+        return None
+    with transaction() as conn:
+        names = [r["os_name"].lower() for r in conn.execute(
+            "SELECT os_name FROM devices WHERE state='active' AND os_family='linux'")]
+    major = re.compile(rf"(?<![\d.]){re.escape(repo['major'])}(\.\d+)*(?![\d.])")
+    return sum(1 for n in names if any(f in n for f in RED_HAT_FAMILY) and major.search(n))
 
 
 @app.route("/rpm/repositories", methods=["POST"])
