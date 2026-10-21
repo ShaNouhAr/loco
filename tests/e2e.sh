@@ -49,6 +49,11 @@ sudo /opt/loco/bin/loco-user list
 step "Relance (idempotence)"
 sudo ./install.sh >/dev/null
 ready
+step "Agent d'administration : première vérification des paquets du système"
+sudo systemctl is-active --quiet loco-agent
+for _ in $(seq 1 90); do grep -q '"package_manager": "apt"' /var/lib/loco-agent/status.json 2>/dev/null && break; sleep 2; done
+grep -q '"package_manager": "apt"' /var/lib/loco-agent/status.json
+sudo /usr/local/sbin/loco-update status
 # shellcheck disable=SC1091
 . /etc/os-release
 DIST=$ID SUITE=${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}
@@ -148,7 +153,7 @@ fail() { echo "ÉCHEC : $*" >&2; exit 1; }
 if systemctl list-unit-files | grep -q loco; then fail 'unités systemd restantes'; fi
 if ss -Hltn | grep -qE ':(8443|8088|3142) '; then fail 'ports encore ouverts'; fi
 if id loco >/dev/null 2>&1; then fail 'utilisateur loco restant'; fi
-for d in /etc/loco /srv/loco /opt/loco; do
+for d in /etc/loco /srv/loco /opt/loco /var/lib/loco-agent /usr/local/sbin/loco-update; do
     if [ -e "$d" ]; then fail "$d restant"; fi
 done
 echo 'Test de bout en bout réussi.'

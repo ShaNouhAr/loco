@@ -155,7 +155,8 @@ Avec Docker, les mêmes commandes passent par le conteneur : `docker compose exe
 | Configuration, autorité et certificats | `/etc/loco` | — |
 
 Sur Debian / Ubuntu, les dépendances viennent des dépôts officiels (`nginx`, `apt-cacher-ng`, `python3-flask`, `gunicorn`,
-`gnupg`, `flatpak`, `ostree`, `createrepo-c`, `rpm`) : les correctifs de sécurité arrivent avec `apt upgrade`.
+`gnupg`, `flatpak`, `ostree`, `createrepo-c`, `rpm`) : les correctifs de sécurité arrivent avec `apt upgrade`, ou
+depuis le portail (**Administration → Mises à jour** : correctifs de sécurité, noyau, redémarrage).
 Sur Rocky, les paquets système sont suivis par `dnf upgrade` ; le runtime Python isolé et les composants
 compilés sont figés et mis à jour avec les versions de loco.
 

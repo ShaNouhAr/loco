@@ -1,6 +1,8 @@
-"""Appliance Alpine : mises à jour (loco, système) et réglages, exécutés par l'agent root (locoadmin)."""
+"""Mises à jour du serveur (système ; loco sur l'appliance Alpine) et réglages de l'appliance, exécutés par l'agent
+root (locoadmin) : le portail dépose les demandes, l'agent les revalide et les applique."""
 
 import ipaddress
+import re
 import socket
 import subprocess
 
@@ -11,11 +13,13 @@ from .auth import audit, login_required, require
 from .system import _alpine_release
 from .util import back
 
-if config.APPLIANCE:
+if config.SERVER_UPDATES:
     import locoadmin
 
-ACTION_LABELS = {"check": "Vérification des versions", "update-loco": "Mise à jour de loco",
-                 "update-system": "Mise à jour du système", "configure": "Réglages", "reboot": "Redémarrage"}
+ACTION_LABELS = {"check": "Vérification des mises à jour", "update-loco": "Mise à jour de loco",
+                 "update-system": "Mise à jour du système", "update-security": "Correctifs de sécurité",
+                 "configure": "Réglages", "reboot": "Redémarrage"}
+TAG_LABELS = {"noyau": "noyau", "loco": "service loco", "socle": "socle"}
 SWITCHES = ("HTTP_ENABLED", "WU_ENABLED", "RPM_ENABLED", "FLATPAK_ENABLED")
 
 
@@ -24,13 +28,22 @@ def _require_appliance():
         abort(404)
 
 
+def _require_agent():
+    if not config.SERVER_UPDATES:
+        abort(404)
+
+
+def _agent_restart():
+    return "rc-service loco-agent restart" if config.APPLIANCE else "systemctl restart loco-agent"
+
+
 def _submit(action, params=None):
     running = locoadmin.running_job()
     if running:
         flash(f"Opération en cours : {ACTION_LABELS.get(running['action'], running['action'])}. Réessayez à la fin.", "error")
         return False
     if not locoadmin.agent_running():
-        flash("L'agent d'administration ne répond pas : sur la console, rc-service loco-agent restart.", "error")
+        flash(f"L'agent d'administration ne répond pas : sur le serveur, {_agent_restart()}.", "error")
         return False
     try:
         locoadmin.request(action, params, user=_username())
@@ -68,28 +81,47 @@ def _network():
     return info
 
 
+def _kernel_short(release):
+    """« 6.12.48+deb13-amd64 » -> « 6.12.48+deb13 » (variante d'architecture retirée, version complète en info-bulle)."""
+    return re.sub(r"[-.](amd64|arm64|x86_64|aarch64|pve|lts|virt|generic)$", "", release or "")
+
+
+def _packages(status):
+    """Paquets en attente (états antérieurs : seulement des noms), filtrables par l'interface."""
+    packages = status.get("packages")
+    if not isinstance(packages, list):
+        packages = [{"name": n, "current": "", "new": "", "origin": "", "security": False, "severity": "", "tags": []}
+                    for n in status.get("system_updates") or []]
+    return [p for p in packages if isinstance(p, dict) and p.get("name")]
+
+
 @app.route("/systeme/mises-a-jour")
 @login_required
 def appliance_updates():
-    _require_appliance()
+    _require_agent()
     status = locoadmin.read_status()
     latest = status.get("latest") or {}
     jobs = locoadmin.jobs(limit=8)
     selected = request.args.get("operation", "")
     job = next((j for j in jobs if j["id"] == selected), None) or (jobs[0] if jobs else None)
+    packages = _packages(status)
     return render_template(
         "appliance_updates.html", status=status, latest=latest, jobs=jobs, job=job,
         signature=f"{jobs[0]['id']}:{jobs[0]['state']}" if jobs else "",
-        job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS,
+        job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS,
         update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
-        running=locoadmin.running_job(), agent=locoadmin.agent_running(), alpine_release=_alpine_release(),
+        running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
+        os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else "Système"),
+        packages=packages, security=[p for p in packages if p.get("security")],
+        key_count=sum(1 for p in packages if p.get("tags")),
+        security_supported=status.get("security_supported", False), kernel_short=_kernel_short,
     )
 
 
 @app.route("/systeme/mises-a-jour/operation/<job_id>")
 @login_required
 def appliance_job(job_id):
-    _require_appliance()
+    _require_agent()
     job = next((j for j in locoadmin.jobs(limit=40) if j["id"] == job_id), None)
     if not job:
         abort(404)
@@ -99,7 +131,7 @@ def appliance_job(job_id):
 @app.route("/systeme/operations/etat")
 @login_required
 def appliance_operations_state():
-    _require_appliance()
+    _require_agent()
     latest = locoadmin.jobs(limit=1)
     signature = f"{latest[0]['id']}:{latest[0]['state']}" if latest else ""
     return {"signature": signature}
@@ -108,14 +140,17 @@ def appliance_operations_state():
 @app.route("/systeme/mises-a-jour", methods=["POST"])
 @login_required
 def appliance_updates_post():
-    _require_appliance()
+    _require_agent()
     action = request.form.get("action", "")
-    if action not in ("check", "update-loco", "update-system", "reboot"):
+    allowed = ("check", "update-system", "update-security", "reboot") + (("update-loco",) if config.APPLIANCE else ())
+    if action not in allowed:
         abort(400)
     require("system.view" if action == "check" else "system.reboot" if action == "reboot" else "system.update")
     if _submit(action):
         audit(f"systeme.{action}", ACTION_LABELS[action])
-        flash(f"{ACTION_LABELS[action]} lancée." if action != "reboot" else "Redémarrage demandé.", "ok")
+        flash("Redémarrage demandé." if action == "reboot" else
+              "Installation des correctifs de sécurité lancée." if action == "update-security" else
+              f"{ACTION_LABELS[action]} lancée.", "ok")
     return back("appliance_updates")
 
 

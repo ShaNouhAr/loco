@@ -1,9 +1,9 @@
-"""Administration de l'appliance Alpine (root) : mises à jour de loco et du système, réglages, redémarrage.
+"""Administration du serveur (root) : mises à jour du système (et, sur l'appliance Alpine, de loco), réglages, redémarrage.
 
 Module hors du paquet loco : l'agent tourne en root sans charger l'application web (ni base, ni sessions).
   locoadmin.py agent                 service loco-agent : exécute les demandes déposées par le portail
   locoadmin.py run-job ID            opération détachée lancée par l'agent
-  locoadmin.py update [check|loco|system|reboot|status]     commande loco-update
+  locoadmin.py update [check|loco|system|security|reboot|status]   commande loco-update
   locoadmin.py config [show|set CLÉ=VALEUR…]                 commande loco-config
 
 Le portail (compte loco, sans droits root) dépose des demandes dans REQUESTS avec request() ; l'agent les
@@ -49,9 +49,12 @@ locosnapshot = importlib.util.module_from_spec(_snapshot_spec)
 _snapshot_spec.loader.exec_module(locosnapshot)
 REPO = "ShaNouhAr/loco"
 API = f"https://api.github.com/repos/{REPO}/releases/latest"
-ACTIONS = ("check", "update-loco", "update-system", "reboot", "configure")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure")
+# Réservées à l'appliance Alpine (sources et réglages gérés par loco) ; ailleurs, install.sh s'en charge.
+APPLIANCE_ACTIONS = ("update-loco", "configure")
 JOB_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")
 CHECK_EVERY = 86400
+RETRY_EVERY = 3600
 MAX_REQUEST = 16384
 
 # Mêmes règles qu'install.sh, plus strictes là où loco.conf (relu par le shell) pourrait être détourné.
@@ -232,9 +235,6 @@ def latest_release():
             "archive": assets.get(f"loco-{version}.tar.gz", ""), "sums": assets.get("SHA256SUMS", "")}
 
 
-def reboot_required():
-    """Noyau mis à jour : les modules du noyau en cours d'exécution ont été remplacés."""
-    return not os.path.isdir(f"/lib/modules/{os.uname().release}")
 
 
 def _write_json(path, data):
@@ -275,28 +275,280 @@ def _run(cmd, log, **kw):
 
 
 def check(log=print):
-    """Versions disponibles (loco publié sur GitHub, paquets Alpine) ; résultat gardé dans STATUS."""
-    values = {"checked": _now(), "current": current_version(), "reboot_required": reboot_required(), "errors": []}
+    """Versions disponibles (loco publié sur GitHub, paquets du système) ; résultat gardé dans STATUS."""
+    values = {"checked": _now(), "current": current_version(), "errors": []}
     try:
         values["latest"] = latest_release()
     except (OSError, ValueError, KeyError) as e:
         values["errors"].append(f"Version publiée de loco introuvable : {e}")
+    values.update(system_state())
     try:
-        if subprocess.run(["apk", "update", "--quiet"], capture_output=True, timeout=45, env=_system_env()).returncode == 0:
-            out = subprocess.run(["apk", "list", "--upgradable"], capture_output=True, text=True, timeout=30).stdout
-            values["system_updates"] = sorted(line.split()[0] for line in out.splitlines() if "upgradable" in line)
-        else:
-            values["errors"].append("Dépôts Alpine injoignables.")
-    except subprocess.TimeoutExpired:
-        values["errors"].append("Dépôts Alpine injoignables (délai dépassé).")
+        packages = pending_packages()
+        values.update(packages=packages, system_updates=[p["name"] for p in packages],
+                      security_count=sum(1 for p in packages if p["security"]), system_error=False)
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        values["errors"].append(f"Paquets du système : {e}.")
+        values["system_error"] = True
     status = _update_status(**values)
     latest = status.get("latest", {}).get("version", "")
     log(f"loco installé : {status['current']} ; dernière version publiée : {latest or 'inconnue'}")
-    log(f"Paquets Alpine à mettre à jour : {len(status.get('system_updates', []))}"
-        + (" ; redémarrage nécessaire" if status["reboot_required"] else ""))
+    log(f"{status['os']} : {len(status.get('system_updates', []))} paquet(s) à mettre à jour"
+        + (f", dont {status.get('security_count', 0)} correctif(s) de sécurité" if status["security_supported"] else ""))
+    for reason in status["reboot_reasons"]:
+        log(f"Redémarrage nécessaire : {reason}")
+    if status["stale_services"]:
+        log("Services qui utilisent d'anciennes bibliothèques : " + ", ".join(sorted(status["stale_services"])))
     for e in status["errors"]:
         log(e)
     return not status["errors"]
+
+
+# --------------------------------------------------------------------------- paquets du système
+
+# Gestionnaire de paquets du serveur : Alpine (appliance), Debian et Ubuntu, Rocky Linux.
+ALPINE = os.path.exists("/etc/alpine-release")
+BOOT = "/boot"
+MODULES = "/lib/modules"
+REBOOT_FLAG = "/run/reboot-required"
+APT_OPTS = ["-q", "-o", "APT::Update::Error-Mode=any", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef",
+            "-o", "Dpkg::Options::=--force-confold"]
+APT_INST_RE = re.compile(r"^Inst (\S+) (?:\[([^\]]+)\] )?\((\S+) (.*?) \[[^\]]+\]\)")
+RPM_ARCH_RE = re.compile(r"\.(x86_64|aarch64|noarch|i686|ppc64le|s390x)$")
+SEVERITIES = ("Critical", "Important", "Moderate", "Low")
+# Paquets à repérer dans la liste : noyau, services que loco fait tourner, socle de sécurité du système.
+KEY_PACKAGES = (
+    ("noyau", re.compile(r"^(linux-image-.+|linux-(lts|virt|edge)|linux-firmware.*|kernel(-core|-modules.*)?)$")),
+    ("loco", re.compile(r"^(squid(-common)?|nginx(-.+)?|apt-cacher-ng|python3(\.[0-9]+)?(-minimal)?|libpython3.*"
+                        r"|python3-(flask|gunicorn|werkzeug|jinja2|ldap.*)|py3-(flask|gunicorn|werkzeug|jinja2|ldap.*)"
+                        r"|gunicorn|flatpak|ostree|createrepo.*)$")),
+    ("socle", re.compile(r"^(openssl(-libs)?|libssl.*|openssh.*|libc6|libc-bin|glibc(-.+)?|musl|sudo|systemd|libsystemd.*"
+                         r"|ca-certificates|curl|libcurl.*|gnutls|libgnutls.*|zlib|zlib1g|libz.*|xz-libs|liblzma.*|dbus.*|polkit.*)$")),
+)
+# Redémarrés après une mise à jour s'ils utilisent encore d'anciennes bibliothèques (services de loco uniquement).
+OWN_UNITS = ("loco-portal.service", "nginx.service", "squid.service", "apt-cacher-ng.service")
+# Jamais redémarrés à chaud : un redémarrage du serveur s'impose.
+CORE_UNITS = ("init", "dbus.service", "dbus-broker.service")
+
+
+def package_manager():
+    if ALPINE:
+        return "apk"
+    if os.path.exists("/etc/debian_version") and shutil.which("apt-get"):
+        return "apt"
+    if shutil.which("dnf"):
+        return "dnf"
+    return ""
+
+
+def os_name():
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    return shlex.split(line.split("=", 1)[1])[0]
+    except (OSError, ValueError, IndexError):
+        pass
+    return "Système"
+
+
+def in_container():
+    """Conteneur LXC ou autre : le noyau est celui de l'hôte, il n'est pas mis à jour ici."""
+    if os.path.exists("/run/systemd/container"):
+        return True
+    try:
+        with open("/proc/1/environ", "rb") as f:
+            return b"container=" in f.read()
+    except OSError:
+        return False
+
+
+def _kernel_key(release):
+    return tuple(int(x) for x in re.findall(r"[0-9]+", release))
+
+
+def installed_kernels():
+    """Noyaux installés dans /boot, du plus récent au plus ancien (Debian, Ubuntu, Rocky)."""
+    try:
+        names = [n[len("vmlinuz-"):] for n in os.listdir(BOOT) if n.startswith("vmlinuz-") and "rescue" not in n]
+    except OSError:
+        return []
+    return sorted((n for n in names if re.match(r"^[0-9]", n)), key=_kernel_key, reverse=True)
+
+
+def _stale_mapping(line):
+    if not line.endswith(" (deleted)\n"):
+        return False
+    parts = line.split(None, 5)
+    return len(parts) == 6 and parts[5].startswith(("/usr/", "/lib", "/bin/", "/sbin/"))
+
+
+def _unit(pid):
+    if pid == "1":
+        return "init"
+    with open(f"/proc/{pid}/cgroup") as f:
+        for line in f:
+            path = line.rstrip("\n").split(":", 2)[-1]
+            for part in reversed(path.split("/")):
+                if part.endswith((".service", ".scope")):
+                    return "session utilisateur" if part.startswith("session-") else part
+    with open(f"/proc/{pid}/comm") as f:
+        return f.read().strip()
+
+
+def stale_services():
+    """Services qui utilisent encore des bibliothèques ou programmes remplacés par une mise à jour."""
+    found = {}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/maps") as f:
+                if not any(_stale_mapping(line) for line in f):
+                    continue
+            unit = _unit(pid)
+            with open(f"/proc/{pid}/comm") as f:
+                found.setdefault(unit, set()).add(f.read().strip())
+        except OSError:
+            continue
+    return {unit: sorted(names) for unit, names in found.items()}
+
+
+def reboot_reasons(stale=None):
+    reasons = []
+    container = in_container()
+    running = os.uname().release
+    if not container:
+        installed = installed_kernels()
+        if not os.path.isdir(os.path.join(MODULES, running)):
+            reasons.append("noyau mis à jour (les modules du noyau en cours ont été remplacés)")
+        elif installed and _kernel_key(installed[0]) > _kernel_key(running):
+            reasons.append(f"noyau {installed[0]} installé, {running} en cours")
+    try:
+        with open(REBOOT_FLAG + ".pkgs") as f:
+            pkgs = sorted({line.strip() for line in f if line.strip()})
+    except OSError:
+        pkgs = []
+    if os.path.exists(REBOOT_FLAG):
+        reasons.append("demandé par " + ", ".join(pkgs[:6]) if pkgs else "demandé par une mise à jour")
+    core = sorted(u for u in (stale or {}) if u in CORE_UNITS)
+    if core:
+        reasons.append("d'anciennes bibliothèques restent chargées par " + ", ".join(core))
+    return reasons
+
+
+def reboot_required():
+    return bool(reboot_reasons(stale_services()))
+
+
+def system_state():
+    """État du système, sans réseau : noyau, redémarrage, services à relancer (calculé en root)."""
+    stale = stale_services()
+    container = in_container()
+    installed = [] if container else installed_kernels()
+    reasons = reboot_reasons(stale)
+    return {"os": os_name(), "package_manager": package_manager(), "container": container,
+            "kernel": {"running": os.uname().release, "installed": installed[0] if installed else ""},
+            "security_supported": package_manager() in ("apt", "dnf"),
+            "reboot_required": bool(reasons), "reboot_reasons": reasons,
+            "stale_services": {u: n for u, n in stale.items() if u not in CORE_UNITS}}
+
+
+def _tags(name):
+    return [tag for tag, pattern in KEY_PACKAGES if pattern.match(name)]
+
+
+def _apt_env():
+    env = _system_env()
+    env.update(DEBIAN_FRONTEND="noninteractive", APT_LISTCHANGES_FRONTEND="none", NEEDRESTART_SUSPEND="1",
+               UCF_FORCE_CONFFOLD="1")
+    return env
+
+
+def _apt_pending():
+    env = _apt_env()
+    if subprocess.run(["apt-get", "update", *APT_OPTS], capture_output=True, timeout=600, env=env).returncode != 0:
+        raise ValueError("dépôts APT injoignables")
+    out = subprocess.run(["apt-get", "-s", *APT_OPTS, "upgrade", "--with-new-pkgs"], capture_output=True, text=True,
+                         timeout=300, env=env)
+    if out.returncode != 0:
+        raise ValueError("simulation de mise à jour APT impossible")
+    packages = []
+    for line in out.stdout.splitlines():
+        m = APT_INST_RE.match(line)
+        if m:
+            name, current, new, origin = m.groups()
+            packages.append({"name": name, "current": current or "", "new": new, "origin": origin[:120],
+                             "security": "security" in origin.lower(), "severity": ""})
+    return packages
+
+
+def _rpm_name(nevra):
+    base = RPM_ARCH_RE.sub("", nevra)
+    return base.rsplit("-", 2)[0] if base.count("-") >= 2 else base
+
+
+def _dnf_pending():
+    env = _system_env()
+    r = subprocess.run(["dnf", "-q", "--refresh", "check-update"], capture_output=True, text=True, timeout=600, env=env)
+    if r.returncode not in (0, 100):
+        raise ValueError("dépôts DNF injoignables")
+    found = {}
+    for line in r.stdout.splitlines():
+        if line.startswith("Obsoleting"):
+            break
+        fields = line.split()
+        if len(fields) == 3 and not line[0].isspace() and RPM_ARCH_RE.search(fields[0]):
+            name = RPM_ARCH_RE.sub("", fields[0])
+            found.setdefault(name, {"name": name, "current": "", "new": fields[1], "origin": fields[2],
+                                    "security": False, "severity": ""})
+    r = subprocess.run(["dnf", "-q", "updateinfo", "list", "--updates", "--security"], capture_output=True, text=True,
+                       timeout=300, env=env)
+    for line in r.stdout.splitlines():
+        fields = line.replace("/", " ").split()
+        nevra = next((f for f in reversed(fields) if RPM_ARCH_RE.search(f)), "")
+        pkg = found.get(_rpm_name(nevra)) if nevra else None
+        if pkg:
+            pkg["security"] = True
+            pkg["severity"] = next((s for s in SEVERITIES if s in fields), pkg["severity"])
+    if found:
+        r = subprocess.run(["rpm", "-q", "--qf", "%{NAME} %{VERSION}-%{RELEASE}\\n", *found], capture_output=True,
+                           text=True, timeout=60)
+        for line in r.stdout.splitlines():
+            fields = line.split()
+            if len(fields) == 2 and fields[0] in found:
+                found[fields[0]]["current"] = fields[1]
+    return list(found.values())
+
+
+def _apk_pending():
+    env = _system_env()
+    if subprocess.run(["apk", "update", "--quiet"], capture_output=True, timeout=120, env=env).returncode != 0:
+        raise ValueError("dépôts Alpine injoignables")
+    out = subprocess.run(["apk", "list", "--upgradable"], capture_output=True, text=True, timeout=60).stdout
+    packages = []
+    for line in out.splitlines():
+        m = re.match(r"^(\S+)-([^-\s]+-r[0-9]+) .*\[upgradable from: (\S+)\]", line)
+        if m:
+            name, new, old = m.groups()
+            packages.append({"name": name, "current": old[len(name) + 1:] if old.startswith(name + "-") else old,
+                             "new": new, "origin": "", "security": False, "severity": ""})
+    return packages
+
+
+def pending_packages():
+    """Paquets à mettre à jour, correctifs de sécurité et paquets importants en tête."""
+    manager = package_manager()
+    if manager == "apt":
+        packages = _apt_pending()
+    elif manager == "dnf":
+        packages = _dnf_pending()
+    elif manager == "apk":
+        packages = _apk_pending()
+    else:
+        raise ValueError("gestionnaire de paquets non pris en charge")
+    for p in packages:
+        p["tags"] = _tags(p["name"])
+    return sorted(packages, key=lambda p: (not p["security"], not p["tags"], p["name"]))
 
 
 def _install(source, args, log):
@@ -444,16 +696,61 @@ def _wait_healthy(log):
     return False
 
 
-def update_system(log=print):
-    """Paquets Alpine de la version installée (apk upgrade), puis redémarrage des services de loco."""
-    if _run(["apk", "update", "--no-progress"], log) != 0:
-        raise ValueError("dépôts Alpine injoignables")
-    ok = _run(["apk", "upgrade", "--no-progress"], log) == 0
-    # Python, nginx ou les bibliothèques ont pu changer : relancer les services avec les nouvelles versions.
-    ok = _run(["rc-service", "loco", "restart"], log) == 0 and ok
+def update_system(log=print, security_only=False):
+    """Paquets du système (tous, ou les seuls correctifs de sécurité), puis relance des services de loco concernés."""
+    manager = package_manager()
+    if manager == "apk":
+        if security_only:
+            raise ValueError("Alpine ne distingue pas les correctifs de sécurité : mettez tout à jour")
+        if _run(["apk", "update", "--no-progress"], log) != 0:
+            raise ValueError("dépôts Alpine injoignables")
+        ok = _run(["apk", "upgrade", "--no-progress"], log) == 0
+        # Python, nginx ou les bibliothèques ont pu changer : relancer les services avec les nouvelles versions.
+        ok = _run(["rc-service", "loco", "restart"], log) == 0 and ok
+    elif manager == "apt":
+        env = _apt_env()
+        if _run(["apt-get", "update", *APT_OPTS], log, env=env) != 0:
+            raise ValueError("dépôts APT injoignables")
+        if security_only:
+            names = [p["name"] for p in _apt_pending() if p["security"] and p["current"]]
+            if not names:
+                log("Aucun correctif de sécurité en attente.")
+                return True
+            cmd = ["apt-get", "-y", *APT_OPTS, "install", "--only-upgrade", *names]
+        else:
+            cmd = ["apt-get", "-y", *APT_OPTS, "upgrade", "--with-new-pkgs"]
+        ok = _run(cmd, log, env=env) == 0
+        ok = _restart_stale(log) and ok
+    elif manager == "dnf":
+        ok = _run(["dnf", "-y", "--refresh", "upgrade", *(["--security"] if security_only else [])], log) == 0
+        ok = _restart_stale(log) and ok
+    else:
+        raise ValueError("gestionnaire de paquets non pris en charge")
     ok = _wait_healthy(log) and ok
-    if reboot_required():
-        log("Noyau mis à jour : redémarrez le serveur pour l'utiliser.")
+    stale = stale_services()
+    for reason in reboot_reasons(stale):
+        log(f"Redémarrage nécessaire : {reason}.")
+    others = sorted(u for u in stale if u not in CORE_UNITS and u not in OWN_UNITS and u != "loco-agent.service")
+    if others:
+        log("Utilisent encore d'anciennes bibliothèques (redémarrez-les ou redémarrez le serveur) : " + ", ".join(others))
+    return ok
+
+
+def _restart_stale(log):
+    """systemd : recharge systemd et relance les services de loco qui utilisent d'anciennes bibliothèques (l'agent en
+    dernier). Les autres services sont seulement signalés."""
+    stale = stale_services()
+    ok = True
+    for unit in OWN_UNITS:
+        if unit in stale:
+            log(f"Relance de {unit} (bibliothèques mises à jour).")
+            ok = _run(["systemctl", "restart", unit], log) == 0 and ok
+    if "init" in stale:
+        log("systemd utilise d'anciennes bibliothèques : rechargement (systemctl daemon-reexec).")
+        ok = _run(["systemctl", "daemon-reexec"], log) == 0 and ok
+    if "loco-agent.service" in stale:
+        # KillMode=process : l'opération en cours survit à la relance de l'agent.
+        _run(["systemctl", "restart", "--no-block", "loco-agent.service"], log)
     return ok
 
 
@@ -494,6 +791,8 @@ def _operation(action, params, log):
         return update_loco(log)
     if action == "update-system":
         return update_system(log)
+    if action == "update-security":
+        return update_system(log, security_only=True)
     if action == "configure":
         return configure(params, log)
     if action == "reboot":
@@ -544,7 +843,7 @@ def run_job(job_id):
             log(f"Erreur : {e}")
         job.update(state="success" if ok else "failed", finished=_now())
         _write_json(meta_path, job)
-        if job["action"] in ("update-loco", "update-system", "configure"):
+        if job["action"] in ("update-loco", "update-system", "update-security", "configure"):
             try:
                 check(lambda _text: None)
             except Exception as e:  # noqa: BLE001
@@ -647,6 +946,10 @@ def agent():
         if job.get("state") in ("queued", "running") and not _alive(job.get("pid")):
             job.update(state="failed", finished=_now())
             _write_json(_job_paths(job["id"])[0], job)
+    # Après un redémarrage (ou une relance de l'agent), l'état du noyau et des services a pu changer : nouvelle
+    # vérification une minute plus tard, le temps que le réseau soit prêt.
+    status = read_status()
+    recheck = time.time() + 60 if (status.get("reboot_required") or status.get("stale_services") or "os" not in status) else 0
     while True:
         for job in jobs(limit=40):
             if job.get("state") in ("queued", "running") and job.get("pid") and not _alive(job["pid"]):
@@ -665,7 +968,7 @@ def agent():
                     os.unlink(path)
                 except OSError:
                     continue
-                if not req or req.get("action") not in ACTIONS:
+                if not req or req.get("action") not in ACTIONS or (req["action"] in APPLIANCE_ACTIONS and not ALPINE):
                     continue
                 params = {}
                 if req["action"] == "configure":
@@ -676,9 +979,14 @@ def agent():
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
-        checked = read_status().get("checked", "")
-        if not busy and (not checked or time.time() - _ts(checked) > CHECK_EVERY):
+        status = read_status()
+        checked = status.get("checked", "")
+        # Dépôts du système injoignables : nouvel essai au bout d'une heure plutôt que le lendemain (GitHub injoignable,
+        # fréquent sur un réseau fermé, ne compte pas).
+        every = RETRY_EVERY if status.get("system_error") else CHECK_EVERY
+        if not busy and (not checked or time.time() - _ts(checked) > every or (recheck and time.time() > recheck)):
             _submit("check", user="loco-agent")
+            recheck = 0
         _prune_jobs()
         if time.time() - beat > 20:
             beat = time.time()
@@ -704,7 +1012,7 @@ def _ts(text):
 
 def request(action, params=None, user=""):
     """Dépôt d'une demande par le portail ; l'agent la revalide avant de l'exécuter."""
-    if action not in ACTIONS:
+    if action not in ACTIONS or (action in APPLIANCE_ACTIONS and not ALPINE):
         raise ValueError("action inconnue")
     params = validate(params or {}) if action == "configure" else {}
     if action == "configure" and not params:
@@ -751,7 +1059,7 @@ def _console(action, params=None):
         ok = False
     finally:
         os.close(fd)
-    if ok and action in ("update-loco", "update-system", "configure"):
+    if ok and action in ("update-loco", "update-system", "update-security", "configure"):
         try:
             check(lambda _text: None)
         except Exception:  # noqa: BLE001 - la vérification reste facultative
@@ -761,10 +1069,11 @@ def _console(action, params=None):
 
 UPDATE_HELP = """Usage : loco-update [COMMANDE]
   status    versions installées et disponibles (dernière vérification)
-  check     vérifie les versions disponibles (loco et paquets Alpine)
-  loco      installe la dernière version publiée de loco (retour arrière automatique en cas d'échec)
-  system    met à jour les paquets Alpine
-  all       loco puis le système
+  check     vérifie les versions disponibles (loco et paquets du système)
+  loco      installe la dernière version publiée de loco (appliance Alpine ; retour arrière en cas d'échec)
+  system    met à jour tous les paquets du système (noyau compris)
+  security  installe les seuls correctifs de sécurité (Debian, Ubuntu, Rocky Linux)
+  all       loco puis le système (appliance Alpine)
   reboot    redémarre le serveur"""
 
 CONFIG_HELP = """Usage : loco-config [show | set CLÉ=VALEUR…]
@@ -779,8 +1088,10 @@ def _print_status():
     print(f"loco installé      : {current_version()}")
     print(f"Dernière publiée   : {latest.get('version', 'inconnue')}"
           + (" (mise à jour disponible)" if latest and version_key(latest["version"]) > version_key(current_version()) else ""))
-    print(f"Paquets Alpine     : {len(status.get('system_updates', []))} à mettre à jour")
-    print(f"Redémarrage requis : {'oui' if reboot_required() else 'non'}")
+    print(f"Paquets du système : {len(status.get('system_updates', []))} à mettre à jour"
+          + (f" dont {status.get('security_count', 0)} de sécurité" if status.get("security_supported") else ""))
+    reasons = reboot_reasons(stale_services())
+    print(f"Redémarrage requis : {'oui (' + '; '.join(reasons) + ')' if reasons else 'non'}")
     print(f"Vérifié le         : {status.get('checked', 'jamais')}")
     for e in status.get("errors", []):
         print(f"  ! {e}")
@@ -802,14 +1113,22 @@ def main(argv):
         if sub == "status":
             _print_status()
             return 0
+        if sub in ("all", "loco") and not ALPINE:
+            print("Erreur : hors appliance, mettez loco à jour avec install.sh de la nouvelle version.", file=sys.stderr)
+            return 1
         if sub == "all":
             return _console("update-loco") or _console("update-system")
-        actions = {"check": "check", "loco": "update-loco", "system": "update-system", "reboot": "reboot"}
+        actions = {"check": "check", "loco": "update-loco", "system": "update-system", "security": "update-security",
+                   "reboot": "reboot"}
         if sub not in actions or len(args) > 1:
             print(UPDATE_HELP, file=sys.stderr)
             return 0 if sub in ("-h", "--help") else 2
         return _console(actions[sub])
     if cmd == "config":
+        if not ALPINE:
+            print("Erreur : réglages de l'appliance Alpine ; ailleurs, relancez install.sh avec les options voulues.",
+                  file=sys.stderr)
+            return 1
         sub = args[0] if args else "show"
         if sub == "show":
             conf = read_conf()

@@ -53,8 +53,8 @@
             {% if can("audit.view") %}<a href="{{ url_for('journal') }}" {% if ep == 'journal' %}aria-current="page"{% endif %}>{{ nav_icon('journal') }}<span><strong>Journal</strong><small>Historique des actions</small></span></a>{% endif %}
             {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>Système</strong><small>Services et sauvegardes</small></span></a>{% endif %}
             {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Fonctionnalités</strong><small>Activer ou désactiver les fonctions</small></span></a>{% endif %}
-            {% if appliance and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Mises à jour</strong><small>loco et Alpine Linux</small></span></a>
-            {% if can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Configuration</strong><small>Accès, fonctions et stockage</small></span></a>{% endif %}{% endif %}
+            {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Mises à jour</strong><small>{{ 'loco, système et sécurité' if appliance else 'Système, noyau et sécurité' }}</small></span></a>{% endif %}
+            {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>Configuration</strong><small>Accès, fonctions et stockage</small></span></a>{% endif %}
           </div>
         </div>
       </details>
@@ -84,8 +84,8 @@
     {% if can("audit.view") %}<a href="{{ url_for('journal') }}" class="{{ 'on' if ep == 'journal' }}">Journal</a>{% endif %}
     {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">Système</a>{% endif %}
     {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">Fonctionnalités</a>{% endif %}
-    {% if appliance and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">Mises à jour</a>
-    {% if can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">Configuration</a>{% endif %}{% endif %}
+    {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">Mises à jour</a>{% endif %}
+    {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">Configuration</a>{% endif %}
   </div>
   {% endif %}
   {% block content %}{% endblock %}

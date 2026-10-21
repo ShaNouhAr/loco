@@ -1,0 +1,16 @@
+[Unit]
+Description=loco - agent d'administration (mises à jour du système demandées depuis le portail)
+Documentation=https://github.com/ShaNouhAr/loco
+After=network-online.target loco-portal.service
+Wants=network-online.target
+
+[Service]
+# Root : apt/dnf, relance des services, redémarrage. Les demandes du portail sont revalidées (portal/locoadmin.py).
+ExecStart=/usr/bin/python3 -I /opt/loco/portal/locoadmin.py agent
+Restart=always
+RestartSec=3
+# Une opération en cours (processus détaché) survit à la relance de l'agent, par exemple après une mise à jour de Python.
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

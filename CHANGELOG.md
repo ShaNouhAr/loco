@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.30.0 — 2026-10-21
+
+- **Mises à jour du système du serveur depuis le portail**, sur toutes les installations Linux (Debian, Ubuntu, Rocky Linux, et l'appliance Alpine qui l'avait déjà) : *Administration → Mises à jour* liste les paquets en attente (noyau, OpenSSL, Squid, nginx, Python, glibc…), avec les **correctifs de sécurité en tête** (dépôt `-security` de Debian/Ubuntu, avis de sécurité DNF avec leur gravité sur Rocky) et les paquets importants repérés (« noyau », « service loco », « socle »). Filtres et recherche dans la liste.
+- **Installer les correctifs de sécurité** seuls ou **tout mettre à jour** ; les fichiers de configuration posés par loco sont conservés, et les services de loco qui utilisent encore d'anciennes bibliothèques (portail, nginx, Squid, apt-cacher-ng) sont relancés automatiquement. Le journal de chaque opération s'affiche en direct.
+- **Redémarrage** : la page indique pourquoi il est nécessaire (nouveau noyau installé, demande d'un paquet, bibliothèques remplacées encore chargées par le système) et les services qui utilisent d'anciennes bibliothèques ; bouton *Redémarrer le serveur*. Dans un conteneur LXC, le noyau est signalé comme géré par l'hôte.
+- Vérification automatique chaque jour et au redémarrage. En console : `loco-update status|check|security|system|reboot`. Les opérations passent par un agent root séparé (`loco-agent`, service systemd désormais installé partout) qui revalide chaque demande : le portail reste sans privilèges.
+
 ## 2.29.2 — 2026-10-21
 
 Passe de sécurité et de fiabilité :

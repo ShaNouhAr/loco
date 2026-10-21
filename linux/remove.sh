@@ -53,9 +53,11 @@ if [ "$ID" = alpine ]; then
     . "$PREFIX/lib/alpine.sh"
     alpine_remove
 fi
-systemctl disable --now loco-portal loco-stats.timer loco-nginx.path loco-backup.timer \
+systemctl disable --now loco-portal loco-stats.timer loco-nginx.path loco-backup.timer loco-agent \
     >/dev/null 2>&1 || true
-rm -f /etc/systemd/system/loco-portal.service /etc/systemd/system/loco-stats.service \
+rm -rf /var/lib/loco-agent
+rm -f /etc/systemd/system/loco-agent.service /usr/local/sbin/loco-update \
+      /etc/systemd/system/loco-portal.service /etc/systemd/system/loco-stats.service \
       /etc/systemd/system/loco-stats.timer /etc/systemd/system/loco-nginx.service \
       /etc/systemd/system/loco-nginx.path /etc/systemd/system/loco-backup.service \
       /etc/systemd/system/loco-backup.timer

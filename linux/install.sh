@@ -625,10 +625,16 @@ elif [ "$CONTAINER" = 1 ]; then
         render "$SRC/docker/supervisord.conf" > /etc/supervisor/loco.conf
     chmod 600 /etc/supervisor/loco.conf
 else
+# Agent root des mises à jour du système (portal/locoadmin.py) : le portail y dépose ses demandes, dossier créé
+# avant le portail (ProtectSystem=strict ne lui ouvre que des dossiers existants).
+install -d -m 755 -o root -g root /var/lib/loco-agent /var/lib/loco-agent/jobs
+install -d -m 730 -o root -g loco /var/lib/loco-agent/requests
+ln -sf "$PREFIX/bin/loco-update" /usr/local/sbin/loco-update
 render "$PREFIX/conf/loco-portal.service" > /etc/systemd/system/loco-portal.service
 cp "$PREFIX/conf/loco-stats.service" "$PREFIX/conf/loco-stats.timer" \
    "$PREFIX/conf/loco-nginx.service" "$PREFIX/conf/loco-nginx.path" \
-   "$PREFIX/conf/loco-backup.service" "$PREFIX/conf/loco-backup.timer" /etc/systemd/system/
+   "$PREFIX/conf/loco-backup.service" "$PREFIX/conf/loco-backup.timer" \
+   "$PREFIX/conf/loco-agent.service" /etc/systemd/system/
 systemctl daemon-reload
 if [ "$PLATFORM" = rocky ] && [ "$OS_MAJOR" = 10 ]; then
     systemctl enable --now loco-acng-maintenance.timer >/dev/null 2>&1
@@ -646,9 +652,11 @@ if [ "$WU_ENABLED" = 1 ] && command -v squid >/dev/null 2>&1; then
 else
     systemctl disable --now squid >/dev/null 2>&1 || true
 fi
-systemctl enable loco-portal loco-stats.timer loco-nginx.path >/dev/null 2>&1
+systemctl enable loco-portal loco-stats.timer loco-nginx.path loco-agent >/dev/null 2>&1
 systemctl start loco-nginx.path
 systemctl restart loco-portal
+# KillMode=process : une mise à jour du système lancée par l'agent survit à cette relance.
+systemctl restart loco-agent || warn "l'agent d'administration ne démarre pas (journalctl -u loco-agent) : mises à jour du système indisponibles depuis le portail."
 systemctl start loco-stats.timer loco-stats.service
 if [ "$BACKUP_KEEP" -gt 0 ]; then
     systemctl enable --now loco-backup.timer >/dev/null 2>&1

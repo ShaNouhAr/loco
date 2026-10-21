@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.29.2"
+VERSION = "2.30.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -20,6 +20,9 @@ WINDOWS = os.name == "nt" or os.environ.get("LOCO_RUNTIME") == "windows"
 # Appliance Alpine (ISO) : OpenRC lance supervisord ; mises à jour et configuration depuis le portail.
 ALPINE = os.environ.get("LOCO_RUNTIME") == "alpine"
 APPLIANCE = ALPINE
+# Serveur Linux installé par install.sh (systemd ou OpenRC) : l'agent root loco-agent met le système à jour depuis
+# le portail. L'image Docker se met à jour par l'image, le serveur Windows par Windows Update.
+SERVER_UPDATES = not CONTAINER and not WINDOWS
 # Cache APT servi par nginx (pas d'apt-cacher-ng) : Windows et Alpine.
 APT_NGINX = WINDOWS or ALPINE
 GPG = os.environ.get("LOCO_GPG", "gpg")

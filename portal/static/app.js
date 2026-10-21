@@ -348,7 +348,7 @@
       var shown = 0;
       rows.forEach(function (row) {
         var okText = !q || (row.dataset.search || row.textContent).toLowerCase().indexOf(q) >= 0;
-        var okChip = mode === "all" || (mode === "manual" && row.dataset.manual) || (mode === "update" && row.dataset.update);
+        var okChip = mode === "all" || !!row.dataset[mode];   // pastille « x » : lignes data-x
         var hit = okText && okChip;
         row.classList.toggle("hidden", !hit);
         if (hit) shown++;

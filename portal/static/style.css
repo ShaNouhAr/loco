@@ -260,6 +260,7 @@ a.tag:hover { border-color: var(--line-2); color: var(--text); text-decoration: 
 .note.warn { border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); background: color-mix(in srgb, var(--warn) 8%, var(--bg)); color: var(--text); }
 .note.err { border-color: color-mix(in srgb, var(--err) 35%, var(--line)); background: color-mix(in srgb, var(--err) 8%, var(--bg)); color: var(--text); }
 .note.err a, .note.warn a { color: var(--text); }
+.note ul { margin: 6px 0 0; padding-left: 20px; }
 
 /* ------------------------------------------------------------------ boutons */
 

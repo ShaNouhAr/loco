@@ -58,7 +58,9 @@ fi
 if runuser -u loco -- test -r /etc/loco/install-state/nginx-rocky-original.conf; then
     echo 'Les métadonnées de désinstallation doivent être réservées à root' >&2; exit 1
 fi
-systemctl is-active --quiet nginx apt-cacher-ng loco-portal loco-backup.timer loco-stats.timer
+systemctl is-active --quiet nginx apt-cacher-ng loco-portal loco-agent loco-backup.timer loco-stats.timer
+for _ in $(seq 1 150); do grep -q '"package_manager": "dnf"' /var/lib/loco-agent/status.json 2>/dev/null && break; sleep 2; done
+grep -q '"package_manager": "dnf"' /var/lib/loco-agent/status.json
 if [ "${VERSION_ID%%.*}" = 10 ]; then
     systemctl is-active --quiet loco-acng-maintenance.timer
     systemctl start loco-acng-maintenance.service
@@ -141,6 +143,7 @@ for _ in 1 2 3; do
 done
 linux/remove.sh --purge -y
 [ ! -e /opt/loco ]
+[ ! -e /var/lib/loco-agent ]
 [ ! -e /etc/loco ]
 [ ! -e /srv/loco ]
 [ ! -e /usr/local/lib/loco/acng ]

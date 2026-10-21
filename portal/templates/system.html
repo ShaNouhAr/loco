@@ -50,7 +50,7 @@
     <div class="metric">
       <div class="k">Version</div>
       <div class="v">{{ version }}</div>
-      <div class="s">{% if appliance and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">mises à jour de loco</a>{% else %}suivie par les agents{% endif %}</div>
+      <div class="s">{% if server_updates and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">mises à jour du serveur</a>{% else %}suivie par les agents{% endif %}</div>
     </div>
   </div>
 

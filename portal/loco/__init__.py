@@ -106,6 +106,7 @@ def inject_globals():
         "alpine": config.ALPINE,
         "apt_nginx": config.APT_NGINX,
         "appliance": config.APPLIANCE,
+        "server_updates": config.SERVER_UPDATES,
     }
 
 

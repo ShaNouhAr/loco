@@ -35,7 +35,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=@DATA@ /var/lib/loco
+# Demandes à l'agent root loco-agent (mises à jour du système) : dépôt seulement, sans lecture.
+ReadWritePaths=@DATA@ /var/lib/loco -/var/lib/loco-agent/requests
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes

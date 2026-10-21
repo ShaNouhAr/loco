@@ -1,4 +1,5 @@
-"""Appliance Alpine : réglages, mise à jour vérifiée avec retour arrière, demandes de l'agent, pages du portail."""
+"""Appliance Alpine et serveurs Linux : réglages, mise à jour vérifiée avec retour arrière, paquets du système
+(correctifs de sécurité, noyau, services à relancer), demandes de l'agent, pages du portail."""
 
 import contextlib
 import hashlib
@@ -38,7 +39,11 @@ class TempAgent(unittest.TestCase):
         values = {"CONF": self.conf, "AGENT_DIR": agent, "REQUESTS": os.path.join(agent, "requests"),
                   "JOBS": os.path.join(agent, "jobs"), "STATUS": os.path.join(agent, "status.json"),
                   "LOCK": os.path.join(agent, "lock"), "HEARTBEAT": os.path.join(agent, "alive"),
-                  "SOURCES": sources, "STATE": os.path.join(root, "state")}
+                  "SOURCES": sources, "STATE": os.path.join(root, "state"), "ALPINE": True,
+                  "BOOT": os.path.join(root, "boot"), "MODULES": os.path.join(root, "modules"),
+                  "REBOOT_FLAG": os.path.join(root, "reboot-required")}
+        os.makedirs(values["BOOT"])
+        os.makedirs(os.path.join(values["MODULES"], os.uname().release))
         for name, value in values.items():
             patcher = mock.patch.object(locoadmin, name, value)
             patcher.start()
@@ -212,10 +217,167 @@ class TestRequests(TempAgent):
         self.assertEqual(locoadmin.job_log("../status"), "")
 
 
+APT_SIMULATION = """NOTE: This is only a simulation!
+Inst libssl3t64 [3.5.1-1] (3.5.4-1~deb13u1 Debian-Security:13/stable-security [amd64])
+Inst linux-image-6.12.57+deb13-amd64 (6.12.57-1 Debian-Security:13/stable-security [amd64])
+Inst linux-image-amd64 [6.12.48-1] (6.12.57-1 Debian-Security:13/stable-security [amd64])
+Inst squid [6.13-2] (6.13-2+deb13u1 Debian:13.2/stable [amd64])
+Inst tzdata [2025b-4] (2025b-4+deb13u1 Debian:13.2/stable [all]) []
+Conf libssl3t64 (3.5.4-1~deb13u1 Debian-Security:13/stable-security [amd64])
+"""
+
+DNF_CHECK = """
+kernel.x86_64                     5.14.0-570.25.1.el9_6       baseos
+openssl-libs.x86_64               1:3.2.2-6.el9_5.1           baseos
+vim-minimal.x86_64                2:8.2.2637-22.el9_6         baseos
+Obsoleting Packages
+grub2-tools.x86_64                1:2.06-104.el9_6            baseos
+    grub2-tools.x86_64            1:2.06-94.el9               @baseos
+"""
+
+DNF_SECURITY = """RLSA-2025:1234 Important/Sec.  kernel-5.14.0-570.25.1.el9_6.x86_64
+RLSA-2025:1301 Moderate/Sec.   openssl-libs-1:3.2.2-6.el9_5.1.x86_64
+"""
+
+
+def _completed(stdout="", code=0):
+    return mock.Mock(returncode=code, stdout=stdout, stderr="")
+
+
+class TestSystemPackages(TempAgent):
+    """Paquets du système : listes des gestionnaires, sécurité, noyau, services à relancer."""
+
+    def test_apt_security_updates_and_key_packages_come_first(self):
+        with mock.patch.object(locoadmin, "package_manager", return_value="apt"), \
+                mock.patch.object(locoadmin.subprocess, "run", side_effect=[_completed(), _completed(APT_SIMULATION)]) as run:
+            packages = locoadmin.pending_packages()
+        self.assertEqual(run.call_args_list[1].args[0][:2], ["apt-get", "-s"])
+        names = [p["name"] for p in packages]
+        self.assertEqual(names, ["libssl3t64", "linux-image-6.12.57+deb13-amd64", "linux-image-amd64", "squid", "tzdata"])
+        by = {p["name"]: p for p in packages}
+        self.assertTrue(by["libssl3t64"]["security"])
+        self.assertEqual((by["libssl3t64"]["current"], by["libssl3t64"]["new"]), ("3.5.1-1", "3.5.4-1~deb13u1"))
+        self.assertEqual(by["linux-image-6.12.57+deb13-amd64"]["current"], "")    # nouveau paquet du noyau
+        self.assertEqual(by["linux-image-amd64"]["tags"], ["noyau"])
+        self.assertEqual(by["squid"]["tags"], ["loco"])
+        self.assertFalse(by["squid"]["security"])
+        self.assertEqual(by["libssl3t64"]["tags"], ["socle"])
+        self.assertEqual(by["tzdata"]["tags"], [])
+
+    def test_apt_failure_is_reported(self):
+        with mock.patch.object(locoadmin, "package_manager", return_value="apt"), \
+                mock.patch.object(locoadmin.subprocess, "run", return_value=_completed(code=100)):
+            with self.assertRaisesRegex(ValueError, "injoignables"):
+                locoadmin.pending_packages()
+
+    def test_dnf_updates_with_advisories(self):
+        rpm = _completed("kernel 5.14.0-503.40.1.el9_5\nkernel 5.14.0-570.12.1.el9_6\nopenssl-libs 3.2.2-6.el9_5\n"
+                         "vim-minimal 8.2.2637-21.el9\n")
+        with mock.patch.object(locoadmin, "package_manager", return_value="dnf"), \
+                mock.patch.object(locoadmin.subprocess, "run",
+                                  side_effect=[_completed(DNF_CHECK, 100), _completed(DNF_SECURITY), rpm]):
+            packages = locoadmin.pending_packages()
+        by = {p["name"]: p for p in packages}
+        self.assertEqual(sorted(by), ["kernel", "openssl-libs", "vim-minimal"])     # obsolètes ignorés
+        self.assertEqual((by["kernel"]["security"], by["kernel"]["severity"]), (True, "Important"))
+        self.assertEqual(by["kernel"]["current"], "5.14.0-570.12.1.el9_6")          # le plus récent installé
+        self.assertEqual(by["openssl-libs"]["severity"], "Moderate")
+        self.assertFalse(by["vim-minimal"]["security"])
+        self.assertEqual([p["name"] for p in packages][:2], ["kernel", "openssl-libs"])
+
+    def test_dnf_repository_error(self):
+        with mock.patch.object(locoadmin, "package_manager", return_value="dnf"), \
+                mock.patch.object(locoadmin.subprocess, "run", return_value=_completed(code=1)):
+            with self.assertRaises(ValueError):
+                locoadmin.pending_packages()
+
+    def test_apk_upgradable_list(self):
+        out = ("musl-1.2.5-r10 x86_64 {musl} (MIT) [upgradable from: musl-1.2.5-r9]\n"
+               "linux-virt-6.12.40-r0 x86_64 {linux-virt} (GPL-2.0-only) [upgradable from: linux-virt-6.12.38-r0]\n")
+        with mock.patch.object(locoadmin, "package_manager", return_value="apk"), \
+                mock.patch.object(locoadmin.subprocess, "run", side_effect=[_completed(), _completed(out)]):
+            packages = locoadmin.pending_packages()
+        by = {p["name"]: p for p in packages}
+        self.assertEqual((by["musl"]["current"], by["musl"]["new"]), ("1.2.5-r9", "1.2.5-r10"))
+        self.assertEqual(by["linux-virt"]["tags"], ["noyau"])
+        self.assertFalse(any(p["security"] for p in packages))
+
+    def test_newer_kernel_or_flag_requires_a_reboot(self):
+        running = os.uname().release
+        with mock.patch.object(locoadmin, "in_container", return_value=False):
+            self.assertEqual(locoadmin.reboot_reasons({}), [])
+            newer = "99.0.0-1-amd64"
+            open(os.path.join(locoadmin.BOOT, "vmlinuz-" + newer), "w").close()
+            open(os.path.join(locoadmin.BOOT, "vmlinuz-0-rescue-abc"), "w").close()
+            self.assertEqual(locoadmin.installed_kernels()[0], newer)
+            self.assertIn(f"noyau {newer} installé, {running} en cours", locoadmin.reboot_reasons({}))
+        # Conteneur : le noyau est celui de l'hôte.
+        with mock.patch.object(locoadmin, "in_container", return_value=True):
+            self.assertEqual(locoadmin.reboot_reasons({}), [])
+            with open(locoadmin.REBOOT_FLAG, "w"), open(locoadmin.REBOOT_FLAG + ".pkgs", "w") as f:
+                f.write("libc6\nlibc6\ndbus\n")
+            self.assertEqual(locoadmin.reboot_reasons({}), ["demandé par dbus, libc6"])
+            self.assertIn("d'anciennes bibliothèques restent chargées par init",
+                          locoadmin.reboot_reasons({"init": ["systemd"], "nginx.service": ["nginx"]}))
+
+    def test_replaced_libraries_are_detected(self):
+        self.assertTrue(locoadmin._stale_mapping(
+            "7f2a1c000000-7f2a1c022000 r--p 00000000 00:2f 1234  /usr/lib/x86_64-linux-gnu/libssl.so.3 (deleted)\n"))
+        self.assertFalse(locoadmin._stale_mapping(
+            "7f2a1c000000-7f2a1c022000 r--p 00000000 00:2f 1234  /usr/lib/x86_64-linux-gnu/libssl.so.3\n"))
+        self.assertFalse(locoadmin._stale_mapping("7f2a1c000000-7f2a1c022000 rw-s 00000000 00:01 9  /memfd:x (deleted)\n"))
+        self.assertIsInstance(locoadmin.stale_services(), dict)
+
+    def test_security_only_upgrades_the_flagged_packages(self):
+        pending = [{"name": "libssl3t64", "current": "3.5.1-1", "security": True},
+                   {"name": "linux-image-6.12.57+deb13-amd64", "current": "", "security": True},
+                   {"name": "squid", "current": "6.13-2", "security": False}]
+        commands = []
+        with mock.patch.object(locoadmin, "package_manager", return_value="apt"), \
+                mock.patch.object(locoadmin, "_run", side_effect=lambda cmd, log, **kw: commands.append(cmd) or 0), \
+                mock.patch.object(locoadmin, "_apt_pending", return_value=pending), \
+                mock.patch.object(locoadmin, "stale_services", return_value={}), \
+                mock.patch.object(locoadmin, "_wait_healthy", return_value=True):
+            self.assertTrue(locoadmin.update_system(lambda _t: None, security_only=True))
+        install = commands[1]
+        self.assertEqual(install[-3:], ["install", "--only-upgrade", "libssl3t64"])
+        self.assertIn("Dpkg::Options::=--force-confold", install)
+
+    def test_full_upgrade_restarts_only_loco_services(self):
+        commands = []
+        stale = {"nginx.service": ["nginx"], "ssh.service": ["sshd"], "loco-agent.service": ["python3"], "init": ["systemd"]}
+        log = []
+        with mock.patch.object(locoadmin, "package_manager", return_value="dnf"), \
+                mock.patch.object(locoadmin, "_run", side_effect=lambda cmd, log, **kw: commands.append(cmd) or 0), \
+                mock.patch.object(locoadmin, "stale_services", return_value=stale), \
+                mock.patch.object(locoadmin, "reboot_reasons", return_value=[]), \
+                mock.patch.object(locoadmin, "_wait_healthy", return_value=True):
+            self.assertTrue(locoadmin.update_system(log.append))
+        self.assertEqual(commands[0], ["dnf", "-y", "--refresh", "upgrade"])
+        self.assertIn(["systemctl", "restart", "nginx.service"], commands)
+        self.assertIn(["systemctl", "restart", "--no-block", "loco-agent.service"], commands)
+        self.assertIn(["systemctl", "daemon-reexec"], commands)
+        self.assertFalse(any("ssh.service" in c for c in commands))
+        self.assertTrue(any("ssh.service" in line for line in log))
+
+    def test_alpine_has_no_security_only_mode(self):
+        with mock.patch.object(locoadmin, "package_manager", return_value="apk"):
+            with self.assertRaisesRegex(ValueError, "Alpine"):
+                locoadmin.update_system(lambda _t: None, security_only=True)
+
+    def test_appliance_actions_are_refused_elsewhere(self):
+        with mock.patch.object(locoadmin, "ALPINE", False):
+            for action in ("update-loco", "configure"):
+                with self.subTest(action=action), self.assertRaises(ValueError):
+                    locoadmin.request(action, {"WU_CACHE_SIZE": "40g"} if action == "configure" else None)
+            locoadmin.request("update-security", user="admin")
+        self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 1)
+
+
 class TestPages(TempAgent):
     def setUp(self):
         super().setUp()
-        for patcher in (mock.patch.object(config, "APPLIANCE", True),
+        for patcher in (mock.patch.object(config, "APPLIANCE", True), mock.patch.object(config, "SERVER_UPDATES", True),
                         mock.patch.object(appliance, "locoadmin", locoadmin, create=True)):
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -266,8 +428,40 @@ class TestPages(TempAgent):
             self.assertEqual(viewer.c.get(path).status_code, 403)
         self.assertEqual(os.listdir(locoadmin.REQUESTS), [])
 
-    def test_viewers_and_other_runtimes_have_no_access(self):
+    def test_debian_server_lists_security_updates(self):
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-20 06:00:00", "os": "Debian GNU/Linux 13 (trixie)", "container": False,
+                       "kernel": {"running": "6.12.48+deb13-amd64", "installed": "6.12.57+deb13-amd64"},
+                       "security_supported": True, "reboot_required": True,
+                       "reboot_reasons": ["noyau 6.12.57+deb13-amd64 installé, 6.12.48+deb13-amd64 en cours"],
+                       "stale_services": {"ssh.service": ["sshd"]}, "security_count": 1,
+                       "packages": [{"name": "libssl3t64", "current": "3.5.1-1", "new": "3.5.4-1~deb13u1",
+                                     "origin": "Debian-Security:13/stable-security", "security": True, "severity": "",
+                                     "tags": ["socle"]},
+                                    {"name": "squid", "current": "6.13-2", "new": "6.13-2+deb13u1", "origin": "",
+                                     "security": False, "severity": "", "tags": ["loco"]}],
+                       "errors": []}, f)
         with mock.patch.object(config, "APPLIANCE", False):
+            html = self.b.c.get("/systeme/mises-a-jour").get_data(as_text=True)
+            self.assertIn("Debian GNU/Linux 13 (trixie)", html)
+            self.assertIn("Installer les correctifs de sécurité", html)
+            self.assertIn('data-security="1"', html)
+            self.assertIn("6.12.57+deb13-amd64 installé", html)
+            self.assertIn("ssh.service", html)
+            self.assertNotIn("/systeme/configuration", html)           # réglages : appliance seulement
+            self.assertNotIn('value="update-loco"', html)
+            r = self.b.post("/systeme/mises-a-jour", {"action": "update-loco"}, page="/systeme/mises-a-jour")
+            self.assertEqual(r.status_code, 400)
+            with mock.patch.object(locoadmin, "ALPINE", False):
+                r = self.b.post("/systeme/mises-a-jour", {"action": "update-security"}, page="/systeme/mises-a-jour")
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(self.b.c.get("/systeme/configuration").status_code, 404)
+        names = os.listdir(locoadmin.REQUESTS)
+        self.assertEqual(len(names), 1)
+        self.assertEqual(locoadmin._read_request(os.path.join(locoadmin.REQUESTS, names[0]))["action"], "update-security")
+
+    def test_viewers_and_other_runtimes_have_no_access(self):
+        with mock.patch.object(config, "SERVER_UPDATES", False):
             self.assertEqual(self.b.c.get("/systeme/mises-a-jour").status_code, 404)
         anonymous = fixture.Browser()
         self.assertEqual(anonymous.c.get("/systeme/configuration").status_code, 302)

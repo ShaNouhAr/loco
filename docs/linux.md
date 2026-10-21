@@ -130,6 +130,15 @@ postes n'ont rien à refaire. Pensez à mettre à jour le DNS (Windows Update) s
 - **Mise à jour** : `git pull && sudo ./install.sh`. Les migrations de la base sont automatiques.
   Avant une mise à jour majeure du système ou de l'application, créez une sauvegarde et validez
   la cible sur une VM de test. La prise en charge d'une version future doit être vérifiée par les tests.
+- **Système du serveur** (noyau, OpenSSL, Squid, nginx, Python…) : **Administration → Mises à jour** liste les
+  paquets en attente, correctifs de sécurité en tête (dépôt `*-security` de Debian/Ubuntu, avis de sécurité DNF de
+  Rocky), avec le noyau en cours et installé, les raisons d'un redémarrage et les services qui utilisent encore
+  d'anciennes bibliothèques. *Installer les correctifs de sécurité* ou *Tout mettre à jour*, puis *Redémarrer le
+  serveur* si besoin. Un agent root séparé (`loco-agent`) revalide et exécute les demandes : le portail reste sans
+  privilèges. Les fichiers de configuration modifiés par loco sont conservés (`--force-confold`) et les services de
+  loco touchés sont relancés. Vérification automatique chaque jour. En console : `loco-update status|check|security|
+  system|reboot`. Droits : *Mettre à jour le serveur*, *Redémarrer le serveur*. Dans un conteneur LXC, le noyau est
+  celui de l'hôte (à mettre à jour sur Proxmox).
 - **Supervision** : `https://SERVEUR:8443/metrics` (format Prometheus, réseaux `--admin-allow`) : état des
   services, tailles des caches, disque, jours avant expiration du certificat, date de la dernière sauvegarde.
   Contrôle simple : `https://SERVEUR:8443/healthz` → `ok`.

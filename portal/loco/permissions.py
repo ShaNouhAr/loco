@@ -64,8 +64,8 @@ GROUPS = [
     ("Serveur loco", [
         ("system.view", "Consulter le système", "Services, certificats, versions et état des sauvegardes.", (), False),
         ("system.configure", "Configurer le serveur", "Réseaux autorisés, fonctions, proxy et stockage de l'appliance.", ("system.view",), True),
-        ("system.update", "Mettre à jour le serveur", "Installer une version de loco ou les paquets de l'appliance.", ("system.view",), True),
-        ("system.reboot", "Redémarrer le serveur", "Demander un redémarrage de l'appliance.", ("system.view",), True),
+        ("system.update", "Mettre à jour le serveur", "Paquets du système (noyau, correctifs de sécurité) et, sur l'appliance, loco.", ("system.view",), True),
+        ("system.reboot", "Redémarrer le serveur", "Demander un redémarrage du serveur loco.", ("system.view",), True),
     ]),
     ("Scripts", [
         ("scripts.view", "Consulter les scripts", "Bibliothèque de scripts et résultats de leurs exécutions.", (), False),
