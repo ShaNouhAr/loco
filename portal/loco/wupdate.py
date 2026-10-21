@@ -239,7 +239,7 @@ def windows_update():
     wu, chart = _live()
     return render_template("windows_update.html", domains=read_wu_domains(), wu=wu, chart=chart,
                            nginx=service_active("nginx"), proxy_active=service_active("squid"),
-                           proxy_on="wu_proxy" not in features.disabled(),
+                           proxy_on="wu_proxy" not in features.disabled(), proxy_available=config.WU_PROXY,
                            proxy_host=config.HOST, proxy_port=config.WU_PROXY_PORT)
 
 

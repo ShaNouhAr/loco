@@ -74,10 +74,14 @@
         <div>
           <h3 class="pick-title">Par proxy, sans DNS <span class="badge-ro">via l'agent</span> <span class="st ok">activé par défaut</span></h3>
           <p class="small muted">L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.</p>
+          {% if not proxy_available %}<p class="small"><span class="st">Non disponible sur ce serveur</span></p>
+          <p class="hint">Le proxy-cache (Squid) n'est installé qu'avec le cache Windows Update d'un serveur Linux ; ici, utilisez la redirection DNS. Aucun proxy n'est envoyé aux postes.</p>
+          {% else %}
           <p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ 'Actif : les postes gérés sont dirigés vers le proxy' if proxy_on else 'Désactivé dans Fonctionnalités' }}</span></p>
           <p class="hint">Activé par défaut ; se coupe {% if is_super_admin() %}dans <a href="{{ url_for('features') }}">Administration › Fonctionnalités</a>{% else %}dans Administration › Fonctionnalités{% endif %} (« Proxy Windows Update »).{% if proxy_on and not proxy_active %} Le service proxy (squid) n'est pas actif{% if can('system.view') %} — voir <a href="{{ url_for('system') }}">Système</a>{% endif %}.{% endif %} Les postes doivent pouvoir joindre <span class="mono">{{ proxy_host }}:{{ proxy_port }}</span>.</p>
           <p class="small muted">Manuellement sur un poste (PowerShell administrateur) :</p>
           {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
+          {% endif %}
         </div>
       </div>
     </div>

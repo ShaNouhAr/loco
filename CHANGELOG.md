@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.29.2 — 2026-10-21
+
+Passe de sécurité et de fiabilité :
+
+- **Proxy Windows Update jamais envoyé sans Squid** : sur une installation `--no-wu` ou un serveur loco sous Windows (pas de proxy-cache), la fonctionnalité « Proxy Windows Update », active par défaut depuis 2.26, poussait quand même le proxy aux postes Windows, dont les mises à jour échouaient. Le portail sait désormais si Squid est installé ; sinon la fonctionnalité est coupée, la page *Windows Update* l'indique et la commande manuelle n'est plus proposée.
+- **Agent Windows : le proxy est réellement retiré quand loco ne répond plus** (annoncé en 2.25 mais absent) : après trois contacts manqués d'affilée (environ 6 min), ou si loco refuse le poste, le proxy WinHTTP posé par loco est retiré et Windows Update repasse en direct ; il est reposé au premier contact réussi.
+- **Squid durci** : le proxy refuse de relayer vers le serveur lui-même (127.0.0.0/8, ::1) et vers le lien local (169.254.0.0/16, fe80::/10), pour qu'un poste ne puisse pas atteindre par rebond les services internes de loco.
+- **Gestionnaire de fichiers** : les champs renvoyés par l'agent (type, droits, dates) sont validés et échappés avant affichage, pour qu'un poste compromis ne puisse rien injecter dans la page (déjà bloqué par la politique de sécurité du contenu, désormais aussi à la source).
+- **Planifications** : la personne qui modifie ou reprend une planification en devient responsable (ses droits sont revérifiés à l'envoi aux postes, son nom figure au journal), au lieu de l'auteur d'origine.
+
 ## 2.29.1 — 2026-10-21
 
 - Gestionnaire de fichiers : le fil d'Ariane ne double plus le « / » de la racine (« / root » au lieu de « / / root »), et un dossier qui ne contient que des fichiers cachés n'est plus annoncé « vide » : le nombre d'éléments cachés est indiqué, avec un lien pour les afficher.

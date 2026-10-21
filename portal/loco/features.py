@@ -58,6 +58,8 @@ def disabled(conn=None):
         off.add("rpm")
     if not config.FLATPAK_ENABLED:
         off.add("flatpak")
+    if not config.WU_PROXY:
+        off.add("wu_proxy")              # Squid absent : ne jamais pousser un proxy inexistant aux postes
     # Une fonctionnalité dont un prérequis est coupé l'est aussi.
     off |= {k for k, f in FEATURES.items() if set(f[2]) & off}
     if conn is None:

@@ -699,16 +699,25 @@ namespace Loco
                 }
                 else Log("proxy WinHTTP : échec du réglage (" + output.Replace("\n", " ").Trim() + ")");
             }
-            else if (marker != null)   // false/null et c'est loco qui l'avait posé : on le retire
+            else ClearWuProxy("cache Windows Update par proxy désactivé");
+        }
+
+        // Retire le proxy WinHTTP seulement s'il a été posé par loco (marqueur) : Windows Update repasse en direct.
+        static void ClearWuProxy(string reason)
+        {
+            if (!File.Exists(WuProxyMarker)) return;
+            string output;
+            if (RunCapture("netsh", "winhttp reset proxy", 20, out output) == 0)
             {
-                string output;
-                if (RunCapture("netsh", "winhttp reset proxy", 20, out output) == 0)
-                {
-                    try { File.Delete(WuProxyMarker); } catch (Exception) { }
-                    Log("proxy WinHTTP retiré (cache Windows Update par proxy désactivé)");
-                }
+                try { File.Delete(WuProxyMarker); } catch (Exception) { }
+                Log("proxy WinHTTP retiré (" + reason + ")");
             }
         }
+
+        // Contacts manqués d'affilée : au-delà de UnreachableLimit (~6 min), le proxy vers un loco absent est retiré
+        // pour ne pas bloquer Windows Update ; il est reposé au premier contact réussi.
+        static int unreachable;
+        const int UnreachableLimit = 3;
 
         // Nouvelle version de loco : l'agent installe le MSI servi par le serveur (empreinte vérifiée).
         static void SelfUpdate(Dictionary<string, object> conf, Dictionary<string, object> answer)
@@ -766,11 +775,15 @@ namespace Loco
                     rescan = false;
                 }
                 Dictionary<string, object> answer;
-                try { answer = Checkin(conf, data); firstRun = false; PublishIndicator(answer); }
+                try { answer = Checkin(conf, data); firstRun = false; unreachable = 0; PublishIndicator(answer); }
                 catch (LocoHttpException e)
                 {
                     DesktopIndicator.Unavailable("Contact avec loco refusé");
-                    if (e.Status == 401) Log("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire");
+                    if (e.Status == 401)
+                    {
+                        Log("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire");
+                        ClearWuProxy("poste refusé par loco");
+                    }
                     else Log("serveur : " + e.Message);
                     return false;
                 }
@@ -778,6 +791,7 @@ namespace Loco
                 {
                     DesktopIndicator.Unavailable("Serveur loco injoignable");
                     Log("serveur injoignable : " + e.Message);
+                    if (++unreachable >= UnreachableLimit) ClearWuProxy("loco injoignable depuis " + unreachable + " contacts");
                     if (data.ContainsKey("inventory")) rescan = true;
                     SaveState(lastScan, scanHours, rescan);
                     return false;

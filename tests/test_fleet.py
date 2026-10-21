@@ -733,6 +733,9 @@ class TestLinuxInventory(FleetTest):
 class TestWuProxy(FleetTest):
     def setUp(self):
         super().setUp()
+        patcher = mock.patch.object(config, "WU_PROXY", True)               # serveur Linux avec Squid installé
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.win = Agent(WINDOWS, "192.168.43.50"); self.win.enroll()
         self.lin = Agent(LINUX, "192.168.43.60"); self.lin.enroll()
 
@@ -749,6 +752,22 @@ class TestWuProxy(FleetTest):
             conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                          (features.SETTING, json.dumps(["wu_proxy"])))
         self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
+
+    def test_no_proxy_is_pushed_when_squid_is_not_installed(self):
+        # Installation --no-wu ou serveur loco sous Windows : jamais de proxy inexistant envoyé aux postes.
+        with mock.patch.object(config, "WU_PROXY", False):
+            self.assertEqual(self.win.checkin().get_json()["wu_proxy"], False)
+            wu = self.admin.c.get("/windows-update").get_data(as_text=True)
+            self.assertIn("Non disponible sur ce serveur", wu)
+            self.assertNotIn("netsh winhttp set proxy", wu)
+            self.assertNotIn("netsh winhttp set proxy", self.admin.c.get("/enrolement").get_data(as_text=True))
+
+    def test_squid_never_relays_to_the_server_itself(self):
+        from pathlib import Path
+        conf = (Path(__file__).resolve().parents[1] / "conf" / "squid-wu.conf").read_text()
+        self.assertIn("127.0.0.0/8", conf)
+        self.assertIn("169.254.0.0/16", conf)
+        self.assertLess(conf.index("http_access deny loco_forbidden_dst"), conf.index("http_access allow loco_clients"))
 
     def test_pages_show_the_manual_proxy_command(self):
         target = f"{config.HOST}:{config.WU_PROXY_PORT}"
@@ -861,6 +880,20 @@ class TestScheduling(FleetTest):
         r = single.post("/parc/planifications/enregistrer", {"action": "update", "target": "all", "recurrence": "daily",
                         "at_time": "02:00", "start_date": datetime.date.today().isoformat()}, page="/compte")
         self.assertEqual(r.status_code, 403)                                   # tout le parc : droit « tout le parc »
+
+    def test_whoever_edits_a_schedule_answers_for_it(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        self.plan(recurrence="daily", start_date=datetime.date.today().isoformat())
+        sid = self.schedule()["id"]
+        editor = test_permissions.TestPermissions.browser(
+            self, "plan-editeur", test_permissions.TestPermissions.profile(self, "plan-editeur", {"fleet.update"}))
+        r = editor.post(f"/parc/planifications/{sid}/enregistrer", {"action": "update", "target": "selection",
+                        "device": str(self.dev), "recurrence": "daily", "at_time": "03:00",
+                        "start_date": datetime.date.today().isoformat()}, page="/compte")
+        self.assertEqual(r.status_code, 302)
+        s = self.schedule()
+        self.assertEqual((s["created_by"], s["at_time"]), ("perm-plan-editeur", "03:00"))   # droits revérifiés pour lui
 
     def test_queued_command_can_be_cancelled_before_it_is_sent(self):
         r = self.admin.post(f"/parc/{self.dev}/action", {"action": "update"}, page=f"/parc/{self.dev}")

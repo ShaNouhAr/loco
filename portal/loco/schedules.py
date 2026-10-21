@@ -382,10 +382,11 @@ def schedule_save(sched_id):
             _check_targets(targets)
             fields = parse(request.form)
             conn.execute("UPDATE schedules SET name=?, action=?, params=?, targets=?, recurrence=?, at_time=?, "
-                         "start_date=?, weekdays=?, monthday=?, next_run=?, enabled=1, updated_at=? WHERE id=?",
+                         "start_date=?, weekdays=?, monthday=?, next_run=?, enabled=1, created_by=?, updated_at=? WHERE id=?",
                          ((request.form.get("name") or "").strip()[:120], action, json.dumps(params),
                           json.dumps(targets), fields["recurrence"], fields["at_time"], fields["start_date"],
-                          fields["weekdays"], fields["monthday"], fields["next_run"], fleet._now(), sched_id))
+                          fields["weekdays"], fields["monthday"], fields["next_run"], g.user["username"],
+                          fleet._now(), sched_id))                # l'auteur de la modification en répond désormais
             audit("planifications.modification", f"{action_text(conn, action, params)} — {describe(fields)}",
                   commit=False)
         else:
@@ -412,8 +413,8 @@ def schedule_toggle(sched_id):
     else:
         upcoming = next_occurrence(s, datetime.datetime.now())     # les occurrences manquées sont sautées
         conn.execute("UPDATE schedules SET enabled=1, next_run=?, last_result=CASE WHEN last_result LIKE 'Script modifié%' "
-                     "THEN '' ELSE last_result END, updated_at=? WHERE id=?",
-                     (upcoming.strftime(FMT) if upcoming else "", fleet._now(), sched_id))
+                     "THEN '' ELSE last_result END, created_by=?, updated_at=? WHERE id=?",
+                     (upcoming.strftime(FMT) if upcoming else "", g.user["username"], fleet._now(), sched_id))
         if s["action"] == "run-script":                            # reprise = contenu actuel relu et accepté
             script = conn.execute("SELECT version FROM scripts WHERE id=?", (_params(s).get("script_id"),)).fetchone()
             if script is None:

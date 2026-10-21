@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.29.1"
+VERSION = "2.29.2"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -11,6 +11,8 @@ ETC = os.environ.get("LOCO_ETC", "/etc/loco")
 HOST = os.environ.get("LOCO_HOST", "localhost")
 ACNG_PORT = os.environ.get("LOCO_ACNG_PORT", "3142")
 WU_PROXY_PORT = os.environ.get("LOCO_WU_PROXY_PORT", "3128")
+# Proxy-cache Windows Update (Squid) réellement installé : posé par install.sh avec le cache WU, absent sous Windows.
+WU_PROXY = os.environ.get("LOCO_WU_PROXY", "0") == "1"
 # Image Docker : supervisord à la place de systemd (voir docker/).
 CONTAINER = os.environ.get("LOCO_RUNTIME") == "container"
 # Serveur Windows natif : service Windows, nginx et waitress (voir windows/).

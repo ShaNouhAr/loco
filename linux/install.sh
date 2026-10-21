@@ -473,7 +473,7 @@ WU_PROXY_CACHE_MB=$(python3 -c 'import sys,re
 m=re.match(r"(\d+)([kKmMgGtT]?)$", sys.argv[1] or "0"); n=int(m.group(1)); u=m.group(2).lower()
 print(max(1, {"":n//1048576,"k":n//1024,"m":n,"g":n*1024,"t":n*1048576}[u]))' "$WU_CACHE_SIZE")
 SQUID_SRC=$(for n in $ALLOW_LIST; do echo "acl loco_clients src $n"; done)
-export LRT_WU_PROXY_PORT="$WU_PROXY_PORT" LRT_WU_PROXY_CACHE_MB="$WU_PROXY_CACHE_MB" \
+export LRT_WU_PROXY="$WU_ENABLED" LRT_WU_PROXY_PORT="$WU_PROXY_PORT" LRT_WU_PROXY_CACHE_MB="$WU_PROXY_CACHE_MB" \
        LRT_SQUID_USER="$SQUID_USER" LRT_SQUID_SRC="$SQUID_SRC"
 export LRT_PORTAL_PORT="$PORTAL_PORT" LRT_HTTPS_PORT="$HTTPS_PORT" LRT_APP_PORT="$APP_PORT" LRT_DATA="$DATA" \
        LRT_HOST="$HOST" LRT_HOSTNAME="$SHORT_HOSTNAME" LRT_ADMIN_URL="$ADMIN_URL" LRT_HTTP_URL="$HTTP_URL" \

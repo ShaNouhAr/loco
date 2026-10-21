@@ -179,17 +179,20 @@ function renderList(entries, truncated) {
       '. <button type="button" class="linkbtn" data-show-hidden>Les afficher</button>'
     : 'Dossier vide.';
   truncEl.classList.toggle('hidden', !truncated);
+  // Tout ce qui vient de l'agent est contrôlé ici : un poste compromis ne doit rien pouvoir injecter dans la page.
   tbody.innerHTML = rows.map(e => {
-    const isDir = e.type === 'dir';
+    const type = ['dir', 'file', 'other'].includes(e.type) ? e.type : 'other';
+    const mode = Number.isInteger(e.mode) && e.mode > 0 ? e.mode.toString(8).padStart(3, '0') : '—';
+    const isDir = type === 'dir';
     const nameCell = isDir
       ? '<button type="button" class="files-name link" data-open-dir>' + icon('dir', e.link) + '<span>' + esc(e.name) + '</span></button>'
-      : '<span class="files-name">' + icon(e.type, e.link) + '<span>' + esc(e.name) + '</span></span>';
-    const canEdit = e.type === 'file' && isText(e.name) && e.size <= EDIT_MAX;
+      : '<span class="files-name">' + icon(type, e.link) + '<span>' + esc(e.name) + '</span></span>';
+    const canEdit = type === 'file' && isText(String(e.name)) && Number(e.size) <= EDIT_MAX;
     const windows = Number(root.dataset.windows) === 1;
     const menu =
       '<details class="menu files-menu"><summary class="btn icon sm" aria-label="Actions"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>' +
       '<div class="menu-list" role="menu">' +
-      (e.type === 'file' ? '<button type="button" class="menu-item" data-act="download">Télécharger</button>' : '') +
+      (type === 'file' ? '<button type="button" class="menu-item" data-act="download">Télécharger</button>' : '') +
       (canEdit ? '<button type="button" class="menu-item" data-act="edit">Modifier le texte</button>' : '') +
       '<button type="button" class="menu-item" data-act="rename">Renommer</button>' +
       '<button type="button" class="menu-item" data-act="copy">Copier</button>' +
@@ -197,11 +200,11 @@ function renderList(entries, truncated) {
       (windows ? '' : '<button type="button" class="menu-item" data-act="chmod">Droits…</button>') +
       '<button type="button" class="menu-item danger" data-act="delete">Supprimer</button>' +
       '</div></details>';
-    return '<tr data-name="' + esc(e.name) + '" data-type="' + e.type + '">' +
+    return '<tr data-name="' + esc(e.name) + '" data-type="' + type + '">' +
       '<td>' + nameCell + '</td>' +
-      '<td class="num muted">' + (e.type === 'file' ? human(e.size) : '—') + '</td>' +
-      '<td class="muted nowrap small">' + fmtDate(e.mtime) + '</td>' +
-      '<td class="num mono small muted">' + (e.mode ? e.mode.toString(8).padStart(3, '0') : '—') + '</td>' +
+      '<td class="num muted">' + (type === 'file' ? human(e.size) : '—') + '</td>' +
+      '<td class="muted nowrap small">' + esc(fmtDate(Number(e.mtime))) + '</td>' +
+      '<td class="num mono small muted">' + mode + '</td>' +
       '<td class="right">' + menu + '</td></tr>';
   }).join('');
 }
