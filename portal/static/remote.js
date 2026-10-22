@@ -131,14 +131,78 @@ document.addEventListener('fullscreenchange', () => {
   root.classList.toggle('is-fullscreen', full);
 });
 if (root.dataset.kind === 'terminal') {
-  terminal = new window.Terminal({ cursorBlink: true, fontSize: 14, scrollback: 3000, theme: { background: '#080808', foreground: '#ddd' } });
+  // Palettes ANSI lisibles, accordées aux thèmes du portail (OLED/sombre/clair) ; le curseur et la sélection
+  // reprennent la couleur d'accent choisie. Rien n'est propre au poste : même rendu pour Linux et Windows.
+  const ANSI = {
+    dark: {
+      foreground: '#e4e4e7',
+      black: '#2a2a31', red: '#f47067', green: '#6fd49b', yellow: '#e3c07b',
+      blue: '#6cb6ff', magenta: '#d2a8ff', cyan: '#56d4c4', white: '#c9c9d1',
+      brightBlack: '#57575f', brightRed: '#ff8b82', brightGreen: '#89e5ad', brightYellow: '#f0cd8a',
+      brightBlue: '#88c7ff', brightMagenta: '#e2bbff', brightCyan: '#72e6d6', brightWhite: '#f4f4f6',
+    },
+    light: {
+      foreground: '#1f2328',
+      black: '#24292f', red: '#cf222e', green: '#116329', yellow: '#7d4e00',
+      blue: '#0969da', magenta: '#8250df', cyan: '#1b7c83', white: '#6e7781',
+      brightBlack: '#57606a', brightRed: '#a40e26', brightGreen: '#1a7f37', brightYellow: '#633c01',
+      brightBlue: '#218bff', brightMagenta: '#a475f9', brightCyan: '#3192aa', brightWhite: '#24292f',
+    },
+  };
+  const TERM_BG = { oled: '#0a0a0b', dim: '#1a1a1e', light: '#ffffff' };
+  const accentColor = () => {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;color:var(--accent)';
+    document.body.appendChild(probe);
+    const colour = getComputedStyle(probe).color;
+    probe.remove();
+    return colour || '#e4e4e7';
+  };
+  const rgba = (colour, alpha) => {
+    const n = colour.match(/[\d.]+/g);
+    return n && n.length >= 3 ? `rgba(${n[0]}, ${n[1]}, ${n[2]}, ${alpha})` : colour;
+  };
+  function terminalTheme() {
+    const name = document.documentElement.getAttribute('data-theme') || 'oled';
+    const light = name === 'light';
+    const background = TERM_BG[name] || TERM_BG.oled;
+    const accent = accentColor();
+    return { ...(light ? ANSI.light : ANSI.dark), background, cursor: accent, cursorAccent: background,
+             selectionBackground: rgba(accent, light ? 0.22 : 0.34) };
+  }
+  const fontKey = 'lr-term-fontsize';
+  let fontSize = 14;
+  try { fontSize = Math.min(22, Math.max(10, parseInt(localStorage.getItem(fontKey), 10) || 14)); } catch (e) { /* stockage indisponible */ }
+  terminal = new window.Terminal({
+    cursorBlink: true, cursorStyle: 'block', cursorInactiveStyle: 'outline',
+    fontSize, lineHeight: 1.3, letterSpacing: 0, scrollback: 5000, smoothScrollDuration: 90,
+    fontFamily: "'JetBrains Mono', 'Cascadia Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace",
+    fontWeight: 400, fontWeightBold: 600, rightClickSelectsWord: true, theme: terminalTheme(),
+  });
+  const applyTheme = () => {
+    terminal.options.theme = terminalTheme();
+    root.style.setProperty('--term-bg', TERM_BG[document.documentElement.getAttribute('data-theme')] || TERM_BG.oled);
+  };
+  applyTheme();
   fit = new window.FitAddon.FitAddon(); terminal.loadAddon(fit); terminal.open(screen);
   new ResizeObserver(() => {
     fit.fit(); cols = Math.max(20, Math.min(500, terminal.cols)); rows = Math.max(5, Math.min(200, terminal.rows));
     if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
   }).observe(screen);
-  terminal.onData(data => send(encoder.encode(data))); terminal.focus();
+  terminal.onData(data => send(encoder.encode(data)));
   terminal.onBinary(data => send(Uint8Array.from(data, c => c.charCodeAt(0) & 255)));
+  terminal.focus();
+  // Taille du texte : A−/A+, mémorisée dans ce navigateur.
+  const setFont = size => {
+    fontSize = Math.min(22, Math.max(10, size));
+    terminal.options.fontSize = fontSize;
+    try { localStorage.setItem(fontKey, String(fontSize)); } catch (e) { /* stockage indisponible */ }
+    fit.fit(); terminal.focus();
+  };
+  document.getElementById('remote-font-dec')?.addEventListener('click', () => setFont(fontSize - 1));
+  document.getElementById('remote-font-inc')?.addEventListener('click', () => setFont(fontSize + 1));
+  // Suivre en direct le thème et l'accent choisis dans le portail.
+  new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
 } else {
   const { default: RFB } = await import('./vendor/novnc-1.7.0/core/rfb.js');
   channel = new RelayChannel(); rfb = new RFB(screen, channel, { shared: true }); rfb.showDotCursor = true;

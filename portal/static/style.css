@@ -970,7 +970,16 @@ label.f > span.password-field { display: block; margin: 0; font-size: inherit; f
 .remote-session [hidden] { display: none !important; }
 /* Scène : cadre de l'image du poste. Le bureau (ou le terminal) l'occupe entièrement ; la superposition et le rail s'y posent. */
 .remote-stage { position: relative; height: max(420px, calc(100dvh - 285px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
-.remote-screen.terminal { position: absolute; inset: 0; padding: 12px; }
+/* Terminal : fond accordé au thème choisi (pas de liseré autour de la marge), coins arrondis nets. */
+.remote-session[data-kind="terminal"] .remote-stage, .remote-screen.terminal { background: var(--term-bg, #0a0a0b); }
+.remote-screen.terminal { position: absolute; inset: 0; padding: 14px 16px; }
+.remote-screen.terminal .xterm-viewport { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent; }
+.remote-screen.terminal .xterm-viewport::-webkit-scrollbar { width: 11px; }
+.remote-screen.terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 26%, transparent); border: 3px solid transparent; border-radius: 11px; background-clip: padding-box; }
+.remote-screen.terminal .xterm-viewport::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 42%, transparent); background-clip: padding-box; }
+.remote-screen.terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.remote-fontsize { display: inline-flex; gap: 4px; }
+.remote-fontsize .btn { min-width: 36px; justify-content: center; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
 .remote-viewport { position: absolute; inset: 0; display: flex; overflow: auto; scrollbar-width: thin; scrollbar-color: #4c4c4c transparent; }
 .remote-viewport::-webkit-scrollbar { width: 10px; height: 10px; }
 .remote-viewport::-webkit-scrollbar-thumb { background: #4c4c4c; border: 2px solid #080808; border-radius: 6px; }
@@ -1060,7 +1069,7 @@ label.f > span.password-field { display: block; margin: 0; font-size: inherit; f
 .remote-detached .remote-description, .remote-detached .remote-footnote, .remote-detached .head > div > p { display: none; }
 .remote-detached .remote-toolbar { flex: 0 0 auto; margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .remote-detached .remote-stage { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
-.remote-detached .remote-screen.terminal { padding: 8px; }
+.remote-detached .remote-screen.terminal { padding: 10px 12px; }
 .remote-detached #remote-new-tab { display: none; }
 
 /* Commandes de la console */

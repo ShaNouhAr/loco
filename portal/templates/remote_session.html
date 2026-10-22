@@ -9,6 +9,10 @@
       <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else _('Shell · root')) if remote.kind == 'terminal' else (_('Bureau du poste, ou console texte root si aucun bureau X11') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris'))) }}</p>
     </div>
     <div class="actions">
+      {% if remote.kind == 'terminal' %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
+        <button type="button" class="btn sm" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
+        <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
+      </div>{% endif %}
       {% if remote.kind == 'desktop' %}<div class="remote-display" role="group" aria-label="{{ _('Affichage du bureau') }}">
         <label class="remote-field" title="{{ _('« Adaptée » change la résolution Windows pour remplir la fenêtre, sans ascenseurs ; « Résolution du poste » garde celle d\'origine.') }}"><span>{{ _("Résolution") }}</span><select id="remote-resolution-mode" aria-label="{{ _('Résolution du bureau') }}"><option value="adapt">{{ _("Adaptée à la fenêtre") }}</option><option value="native">{{ _("Résolution du poste") }}</option></select></label>
         <label class="remote-field" title="{{ _('Taille de l\'affichage. En résolution adaptée, un zoom agrandit l\'interface du poste sans faire défiler ; en résolution du poste, il agrandit l\'image.') }}"><span>{{ _("Zoom") }}</span><select id="remote-zoom" aria-label="{{ _('Zoom de l\'affichage') }}"><option value="fit" selected>{{ _("Ajuster") }}</option><option value="50">50 %</option><option value="75">75 %</option><option value="100">100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
