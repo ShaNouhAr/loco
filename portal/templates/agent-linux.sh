@@ -5,9 +5,9 @@
 # et loco-client.timer (contact toutes les deux minutes). Retrait : sudo loco-client remove,
 # ou « Retirer l'agent » dans le portail. Relancer cette commande réinscrit le poste (même identifiant).
 set -eu
-# Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
-case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+# Langue du poste : français si LANG/LC_* commence par « fr », espagnol par « es », sinon anglais (sudo conserve LANG).
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_LANG=fr ;; es*) LOCO_LANG=es ;; *) LOCO_LANG=en ;; esac
+t() { case "$LOCO_LANG" in fr) printf '%s' "$1" ;; es) printf '%s' "$3" ;; *) printf '%s' "$2" ;; esac; }
 [ "$(id -u)" -eq 0 ] || { echo "{{ sh_t('Lancez ce script en root (sudo).') }}" >&2; exit 1; }
 command -v systemctl >/dev/null 2>&1 || { echo "{{ sh_t('systemd requis.') }}" >&2; exit 1; }
 if ! command -v python3 >/dev/null 2>&1; then

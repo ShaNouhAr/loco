@@ -4,9 +4,9 @@
 #   ... | sudo sh -s -- --remove     Flathub en accès direct, dépôt local retiré
 # Les signatures GPG (clé de Flathub, clé du dépôt local) restent vérifiées par Flatpak.
 set -e
-# Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
-case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+# Langue du poste : français si LANG/LC_* commence par « fr », espagnol par « es », sinon anglais (sudo conserve LANG).
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_LANG=fr ;; es*) LOCO_LANG=es ;; *) LOCO_LANG=en ;; esac
+t() { case "$LOCO_LANG" in fr) printf '%s' "$1" ;; es) printf '%s' "$3" ;; *) printf '%s' "$2" ;; esac; }
 [ "$(id -u)" -eq 0 ] || { echo "{{ sh_t('Lancez ce script en root (sudo).') }}" >&2; exit 1; }
 BASE="{{ base }}"
 FLATHUB="{{ flathub_url }}"

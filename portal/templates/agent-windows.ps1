@@ -7,9 +7,9 @@
 # HKLM\SOFTWARE\Policies\loco\Client (voir Mon parc).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-# Langue du poste : francais si Windows est en francais, sinon anglais.
-$LocoEn = (Get-UICulture).TwoLetterISOLanguageName -ne 'fr'
-function T($fr, $en) { if ($LocoEn) { $en } else { $fr } }
+# Langue du poste : francais si Windows est en francais, espagnol si en espagnol, sinon anglais.
+$LocoLang = (Get-UICulture).TwoLetterISOLanguageName
+function T($fr, $en, $es) { switch ($LocoLang) { 'fr' { $fr } 'es' { $es } default { $en } } }
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning {{ ps_t("Relancez PowerShell en tant qu'administrateur.") }}

@@ -14,6 +14,7 @@ tests/test_i18n.py vérifie que chaque texte marqué a sa traduction anglaise.
 import json
 import os
 import re
+import unicodedata
 
 from flask import g, has_request_context, request
 from markupsafe import escape
@@ -122,9 +123,10 @@ def L_(message):
 _SLOT = re.compile(r"%\((\w+)\)s")
 
 
-def _both(message, escape, values):
+def _variants(message, escape, values):
+    """Les trois langues du message (français, anglais, espagnol), mises en forme et échappées pour le script."""
     out = []
-    for text in (message, catalog("en").get(message) or message):
+    for text in (message, catalog("en").get(message) or message, catalog("es").get(message) or message):
         parts, pos = [], 0
         for m in _SLOT.finditer(text):
             parts.append(escape(text[pos:m.start()].replace("%%", "%")))
@@ -136,20 +138,22 @@ def _both(message, escape, values):
 
 
 def sh_t(message, **values):
-    """Message d'un script shell : « $(t "français" "english") », à mettre dans un echo "…" (la fonction t du
-    script choisit la langue ; valeurs = expressions shell, ex. "$1")."""
+    """Message d'un script shell : « $(t "français" "english" "español") », à mettre dans un echo "…" (la fonction t
+    du script choisit la langue ; valeurs = expressions shell, ex. "$1")."""
     def escape(text):
         return text.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
-    fr, en = _both(message, escape, values)
-    return f'$(t "{fr}" "{en}")'
+    fr, en, es = _variants(message, escape, values)
+    return f'$(t "{fr}" "{en}" "{es}")'
 
 
 def ps_t(message, **values):
-    """Message d'un script PowerShell : « (T "français" "english") » (valeurs = expressions PowerShell)."""
+    """Message d'un script PowerShell : « (T "français" "english" "español") » (valeurs = expressions PowerShell).
+    Les scripts .ps1 sont servis en ASCII (compatibilité Windows PowerShell) : les accents espagnols sont repliés."""
     def escape(text):
+        text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
         return text.replace("`", "``").replace('"', '`"').replace("$", "`$")
-    fr, en = _both(message, escape, values)
-    return f'(T "{fr}" "{en}")'
+    fr, en, es = _variants(message, escape, values)
+    return f'(T "{fr}" "{en}" "{es}")'
 
 
 def js_catalog():

@@ -4,9 +4,9 @@
 #   .\loco-dns.ps1 -Remove    -> supprime les zones (retour arriere)
 param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
-# Langue du poste : francais si Windows est en francais, sinon anglais.
-$LocoEn = (Get-UICulture).TwoLetterISOLanguageName -ne 'fr'
-function T($fr, $en) { if ($LocoEn) { $en } else { $fr } }
+# Langue du poste : francais si Windows est en francais, espagnol si en espagnol, sinon anglais.
+$LocoLang = (Get-UICulture).TwoLetterISOLanguageName
+function T($fr, $en, $es) { switch ($LocoLang) { 'fr' { $fr } 'es' { $es } default { $en } } }
 $ip = '{{ host }}'
 $domains = @({% for d in domains %}'{{ d }}'{% if not loop.last %}, {% endif %}{% endfor %})
 
