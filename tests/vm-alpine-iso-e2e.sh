@@ -107,7 +107,7 @@ for mode in ${LOCO_ISO_MODES:-bios uefi}; do
     done
     if kill -0 "$pid" 2>/dev/null; then tail -80 "$LOG_DIR/$mode-serial.log"; echo 'Installation ISO expirée.' >&2; exit 1; fi
     wait "$pid"; pid=""
-    grep -q 'installation réussie' "$LOG_DIR/$mode-serial.log"
+    grep -qE 'installation réussie|installation successful|instalación correcta' "$LOG_DIR/$mode-serial.log"
     echo "$mode : démarrage sur disque, sans ISO ni fichier de réponses"
     boot_disk() {
         qemu-system-x86_64 "${accel[@]}" "${fw[@]}" -m 2048 -smp 2 -display none -monitor none \
@@ -143,8 +143,8 @@ html = get('/login')
 token = re.search(r'name="csrf" value="([^"]+)"', html)[1]
 with op.open(base+'/login', urllib.parse.urlencode(dict(csrf=token, username='admin', password=sys.argv[1])).encode()) as r:
     assert r.geturl().rstrip('/') == base
-assert 'Mises à jour' in get('/systeme/mises-a-jour')
-assert 'Réseaux des postes' in get('/systeme/configuration')
+assert 'Mises à jour' in get('/system/updates')
+assert 'Réseaux autorisés' in get('/system/configuration')
 print('Authentification et pages Configuration / Mises à jour : OK')
 PY
     ca=$(access 'sha256sum /etc/loco/tls/ca.crt')
