@@ -24,7 +24,7 @@ class TestRemote(FleetTest):
 
     def open(self, kind='terminal', browser=None):
         browser = browser or self.admin
-        response = browser.post(f'/parc/{self.dev_id}/session', {'kind': kind})
+        response = browser.post(f'/fleet/{self.dev_id}/session', {'kind': kind})
         self.assertEqual(response.status_code, 302)
         return response.headers['Location'].rsplit('/', 1)[1]
 
@@ -33,7 +33,7 @@ class TestRemote(FleetTest):
         return agent.post('/agent/api/remote', {'sessions': sessions or []}, agent.token)
 
     def io(self, sid, data=None, browser=None):
-        return (browser or self.admin).post(f'/parc/session/{sid}/io', data or {})
+        return (browser or self.admin).post(f'/fleet/session/{sid}/io', data or {})
 
     def test_authenticated_remote_contacts_keep_presence_without_writing_every_packet(self):
         old = '2020-01-01 00:00:00'
@@ -54,7 +54,7 @@ class TestRemote(FleetTest):
     def test_terminal_and_desktop_relay_binary_bytes_without_replaying_input(self):
         for kind in ('terminal', 'desktop'):
             sid = self.open(kind)
-            self.assertEqual(self.admin.c.get('/parc/session/' + sid).status_code, 200)
+            self.assertEqual(self.admin.c.get('/fleet/session/' + sid).status_code, 200)
             binary = base64.b64encode(b'\0\xff\x1b[31mtest\r').decode()
             self.assertEqual(self.io(sid, {'seq': 1, 'data': binary}).status_code, 200)
             # Même requête après perte de réponse : un seul paquet, donc une seule exécution.
@@ -81,14 +81,14 @@ class TestRemote(FleetTest):
             auth.create_user(conn, 'remote-viewer', 'Remote-Viewer-2026', 'viewer', must_change=False)
         viewer = fixture.Browser(); viewer.login('remote-viewer', 'Remote-Viewer-2026')
         sid = self.open()
-        self.assertEqual(viewer.post(f'/parc/{self.dev_id}/session', {'kind': 'terminal'}).status_code, 403)
-        self.assertEqual(viewer.c.get('/parc/session/' + sid).status_code, 403)
+        self.assertEqual(viewer.post(f'/fleet/{self.dev_id}/session', {'kind': 'terminal'}).status_code, 403)
+        self.assertEqual(viewer.c.get('/fleet/session/' + sid).status_code, 403)
         self.assertEqual(self.io(sid, browser=viewer).status_code, 403)
         other = fixture.Browser(); other.login('admin', fixture.ADMIN_PW)
-        self.assertEqual(other.c.get('/parc/session/' + sid).status_code, 404)
+        self.assertEqual(other.c.get('/fleet/session/' + sid).status_code, 404)
         self.assertEqual(self.io(sid, browser=other).status_code, 404)
-        self.assertEqual(fixture.Browser().c.get('/parc/session/' + sid).status_code, 302)
-        self.assertEqual(self.admin.c.post('/parc/session/' + sid + '/io').status_code, 400)
+        self.assertEqual(fixture.Browser().c.get('/fleet/session/' + sid).status_code, 302)
+        self.assertEqual(self.admin.c.post('/fleet/session/' + sid + '/io').status_code, 400)
 
     def test_an_agent_cannot_get_or_write_another_devices_session(self):
         sid = self.open()
@@ -131,8 +131,8 @@ class TestRemote(FleetTest):
             self.assertEqual(self.io(sid, data).status_code, status, json.dumps({k: str(v)[:20] for k, v in data.items()}))
         self.open('desktop')
         self.open('terminal')
-        self.assertEqual(self.admin.post(f'/parc/{self.dev_id}/session', {'kind': 'terminal'}).status_code, 409)
-        self.assertEqual(self.admin.post(f'/parc/{self.dev_id}/session', {'kind': 'arbitrary-command'}).status_code, 400)
+        self.assertEqual(self.admin.post(f'/fleet/{self.dev_id}/session', {'kind': 'terminal'}).status_code, 409)
+        self.assertEqual(self.admin.post(f'/fleet/{self.dev_id}/session', {'kind': 'arbitrary-command'}).status_code, 400)
 
     def test_backups_exclude_sessions_and_pending_input_without_touching_live_connections(self):
         sid = self.open()
@@ -156,9 +156,9 @@ class TestRemote(FleetTest):
 
     def test_reloading_a_page_closes_the_old_stream_instead_of_replaying_its_input(self):
         sid = self.open()
-        self.assertEqual(self.admin.c.get('/parc/session/' + sid).status_code, 200)
+        self.assertEqual(self.admin.c.get('/fleet/session/' + sid).status_code, 200)
         self.io(sid, {'seq': 1, 'data': base64.b64encode(b'command').decode()})
-        page = self.admin.c.get('/parc/session/' + sid)
+        page = self.admin.c.get('/fleet/session/' + sid)
         self.assertIn('Nouvelle session', page.get_data(as_text=True))
         self.assertEqual(self.io(sid).get_json()['state'], 'closed')
 
@@ -172,7 +172,7 @@ class TestRemote(FleetTest):
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM remote_packets WHERE session_id=?', (sid,)).fetchone()[0], 0)
 
     def test_new_tab_is_a_console_without_portal_navigation_and_keeps_access_checks(self):
-        response = self.admin.post(f'/parc/{self.dev_id}/session', {'kind': 'desktop', 'view': 'console'})
+        response = self.admin.post(f'/fleet/{self.dev_id}/session', {'kind': 'desktop', 'view': 'console'})
         location = response.headers['Location']
         self.assertIn('?view=console', location)
         page = self.admin.c.get(location).get_data(as_text=True)
@@ -186,14 +186,14 @@ class TestRemote(FleetTest):
 
     def test_desktop_page_offers_the_command_panel(self):
         sid = self.open('desktop')
-        page = self.admin.c.get(f'/parc/session/{sid}').get_data(as_text=True)
+        page = self.admin.c.get(f'/fleet/session/{sid}').get_data(as_text=True)
         for text in ('id="remote-toolbar"', 'data-keys="ctrl alt delete"', 'data-keys="super r"', 'data-keys="super l"',
                      'data-keys="ctrl shift escape"', 'data-hold="ctrl"', 'data-hold="super"', 'id="remote-type"'):
             self.assertIn(text, page)
         self.assertIn('>Win<', page)                                       # libellés Windows sur un poste Windows
         self.assertIn('id="remote-rail"', page)                            # rail de commandes du plein écran
         self.assertIn('id="remote-rail-toggle"', page)
-        terminal = self.admin.c.get(f"/parc/session/{self.open('terminal')}").get_data(as_text=True)
+        terminal = self.admin.c.get(f"/fleet/session/{self.open('terminal')}").get_data(as_text=True)
         self.assertNotIn('id="remote-toolbar"', terminal)                 # pas de panneau pour le terminal
         self.assertNotIn('id="remote-rail"', terminal)                    # ni rail
         script = (Path(__file__).resolve().parents[1] / 'portal/static/remote.js').read_text()

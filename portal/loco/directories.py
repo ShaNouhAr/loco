@@ -200,7 +200,7 @@ def _values(kind, existing=None):
     return label, cfg
 
 
-@app.route("/comptes/annuaires")
+@app.route("/accounts/directories")
 @login_required
 def sso_settings():
     rows = db().execute("SELECT d.*, (SELECT COUNT(*) FROM directory_identities i WHERE i.directory_id=d.id) AS accounts "
@@ -215,7 +215,7 @@ def sso_settings():
     return render_template("directories.html", directories=directories, kinds=KINDS, presets=LDAP_PRESETS, legacy=legacy)
 
 
-@app.route("/comptes/annuaires/ajouter", methods=["POST"])
+@app.route("/accounts/directories/add", methods=["POST"])
 @login_required
 def directory_add():
     conn = lock_access("sso.manage")
@@ -242,7 +242,7 @@ def _revoke(directory_id):
         permissions.revoke(db(), row[0])
 
 
-@app.route("/comptes/annuaires/<directory_id>/modifier", methods=["POST"])
+@app.route("/accounts/directories/<directory_id>/edit", methods=["POST"])
 @login_required
 def directory_update(directory_id):
     conn = lock_access("sso.manage")
@@ -261,7 +261,7 @@ def directory_update(directory_id):
     return redirect(url_for("sso_settings"))
 
 
-@app.route("/comptes/annuaires/<directory_id>/supprimer", methods=["POST"])
+@app.route("/accounts/directories/<directory_id>/delete", methods=["POST"])
 @login_required
 def directory_delete(directory_id):
     conn = lock_access("sso.manage")
@@ -276,7 +276,7 @@ def directory_delete(directory_id):
     return redirect(url_for("sso_settings"))
 
 
-@app.route("/comptes/annuaires/<directory_id>/monter", methods=["POST"])
+@app.route("/accounts/directories/<directory_id>/move-up", methods=["POST"])
 @login_required
 def directory_move(directory_id):
     conn = lock_access("sso.manage")
@@ -293,7 +293,7 @@ def directory_move(directory_id):
     return redirect(url_for("sso_settings"))
 
 
-@app.route("/comptes/annuaires/<directory_id>/tester", methods=["POST"])
+@app.route("/accounts/directories/<directory_id>/test", methods=["POST"])
 @login_required
 def directory_test(directory_id):
     require("sso.manage")                   # pas de verrou de la base pendant l'échange réseau avec l'annuaire
@@ -314,7 +314,7 @@ def directory_test(directory_id):
     return redirect(url_for("sso_settings"))
 
 
-@app.route("/comptes/<int:user_id>/approuver", methods=["POST"])
+@app.route("/accounts/<int:user_id>/approve", methods=["POST"])
 @login_required
 def users_approve(user_id):
     conn = lock_access("users.approve")

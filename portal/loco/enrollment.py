@@ -7,7 +7,7 @@ from . import agentpkg, app, config, features
 from .auth import can, login_required
 
 
-@app.route("/enrolement")
+@app.route("/enrollment")
 @login_required
 def enrollment():
     from . import fleet

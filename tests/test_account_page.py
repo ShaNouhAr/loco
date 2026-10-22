@@ -16,7 +16,7 @@ class TestAccountPage(FleetTest):
             conn.execute("INSERT INTO audit (at, username, ip, action, detail) VALUES ('2026-10-19 08:00:00', 'admin', "
                          "'192.168.43.20', 'parc.update', 'pc-compta-01'), ('2026-10-19 08:01:00', 'quelqu-un', "
                          "'192.168.43.21', 'windows.ajout', 'action d’un autre compte')")
-        page = self.admin.c.get("/compte").get_data(as_text=True)
+        page = self.admin.c.get("/account").get_data(as_text=True)
         for text in ('data-tab="securite"', 'data-tab="apparence"', 'data-tab="droits"', 'data-tab="activite"',
                      'data-rule="length"', 'data-rule="match"', 'data-set-theme="dim"', 'data-set-accent="green"',
                      "Mise à jour demandée", "pc-compta-01", '<details class="rights-group">'):
@@ -26,11 +26,11 @@ class TestAccountPage(FleetTest):
     def test_password_change_still_works_and_reader_sees_no_management(self):
         reader = test_permissions.TestPermissions.browser(
             self, "compte-lecture", test_permissions.TestPermissions.profile(self, "compte-lecture", {"dashboard.view"}))
-        page = reader.c.get("/compte").get_data(as_text=True)
+        page = reader.c.get("/account").get_data(as_text=True)
         self.assertIn("compte-lecture", page)
         self.assertNotIn("Tout le journal de ce compte", page)            # pas de droit sur le journal
-        r = reader.post("/compte", {"current": test_permissions.PASSWORD, "new": "Nouveau-Secret-2026x",
-                                    "confirm": "Nouveau-Secret-2026x"}, page="/compte")
+        r = reader.post("/account", {"current": test_permissions.PASSWORD, "new": "Nouveau-Secret-2026x",
+                                    "confirm": "Nouveau-Secret-2026x"}, page="/account")
         self.assertEqual(r.status_code, 302)
         with transaction() as conn:
             self.assertTrue(conn.execute("SELECT 1 FROM audit WHERE username='perm-compte-lecture' AND action='compte.mot_de_passe'")

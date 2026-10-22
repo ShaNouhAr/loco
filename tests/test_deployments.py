@@ -65,19 +65,19 @@ class TestDeployments(FleetTest):
             return conn.execute('SELECT * FROM win_apps WHERE id=?', (ident,)).fetchone()
 
     def post(self, path, data=None, browser=None):
-        return (browser or self.admin).post(path, data, page='/compte')
+        return (browser or self.admin).post(path, data, page='/account')
 
     def group(self, kind, name, members):
-        prefix = '/windows-apps' if kind == 'software' else '/parc'
-        response = self.post(prefix + '/groupes/enregistrer', {'name': name, 'members': [str(i) for i in members]})
+        prefix = '/windows-apps' if kind == 'software' else '/fleet'
+        response = self.post(prefix + '/groups/save', {'name': name, 'members': [str(i) for i in members]})
         self.assertEqual(response.status_code, 302)
         return int(response.location.rsplit('/', 1)[1])
 
     def preview(self, data=None, browser=None):
         values = data if data is not None else {'app': self.app['slug'], 'device': str(device(self.agent.uid)['id'])}
-        response = self.post('/parc/deploiements/preparer', values, browser)
+        response = self.post('/fleet/deployments/prepare', values, browser)
         self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
-        self.assertIn('/deploiements/', response.location)
+        self.assertIn('/deployments/', response.location)
         return response.location
 
     def commands(self):
@@ -96,16 +96,16 @@ class TestDeployments(FleetTest):
         first = self.group('device', 'Comptabilité', [dev_id])
         second = self.group('device', 'Paris', [dev_id])
         software = self.group('software', 'Socle', [self.app['id']])
-        self.assertEqual(self.post(f"/windows-apps/{self.app['slug']}/groupe", {'group_id': software}).status_code, 302)
+        self.assertEqual(self.post(f"/windows-apps/{self.app['slug']}/group", {'group_id': software}).status_code, 302)
         with transaction() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM device_group_members WHERE device_id=?', (dev_id,)).fetchone()[0], 2)
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM software_group_members').fetchone()[0], 1)
-        self.assertEqual(self.admin.c.get(f'/parc?group={first}').status_code, 200)
-        self.assertEqual(self.post(f'/parc/groupes/{first}/supprimer').status_code, 302)
+        self.assertEqual(self.admin.c.get(f'/fleet?group={first}').status_code, 200)
+        self.assertEqual(self.post(f'/fleet/groups/{first}/delete').status_code, 302)
         with transaction() as conn:
             self.assertIsNotNone(conn.execute('SELECT id FROM devices WHERE id=?', (dev_id,)).fetchone())
             self.assertIsNotNone(conn.execute('SELECT id FROM device_groups WHERE id=?', (second,)).fetchone())
-        self.assertEqual(self.post('/parc/groupes/enregistrer', {'name': 'paris'}).status_code, 302)
+        self.assertEqual(self.post('/fleet/groups/save', {'name': 'paris'}).status_code, 302)
         with transaction() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM device_groups').fetchone()[0], 1)
 
@@ -120,10 +120,10 @@ class TestDeployments(FleetTest):
         self.assertIn('système non compatible', html)
         self.assertIn('Outil Deux', html)
         # La composition est figée à la prévisualisation, même si un groupe est réorganisé.
-        self.post(f'/parc/groupes/{group}/enregistrer', {'name': 'Équipe', 'members': [str(device(self.other.uid)['id'])]})
-        self.post(f'/windows-apps/groupes/{bundle}/supprimer')
-        self.assertEqual(self.post(path + '/confirmer').status_code, 302)
-        self.assertEqual(self.post(path + '/confirmer').status_code, 302)
+        self.post(f'/fleet/groups/{group}/save', {'name': 'Équipe', 'members': [str(device(self.other.uid)['id'])]})
+        self.post(f'/windows-apps/groups/{bundle}/delete')
+        self.assertEqual(self.post(path + '/confirm').status_code, 302)
+        self.assertEqual(self.post(path + '/confirm').status_code, 302)
         commands = self.commands()
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0]['device_id'], device(self.agent.uid)['id'])
@@ -156,12 +156,12 @@ class TestDeployments(FleetTest):
         path = self.preview()
         with self.admin.c.session_transaction() as current:
             saved_session = dict(current)
-        token = self.admin.token('/compte')
+        token = self.admin.token('/account')
         def confirm(_):
             browser = fixture.loco.app.test_client()
             with browser.session_transaction() as current:
                 current.update(saved_session)
-            return browser.post(path + '/confirmer', data={'csrf': token}).status_code
+            return browser.post(path + '/confirm', data={'csrf': token}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(list(pool.map(confirm, range(2))), [302, 302])
         self.assertEqual(len(self.commands()), 1)
@@ -169,7 +169,7 @@ class TestDeployments(FleetTest):
     def test_windows_server_retains_independent_files_compatible_with_native_backups(self):
         path = self.preview()
         with mock.patch.object(config, 'WINDOWS', True):
-            self.assertEqual(self.post(path + '/confirmer').status_code, 302)
+            self.assertEqual(self.post(path + '/confirm').status_code, 302)
         app = json.loads(self.commands()[0]['params'])['app_snapshots'][0]
         source = Path(config.WIN_DIR, self.app['slug'], self.app['filename'])
         retained = Path(config.WIN_DIR, app['url'].removeprefix('/win/files/'))
@@ -180,19 +180,19 @@ class TestDeployments(FleetTest):
         path = self.preview()
         with transaction() as conn:
             conn.execute("UPDATE win_apps SET args='/quiet CHANGED=1' WHERE id=?", (self.app['id'],))
-        self.assertEqual(self.post(path + '/confirmer').status_code, 409)
+        self.assertEqual(self.post(path + '/confirm').status_code, 409)
         self.assertEqual(self.commands(), [])
         path = self.preview()
         with transaction() as conn:
             conn.execute("UPDATE devices SET state='removing' WHERE uid=?", (self.agent.uid,))
-        self.assertEqual(self.post(path + '/confirmer').status_code, 409)
+        self.assertEqual(self.post(path + '/confirm').status_code, 409)
         self.assertEqual(self.commands(), [])
 
     def test_missing_or_altered_installer_rolls_back_the_entire_campaign(self):
         broken = self.software('broken', 'Second logiciel', b'original')
         Path(config.WIN_DIR, broken['slug'], broken['filename']).write_bytes(b'corrompu')
         path = self.preview({'app': [self.app['slug'], broken['slug']], 'device': str(device(self.agent.uid)['id'])})
-        self.assertEqual(self.post(path + '/confirmer').status_code, 302)
+        self.assertEqual(self.post(path + '/confirm').status_code, 302)
         self.assertEqual(self.commands(), [])
         self.assertIn('Déploiement non lancé', self.admin.c.get(path).get_data(as_text=True))
         with transaction() as conn:
@@ -201,26 +201,26 @@ class TestDeployments(FleetTest):
     def test_bulk_permissions_and_browser_ownership_are_enforced_on_the_server(self):
         operator = self.account('operator')
         ids = [str(device(self.agent.uid)['id']), str(device(self.other.uid)['id'])]
-        self.assertEqual(self.post('/parc/deploiements/preparer', {'app': self.app['slug'], 'device': ids}, operator).status_code, 403)
+        self.assertEqual(self.post('/fleet/deployments/prepare', {'app': self.app['slug'], 'device': ids}, operator).status_code, 403)
         group = self.group('device', 'Un seul poste', [int(ids[0])])
-        self.assertEqual(self.post('/parc/deploiements/preparer', {'app': self.app['slug'], 'device_group': group}, operator).status_code, 403)
+        self.assertEqual(self.post('/fleet/deployments/prepare', {'app': self.app['slug'], 'device_group': group}, operator).status_code, 403)
         path = self.preview(browser=operator)
         self.assertEqual(self.admin.c.get(path).status_code, 404)
-        self.assertEqual(self.post(path + '/confirmer').status_code, 404)
+        self.assertEqual(self.post(path + '/confirm').status_code, 404)
         second = fixture.Browser()
         second.login('deploy-test-operator', 'Test-Deployment-2026')
-        self.assertEqual(self.post(path + '/confirmer', browser=second).status_code, 403)
-        self.assertEqual(self.post(path + '/confirmer', browser=operator).status_code, 302)
+        self.assertEqual(self.post(path + '/confirm', browser=second).status_code, 403)
+        self.assertEqual(self.post(path + '/confirm', browser=operator).status_code, 302)
         self.assertEqual(len(self.commands()), 1)
         viewer = self.account('viewer')
         self.assertEqual(viewer.c.get(path).status_code, 200)
-        self.assertEqual(self.post(path + '/confirmer', browser=viewer).status_code, 403)
-        self.assertEqual(self.post('/parc/groupes/enregistrer', {'name': 'Interdit'}, viewer).status_code, 403)
+        self.assertEqual(self.post(path + '/confirm', browser=viewer).status_code, 403)
+        self.assertEqual(self.post('/fleet/groups/save', {'name': 'Interdit'}, viewer).status_code, 403)
 
     def test_rights_are_rechecked_before_agent_dispatch(self):
         operator = self.account('operator')
         path = self.preview(browser=operator)
-        self.post(path + '/confirmer', browser=operator)
+        self.post(path + '/confirm', browser=operator)
         with transaction() as conn:
             conn.execute("UPDATE users SET role='viewer' WHERE username='deploy-test-operator'")
         self.assertEqual(self.agent.checkin().get_json()['commands'], [])
@@ -229,7 +229,7 @@ class TestDeployments(FleetTest):
     def test_bulk_permission_is_rechecked_even_if_individual_install_remains_allowed(self):
         admin = self.account('admin')
         path = self.preview({'app': self.app['slug'], 'device': [str(device(a.uid)['id']) for a in (self.agent, self.other)]}, admin)
-        self.post(path + '/confirmer', browser=admin)
+        self.post(path + '/confirm', browser=admin)
         with transaction() as conn:
             conn.execute("UPDATE users SET role='operator' WHERE username='deploy-test-admin'")
         self.assertEqual(self.agent.checkin().get_json()['commands'], [])
@@ -241,7 +241,7 @@ class TestDeployments(FleetTest):
         from locosnapshot import snapshot
         group = self.group('software', 'Socle à sauvegarder', [self.app['id']])
         path = self.preview({'software_group': str(group), 'device': str(device(self.agent.uid)['id'])})
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         backup = Path(self.files.name, 'portal.db')
         snapshot(config.DB_PATH, backup)
         with closing(sqlite3.connect(backup)) as conn:
@@ -254,14 +254,14 @@ class TestDeployments(FleetTest):
     def test_installed_versions_and_pending_batches_are_skipped_but_force_reinstalls(self):
         self.agent.checkin({'updates': [], 'apps': [{'name': self.app['name'], 'version': '1.0'}]})
         path = self.preview()
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         self.assertEqual(self.commands(), [])
         self.assertIn('Version déjà installée', self.admin.c.get(path).get_data(as_text=True))
         path = self.preview({'app': self.app['slug'], 'device': str(device(self.agent.uid)['id']), 'force': '1'})
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         self.assertEqual(len(self.commands()), 1)
         another = self.preview()
-        self.post(another + '/confirmer')
+        self.post(another + '/confirm')
         self.assertEqual(len(self.commands()), 1)
         self.assertIn('Déjà en attente', self.admin.c.get(another).get_data(as_text=True))
         self.assertEqual(len(self.agent.checkin().get_json()['commands'][0]['apps']), 1)
@@ -270,14 +270,14 @@ class TestDeployments(FleetTest):
         self.agent.checkin({'updates': [], 'apps': [{'name': self.app['name'], 'version': '1.0'}]})
         with transaction() as conn:
             conn.execute("UPDATE devices SET last_scan='2020-01-01 00:00:00' WHERE uid=?", (self.agent.uid,))
-        self.post(self.preview() + '/confirmer')
+        self.post(self.preview() + '/confirm')
         self.assertEqual(len(self.commands()), 1)
 
     def test_cancel_only_stops_queued_commands_and_keeps_history(self):
         path = self.preview({'app': self.app['slug'], 'device': [str(device(a.uid)['id']) for a in (self.agent, self.other)]})
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         cmd = self.agent.checkin().get_json()['commands'][0]
-        self.post(path + '/annuler')
+        self.post(path + '/cancel')
         self.assertEqual([c['state'] for c in self.commands()], ['sent', 'cancelled'])
         self.assertEqual(self.other.checkin().get_json()['commands'], [])
         self.assertIn('Annulation demandée', self.admin.c.get(path).get_data(as_text=True))
@@ -287,10 +287,10 @@ class TestDeployments(FleetTest):
 
     def test_forgetting_a_device_preserves_its_completed_result_and_logs(self):
         path = self.preview()
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         cmd = self.agent.checkin().get_json()['commands'][0]
         self.agent.result(cmd['id'], 'failed', 'Installeur en échec : code 1603')
-        self.assertEqual(self.post(f"/parc/{device(self.agent.uid)['id']}/action", {'action': 'forget'}).status_code, 302)
+        self.assertEqual(self.post(f"/fleet/{device(self.agent.uid)['id']}/action", {'action': 'forget'}).status_code, 302)
         html = self.admin.c.get(path).get_data(as_text=True)
         self.assertIn('Déploiement terminé avec erreurs', html)
         self.assertIn('Installeur en échec : code 1603', html)
@@ -299,15 +299,15 @@ class TestDeployments(FleetTest):
     def test_list_shows_progress_and_filters_by_state(self):
         draft = self.preview()
         failed = self.preview()
-        self.post(failed + '/confirmer')
+        self.post(failed + '/confirm')
         cmd = self.agent.checkin().get_json()['commands'][0]
         self.agent.result(cmd['id'], 'failed', 'Installeur en échec : code 1603')
-        html = self.admin.c.get('/parc/deploiements').get_data(as_text=True)
+        html = self.admin.c.get('/fleet/deployments').get_data(as_text=True)
         self.assertIn('Avec erreurs <b>1</b>', html)
         self.assertIn('À confirmer <b>1</b>', html)
         self.assertIn('0/1 réussi', html)
         self.assertIn('class="prog-failed"', html)
-        html = self.admin.c.get('/parc/deploiements?etat=erreurs').get_data(as_text=True)
+        html = self.admin.c.get('/fleet/deployments?etat=erreurs').get_data(as_text=True)
         self.assertIn(failed.rsplit('/', 1)[-1], html)
         self.assertNotIn(draft.rsplit('/', 1)[-1], html)
         html = self.admin.c.get(failed).get_data(as_text=True)
@@ -317,23 +317,23 @@ class TestDeployments(FleetTest):
     def test_deployments_live_in_mon_parc_and_old_addresses_redirect(self):
         """Une action sur les appareils, comme les scripts : sous-menu et entrée « Mon parc », plus d'onglet côté Logiciels."""
         detail = self.preview()
-        for page in ('/parc/deploiements', '/parc/deploiements/nouveau', detail):
+        for page in ('/fleet/deployments', '/fleet/deployments/new', detail):
             html = self.admin.c.get(page).get_data(as_text=True)
             self.assertIn('aria-label="Gestion du parc"', html)                 # sous-menu de Mon parc
             self.assertNotIn('aria-label="Gestion des logiciels"', html)
-            self.assertRegex(html, r'<a href="/parc" class="on" aria-current="page">')   # « Mon parc » actif en haut
+            self.assertRegex(html, r'<a href="/fleet" class="on" aria-current="page">')   # « Mon parc » actif en haut
         catalog = self.admin.c.get('/windows-apps').get_data(as_text=True)
         self.assertIn('aria-label="Gestion des logiciels"', catalog)
-        self.assertNotIn('href="/parc/deploiements"', catalog.split('aria-label="Gestion des logiciels"')[1].split('</nav>')[0])
-        for old, new in (('/windows-apps/deploiements?etat=erreurs', '/parc/deploiements?etat=erreurs'),
-                         ('/windows-apps/deployer?app=x', '/parc/deploiements/nouveau?app=x'),
-                         ('/windows-apps/deploiements/' + detail.rsplit('/', 1)[-1], detail)):
+        self.assertNotIn('href="/fleet/deployments"', catalog.split('aria-label="Gestion des logiciels"')[1].split('</nav>')[0])
+        for old, new in (('/windows-apps/deployments?etat=erreurs', '/fleet/deployments?etat=erreurs'),
+                         ('/windows-apps/deployer?app=x', '/fleet/deployments/new?app=x'),
+                         ('/windows-apps/deployments/' + detail.rsplit('/', 1)[-1], detail)):
             response = self.admin.c.get(old)
             self.assertEqual((response.status_code, _path(response.location)), (308, _path(new)))
 
     def test_live_install_steps_are_shown_while_the_agent_works(self):
         path = self.preview()
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         cmd = self.agent.checkin().get_json()['commands'][0]
         report = lambda progress: self.agent.post('/agent/api/result', {'id': cmd['id'], 'state': 'running', 'output': '',
                                                                        'progress': progress}, self.agent.token)
@@ -347,7 +347,7 @@ class TestDeployments(FleetTest):
         html = self.admin.c.get(path).get_data(as_text=True)
         self.assertIn('Installation de Outil Éditeur · logiciel 2/2', html)
         self.assertNotIn('pirater', html)
-        device_page = self.admin.c.get(f"/parc/{device(self.agent.uid)['id']}").get_data(as_text=True)
+        device_page = self.admin.c.get(f"/fleet/{device(self.agent.uid)['id']}").get_data(as_text=True)
         self.assertIn('installation de outil éditeur · logiciel 2/2', device_page)
         self.agent.result(cmd['id'], 'success', 'OK : Outil Éditeur 1.0')
         self.assertNotIn('class="live-step"', self.admin.c.get(path).get_data(as_text=True))   # terminé : plus de barre
@@ -358,15 +358,15 @@ class TestDeployments(FleetTest):
         other.login('admin', fixture.ADMIN_PW)                              # autre connexion du même compte
         html = other.c.get(path).get_data(as_text=True)
         self.assertIn('faite depuis une autre connexion', html)
-        self.assertEqual(other.post(path + '/confirmer', {}, page='/compte').status_code, 403)
+        self.assertEqual(other.post(path + '/confirm', {}, page='/account').status_code, 403)
 
     def test_expired_preview_and_all_incompatible_devices_never_queue(self):
         path = self.preview()
         with transaction() as conn:
             conn.execute('UPDATE deployments SET expires=0')
-        self.assertEqual(self.post(path + '/confirmer').status_code, 409)
+        self.assertEqual(self.post(path + '/confirm').status_code, 409)
         with mock.patch.object(winget, 'import_package') as importer:
-            response = self.post('/parc/deploiements/preparer', {'package_id': 'Vendor.App', 'device': str(device(self.linux.uid)['id'])})
+            response = self.post('/fleet/deployments/prepare', {'package_id': 'Vendor.App', 'device': str(device(self.linux.uid)['id'])})
             self.assertEqual(response.status_code, 400)
             importer.assert_not_called()
         self.assertEqual(self.commands(), [])
@@ -379,8 +379,8 @@ class TestDeployments(FleetTest):
         with mock.patch.object(winget, 'describe', return_value=info), mock.patch.object(winapps, 'start_fetch') as fetch:
             path = self.preview({'package_id': 'Vendor.Fixture', 'device': str(device(self.agent.uid)['id'])})
             self.assertEqual(fetch.call_count, 1)
-            self.assertEqual(self.post(path + '/confirmer').status_code, 409)
-            self.assertEqual(self.post('/windows-apps/store/Vendor.Fixture/groupe', {'group_id': group}).status_code, 302)
+            self.assertEqual(self.post(path + '/confirm').status_code, 409)
+            self.assertEqual(self.post('/windows-apps/store/Vendor.Fixture/group', {'group_id': group}).status_code, 302)
             self.assertEqual(fetch.call_count, 1)
         with transaction() as conn:
             row = conn.execute("SELECT * FROM win_apps WHERE winget_id='Vendor.Fixture'").fetchone()
@@ -395,20 +395,20 @@ class TestDeployments(FleetTest):
         local.write_bytes(content)
         with transaction() as conn:
             conn.execute("UPDATE win_apps SET status='ready',sha256=?,filename='setup.msi' WHERE id=?", (info['sha256'], row['id']))
-        self.assertEqual(self.post(path + '/confirmer').status_code, 302)
+        self.assertEqual(self.post(path + '/confirm').status_code, 302)
         self.assertEqual(self.commands()[0]['action'], 'install-app')
 
     def test_store_group_import_failure_is_reported_without_mutating_members(self):
         group = self.group('software', 'Socle', [])
         with mock.patch.object(winget, 'import_package', side_effect=ValueError('Manifeste indisponible')):
-            response = self.post('/windows-apps/store/Vendor.Fixture/groupe', {'group_id': group})
+            response = self.post('/windows-apps/store/Vendor.Fixture/group', {'group_id': group})
             self.assertEqual(response.status_code, 302)
         with transaction() as conn:
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM software_group_members').fetchone()[0], 0)
 
     def test_cache_retains_active_versions_and_only_removes_old_unused_deployment_files(self):
         path = self.preview()
-        self.post(path + '/confirmer')
+        self.post(path + '/confirm')
         payload = json.loads(self.commands()[0]['params'])['app_snapshots'][0]
         directory = Path(config.WIN_DIR, '_deployments', payload['sha256'])
         unused = directory.parent / ('0' * 64)
@@ -422,7 +422,7 @@ class TestDeployments(FleetTest):
         self.assertTrue(directory.is_dir())
         self.assertFalse(unused.exists())
         self.assertTrue(Path(config.WIN_DIR, self.app['slug'], self.app['filename']).is_file())
-        self.post(path + '/annuler')
+        self.post(path + '/cancel')
         with transaction() as conn:
             conn.execute("DELETE FROM settings WHERE key='deployment_gc'")
             deployments.cleanup_artifacts(conn)
@@ -432,7 +432,7 @@ class TestDeployments(FleetTest):
         for agent in (self.agent, self.other):
             agent.checkin({'updates': [{'name': 'Correctif'}]})
         group = self.group('device', 'Équipe', [device(self.agent.uid)['id']])
-        response = self.post('/parc/tout-mettre-a-jour', {'group': str(group)})
+        response = self.post('/fleet/update-all', {'group': str(group)})
         self.assertEqual(response.status_code, 302)
         self.assertIn('group=', response.location)
         self.assertEqual([c['device_id'] for c in self.commands()], [device(self.agent.uid)['id']])

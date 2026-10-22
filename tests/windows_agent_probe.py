@@ -61,13 +61,13 @@ def wait(what, check, timeout=600):
 
 
 url, html = post('/login', {'csrf': csrf(get('/login')), 'username': 'admin', 'password': password})
-if url.endswith('/compte'):
+if url.endswith('/account'):
     changed = password + '-Changed'
-    url, html = post('/compte', {'csrf': csrf(html), 'current': password, 'new': changed, 'confirm': changed})
+    url, html = post('/account', {'csrf': csrf(html), 'current': password, 'new': changed, 'confirm': changed})
 assert url.rstrip('/') == base, f'Connexion refusée : {url}'
 
 # Commande d'installation affichée dans « Mon parc » : amorçage en HTTP (autorité pas encore importée).
-fleet = get('/enrolement')                                  # clé d'inscription : page Enrôlement
+fleet = get('/enrollment')                                  # clé d'inscription : page Enrôlement
 key = re.search(r"/agent/windows\.ps1\?key=([A-Za-z0-9_-]+)", fleet).group(1)
 http_base = f"http://127.0.0.1:{cfg['http_port']}" if cfg.get('http_port') else base
 result = powershell(f"irm '{http_base}/agent/windows.ps1?key={key}' | iex")
@@ -78,12 +78,12 @@ print('Agent Windows : MSI vérifié et installé, service loco-client démarré
 
 
 def device_id():
-    m = re.search(r'href="/parc/(\d+)" class="[^"]*\bhost\b[^"]*">' + re.escape(hostname) + '<', get('/parc'))
+    m = re.search(r'href="/fleet/(\d+)" class="[^"]*\bhost\b[^"]*">' + re.escape(hostname) + '<', get('/fleet'))
     return m.group(1) if m else None
 
 
 dev = wait('inscription du poste', device_id, 300)
-page = wait('premier inventaire', lambda: (lambda p: p if 'Inventaire en cours' not in p else None)(get(f'/parc/{dev}')), 900)
+page = wait('premier inventaire', lambda: (lambda p: p if 'Inventaire en cours' not in p else None)(get(f'/fleet/{dev}')), 900)
 assert 'loco-client' in page and 'Windows' in page, page[:2000]
 print(f'Poste {hostname} inscrit (n° {dev}) et inventorié')
 probe = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
@@ -91,10 +91,10 @@ probe = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Byp
 assert probe.returncode == 0, 'Vérification du systray en échec'
 
 # Terminal natif via le relais HTTPS : vrai ConPTY SYSTEM, puis suppression de l'arbre de processus.
-session_url, _ = post(f'/parc/{dev}/session', {'csrf': csrf(get(f'/parc/{dev}')), 'kind': 'terminal'})
+session_url, _ = post(f'/fleet/{dev}/session', {'csrf': csrf(get(f'/fleet/{dev}')), 'kind': 'terminal'})
 sid = session_url.rsplit('/', 1)[1]
-io_path = f'/parc/session/{sid}/io'
-token = csrf(get(f'/parc/{dev}'))
+io_path = f'/fleet/session/{sid}/io'
+token = csrf(get(f'/fleet/{dev}'))
 command = ("Write-Output ([string]::Concat('LOCO_','PTY_OK')); whoami /user; "
            "$p=Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep 300' -PassThru; "
            "Write-Output ('CHILD_PID='+$p.Id)\r")
@@ -168,10 +168,10 @@ class FilesRelay:
 
 
 # Gestionnaire de fichiers via le relais : vrai FileRelay C# du poste (agent 2.23+), hello/list/write/read/delete.
-_, body = post(f'/parc/{dev}/session', {'csrf': csrf(get(f'/parc/{dev}')), 'kind': 'files'})
+_, body = post(f'/fleet/{dev}/session', {'csrf': csrf(get(f'/fleet/{dev}')), 'kind': 'files'})
 files_sid = json.loads(body)['sid']
-files_io = f'/parc/session/{files_sid}/io'
-files = FilesRelay(files_io, csrf(get(f'/parc/{dev}')))
+files_io = f'/fleet/session/{files_sid}/io'
+files = FilesRelay(files_io, csrf(get(f'/fleet/{dev}')))
 files_dir = r'C:\Windows\Temp\loco-fmprobe'
 files_path = files_dir + r'\probe.txt'
 payload = b'FileRelay sur ' + hostname.encode() + b' fonctionne'
@@ -197,9 +197,9 @@ assert subprocess.run([str(desktop_exe), '--update'], timeout=10).returncode == 
 leftover = powershell("(Get-ItemProperty 'HKLM:\\SOFTWARE\\loco\\Client' -ErrorAction SilentlyContinue).Key").stdout.strip()
 assert not leftover, 'clé d\'inscription restée dans le registre'
 
-url, html = post(f'/parc/{dev}/action', {'csrf': csrf(get(f'/parc/{dev}')), 'action': 'scan'})
+url, html = post(f'/fleet/{dev}/action', {'csrf': csrf(get(f'/fleet/{dev}')), 'action': 'scan'})
 wait('résultat de l\'inventaire demandé',
-     lambda: re.search(r'<td>Inventaire</td>\s*<td[^>]*>[^<]*</td>\s*<td><span class="st (ok|err)">', get(f'/parc/{dev}')), 900)
+     lambda: re.search(r'<td>Inventaire</td>\s*<td[^>]*>[^<]*</td>\s*<td><span class="st (ok|err)">', get(f'/fleet/{dev}')), 900)
 print('Action à distance : inventaire exécuté et rapporté')
 
 # Autre MSI du même numéro de version : remplace le produit sans perdre le service ni l'identité.
@@ -218,9 +218,9 @@ installed = powershell("Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\C
 assert installed.stdout.strip() == '1', 'plusieurs MSI loco-client après réinstallation'
 print('Réinstallation de la même version : service actif, identité conservée, un seul MSI')
 
-url, html = post(f'/parc/{dev}/action', {'csrf': csrf(get(f'/parc/{dev}')), 'action': 'uninstall'})
+url, html = post(f'/fleet/{dev}/action', {'csrf': csrf(get(f'/fleet/{dev}')), 'action': 'uninstall'})
 wait('retrait de l\'agent', lambda: powershell('if (Get-Service loco-client -ErrorAction SilentlyContinue) { 1 } else { 0 }').stdout.strip() == '0', 600)
-assert hostname not in re.findall(r'class="[^"]*\bhost\b[^"]*">([^<]+)<', get('/parc')), 'poste encore dans le parc'
+assert hostname not in re.findall(r'class="[^"]*\bhost\b[^"]*">([^<]+)<', get('/fleet')), 'poste encore dans le parc'
 installed = powershell("Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | "
                        "Where-Object DisplayName -eq 'loco-client' | Measure-Object | Select-Object -ExpandProperty Count")
 assert installed.stdout.strip() == '0', 'MSI loco-client encore installé'

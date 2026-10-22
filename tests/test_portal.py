@@ -91,7 +91,7 @@ class TestAuth(unittest.TestCase):
 
     def test_pages_require_login(self):
         b = Browser()
-        for path in ("/", "/linux", "/windows-apps", "/comptes", "/systeme", "/api/status"):
+        for path in ("/", "/linux", "/windows-apps", "/accounts", "/system", "/api/status"):
             r = b.c.get(path)
             self.assertEqual(r.status_code, 302, path)
             self.assertIn("/login", r.headers["Location"])
@@ -124,21 +124,21 @@ class TestAuth(unittest.TestCase):
             auth.create_user(conn, "lecteur", "Temporaire-123456", "viewer", must_change=True)
         b = Browser()
         r = b.login("lecteur", "Temporaire-123456")
-        self.assertTrue(r.headers["Location"].endswith("/compte"))
-        self.assertTrue(b.c.get("/linux").headers["Location"].endswith("/compte"))
+        self.assertTrue(r.headers["Location"].endswith("/account"))
+        self.assertTrue(b.c.get("/linux").headers["Location"].endswith("/account"))
         # Page dédiée : formulaire seul, aucun lien de navigation vers le reste du portail.
-        page = b.c.get("/compte").get_data(as_text=True)
+        page = b.c.get("/account").get_data(as_text=True)
         self.assertIn("Choisissez votre mot de passe", page)
         self.assertNotIn('class="nav"', page)
         self.assertNotIn('href="/linux"', page)
         self.assertEqual(b.c.get("/api/status", headers={"X-Requested-With": "fetch"}).status_code, 403)
-        r = b.post("/compte", {"current": "Temporaire-123456", "new": "court", "confirm": "court"}, page="/compte")
+        r = b.post("/account", {"current": "Temporaire-123456", "new": "court", "confirm": "court"}, page="/account")
         self.assertIn("au moins", b.c.get(r.headers["Location"]).get_data(as_text=True))
-        b.post("/compte", {"current": "Temporaire-123456", "new": "Nouveau-Secret-2026x", "confirm": "Nouveau-Secret-2026x"},
-               page="/compte")
+        b.post("/account", {"current": "Temporaire-123456", "new": "Nouveau-Secret-2026x", "confirm": "Nouveau-Secret-2026x"},
+               page="/account")
         self.assertEqual(b.c.get("/linux").status_code, 200)
         self.assertEqual(b.post("/windows-apps/add", {"name": "x", "url": "https://x.test/a.exe"}).status_code, 403)
-        self.assertEqual(b.c.get("/comptes").status_code, 403)
+        self.assertEqual(b.c.get("/accounts").status_code, 403)
         with connect() as conn:
             conn.execute("DELETE FROM users WHERE username='lecteur'")
 
@@ -147,7 +147,7 @@ class TestAuth(unittest.TestCase):
         b.login("admin", ADMIN_PW)
         with connect() as conn:
             uid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()[0]
-        b.post(f"/comptes/{uid}/supprimer", page="/comptes")
+        b.post(f"/accounts/{uid}/delete", page="/accounts")
         with connect() as conn:
             self.assertIsNotNone(conn.execute("SELECT 1 FROM users WHERE username='admin'").fetchone())
 
@@ -218,10 +218,10 @@ class TestLastLoginAddress(unittest.TestCase):
                  headers={"X-Forwarded-For": "192.168.43.77"})
         with connect() as conn:
             self.assertEqual(conn.execute("SELECT last_ip FROM users WHERE username='admin'").fetchone()[0], "192.168.43.77")
-        page = b.c.get("/comptes").get_data(as_text=True)
+        page = b.c.get("/accounts").get_data(as_text=True)
         self.assertIn('depuis <span class="mono">192.168.43.77</span>', page)
         self.assertIn(">historique</a>", page)
-        self.assertRegex(page, r'href="/journal\?[^"]*compte=admin')
+        self.assertRegex(page, r'href="/log\?[^"]*compte=admin')
 
     def test_existing_accounts_take_the_address_of_their_last_login_from_the_journal(self):
         import sqlite3

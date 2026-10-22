@@ -95,7 +95,7 @@ def _require_bulk(selection, devices):
     return bulk
 
 
-@app.route('/parc/deploiements/nouveau')
+@app.route('/fleet/deployments/new')
 @login_required
 def deployment_compose():
     selected = _selection(request.args)
@@ -120,7 +120,7 @@ def deployment_compose():
                            devices=db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall())
 
 
-@app.route('/parc/deploiements/preparer', methods=['POST'])
+@app.route('/fleet/deployments/prepare', methods=['POST'])
 @login_required
 def deployment_preview():
     selected = _selection(request.form)
@@ -221,7 +221,7 @@ def _progress(targets):
     return counts
 
 
-@app.route('/parc/deploiements')
+@app.route('/fleet/deployments')
 @login_required
 def deployments():
     db().execute("BEGIN IMMEDIATE")
@@ -253,7 +253,7 @@ def deployments():
                            pages=pages, all_count=len(rows), counts=counts, filters=FILTERS, wanted=wanted)
 
 
-@app.route('/parc/deploiements/<deployment_id>')
+@app.route('/fleet/deployments/<deployment_id>')
 @login_required
 def deployment_detail(deployment_id):
     row = _get(deployment_id)
@@ -370,7 +370,7 @@ def _pending_apps(dev):
     return result
 
 
-@app.route('/parc/deploiements/<deployment_id>/confirmer', methods=['POST'])
+@app.route('/fleet/deployments/<deployment_id>/confirm', methods=['POST'])
 @login_required
 def deployment_confirm(deployment_id):
     conn = lock_access('fleet.install')
@@ -436,7 +436,7 @@ def deployment_confirm(deployment_id):
     return back('deployment_detail', deployment_id=deployment_id)
 
 
-@app.route('/parc/deploiements/<deployment_id>/annuler', methods=['POST'])
+@app.route('/fleet/deployments/<deployment_id>/cancel', methods=['POST'])
 @login_required
 def deployment_cancel(deployment_id):
     conn = lock_access('fleet.install')
@@ -458,8 +458,8 @@ def deployment_cancel(deployment_id):
 
 
 # Les déploiements vivent dans Mon parc (actions sur les appareils, comme les scripts) ; anciennes adresses redirigées.
-@app.route('/windows-apps/deploiements', defaults={'deployment_id': ''})
-@app.route('/windows-apps/deploiements/<deployment_id>')
+@app.route('/windows-apps/deployments', defaults={'deployment_id': ''})
+@app.route('/windows-apps/deployments/<deployment_id>')
 @app.route('/windows-apps/deployer', defaults={'deployment_id': 'nouveau'})
 @login_required
 def deployments_legacy(deployment_id):

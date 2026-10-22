@@ -276,7 +276,7 @@ def logout():
 
 # --------------------------------------------------------------------------- mon compte
 
-@app.route("/langue", methods=["POST"])
+@app.route("/language", methods=["POST"])
 def set_language():
     """Langue de l'interface : gardée dans le compte (et un cookie, pour l'écran de connexion)."""
     from . import i18n
@@ -294,7 +294,7 @@ def set_language():
     return resp
 
 
-@app.route("/compte", methods=["GET", "POST"])
+@app.route("/account", methods=["GET", "POST"])
 @login_required
 def account():
     if request.method == "POST":
@@ -334,7 +334,7 @@ def account():
 
 # --------------------------------------------------------------------------- gestion des comptes
 
-@app.route("/comptes")
+@app.route("/accounts")
 @login_required
 def users():
     rows = db().execute("SELECT u.*, COALESCE(di.display_name, i.display_name) AS display_name, COALESCE(di.email, i.email) AS email, "
@@ -354,7 +354,7 @@ def _get_user(user_id):
     return row
 
 
-@app.route("/comptes/ajouter", methods=["POST"])
+@app.route("/accounts/add", methods=["POST"])
 @login_required
 def users_add():
     conn = lock_access("users.create")
@@ -377,7 +377,7 @@ def users_add():
     return back("users")
 
 
-@app.route("/comptes/<int:user_id>/reinitialiser", methods=["POST"])
+@app.route("/accounts/<int:user_id>/reset", methods=["POST"])
 @login_required
 def users_reset(user_id):
     conn = lock_access("users.reset")
@@ -394,7 +394,7 @@ def users_reset(user_id):
     return back("users")
 
 
-@app.route("/comptes/<int:user_id>/modifier", methods=["POST"])
+@app.route("/accounts/<int:user_id>/edit", methods=["POST"])
 @login_required
 def users_update(user_id):
     conn = lock_access("users.edit")
@@ -428,7 +428,7 @@ def users_update(user_id):
     return back("users")
 
 
-@app.route("/comptes/<int:user_id>/supprimer", methods=["POST"])
+@app.route("/accounts/<int:user_id>/delete", methods=["POST"])
 @login_required
 def users_delete(user_id):
     conn = lock_access("users.delete")
@@ -462,7 +462,7 @@ def _editable_role(row):
     return not row["builtin"] and row["id"] != g.user["role"] and can_assign(row["id"])
 
 
-@app.route("/comptes/profils")
+@app.route("/accounts/profiles")
 @login_required
 def roles():
     rows = db().execute("SELECT r.*,COUNT(u.id) AS accounts FROM access_roles r LEFT JOIN users u ON u.role=r.id "
@@ -471,7 +471,7 @@ def roles():
                            editable_role=_editable_role)
 
 
-@app.route("/comptes/profils/<role_id>")
+@app.route("/accounts/profiles/<role_id>")
 @login_required
 def roles_editor(role_id):
     row = None if role_id == "new" else _role(role_id)
@@ -519,7 +519,7 @@ def _audit_grants(role_id, before, after):
             audit("profils.droits", f"{role_id} : {kind} {', '.join(chunk)}", commit=False)
 
 
-@app.route("/comptes/profils/ajouter", methods=["POST"])
+@app.route("/accounts/profiles/add", methods=["POST"])
 @login_required
 def roles_add():
     conn = lock_access("roles.manage")
@@ -537,7 +537,7 @@ def roles_add():
     return redirect(url_for("roles_editor", role_id=role_id))
 
 
-@app.route("/comptes/profils/<role_id>/modifier", methods=["POST"])
+@app.route("/accounts/profiles/<role_id>/edit", methods=["POST"])
 @login_required
 def roles_update(role_id):
     conn = lock_access("roles.manage")
@@ -561,7 +561,7 @@ def roles_update(role_id):
     return back("roles_editor", role_id=role_id)
 
 
-@app.route("/comptes/profils/<role_id>/supprimer", methods=["POST"])
+@app.route("/accounts/profiles/<role_id>/delete", methods=["POST"])
 @login_required
 def roles_delete(role_id):
     conn = lock_access("roles.manage")
@@ -612,7 +612,7 @@ def _filters():
     return {k: request.args[k] for k in FILTERS if request.args.get(k)}
 
 
-@app.route("/journal")
+@app.route("/log")
 @login_required
 def journal():
     args = _filters()
@@ -649,7 +649,7 @@ def journal():
                            choices=AUDIT_RETENTION_CHOICES, today=datetime.date.today().isoformat())
 
 
-@app.route("/journal/export")
+@app.route("/log/export")
 @login_required
 def journal_export():
     """Journal en JSON : en entier, sur une période (dates incluses) ou avec les filtres de la page."""
@@ -679,7 +679,7 @@ def journal_export():
                     headers={"Content-Disposition": f'attachment; filename="{secure_filename(name) or "loco-journal.json"}"'})
 
 
-@app.route("/journal/conservation", methods=["POST"])
+@app.route("/log/retention", methods=["POST"])
 @login_required
 def journal_retention():
     try:

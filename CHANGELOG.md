@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.35.0 — 2026-10-22
+
+- **Adresses (URL) des pages en anglais**, identiques quelle que soit la langue choisie, pour une navigation uniforme : `/fleet`, `/accounts`, `/log`, `/system/updates`, `/enrollment`… (avant `/parc`, `/comptes`, `/journal`, `/systeme/mises-a-jour`, `/enrolement`). Les liens internes suivent automatiquement ; les adresses servies aux postes (dépôts, agents, scripts d'installation) ne changent pas.
+
+
 ## 2.34.0 — 2026-10-21
 
 - **Portail multilingue (français, anglais, espagnol)** : chaque personne choisit **Français**, **English** ou **Español** dans le menu *Apparence* (icône palette, en haut à droite, aussi sur l'écran de connexion) ; le choix est gardé dans son compte. Sans choix, le portail suit la langue du navigateur. Tout est traduit : pages, fenêtres, confirmations, messages après une action et erreurs, libellés (droits, journal, états, récurrences, profils intégrés), gestionnaire de fichiers, console à distance, recherche Ctrl+K. Dates, tailles (Go/GB, virgule ou point décimal) et nombres suivent la langue ; les récurrences des planifications sont rédigées dans l'ordre de chaque langue (« Every Tuesday and Thursday at 02:00 », « Cada martes y jueves a las 02:00 »).

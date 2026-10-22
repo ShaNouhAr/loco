@@ -128,7 +128,7 @@ def _browser_session(sid):
     return row
 
 
-@app.route("/parc/<int:dev_id>/session", methods=["POST"])
+@app.route("/fleet/<int:dev_id>/session", methods=["POST"])
 @login_required
 def remote_open(dev_id):
     dev = fleet._get(dev_id)
@@ -158,7 +158,7 @@ def remote_open(dev_id):
     return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
 
 
-@app.route("/parc/session/<sid>")
+@app.route("/fleet/session/<sid>")
 @login_required
 def remote_session(sid):
     db().execute("BEGIN IMMEDIATE")
@@ -173,7 +173,7 @@ def remote_session(sid):
     return render_template("remote_session.html", remote=row, detached=request.args.get("view") == "console")
 
 
-@app.route("/parc/session/<sid>/io", methods=["POST"])
+@app.route("/fleet/session/<sid>/io", methods=["POST"])
 @login_required
 def remote_io(sid):
     if (request.content_length or 0) > 400000:

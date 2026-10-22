@@ -29,4 +29,4 @@ Remove-Item $msi -Force -ErrorAction SilentlyContinue
 if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw {{ ps_t('Installation du MSI en echec (code %(code)s, journal %(log)s).', code='$($p.ExitCode)', log='$log') }} }
 $service = Get-Service loco-client -ErrorAction SilentlyContinue
 if (-not $service -or $service.Status -ne 'Running') { throw {{ ps_t('Le service loco-client ne tourne pas.') }} }
-Write-Host {{ ps_t('Agent loco installe (service loco-client) : le poste apparait dans Mon parc sous deux minutes (%(url)s/parc).', url=server) }} -ForegroundColor Green
+Write-Host {{ ps_t('Agent loco installe (service loco-client) : le poste apparait dans Mon parc sous deux minutes (%(url)s/fleet).', url=server) }} -ForegroundColor Green

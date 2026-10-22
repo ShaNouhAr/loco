@@ -98,16 +98,16 @@ class TestLanguageChoice(unittest.TestCase):
         self.assertIn('<html lang="fr"', c.get("/login", headers={"Accept-Language": "fr-FR"}).get_data(as_text=True))
         b = fixture.Browser()
         b.login("admin", fixture.ADMIN_PW)
-        r = b.post("/langue", {"lang": "en", "next": "/systeme"}, page="/")
+        r = b.post("/language", {"lang": "en", "next": "/system"}, page="/")
         self.assertEqual(r.status_code, 302)
         self.assertIn('<html lang="en"', b.c.get("/", headers={"Accept-Language": "fr"}).get_data(as_text=True))
-        b.post("/langue", {"lang": "fr", "next": "/"}, page="/")
+        b.post("/language", {"lang": "fr", "next": "/"}, page="/")
         self.assertIn('<html lang="fr"', b.c.get("/").get_data(as_text=True))
-        self.assertEqual(b.post("/langue", {"lang": "xx"}, page="/").status_code, 400)
+        self.assertEqual(b.post("/language", {"lang": "xx"}, page="/").status_code, 400)
 
     def test_next_stays_on_this_site(self):
         b = fixture.Browser()
-        r = b.post("/langue", {"lang": "en", "next": "//evil.example/"}, page="/login")
+        r = b.post("/language", {"lang": "en", "next": "//evil.example/"}, page="/login")
         self.assertEqual(r.headers["Location"].rsplit("/", 1)[-1], "")
 
 

@@ -392,16 +392,16 @@ class TestPages(TempAgent):
         with open(locoadmin.STATUS, "w") as f:
             json.dump({"checked": "2026-10-15 09:00:00", "latest": {"version": "9.0.0", "url": "", "published": ""},
                        "system_updates": ["musl-1.2.6-r1"], "errors": []}, f)
-        html = self.b.c.get("/systeme/mises-a-jour").get_data(as_text=True)
+        html = self.b.c.get("/system/updates").get_data(as_text=True)
         self.assertIn("Installer 9.0.0", html)
         self.assertIn("musl-1.2.6-r1", html)
-        html = self.b.c.get("/systeme/configuration").get_data(as_text=True)
+        html = self.b.c.get("/system/configuration").get_data(as_text=True)
         self.assertIn('value="10.0.0.0/8 192.168.0.0/16"', html)
 
     def test_settings_are_sent_to_the_agent(self):
         form = {k: v for k, v in locoadmin.read_conf().items() if k in locoadmin.SETTINGS}
         form.update(WU_CACHE_SIZE="60g", ADMIN_ALLOW="127.0.0.0/8 192.168.43.0/24")
-        r = self.b.post("/systeme/configuration", form, page="/systeme/configuration")
+        r = self.b.post("/system/configuration", form, page="/system/configuration")
         self.assertEqual(r.status_code, 302)
         names = os.listdir(locoadmin.REQUESTS)
         self.assertEqual(len(names), 1)
@@ -410,22 +410,22 @@ class TestPages(TempAgent):
 
     def test_admin_cannot_lock_themself_out(self):
         form = {k: v for k, v in locoadmin.read_conf().items() if k in locoadmin.SETTINGS}
-        form.update(ADMIN_ALLOW="10.99.0.0/16", csrf=self.b.token("/systeme/configuration"))
-        self.b.c.post("/systeme/configuration", data=form, headers={"X-Forwarded-For": "192.168.43.5"})
+        form.update(ADMIN_ALLOW="10.99.0.0/16", csrf=self.b.token("/system/configuration"))
+        self.b.c.post("/system/configuration", data=form, headers={"X-Forwarded-For": "192.168.43.5"})
         self.assertEqual(os.listdir(locoadmin.REQUESTS), [])
         form["ADMIN_ALLOW"] = "192.168.43.0/24 10.99.0.0/16"
-        self.b.c.post("/systeme/configuration", data=form, headers={"X-Forwarded-For": "192.168.43.5"})
+        self.b.c.post("/system/configuration", data=form, headers={"X-Forwarded-For": "192.168.43.5"})
         self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 1)
 
     def test_new_operations_require_admin_and_csrf(self):
-        for path in ("/systeme/configuration", "/systeme/mises-a-jour"):
+        for path in ("/system/configuration", "/system/updates"):
             self.assertEqual(self.b.c.post(path, data={"action": "reboot"}).status_code, 400)
         with fixture.connect() as conn:
             conn.execute("DELETE FROM users WHERE username='appliance-reader'")
             fixture.auth.create_user(conn, "appliance-reader", fixture.ADMIN_PW, role="viewer", must_change=False)
         viewer = fixture.Browser()
         viewer.login("appliance-reader", fixture.ADMIN_PW)
-        for path in ("/systeme/configuration", "/systeme/mises-a-jour", "/systeme/operations/etat"):
+        for path in ("/system/configuration", "/system/updates", "/system/operations/state"):
             self.assertEqual(viewer.c.get(path).status_code, 403)
         self.assertEqual(os.listdir(locoadmin.REQUESTS), [])
 
@@ -443,29 +443,29 @@ class TestPages(TempAgent):
                                      "security": False, "severity": "", "tags": ["loco"]}],
                        "errors": []}, f)
         with mock.patch.object(config, "APPLIANCE", False):
-            html = self.b.c.get("/systeme/mises-a-jour").get_data(as_text=True)
+            html = self.b.c.get("/system/updates").get_data(as_text=True)
             self.assertIn("Debian GNU/Linux 13 (trixie)", html)
             self.assertIn("Installer les correctifs de sécurité", html)
             self.assertIn('data-security="1"', html)
             self.assertIn("6.12.57+deb13-amd64 installé", html)
             self.assertIn("ssh.service", html)
-            self.assertNotIn("/systeme/configuration", html)           # réglages : appliance seulement
+            self.assertNotIn("/system/configuration", html)           # réglages : appliance seulement
             self.assertNotIn('value="update-loco"', html)
-            r = self.b.post("/systeme/mises-a-jour", {"action": "update-loco"}, page="/systeme/mises-a-jour")
+            r = self.b.post("/system/updates", {"action": "update-loco"}, page="/system/updates")
             self.assertEqual(r.status_code, 400)
             with mock.patch.object(locoadmin, "ALPINE", False):
-                r = self.b.post("/systeme/mises-a-jour", {"action": "update-security"}, page="/systeme/mises-a-jour")
+                r = self.b.post("/system/updates", {"action": "update-security"}, page="/system/updates")
             self.assertEqual(r.status_code, 302)
-            self.assertEqual(self.b.c.get("/systeme/configuration").status_code, 404)
+            self.assertEqual(self.b.c.get("/system/configuration").status_code, 404)
         names = os.listdir(locoadmin.REQUESTS)
         self.assertEqual(len(names), 1)
         self.assertEqual(locoadmin._read_request(os.path.join(locoadmin.REQUESTS, names[0]))["action"], "update-security")
 
     def test_viewers_and_other_runtimes_have_no_access(self):
         with mock.patch.object(config, "SERVER_UPDATES", False):
-            self.assertEqual(self.b.c.get("/systeme/mises-a-jour").status_code, 404)
+            self.assertEqual(self.b.c.get("/system/updates").status_code, 404)
         anonymous = fixture.Browser()
-        self.assertEqual(anonymous.c.get("/systeme/configuration").status_code, 302)
+        self.assertEqual(anonymous.c.get("/system/configuration").status_code, 302)
 
 
 if __name__ == "__main__":

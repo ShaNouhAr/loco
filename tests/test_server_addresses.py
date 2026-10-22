@@ -29,7 +29,7 @@ class TestAnnouncedAddresses(FleetTest):
             conn.execute("DELETE FROM settings WHERE key=?", (addresses.SETTING,))
 
     def announce(self, url, action="announce"):
-        return self.admin.post("/parc/adresses", {"url": url, "action": action}, page="/parc")
+        return self.admin.post("/fleet/addresses", {"url": url, "action": action}, page="/fleet")
 
     def test_announced_address_reaches_agents_and_coverage_is_counted(self):
         win, lin = Agent(WINDOWS, "192.168.43.50"), Agent(LINUX, "192.168.43.60")
@@ -43,7 +43,7 @@ class TestAnnouncedAddresses(FleetTest):
         lin.checkin()                                               # agent ancien : ne déclare rien
         with db.transaction() as conn:
             self.assertEqual(addresses.coverage(conn), [(config.HTTPS_URL, 1, 2), (NEW, 1, 2)])
-        page = self.admin.c.get("/parc/reglages").get_data(as_text=True)
+        page = self.admin.c.get("/fleet/settings").get_data(as_text=True)
         self.assertIn(NEW, page)
         self.assertIn("1/2 poste(s) prévenu(s)", page)
         self.announce(NEW, "forget")
@@ -76,10 +76,10 @@ class TestAnnouncedAddresses(FleetTest):
 
     def test_only_fleet_settings_can_announce(self):
         viewer = self.browser("adresse-lecture", self.profile("adresse-lecture", {"fleet.view"}))
-        r = viewer.post("/parc/adresses", {"url": NEW}, page="/compte")
+        r = viewer.post("/fleet/addresses", {"url": NEW}, page="/account")
         self.assertEqual(r.status_code, 403)
-        self.assertEqual(viewer.c.get("/parc/reglages").status_code, 403)
-        self.assertNotIn("Réglages", viewer.c.get("/parc").get_data(as_text=True))
+        self.assertEqual(viewer.c.get("/fleet/settings").status_code, 403)
+        self.assertNotIn("Réglages", viewer.c.get("/fleet").get_data(as_text=True))
 
     def test_console_command(self):
         out = io.StringIO()

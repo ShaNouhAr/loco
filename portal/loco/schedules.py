@@ -346,7 +346,7 @@ def _back(default="schedules"):
     return redirect(safe_next(target) if target else url_for(default))
 
 
-@app.route("/parc/planifications")
+@app.route("/fleet/schedules")
 @login_required
 def schedules():
     conn = db()
@@ -356,8 +356,8 @@ def schedules():
     return render_template("schedules.html", items=[view(conn, s) for s in rows], tz=timezone())
 
 
-@app.route("/parc/planifications/nouvelle", defaults={"sched_id": 0})
-@app.route("/parc/planifications/<int:sched_id>")
+@app.route("/fleet/schedules/new", defaults={"sched_id": 0})
+@app.route("/fleet/schedules/<int:sched_id>")
 @login_required
 def schedule_editor(sched_id):
     conn = db()
@@ -402,8 +402,8 @@ def _form_params(conn, action, form):
     return {"script_id": script["id"], "version": script["version"]}
 
 
-@app.route("/parc/planifications/enregistrer", defaults={"sched_id": 0}, methods=["POST"])
-@app.route("/parc/planifications/<int:sched_id>/enregistrer", methods=["POST"])
+@app.route("/fleet/schedules/save", defaults={"sched_id": 0}, methods=["POST"])
+@app.route("/fleet/schedules/<int:sched_id>/save", methods=["POST"])
 @login_required
 def schedule_save(sched_id):
     conn = db()
@@ -439,7 +439,7 @@ def schedule_save(sched_id):
     return _back()
 
 
-@app.route("/parc/planifications/<int:sched_id>/pause", methods=["POST"])
+@app.route("/fleet/schedules/<int:sched_id>/pause", methods=["POST"])
 @login_required
 def schedule_toggle(sched_id):
     conn, s = db(), _row(sched_id)
@@ -465,7 +465,7 @@ def schedule_toggle(sched_id):
     return _back()
 
 
-@app.route("/parc/planifications/<int:sched_id>/supprimer", methods=["POST"])
+@app.route("/fleet/schedules/<int:sched_id>/delete", methods=["POST"])
 @login_required
 def schedule_delete(sched_id):
     conn, s = db(), _row(sched_id)

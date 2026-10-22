@@ -24,14 +24,14 @@ class TestRemoteFiles(FleetTest):
         self.dev_id = device(self.agent.uid)["id"]
 
     def open(self, browser=None, page="/"):
-        return (browser or self.admin).post(f"/parc/{self.dev_id}/session", {"kind": "files"}, page=page)
+        return (browser or self.admin).post(f"/fleet/{self.dev_id}/session", {"kind": "files"}, page=page)
 
     def test_open_returns_a_session_and_io_url_without_a_page(self):
         response = self.open()
         self.assertEqual(response.status_code, 200)
         body = response.get_json()
         self.assertIn("sid", body)
-        self.assertEqual(body["io"], f"/parc/session/{body['sid']}/io")
+        self.assertEqual(body["io"], f"/fleet/session/{body['sid']}/io")
         with transaction() as conn:
             row = conn.execute("SELECT kind,state FROM remote_sessions WHERE id=?", (body["sid"],)).fetchone()
             self.assertEqual((row["kind"], row["state"]), ("files", "waiting"))
@@ -42,32 +42,32 @@ class TestRemoteFiles(FleetTest):
     def test_old_agent_is_refused(self):
         stale = Agent(dict(LINUX, agent_version="2.22.0", hostname="old-linux"), "192.168.43.62")
         stale.enroll()
-        response = self.admin.post(f"/parc/{device(stale.uid)['id']}/session", {"kind": "files"})
+        response = self.admin.post(f"/fleet/{device(stale.uid)['id']}/session", {"kind": "files"})
         self.assertEqual(response.status_code, 409)
         self.assertIn(b"2.23", response.data)
 
     def test_tab_follows_version_and_right(self):
-        page = self.admin.c.get(f"/parc/{self.dev_id}").get_data(as_text=True)
+        page = self.admin.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)
         self.assertIn('data-tab="fichiers"', page)
         self.assertIn('id="file-manager"', page)
         self.assertIn("files.js", page)
         # Agent trop ancien : pas d'onglet.
         stale = Agent(dict(LINUX, agent_version="2.22.0", hostname="old-linux"), "192.168.43.62")
         stale.enroll()
-        old_page = self.admin.c.get(f"/parc/{device(stale.uid)['id']}").get_data(as_text=True)
+        old_page = self.admin.c.get(f"/fleet/{device(stale.uid)['id']}").get_data(as_text=True)
         self.assertNotIn('data-tab="fichiers"', old_page)
         # Compte sans le droit « remote.files » mais avec la vue du parc : pas d'onglet, ouverture refusée.
         self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
         viewer = test_permissions.TestPermissions.browser(
             self, "nofiles", test_permissions.TestPermissions.profile(self, "nofiles", {"fleet.view"}))
-        limited = viewer.c.get(f"/parc/{self.dev_id}").get_data(as_text=True)
+        limited = viewer.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)
         self.assertNotIn('data-tab="fichiers"', limited)
-        self.assertEqual(self.open(browser=viewer, page="/compte").status_code, 403)
+        self.assertEqual(self.open(browser=viewer, page="/account").status_code, 403)
 
     def test_bytes_relay_to_the_agent_and_back(self):
         sid = self.open().get_json()["sid"]
         request = base64.b64encode(frame({"op": "hello", "id": 1})).decode()
-        self.assertEqual(self.admin.post(f"/parc/session/{sid}/io", {"seq": 1, "data": request}).status_code, 200)
+        self.assertEqual(self.admin.post(f"/fleet/session/{sid}/io", {"seq": 1, "data": request}).status_code, 200)
         # L'agent récupère la requête du navigateur (direction « in »).
         descriptor = next(d for d in self.exchange(sid).get_json()["sessions"] if d["id"] == sid)
         self.assertEqual(descriptor["kind"], "files")
@@ -75,9 +75,9 @@ class TestRemoteFiles(FleetTest):
         # L'agent répond (direction « out ») ; le navigateur la lit une fois, puis l'acquitte.
         answer = base64.b64encode(frame({"id": 1, "ok": True, "os": "linux"})).decode()
         self.exchange(sid, [{"id": sid, "ack": 1, "seq": 1, "data": answer, "state": "active"}])
-        self.assertEqual(self.admin.post(f"/parc/session/{sid}/io", {}).get_json()["packets"],
+        self.assertEqual(self.admin.post(f"/fleet/session/{sid}/io", {}).get_json()["packets"],
                          [{"seq": 1, "data": answer}])
-        self.assertEqual(self.admin.post(f"/parc/session/{sid}/io", {"ack": 1}).get_json()["packets"], [])
+        self.assertEqual(self.admin.post(f"/fleet/session/{sid}/io", {"ack": 1}).get_json()["packets"], [])
 
     def test_two_files_sessions_per_device_at_most(self):
         self.assertEqual(self.open().status_code, 200)

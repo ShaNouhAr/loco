@@ -22,17 +22,17 @@ class TestFeatures(FleetTest):
 
     def switch(self, *off):
         form = {k: "1" for k in features.FEATURES if k not in off}
-        return self.admin.post("/administration/fonctionnalites", form, page="/administration/fonctionnalites")
+        return self.admin.post("/administration/features", form, page="/administration/features")
 
     def test_only_the_installation_admin_account_manages_features(self):
-        page = self.admin.c.get("/administration/fonctionnalites").get_data(as_text=True)
+        page = self.admin.c.get("/administration/features").get_data(as_text=True)
         self.assertIn("Fonctionnalités", page)
         self.assertIn('name="remote"', page)
-        self.assertIn("/administration/fonctionnalites", self.admin.c.get("/").get_data(as_text=True))   # navigation
+        self.assertIn("/administration/features", self.admin.c.get("/").get_data(as_text=True))   # navigation
         other = test_permissions.TestPermissions.browser(self, "second-admin", "admin")        # autre administrateur
-        self.assertEqual(other.c.get("/administration/fonctionnalites").status_code, 403)
-        self.assertEqual(other.post("/administration/fonctionnalites", {}, page="/compte").status_code, 403)
-        self.assertNotIn("/administration/fonctionnalites", other.c.get("/").get_data(as_text=True))
+        self.assertEqual(other.c.get("/administration/features").status_code, 403)
+        self.assertEqual(other.post("/administration/features", {}, page="/account").status_code, 403)
+        self.assertNotIn("/administration/features", other.c.get("/").get_data(as_text=True))
 
     def test_disabled_feature_is_hidden_and_refused_everywhere(self):
         self.switch("wu")
@@ -57,9 +57,9 @@ class TestFeatures(FleetTest):
         r = a.checkin()
         self.assertEqual(r.status_code, 503)
         self.assertEqual(r.headers["Retry-After"], "600")
-        page = self.admin.c.get("/administration/fonctionnalites").get_data(as_text=True)
+        page = self.admin.c.get("/administration/features").get_data(as_text=True)
         self.assertIn("Inactive tant que Mon parc et agents est désactivé", page)
-        self.assertEqual(self.admin.c.get("/parc").status_code, 403)
+        self.assertEqual(self.admin.c.get("/fleet").status_code, 403)
         self.switch("apt")
         self.assertEqual(fixture.Browser().c.get("/linux/setup.sh").status_code, 403)          # script public coupé
         self.switch()

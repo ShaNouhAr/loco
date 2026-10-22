@@ -113,7 +113,7 @@ app.before_request_funcs[None].insert(0, block_disabled_features)
 app.jinja_env.globals.update(feature=enabled, is_super_admin=is_super_admin)
 
 
-@app.route("/administration/fonctionnalites")
+@app.route("/administration/features")
 @login_required
 def features():
     if not is_super_admin():
@@ -136,7 +136,7 @@ def features():
     return render_template("features.html", items=items, appliance=config.APPLIANCE)
 
 
-@app.route("/administration/fonctionnalites", methods=["POST"])
+@app.route("/administration/features", methods=["POST"])
 @login_required
 def features_save():
     if not is_super_admin():

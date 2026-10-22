@@ -128,7 +128,7 @@ class TestEnrollment(FleetTest):
         a = Agent(WINDOWS, "192.168.43.50")
         a.enroll()
         old_key = Agent.key()
-        self.admin.post("/parc/cle", page="/parc")
+        self.admin.post("/fleet/key", page="/fleet")
         self.assertNotEqual(Agent.key(), old_key)
         self.assertEqual(a.checkin().status_code, 200)
         self.assertEqual(Agent(LINUX, "192.168.43.61").enroll(key=old_key).status_code, 403)
@@ -149,10 +149,10 @@ class TestStatus(FleetTest):
         a = Agent(WINDOWS, "192.168.43.50")
         a.enroll()
         a.checkin({"updates": [{"name": f"KB{i}"} for i in range(10)]})
-        path = f"/parc/{device(a.uid)['id']}"
+        path = f"/fleet/{device(a.uid)['id']}"
         headers = {"X-Requested-With": "fetch"}
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=120)):
-            page = self.admin.c.get("/parc").get_data(as_text=True)
+            page = self.admin.c.get("/fleet").get_data(as_text=True)
             cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
             self.assertIn('aria-label="En ligne"', cells[0])
             self.assertIn('class="st ok device-availability"', cells[0])
@@ -163,19 +163,19 @@ class TestStatus(FleetTest):
             self.assertIn('>En ligne</span>', detail)
             self.assertIn('class="device-update-state"', detail)
             self.assertIn('>À traiter</span>', detail)
-            signatures = [self.admin.c.get(p, headers=headers).json["signature"] for p in ("/parc", path)]
+            signatures = [self.admin.c.get(p, headers=headers).json["signature"] for p in ("/fleet", path)]
         # Sans nouvel événement ni nouvel inventaire, le franchissement du délai doit rafraîchir les deux pages.
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
-            page = self.admin.c.get("/parc").get_data(as_text=True)
+            page = self.admin.c.get("/fleet").get_data(as_text=True)
             cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
             self.assertIn('aria-label="Hors ligne"', cells[0])
             self.assertIn('class="st err device-availability"', cells[0])
             self.assertIn('aria-label="Mises à jour : à traiter"', cells[2])
-            for p, previous in zip(("/parc", path), signatures):
+            for p, previous in zip(("/fleet", path), signatures):
                 self.assertNotEqual(self.admin.c.get(p, headers=headers).json["signature"], previous)
         a.checkin({"updates": []})
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
-            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', self.admin.c.get("/parc").get_data(as_text=True), re.S)
+            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', self.admin.c.get("/fleet").get_data(as_text=True), re.S)
             self.assertIn('aria-label="Hors ligne"', cells[0])
             self.assertIn('aria-label="Mises à jour : à jour"', cells[2])
             self.assertIn('class="st ok"', cells[2])
@@ -236,14 +236,14 @@ class TestStatus(FleetTest):
         for count, color in ((0, "green"), (1, "orange"), (9, "orange"), (10, "red"), (11, "red")):
             answer = a.checkin({"updates": [{"name": f"pkg{i}"} for i in range(count)]}).get_json()
             self.assertEqual(answer["indicator"]["color"], color, count)
-        self.admin.post("/parc/seuil", {"threshold": "5"}, page="/parc")
+        self.admin.post("/fleet/threshold", {"threshold": "5"}, page="/fleet")
         for count, color in ((4, "orange"), (5, "red")):
             a.checkin({"updates": [{"name": f"pkg{i}"} for i in range(count)]})
             self.assertEqual(status_of(a.uid)[0], color)
-        self.admin.post("/parc/seuil", {"threshold": "0"}, page="/parc")
+        self.admin.post("/fleet/threshold", {"threshold": "0"}, page="/fleet")
         with fixture.loco.app.test_request_context():
             self.assertEqual(fleet.red_threshold(), 5)
-        self.assertIn("5 mises à jour ou plus", self.admin.c.get("/parc").get_data(as_text=True))
+        self.assertIn("5 mises à jour ou plus", self.admin.c.get("/fleet").get_data(as_text=True))
 
     def test_software_and_system_updates_are_added_together(self):
         with transaction() as conn:
@@ -277,7 +277,7 @@ class TestActions(FleetTest):
 
     def queue(self, uid, action, **form):
         dev = device(uid)
-        return self.admin.post(f"/parc/{dev['id']}/action", dict(form, action=action), page=f"/parc/{dev['id']}")
+        return self.admin.post(f"/fleet/{dev['id']}/action", dict(form, action=action), page=f"/fleet/{dev['id']}")
 
     def test_command_reports_keep_a_busy_device_online(self):
         a = Agent(LINUX, "192.168.43.60")
@@ -309,7 +309,7 @@ class TestActions(FleetTest):
         a.result(cmd["id"], "success", "OK : Notepad++ 8.9.8",
                  {"updates": [], "apps": [{"name": "Notepad++ (64-bit x64)", "version": "8.9.8"}]})
         self.assertEqual(status_of(a.uid)[0], "green")
-        page = self.admin.c.get(f"/parc/{device(a.uid)['id']}").get_data(as_text=True)
+        page = self.admin.c.get(f"/fleet/{device(a.uid)['id']}").get_data(as_text=True)
         self.assertIn("OK : Notepad++ 8.9.8", page)
 
     def test_update_all_only_targets_devices_with_pending_updates(self):
@@ -319,7 +319,7 @@ class TestActions(FleetTest):
         fine = Agent(WINDOWS, "192.168.43.50")
         fine.enroll()
         fine.checkin({"updates": [], "apps": []})
-        self.admin.post("/parc/tout-mettre-a-jour", {}, page="/parc")
+        self.admin.post("/fleet/update-all", {}, page="/fleet")
         self.assertEqual([c["action"] for c in late.checkin().get_json()["commands"]], ["update"])
         self.assertEqual(fine.checkin().get_json()["commands"], [])
 
@@ -348,7 +348,7 @@ class TestActions(FleetTest):
         a.result(cmd["id"], "success", "Agent retiré du poste.")
         self.assertEqual(device(a.uid)["state"], "removed")
         self.assertEqual(a.checkin().status_code, 401)
-        self.assertNotIn("srv-web", self.admin.c.get("/parc").get_data(as_text=True))
+        self.assertNotIn("srv-web", self.admin.c.get("/fleet").get_data(as_text=True))
 
     def test_viewers_see_the_fleet_but_cannot_act(self):
         a = Agent(LINUX, "192.168.43.60")
@@ -359,11 +359,11 @@ class TestActions(FleetTest):
                 auth.create_user(conn, "lecteur-parc", "Lecteur-Parc-2026", "viewer", must_change=False)
         viewer = fixture.Browser()
         viewer.login("lecteur-parc", "Lecteur-Parc-2026")
-        page = viewer.c.get("/parc").get_data(as_text=True)
+        page = viewer.c.get("/fleet").get_data(as_text=True)
         self.assertIn("srv-web", page)
         self.assertNotIn("key=", page)                       # pas de clé d'inscription en lecture seule
         dev = device(a.uid)
-        r = viewer.post(f"/parc/{dev['id']}/action", {"action": "reboot"}, page="/parc")
+        r = viewer.post(f"/fleet/{dev['id']}/action", {"action": "reboot"}, page="/fleet")
         self.assertEqual(r.status_code, 403)
 
 
@@ -414,7 +414,7 @@ class TestInstallers(FleetTest):
         sha = "e" * 64
         with mock.patch.object(fleet, "agent_msi", return_value=("/nulle/part.msi", sha)), \
                 mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
-            page = self.admin.c.get("/enrolement").get_data(as_text=True)
+            page = self.admin.c.get("/enrollment").get_data(as_text=True)
         self.assertIn("Télécharger le MSI", page)
         self.assertIn('href="/agent/files/loco-client.msi" download', page)
         self.assertIn("https://repo.test:8443/agent/files/loco-client.msi", page)   # depuis le poste, en HTTPS
@@ -644,7 +644,7 @@ class TestSoftwareStore(FleetTest):
                                 page="/windows-apps/store")
             self.assertTrue(r.headers["Location"].endswith("/windows-apps/store?q=Example"))
             r = self.admin.post("/windows-apps/winget/add", {"id": "Example.Tool"}, page="/windows-apps/store")
-            self.assertTrue(r.headers["Location"].endswith("/windows-apps/logiciel/outil"))
+            self.assertTrue(r.headers["Location"].endswith("/windows-apps/software/outil"))
         with mock.patch.object(winget, "manifest", return_value=winget.parse_yaml(MANIFEST)):
             page = self.admin.c.get("/windows-apps/store/Example.Tool").get_data(as_text=True)
         self.assertIn("Le catalogue local a la version 2.0.0 ; le centre de logiciels propose 2.5.0", page)
@@ -689,7 +689,7 @@ class TestLinuxInventory(FleetTest):
         self.assertEqual(len(data["packages"]), 3)
         self.assertEqual(data["system"]["virtualization"], "kvm")
         self.assertNotIn("packages", json.loads(device(a.uid)["inventory"]))     # inventaire du parc : sans les paquets
-        page = self.admin.c.get(f"/parc/{device(a.uid)['id']}").get_data(as_text=True)
+        page = self.admin.c.get(f"/fleet/{device(a.uid)['id']}").get_data(as_text=True)
         self.assertIn('data-tab="paquets"', page)
         self.assertIn('data-tab="flatpak"', page)
         self.assertIn("libc6", page)
@@ -704,7 +704,7 @@ class TestLinuxInventory(FleetTest):
         a.enroll()
         a.checkin({"updates": [], "apps": [{"name": "7-Zip", "version": "24.09"}]})
         self.assertIsNone(self.soft(a.uid))
-        page = self.admin.c.get(f"/parc/{device(a.uid)['id']}").get_data(as_text=True)
+        page = self.admin.c.get(f"/fleet/{device(a.uid)['id']}").get_data(as_text=True)
         self.assertNotIn('data-tab="paquets"', page)
 
     def test_oversized_inventory_is_capped(self):
@@ -760,7 +760,7 @@ class TestWuProxy(FleetTest):
             wu = self.admin.c.get("/windows-update").get_data(as_text=True)
             self.assertIn("Non disponible sur ce serveur", wu)
             self.assertNotIn("netsh winhttp set proxy", wu)
-            self.assertNotIn("netsh winhttp set proxy", self.admin.c.get("/enrolement").get_data(as_text=True))
+            self.assertNotIn("netsh winhttp set proxy", self.admin.c.get("/enrollment").get_data(as_text=True))
 
     def test_squid_never_relays_to_the_server_itself(self):
         from pathlib import Path
@@ -775,7 +775,7 @@ class TestWuProxy(FleetTest):
         self.assertIn("netsh winhttp set proxy", wu)
         self.assertIn(target, wu)
         self.assertIn("Diriger les postes vers le cache", wu)
-        enroll = self.admin.c.get("/enrolement").get_data(as_text=True)
+        enroll = self.admin.c.get("/enrollment").get_data(as_text=True)
         self.assertIn("netsh winhttp set proxy", enroll)
         self.assertIn(target, enroll)
 
@@ -793,7 +793,7 @@ class TestScheduling(FleetTest):
         values = {"action": "update", "target": "selection", "device": str(self.dev), "recurrence": "once",
                   "start_date": (datetime.date.today() + datetime.timedelta(days=1)).isoformat(), "at_time": "02:00"}
         values.update(form)
-        return self.admin.post("/parc/planifications/enregistrer", values, page="/parc/planifications")
+        return self.admin.post("/fleet/schedules/save", values, page="/fleet/schedules")
 
     def due(self):
         past = (datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -831,7 +831,7 @@ class TestScheduling(FleetTest):
         self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["update"])
         s = self.schedule()
         self.assertEqual((s["next_run"], s["last_result"]), ("", "1 poste(s)"))  # terminée
-        self.assertIn("Terminée", self.admin.c.get("/parc/planifications").get_data(as_text=True))
+        self.assertIn("Terminée", self.admin.c.get("/fleet/schedules").get_data(as_text=True))
 
     def test_recurring_schedule_advances_without_piling_up_missed_runs(self):
         self.plan(recurrence="weekly", weekdays=["1", "3"], start_date=datetime.date.today().isoformat())
@@ -840,7 +840,7 @@ class TestScheduling(FleetTest):
         self.assertEqual(self.a.checkin().get_json()["commands"], [])            # une seule fois par occurrence
         s = self.schedule()
         self.assertGreater(s["next_run"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        page = self.admin.c.get(f"/parc/{self.dev}").get_data(as_text=True)    # fiche : planifications du poste
+        page = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)    # fiche : planifications du poste
         self.assertIn("chaque mardi et jeudi à 02:00", page)
         self.assertIn('id="plan-update"', page)
 
@@ -856,14 +856,14 @@ class TestScheduling(FleetTest):
     def test_pause_resume_and_delete(self):
         self.plan(recurrence="daily", start_date=datetime.date.today().isoformat())
         sid = self.schedule()["id"]
-        self.admin.post(f"/parc/planifications/{sid}/pause", {}, page="/parc/planifications")
+        self.admin.post(f"/fleet/schedules/{sid}/pause", {}, page="/fleet/schedules")
         self.due()
         self.assertEqual(self.a.checkin().get_json()["commands"], [])            # en pause : rien n'est envoyé
-        self.admin.post(f"/parc/planifications/{sid}/pause", {}, page="/parc/planifications")
+        self.admin.post(f"/fleet/schedules/{sid}/pause", {}, page="/fleet/schedules")
         s = self.schedule()
         self.assertEqual(s["enabled"], 1)
         self.assertGreater(s["next_run"], datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))   # pas de rattrapage
-        self.admin.post(f"/parc/planifications/{sid}/supprimer", {}, page="/parc/planifications")
+        self.admin.post(f"/fleet/schedules/{sid}/delete", {}, page="/fleet/schedules")
         self.assertIsNone(self.schedule())
 
     def test_rights_follow_the_planned_action(self):
@@ -871,14 +871,14 @@ class TestScheduling(FleetTest):
         self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
         viewer = test_permissions.TestPermissions.browser(
             self, "plan-lecture", test_permissions.TestPermissions.profile(self, "plan-lecture", {"fleet.view"}))
-        self.assertEqual(viewer.c.get("/parc/planifications").status_code, 200)
-        self.assertEqual(viewer.post("/parc/planifications/enregistrer", {"action": "update", "target": "all",
+        self.assertEqual(viewer.c.get("/fleet/schedules").status_code, 200)
+        self.assertEqual(viewer.post("/fleet/schedules/save", {"action": "update", "target": "all",
                                      "recurrence": "daily", "at_time": "02:00",
-                                     "start_date": datetime.date.today().isoformat()}, page="/compte").status_code, 403)
+                                     "start_date": datetime.date.today().isoformat()}, page="/account").status_code, 403)
         single = test_permissions.TestPermissions.browser(
             self, "plan-poste", test_permissions.TestPermissions.profile(self, "plan-poste", {"fleet.update"}))
-        r = single.post("/parc/planifications/enregistrer", {"action": "update", "target": "all", "recurrence": "daily",
-                        "at_time": "02:00", "start_date": datetime.date.today().isoformat()}, page="/compte")
+        r = single.post("/fleet/schedules/save", {"action": "update", "target": "all", "recurrence": "daily",
+                        "at_time": "02:00", "start_date": datetime.date.today().isoformat()}, page="/account")
         self.assertEqual(r.status_code, 403)                                   # tout le parc : droit « tout le parc »
 
     def test_whoever_edits_a_schedule_answers_for_it(self):
@@ -888,21 +888,21 @@ class TestScheduling(FleetTest):
         sid = self.schedule()["id"]
         editor = test_permissions.TestPermissions.browser(
             self, "plan-editeur", test_permissions.TestPermissions.profile(self, "plan-editeur", {"fleet.update"}))
-        r = editor.post(f"/parc/planifications/{sid}/enregistrer", {"action": "update", "target": "selection",
+        r = editor.post(f"/fleet/schedules/{sid}/save", {"action": "update", "target": "selection",
                         "device": str(self.dev), "recurrence": "daily", "at_time": "03:00",
-                        "start_date": datetime.date.today().isoformat()}, page="/compte")
+                        "start_date": datetime.date.today().isoformat()}, page="/account")
         self.assertEqual(r.status_code, 302)
         s = self.schedule()
         self.assertEqual((s["created_by"], s["at_time"]), ("perm-plan-editeur", "03:00"))   # droits revérifiés pour lui
 
     def test_queued_command_can_be_cancelled_before_it_is_sent(self):
-        r = self.admin.post(f"/parc/{self.dev}/action", {"action": "update"}, page=f"/parc/{self.dev}")
+        r = self.admin.post(f"/fleet/{self.dev}/action", {"action": "update"}, page=f"/fleet/{self.dev}")
         self.assertEqual(r.status_code, 302)
         with transaction() as conn:
             cid = conn.execute("SELECT id FROM device_commands WHERE device_id=?", (self.dev,)).fetchone()[0]
-        self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 302)
+        self.assertEqual(self.admin.post(f"/fleet/{self.dev}/cancel/{cid}", {}, page=f"/fleet/{self.dev}").status_code, 302)
         self.assertEqual(self.a.checkin().get_json()["commands"], [])
-        self.assertEqual(self.admin.post(f"/parc/{self.dev}/annuler/{cid}", {}, page=f"/parc/{self.dev}").status_code, 404)
+        self.assertEqual(self.admin.post(f"/fleet/{self.dev}/cancel/{cid}", {}, page=f"/fleet/{self.dev}").status_code, 404)
 
 
 if __name__ == "__main__":

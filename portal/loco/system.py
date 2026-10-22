@@ -164,7 +164,7 @@ def _age(mtime):
     return {"text": text, "late": hours > 48}
 
 
-@app.route("/systeme")
+@app.route("/system")
 @login_required
 def system():
     services = [(unit, desc, service_active(unit)) for unit, desc in UNITS]

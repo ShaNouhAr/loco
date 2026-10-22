@@ -96,7 +96,7 @@ def _packages(status):
     return [p for p in packages if isinstance(p, dict) and p.get("name")]
 
 
-@app.route("/systeme/mises-a-jour")
+@app.route("/system/updates")
 @login_required
 def appliance_updates():
     _require_agent()
@@ -119,7 +119,7 @@ def appliance_updates():
     )
 
 
-@app.route("/systeme/mises-a-jour/operation/<job_id>")
+@app.route("/system/updates/operation/<job_id>")
 @login_required
 def appliance_job(job_id):
     _require_agent()
@@ -129,7 +129,7 @@ def appliance_job(job_id):
     return {"state": job.get("state", ""), "log": locoadmin.job_log(job_id)}
 
 
-@app.route("/systeme/operations/etat")
+@app.route("/system/operations/state")
 @login_required
 def appliance_operations_state():
     _require_agent()
@@ -138,7 +138,7 @@ def appliance_operations_state():
     return {"signature": signature}
 
 
-@app.route("/systeme/mises-a-jour", methods=["POST"])
+@app.route("/system/updates", methods=["POST"])
 @login_required
 def appliance_updates_post():
     _require_agent()
@@ -153,7 +153,7 @@ def appliance_updates_post():
     return back("appliance_updates")
 
 
-@app.route("/systeme/configuration")
+@app.route("/system/configuration")
 @login_required
 def appliance_settings():
     _require_appliance()
@@ -163,7 +163,7 @@ def appliance_settings():
                            client_ip=request.remote_addr or "")
 
 
-@app.route("/systeme/configuration", methods=["POST"])
+@app.route("/system/configuration", methods=["POST"])
 @login_required
 def appliance_settings_post():
     _require_appliance()

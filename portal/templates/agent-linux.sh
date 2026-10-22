@@ -63,4 +63,4 @@ UNIT_EOF
 systemctl daemon-reload
 systemctl enable --now loco-client.timer >/dev/null 2>&1
 systemctl start --no-block loco-client.service
-echo "{{ sh_t('Agent loco installé : le poste apparaît dans « Mon parc » (%(url)s/parc).', url=server) }}"
+echo "{{ sh_t('Agent loco installé : le poste apparaît dans « Mon parc » (%(url)s/fleet).', url=server) }}"

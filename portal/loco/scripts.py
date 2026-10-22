@@ -53,7 +53,7 @@ def _run_state(p):
     return "active" if p["active"] else "failed" if p["failed"] else "success" if p["success"] == p["total"] and p["total"] else "other"
 
 
-@app.route("/parc/scripts")
+@app.route("/fleet/scripts")
 @login_required
 def scripts():
     rows = db().execute("SELECT s.*, (SELECT MAX(created_at) FROM script_runs r WHERE r.script_id=s.id) AS last_run, "
@@ -79,7 +79,7 @@ def scripts():
                            running=sum(h["summary"]["active"] for h in history), limit=HISTORY_LIMIT)
 
 
-@app.route("/parc/scripts/executions/annuler-tout", methods=["POST"])
+@app.route("/fleet/scripts/runs/cancel-all", methods=["POST"])
 @login_required
 def script_runs_cancel_all():
     """Vider la file : aucun poste ne recevra plus les scripts encore en attente (déjà transmis : ils se terminent)."""
@@ -105,7 +105,7 @@ def _delete_runs(conn, run_ids):
         conn.execute("UPDATE schedules SET last_ref=0 WHERE action='run-script' AND last_ref=?", (run_id,))   # plus de lien mort
 
 
-@app.route("/parc/scripts/historique/vider", methods=["POST"])
+@app.route("/fleet/scripts/history/clear", methods=["POST"])
 @login_required
 def script_history_clear():
     conn = lock_access("scripts.edit")
@@ -118,7 +118,7 @@ def script_history_clear():
     return back("scripts")
 
 
-@app.route("/parc/scripts/executions/<int:run_id>/supprimer", methods=["POST"])
+@app.route("/fleet/scripts/runs/<int:run_id>/delete", methods=["POST"])
 @login_required
 def script_run_delete(run_id):
     conn = lock_access("scripts.edit")
@@ -135,8 +135,8 @@ def script_run_delete(run_id):
     return back("scripts")
 
 
-@app.route("/parc/scripts/nouveau", defaults={"script_id": 0})
-@app.route("/parc/scripts/<int:script_id>")
+@app.route("/fleet/scripts/new", defaults={"script_id": 0})
+@app.route("/fleet/scripts/<int:script_id>")
 @login_required
 def script_editor(script_id):
     script = _script(script_id) if script_id else None
@@ -145,8 +145,8 @@ def script_editor(script_id):
                            runs=[{"run": r, "summary": _summary(_targets(r["id"]))} for r in runs])
 
 
-@app.route("/parc/scripts/enregistrer", defaults={"script_id": 0}, methods=["POST"])
-@app.route("/parc/scripts/<int:script_id>/enregistrer", methods=["POST"])
+@app.route("/fleet/scripts/save", defaults={"script_id": 0}, methods=["POST"])
+@app.route("/fleet/scripts/<int:script_id>/save", methods=["POST"])
 @login_required
 def script_save(script_id):
     conn = lock_access("scripts.edit")
@@ -176,7 +176,7 @@ def script_save(script_id):
     return back("script_editor", script_id=script_id)
 
 
-@app.route("/parc/scripts/<int:script_id>/supprimer", methods=["POST"])
+@app.route("/fleet/scripts/<int:script_id>/delete", methods=["POST"])
 @login_required
 def script_delete(script_id):
     conn = lock_access("scripts.edit")
@@ -190,7 +190,7 @@ def script_delete(script_id):
     return back("scripts")
 
 
-@app.route("/parc/scripts/<int:script_id>/executer")
+@app.route("/fleet/scripts/<int:script_id>/run")
 @login_required
 def script_compose(script_id):
     script = _script(script_id)
@@ -217,7 +217,7 @@ def start_run(conn, script, targets, user, run_after=""):
     return run_id
 
 
-@app.route("/parc/scripts/<int:script_id>/executer", methods=["POST"])
+@app.route("/fleet/scripts/<int:script_id>/run", methods=["POST"])
 @login_required
 def script_run_start(script_id):
     from . import schedules
@@ -254,7 +254,7 @@ def script_run_start(script_id):
     return back("script_run", run_id=run_id)
 
 
-@app.route("/parc/scripts/executions/<int:run_id>")
+@app.route("/fleet/scripts/runs/<int:run_id>")
 @login_required
 def script_run(run_id):
     run = db().execute("SELECT * FROM script_runs WHERE id=?", (run_id,)).fetchone()
@@ -269,7 +269,7 @@ def script_run(run_id):
                            platforms=PLATFORMS, states=STATES, signature=signature)
 
 
-@app.route("/parc/scripts/executions/<int:run_id>/annuler", methods=["POST"])
+@app.route("/fleet/scripts/runs/<int:run_id>/cancel", methods=["POST"])
 @login_required
 def script_run_cancel(run_id):
     conn = lock_access("scripts.run")

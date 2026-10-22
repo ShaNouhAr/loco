@@ -267,7 +267,7 @@ def windows_apps_delete(slug):
     return back("windows_apps")
 
 
-@app.route("/windows-apps/logiciel/<slug>")
+@app.route("/windows-apps/software/<slug>")
 @login_required
 def software_detail(slug):
     from . import fleet, groups

@@ -209,14 +209,14 @@ class TestDirectoryLogin(FleetTest):
             conn.execute("DELETE FROM users WHERE auth_source IN ('directory', 'sso')")
 
     def add_directories(self):
-        r = self.admin.post("/comptes/annuaires/ajouter", {
+        r = self.admin.post("/accounts/directories/add", {
             "kind": "ldap", "label": "Annuaire test", "url": f"ldaps://127.0.0.1:{self.ldap.port}", "ca_pem": self.ldap.ca,
             "base_dn": "dc=test", "user_filter": "(uid={username})", "bind_dn": "cn=svc,dc=test",
-            "bind_password": "secret-service", "enabled": "1"}, page="/comptes/annuaires")
+            "bind_password": "secret-service", "enabled": "1"}, page="/accounts/directories")
         self.assertEqual(r.status_code, 302)
-        self.admin.post("/comptes/annuaires/ajouter", {"kind": "radius", "label": "RADIUS test", "host": "127.0.0.1",
+        self.admin.post("/accounts/directories/add", {"kind": "radius", "label": "RADIUS test", "host": "127.0.0.1",
                         "port": str(self.radius.port), "secret": "secret-radius", "timeout": "2", "retries": "0",
-                        "require_message_authenticator": "1", "enabled": "1"}, page="/comptes/annuaires")
+                        "require_message_authenticator": "1", "enabled": "1"}, page="/accounts/directories")
         with transaction() as conn:
             stored = conn.execute("SELECT config FROM auth_directories WHERE kind='ldap'").fetchone()[0]
         self.assertNotIn("secret-service", stored)                     # secret chiffré au repos
@@ -227,7 +227,7 @@ class TestDirectoryLogin(FleetTest):
 
     def test_first_login_creates_a_request_then_approval_grants_access(self):
         self.add_directories()
-        page = self.admin.c.get("/comptes/annuaires").get_data(as_text=True)
+        page = self.admin.c.get("/accounts/directories").get_data(as_text=True)
         self.assertIn("Annuaire test", page)
         self.assertNotIn("secret-service", page)
         _b, r = self.login("alice", "Mot-de-passe-Alice")
@@ -238,20 +238,20 @@ class TestDirectoryLogin(FleetTest):
         with transaction() as conn:
             alice = conn.execute("SELECT * FROM users WHERE username='alice'").fetchone()
             self.assertEqual((alice["auth_source"], alice["pending"], alice["role"]), ("directory", 1, "pending"))
-        users = self.admin.c.get("/comptes").get_data(as_text=True)
+        users = self.admin.c.get("/accounts").get_data(as_text=True)
         self.assertIn("Alice Martin", users)
         self.assertIn("alice@test.local", users)
-        self.admin.post(f"/comptes/{alice['id']}/approuver", {"role": "viewer"}, page="/comptes")
+        self.admin.post(f"/accounts/{alice['id']}/approve", {"role": "viewer"}, page="/accounts")
         browser, r = self.login("alice", "Mot-de-passe-Alice")
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(browser.c.get("/compte").status_code, 200)
+        self.assertEqual(browser.c.get("/account").status_code, 200)
         _b, r = self.login("alice", "mauvais")
         self.assertEqual(r.status_code, 401)
         # Annuaire désactivé : la session de ce compte tombe, les comptes locaux restent.
-        self.admin.post("/administration/fonctionnalites", {k: "1" for k in features.FEATURES if k != "directories"},
-                        page="/administration/fonctionnalites")
-        self.assertEqual(browser.c.get("/compte").status_code, 302)
-        self.assertEqual(self.admin.c.get("/compte").status_code, 200)
+        self.admin.post("/administration/features", {k: "1" for k in features.FEATURES if k != "directories"},
+                        page="/administration/features")
+        self.assertEqual(browser.c.get("/account").status_code, 302)
+        self.assertEqual(self.admin.c.get("/account").status_code, 200)
 
     def test_local_accounts_are_never_matched_with_a_directory(self):
         self.add_directories()
@@ -266,16 +266,16 @@ class TestDirectoryLogin(FleetTest):
             did = conn.execute("SELECT id FROM auth_directories WHERE kind='ldap'").fetchone()[0]
             conn.execute("INSERT INTO users (username,password_hash,role,auth_source,created_at) VALUES "
                          "('ancien-oidc','x','viewer','sso','2026-01-01 00:00')")
-        r = self.admin.post(f"/comptes/annuaires/{did}/tester", {"username": "alice", "password": "Mot-de-passe-Alice"},
-                            page="/comptes/annuaires")
+        r = self.admin.post(f"/accounts/directories/{did}/test", {"username": "alice", "password": "Mot-de-passe-Alice"},
+                            page="/accounts/directories")
         self.assertEqual(r.status_code, 302)
-        page = self.admin.c.get("/comptes/annuaires").get_data(as_text=True)
+        page = self.admin.c.get("/accounts/directories").get_data(as_text=True)
         self.assertIn("Identifiants acceptés : Alice Martin", page)
         self.assertIn("1 ancien compte OpenID Connect", page)
         with transaction() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM users WHERE username='alice'").fetchone()[0], 0)   # pas de demande
             legacy = conn.execute("SELECT id FROM users WHERE username='ancien-oidc'").fetchone()[0]
-        self.admin.post(f"/comptes/{legacy}/reinitialiser", {}, page="/comptes")
+        self.admin.post(f"/accounts/{legacy}/reset", {}, page="/accounts")
         with transaction() as conn:
             self.assertEqual(conn.execute("SELECT auth_source FROM users WHERE id=?", (legacy,)).fetchone()[0], "local")
 

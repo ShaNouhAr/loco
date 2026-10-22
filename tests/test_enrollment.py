@@ -105,7 +105,7 @@ class TestAgentPackages(unittest.TestCase):
 
 class TestEnrollmentPage(FleetTest):
     def test_page_offers_each_system_with_its_installer(self):
-        page = self.admin.c.get("/enrolement").get_data(as_text=True)
+        page = self.admin.c.get("/enrollment").get_data(as_text=True)
         key = Agent.key()
         for tab in ('data-tab="windows"', 'data-tab="debian"', 'data-tab="redhat"'):
             self.assertIn(tab, page)
@@ -117,9 +117,9 @@ class TestEnrollmentPage(FleetTest):
         self.assertIn(f"sudo dnf install ./loco-client-{config.VERSION}-1.depots.noarch.rpm", page)
         self.assertIn("Dépôts seuls, sans agent", page)
         self.assertIn("/linux/setup.sh | sudo sh", page)
-        self.assertIn('href="/enrolement" class="nav-enroll on"', page)
+        self.assertIn('href="/enrollment" class="nav-enroll on"', page)
         self.assertNotIn("Brancher un poste", self.admin.c.get("/").get_data(as_text=True))
-        self.assertIn('href="/enrolement">Ajouter un poste', self.admin.c.get("/parc").get_data(as_text=True))
+        self.assertIn('href="/enrollment">Ajouter un poste', self.admin.c.get("/fleet").get_data(as_text=True))
 
     def test_packages_need_the_enrollment_key_and_carry_this_server(self):
         self.assertEqual(self.admin.c.get("/agent/loco-client.deb?key=faux").status_code, 403)
@@ -167,7 +167,7 @@ class TestEnrollmentPage(FleetTest):
         self.assertIn("update-ca-trust extract", header[1024])
         with mock.patch.object(config, "RPM_ENABLED", False):
             self.assertEqual(self.admin.c.get(f"/agent/loco-client.rpm?key={key}&depots=1").status_code, 404)
-            page = self.admin.c.get("/enrolement").get_data(as_text=True)
+            page = self.admin.c.get("/enrollment").get_data(as_text=True)
         self.assertNotIn(f"loco-client.rpm?key={key}&amp;depots=1", page)
         self.assertIn(f"loco-client.rpm?key={key}", page)                         # l'agent seul reste proposé
 
@@ -176,14 +176,14 @@ class TestEnrollmentPage(FleetTest):
         browser, profile = test_permissions.TestPermissions.browser, test_permissions.TestPermissions.profile
         self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
         apt_only = browser(self, "depots", profile(self, "depots", {"linux.view"}))
-        page = apt_only.c.get("/enrolement").get_data(as_text=True)
+        page = apt_only.c.get("/enrollment").get_data(as_text=True)
         self.assertIn("/linux/setup.sh", page)
         self.assertNotIn("loco-client.deb", page)                                # clé d'inscription réservée
         self.assertNotIn('data-tab="windows"', page)
-        self.assertIn('href="/enrolement"', page)
+        self.assertIn('href="/enrollment"', page)
         nothing = browser(self, "rien", profile(self, "rien", {"dashboard.view"}))
-        self.assertEqual(nothing.c.get("/enrolement").status_code, 403)
-        self.assertNotIn('href="/enrolement"', nothing.c.get("/").get_data(as_text=True))
+        self.assertEqual(nothing.c.get("/enrollment").status_code, 403)
+        self.assertNotIn('href="/enrollment"', nothing.c.get("/").get_data(as_text=True))
 
 
 if __name__ == "__main__":

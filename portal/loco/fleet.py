@@ -873,7 +873,7 @@ def _enrich(rows):
     return rows
 
 
-@app.route("/parc")
+@app.route("/fleet")
 @login_required
 def fleet():
     rows = _rows()
@@ -907,14 +907,14 @@ def fleet():
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 
 
-@app.route("/parc/reglages")
+@app.route("/fleet/settings")
 @login_required
 def fleet_settings():
     return render_template("fleet_settings.html", red_threshold=red_threshold(), checkin=CHECKIN,
                            server_coverage=addresses.coverage(db()))
 
 
-@app.route("/parc/adresses", methods=["POST"])
+@app.route("/fleet/addresses", methods=["POST"])
 @login_required
 def fleet_server_address():
     """Annonce (ou retrait) d'une future adresse du serveur, transmise aux agents avant le changement."""
@@ -935,7 +935,7 @@ def fleet_server_address():
     return back("fleet_settings")
 
 
-@app.route("/parc/seuil", methods=["POST"])
+@app.route("/fleet/threshold", methods=["POST"])
 @login_required
 def fleet_threshold():
     try:
@@ -973,7 +973,7 @@ def _get(dev_id):
     return dev
 
 
-@app.route("/parc/<int:dev_id>")
+@app.route("/fleet/<int:dev_id>")
 @login_required
 def fleet_device(dev_id):
     dev = _get(dev_id)
@@ -1013,7 +1013,7 @@ def fleet_device(dev_id):
                            planned=schedules.covering(db(), dev_id))
 
 
-@app.route("/parc/<int:dev_id>/action", methods=["POST"])
+@app.route("/fleet/<int:dev_id>/action", methods=["POST"])
 @login_required
 def fleet_action(dev_id):
     dev = _get(dev_id)
@@ -1049,7 +1049,7 @@ def fleet_action(dev_id):
     return back("fleet_device", dev_id=dev_id)
 
 
-@app.route("/parc/<int:dev_id>/annuler/<int:cmd_id>", methods=["POST"])
+@app.route("/fleet/<int:dev_id>/cancel/<int:cmd_id>", methods=["POST"])
 @login_required
 def fleet_cancel_command(dev_id, cmd_id):
     dev = _get(dev_id)
@@ -1067,7 +1067,7 @@ def fleet_cancel_command(dev_id, cmd_id):
     return back("fleet_device", dev_id=dev_id)
 
 
-@app.route("/parc/tout-mettre-a-jour", methods=["POST"])
+@app.route("/fleet/update-all", methods=["POST"])
 @login_required
 def fleet_update_all():
     apps = catalog()
@@ -1093,7 +1093,7 @@ def fleet_update_all():
     return back("fleet", **({"group": group_id} if group_id else {}))
 
 
-@app.route("/parc/cle", methods=["POST"])
+@app.route("/fleet/key", methods=["POST"])
 @login_required
 def fleet_rotate_key():
     set_setting("enroll_key", secrets.token_urlsafe(18))

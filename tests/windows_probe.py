@@ -90,11 +90,11 @@ def upload(page, repository, filename):
 
 
 url, html = post('/login', {'csrf': csrf(get('/login')), 'username': 'admin', 'password': password})
-if url.endswith('/compte'):
+if url.endswith('/account'):
     changed = password + '-Changed'
-    url, html = post('/compte', {'csrf': csrf(html), 'current': password, 'new': changed, 'confirm': changed})
+    url, html = post('/account', {'csrf': csrf(html), 'current': password, 'new': changed, 'confirm': changed})
 assert url.rstrip('/') == base, f'Connexion refusée : {url}'
-for page in ('/', '/linux', '/rpm', '/flatpak', '/windows-apps', '/windows-update', '/systeme', '/api/status'):
+for page in ('/', '/linux', '/rpm', '/flatpak', '/windows-apps', '/windows-update', '/system', '/api/status'):
     assert get(page), page
 print('Portail HTTPS et pages authentifiées : OK')
 

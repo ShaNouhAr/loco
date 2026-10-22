@@ -141,59 +141,59 @@ def _delete(kind, group_id):
     return back("software_groups" if software else "fleet_groups")
 
 
-@app.route("/windows-apps/groupes")
+@app.route("/windows-apps/groups")
 @login_required
 def software_groups():
     return render_template("groups.html", kind="software", groups=listing("software"), overview=_overview("software"))
 
 
-@app.route("/windows-apps/groupes/nouveau", defaults={"group_id": 0})
-@app.route("/windows-apps/groupes/<int:group_id>")
+@app.route("/windows-apps/groups/new", defaults={"group_id": 0})
+@app.route("/windows-apps/groups/<int:group_id>")
 @login_required
 def software_group_editor(group_id):
     return _editor("software", group_id)
 
 
-@app.route("/windows-apps/groupes/enregistrer", defaults={"group_id": 0}, methods=["POST"])
-@app.route("/windows-apps/groupes/<int:group_id>/enregistrer", methods=["POST"])
+@app.route("/windows-apps/groups/save", defaults={"group_id": 0}, methods=["POST"])
+@app.route("/windows-apps/groups/<int:group_id>/save", methods=["POST"])
 @login_required
 def software_group_save(group_id):
     return _save("software", group_id)
 
 
-@app.route("/windows-apps/groupes/<int:group_id>/supprimer", methods=["POST"])
+@app.route("/windows-apps/groups/<int:group_id>/delete", methods=["POST"])
 @login_required
 def software_group_delete(group_id):
     return _delete("software", group_id)
 
 
-@app.route("/parc/groupes")
+@app.route("/fleet/groups")
 @login_required
 def fleet_groups():
     return render_template("groups.html", kind="device", groups=listing("device"), overview=_overview("device"))
 
 
-@app.route("/parc/groupes/nouveau", defaults={"group_id": 0})
-@app.route("/parc/groupes/<int:group_id>")
+@app.route("/fleet/groups/new", defaults={"group_id": 0})
+@app.route("/fleet/groups/<int:group_id>")
 @login_required
 def fleet_group_editor(group_id):
     return _editor("device", group_id)
 
 
-@app.route("/parc/groupes/enregistrer", defaults={"group_id": 0}, methods=["POST"])
-@app.route("/parc/groupes/<int:group_id>/enregistrer", methods=["POST"])
+@app.route("/fleet/groups/save", defaults={"group_id": 0}, methods=["POST"])
+@app.route("/fleet/groups/<int:group_id>/save", methods=["POST"])
 @login_required
 def fleet_group_save(group_id):
     return _save("device", group_id)
 
 
-@app.route("/parc/groupes/<int:group_id>/supprimer", methods=["POST"])
+@app.route("/fleet/groups/<int:group_id>/delete", methods=["POST"])
 @login_required
 def fleet_group_delete(group_id):
     return _delete("device", group_id)
 
 
-@app.route("/parc/<int:dev_id>/groupes", methods=["POST"])
+@app.route("/fleet/<int:dev_id>/groups", methods=["POST"])
 @login_required
 def fleet_group_membership(dev_id):
     conn = lock_access("fleet.groups")
@@ -209,7 +209,7 @@ def fleet_group_membership(dev_id):
     return back("fleet_device", dev_id=dev_id)
 
 
-@app.route("/windows-apps/<slug>/groupe", methods=["POST"])
+@app.route("/windows-apps/<slug>/group", methods=["POST"])
 @login_required
 def software_group_attach(slug):
     from .winapps import get_app
@@ -224,7 +224,7 @@ def software_group_attach(slug):
     return back("software_group_editor", group_id=group["id"])
 
 
-@app.route("/windows-apps/store/<package_id>/groupe", methods=["POST"])
+@app.route("/windows-apps/store/<package_id>/group", methods=["POST"])
 @login_required
 def store_group_attach(package_id):
     from . import winget
