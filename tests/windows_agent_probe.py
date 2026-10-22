@@ -71,7 +71,9 @@ fleet = get('/enrollment')                                  # clé d'inscription
 key = re.search(r"/agent/windows\.ps1\?key=([A-Za-z0-9_-]+)", fleet).group(1)
 http_base = f"http://127.0.0.1:{cfg['http_port']}" if cfg.get('http_port') else base
 result = powershell(f"irm '{http_base}/agent/windows.ps1?key={key}' | iex")
-assert result.returncode == 0 and 'Agent loco installe' in result.stdout, result.stderr
+# Le script d'agent suit la langue du poste (anglais par défaut sur le banc) : accepter chaque variante.
+assert result.returncode == 0 and any(m in result.stdout for m in (
+    'Agent loco installe', 'loco agent installed', 'Agente loco instalado')), result.stderr
 service = powershell('(Get-Service loco-client).Status').stdout.strip()
 assert service == 'Running', service
 print('Agent Windows : MSI vérifié et installé, service loco-client démarré')

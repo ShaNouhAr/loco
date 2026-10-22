@@ -67,15 +67,17 @@ class ConsoleVM:
     def screen(self):
         return base64.b64decode(self.command('base64 /dev/vcs7')).decode('latin1')
 
-    def wait_screen(self, expected):
+    def wait_screen(self, *expected):
+        # L'assistant de l'ISO suit la langue du serveur (anglais par défaut sur le banc) : accepter chaque variante.
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             screen = self.screen()
-            if expected in screen:
-                print(f'Écran : {expected}', flush=True)
+            hit = next((text for text in expected if text in screen), None)
+            if hit:
+                print(f'Écran : {hit}', flush=True)
                 return screen
             time.sleep(.3)
-        raise AssertionError(f'Écran attendu : {expected}\n{screen}')
+        raise AssertionError(f'Écran attendu : {" / ".join(expected)}\n{screen}')
 
     def key(self, key):
         self.qmp('human-monitor-command', {'command-line': f'sendkey {key} 50'})
@@ -89,27 +91,27 @@ class ConsoleVM:
 
     def configure_to_features(self):
         self.key('ret')
-        self.wait_screen('Clavier')
+        self.wait_screen('Clavier', 'Keyboard')
         self.key('ret')
-        self.wait_screen('Disque')
+        self.wait_screen('Disque', 'Disk')
         self.key('ret')
-        self.wait_screen('Nom')
+        self.wait_screen('Nom', 'Name')
         self.key('ret')
-        self.wait_screen('Adresse du serveur')
+        self.wait_screen('Adresse du serveur', 'Server address', 'Dirección del servidor')
         self.key('down')  # DHCP : pas de formulaire d'adresse fixe.
         self.key('ret')
-        self.wait_screen('Fuseau horaire')
+        self.wait_screen('Fuseau horaire', 'Time zone', 'Zona horaria')
         self.key('ret')
-        self.wait_screen('Compte root')
+        self.wait_screen('Compte root', 'Root account', 'Cuenta root')
         self.text('console-test-123\n')
         self.text('console-test-123\n')
-        self.wait_screen('Portail')
+        self.wait_screen('Portail', 'Portal')
         self.text('console-portal-123\n')
         self.text('console-portal-123\n')
-        self.wait_screen('Postes clients')
+        self.wait_screen('Postes clients', 'Client machines', 'Equipos cliente')
         self.key('tab')
         self.key('ret')
-        self.wait_screen('Fonctions')
+        self.wait_screen('Fonctions', 'Features', 'Funciones')
 
     def check(self):
         self.monitor = self.connect('monitor')
@@ -121,7 +123,7 @@ class ConsoleVM:
         self.read_until(b'login: ', timeout=240)
         self.serial.sendall(b'root\n')
         self.read_until(b'# ')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         # Laisser init démarrer ses getty : tty0 ne doit jamais reprendre l'écran actif.
         time.sleep(3)
         assert self.command("grep -c '^tty0:' /etc/inittab") == '0'
@@ -130,25 +132,25 @@ class ConsoleVM:
 
         self.key('esc')
         time.sleep(2)
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         self.key('ret')
-        self.wait_screen('Clavier')
+        self.wait_screen('Clavier', 'Keyboard')
         # Le bouton Accueil (Tab puis Entrée), puis Échap sur la sélection du disque.
         self.key('tab')
         self.key('ret')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         self.key('ret')
-        self.wait_screen('Clavier')
+        self.wait_screen('Clavier', 'Keyboard')
         for _ in range(4):
             self.key('down')  # QEMU injecte des touches physiques QWERTY : sélectionner US.
         self.key('ret')
-        self.wait_screen('Disque')
+        self.wait_screen('Disque', 'Disk')
         self.key('esc')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
 
         self.key('down')
         self.key('ret')
-        screen = self.wait_screen('Tapez exit')
+        screen = self.wait_screen('Tapez exit', 'Type exit', 'Escriba exit')
         assert "can't access tty" not in screen and 'job control turned off' not in screen
         # Ctrl+C doit arrêter la commande et laisser un shell capable de recevoir la suivante.
         self.text('sleep 60\n')
@@ -157,28 +159,28 @@ class ConsoleVM:
         self.text('echo console-ok > /tmp/loco-console-result\n')
         assert self.command('cat /tmp/loco-console-result') == 'console-ok'
         self.text('exit\n')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         self.key('alt-f1')
         assert self.command('cat /sys/class/tty/tty0/active') == 'tty1'
         self.key('alt-f7')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
 
         # Atteindre les fonctions, puis annuler : aucun récapitulatif/effacement ne doit suivre.
         self.configure_to_features()
         self.key('esc')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         self.configure_to_features()
         for _ in range(4):
             self.key('down')
         self.key('spc')  # Active SSH : mot de passe proposé sans saisir de clé.
         self.key('ret')
-        self.wait_screen('Connexion SSH')
+        self.wait_screen('Connexion SSH', 'SSH access', 'Acceso SSH')
         self.key('ret')
         screen = self.wait_screen('SSH root')
         # Le texte peut être coupé entre deux lignes de la fenêtre dialog.
-        assert 'mot de passe root' in ' '.join(screen.replace('\xb3', ' ').split())
+        assert any(t in ' '.join(screen.replace('\xb3', ' ').split()) for t in ('mot de passe root', 'root password'))
         self.key('esc')
-        self.wait_screen('Bienvenue')
+        self.wait_screen('Bienvenue', 'Welcome')
         assert self.command('dd if=/dev/vda bs=1M count=1 2>/dev/null | sha256sum') == original
         assert self.command('ls /sys/block/vda/vda* 2>/dev/null | wc -l') == '0'
         print('ISO interactive : Échap, Accueil, shell/Ctrl+C/exit, Alt+F1/F7, fonctions annulées, SSH par mot de passe sans clé, disque intact : OK')
