@@ -9,6 +9,12 @@ trap 'echo "Échec du test ligne $LINENO : $BASH_COMMAND" >&2' ERR
 step() { printf '\n\033[1m--- %s\033[0m\n' "$*"; }
 ready() { curl -fsk --retry 10 --retry-connrefused --retry-delay 1 --max-time 5 https://127.0.0.1:8443/healthz; }
 cli() { (cd /opt/loco/portal && sudo -u loco env LOCO_DATA=/srv/loco LOCO_STATE=/var/lib/loco LOCO_ETC=/etc/loco python3 -m loco.cli "$@"); }
+# Les commandes du scénario partagent le verrou des opérations d'administration avec l'agent.
+# Son inventaire automatique démarre à l'installation et peut sinon occuper le verrou APT
+# pendant le test de migration ou la relance de l'installateur. Aucun verrou APT n'est supprimé.
+with_admin_lock() {
+    sudo sh -c 'umask 077; exec flock -o -w 900 /var/lib/loco-agent/lock "$@"' sh "$@"
+}
 build_deb() {
     local kind=$1
     mkdir -p "$work/$kind/DEBIAN" "$work/$kind/usr/bin"
@@ -40,14 +46,14 @@ HOST=$(. /etc/loco/loco.conf && echo "$HOST")
 if [ -f "$work/old-ca" ]; then
     [ "$(id -u loco)" = "$old_uid" ]
     [ ! -d /etc/local-repo ]
-    sudo apt-get update -o APT::Update::Error-Mode=any >/dev/null
+    with_admin_lock apt-get update -o APT::Update::Error-Mode=any >/dev/null
     [ "$(sudo sha256sum /etc/loco/tls/ca.crt | cut -d' ' -f1)" = "$(cat "$work/old-ca")" ]
     sudo cmp "$work/legacy.deb" /srv/loco/apt/pool/lr-e2e_1.0_all.deb
     grep -q 'lr-e2e' /srv/loco/apt/Packages
 fi
 sudo /opt/loco/bin/loco-user list
 step "Relance (idempotence)"
-sudo ./install.sh >/dev/null
+with_admin_lock ./install.sh >/dev/null
 ready
 step "Agent d'administration : première vérification des paquets du système"
 sudo systemctl is-active --quiet loco-agent
@@ -67,32 +73,32 @@ sudo cmp "$work/native.deb" "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_al
 sudo cmp "$work/foreign.deb" /srv/loco/apt/repositories/ubuntu/isolation-e2e/pool/lr-e2e_1.0_all.deb
 step "Poste : détection automatique, source deb822, signatures et HTTPS"
 curl -fsSL "http://$HOST:8088/linux/setup.sh" > "$work/setup.sh"
-sudo sh "$work/setup.sh" --trust-ca
+with_admin_lock sh "$work/setup.sh" --trust-ca
 curl -fsSL "https://$HOST:8443/linux/setup.sh" > "$work/setup.sh"
 SOURCE=/etc/apt/sources.list.d/loco.sources
 grep -q "https://$HOST:8443/apt/repositories/$REPO/" "$SOURCE"
 [ ! -e /etc/apt/sources.list.d/loco.list ]
 curl -fsS "https://$HOST:8443/healthz" >/dev/null
-sudo apt-get install -y -q lr-e2e >/dev/null
+with_admin_lock apt-get install -y -q lr-e2e >/dev/null
 [ "$(lr-e2e)" = loco-native-ok ]
 step "Version absente : échec sans changer le dépôt en place"
 sudo cp "$SOURCE" "$work/source-before"
-if sudo sh "$work/setup.sh" --distribution debian --suite not-created; then echo 'Une version absente doit être refusée.' >&2; exit 1; fi
+if with_admin_lock sh "$work/setup.sh" --distribution debian --suite not-created; then echo 'Une version absente doit être refusée.' >&2; exit 1; fi
 sudo cmp "$SOURCE" "$work/source-before"
 step "Cache seul et retour au dépôt détecté"
-sudo sh "$work/setup.sh" --cache-only >/dev/null
+with_admin_lock sh "$work/setup.sh" --cache-only >/dev/null
 [ ! -e "$SOURCE" ]
 [ -e /etc/apt/apt.conf.d/01loco-proxy ]
-sudo sh "$work/setup.sh" >/dev/null
+with_admin_lock sh "$work/setup.sh" >/dev/null
 if [ -f "$work/old-ca" ]; then
     step "Compatibilité explicite du dépôt historique"
-    sudo apt-get purge -y -q lr-e2e >/dev/null
-    sudo sh "$work/setup.sh" --legacy >/dev/null
-    sudo apt-get install -y -q lr-e2e >/dev/null
+    with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
+    with_admin_lock sh "$work/setup.sh" --legacy >/dev/null
+    with_admin_lock apt-get install -y -q lr-e2e >/dev/null
     [ "$(lr-e2e)" = loco-legacy-ok ]
-    sudo apt-get purge -y -q lr-e2e >/dev/null
-    sudo sh "$work/setup.sh" >/dev/null
-    sudo apt-get install -y -q lr-e2e >/dev/null
+    with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
+    with_admin_lock sh "$work/setup.sh" >/dev/null
+    with_admin_lock apt-get install -y -q lr-e2e >/dev/null
     [ "$(lr-e2e)" = loco-native-ok ]
 fi
 step "Flatpak : application locale et cache Flathub"
@@ -139,14 +145,14 @@ sudo rm "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_all.deb"
 cli rebuild-apt
 sudo loco-backup restore "$archive"
 sudo cmp /srv/loco/win/backup-fixture/setup.msi "$pin_dir/installer.msi"
-sudo ./install.sh >/dev/null
+with_admin_lock ./install.sh >/dev/null
 ready
 sudo cmp "$work/native.deb" "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_all.deb"
 sudo loco-apt list | grep -q "$REPO"
 python3 tests/e2e_portal.py https://127.0.0.1:8443 "$PW" "$work/native.deb" linux "$REPO"
 step "Désinstallation"
-sudo apt-get purge -y -q lr-e2e >/dev/null
-curl -fsSL "https://$HOST:8443/linux/setup.sh" | sudo sh -s -- --remove
+with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
+curl -fsSL "https://$HOST:8443/linux/setup.sh" | with_admin_lock sh -s -- --remove
 [ ! -e /etc/apt/sources.list.d/loco.sources ]
 sudo /opt/loco/remove.sh -y --purge
 fail() { echo "ÉCHEC : $*" >&2; exit 1; }
