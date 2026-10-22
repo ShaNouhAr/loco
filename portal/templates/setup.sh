@@ -12,8 +12,8 @@
 set -eu
 # Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
 case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
-[ "$(id -u)" -eq 0 ] || { {{ sh_t('Lancez ce script en root (sudo).') }} >&2; exit 1; }
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+[ "$(id -u)" -eq 0 ] || { echo "{{ sh_t('Lancez ce script en root (sudo).') }}" >&2; exit 1; }
 BASE="{{ base }}"
 HTTPS_BASE="{{ https_url }}"
 KEY=/etc/apt/keyrings/loco.gpg
@@ -22,7 +22,7 @@ SOURCE=/etc/apt/sources.list.d/loco.sources
 PROXY=/etc/apt/apt.conf.d/01loco-proxy
 CA=/usr/local/share/ca-certificates/loco.crt
 USE_PROXY=1 TRUST_CA=0 REMOVE=0 CACHE_ONLY=0 LEGACY=0 FROM_PACKAGE=0 DIST="" SUITE=""
-need() { if [ "$#" -lt 2 ] || [ -z "$2" ]; then {{ sh_t("L'option %(opt)s attend une valeur.", opt='$1') }} >&2; exit 1; fi; }
+need() { if [ "$#" -lt 2 ] || [ -z "$2" ]; then echo "{{ sh_t('Une valeur est attendue après %(opt)s.', opt='$1') }}" >&2; exit 1; fi; }
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --no-proxy) USE_PROXY=0; shift ;;
@@ -33,7 +33,7 @@ while [ "$#" -gt 0 ]; do
         --suite) need "$@"; SUITE=$2; shift 2 ;;
         --remove) REMOVE=1; shift ;;
         --from-package) FROM_PACKAGE=1; shift ;;
-        *) {{ sh_t('Option inconnue : %(opt)s', opt='$1') }} >&2; exit 1 ;;
+        *) echo "{{ sh_t('Option inconnue : %(opt)s', opt='$1') }}" >&2; exit 1 ;;
     esac
 done
 if [ "$REMOVE" = 1 ]; then
@@ -45,45 +45,45 @@ if [ "$REMOVE" = 1 ]; then
         update-ca-certificates --fresh >/dev/null
     fi
     if [ -f "$CA" ]; then rm -f "$CA"; update-ca-certificates --fresh >/dev/null 2>&1 || true; fi
-    {{ sh_t('Configuration loco retirée.') }}
+    echo "{{ sh_t('Configuration loco retirée.') }}"
     exit 0
 fi
-command -v apt-get >/dev/null 2>&1 || { {{ sh_t('Ce poste doit utiliser APT.') }} >&2; exit 1; }
+command -v apt-get >/dev/null 2>&1 || { echo "{{ sh_t('Ce poste doit utiliser APT.') }}" >&2; exit 1; }
 if [ "$LEGACY" = 1 ] && { [ "$CACHE_ONLY" = 1 ] || [ -n "$DIST$SUITE" ]; }; then
-    {{ sh_t('--legacy ne se combine pas avec --cache-only, --distribution ou --suite.') }} >&2; exit 1
+    echo "{{ sh_t('--legacy ne se combine pas avec --cache-only, --distribution ou --suite.') }}" >&2; exit 1
 fi
 if [ "$CACHE_ONLY" = 0 ] && [ "$LEGACY" = 0 ]; then
     if [ -z "$DIST$SUITE" ]; then
-        [ -r /etc/os-release ] || { {{ sh_t('Distribution inconnue : précisez --distribution et --suite.') }} >&2; exit 1; }
+        [ -r /etc/os-release ] || { echo "{{ sh_t('Distribution inconnue : précisez --distribution et --suite.') }}" >&2; exit 1; }
         # shellcheck disable=SC1091
         . /etc/os-release
         DIST=${ID:-}
         SUITE=${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}
     fi
-    case "$DIST" in debian|ubuntu) ;; *) {{ sh_t('Distribution non reconnue : précisez --distribution debian|ubuntu et --suite NOM.') }} >&2; exit 1 ;; esac
-    case "$SUITE" in ''|*[!a-z0-9-]*|[!a-z]* ) {{ sh_t('Nom de version invalide ou absent.') }} >&2; exit 1 ;; esac
-    [ "$(printf '%s' "$SUITE" | wc -c)" -le 40 ] || { {{ sh_t('Nom de version trop long.') }} >&2; exit 1; }
+    case "$DIST" in debian|ubuntu) ;; *) echo "{{ sh_t('Distribution non reconnue : précisez --distribution debian|ubuntu et --suite NOM.') }}" >&2; exit 1 ;; esac
+    case "$SUITE" in ''|*[!a-z0-9-]*|[!a-z]* ) echo "{{ sh_t('Nom de version invalide ou absent.') }}" >&2; exit 1 ;; esac
+    [ "$(printf '%s' "$SUITE" | wc -c)" -le 40 ] || { echo "{{ sh_t('Nom de version trop long.') }}" >&2; exit 1; }
 fi
 if command -v curl >/dev/null 2>&1; then GET="curl -fsSL"; elif command -v wget >/dev/null 2>&1; then GET="wget -qO-"; else
-    {{ sh_t('Installez curl ou wget avant de configurer ce poste.') }} >&2; exit 1
+    echo "{{ sh_t('Installez curl ou wget avant de configurer ce poste.') }}" >&2; exit 1
 fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 # Vérifier le dépôt et télécharger les fichiers avant de remplacer une configuration existante.
 if [ "$CACHE_ONLY" = 0 ]; then
     if [ "$LEGACY" = 1 ]; then
-        {{ sh_t('Attention : dépôt historique partagé, sans isolation des versions.') }}
+        echo "{{ sh_t('Attention : dépôt historique partagé, sans isolation des versions.') }}"
         printf 'Types: deb\nURIs: %s/apt/\nSuites: ./\nSigned-By: %s\n' "$BASE" "$KEY" > "$TMP/source"
     else
         if ! $GET "$BASE/linux/repositories/$DIST/$SUITE.sources" > "$TMP/source"; then
-            {{ sh_t('Dépôt %(dist)s/%(suite)s indisponible : créez-le dans Linux > Paquets, ou utilisez --cache-only.', dist='$DIST', suite='$SUITE') }} >&2
+            echo "{{ sh_t('Dépôt %(dist)s/%(suite)s indisponible : créez-le dans Linux > Paquets, ou utilisez --cache-only.', dist='$DIST', suite='$SUITE') }}" >&2
             exit 1
         fi
         EXPECTED=$(printf 'Types: deb\nURIs: %s/apt/repositories/%s/%s/\nSuites: ./\nSigned-By: %s\n' "$BASE" "$DIST" "$SUITE" "$KEY")
-        [ "$(cat "$TMP/source")" = "$EXPECTED" ] || { {{ sh_t('Configuration de dépôt inattendue.') }} >&2; exit 1; }
+        [ "$(cat "$TMP/source")" = "$EXPECTED" ] || { echo "{{ sh_t('Configuration de dépôt inattendue.') }}" >&2; exit 1; }
     fi
     $GET "$BASE/apt/loco.gpg" > "$TMP/key"
-    [ -s "$TMP/key" ] || { {{ sh_t('Clé du dépôt vide.') }} >&2; exit 1; }
+    [ -s "$TMP/key" ] || { echo "{{ sh_t('Clé du dépôt vide.') }}" >&2; exit 1; }
 fi
 if [ "$TRUST_CA" = 1 ]; then
     $GET "$BASE/ca.crt" > "$TMP/ca"
@@ -93,8 +93,8 @@ if [ "$TRUST_CA" = 1 ]; then
     install -m 644 "$TMP/ca" "$CA"
     update-ca-certificates >/dev/null
     if command -v openssl >/dev/null 2>&1; then
-        {{ sh_t('Autorité importée, empreinte SHA-256 : %(fp)s', fp='$(openssl x509 -in \"$CA\" -noout -fingerprint -sha256 | cut -d= -f2)') }}
-        {{ sh_t('Comparez-la à celle de la page Système du portail.') }}
+        echo "{{ sh_t('Autorité importée, empreinte SHA-256 : %(fp)s', fp='$(openssl x509 -in \"$CA\" -noout -fingerprint -sha256 | cut -d= -f2)') }}"
+        echo "{{ sh_t('Comparez-la à celle de la page Système du portail.') }}"
     fi
     BASE=$HTTPS_BASE
 fi
@@ -130,4 +130,4 @@ else
     rm -f "$PROXY"
 fi
 if [ "$FROM_PACKAGE" = 0 ]; then apt-get update -o APT::Update::Error-Mode=any; fi
-if [ "$CACHE_ONLY" = 1 ]; then {{ sh_t('Cache APT configuré (%(base)s).', base='$BASE') }}; else {{ sh_t('Poste configuré : dépôt %(repo)s (%(base)s).', repo='$PATH_REPO', base='$BASE') }}; fi
+if [ "$CACHE_ONLY" = 1 ]; then echo "{{ sh_t('Cache APT configuré (%(base)s).', base='$BASE') }}"; else echo "{{ sh_t('Poste configuré : dépôt %(repo)s (%(base)s).', repo='$PATH_REPO', base='$BASE') }}"; fi

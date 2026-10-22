@@ -7,17 +7,17 @@
 set -eu
 # Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
 case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
-[ "$(id -u)" -eq 0 ] || { {{ sh_t('Lancez ce script en root (sudo).') }} >&2; exit 1; }
-command -v systemctl >/dev/null 2>&1 || { {{ sh_t('systemd requis.') }} >&2; exit 1; }
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+[ "$(id -u)" -eq 0 ] || { echo "{{ sh_t('Lancez ce script en root (sudo).') }}" >&2; exit 1; }
+command -v systemctl >/dev/null 2>&1 || { echo "{{ sh_t('systemd requis.') }}" >&2; exit 1; }
 if ! command -v python3 >/dev/null 2>&1; then
-    {{ sh_t('Installation de python3…') }}
+    echo "{{ sh_t('Installation de python3…') }}"
     if command -v apt-get >/dev/null 2>&1; then
         apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3 >/dev/null
     elif command -v dnf >/dev/null 2>&1; then
         dnf install -y -q python3 >/dev/null
     else
-        {{ sh_t('Installez python3 puis relancez.') }} >&2; exit 1
+        echo "{{ sh_t('Installez python3 puis relancez.') }}" >&2; exit 1
     fi
 fi
 install -d -m 755 /usr/local/lib/loco-client /var/lib/loco-client
@@ -63,4 +63,4 @@ UNIT_EOF
 systemctl daemon-reload
 systemctl enable --now loco-client.timer >/dev/null 2>&1
 systemctl start --no-block loco-client.service
-{{ sh_t('Agent loco installé : le poste apparaît dans « Mon parc » (%(url)s/parc).', url=server) }}
+echo "{{ sh_t('Agent loco installé : le poste apparaît dans « Mon parc » (%(url)s/parc).', url=server) }}"

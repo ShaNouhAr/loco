@@ -136,12 +136,12 @@ def _both(message, escape, values):
 
 
 def sh_t(message, **values):
-    """Message d'un script shell : « t "français" "english" » (la fonction t du script écrit la bonne langue,
-    suivie d'un saut de ligne ; valeurs = expressions shell, ex. "$1")."""
+    """Message d'un script shell : « $(t "français" "english") », à mettre dans un echo "…" (la fonction t du
+    script choisit la langue ; valeurs = expressions shell, ex. "$1")."""
     def escape(text):
         return text.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
     fr, en = _both(message, escape, values)
-    return f't "{fr}" "{en}"'
+    return f'$(t "{fr}" "{en}")'
 
 
 def ps_t(message, **values):

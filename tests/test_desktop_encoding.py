@@ -135,7 +135,7 @@ class Probe {
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory); (path / 'Probe.cs').write_text(harness)
             subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
-                            '-out:' + str(path / 'Probe.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            '-out:' + str(path / 'Probe.exe'), str(ROOT / 'windows/client/Lang.cs'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
                             str(path / 'Probe.cs')], check=True, capture_output=True)
             subprocess.run(['mono', str(path / 'Probe.exe'), directory], check=True, capture_output=True)
             image = (path / 'image.bin').read_bytes()
@@ -176,7 +176,7 @@ class Jpeg {
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory); (path / 'Jpeg.cs').write_text(harness)
             subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
-                            '-out:' + str(path / 'Jpeg.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            '-out:' + str(path / 'Jpeg.exe'), str(ROOT / 'windows/client/Lang.cs'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
                             str(path / 'Jpeg.cs')], check=True, capture_output=True)
             run = subprocess.run(['mono', str(path / 'Jpeg.exe'), directory], capture_output=True, text=True)
             if run.returncode:
@@ -213,7 +213,7 @@ class Mask {
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory); (path / 'Mask.cs').write_text(harness)
             subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-r:System.Drawing.dll', '-r:System.Core.dll',
-                            '-out:' + str(path / 'Mask.exe'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
+                            '-out:' + str(path / 'Mask.exe'), str(ROOT / 'windows/client/Lang.cs'), str(ROOT / 'windows/client/RfbFramebuffer.cs'),
                             str(path / 'Mask.cs')], check=True, capture_output=True)
             subprocess.run(['mono', str(path / 'Mask.exe'), directory], check=True, capture_output=True)
             left = (path / 'left.bin').read_bytes()

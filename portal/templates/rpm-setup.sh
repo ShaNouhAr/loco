@@ -14,8 +14,8 @@
 set -eu
 # Langue du poste : français si LANG/LC_* commence par « fr », sinon anglais (sudo conserve LANG).
 case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
-[ "$(id -u)" -eq 0 ] || { {{ sh_t('Lancez ce script en root (sudo).') }} >&2; exit 1; }
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+[ "$(id -u)" -eq 0 ] || { echo "{{ sh_t('Lancez ce script en root (sudo).') }}" >&2; exit 1; }
 
 BASE="{{ base }}"
 HTTPS_BASE="{{ https_url }}"
@@ -33,13 +33,13 @@ for arg in "$@"; do
         --no-local) USE_LOCAL=0 ;;
         --remove) REMOVE=1 ;;
         --from-package) FROM_PACKAGE=1 ;;
-        *) {{ sh_t('Option inconnue : %(opt)s', opt='$arg') }} >&2; exit 1 ;;
+        *) echo "{{ sh_t('Option inconnue : %(opt)s', opt='$arg') }}" >&2; exit 1 ;;
     esac
 done
-command -v dnf >/dev/null 2>&1 || { {{ sh_t('Ce poste doit utiliser dnf (famille Red Hat 8 ou plus).') }} >&2; exit 1; }
+command -v dnf >/dev/null 2>&1 || { echo "{{ sh_t('Ce poste doit utiliser dnf (famille Red Hat 8 ou plus).') }}" >&2; exit 1; }
 # Reprendre le journal des dépôts désactivés ; il sert aussi à restaurer le système avec --remove.
 if [ -f /etc/local-repo-rpm.state ]; then
-    [ ! -e "$STATE" ] || { {{ sh_t('Deux états de dépôts RPM existent ; migration refusée.') }} >&2; exit 1; }
+    [ ! -e "$STATE" ] || { echo "{{ sh_t('Deux états de dépôts RPM existent ; migration refusée.') }}" >&2; exit 1; }
     mv /etc/local-repo-rpm.state "$STATE"
 fi
 if [ -f /etc/pki/ca-trust/source/anchors/local-repo.crt ]; then
@@ -94,16 +94,16 @@ if [ "$REMOVE" = 1 ]; then
     rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
     if [ -f "$CA" ]; then rm -f "$CA"; update-ca-trust extract; fi
     [ "$FROM_PACKAGE" = 1 ] || dnf clean all >/dev/null 2>&1 || true
-    {{ sh_t('Configuration loco retirée ; dépôts du système rétablis.') }}
+    echo "{{ sh_t('Configuration loco retirée ; dépôts du système rétablis.') }}"
     exit 0
 fi
 
-[ -r /etc/os-release ] || { {{ sh_t('Distribution inconnue (/etc/os-release absent).') }} >&2; exit 1; }
+[ -r /etc/os-release ] || { echo "{{ sh_t('Distribution inconnue (/etc/os-release absent).') }}" >&2; exit 1; }
 # shellcheck disable=SC1091
 . /etc/os-release
 MAJOR=${VERSION_ID%%.*}
-case "$MAJOR" in ''|*[!0-9]*) {{ sh_t('Version de la distribution illisible : %(v)s', v='$VERSION_ID') }} >&2; exit 1 ;; esac
-[ "$MAJOR" -ge 8 ] || { {{ sh_t('Famille Red Hat 8 ou plus requise.') }} >&2; exit 1; }
+case "$MAJOR" in ''|*[!0-9]*) echo "{{ sh_t('Version de la distribution illisible : %(v)s', v='$VERSION_ID') }}" >&2; exit 1 ;; esac
+[ "$MAJOR" -ge 8 ] || { echo "{{ sh_t('Famille Red Hat 8 ou plus requise.') }}" >&2; exit 1; }
 EL="el$MAJOR"
 case "$ID" in
     rocky|almalinux) VENDOR=$ID ;;
@@ -119,8 +119,8 @@ if [ "$TRUST_CA" = 1 ]; then
     install -m 644 "$WORK/ca" "$CA"
     update-ca-trust extract
     if command -v openssl >/dev/null 2>&1; then
-        {{ sh_t('Autorité importée, empreinte SHA-256 : %(fp)s', fp='$(openssl x509 -in \"$CA\" -noout -fingerprint -sha256 | cut -d= -f2)') }}
-        {{ sh_t('Comparez-la à celle de la page Système du portail.') }}
+        echo "{{ sh_t('Autorité importée, empreinte SHA-256 : %(fp)s', fp='$(openssl x509 -in \"$CA\" -noout -fingerprint -sha256 | cut -d= -f2)') }}"
+        echo "{{ sh_t('Comparez-la à celle de la page Système du portail.') }}"
     fi
     BASE=$HTTPS_BASE
 fi
@@ -128,7 +128,7 @@ fi
 # Dépôt local : vérifié avant toute modification du poste.
 if [ "$USE_LOCAL" = 1 ]; then
     if ! $GET "$BASE/rpm/$EL/repodata/repomd.xml" > /dev/null; then
-        {{ sh_t('Dépôt %(el)s indisponible : créez-le dans Linux › Paquets, ou utilisez --no-local.', el='$EL') }} >&2
+        echo "{{ sh_t('Dépôt %(el)s indisponible : créez-le dans Linux › Paquets, ou utilisez --no-local.', el='$EL') }}" >&2
         exit 1
     fi
     cat > "$WORK/local" <<EOF
@@ -175,7 +175,7 @@ if [ "$USE_CACHE" = 1 ]; then
             dnf -y -q install epel-release
         else
             dnf -y -q install "$BASE/rpmcache/epel/epel-release-latest-$MAJOR.noarch.rpm"
-            {{ sh_t('RHEL : activez aussi CodeReady Builder (subscription-manager repos --enable codeready-builder-for-rhel-%(major)s-$(arch)-rpms).', major='$MAJOR') }}
+            echo "{{ sh_t('RHEL : activez aussi CodeReady Builder (subscription-manager repos --enable codeready-builder-for-rhel-%(major)s-$(arch)-rpms).', major='$MAJOR') }}"
         fi
     fi
     restore_system
@@ -201,9 +201,9 @@ fi
 # Les nouveaux dépôts ont été vérifiés et écrits : l'ancien nom peut être retiré.
 rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
 if [ "$FROM_PACKAGE" = 1 ]; then
-    {{ sh_t('Poste configuré pour loco (%(base)s).', base='$BASE') }}
+    echo "{{ sh_t('Poste configuré pour loco (%(base)s).', base='$BASE') }}"
 else
     dnf -y -q makecache
-    {{ sh_t('Poste configuré pour loco (%(base)s) :', base='$BASE') }}
+    echo "{{ sh_t('Poste configuré pour loco (%(base)s) :', base='$BASE') }}"
     dnf repolist --enabled
 fi
