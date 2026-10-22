@@ -39,6 +39,18 @@
       <div class="s">{{ _("applications Flatpak") }}</div>
     </div>
     {% endif %}
+    {% if d.cpu %}<div class="metric">
+      <div class="k">{{ _("Processeur") }}</div>
+      <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>
+      <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
+      <div class="meter {{ 'err' if d.cpu.pct >= 90 else 'warn' if d.cpu.pct >= 75 }}"><i data-bind="cpu.pct" data-fmt="meter" data-width="{{ d.cpu.pct }}"></i></div>
+    </div>{% endif %}
+    {% if d.mem %}<div class="metric">
+      <div class="k">{{ _("Mémoire") }}</div>
+      <div class="v"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span></div>
+      <div class="s">{{ _("utilisés sur %(total)s", total=d.mem.total|human) }}</div>
+      <div class="meter {{ 'err' if d.mem.pct >= 90 else 'warn' if d.mem.pct >= 80 }}"><i data-bind="mem.pct" data-fmt="meter" data-width="{{ d.mem.pct }}"></i></div>
+    </div>{% endif %}
     <div class="metric">
       <div class="k">{{ _("Disque") }}</div>
       <div class="v"><span data-bind="disk.free" data-fmt="bytes">{{ d.disk.free|human }}</span></div>

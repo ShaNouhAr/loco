@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -158,6 +159,49 @@ def disk_usage():
     d = shutil.disk_usage(config.DATA)
     return {"total": d.total, "used": d.total - d.free, "free": d.free,
             "pct": round(100 * (d.total - d.free) / d.total) if d.total else 0}
+
+
+def mem_info():
+    """Mémoire vive du serveur loco (/proc/meminfo), en octets. {} si indisponible (p. ex. serveur Windows)."""
+    if config.WINDOWS:
+        return {}
+    try:
+        values = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                if key in ("MemTotal", "MemAvailable", "MemFree"):
+                    values[key] = int(rest.split()[0]) * 1024
+        total = values.get("MemTotal", 0)
+        available = values.get("MemAvailable", values.get("MemFree", 0))
+        used = max(0, total - available)
+        return {"total": total, "used": used, "available": available,
+                "pct": round(100 * used / total) if total else 0}
+    except (OSError, ValueError, IndexError):
+        return {}
+
+
+def _cpu_times():
+    with open("/proc/stat") as f:
+        fields = [int(x) for x in f.readline().split()[1:]]
+    idle = fields[3] + (fields[4] if len(fields) > 4 else 0)   # idle + iowait
+    return sum(fields), idle
+
+
+def cpu_usage(interval=0.12):
+    """Charge processeur du serveur loco : pourcentage (court échantillon sur /proc/stat), charge sur 1 min, cœurs.
+    {} si indisponible (p. ex. serveur Windows)."""
+    if config.WINDOWS:
+        return {}
+    try:
+        total1, idle1 = _cpu_times()
+        time.sleep(interval)
+        total2, idle2 = _cpu_times()
+        delta_total, delta_idle = total2 - total1, idle2 - idle1
+        pct = round(100 * (delta_total - delta_idle) / delta_total) if delta_total > 0 else 0
+        return {"pct": max(0, min(100, pct)), "load1": round(os.getloadavg()[0], 2), "cores": os.cpu_count() or 1}
+    except (OSError, ValueError, IndexError, ZeroDivisionError):
+        return {}
 
 
 PROC_NET_DEV, PROC_NET_ROUTE = "/proc/net/dev", "/proc/net/route"

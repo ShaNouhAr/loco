@@ -10,7 +10,7 @@ from .i18n import L_, _
 from .auth import login_required, can
 from .db import db
 from .linux import list_debs
-from .util import disk_usage, net_counters, read_stats, service_active
+from .util import cpu_usage, disk_usage, mem_info, net_counters, read_stats, service_active
 from .wupdate import wu_chart, wu_stats
 
 STATUS_LABELS = {"ready": L_("prêt"), "downloading": L_("téléchargement"), "error": L_("erreur"), "pending": L_("en attente")}
@@ -32,6 +32,8 @@ def dashboard_data():
         "apps_size": apps["s"],
         "wu": {k: wu[k] for k in ("hits", "misses", "hit_bytes", "miss_bytes", "ratio")},
         "disk": disk_usage(),
+        "cpu": cpu_usage(),
+        "mem": mem_info(),
         "stats_updated": stats.get("updated", ""),
     }
 
