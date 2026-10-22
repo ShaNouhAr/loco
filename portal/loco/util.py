@@ -24,7 +24,8 @@ def now():
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-UNITS = {"fr": ("o", "Ko", "Mo", "Go", "To"), "en": ("B", "KB", "MB", "GB", "TB")}
+UNITS = {"fr": ("o", "Ko", "Mo", "Go", "To"), "en": ("B", "KB", "MB", "GB", "TB"),
+         "es": ("B", "KB", "MB", "GB", "TB")}
 MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 

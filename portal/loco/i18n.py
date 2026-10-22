@@ -18,7 +18,7 @@ import re
 from flask import g, has_request_context, request
 from markupsafe import escape
 
-LANGS = {"fr": "Français", "en": "English"}
+LANGS = {"fr": "Français", "en": "English", "es": "Español"}
 DEFAULT = "fr"
 COOKIE = "loco_lang"
 CATALOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "i18n")

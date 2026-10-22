@@ -27,6 +27,9 @@ MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "ao�
 DAYS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 MONTHS_EN = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
              "November", "December")
+DAYS_ES = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+MONTHS_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+             "noviembre", "diciembre")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 FMT = "%Y-%m-%d %H:%M:%S"
 MAX_TARGETS = 500
@@ -69,25 +72,36 @@ def _english():
     return locale() == "en"
 
 
+def _days():
+    return {"en": DAYS_EN, "es": DAYS_ES}.get(locale(), DAYS)
+
+
 def _join(items):
     if len(items) == 1:
         return items[0]
-    return ", ".join(items[:-1]) + (" and " if _english() else " et ") + items[-1]
+    sep = {"en": " and ", "es": " y "}.get(locale(), " et ")
+    return ", ".join(items[:-1]) + sep + items[-1]
 
 
 def _ordinal(day):
-    if _english():
+    lang = locale()
+    if lang == "en":
         return f"{day}{'th' if 11 <= day % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')}"
-    return "1er" if day == 1 else str(day)
+    return "1er" if lang == "fr" and day == 1 else str(day)
 
 
 def when_text(when):
-    """« mardi 21 octobre à 02:00 » / « Tuesday, October 21 at 02:00 » (année si elle diffère de l'année en cours)."""
+    """« mardi 21 octobre à 02:00 » / « Tuesday, October 21 at 02:00 » / « martes 21 de octubre a las 02:00 »
+    (année si elle diffère de l'année en cours)."""
     if isinstance(when, str):
         when = datetime.datetime.strptime(when, FMT)
-    year = f" {when.year}" if when.year != datetime.date.today().year else ""
-    if _english():
+    diff = when.year != datetime.date.today().year
+    year = f" {when.year}" if diff else ""
+    lang = locale()
+    if lang == "en":
         return f"{DAYS_EN[when.weekday()]}, {MONTHS_EN[when.month - 1]} {when.day}{',' if year else ''}{year} at {when:%H:%M}"
+    if lang == "es":
+        return f"{DAYS_ES[when.weekday()]} {when.day} de {MONTHS_ES[when.month - 1]}{f' de {when.year}' if diff else ''} a las {when:%H:%M}"
     return f"{DAYS[when.weekday()]} {_ordinal(when.day)} {MONTHS[when.month - 1]}{year} à {when:%H:%M}"
 
 
@@ -112,7 +126,7 @@ def describe(s):
             return _("Du lundi au vendredi à %(at)s", at=at)
         if days == [5, 6]:
             return _("Le week-end à %(at)s", at=at)
-        return _("Chaque %(days)s à %(at)s", days=_join([(DAYS_EN if _english() else DAYS)[d] for d in days]), at=at)
+        return _("Chaque %(days)s à %(at)s", days=_join([_days()[d] for d in days]), at=at)
     day = int(s["monthday"])
     if day == LAST_DAY:
         return _("Le dernier jour de chaque mois à %(at)s", at=at)

@@ -59,27 +59,33 @@ def all_messages():
     return found
 
 
+TRANSLATED = [lang for lang in i18n.LANGS if lang != i18n.DEFAULT]  # en, es…
+
+
 class TestCatalog(unittest.TestCase):
-    def test_every_marked_text_has_an_english_translation(self):
-        catalog = i18n.catalog("en")
-        missing = [f"{where} : {text!r}" for text, where in sorted(all_messages().items(), key=lambda kv: kv[1])
-                   if not catalog.get(text)]
-        self.assertEqual(missing, [], f"{len(missing)} texte(s) sans traduction anglaise (portal/i18n/en.json)")
+    def test_every_marked_text_has_a_translation(self):
+        for lang in TRANSLATED:
+            catalog = i18n.catalog(lang)
+            missing = [f"{where} : {text!r}" for text, where in sorted(all_messages().items(), key=lambda kv: kv[1])
+                       if not catalog.get(text)]
+            self.assertEqual(missing, [], f"{len(missing)} texte(s) sans traduction {lang} (portal/i18n/{lang}.json)")
 
     def test_translations_keep_the_same_values(self):
         # Seuls les suffixes de pluriel faits main (%(v)s = « s » ou rien) peuvent manquer : l'anglais n'accorde pas
-        # les participes (« 3 postes prévus » -> « 3 devices planned »).
-        for text, english in i18n.catalog("en").items():
-            with self.subTest(text=text):
-                source, target = set(PLACEHOLDER.findall(text)), set(PLACEHOLDER.findall(english))
-                self.assertLessEqual(target, source)
-                self.assertEqual({p for p in source - target if not re.fullmatch(r"v\d*", p)}, set())
+        # les participes (« 3 postes prévus » -> « 3 devices planned ») et l'espagnol pluralise autrement.
+        for lang in TRANSLATED:
+            for text, translated in i18n.catalog(lang).items():
+                with self.subTest(lang=lang, text=text):
+                    source, target = set(PLACEHOLDER.findall(text)), set(PLACEHOLDER.findall(translated))
+                    self.assertLessEqual(target, source)
+                    self.assertEqual({p for p in source - target if not re.fullmatch(r"v\d*", p)}, set())
 
     def test_catalog_is_valid_json_without_stale_duplicates(self):
-        with open(os.path.join(ROOT, "i18n", "en.json"), encoding="utf-8") as f:
-            pairs = json.load(f, object_pairs_hook=lambda kv: kv)
-        keys = [k for k, _v in pairs]
-        self.assertEqual(len(keys), len(set(keys)), "clé en double dans en.json")
+        for lang in TRANSLATED:
+            with open(os.path.join(ROOT, "i18n", f"{lang}.json"), encoding="utf-8") as f:
+                pairs = json.load(f, object_pairs_hook=lambda kv: kv)
+            keys = [k for k, _v in pairs]
+            self.assertEqual(len(keys), len(set(keys)), f"clé en double dans {lang}.json")
 
 
 class TestLanguageChoice(unittest.TestCase):
