@@ -11,11 +11,14 @@
     <Media Id="1" Cabinet="client.cab" EmbedCab="yes" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/ShaNouhAr/loco" />
     <Property Id="ARPNOMODIFY" Value="1" />
-    <Property Id="SERVER" Secure="yes" />
-    <Property Id="KEY" Secure="yes" />
+    <!-- Emplacements d'inscription gravés à la volée par le portail quand le poste télécharge « son » MSI
+         (double-clic = installation ET inscription). Le portail les remplit d'espaces pour le MSI générique
+         (ps1, GPO : réglages passés en propriétés ou dans HKLM\SOFTWARE\Policies\loco\Client). -->
+    <Property Id="SERVER" Secure="yes" Value="@LOCO_PROVISION_SERVER@........................................................................................................................................." />
+    <Property Id="KEY" Secure="yes" Value="@LOCO_PROVISION_KEY@............................................................................" />
     <!-- La clé d'inscription n'apparaît pas dans les journaux de Windows Installer. -->
     <Property Id="MsiHiddenProperties" Value="KEY" />
-    <Property Id="CA_SHA256" Secure="yes" />
+    <Property Id="CA_SHA256" Secure="yes" Value="@LOCO_PROVISION_CA@............................................................................................................." />
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">

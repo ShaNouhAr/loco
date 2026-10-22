@@ -416,13 +416,33 @@ class TestInstallers(FleetTest):
                 mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
             page = self.admin.c.get("/enrollment").get_data(as_text=True)
         self.assertIn("Télécharger le MSI", page)
-        self.assertIn('href="/agent/files/loco-client.msi" download', page)
-        self.assertIn("https://repo.test:8443/agent/files/loco-client.msi", page)   # depuis le poste, en HTTPS
+        self.assertIn('href="/agent/windows/enroll.msi" download', page)             # MSI prêt : double-clic = inscription
+        self.assertIn("https://repo.test:8443/agent/files/loco-client.msi", page)   # MSI générique depuis le poste, en HTTPS
         self.assertIn("http://repo.test:8088/agent/files/loco-client.msi", page)    # ou en HTTP
-        self.assertIn(f"SHA-256 {sha[:12]}", page)
         command = (f'msiexec /i &#34;%USERPROFILE%\\Downloads\\loco-client.msi&#34; SERVER=https://repo.test:8443 '
                    f'KEY={Agent.key()} CA_SHA256={CA_SHA256} /qb')
         self.assertIn(command, page)
+
+    def test_enroll_msi_bakes_server_and_key_while_generic_msi_is_blank(self):
+        placeholders = (b"@LOCO_PROVISION_SERVER@" + b"." * 137, b"@LOCO_PROVISION_KEY@" + b"." * 76,
+                        b"@LOCO_PROVISION_CA@" + b"." * 109)
+        blob = b"MSI\x00" + placeholders[0] + b"\x01" + placeholders[1] + b"\x02" + placeholders[2] + b"end"
+        with tempfile.TemporaryDirectory() as tmp:
+            msi = os.path.join(tmp, "loco-client.msi")
+            with open(msi, "wb") as f:
+                f.write(blob)
+            with mock.patch.object(fleet, "agent_msi", return_value=(msi, "sha")), \
+                    mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
+                fleet._CANON.clear()
+                generic = self.admin.c.get("/agent/files/loco-client.msi").get_data()
+                enroll = self.admin.c.get("/agent/windows/enroll.msi").get_data()
+        self.assertEqual(len(generic), len(blob))            # tampon à longueur constante : MSI toujours valide
+        self.assertEqual(len(enroll), len(blob))
+        self.assertNotIn(b"@LOCO_PROVISION", generic)
+        self.assertNotIn(b"@LOCO_PROVISION", enroll)
+        self.assertNotIn(Agent.key().encode(), generic)      # générique (ps1/GPO) : aucune inscription gravée
+        self.assertIn(b"https://repo.test:8443", enroll)     # prêt à l'emploi : adresse gravée
+        self.assertIn(Agent.key().encode(), enroll)          # et la clé d'inscription
 
     def test_msi_is_fetched_from_the_release_and_checked(self):
         data = b"MSI publie"

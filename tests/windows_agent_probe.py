@@ -227,3 +227,16 @@ installed = powershell("Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\C
                        "Where-Object DisplayName -eq 'loco-client' | Measure-Object | Select-Object -ExpandProperty Count")
 assert installed.stdout.strip() == '0', 'MSI loco-client encore installé'
 print('Retrait poussé depuis loco : service et MSI désinstallés, poste retiré du parc')
+
+# MSI « prêt à l'emploi » : un double-clic (ici installation silencieuse SANS propriétés) installe ET inscrit le
+# poste, sans aucune commande. L'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont gravées
+# dans le MSI par le portail au téléchargement (poste propre après le retrait ci-dessus).
+enroll_msi = Path(os.environ['TEMP'], 'loco-enroll.msi')
+enroll_msi.write_bytes(opener.open(base + '/agent/windows/enroll.msi', timeout=90).read())
+result = subprocess.run(['msiexec.exe', '/i', str(enroll_msi), '/qn', '/norestart'], timeout=180)
+assert result.returncode in (0, 3010), f'Installation du MSI prêt à l\'emploi : {result.returncode}'
+assert powershell('(Get-Service loco-client).Status').stdout.strip() == 'Running', 'service pas démarré (MSI prêt)'
+assert powershell("(Get-ItemProperty 'HKLM:\\SOFTWARE\\loco\\Client' -Name Server).Server").stdout.strip(), \
+    'adresse du serveur non gravée dans le MSI'
+ready = wait('inscription par le MSI prêt à l\'emploi', device_id, 300)
+print(f'MSI prêt à l\'emploi : installé sans aucune commande, poste réinscrit (n° {ready})')

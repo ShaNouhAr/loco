@@ -696,6 +696,47 @@ def agent_msi(fetch=False):
         return _msi_cache(), expected
 
 
+# Emplacements gravés dans le MSI (mêmes chaînes et longueurs que windows/client/loco-client.wxs).
+_MSI_FIELDS = (
+    (b"@LOCO_PROVISION_SERVER@" + b"." * 137, "server"),
+    (b"@LOCO_PROVISION_KEY@" + b"." * 76, "key"),
+    (b"@LOCO_PROVISION_CA@" + b"." * 109, "ca"),
+)
+
+
+def _stamp_msi(data, server="", key="", ca=""):
+    """Grave l'adresse, la clé d'inscription et l'empreinte de l'autorité dans les emplacements du MSI (complétés
+    d'espaces, que l'agent rogne). Valeurs vides = emplacements vidés (MSI générique pour ps1/GPO). Un MSI sans
+    emplacement (ancienne version) est renvoyé inchangé."""
+    values = {"server": server, "key": key, "ca": ca}
+    out = bytearray(data)
+    for placeholder, field in _MSI_FIELDS:
+        encoded = values[field].encode()
+        if len(encoded) > len(placeholder):
+            raise ValueError(f"{field} trop long pour le MSI")
+        index = out.find(placeholder)
+        if index >= 0:
+            out[index:index + len(placeholder)] = encoded.ljust(len(placeholder), b" ")
+    return bytes(out)
+
+
+_CANON = {}
+
+
+def canonical_msi():
+    """MSI servi par défaut (ps1, GPO) : emplacements d'inscription vidés. Déterministe → empreinte SHA-256 stable."""
+    path, reason = agent_msi(fetch=True)
+    if path is None:
+        return None, reason
+    raw = _file_sha256(path)
+    if _CANON.get("raw") != raw:
+        with open(path, "rb") as f:
+            data = _stamp_msi(f.read())
+        _CANON.clear()
+        _CANON.update(raw=raw, data=data, sha=hashlib.sha256(data).hexdigest())
+    return _CANON["data"], _CANON["sha"]
+
+
 _SHA = {}
 
 
@@ -786,8 +827,8 @@ def agent_rpm():
 def agent_windows_installer():
     """Script d'amorçage : télécharge le MSI depuis loco (empreinte vérifiée) et l'installe avec les réglages."""
     key = _check_key()
-    path, sha = agent_msi(fetch=True)
-    if path is None:
+    data, sha = canonical_msi()
+    if data is None:
         reason = sha.replace("'", "''")
         script = f"Write-Warning 'Agent Windows indisponible sur le serveur loco : {reason}.'\n"
     else:
@@ -804,14 +845,31 @@ def agent_file(name):
     if name == "loco-client.py":
         return Response(_agent_source(name), mimetype="text/plain")
     if name == "loco-client.msi":
-        path, reason = agent_msi(fetch=True)
-        if path is None:
+        data, reason = canonical_msi()
+        if data is None:
             # Indisponible pour l'instant (GitHub injoignable…) : le dire au lieu d'un 404 muet.
             current_app.logger.warning("MSI de l'agent %s indisponible : %s", config.VERSION, reason)
             return Response(f"loco-client.msi {config.VERSION} indisponible : {reason}. Réessayez dans un instant.\n",
                             status=503, mimetype="text/plain", headers={"Retry-After": "30"})
-        return send_file(path, mimetype="application/x-msi", as_attachment=True, download_name="loco-client.msi")
+        return Response(data, mimetype="application/x-msi",
+                        headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
     abort(404)
+
+
+@app.route("/agent/windows/enroll.msi")
+@login_required
+def agent_enroll_msi():
+    """MSI prêt pour ce serveur : un double-clic installe le service ET inscrit le poste (adresse, clé et empreinte
+    de l'autorité gravées dans le MSI). Réservé aux comptes autorisés à enrôler (voir permissions.ENDPOINTS)."""
+    path, reason = agent_msi(fetch=True)
+    if path is None:
+        current_app.logger.warning("MSI de l'agent %s indisponible : %s", config.VERSION, reason)
+        return Response(f"loco-client.msi {config.VERSION} indisponible : {reason}. Réessayez dans un instant.\n",
+                        status=503, mimetype="text/plain", headers={"Retry-After": "30"})
+    with open(path, "rb") as f:
+        data = _stamp_msi(f.read(), server=config.HTTPS_URL, key=enroll_key(), ca=_ca_fingerprint())
+    return Response(data, mimetype="application/x-msi",
+                    headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
 
 
 # --------------------------------------------------------------------------- portail

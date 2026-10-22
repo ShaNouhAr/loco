@@ -79,16 +79,16 @@
     <section class="panel">
       {{ step(ns, _("Installer l'agent"), "Windows 10/11, Windows Server 2016 et plus") }}
       <div class="panel-b">
-        {{ download('windows', 'loco-client.msi', (_('Service Windows · version %(version)s · SHA-256 %(sha)s…', version=version, sha=msi_sha256[:12]) if msi_sha256 else _('Service Windows · version %(version)s · récupéré depuis GitHub au premier téléchargement', version=version)), url_for('agent_file', name='loco-client.msi'), _('Télécharger le MSI')) }}
-        <span class="cmd-label">{{ _("Puis, dans une invite de commandes en administrateur, pour l'installer et inscrire le poste :") }}</span>
-        {{ cmd('enroll-msi', commands.msiexec, '>') }}
-        <span class="hint">{{ _("Un double-clic installe le service sans l'inscrire : la commande lui donne l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité.") }}</span>
+        {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste · version %(version)s", version=version), url_for('agent_enroll_msi'), _('Télécharger le MSI')) }}
+        <span class="hint">{{ _("Un double-clic installe le service et inscrit le poste dans « Mon parc » : l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans le MSI. Rien d'autre à faire.") }}</span>
         <details class="hint"><summary>{{ _("Autres méthodes") }}</summary>
           <div class="stack-sm">
             <span class="cmd-label">{{ _("En une commande PowerShell (administrateur), sans téléchargement préalable :") }}</span>
             {{ cmd('enroll-ps', commands.windows, 'PS>') }}
             {% if commands.windows_http %}<span class="hint">{{ _("Autorité loco pas encore importée sur le poste :") }} <code>{{ commands.windows_http }}</code></span>{% endif %}
-            <span class="hint">{{ _("MSI depuis le navigateur du poste :") }} {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}.</span>
+            <span class="cmd-label">{{ _("MSI générique (sans inscription) puis installation avec les réglages, en administrateur :") }}</span>
+            {{ cmd('enroll-msi', commands.msiexec, '>') }}
+            <span class="hint">{{ _("MSI générique depuis le navigateur du poste :") }} {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}.</span>
             <span class="cmd-label">{{ _("Déploiement en masse (GPO, Intune, SCCM) : distribuer le MSI et créer sous") }} <code>{{ _("HKLM\\SOFTWARE\\Policies\\loco\\Client") }}</code> {{ _("les valeurs chaîne") }} <code>{{ _("Server") }}</code> = <code>{{ https_url }}</code>, <code>{{ _("Key") }}</code> = <code>{{ key }}</code> {{ _("et") }} <code>{{ _("CaSha256") }}</code> = <code>{{ ca_sha256 or _('(vide : certificat public)') }}</code>{{ _(", ou en ligne de commande :") }}</span>
             {{ cmd('enroll-msi-mass', 'msiexec /i loco-client.msi SERVER=' ~ https_url ~ ' KEY=' ~ key ~ (' CA_SHA256=' ~ ca_sha256 if ca_sha256 else '') ~ ' /qn', '>') }}
           </div>
