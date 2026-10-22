@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.38.0 — 2026-10-22
+
+- **Vue d'ensemble plus lisible** : les tuiles (caches, Processeur, Mémoire, Disque) s'enroulent au lieu d'être tassées sur une seule ligne, donc plus de valeurs coupées. La tuile **Mémoire** montre désormais un **pourcentage** d'utilisation (comme le Processeur) avec « utilisée sur totale » en dessous, au lieu d'un nombre d'octets tronqué.
+- **Terminal des postes Linux comme un vrai terminal** : la session ouvre une **invite colorée** par défaut (`utilisateur@poste : chemin`) quand le poste n'en a pas, pour une vraie allure de terminal dès l'ouverture. Le `.bashrc` du poste reste prioritaire : s'il définit déjà une invite colorée (ou un `PROMPT_COMMAND`), c'est la sienne qui s'affiche.
+
 ## 2.37.0 — 2026-10-22
 
 - **Processeur et mémoire du serveur dans la vue d'ensemble** : deux tuiles, à côté de « Disque », montrent la charge du serveur sur lequel tourne loco — **Processeur** (pourcentage d'utilisation, charge sur 1 min et nombre de cœurs) et **Mémoire** (utilisée sur totale), avec une jauge (orange puis rouge quand ça se remplit). Les valeurs s'actualisent en direct comme le reste de la page. Lues sur le serveur (`/proc`) ; masquées si indisponibles.
