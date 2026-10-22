@@ -6,6 +6,10 @@
 
 - **Adresses (URL) des pages en anglais**, identiques quelle que soit la langue choisie, pour une navigation uniforme : `/fleet`, `/accounts`, `/log`, `/system/updates`, `/enrollment`… (avant `/parc`, `/comptes`, `/journal`, `/systeme/mises-a-jour`, `/enrolement`). Les liens internes suivent automatiquement ; les adresses servies aux postes (dépôts, agents, scripts d'installation) ne changent pas.
 
+- **Mise à jour de loco plus simple**, depuis la page *Mises à jour* : le bouton d'installation de la version publiée vaut désormais pour **tout serveur Linux** (systemd), et plus seulement pour l'appliance Alpine — l'archive est vérifiée (SHA-256) puis installée, avec retour automatique à la version précédente en cas d'échec. Une section **Dépôt GitHub** permet de pointer les mises à jour vers un autre dépôt « owner/repo » (par exemple votre fork) et de revérifier ; le choix est gardé dans `loco.conf` (et conservé d'une mise à jour à l'autre). Réglable aussi à l'installation avec `--github-repo owner/repo`.
+
+- **Sélecteur de langue dédié** : une icône globe, en haut à droite et sur l'écran de connexion, ouvre un menu *Français / English / Español* accessible depuis n'importe quelle page. Le choix de langue sort du menu *Apparence* (palette) pour devenir une action d'un seul clic.
+
 
 ## 2.34.0 — 2026-10-21
 
