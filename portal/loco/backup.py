@@ -1,11 +1,39 @@
-"""Restauration des archives Linux loco et local-repo vers les chemins du serveur courant."""
+"""Restauration des archives Linux loco et local-repo vers les chemins du serveur courant.
+Lancé comme script par loco-backup (hors du paquet loco) : traduction autonome, dans la langue du serveur."""
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
 import sys
 import tarfile
-from .i18n import _
+
+
+def _lang():
+    value = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    if not value:
+        for path in ("/etc/default/locale", "/etc/locale.conf"):
+            try:
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    for line in handle:
+                        for key in ("LC_ALL=", "LC_MESSAGES=", "LANG="):
+                            if line.strip().startswith(key):
+                                value = line.strip()[len(key):].strip().strip('"')
+                                break
+                        if value:
+                            break
+            except OSError:
+                pass
+            if value:
+                break
+    value = value.lower()
+    return "fr" if value.startswith("fr") else "es" if value.startswith("es") else "en"
+
+
+LANG = _lang()
+
+
+def t(fr, en, es):
+    return fr if LANG == "fr" else es if LANG == "es" else en
 
 
 def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
@@ -15,11 +43,11 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
         configs = ['etc/loco/loco.conf', 'etc/local-repo/local-repo.conf']
         config = next((name for name in configs if name in names), None)
         if 'portal.db' not in names or config is None:
-            raise ValueError(_('Sauvegarde Linux loco ou local-repo attendue.'))
+            raise ValueError(t('Sauvegarde Linux loco ou local-repo attendue.', 'A loco or local-repo Linux backup was expected.', 'Se espera una copia de seguridad Linux de loco o local-repo.'))
         with tar.extractfile(config) as source:
             match = re.search(r'^DATA=([/A-Za-z0-9._-]+)$', source.read().decode(), re.M)
         if not match:
-            raise ValueError(_('Chemin des données absent de la sauvegarde.'))
+            raise ValueError(t('Chemin des données absent de la sauvegarde.', 'Data path missing from the backup.', 'Falta la ruta de los datos en la copia de seguridad.'))
         old_data = match.group(1).lstrip('/')
         roots = [('etc/loco', Path(etc)), ('etc/local-repo', Path(etc)),
                  ('var/lib/loco', Path(state)), ('var/lib/local-repo', Path(state))]
@@ -30,7 +58,7 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
             path = PurePosixPath(name)
             if (path.is_absolute() or '..' in path.parts or '\\' in name or ':' in name
                     or not (member.isdir() or member.isfile())):
-                raise ValueError(_('Chemin ou type de fichier invalide dans la sauvegarde.'))
+                raise ValueError(t('Chemin ou type de fichier invalide dans la sauvegarde.', 'Invalid path or file type in the backup.', 'Ruta o tipo de archivo no válido en la copia de seguridad.'))
             if name in configs or any(name.startswith(p + '/install-state') for p, _ in roots[:2]):
                 continue
             target = Path(state) / 'portal.db' if name == 'portal.db' else None
@@ -39,9 +67,9 @@ def restore_linux(archive, data, etc='/etc/loco', state='/var/lib/loco'):
                     target = destination / name[len(prefix):].lstrip('/')
                     break
             if target is None:
-                raise ValueError(_('Fichier étranger aux données de loco dans la sauvegarde.'))
+                raise ValueError(t('Fichier étranger aux données de loco dans la sauvegarde.', 'File unrelated to loco data in the backup.', 'Archivo ajeno a los datos de loco en la copia de seguridad.'))
             if any(p.is_symlink() for p in (target, *target.parents)):
-                raise ValueError(_('Destination contenant un lien symbolique.'))
+                raise ValueError(t('Destination contenant un lien symbolique.', 'Destination contains a symbolic link.', 'Destino que contiene un enlace simbólico.'))
             plan.append((member, target))
         # Tous les chemins sont vérifiés avant la première écriture.
         for member, target in plan:
