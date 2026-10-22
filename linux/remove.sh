@@ -11,10 +11,13 @@ ETC=/etc/loco
 STATE=/var/lib/loco
 PREFIX=/opt/loco
 
-say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-die() { printf '\033[1;31mErreur :\033[0m %s\n' "$*" >&2; exit 1; }
+# Langue du serveur : français si LANG/LC_* commence par « fr », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+say() { printf '\033[1;34m==>\033[0m %s\n' "$(t "$1" "${2:-$1}")"; }
+die() { printf '\033[1;31m%s\033[0m %s\n' "$(t 'Erreur :' 'Error:')" "$(t "$1" "${2:-$1}")" >&2; exit 1; }
 
-[ "$(id -u)" -eq 0 ] || die "lancez ce script en root (sudo ./remove.sh)."
+[ "$(id -u)" -eq 0 ] || die "lancez ce script en root (sudo ./remove.sh)." "run this script as root (sudo ./remove.sh)."
 
 PURGE=0 YES=0
 for arg in "$@"; do
@@ -22,7 +25,7 @@ for arg in "$@"; do
         --purge) PURGE=1 ;;
         -y|--yes) YES=1 ;;
         -h|--help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) die "option inconnue : $arg" ;;
+        *) die "option inconnue : $arg" "unknown option: $arg" ;;
     esac
 done
 
@@ -37,17 +40,17 @@ cd /
 
 if [ "$YES" = 0 ]; then
     if [ "$PURGE" = 1 ]; then
-        echo "loco va être désinstallé ET toutes ses données supprimées ($DATA, $STATE, cache apt-cacher-ng)."
+        printf '%s\n' "$(t "loco va être désinstallé ET toutes ses données supprimées ($DATA, $STATE, cache apt-cacher-ng)." "loco will be uninstalled AND all its data removed ($DATA, $STATE, apt-cacher-ng cache).")"
     else
-        echo "loco va être désinstallé (les données dans $DATA et $STATE sont conservées)."
+        printf '%s\n' "$(t "loco va être désinstallé (les données dans $DATA et $STATE sont conservées)." "loco will be uninstalled (data in $DATA and $STATE is kept).")"
     fi
-    read -r -p "Continuer ? [o/N] " answer < /dev/tty
-    [[ "$answer" =~ ^[oOyY]$ ]] || { echo "Annulé."; exit 1; }
+    read -r -p "$(t 'Continuer ? [o/N] ' 'Continue? [y/N] ')" answer < /dev/tty
+    [[ "$answer" =~ ^[oOyY]$ ]] || { printf '%s\n' "$(t 'Annulé.' 'Cancelled.')"; exit 1; }
 fi
 
 # shellcheck disable=SC1091
 . /etc/os-release
-say "Arrêt des services"
+say "Arrêt des services" "Stopping services"
 if [ "$ID" = alpine ]; then
     # shellcheck source=linux/lib/alpine.sh
     . "$PREFIX/lib/alpine.sh"
@@ -72,7 +75,7 @@ for f in /etc/hosts.allow /etc/hosts.deny; do
 done
 systemctl daemon-reload 2>/dev/null || true
 
-say "Configuration nginx"
+say "Configuration nginx" "nginx configuration"
 if [ -f "$ETC/install-state/nginx-rocky-original.conf" ]; then
     # shellcheck source=linux/lib/rocky.sh
     . "$PREFIX/lib/rocky.sh"
@@ -95,7 +98,7 @@ PACKAGE_RECORD="$STATE/installed-packages"
 if [ -f "$ETC/install-state/installed-packages" ]; then PACKAGE_RECORD="$ETC/install-state/installed-packages"; fi
 if [ -f "$PACKAGE_RECORD" ]; then mapfile -t PKGS < "$PACKAGE_RECORD"; fi
 if [ ${#PKGS[@]} -gt 0 ]; then
-    say "Désinstallation des paquets : ${PKGS[*]}"
+    say "Désinstallation des paquets : ${PKGS[*]}" "Uninstalling packages: ${PKGS[*]}"
     # EPEL peut fournir apt-get sur Rocky : choisir d'après le système, jamais d'après sa présence.
     if [ "$ID" = alpine ]; then
         apk del --no-progress "${PKGS[@]}" >/dev/null || true
@@ -112,12 +115,12 @@ if systemctl is-active -q nginx 2>/dev/null; then
 fi
 if systemctl is-active -q apt-cacher-ng 2>/dev/null; then systemctl restart apt-cacher-ng || true; fi
 
-say "Suppression du programme"
+say "Suppression du programme" "Removing the program"
 rm -rf "$PREFIX" "$PREFIX.new"
 
 if [ "$PURGE" = 1 ]; then
-    say "Suppression des données"
-    case "$DATA" in /|/srv|/var|/home|/opt|"") die "dossier de données suspect : '$DATA'" ;; esac
+    say "Suppression des données" "Removing data"
+    case "$DATA" in /|/srv|/var|/home|/opt|"") die "dossier de données suspect : '$DATA'" "suspicious data directory: '$DATA'" ;; esac
     rm -rf "$DATA" "$STATE" "$ETC"
     rm -f /var/log/nginx/loco-*.log* /var/log/loco-install.log
     # Cache et journaux d'apt-cacher-ng seulement s'il avait été installé par loco.
@@ -129,10 +132,10 @@ if [ "$PURGE" = 1 ]; then
     else userdel loco 2>/dev/null || true; fi
     BACKUP_DIR=${BACKUP_DIR:-/var/backups/loco}
     if [ -d "$BACKUP_DIR" ]; then
-        echo "    Sauvegardes conservées : $BACKUP_DIR (à supprimer à la main si inutiles)"
+        printf '    %s\n' "$(t "Sauvegardes conservées : $BACKUP_DIR (à supprimer à la main si inutiles)" "Backups kept: $BACKUP_DIR (remove by hand if not needed)")"
     fi
 else
-    echo "    Données conservées : $DATA, $STATE, $ETC (sudo ./remove.sh --purge pour tout effacer)"
+    printf '    %s\n' "$(t "Données conservées : $DATA, $STATE, $ETC (sudo ./remove.sh --purge pour tout effacer)" "Data kept: $DATA, $STATE, $ETC (sudo ./remove.sh --purge to erase everything)")"
 fi
 
-say "loco est désinstallé"
+say "loco est désinstallé" "loco is uninstalled"

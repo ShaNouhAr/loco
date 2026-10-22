@@ -5,7 +5,10 @@
 #   loco-user passwd NOM          mot de passe temporaire (accès perdu)
 #   loco-user enable|disable NOM
 set -euo pipefail
-[ "$(id -u)" -eq 0 ] || { echo "Lancez cette commande en root (sudo)." >&2; exit 1; }
+# Langue du serveur : français si LANG/LC_* commence par « fr », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
+[ "$(id -u)" -eq 0 ] || { t "Lancez cette commande en root (sudo)." "Run this command as root (sudo)." >&2; exit 1; }
 # shellcheck disable=SC1091
 . /etc/loco/loco.conf
 cd /opt/loco/portal

@@ -42,13 +42,16 @@ PACKAGE_RECORD="$STATE/installed-packages"
 PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask python3-cryptography gunicorn curl openssl ca-certificates)
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10"
 
-say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[1;31mErreur :\033[0m %s\n' "$*" >&2; exit 1; }
-trap 'die "échec inattendu ligne $LINENO : $BASH_COMMAND"' ERR
+# Langue du serveur : français si LANG/LC_* commence par « fr », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+say()  { printf '\033[1;34m==>\033[0m %s\n' "$(t "$1" "${2:-$1}")"; }
+warn() { printf '\033[1;33m!!\033[0m %s\n' "$(t "$1" "${2:-$1}")" >&2; }
+die()  { printf '\033[1;31m%s\033[0m %s\n' "$(t 'Erreur :' 'Error:')" "$(t "$1" "${2:-$1}")" >&2; exit 1; }
+trap 'die "échec inattendu ligne $LINENO : $BASH_COMMAND" "unexpected failure at line $LINENO: $BASH_COMMAND"' ERR
 LOG=/var/log/loco-install.log
 
-[ "$(id -u)" -eq 0 ] || die "lancez ce script en root (sudo ./install.sh)."
+[ "$(id -u)" -eq 0 ] || die "lancez ce script en root (sudo ./install.sh)." "run this script as root (sudo ./install.sh)."
 # La présence éventuelle d'APT sur Rocky ne doit pas sélectionner le mauvais gestionnaire.
 # shellcheck disable=SC1091
 . /etc/os-release
@@ -61,9 +64,9 @@ SQUID_USER=proxy
 LOG_GROUP=adm
 CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 case "$ID" in
-    debian|ubuntu) command -v apt-get >/dev/null || die "apt-get requis." ;;
+    debian|ubuntu) command -v apt-get >/dev/null || die "apt-get requis." "apt-get required." ;;
     rocky)
-        case "$OS_MAJOR" in 8|9|10) ;; *) die "Serveur Rocky Linux 8, 9 ou 10 requis." ;; esac
+        case "$OS_MAJOR" in 8|9|10) ;; *) die "Serveur Rocky Linux 8, 9 ou 10 requis." "Rocky Linux server 8, 9 or 10 required." ;; esac
         PLATFORM=rocky
         PACKAGE_RECORD="$ETC/install-state/installed-packages"
         PYTHON=/usr/local/lib/loco/venv/bin/python
@@ -82,9 +85,9 @@ case "$ID" in
         LOG_GROUP=nginx
         # shellcheck source=linux/lib/alpine.sh
         . "$SRC/lib/alpine.sh"
-        alpine_supported || die "Alpine Linux 3.24 ou plus récent requis."
+        alpine_supported || die "Alpine Linux 3.24 ou plus récent requis." "Alpine Linux 3.24 or newer required."
         ;;
-    *) die "Serveur Debian, Ubuntu, Rocky Linux ou Alpine Linux requis." ;;
+    *) die "Serveur Debian, Ubuntu, Rocky Linux ou Alpine Linux requis." "Debian, Ubuntu, Rocky Linux or Alpine Linux server required." ;;
 esac
 # Le code et les ressources publiques doivent rester lisibles même avec umask 077.
 umask 022
@@ -93,11 +96,11 @@ umask 022
 CONTAINER=0
 for arg in "$@"; do if [ "$arg" = "--container" ]; then CONTAINER=1; fi; done
 if [ "$CONTAINER" = 1 ]; then
-    [ "${LOCO_RUNTIME:-}" = container ] || die "--container est réservé à l'image Docker (docker compose up -d)."
+    [ "${LOCO_RUNTIME:-}" = container ] || die "--container est réservé à l'image Docker (docker compose up -d)." "--container is reserved for the Docker image (docker compose up -d)."
 elif [ "$PLATFORM" = alpine ]; then
-    command -v rc-service >/dev/null || die "OpenRC requis."
+    command -v rc-service >/dev/null || die "OpenRC requis." "OpenRC required."
 else
-    command -v systemctl >/dev/null || die "systemd requis."
+    command -v systemctl >/dev/null || die "systemd requis." "systemd required."
 fi
 
 # Python sert à valider la configuration : installé d'abord s'il manque (système minimal).
@@ -106,12 +109,12 @@ if ! command -v python3 >/dev/null; then
     if [ "$PLATFORM" = rocky ]; then install -d -m 700 -o root -g root "$ETC/install-state"; fi
     echo python3 >> "$PACKAGE_RECORD"
     if [ "$PLATFORM" = rocky ]; then
-        dnf install -y python3 >/dev/null 2>&1 || die "impossible d'installer python3."
+        dnf install -y python3 >/dev/null 2>&1 || die "impossible d'installer python3." "cannot install python3."
     elif [ "$PLATFORM" = alpine ]; then
-        apk add --no-progress python3 >/dev/null 2>&1 || die "impossible d'installer python3."
+        apk add --no-progress python3 >/dev/null 2>&1 || die "impossible d'installer python3." "cannot install python3."
     else
         { apt-get update -q -o APT::Update::Error-Mode=any && DEBIAN_FRONTEND=noninteractive apt-get install -y -q python3; } >/dev/null 2>&1 \
-            || die "impossible d'installer python3."
+            || die "impossible d'installer python3." "cannot install python3."
     fi
 fi
 
@@ -127,7 +130,7 @@ RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE=""
 # shellcheck disable=SC1091
 [ -f "$ETC/loco.conf" ] && . "$ETC/loco.conf"
 PASSWORD="" TLS_CERT="" TLS_KEY=""
-need() { [ $# -ge 2 ] || die "l'option $1 attend une valeur."; }
+need() { [ $# -ge 2 ] || die "l'option $1 attend une valeur." "option $1 expects a value."; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --host) need "$@"; HOST="$2"; shift 2 ;;
@@ -160,30 +163,30 @@ while [ $# -gt 0 ]; do
         --no-wu) WU_ENABLED=0; shift ;;
         --wu) WU_ENABLED=1; shift ;;
         -h|--help) sed -n '2,/^set -euo/{/^#/p;}' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) die "option inconnue : $1 (voir --help)" ;;
+        *) die "option inconnue : $1 (voir --help)" "unknown option: $1 (see --help)" ;;
     esac
 done
 if [ -z "$ADMIN_ALLOW" ]; then ADMIN_ALLOW="$ALLOW"; fi
 
 # ---------------------------------------------------------------- vérifications
-num() { [[ "$2" =~ ^[0-9]+$ ]] || die "$1 doit être un nombre."; }
+num() { [[ "$2" =~ ^[0-9]+$ ]] || die "$1 doit être un nombre." "$1 must be a number."; }
 num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-keep "$BACKUP_KEEP"
-[ "$PORTAL_PORT" != "$HTTPS_PORT" ] || die "--http-port et --https-port doivent être différents."
-[[ "$MAX_UPLOAD" =~ ^[0-9]+[kKmMgG]?$ ]] || die "--max-upload : taille invalide (ex. 8g, 500m)."
-[[ "$WU_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--wu-cache-size : taille invalide (ex. 50g)."
-[[ "$WU_PROXY_PORT" =~ ^[0-9]+$ && "$WU_PROXY_PORT" -ge 1 && "$WU_PROXY_PORT" -le 65535 ]] || die "--wu-proxy-port : port invalide."
-[[ "$FLATPAK_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--flatpak-cache-size : taille invalide (ex. 20g)."
-[[ "$RPM_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--rpm-cache-size : taille invalide (ex. 30g)."
-[[ "$APT_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--apt-cache-size : taille invalide (ex. 50g)."
-if [[ ! "$DATA" =~ ^/[A-Za-z0-9._/-]+$ || "$DATA" == "/" ]]; then die "--data : chemin absolu simple attendu."; fi
-[[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--backup-dir : chemin absolu simple attendu."
+[ "$PORTAL_PORT" != "$HTTPS_PORT" ] || die "--http-port et --https-port doivent être différents." "--http-port and --https-port must differ."
+[[ "$MAX_UPLOAD" =~ ^[0-9]+[kKmMgG]?$ ]] || die "--max-upload : taille invalide (ex. 8g, 500m)." "--max-upload: invalid size (e.g. 8g, 500m)."
+[[ "$WU_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--wu-cache-size : taille invalide (ex. 50g)." "--wu-cache-size: invalid size (e.g. 50g)."
+[[ "$WU_PROXY_PORT" =~ ^[0-9]+$ && "$WU_PROXY_PORT" -ge 1 && "$WU_PROXY_PORT" -le 65535 ]] || die "--wu-proxy-port : port invalide." "--wu-proxy-port: invalid port."
+[[ "$FLATPAK_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--flatpak-cache-size : taille invalide (ex. 20g)." "--flatpak-cache-size: invalid size (e.g. 20g)."
+[[ "$RPM_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--rpm-cache-size : taille invalide (ex. 30g)." "--rpm-cache-size: invalid size (e.g. 30g)."
+[[ "$APT_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--apt-cache-size : taille invalide (ex. 50g)." "--apt-cache-size: invalid size (e.g. 50g)."
+if [[ ! "$DATA" =~ ^/[A-Za-z0-9._/-]+$ || "$DATA" == "/" ]]; then die "--data : chemin absolu simple attendu." "--data: a simple absolute path is expected."; fi
+[[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--backup-dir : chemin absolu simple attendu." "--backup-dir: a simple absolute path is expected."
 if [ -n "$UPSTREAM_PROXY" ]; then
-    [[ "$UPSTREAM_PROXY" =~ ^http://[^[:space:]\"\']+$ ]] || die "--proxy : adresse http://hôte:port attendue."
+    [[ "$UPSTREAM_PROXY" =~ ^http://[^[:space:]\"\']+$ ]] || die "--proxy : adresse http://hôte:port attendue." "--proxy: an http://host:port address is expected."
 fi
 if [ -n "$TLS_CERT$TLS_KEY" ]; then
-    if [ ! -f "$TLS_CERT" ] || [ ! -f "$TLS_KEY" ]; then die "--tls-cert et --tls-key doivent désigner deux fichiers existants."; fi
+    if [ ! -f "$TLS_CERT" ] || [ ! -f "$TLS_KEY" ]; then die "--tls-cert et --tls-key doivent désigner deux fichiers existants." "--tls-cert and --tls-key must point to two existing files."; fi
 fi
-for r in $RESOLVERS; do [[ "$r" =~ ^[0-9a-fA-F.:]+$ ]] || die "--resolvers : adresse IP attendue ($r)."; done
+for r in $RESOLVERS; do [[ "$r" =~ ^[0-9a-fA-F.:]+$ ]] || die "--resolvers : adresse IP attendue ($r)." "--resolvers: an IP address is expected ($r)."; done
 # Réseaux : validés et normalisés par Python ; la boucle locale est toujours autorisée.
 nets() {
     python3 -c '
@@ -198,7 +201,7 @@ for item in sys.argv[1].split():
         sys.exit(f"réseau invalide : {item}")
     if n not in out:
         out.append(n)
-print(" ".join(out))' "$1" || die "$2 : réseau invalide."
+print(" ".join(out))' "$1" || die "$2 : réseau invalide." "$2: invalid network."
 }
 ALLOW_LIST=$(nets "$ALLOW" --allow)
 ADMIN_LIST=$(nets "$ADMIN_ALLOW" --admin-allow)
@@ -207,7 +210,7 @@ if [ -z "$HOST" ]; then
     HOST=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}' || true)
     if [ -z "$HOST" ]; then HOST=$(ip -4 -o addr show scope global | awk '{sub(/\/.*/, "", $4); print $4; exit}'); fi
 fi
-[ -n "$HOST" ] || die "impossible de détecter l'IP du serveur, utilisez --host."
+[ -n "$HOST" ] || die "impossible de détecter l'IP du serveur, utilisez --host." "cannot detect the server IP, use --host."
 ADMIN_URL="https://$HOST:$HTTPS_PORT"
 HTTP_URL=""
 if [ "$HTTP_ENABLED" = 1 ]; then HTTP_URL="http://$HOST:$PORTAL_PORT"; fi
@@ -218,16 +221,16 @@ check_port() {
     if [ "$CONTAINER" = 1 ]; then
         # Réseau de l'hôte, rien n'est encore lancé dans le conteneur : tout port ouvert est pris par l'hôte.
         if ss -Hltn "sport = :$1" 2>/dev/null | grep -q .; then
-            die "le port $1 est déjà utilisé sur l'hôte (installation native de loco, autre service ?)."
+            die "le port $1 est déjà utilisé sur l'hôte (installation native de loco, autre service ?)." "port $1 is already in use on the host (native loco install, another service?)."
         fi
         return 0
     fi
     owner=$(port_owner "$1")
     if [ -n "$owner" ] && [ "$owner" != "$2" ]; then
-        die "le port $1 est déjà utilisé par « $owner »."
+        die "le port $1 est déjà utilisé par « $owner »." "port $1 is already in use by \"$owner\"."
     fi
 }
-say "Vérification des ports"
+say "Vérification des ports" "Checking ports"
 check_port "$HTTPS_PORT" nginx
 if [ "$HTTP_ENABLED" = 1 ]; then check_port "$PORTAL_PORT" nginx; fi
 if [ "$PLATFORM" = debian ]; then check_port 3142 apt-cacher-ng; else check_port 3142 nginx; fi
@@ -244,7 +247,7 @@ if [ "$RPM_ENABLED" = 1 ]; then PACKAGES+=(createrepo-c rpm); fi
 if [ "$WU_ENABLED" = 1 ]; then PACKAGES+=(squid); fi
 mkdir -p "$STATE"
 if [ "$CONTAINER" = 0 ]; then
-say "Installation des paquets"
+say "Installation des paquets" "Installing packages"
 if [ "$PLATFORM" = rocky ]; then
     rocky_packages
 elif [ "$PLATFORM" = alpine ]; then
@@ -261,13 +264,13 @@ export DEBIAN_FRONTEND=noninteractive
 : > "$LOG"
 if ! { apt-get update -q -o APT::Update::Error-Mode=any && apt-get install -y -q --no-install-recommends "${PACKAGES[@]}"; } >> "$LOG" 2>&1; then
     tail -15 "$LOG" >&2
-    die "installation des paquets impossible (journal complet : $LOG)."
+    die "installation des paquets impossible (journal complet : $LOG)." "package installation failed (full log: $LOG)."
 fi
 fi
 fi
 
 # ---------------------------------------------------------------- utilisateur et dossiers
-say "Utilisateur et dossiers"
+say "Utilisateur et dossiers" "User and directories"
 if [ "$PLATFORM" = alpine ]; then alpine_user
 else id loco >/dev/null 2>&1 || useradd --system --home-dir "$STATE" --shell /usr/sbin/nologin loco; fi
 install -d -m 755 -o loco -g loco "$DATA" "$DATA/apt" "$DATA/apt/pool" "$DATA/win"
@@ -286,7 +289,7 @@ if [ -z "$WU_CACHE_SIZE" ]; then
     free_g=$(df -BG --output=avail "$DATA" | tail -1 | tr -dc '0-9')
     WU_CACHE_SIZE="$(( free_g / 2 > 200 ? 200 : (free_g / 2 < 5 ? 5 : free_g / 2) ))g"
     if [ "$WU_ENABLED" = 1 ] && [ "$free_g" -lt 10 ]; then
-        warn "seulement ${free_g} Go libres dans $DATA : le cache Windows Update ($WU_CACHE_SIZE) risque de remplir le disque."
+        warn "seulement ${free_g} Go libres dans $DATA : le cache Windows Update ($WU_CACHE_SIZE) risque de remplir le disque." "only ${free_g} GB free in $DATA: the Windows Update cache ($WU_CACHE_SIZE) may fill the disk."
     fi
 fi
 
@@ -331,7 +334,7 @@ EOF
 chmod 644 "$ETC/loco.conf"
 
 # ---------------------------------------------------------------- code
-say "Copie du portail dans $PREFIX"
+say "Copie du portail dans $PREFIX" "Copying the portal into $PREFIX"
 rm -rf "$PREFIX.new"
 install -d "$PREFIX.new"
 cp -r "$ROOT/portal" "$SRC/bin" "$ROOT/conf" "$SRC/lib" "$SRC/remove.sh" "$PREFIX.new/"
@@ -352,7 +355,7 @@ cli() {
 }
 
 # ---------------------------------------------------------------- secrets et comptes
-say "Comptes du portail"
+say "Comptes du portail" "Portal accounts"
 (umask 077
 python3 - "$ETC/portal.secret" <<'EOF'
 import json, secrets, sys
@@ -389,7 +392,7 @@ fi
 
 # ---------------------------------------------------------------- clé de signature APT
 if ! runuser -u loco -- env GNUPGHOME="$STATE/gnupg" gpg --list-secret-keys 2>/dev/null | grep -q sec; then
-    say "Création de la clé de signature du dépôt APT"
+    say "Création de la clé de signature du dépôt APT" "Creating the APT repository signing key"
     runuser -u loco -- env GNUPGHOME="$STATE/gnupg" gpg --batch --quiet --pinentry-mode loopback --passphrase '' \
         --quick-gen-key "loco ($(hostname)) <loco@$(hostname)>" rsa4096 sign never
 fi
@@ -408,7 +411,7 @@ if [ "$RPM_ENABLED" = 1 ]; then
 fi
 
 # ---------------------------------------------------------------- certificats HTTPS
-say "Certificat HTTPS"
+say "Certificat HTTPS" "HTTPS certificate"
 TLS=$ETC/tls
 install -d -m 755 "$TLS"
 if [ -n "$TLS_CERT" ]; then
@@ -443,7 +446,7 @@ elif [ ! -f "$TLS/custom" ]; then
         chmod 600 "$TLS/server.key"; chmod 644 "$TLS/server.crt"
     fi
     openssl verify -CAfile "$TLS/ca.crt" "$TLS/server.crt" >> "$LOG" 2>&1 \
-        || die "le certificat serveur n'est pas vérifiable avec l'autorité locale (journal : $LOG)."
+        || die "le certificat serveur n'est pas vérifiable avec l'autorité locale (journal : $LOG)." "the server certificate cannot be verified against the local authority (log: $LOG)."
 fi
 
 # ---------------------------------------------------------------- génération des configurations
@@ -507,7 +510,7 @@ fi
 export LRT_SQUID_PROGRAM
 
 # ---------------------------------------------------------------- nginx
-say "Configuration de nginx"
+say "Configuration de nginx" "Configuring nginx"
 install -d /etc/nginx/snippets /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/modules-enabled
 { echo "# loco : réseaux autorisés pour les postes (--allow)."; acl "$ALLOW_LIST"; } > /etc/nginx/snippets/loco-clients.conf
 { echo "# loco : réseaux autorisés pour l'interface (--admin-allow)."; acl "$ADMIN_LIST"; } > /etc/nginx/snippets/loco-admin.conf
@@ -560,15 +563,15 @@ if ! nginx -t >/dev/null 2>&1; then
         ln -sf ../sites-available/default /etc/nginx/sites-enabled/default
         rm -f "$STATE/nginx-default-disabled"
     fi
-    die "configuration nginx refusée (voir ci-dessus). Un autre site occupe peut-être le port 80 : essayez --no-wu."
+    die "configuration nginx refusée (voir ci-dessus). Un autre site occupe peut-être le port 80 : essayez --no-wu." "nginx configuration refused (see above). Another site may be using port 80: try --no-wu."
 fi
 
 # ---------------------------------------------------------------- apt-cacher-ng
 # Alpine : pas d'apt-cacher-ng, le cache APT est servi par nginx (voir alpine_nginx).
 if [ "$PLATFORM" != alpine ]; then
-say "Configuration d'apt-cacher-ng"
+say "Configuration d'apt-cacher-ng" "Configuring apt-cacher-ng"
 if [ "$PLATFORM" = debian ]; then
-ldd /usr/sbin/apt-cacher-ng | grep libwrap >/dev/null || die "apt-cacher-ng sans libwrap : impossible de garantir le filtrage des postes sur cette distribution."
+ldd /usr/sbin/apt-cacher-ng | grep libwrap >/dev/null || die "apt-cacher-ng sans libwrap : impossible de garantir le filtrage des postes sur cette distribution." "apt-cacher-ng without libwrap: cannot guarantee client filtering on this distribution."
 fi
 if [ ! -s "$ETC/acng-admin" ]; then
     (umask 077; echo "admin:$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')" > "$ETC/acng-admin")
@@ -608,7 +611,7 @@ fi
 fi
 
 # ---------------------------------------------------------------- services
-say "Services"
+say "Services" "Services"
 if [ "$PLATFORM" = alpine ]; then
     alpine_services
     alpine_check
@@ -641,15 +644,15 @@ if [ "$PLATFORM" = rocky ] && [ "$OS_MAJOR" = 10 ]; then
     systemctl enable --now loco-acng-maintenance.timer >/dev/null 2>&1
 fi
 systemctl enable apt-cacher-ng nginx >/dev/null 2>&1
-systemctl restart apt-cacher-ng || die "apt-cacher-ng ne démarre pas (journalctl -u apt-cacher-ng)."
+systemctl restart apt-cacher-ng || die "apt-cacher-ng ne démarre pas (journalctl -u apt-cacher-ng)." "apt-cacher-ng does not start (journalctl -u apt-cacher-ng)."
 if systemctl is-active -q nginx; then
     systemctl reload nginx
 else
-    systemctl start nginx || die "nginx ne démarre pas (journalctl -u nginx)."
+    systemctl start nginx || die "nginx ne démarre pas (journalctl -u nginx)." "nginx does not start (journalctl -u nginx)."
 fi
 if [ "$WU_ENABLED" = 1 ] && command -v squid >/dev/null 2>&1; then
     systemctl enable squid >/dev/null 2>&1
-    systemctl restart squid || warn "squid (proxy Windows Update) ne démarre pas (journalctl -u squid) ; le cache par proxy est indisponible."
+    systemctl restart squid || warn "squid (proxy Windows Update) ne démarre pas (journalctl -u squid) ; le cache par proxy est indisponible." "squid (Windows Update proxy) does not start (journalctl -u squid); the proxy cache is unavailable."
 else
     systemctl disable --now squid >/dev/null 2>&1 || true
 fi
@@ -657,7 +660,7 @@ systemctl enable loco-portal loco-stats.timer loco-nginx.path loco-agent >/dev/n
 systemctl start loco-nginx.path
 systemctl restart loco-portal
 # KillMode=process : une mise à jour du système lancée par l'agent survit à cette relance.
-systemctl restart loco-agent || warn "l'agent d'administration ne démarre pas (journalctl -u loco-agent) : mises à jour du système indisponibles depuis le portail."
+systemctl restart loco-agent || warn "l'agent d'administration ne démarre pas (journalctl -u loco-agent) : mises à jour du système indisponibles depuis le portail." "the admin agent does not start (journalctl -u loco-agent): system updates unavailable from the portal."
 systemctl start loco-stats.timer loco-stats.service
 if [ "$BACKUP_KEEP" -gt 0 ]; then
     systemctl enable --now loco-backup.timer >/dev/null 2>&1
@@ -669,48 +672,50 @@ for _ in $(seq 1 30); do
     curl -fsk --connect-timeout 2 --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" >/dev/null 2>&1 && break
     sleep 0.5
 done
-curl -fsk --connect-timeout 2 --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" >/dev/null || die "le portail ne répond pas (journalctl -u loco-portal)."
-systemctl is-active --quiet apt-cacher-ng nginx loco-portal || die "un service ne reste pas actif (journalctl -u apt-cacher-ng -u nginx -u loco-portal)."
-cache_status=$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3142/acng-report.html) || die "le cache APT ne répond pas."
-case "$cache_status" in 200|401) ;; *) die "le cache APT ne répond pas correctement (HTTP $cache_status)." ;; esac
+curl -fsk --connect-timeout 2 --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" >/dev/null || die "le portail ne répond pas (journalctl -u loco-portal)." "the portal does not respond (journalctl -u loco-portal)."
+systemctl is-active --quiet apt-cacher-ng nginx loco-portal || die "un service ne reste pas actif (journalctl -u apt-cacher-ng -u nginx -u loco-portal)." "a service does not stay active (journalctl -u apt-cacher-ng -u nginx -u loco-portal)."
+cache_status=$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3142/acng-report.html) || die "le cache APT ne répond pas." "the APT cache does not respond."
+case "$cache_status" in 200|401) ;; *) die "le cache APT ne répond pas correctement (HTTP $cache_status)." "the APT cache does not respond correctly (HTTP $cache_status)." ;; esac
 fi
 
 # ---------------------------------------------------------------- résumé
 echo
-say "loco est installé"
-echo "    Interface          : $ADMIN_URL"
+say "loco est installé" "loco is installed"
+row()  { printf '    %-20s : %s\n' "$(t "$1" "$2")" "$3"; }
+cont() { printf '    %-20s   %s\n' "" "$1"; }
+row "Interface" "Web interface" "$ADMIN_URL"
 if [ -n "$ISSUED" ]; then
-    echo "    Compte initial     : admin / $ISSUED   (à changer à la première connexion ; affiché une seule fois)"
+    row "Compte initial" "Initial account" "admin / $ISSUED   $(t '(à changer à la première connexion ; affiché une seule fois)' '(change at first sign-in; shown only once)')"
 fi
 if [ "$CONTAINER" = 1 ]; then
-    echo "    Accès perdu        : docker compose exec loco loco-user passwd admin"
+    row "Accès perdu" "Lost access" "docker compose exec loco loco-user passwd admin"
 elif [ "$PLATFORM" = alpine ]; then
-    echo "    Accès perdu        : loco-user passwd admin   (en root, sur la console)"
+    row "Accès perdu" "Lost access" "loco-user passwd admin   $(t '(en root, sur la console)' '(as root, on the console)')"
 else
-    echo "    Accès perdu        : sudo loco-user passwd admin"
+    row "Accès perdu" "Lost access" "sudo loco-user passwd admin"
 fi
 if [ ! -f "$TLS/custom" ]; then
-    echo "    Autorité HTTPS     : $ETC/tls/ca.crt (à déployer sur les postes, par GPO par exemple)"
-    echo "                         empreinte $(openssl x509 -in "$TLS/ca.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
+    row "Autorité HTTPS" "HTTPS authority" "$ETC/tls/ca.crt $(t '(à déployer sur les postes, par GPO par exemple)' '(deploy on the machines, e.g. via GPO)')"
+    cont "$(t 'empreinte' 'fingerprint') $(openssl x509 -in "$TLS/ca.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
 fi
-echo "    Postes Linux       : curl -fsSL $ADMIN_URL/linux/setup.sh | sudo sh"
-if [ -n "$HTTP_URL" ]; then echo "                         sans l'autorité : curl -fsSL $HTTP_URL/linux/setup.sh | sudo sh -s -- --trust-ca"; fi
-echo "    Réseaux autorisés  : postes $ALLOW | interface $ADMIN_ALLOW"
-if [ -n "$UPSTREAM_PROXY" ]; then echo "    Proxy sortant      : $UPSTREAM_PROXY (le cache Windows Update sort en direct)"; fi
+row "Postes Linux" "Linux machines" "curl -fsSL $ADMIN_URL/linux/setup.sh | sudo sh"
+if [ -n "$HTTP_URL" ]; then cont "$(t "sans l'autorité :" 'without the authority:') curl -fsSL $HTTP_URL/linux/setup.sh | sudo sh -s -- --trust-ca"; fi
+row "Réseaux autorisés" "Allowed networks" "$(t 'postes' 'clients') $ALLOW | interface $ADMIN_ALLOW"
+if [ -n "$UPSTREAM_PROXY" ]; then row "Proxy sortant" "Outbound proxy" "$UPSTREAM_PROXY $(t '(le cache Windows Update sort en direct)' '(the Windows Update cache goes out directly)')"; fi
 if [ "$WU_ENABLED" = 1 ]; then
-    echo "    Cache Windows Upd. : $WU_CACHE_SIZE max, DNS à configurer depuis le portail"
+    row "Cache Windows Upd." "Windows Update cache" "$WU_CACHE_SIZE max, $(t 'DNS à configurer depuis le portail' 'DNS to configure from the portal')"
 fi
 if [ "$RPM_ENABLED" = 1 ]; then
-    echo "    Famille Red Hat    : curl -fsSL $ADMIN_URL/rpm/setup.sh | sudo sh   (cache RPM $RPM_CACHE_SIZE max)"
+    row "Famille Red Hat" "Red Hat family" "curl -fsSL $ADMIN_URL/rpm/setup.sh | sudo sh   $(t '(cache RPM' '(RPM cache') $RPM_CACHE_SIZE max)"
 fi
 if [ "$FLATPAK_ENABLED" = 1 ]; then
-    echo "    Flatpak            : curl -fsSL $ADMIN_URL/flatpak/setup.sh | sudo sh   (cache Flathub $FLATPAK_CACHE_SIZE max)"
+    row "Flatpak" "Flatpak" "curl -fsSL $ADMIN_URL/flatpak/setup.sh | sudo sh   $(t '(cache Flathub' '(Flathub cache') $FLATPAK_CACHE_SIZE max)"
 fi
 if [ "$BACKUP_KEEP" -gt 0 ]; then
-    echo "    Sauvegardes        : quotidiennes dans $BACKUP_DIR ($BACKUP_KEEP conservées)"
+    row "Sauvegardes" "Backups" "$(t 'quotidiennes dans' 'daily in') $BACKUP_DIR ($BACKUP_KEEP $(t 'conservées' 'kept'))"
 fi
 if [ "$CONTAINER" = 1 ]; then
-    echo "    Arrêter            : docker compose down   (les données restent dans les volumes)"
+    row "Arrêter" "Stop" "docker compose down   $(t '(les données restent dans les volumes)' '(data stays in the volumes)')"
 else
-    echo "    Désinstaller       : $([ "$PLATFORM" = alpine ] || printf 'sudo ')$PREFIX/remove.sh"
+    row "Désinstaller" "Uninstall" "$([ "$PLATFORM" = alpine ] || printf 'sudo ')$PREFIX/remove.sh"
 fi

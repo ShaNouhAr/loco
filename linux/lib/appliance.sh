@@ -2,6 +2,10 @@
 # Appliance Alpine (ISO) : fonctions communes à l'installateur de l'ISO et à setup-loco (console).
 # POSIX sh (ash de BusyBox) ; les validations d'adresses passent par Python (présent sur l'appliance).
 
+# Langue de la console : français si LANG/LC_* commence par « fr », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
+t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
 # Réponse oui/non ou valeur : « yes », « oui », « 1 », « true ».
 appliance_true() {
     case "$1" in yes|oui|1|true|on) return 0 ;; *) return 1 ;; esac
@@ -163,14 +167,14 @@ appliance_issue() {
     {
         printf '\nloco %s, appliance Alpine Linux %s (\\n, \\l)\n\n' "${version:-?}" "$(cat /etc/alpine-release 2>/dev/null)"
         if [ -n "$host" ] && [ -n "$fingerprint" ]; then
-            printf '  Portail                 https://%s:%s\n' "$host" "$port"
-            printf '  Autorité HTTPS (SHA-256) %s\n' "$fingerprint"
+            printf '  %-25s https://%s:%s\n' "$(t 'Portail' 'Portal')" "$host" "$port"
+            printf '  %-25s %s\n' "$(t 'Autorité HTTPS (SHA-256)' 'HTTPS authority (SHA-256)')" "$fingerprint"
             if [ -n "$current" ] && [ "${current%/*}" != "$host" ]; then
-                printf '\n  ! Adresse actuelle %s différente de %s : lancez setup-loco.\n' "${current%/*}" "$host"
+                printf '\n  ! %s\n' "$(t "Adresse actuelle ${current%/*} différente de $host : lancez setup-loco." "Current address ${current%/*} differs from $host: run setup-loco.")"
             fi
         elif [ -f /etc/init.d/loco-firstboot ]; then
-            printf '  Installation de loco en cours ou interrompue : journal /var/log/loco-firstboot.log\n'
+            printf '  %s\n' "$(t 'Installation de loco en cours ou interrompue : journal /var/log/loco-firstboot.log' 'loco installation in progress or interrupted: log /var/log/loco-firstboot.log')"
         fi
-        printf '\n  Console (root) : setup-loco (réseau, mots de passe), loco-update, loco-config\n\n'
+        printf '\n  %s\n\n' "$(t 'Console (root) : setup-loco (réseau, mots de passe), loco-update, loco-config' 'Console (root): setup-loco (network, passwords), loco-update, loco-config')"
     } > /etc/issue
 }

@@ -26,19 +26,19 @@ stash_self_client() {
 migrate_local_repo() {
     local old=/etc/local-repo legacy_data legacy_backup old_uid new_uid path unit
     [ -f "$old/local-repo.conf" ] || return 0
-    [ ! -e /etc/loco/loco.conf ] || die 'Deux installations existent (local-repo et loco) : migration refusée sans écrasement.'
+    [ ! -e /etc/loco/loco.conf ] || die 'Deux installations existent (local-repo et loco) : migration refusée sans écrasement.' 'Two installations exist (local-repo and loco): migration refused without overwrite.'
     for path in /etc/loco /var/lib/loco /opt/loco /usr/local/lib/loco; do
-        [ ! -e "$path" ] || die "Migration : destination déjà présente ($path)."
+        [ ! -e "$path" ] || die "Migration : destination déjà présente ($path)." "Migration: destination already present ($path)."
     done
     old_uid=$(id -u localrepo 2>/dev/null || true)
     new_uid=$(id -u loco 2>/dev/null || true)
-    [ -z "$new_uid" ] || [ "$new_uid" = "$old_uid" ] || die 'Le compte loco existe déjà avec un autre UID.'
+    [ -z "$new_uid" ] || [ "$new_uid" = "$old_uid" ] || die 'Le compte loco existe déjà avec un autre UID.' 'The loco account already exists with a different UID.'
     # Configuration de l'ancien installateur, réservée à root.
     legacy_data=$(bash -c '. /etc/local-repo/local-repo.conf; printf %s "$DATA"')
     legacy_backup=$(bash -c '. /etc/local-repo/local-repo.conf; printf %s "${BACKUP_DIR:-/var/backups/local-repo}"')
-    if [ "$legacy_data" = /srv/local-repo ]; then [ ! -e /srv/loco ] || die '/srv/loco existe déjà.'; fi
-    if [ "$legacy_backup" = /var/backups/local-repo ]; then [ ! -e /var/backups/loco ] || die '/var/backups/loco existe déjà.'; fi
-    say 'Migration de local-repo vers loco (comptes, clés et données conservés)'
+    if [ "$legacy_data" = /srv/local-repo ]; then [ ! -e /srv/loco ] || die '/srv/loco existe déjà.' '/srv/loco already exists.'; fi
+    if [ "$legacy_backup" = /var/backups/local-repo ]; then [ ! -e /var/backups/loco ] || die '/var/backups/loco existe déjà.' '/var/backups/loco already exists.'; fi
+    say 'Migration de local-repo vers loco (comptes, clés et données conservés)' 'Migrating local-repo to loco (accounts, keys and data preserved)'
     if [ -x /usr/local/sbin/local-repo-backup ]; then
         /usr/local/sbin/local-repo-backup create
     fi
@@ -98,5 +98,5 @@ PY
         if [ -e "$path" ]; then mv "$path" "${path/local-repo/loco}"; fi
     done
     if [ "$CONTAINER" = 0 ]; then systemctl daemon-reload; fi
-    say 'Migration des fichiers terminée ; installation et vérification de loco'
+    say 'Migration des fichiers terminée ; installation et vérification de loco' 'File migration complete; installing and verifying loco'
 }
