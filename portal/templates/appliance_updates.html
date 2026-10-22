@@ -19,7 +19,7 @@
   {% if not agent %}
   <p class="note err">{{ _("L'agent d'administration ne répond pas : les opérations sont indisponibles. Sur le serveur : <code>%(agent_restart)s</code>.", agent_restart=agent_restart) }}</p>
   {% endif %}
-  {% for e in status.errors or [] %}<p class="note warn">{{ e }}</p>{% endfor %}
+  {% for e in errors %}<p class="note warn">{{ e }}</p>{% endfor %}
 
   <div class="metrics">
     <div class="metric">
@@ -57,7 +57,7 @@
   {% if status.reboot_required %}
   <div class="note warn">
     <strong>{{ _("Redémarrage nécessaire") }}</strong> {{ _("pour appliquer complètement les mises à jour :") }}
-    <ul>{% for r in status.reboot_reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+    <ul>{% for r in reboot_texts %}<li>{{ r }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
   {% if status.stale_services %}

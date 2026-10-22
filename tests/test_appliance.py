@@ -13,6 +13,7 @@ from unittest import mock
 
 import test_portal as fixture
 import locoadmin
+locoadmin.LANG = "fr"  # journaux de l'agent en français (langue de référence) pour des assertions stables
 from loco import appliance, config
 
 
@@ -311,14 +312,14 @@ class TestSystemPackages(TempAgent):
             open(os.path.join(locoadmin.BOOT, "vmlinuz-" + newer), "w").close()
             open(os.path.join(locoadmin.BOOT, "vmlinuz-0-rescue-abc"), "w").close()
             self.assertEqual(locoadmin.installed_kernels()[0], newer)
-            self.assertIn(f"noyau {newer} installé, {running} en cours", locoadmin.reboot_reasons({}))
+            self.assertIn({"code": "kernel-newer", "installed": newer, "running": running}, locoadmin.reboot_reasons({}))
         # Conteneur : le noyau est celui de l'hôte.
         with mock.patch.object(locoadmin, "in_container", return_value=True):
             self.assertEqual(locoadmin.reboot_reasons({}), [])
             with open(locoadmin.REBOOT_FLAG, "w"), open(locoadmin.REBOOT_FLAG + ".pkgs", "w") as f:
                 f.write("libc6\nlibc6\ndbus\n")
-            self.assertEqual(locoadmin.reboot_reasons({}), ["demandé par dbus, libc6"])
-            self.assertIn("d'anciennes bibliothèques restent chargées par init",
+            self.assertEqual(locoadmin.reboot_reasons({}), [{"code": "requested", "packages": "dbus, libc6"}])
+            self.assertIn({"code": "stale-core", "units": "init"},
                           locoadmin.reboot_reasons({"init": ["systemd"], "nginx.service": ["nginx"]}))
 
     def test_replaced_libraries_are_detected(self):
@@ -434,7 +435,7 @@ class TestPages(TempAgent):
             json.dump({"checked": "2026-10-20 06:00:00", "os": "Debian GNU/Linux 13 (trixie)", "container": False,
                        "kernel": {"running": "6.12.48+deb13-amd64", "installed": "6.12.57+deb13-amd64"},
                        "security_supported": True, "reboot_required": True,
-                       "reboot_reasons": ["noyau 6.12.57+deb13-amd64 installé, 6.12.48+deb13-amd64 en cours"],
+                       "reboot_reasons": [{"code": "kernel-newer", "installed": "6.12.57+deb13-amd64", "running": "6.12.48+deb13-amd64"}],
                        "stale_services": {"ssh.service": ["sshd"]}, "security_count": 1,
                        "packages": [{"name": "libssl3t64", "current": "3.5.1-1", "new": "3.5.4-1~deb13u1",
                                      "origin": "Debian-Security:13/stable-security", "security": True, "severity": "",
@@ -447,7 +448,7 @@ class TestPages(TempAgent):
             self.assertIn("Debian GNU/Linux 13 (trixie)", html)
             self.assertIn("Installer les correctifs de sécurité", html)
             self.assertIn('data-security="1"', html)
-            self.assertIn("6.12.57+deb13-amd64 installé", html)
+            self.assertIn("6.12.57+deb13-amd64", html)
             self.assertIn("ssh.service", html)
             self.assertNotIn("/system/configuration", html)           # réglages : appliance seulement
             self.assertNotIn('value="update-loco"', html)

@@ -74,11 +74,11 @@ def _unscoped(value):
 def _networks(value):
     items = value.split()
     if not items:
-        raise ValueError("au moins un réseau attendu")
+        raise ValueError(t("au moins un réseau attendu", "at least one network expected", "se espera al menos una red"))
     try:
         return " ".join(str(ipaddress.ip_network(n, strict=False)) for n in items if _unscoped(n))
     except ValueError:
-        raise ValueError("réseau invalide (ex. 192.168.1.0/24)") from None
+        raise ValueError(t("réseau invalide (ex. 192.168.1.0/24)", "invalid network (e.g. 192.168.1.0/24)", "red no válida (ej. 192.168.1.0/24)")) from None
 
 
 def _ips(value):
@@ -117,7 +117,7 @@ def _count(value):
 
 def _proxy(value):
     if value and not PROXY_RE.fullmatch(value):
-        raise ValueError("adresse http://hôte:port attendue (vide : accès direct)")
+        raise ValueError(t("adresse http://hôte:port attendue (vide : accès direct)", "http://host:port address expected (empty: direct access)", "se espera una dirección http://host:puerto (vacío: acceso directo)"))
     return value
 
 
@@ -167,12 +167,12 @@ def read_conf(path=None):
 def validate(changes, current=None):
     """Changements validés et normalisés (ceux identiques à la configuration actuelle sont écartés)."""
     if not isinstance(changes, dict):
-        raise ValueError("réglages attendus")
+        raise ValueError(t("réglages attendus", "settings expected", "se esperan ajustes"))
     current = read_conf() if current is None else current
     clean = {}
     for key, value in changes.items():
         if key not in SETTINGS:
-            raise ValueError(f"réglage inconnu : {key}")
+            raise ValueError(t(f"réglage inconnu : {key}", f"unknown setting: {key}", f"ajuste desconocido: {key}"))
         label, check, _ = SETTINGS[key]
         try:
             value = check(str(value).strip())
@@ -194,6 +194,41 @@ def current_version():
 
 def version_key(v):
     return tuple(int(x) for x in re.findall(r"\d+", v))
+
+
+def _lang():
+    """Langue du serveur (variables d'environnement, sinon fichier de locale) : les journaux d'opération s'écrivent
+    dans la langue du serveur ; l'état renvoyé au portail est, lui, traduit à l'affichage dans la langue de chacun."""
+    value = os.environ.get("LC_ALL") or os.environ.get("LC_MESSAGES") or os.environ.get("LANG") or ""
+    if not value:
+        for path in ("/etc/default/locale", "/etc/locale.conf"):
+            try:
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        for key in ("LC_ALL=", "LC_MESSAGES=", "LANG="):
+                            if line.strip().startswith(key):
+                                value = line.strip()[len(key):].strip().strip('"')
+                                break
+                        if value:
+                            break
+            except OSError:
+                pass
+            if value:
+                break
+    value = value.lower()
+    return "fr" if value.startswith("fr") else "es" if value.startswith("es") else "en"
+
+
+LANG = _lang()
+
+
+def t(fr, en, es=None):
+    """Texte d'un journal d'opération, dans la langue du serveur (anglais par défaut)."""
+    if LANG == "fr":
+        return fr
+    if LANG == "es" and es is not None:
+        return es
+    return en
 
 
 def _now():
@@ -228,7 +263,7 @@ def latest_release():
         data = json.load(r)
     version = data["tag_name"].lstrip("v")
     if not re.fullmatch(r"[0-9]+(\.[0-9]+){1,3}", version):
-        raise ValueError(f"version publiée inattendue : {data['tag_name']}")
+        raise ValueError(t(f"version publiée inattendue : {data['tag_name']}", f"unexpected published version: {data['tag_name']}", f"versión publicada inesperada: {data['tag_name']}"))
     assets = {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
     return {"version": version, "url": data.get("html_url", ""), "published": data.get("published_at", ""),
             "notes": (data.get("body") or "")[:6000],
@@ -280,7 +315,7 @@ def check(log=print):
     try:
         values["latest"] = latest_release()
     except (OSError, ValueError, KeyError) as e:
-        values["errors"].append(f"Version publiée de loco introuvable : {e}")
+        values["errors"].append({"code": "loco-release", "detail": str(e)})
     values.update(system_state())
     # État du système publié tout de suite : la liste des paquets peut prendre plusieurs minutes (miroirs lents).
     _update_status(**{k: v for k, v in values.items() if k not in ("checked", "errors")})
@@ -289,20 +324,40 @@ def check(log=print):
         values.update(packages=packages, system_updates=[p["name"] for p in packages],
                       security_count=sum(1 for p in packages if p["security"]), system_error=False)
     except (OSError, ValueError, subprocess.SubprocessError) as e:
-        values["errors"].append(f"Paquets du système : {e}.")
+        values["errors"].append({"code": "system-packages", "detail": str(e)})
         values["system_error"] = True
     status = _update_status(**values)
     latest = status.get("latest", {}).get("version", "")
-    log(f"loco installé : {status['current']} ; dernière version publiée : {latest or 'inconnue'}")
-    log(f"{status['os']} : {len(status.get('system_updates', []))} paquet(s) à mettre à jour"
-        + (f", dont {status.get('security_count', 0)} correctif(s) de sécurité" if status["security_supported"] else ""))
+    os_label = status["os"] or t("Système", "System", "Sistema")
+    log(t(f"loco installé : {status['current']} ; dernière version publiée : {latest or 'inconnue'}",
+          f"loco installed: {status['current']} ; latest published version: {latest or 'unknown'}",
+          f"loco instalado: {status['current']} ; última versión publicada: {latest or 'desconocida'}"))
+    count = len(status.get("system_updates", []))
+    log(t(f"{os_label} : {count} paquet(s) à mettre à jour", f"{os_label}: {count} package(s) to update",
+          f"{os_label}: {count} paquete(s) por actualizar")
+        + (t(f", dont {status.get('security_count', 0)} correctif(s) de sécurité",
+             f", of which {status.get('security_count', 0)} security fix(es)",
+             f", de los cuales {status.get('security_count', 0)} parche(s) de seguridad") if status["security_supported"] else ""))
     for reason in status["reboot_reasons"]:
-        log(f"Redémarrage nécessaire : {reason}")
+        log(t("Redémarrage nécessaire : ", "Reboot required: ", "Reinicio necesario: ") + _reason_log(reason))
     if status["stale_services"]:
-        log("Services qui utilisent d'anciennes bibliothèques : " + ", ".join(sorted(status["stale_services"])))
+        log(t("Services qui utilisent d'anciennes bibliothèques : ", "Services using old libraries: ",
+              "Servicios que usan bibliotecas antiguas: ") + ", ".join(sorted(status["stale_services"])))
     for e in status["errors"]:
-        log(e)
+        log(_error_log(e))
     return not status["errors"]
+
+
+def _error_log(e):
+    """Un message d'erreur d'état en toutes lettres, pour le journal (langue du serveur)."""
+    if e.get("code") == "loco-release":
+        return t(f"Version publiée de loco introuvable : {e['detail']}",
+                 f"Published loco version not found: {e['detail']}",
+                 f"Versión publicada de loco no encontrada: {e['detail']}")
+    if e.get("code") == "system-packages":
+        return t(f"Paquets du système : {e['detail']}.", f"System packages: {e['detail']}.",
+                 f"Paquetes del sistema: {e['detail']}.")
+    return e.get("detail", "")
 
 
 # --------------------------------------------------------------------------- paquets du système
@@ -352,7 +407,7 @@ def os_name():
                     return shlex.split(line.split("=", 1)[1])[0]
     except (OSError, ValueError, IndexError):
         pass
-    return "Système"
+    return ""  # inconnu : le portail affiche « Système » traduit
 
 
 def in_container():
@@ -418,26 +473,50 @@ def stale_services():
 
 
 def reboot_reasons(stale=None):
+    """Raisons de redémarrage, chacune {« code », …données} : le portail les traduit à l'affichage (langue de
+    chaque personne) ; _reason_log() les met en mots pour le journal (langue du serveur)."""
     reasons = []
     container = in_container()
     running = os.uname().release
     if not container:
         installed = installed_kernels()
         if not os.path.isdir(os.path.join(MODULES, running)):
-            reasons.append("noyau mis à jour (les modules du noyau en cours ont été remplacés)")
+            reasons.append({"code": "kernel-modules"})
         elif installed and _kernel_key(installed[0]) > _kernel_key(running):
-            reasons.append(f"noyau {installed[0]} installé, {running} en cours")
+            reasons.append({"code": "kernel-newer", "installed": installed[0], "running": running})
     try:
         with open(REBOOT_FLAG + ".pkgs") as f:
             pkgs = sorted({line.strip() for line in f if line.strip()})
     except OSError:
         pkgs = []
     if os.path.exists(REBOOT_FLAG):
-        reasons.append("demandé par " + ", ".join(pkgs[:6]) if pkgs else "demandé par une mise à jour")
+        reasons.append({"code": "requested", "packages": ", ".join(pkgs[:6])} if pkgs else {"code": "requested"})
     core = sorted(u for u in (stale or {}) if u in CORE_UNITS)
     if core:
-        reasons.append("d'anciennes bibliothèques restent chargées par " + ", ".join(core))
+        reasons.append({"code": "stale-core", "units": ", ".join(core)})
     return reasons
+
+
+def _reason_log(r):
+    """Une raison de redémarrage en toutes lettres, pour le journal (langue du serveur)."""
+    code = r.get("code")
+    if code == "kernel-modules":
+        return t("noyau mis à jour (les modules du noyau en cours ont été remplacés)",
+                 "kernel updated (the running kernel's modules were replaced)",
+                 "kernel actualizado (los módulos del kernel en curso se han reemplazado)")
+    if code == "kernel-newer":
+        return t(f"noyau {r['installed']} installé, {r['running']} en cours",
+                 f"kernel {r['installed']} installed, {r['running']} running",
+                 f"kernel {r['installed']} instalado, {r['running']} en curso")
+    if code == "requested":
+        return (t(f"demandé par {r['packages']}", f"requested by {r['packages']}", f"solicitado por {r['packages']}")
+                if r.get("packages") else
+                t("demandé par une mise à jour", "requested by an update", "solicitado por una actualización"))
+    if code == "stale-core":
+        return t(f"d'anciennes bibliothèques restent chargées par {r['units']}",
+                 f"old libraries are still loaded by {r['units']}",
+                 f"bibliotecas antiguas siguen cargadas por {r['units']}")
+    return ""
 
 
 def reboot_required():
@@ -471,11 +550,11 @@ def _apt_env():
 def _apt_pending():
     env = _apt_env()
     if subprocess.run(["apt-get", "update", *APT_OPTS], capture_output=True, timeout=600, env=env).returncode != 0:
-        raise ValueError("dépôts APT injoignables")
+        raise ValueError(t("dépôts APT injoignables", "APT repositories unreachable", "repositorios APT inaccesibles"))
     out = subprocess.run(["apt-get", "-s", *APT_OPTS, "upgrade", "--with-new-pkgs"], capture_output=True, text=True,
                          timeout=300, env=env)
     if out.returncode != 0:
-        raise ValueError("simulation de mise à jour APT impossible")
+        raise ValueError(t("simulation de mise à jour APT impossible", "APT upgrade simulation failed", "no se pudo simular la actualización APT"))
     packages = []
     for line in out.stdout.splitlines():
         m = APT_INST_RE.match(line)
@@ -495,7 +574,7 @@ def _dnf_pending():
     env = _system_env()
     r = subprocess.run(["dnf", "-q", "--refresh", *DNF_NET, "check-update"], capture_output=True, text=True, timeout=600, env=env)
     if r.returncode not in (0, 100):
-        raise ValueError("dépôts DNF injoignables")
+        raise ValueError(t("dépôts DNF injoignables", "DNF repositories unreachable", "repositorios DNF inaccesibles"))
     found = {}
     for line in r.stdout.splitlines():
         if line.startswith("Obsoleting"):
@@ -530,7 +609,7 @@ def _dnf_pending():
 def _apk_pending():
     env = _system_env()
     if subprocess.run(["apk", "update", "--quiet"], capture_output=True, timeout=120, env=env).returncode != 0:
-        raise ValueError("dépôts Alpine injoignables")
+        raise ValueError(t("dépôts Alpine injoignables", "Alpine repositories unreachable", "repositorios Alpine inaccesibles"))
     out = subprocess.run(["apk", "list", "--upgradable"], capture_output=True, text=True, timeout=60).stdout
     packages = []
     for line in out.splitlines():
@@ -571,9 +650,9 @@ def _safe_extract(archive, dest, top):
         for m in tar.getmembers():
             parts = m.name.rstrip("/").split("/")
             if m.name.startswith("/") or ".." in parts or parts[0] != top:
-                raise ValueError(f"archive refusée : chemin inattendu {m.name}")
+                raise ValueError(t(f"archive refusée : chemin inattendu {m.name}", f"archive refused: unexpected path {m.name}", f"archivo rechazado: ruta inesperada {m.name}"))
             if not (m.isfile() or m.isdir()):
-                raise ValueError(f"archive refusée : {m.name} n'est ni un fichier ni un dossier")
+                raise ValueError(t(f"archive refusée : {m.name} n'est ni un fichier ni un dossier", f"archive refused: {m.name} is neither a file nor a directory", f"archivo rechazado: {m.name} no es ni un archivo ni una carpeta"))
         # Extraction explicite : aucun propriétaire, lien ni permission spéciale de l'archive.
         for m in tar.getmembers():
             path = os.path.join(dest, m.name)
@@ -608,7 +687,7 @@ def _snapshot():
 
 def _rollback(work, source, log):
     """Relance les sources précédentes avec la configuration et la base antérieures."""
-    log("Échec : restauration de la configuration et de la version précédentes.")
+    log(t("Échec : restauration de la configuration et de la version précédentes.", "Failed: restoring the previous configuration and version.", "Error: restaurando la configuración y la versión anteriores."))
     _run(["rc-service", "loco", "stop"], log)
     shutil.copy2(os.path.join(work, "loco.conf"), CONF)
     snapshot_db = os.path.join(work, "portal.db")
@@ -619,7 +698,7 @@ def _rollback(work, source, log):
                 os.unlink(db + suffix)
         shutil.copyfile(snapshot_db, db)
     rc = _install(source, [], log)
-    log("Version précédente rétablie." if rc == 0 else "Retour arrière en échec : intervention nécessaire sur la console.")
+    log(t("Version précédente rétablie.", "Previous version restored.", "Versión anterior restablecida.") if rc == 0 else t("Retour arrière en échec : intervention nécessaire sur la console.", "Rollback failed: action needed on the console.", "Error en la reversión: se requiere intervención en la consola."))
     return rc == 0
 
 
@@ -628,7 +707,7 @@ def update_loco(log=print):
     latest = latest_release()
     current = current_version()
     if version_key(latest["version"]) <= version_key(current):
-        log(f"loco {current} est à jour.")
+        log(t(f"loco {current} est à jour.", f"loco {current} is up to date.", f"loco {current} está actualizado."))
         return True
     if not latest["archive"] or not latest["sums"]:
         raise ValueError(f"la version {latest['version']} ne fournit pas loco-{latest['version']}.tar.gz et SHA256SUMS")
@@ -636,13 +715,13 @@ def update_loco(log=print):
     target = os.path.join(SOURCES, name)
     previous = read_conf().get("SOURCE_DIR", "")
     if not previous or not os.path.isfile(os.path.join(previous, "linux", "install.sh")):
-        raise ValueError("sources précédentes introuvables : mise à jour refusée sans possibilité de retour arrière")
+        raise ValueError(t("sources précédentes introuvables : mise à jour refusée sans possibilité de retour arrière", "previous sources not found: update refused without rollback capability", "fuentes anteriores no encontradas: actualización rechazada sin posibilidad de reversión"))
     if os.path.realpath(previous) == os.path.realpath(target):
-        raise ValueError("le dossier des sources précédentes correspond à la version cible")
+        raise ValueError(t("le dossier des sources précédentes correspond à la version cible", "the previous sources directory matches the target version", "la carpeta de fuentes anteriores coincide con la versión de destino"))
     os.makedirs(SOURCES, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="loco-update-") as work:
         archive = os.path.join(work, name + ".tar.gz")
-        log(f"Téléchargement de {latest['archive']}")
+        log(t(f"Téléchargement de {latest['archive']}", f"Downloading {latest['archive']}", f"Descargando {latest['archive']}"))
         with _get(latest["archive"], timeout=300) as r, open(archive, "wb") as f:
             shutil.copyfileobj(r, f)
         with _get(latest["sums"]) as r:
@@ -654,16 +733,16 @@ def update_loco(log=print):
                 expected = fields[0].lower()
         digest = _sha256(archive)
         if not expected or digest != expected:
-            raise ValueError("empreinte SHA-256 de l'archive incorrecte : mise à jour refusée")
-        log(f"Empreinte SHA-256 vérifiée : {digest}")
+            raise ValueError(t("empreinte SHA-256 de l'archive incorrecte : mise à jour refusée", "incorrect archive SHA-256 fingerprint: update refused", "huella SHA-256 del archivo incorrecta: actualización rechazada"))
+        log(t(f"Empreinte SHA-256 vérifiée : {digest}", f"SHA-256 fingerprint verified: {digest}", f"Huella SHA-256 verificada: {digest}"))
         unpack = os.path.join(work, "src")
         os.mkdir(unpack)
         _safe_extract(archive, unpack, name)
         if not os.path.isfile(os.path.join(unpack, name, "linux", "install.sh")):
-            raise ValueError("archive incomplète : linux/install.sh absent")
+            raise ValueError(t("archive incomplète : linux/install.sh absent", "incomplete archive: linux/install.sh missing", "archivo incompleto: falta linux/install.sh"))
         if os.path.exists(target):
             if not os.path.isfile(os.path.join(target, ".loco-managed")):
-                raise ValueError(f"dossier existant non géré par loco : {target}")
+                raise ValueError(t(f"dossier existant non géré par loco : {target}", f"existing directory not managed by loco: {target}", f"carpeta existente no gestionada por loco: {target}"))
             shutil.rmtree(target)
         shutil.move(os.path.join(unpack, name), target)
         with open(os.path.join(target, ".loco-managed"), "w"):
@@ -678,7 +757,7 @@ def update_loco(log=print):
         if not ok:
             _rollback(snapshot, previous, log)
             return False
-    log(f"loco {latest['version']} installé.")
+    log(t(f"loco {latest['version']} installé.", f"loco {latest['version']} installed.", f"loco {latest['version']} instalado."))
     _cleanup_sources(keep={target, previous})
     return True
 
@@ -696,10 +775,10 @@ def _wait_healthy(log):
                                  "https://127.0.0.1:" + read_conf().get("HTTPS_PORT", "8443") + "/healthz"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=7)
         if result.returncode == 0:
-            log("Portail HTTPS prêt.")
+            log(t("Portail HTTPS prêt.", "HTTPS portal ready.", "Portal HTTPS listo."))
             return True
         time.sleep(2)
-    log("Le portail ne répond pas après la mise à jour : consultez /var/log/loco/.")
+    log(t("Le portail ne répond pas après la mise à jour : consultez /var/log/loco/.", "The portal does not respond after the update: see /var/log/loco/.", "El portal no responde tras la actualización: consulte /var/log/loco/."))
     return False
 
 
@@ -708,20 +787,20 @@ def update_system(log=print, security_only=False):
     manager = package_manager()
     if manager == "apk":
         if security_only:
-            raise ValueError("Alpine ne distingue pas les correctifs de sécurité : mettez tout à jour")
+            raise ValueError(t("Alpine ne distingue pas les correctifs de sécurité : mettez tout à jour", "Alpine does not distinguish security fixes: update everything", "Alpine no distingue los parches de seguridad: actualice todo"))
         if _run(["apk", "update", "--no-progress"], log) != 0:
-            raise ValueError("dépôts Alpine injoignables")
+            raise ValueError(t("dépôts Alpine injoignables", "Alpine repositories unreachable", "repositorios Alpine inaccesibles"))
         ok = _run(["apk", "upgrade", "--no-progress"], log) == 0
         # Python, nginx ou les bibliothèques ont pu changer : relancer les services avec les nouvelles versions.
         ok = _run(["rc-service", "loco", "restart"], log) == 0 and ok
     elif manager == "apt":
         env = _apt_env()
         if _run(["apt-get", "update", *APT_OPTS], log, env=env) != 0:
-            raise ValueError("dépôts APT injoignables")
+            raise ValueError(t("dépôts APT injoignables", "APT repositories unreachable", "repositorios APT inaccesibles"))
         if security_only:
             names = [p["name"] for p in _apt_pending() if p["security"] and p["current"]]
             if not names:
-                log("Aucun correctif de sécurité en attente.")
+                log(t("Aucun correctif de sécurité en attente.", "No security fix pending.", "Ningún parche de seguridad pendiente."))
                 return True
             cmd = ["apt-get", "-y", *APT_OPTS, "install", "--only-upgrade", *names]
         else:
@@ -736,10 +815,10 @@ def update_system(log=print, security_only=False):
     ok = _wait_healthy(log) and ok
     stale = stale_services()
     for reason in reboot_reasons(stale):
-        log(f"Redémarrage nécessaire : {reason}.")
+        log(t("Redémarrage nécessaire : ", "Reboot required: ", "Reinicio necesario: ") + _reason_log(reason) + ".")
     others = sorted(u for u in stale if u not in CORE_UNITS and u not in OWN_UNITS and u != "loco-agent.service")
     if others:
-        log("Utilisent encore d'anciennes bibliothèques (redémarrez-les ou redémarrez le serveur) : " + ", ".join(others))
+        log(t("Utilisent encore d'anciennes bibliothèques (redémarrez-les ou redémarrez le serveur) : ", "Still using old libraries (restart them or reboot the server): ", "Aún usan bibliotecas antiguas (reiníchelos o reinicie el servidor): ") + ", ".join(others))
     return ok
 
 
@@ -750,10 +829,10 @@ def _restart_stale(log):
     ok = True
     for unit in OWN_UNITS:
         if unit in stale:
-            log(f"Relance de {unit} (bibliothèques mises à jour).")
+            log(t(f"Relance de {unit} (bibliothèques mises à jour).", f"Restarting {unit} (libraries updated).", f"Reiniciando {unit} (bibliotecas actualizadas)."))
             ok = _run(["systemctl", "restart", unit], log) == 0 and ok
     if "init" in stale:
-        log("systemd utilise d'anciennes bibliothèques : rechargement (systemctl daemon-reexec).")
+        log(t("systemd utilise d'anciennes bibliothèques : rechargement (systemctl daemon-reexec).", "systemd is using old libraries: reloading (systemctl daemon-reexec).", "systemd usa bibliotecas antiguas: recargando (systemctl daemon-reexec)."))
         ok = _run(["systemctl", "daemon-reexec"], log) == 0 and ok
     if "loco-agent.service" in stale:
         # KillMode=process : l'opération en cours survit à la relance de l'agent.
@@ -785,7 +864,7 @@ def configure(changes, log=print):
 
 
 def reboot(log=print):
-    log("Redémarrage du serveur dans 5 secondes.")
+    log(t("Redémarrage du serveur dans 5 secondes.", "Server rebooting in 5 seconds.", "El servidor se reinicia en 5 segundos."))
     subprocess.Popen(["sh", "-c", "sleep 5; exec reboot"], start_new_session=True, stdin=subprocess.DEVNULL,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return True
@@ -854,7 +933,7 @@ def run_job(job_id):
             try:
                 check(lambda _text: None)
             except Exception as e:  # noqa: BLE001
-                log(f"Vérification des versions impossible : {e}")
+                log(t(f"Vérification des versions impossible : {e}", f"Version check failed: {e}", f"No se pudo comprobar las versiones: {e}"))
         os.close(fd)
 
 
@@ -1097,11 +1176,11 @@ def _print_status():
           + (" (mise à jour disponible)" if latest and version_key(latest["version"]) > version_key(current_version()) else ""))
     print(f"Paquets du système : {len(status.get('system_updates', []))} à mettre à jour"
           + (f" dont {status.get('security_count', 0)} de sécurité" if status.get("security_supported") else ""))
-    reasons = reboot_reasons(stale_services())
+    reasons = [_reason_log(r) for r in reboot_reasons(stale_services())]
     print(f"Redémarrage requis : {'oui (' + '; '.join(reasons) + ')' if reasons else 'non'}")
     print(f"Vérifié le         : {status.get('checked', 'jamais')}")
     for e in status.get("errors", []):
-        print(f"  ! {e}")
+        print(f"  ! {_error_log(e)}")
 
 
 def main(argv):

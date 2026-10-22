@@ -21,6 +21,30 @@ ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": 
                  "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
                  "configure": L_("Réglages"), "reboot": L_("Redémarrage")}
 TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
+
+
+def _reboot_text(r):
+    """Raison de redémarrage (code renvoyé par l'agent) en toutes lettres, dans la langue de la personne."""
+    code = r.get("code")
+    if code == "kernel-modules":
+        return _("noyau mis à jour (les modules du noyau en cours ont été remplacés)")
+    if code == "kernel-newer":
+        return _("noyau %(installed)s installé, %(running)s en cours", installed=r.get("installed", ""), running=r.get("running", ""))
+    if code == "requested":
+        return _("redémarrage demandé par %(packages)s", packages=r["packages"]) if r.get("packages") \
+            else _("redémarrage demandé par une mise à jour")
+    if code == "stale-core":
+        return _("d'anciennes bibliothèques restent chargées par %(units)s", units=r.get("units", ""))
+    return ""
+
+
+def _error_text(e):
+    """Erreur d'état (code renvoyé par l'agent) dans la langue de la personne ; le détail reste tel quel."""
+    if e.get("code") == "loco-release":
+        return _("Version publiée de loco introuvable : %(detail)s", detail=e.get("detail", ""))
+    if e.get("code") == "system-packages":
+        return _("Paquets du système : %(detail)s.", detail=e.get("detail", ""))
+    return e.get("detail", "")
 SWITCHES = ("HTTP_ENABLED", "WU_ENABLED", "RPM_ENABLED", "FLATPAK_ENABLED")
 
 
@@ -113,6 +137,8 @@ def appliance_updates():
         update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
+        reboot_texts=[_reboot_text(r) for r in status.get("reboot_reasons") or []],
+        errors=[_error_text(e) for e in status.get("errors") or []],
         packages=packages, security=[p for p in packages if p.get("security")],
         key_count=sum(1 for p in packages if p.get("tags")),
         security_supported=status.get("security_supported", False), kernel_short=_kernel_short,

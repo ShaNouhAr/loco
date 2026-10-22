@@ -2,6 +2,8 @@
 
 ## 2.35.0 — 2026-10-22
 
+- **Page Mises à jour entièrement traduite** : l'agent d'administration (`locoadmin`) renvoie désormais un état structuré (codes) que le portail met en mots dans la langue de chaque personne — résumé, raisons de redémarrage, erreurs. Les journaux d'opération (vérification, mise à jour, redémarrage) suivent la langue du serveur (français, espagnol ou anglais selon sa locale), en anglais par défaut.
+
 - **Adresses (URL) des pages en anglais**, identiques quelle que soit la langue choisie, pour une navigation uniforme : `/fleet`, `/accounts`, `/log`, `/system/updates`, `/enrollment`… (avant `/parc`, `/comptes`, `/journal`, `/systeme/mises-a-jour`, `/enrolement`). Les liens internes suivent automatiquement ; les adresses servies aux postes (dépôts, agents, scripts d'installation) ne changent pas.
 
 
