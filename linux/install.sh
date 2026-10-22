@@ -20,7 +20,7 @@
 #   --max-upload T           taille max d'un fichier envoyé au portail (défaut : 8g)
 #   --backup-keep N          sauvegardes quotidiennes conservées (défaut : 3 ; 0 = désactivées)
 #   --backup-dir DIR         dossier des sauvegardes (défaut : /var/backups/loco)
-#   --github-repo OWNER/REPO dépôt GitHub des mises à jour de loco (défaut : dépôt officiel)
+#   --github-repo SOURCE     source des mises à jour : « owner/repo » GitHub ou URL d'un projet GitLab (défaut : officiel)
 #   --password MDP           définit le mot de passe du compte « admin »
 #   --tls-cert F --tls-key F certificat fourni au lieu de l'autorité locale
 #   --no-wu / --wu           sans / avec le cache Windows Update (ports 80 et 443)
@@ -182,7 +182,7 @@ num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-kee
 [[ "$APT_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--apt-cache-size : taille invalide (ex. 50g)." "--apt-cache-size: invalid size (e.g. 50g)." "--apt-cache-size: tamaño no válido (ej. 50g)."
 if [[ ! "$DATA" =~ ^/[A-Za-z0-9._/-]+$ || "$DATA" == "/" ]]; then die "--data : chemin absolu simple attendu." "--data: a simple absolute path is expected." "--data: se espera una ruta absoluta simple."; fi
 [[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--backup-dir : chemin absolu simple attendu." "--backup-dir: a simple absolute path is expected." "--backup-dir: se espera una ruta absoluta simple."
-[ -z "$GITHUB_REPO" ] || [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "--github-repo : dépôt owner/repo attendu." "--github-repo: owner/repo expected." "--github-repo: se espera owner/repo."
+[ -z "$GITHUB_REPO" ] || [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || [[ "$GITHUB_REPO" =~ ^https://[A-Za-z0-9._-]+(:[0-9]+)?/[A-Za-z0-9._/-]+/[A-Za-z0-9._-]+$ ]] || die "--github-repo : « owner/repo » GitHub ou URL d'un projet GitLab attendu." "--github-repo: GitHub owner/repo or a GitLab project URL expected." "--github-repo: se espera «owner/repo» de GitHub o la URL de un proyecto GitLab."
 if [ -n "$UPSTREAM_PROXY" ]; then
     [[ "$UPSTREAM_PROXY" =~ ^http://[^[:space:]\"\']+$ ]] || die "--proxy : adresse http://hôte:port attendue." "--proxy: an http://host:port address is expected." "--proxy: se espera una dirección http://host:puerto."
 fi

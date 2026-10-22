@@ -28,6 +28,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 import uuid
 
@@ -48,7 +49,14 @@ _snapshot_spec = importlib.util.spec_from_file_location("locosnapshot", os.path.
 locosnapshot = importlib.util.module_from_spec(_snapshot_spec)
 _snapshot_spec.loader.exec_module(locosnapshot)
 DEFAULT_REPO = "ShaNouhAr/loco"
-REPO_RE = re.compile(r"[\w.-]+/[\w.-]+")
+GITHUB_RE = re.compile(r"[\w.-]+/[\w.-]+")                            # « owner/repo » sur GitHub
+GITLAB_RE = re.compile(r"https://[\w.-]+(?::\d+)?/[\w./-]+/[\w.-]+")  # URL d'un projet GitLab (même interne)
+
+
+def valid_source(value):
+    """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
+    value = (value or "").strip()
+    return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
@@ -259,26 +267,48 @@ def _get(url, timeout=15):
     return opener.open(req, timeout=timeout)
 
 
-def repo():
-    """Dépôt GitHub source des mises à jour de loco (réglage loco.conf GITHUB_REPO, défaut DEFAULT_REPO)."""
+def source():
+    """Source des mises à jour de loco (réglage loco.conf GITHUB_REPO, défaut DEFAULT_REPO) : « owner/repo »
+    GitHub, ou l'URL d'un projet GitLab."""
     configured = read_conf().get("GITHUB_REPO", "").strip()
-    return configured if REPO_RE.fullmatch(configured) else DEFAULT_REPO
+    return configured if valid_source(configured) else DEFAULT_REPO
 
 
-def _api():
-    return f"https://api.github.com/repos/{repo()}/releases/latest"
+def _check_version(version, tag):
+    if not re.fullmatch(r"[0-9]+(\.[0-9]+){1,3}", version):
+        raise ValueError(t(f"version publiée inattendue : {tag}", f"unexpected published version: {tag}", f"versión publicada inesperada: {tag}"))
 
 
 def latest_release():
-    with _get(_api()) as r:
+    src = source()
+    return _gitlab_release(src) if "://" in src else _github_release(src)
+
+
+def _github_release(repo):
+    with _get(f"https://api.github.com/repos/{repo}/releases/latest") as r:
         data = json.load(r)
     version = data["tag_name"].lstrip("v")
-    if not re.fullmatch(r"[0-9]+(\.[0-9]+){1,3}", version):
-        raise ValueError(t(f"version publiée inattendue : {data['tag_name']}", f"unexpected published version: {data['tag_name']}", f"versión publicada inesperada: {data['tag_name']}"))
+    _check_version(version, data["tag_name"])
     assets = {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
     return {"version": version, "url": data.get("html_url", ""), "published": data.get("published_at", ""),
             "notes": (data.get("body") or "")[:6000],
             "archive": assets.get(f"loco-{version}.tar.gz", ""), "sums": assets.get("SHA256SUMS", "")}
+
+
+def _gitlab_release(url):
+    parts = urllib.parse.urlsplit(url)
+    project = urllib.parse.quote(parts.path.strip("/"), safe="")
+    with _get(f"https://{parts.netloc}/api/v4/projects/{project}/releases") as r:
+        data = json.load(r)
+    if not data:
+        raise ValueError(t("aucune version publiée sur ce dépôt GitLab", "no published release on this GitLab project", "ninguna versión publicada en este proyecto GitLab"))
+    rel = data[0]
+    version = rel["tag_name"].lstrip("v")
+    _check_version(version, rel["tag_name"])
+    links = {a["name"]: (a.get("direct_asset_url") or a.get("url")) for a in rel.get("assets", {}).get("links", [])}
+    return {"version": version, "url": rel.get("_links", {}).get("self", url), "published": rel.get("released_at", ""),
+            "notes": (rel.get("description") or "")[:6000],
+            "archive": links.get(f"loco-{version}.tar.gz", ""), "sums": links.get("SHA256SUMS", "")}
 
 
 
@@ -322,7 +352,7 @@ def _run(cmd, log, **kw):
 
 def check(log=print):
     """Versions disponibles (loco publié sur GitHub, paquets du système) ; résultat gardé dans STATUS."""
-    values = {"checked": _now(), "current": current_version(), "repo": repo(), "errors": []}
+    values = {"checked": _now(), "current": current_version(), "repo": source(), "errors": []}
     try:
         values["latest"] = latest_release()
     except (OSError, ValueError, KeyError) as e:
@@ -901,14 +931,14 @@ def _set_conf(key, value):
 
 
 def set_repo(params, log=print):
-    """Change le dépôt GitHub source puis revérifie les versions. Le dépôt doit être « owner/repo »."""
+    """Change la source des mises à jour puis revérifie : « owner/repo » GitHub, ou l'URL d'un projet GitLab."""
     new = str((params or {}).get("repo", "")).strip()
-    if not REPO_RE.fullmatch(new):
-        raise ValueError(t("dépôt GitHub invalide (format attendu : owner/repo)",
-                           "invalid GitHub repository (expected owner/repo)",
-                           "repositorio GitHub no válido (formato esperado: owner/repo)"))
+    if not valid_source(new):
+        raise ValueError(t("source invalide (attendu : « owner/repo » GitHub, ou l'URL d'un projet GitLab)",
+                           "invalid source (expected: GitHub \"owner/repo\", or a GitLab project URL)",
+                           "origen no válido (se espera: «owner/repo» de GitHub, o la URL de un proyecto GitLab)"))
     _set_conf("GITHUB_REPO", new)
-    log(t(f"Dépôt GitHub : {new}", f"GitHub repository: {new}", f"Repositorio GitHub: {new}"))
+    log(t(f"Source des mises à jour : {new}", f"Update source: {new}", f"Origen de las actualizaciones: {new}"))
     return check(log)
 
 
@@ -1115,7 +1145,7 @@ def agent():
                         continue
                 elif req["action"] == "set-repo":
                     new = str((req.get("params") or {}).get("repo", "")).strip()
-                    if not REPO_RE.fullmatch(new):
+                    if not valid_source(new):
                         continue
                     params = {"repo": new}
                 _submit(req["action"], params, str(req.get("user", "")))
@@ -1162,7 +1192,7 @@ def request(action, params=None, user=""):
             raise ValueError("aucun changement")
     elif action == "set-repo":
         new = str((params or {}).get("repo", "")).strip()
-        if not REPO_RE.fullmatch(new):
+        if not valid_source(new):
             raise ValueError("dépôt GitHub invalide")
         params = {"repo": new}
     else:

@@ -81,7 +81,7 @@
     <div class="metric">
       <div class="k">{{ _("Mises à jour système") }}</div>
       <div class="v">{{ summary.updates if dev.last_scan else '—' }}</div>
-      <div class="s">{% if summary.security %}<span class="st err">{{ _("dont %(security)s de sécurité", security=summary.security) }}</span>{% elif dev.last_scan %}{{ _('à installer') if summary.updates else _('système à jour') }}{% else %}{{ _("inventaire en cours") }}{% endif %}</div>
+      <div class="s">{% if summary.security %}<span class="sec-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s de sécurité", security=summary.security) }}</span>{% elif dev.last_scan %}{{ _('à installer') if summary.updates else _('système à jour') }}{% else %}{{ _("inventaire en cours") }}{% endif %}</div>
     </div>
     <div class="metric">
       <div class="k">{{ _('Logiciels') if windows else 'Flatpak' }}</div>

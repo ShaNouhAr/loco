@@ -81,15 +81,17 @@
   {% endif %}
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Dépôt GitHub") }}</h2><div class="aside mono small">{{ repo }}</div></div>
-    <p class="muted small">{{ _("Source des mises à jour de loco. Le dépôt officiel par défaut ; indiquez un autre dépôt « owner/repo » (par exemple votre fork) pour en tirer vos propres versions.") }}</p>
-    {% if can("system.update") %}
-    <form class="panel-f row" method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-repo">
-      <input type="text" name="repo" value="{{ repo }}" placeholder="owner/repo" pattern="[\w.-]+/[\w.-]+" required aria-label="{{ _('Dépôt GitHub') }}" class="grow mono">
-      <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Enregistrer et vérifier") }}</button>
-    </form>
-    {% endif %}
+    <div class="panel-h"><h2>{{ _("Source des mises à jour") }}</h2></div>
+    <div class="panel-b">
+      <p class="muted small">{{ _("Dépôt où loco cherche ses nouvelles versions : « owner/repo » sur GitHub, ou l'URL d'un projet GitLab (même un GitLab interne). Laissez « %(default)s » pour le dépôt officiel.", default=default_repo) }}</p>
+      {% if can("system.update") %}
+      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax class="repo-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-repo">
+        <input type="text" name="repo" value="{{ repo }}" placeholder="owner/repo  ·  https://gitlab.exemple/groupe/projet" pattern="[\w.-]+/[\w.-]+|https://[\w.-]+(:\d+)?/[\w./-]+/[\w.-]+" required aria-label="{{ _('Source des mises à jour') }}" class="mono" spellcheck="false">
+        <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Enregistrer et vérifier") }}</button>
+      </form>
+      {% else %}<p class="mono small">{{ repo }}</p>{% endif %}
+    </div>
   </section>
 
   <section class="panel" data-pkgs="#sys-packages" data-empty="#sys-packages-empty">

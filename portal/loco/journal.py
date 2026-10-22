@@ -50,7 +50,7 @@ LABELS = {
     "flatpak.suppression": L_("Application Flatpak supprimée"), "windows_update.domaines": L_("Domaines Windows Update modifiés"),
     "systeme.configuration": L_("Configuration du serveur"), "systeme.fonctionnalites": L_("Fonctionnalités activées ou désactivées"), "systeme.check": L_("Recherche de mises à jour"),
     "systeme.update-loco": L_("Mise à jour de loco"), "systeme.update-system": L_("Mise à jour du système"), "systeme.update-security": L_("Correctifs de sécurité du serveur"),
-    "systeme.reboot": L_("Redémarrage du serveur"), "systeme.set-repo": L_("Dépôt GitHub de loco modifié"), "systeme.configure": L_("Réglages du serveur"), "journal.export": L_("Journal exporté"),
+    "systeme.reboot": L_("Redémarrage du serveur"), "systeme.set-repo": L_("Source des mises à jour modifiée"), "systeme.configure": L_("Réglages du serveur"), "journal.export": L_("Journal exporté"),
     "journal.conservation": L_("Conservation du journal modifiée"),
     "scripts.ajout": L_("Script créé"), "scripts.modification": L_("Script modifié"), "scripts.suppression": L_("Script supprimé"),
     "scripts.execution": L_("Script exécuté sur des postes"),

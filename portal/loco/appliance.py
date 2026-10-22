@@ -19,7 +19,7 @@ if config.SERVER_UPDATES:
 
 ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": L_("Mise à jour de loco"),
                  "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
-                 "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Dépôt GitHub")}
+                 "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Source des mises à jour")}
 TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
 
 
@@ -142,7 +142,7 @@ def appliance_updates():
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
         reboot_texts=[_reboot_text(r) for r in status.get("reboot_reasons") or []],
-        repo=status.get("repo") or locoadmin.DEFAULT_REPO,
+        repo=status.get("repo") or locoadmin.DEFAULT_REPO, default_repo=locoadmin.DEFAULT_REPO,
         errors=[_error_text(e) for e in status.get("errors") or []],
         packages=packages, security=[p for p in packages if p.get("security")],
         key_count=sum(1 for p in packages if p.get("tags")),
