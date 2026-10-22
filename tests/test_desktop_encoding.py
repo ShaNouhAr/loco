@@ -64,7 +64,7 @@ class TestLinuxDesktopEncoding(unittest.TestCase):
     def setUpClass(cls):
         spec = importlib.util.spec_from_file_location('loco_desktop_encoding', ROOT / 'portal/agents/loco-client.py')
         cls.agent = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.agent)
-        cls.agent.LANG_EN = False  # messages en français (langue de référence)
+        cls.agent.LANG = "fr"  # messages en français (langue de référence) pour des assertions stables
 
     def test_lossless_edge_tiles_delta_empty_update_and_full_refresh(self):
         w, h = 257, 129

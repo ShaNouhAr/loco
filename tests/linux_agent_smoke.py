@@ -8,7 +8,7 @@ source = Path(__file__).resolve().parents[1] / 'portal' / 'agents' / 'loco-clien
 spec = importlib.util.spec_from_file_location('loco_client', str(source))
 agent = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(agent)
-agent.LANG_EN = False  # messages en français (langue de référence)
+agent.LANG = "fr"  # messages en français (langue de référence) pour des assertions stables
 
 ctx = agent.context()
 assert ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname

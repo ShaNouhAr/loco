@@ -72,12 +72,25 @@ def _system_lang():
     return ""
 
 
-LANG_EN = not _system_lang().lower().startswith("fr")
+def _lang():
+    value = _system_lang().lower()
+    if value.startswith("fr"):
+        return "fr"
+    if value.startswith("es"):
+        return "es"
+    return "en"
 
 
-def t(fr, en):
+LANG = _lang()
+
+
+def t(fr, en, es=None):
     """Texte vu par l'admin ou l'utilisateur du poste, dans la langue du poste (anglais par défaut)."""
-    return en if LANG_EN else fr
+    if LANG == "fr":
+        return fr
+    if LANG == "es":
+        return es if es is not None else en
+    return en
 
 
 
@@ -152,14 +165,14 @@ def checkin(conf, data):
             continue
         announced = [u.rstrip("/") for u in answer.get("servers") or [] if isinstance(u, str) and SERVER_RE.match(u.rstrip("/"))][:8]
         if server != conf["server"]:
-            log(t(f"serveur joint à sa nouvelle adresse : {server} (au lieu de {conf['server']})", f"server reached at its new address: {server} (instead of {conf['server']})"))
+            log(t(f"serveur joint à sa nouvelle adresse : {server} (au lieu de {conf['server']})", f"server reached at its new address: {server} (instead of {conf['server']})", f"servidor contactado en su nueva dirección: {server} (en lugar de {conf['server']})"))
         if server != conf["server"] or (announced and announced != conf.get("servers")):
             conf["server"] = server
             if announced:
                 conf["servers"] = announced
             save(CONFIG, conf)
         return answer
-    raise failure or OSError(t("aucune adresse de serveur connue", "no known server address"))
+    raise failure or OSError(t("aucune adresse de serveur connue", "no known server address", "ninguna dirección de servidor conocida"))
 
 
 def download(server, path, timeout=120):
@@ -220,7 +233,7 @@ def run(cmd, timeout=7200):
     except FileNotFoundError:
         return 127, f"{cmd[0]} introuvable\n"
     except subprocess.TimeoutExpired as e:
-        return 124, (e.stdout or "") if isinstance(e.stdout, str) else t("délai dépassé\n", "timed out\n")
+        return 124, (e.stdout or "") if isinstance(e.stdout, str) else t("délai dépassé\n", "timed out\n", "tiempo agotado\n")
 
 
 def booted_since(timestamp):
@@ -371,7 +384,7 @@ def scan():
             if line.startswith("Obsoleting"):
                 break
     else:
-        inv["error"] = t("gestionnaire de paquets non reconnu", "unrecognised package manager")
+        inv["error"] = t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
     inv["flatpak"] = flatpak_updates()
     inv["reboot_required"] = reboot_required()
     inv["packages"] = installed_packages(fam)
@@ -411,7 +424,7 @@ def report(conf, cmd_id, state, output="", code=None, inventory=None):
     try:
         call(conf["server"], "/agent/api/result", data, conf["token"])
     except (OSError, ValueError) as e:
-        log(t(f"résultat non transmis : {e}", f"result not sent: {e}"))
+        log(t(f"résultat non transmis : {e}", f"result not sent: {e}", f"resultado no transmitido: {e}"))
 
 
 def run_script(cmd):
@@ -419,9 +432,9 @@ def run_script(cmd):
     script = cmd.get("script") or {}
     content = script.get("content") or ""
     if script.get("platform") != "linux":
-        return 1, t("Script destiné à un autre système.", "Script intended for another system.")
+        return 1, t("Script destiné à un autre système.", "Script intended for another system.", "Script destinado a otro sistema.")
     if hashlib.sha256(content.encode()).hexdigest() != (script.get("sha256") or "").lower():
-        return 1, t("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run.")
+        return 1, t("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run.", "Huella del script no válida: no ejecutado.")
     fd, path = tempfile.mkstemp(prefix="loco-script-", suffix=".sh")
     try:
         with os.fdopen(fd, "w") as f:
@@ -432,9 +445,9 @@ def run_script(cmd):
             done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                   timeout=1800, cwd="/")
         except subprocess.TimeoutExpired as e:
-            return -1, ((e.output or b"").decode("utf-8", "replace") + t("\nArrêté : pas terminé après 1800 s.", "\nStopped: not finished after 1800 s.")).strip()
+            return -1, ((e.output or b"").decode("utf-8", "replace") + t("\nArrêté : pas terminé après 1800 s.", "\nStopped: not finished after 1800 s.", "\nDetenido: no terminó tras 1800 s.")).strip()
         except OSError as e:
-            return 1, t(f"Exécution impossible : {e}", f"Cannot run: {e}")
+            return 1, t(f"Exécution impossible : {e}", f"Cannot run: {e}", f"No se puede ejecutar: {e}")
         return done.returncode, done.stdout.decode("utf-8", "replace").strip() or "(aucune sortie)"
     finally:
         os.unlink(path)
@@ -450,7 +463,7 @@ def self_update(conf, wanted):
         code = download(conf["server"], "/agent/files/loco-client.py").decode()
         compile(code, PROGRAM, "exec")
     except (OSError, ValueError, SyntaxError) as e:
-        log(t(f"mise à jour de l'agent impossible : {e}", f"agent update failed: {e}"))
+        log(t(f"mise à jour de l'agent impossible : {e}", f"agent update failed: {e}", f"no se pudo actualizar el agente: {e}"))
         return
     if f'VERSION = "{wanted}"' not in code:
         return
@@ -459,7 +472,7 @@ def self_update(conf, wanted):
         f.write(code)
     os.chmod(tmp, 0o755)
     os.replace(tmp, PROGRAM)
-    log(t(f"agent mis à jour : {VERSION} -> {wanted}", f"agent updated: {VERSION} -> {wanted}"))
+    log(t(f"agent mis à jour : {VERSION} -> {wanted}", f"agent updated: {VERSION} -> {wanted}", f"agente actualizado: {VERSION} -> {wanted}"))
 
 
 def remove_local():
@@ -479,7 +492,7 @@ def remove_local():
 def service():
     conf = load(CONFIG)
     if not conf.get("token"):
-        log(t("poste non inscrit : relancez la commande d'installation de l'agent.", "machine not enrolled: run the agent install command again."))
+        log(t("poste non inscrit : relancez la commande d'installation de l'agent.", "machine not enrolled: run the agent install command again.", "equipo no inscrito: vuelva a ejecutar el comando de instalación del agente."))
         return 1
     lock = open(LOCK, "w")
     try:
@@ -500,13 +513,13 @@ def service():
         answer = checkin(conf, data)
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            log(t("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire.", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it."))
+            log(t("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire.", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it.", "token rechazado por el servidor (¿equipo retirado del parque?): reinstale el agente para volver a inscribirlo."))
         else:
-            log(t(f"serveur : HTTP {e.code}", f"server: HTTP {e.code}"))
+            log(t(f"serveur : HTTP {e.code}", f"server: HTTP {e.code}", f"servidor: HTTP {e.code}"))
         save(STATE, state)
         return 1
     except (OSError, ValueError) as e:
-        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}"))
+        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
         # Inventaire non transmis : à refaire au prochain contact.
         if "inventory" in data:
             state["rescan"] = True
@@ -515,12 +528,12 @@ def service():
     state["scan_hours"] = answer.get("scan_hours", 6)
     for cmd in answer.get("commands", []):
         action = cmd.get("action")
-        log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}"))
+        log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))
         report(conf, cmd["id"], "running")
         if action == "scan":
             inv = scan()
             state["last_scan"] = time.time()
-            report(conf, cmd["id"], "success" if not inv["error"] else "failed", inv["error"] or t("Inventaire transmis.", "Inventory sent."),
+            report(conf, cmd["id"], "success" if not inv["error"] else "failed", inv["error"] or t("Inventaire transmis.", "Inventory sent.", "Inventario transmitido."),
                    0, inv)
         elif action == "update":
             code, out = update()
@@ -528,26 +541,26 @@ def service():
             state["last_scan"] = time.time()
             reboot = cmd.get("reboot") and inv["reboot_required"] and code == 0
             report(conf, cmd["id"], "success" if code == 0 else "failed",
-                   out + (t("\nRedémarrage dans une minute.", "\nRebooting in one minute.") if reboot else ""), code, inv)
+                   out + (t("\nRedémarrage dans une minute.", "\nRebooting in one minute.", "\nReinicio en un minuto.") if reboot else ""), code, inv)
             if reboot:
                 save(STATE, state)
-                subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage après mise à jour", "loco: reboot after update")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage après mise à jour", "loco: reboot after update", "loco: reinicio tras la actualización")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 0
         elif action == "run-script":
             code, out = run_script(cmd)
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)
         elif action == "reboot":
-            report(conf, cmd["id"], "success", t("Redémarrage dans une minute.", "Rebooting in one minute."), 0)
+            report(conf, cmd["id"], "success", t("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."), 0)
             save(STATE, state)
-            subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage demandé", "loco: reboot requested")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage demandé", "loco: reboot requested", "loco: reinicio solicitado")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             return 0
         elif action == "uninstall":
-            report(conf, cmd["id"], "success", t("Agent retiré du poste.", "Agent removed from the machine."), 0)
+            report(conf, cmd["id"], "success", t("Agent retiré du poste.", "Agent removed from the machine.", "Agente retirado del equipo."), 0)
             remove_local()
-            log(t("agent retiré à la demande du serveur.", "agent removed at the server's request."))
+            log(t("agent retiré à la demande du serveur.", "agent removed at the server's request.", "agente retirado a petición del servidor."))
             return 0
         else:
-            report(conf, cmd["id"], "failed", t(f"Action non prise en charge sur Linux : {action}", f"Action not supported on Linux: {action}"), 1)
+            report(conf, cmd["id"], "failed", t(f"Action non prise en charge sur Linux : {action}", f"Action not supported on Linux: {action}", f"Acción no admitida en Linux: {action}"), 1)
     save(STATE, state)
     self_update(conf, answer.get("agent_version"))
     return 0
@@ -559,21 +572,21 @@ def enroll(server, key):
     uid = conf.get("uid") or uuid.uuid4().hex
     data = identity()
     if not data["os"]["family"]:
-        log(t("système non pris en charge (APT ou DNF requis).", "unsupported system (APT or DNF required)."))
+        log(t("système non pris en charge (APT ou DNF requis).", "unsupported system (APT or DNF required).", "sistema no admitido (se requiere APT o DNF)."))
         return 1
     data.update(key=key, uid=uid)
     try:
         answer = call(server, "/agent/api/enroll", data)
     except urllib.error.HTTPError as e:
-        log(t("clé d'inscription refusée.", "enrollment key refused.") if e.code == 403 else t(f"inscription refusée : HTTP {e.code}", f"enrollment refused: HTTP {e.code}"))
+        log(t("clé d'inscription refusée.", "enrollment key refused.", "clave de inscripción rechazada.") if e.code == 403 else t(f"inscription refusée : HTTP {e.code}", f"enrollment refused: HTTP {e.code}", f"inscripción rechazada: HTTP {e.code}"))
         return 1
     except (OSError, ValueError) as e:
-        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}"))
+        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
         return 1
     save(CONFIG, {"server": server.rstrip("/"), "uid": uid, "token": answer["token"],
                   "enrolled": datetime.datetime.now().isoformat(timespec="seconds")})
     save(STATE, {"rescan": True})
-    log(t(f"poste inscrit auprès de {server}.", f"machine enrolled with {server}."))
+    log(t(f"poste inscrit auprès de {server}.", f"machine enrolled with {server}.", f"equipo inscrito en {server}."))
     return 0
 
 
@@ -581,14 +594,14 @@ def status_cmd():
     conf = load(CONFIG)
     state = load(STATE)
     scanned = state.get("last_scan")
-    rows = [(t("Agent", "Agent"), f"loco-client {VERSION}"),
-            (t("Serveur", "Server"), conf.get("server") or t("non inscrit", "not enrolled"))]
+    rows = [(t("Agent", "Agent", "Agente"), f"loco-client {VERSION}"),
+            (t("Serveur", "Server", "Servidor"), conf.get("server") or t("non inscrit", "not enrolled", "no inscrito"))]
     others = known_servers(conf)[1:] if conf.get("server") else []
     if others:
-        rows.append((t("De secours", "Fallback"), " ".join(others)))
-    rows.append((t("Identifiant", "ID"), conf.get("uid", "-")))
-    rows.append((t("Inventaire", "Inventory"),
-                 datetime.datetime.fromtimestamp(scanned).isoformat(timespec="seconds") if scanned else t("jamais", "never")))
+        rows.append((t("De secours", "Fallback", "De reserva"), " ".join(others)))
+    rows.append((t("Identifiant", "ID", "Identificador"), conf.get("uid", "-")))
+    rows.append((t("Inventaire", "Inventory", "Inventario"),
+                 datetime.datetime.fromtimestamp(scanned).isoformat(timespec="seconds") if scanned else t("jamais", "never", "nunca")))
     width = max(len(label) for label, _ in rows)
     for label, value in rows:
         print(f"{label.ljust(width)} : {value}")
@@ -662,7 +675,7 @@ class RemoteProcess:
                                                 start_new_session=True, close_fds=True)
                 self.reader, self.writer = self.process.stdout.fileno(), self.process.stdin.fileno()
             else:
-                raise ValueError(t("Type de session inconnu", "Unknown session type"))
+                raise ValueError(t("Type de session inconnu", "Unknown session type", "Tipo de sesión desconocido"))
             for fd in set((self.reader, self.writer)):
                 fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
             self.resize(descriptor)
@@ -731,7 +744,7 @@ class RemoteProcess:
             if self.state == "closed":
                 if self.kind in ("desktop", "files") and self.process.stderr:
                     self.error = self.process.stderr.read(1000).decode("utf-8", "replace").strip()[-300:]
-                self.error = self.error or t("Session terminée.", "Session ended.")
+                self.error = self.error or t("Session terminée.", "Session ended.", "Sesión finalizada.")
         return {"id": self.sid, "ack": self.ack, "seq": self.seq,
                 "data": base64.b64encode(self.pending).decode(), "state": self.state, "error": self.error}
 
@@ -778,7 +791,7 @@ class RemoteTransport:
                 elif parsed.scheme == "http":
                     self.connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=10)
                 else:
-                    raise ValueError(t("Adresse du serveur invalide", "Invalid server address"))
+                    raise ValueError(t("Adresse du serveur invalide", "Invalid server address", "Dirección del servidor no válida"))
                 self.key = key
             self.connection.request("POST", parsed.path.rstrip("/") + "/agent/api/remote", json.dumps(data).encode(),
                                     {"Content-Type": "application/json", "Authorization": "Bearer " + token,
@@ -788,7 +801,7 @@ class RemoteTransport:
             if response.status != 200:
                 raise urllib.error.HTTPError(server, response.status, response.reason, response.headers, None)
             if len(body) > 4 * 1024 * 1024:
-                raise ValueError(t("Réponse distante trop volumineuse", "Remote response too large"))
+                raise ValueError(t("Réponse distante trop volumineuse", "Remote response too large", "Respuesta remota demasiado grande"))
             return json.loads(body)
         except (OSError, ValueError, http.client.HTTPException) as exc:
             self.close()
@@ -887,8 +900,8 @@ def x11_environment():
             continue
         if env.get("DISPLAY") not in wayland_displays and re.fullmatch(r":[0-9]+(?:\.[0-9]+)?", env.get("DISPLAY", "")):
             return env
-    raise RuntimeError(t("Bureau Wayland non pris en charge ; une session X11 est nécessaire.", "Wayland desktop not supported; an X11 session is required.") if wayland else
-                       t("Aucune session graphique X11 ouverte sur ce poste.", "No X11 graphical session open on this machine."))
+    raise RuntimeError(t("Bureau Wayland non pris en charge ; une session X11 est nécessaire.", "Wayland desktop not supported; an X11 session is required.", "Escritorio Wayland no admitido; se necesita una sesión X11.") if wayland else
+                       t("Aucune session graphique X11 ouverte sur ce poste.", "No X11 graphical session open on this machine.", "Ninguna sesión gráfica X11 abierta en este equipo."))
 
 
 class XFixesCursorImage(ctypes.Structure):
@@ -967,7 +980,7 @@ def text_console():
                 f.write(data)
             with open(path, "rb") as f:
                 if hashlib.sha256(f.read()).hexdigest() != digest:
-                    raise RuntimeError(t("Bibliothèque de console altérée", "Console library tampered with"))
+                    raise RuntimeError(t("Bibliothèque de console altérée", "Console library tampered with", "Biblioteca de consola alterada"))
             sys.path.insert(0, path)
             from console_rfb import serve
             return serve(rfb_frame)
@@ -984,7 +997,7 @@ def linux_desktop(terminal_fallback=False):
         if "Wayland" in str(e):
             raise
         if not terminal_fallback:
-            raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console."))
+            raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console.", "Ningún escritorio X11. Se requiere el permiso Terminal remoto para abrir la consola de texto noVNC."))
         return text_console()
     os.environ["DISPLAY"] = env["DISPLAY"]
     if env.get("XAUTHORITY"):
@@ -997,13 +1010,13 @@ def linux_desktop(terminal_fallback=False):
     ptr, integer, ulong = ctypes.c_void_p, ctypes.c_int, ctypes.c_ulong
     display = bind(x, "XOpenDisplay", ptr, [ctypes.c_char_p])(env["DISPLAY"].encode())
     if not display:
-        raise RuntimeError(t("La session X11 n'est pas accessible à l'agent.", "The X11 session is not accessible to the agent."))
+        raise RuntimeError(t("La session X11 n'est pas accessible à l'agent.", "The X11 session is not accessible to the agent.", "La sesión X11 no es accesible para el agente."))
     root = bind(x, "XDefaultRootWindow", ulong, [ptr])(display)
     screen = bind(x, "XDefaultScreen", integer, [ptr])(display)
     width = bind(x, "XDisplayWidth", integer, [ptr, integer])(display, screen)
     height = bind(x, "XDisplayHeight", integer, [ptr, integer])(display, screen)
     if not 1 <= width <= 4096 or not 1 <= height <= 2160:
-        raise RuntimeError(t("Résolution X11 supérieure à 4096 × 2160.", "X11 resolution larger than 4096 × 2160."))
+        raise RuntimeError(t("Résolution X11 supérieure à 4096 × 2160.", "X11 resolution larger than 4096 × 2160.", "Resolución X11 superior a 4096 × 2160."))
     get_image = bind(x, "XGetImage", ctypes.POINTER(XImage), [ptr, ulong, integer, integer, ctypes.c_uint, ctypes.c_uint, ulong, integer])
     destroy = bind(x, "XDestroyImage", integer, [ctypes.POINTER(XImage)])
     keycode = bind(x, "XKeysymToKeycode", ctypes.c_ubyte, [ptr, ulong])
@@ -1056,10 +1069,10 @@ def linux_desktop(terminal_fallback=False):
     try:
         write(b"RFB 003.008\n")
         if read(12) != b"RFB 003.008\n":
-            raise ValueError(t("Version RFB non prise en charge", "Unsupported RFB version"))
+            raise ValueError(t("Version RFB non prise en charge", "Unsupported RFB version", "Versión RFB no admitida"))
         write(b"\x01\x01")
         if read(1) != b"\x01":
-            raise ValueError(t("Négociation RFB invalide", "Invalid RFB negotiation"))
+            raise ValueError(t("Négociation RFB invalide", "Invalid RFB negotiation", "Negociación RFB no válida"))
         write(b"\0\0\0\0")
         read(1)
         name = socket.gethostname().encode()
@@ -1070,7 +1083,7 @@ def linux_desktop(terminal_fallback=False):
             if kind == 0:
                 fmt = read(19)[3:]
                 if fmt[:10] != pixel[:10] or fmt[10:13] not in (b"\x10\x08\x00", b"\x00\x08\x10"):
-                    raise ValueError(t("Format de pixels RFB non pris en charge", "Unsupported RFB pixel format"))
+                    raise ValueError(t("Format de pixels RFB non pris en charge", "Unsupported RFB pixel format", "Formato de píxeles RFB no admitido"))
                 rgb_order = fmt[10] == 0
             elif kind == 2:
                 count = struct.unpack(">xH", read(3))[0]
@@ -1083,11 +1096,11 @@ def linux_desktop(terminal_fallback=False):
                 time.sleep(max(0, 0.04 - (time.monotonic() - last_frame)))
                 image = get_image(display, root, 0, 0, width, height, ctypes.c_ulong(-1).value, 2)
                 if not image:
-                    raise RuntimeError(t("Capture de la session X11 impossible", "Cannot capture the X11 session"))
+                    raise RuntimeError(t("Capture de la session X11 impossible", "Cannot capture the X11 session", "No se puede capturar la sesión X11"))
                 try:
                     im = image.contents
                     if im.bits_per_pixel != 32 or im.byte_order != 0 or (im.red_mask, im.green_mask, im.blue_mask) != (0xff0000, 0xff00, 0xff):
-                        raise RuntimeError(t("Format X11 non pris en charge (RGB 24/32 bits requis)", "Unsupported X11 format (RGB 24/32-bit required)"))
+                        raise RuntimeError(t("Format X11 non pris en charge (RGB 24/32 bits requis)", "Unsupported X11 format (RGB 24/32-bit required)", "Formato X11 no admitido (se requiere RGB 24/32 bits)"))
                     data = ctypes.string_at(im.data, im.bytes_per_line * height)
                     if im.bytes_per_line != width * 4:
                         data = b"".join(data[y * im.bytes_per_line:y * im.bytes_per_line + width * 4] for y in range(height))
@@ -1119,7 +1132,7 @@ def linux_desktop(terminal_fallback=False):
                     raise ValueError("Presse-papiers trop volumineux")
                 read(length)
             else:
-                raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message"))
+                raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message", "Mensaje RFB no admitido"))
             flush(display)
     except EOFError:
         pass
@@ -1201,7 +1214,7 @@ class FileSession:
         op = header.get("op")
         method = getattr(self, "op_" + op, None) if isinstance(op, str) and op.isidentifier() else None
         if method is None:
-            raise ValueError(t("opération inconnue", "unknown operation"))
+            raise ValueError(t("opération inconnue", "unknown operation", "operación desconocida"))
         return method(header, data)
 
     # ------------------------------------------------------------------ inspection
@@ -1223,7 +1236,7 @@ class FileSession:
 
     def op_hello(self, h, data):
         info = pwd.getpwuid(os.getuid())
-        roots = [{"name": t("Racine", "Root"), "path": "/"}, {"name": t("Dossier personnel", "Home folder"), "path": info.pw_dir}]
+        roots = [{"name": t("Racine", "Root", "Raíz"), "path": "/"}, {"name": t("Dossier personnel", "Home folder", "Carpeta personal"), "path": info.pw_dir}]
         return {"os": "linux", "sep": "/", "home": info.pw_dir, "user": info.pw_name,
                 "host": socket.gethostname(), "roots": roots}, b""
 
@@ -1251,7 +1264,7 @@ class FileSession:
         path = os.path.abspath(h["path"])
         dest = os.path.join(os.path.dirname(path), os.path.basename(h["name"]))
         if os.path.lexists(dest):
-            raise ValueError(t("Un élément porte déjà ce nom.", "An item already has that name."))
+            raise ValueError(t("Un élément porte déjà ce nom.", "An item already has that name.", "Un elemento ya tiene ese nombre."))
         os.rename(path, dest)
         return {"path": dest}, b""
 
@@ -1259,7 +1272,7 @@ class FileSession:
         path = os.path.abspath(h["path"])
         dest = os.path.join(os.path.abspath(h["to"]), os.path.basename(path))
         if os.path.lexists(dest):
-            raise ValueError(t("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination."))
+            raise ValueError(t("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination.", "Un elemento ya tiene ese nombre en el destino."))
         shutil.move(path, dest)
         return {"path": dest}, b""
 
@@ -1267,7 +1280,7 @@ class FileSession:
         path = os.path.abspath(h["path"])
         dest = os.path.join(os.path.abspath(h["to"]), os.path.basename(path))
         if os.path.lexists(dest):
-            raise ValueError(t("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination."))
+            raise ValueError(t("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination.", "Un elemento ya tiene ese nombre en el destino."))
         if os.path.isdir(path) and not os.path.islink(path):
             shutil.copytree(path, dest, symlinks=True)
         else:
@@ -1308,7 +1321,7 @@ class FileSession:
             entry = (open(tmp, "wb"), tmp)
             self.uploads[path] = entry
         elif entry is None:
-            raise ValueError(t("Téléversement sans début.", "Upload without a start."))
+            raise ValueError(t("Téléversement sans début.", "Upload without a start.", "Subida sin inicio."))
         handle = entry[0]
         handle.seek(offset)
         handle.write(data)
@@ -1355,7 +1368,7 @@ def files_service():
 
 def main(argv):
     if os.geteuid() != 0:
-        print(t("loco-client : lancez cette commande en root.", "loco-client: run this command as root."), file=sys.stderr)
+        print(t("loco-client : lancez cette commande en root.", "loco-client: run this command as root.", "loco-client: ejecute este comando como root."), file=sys.stderr)
         return 1
     cmd = argv[0] if argv else "run"
     if cmd == "remote":
@@ -1378,8 +1391,8 @@ def main(argv):
     if cmd == "remove":
         conf = load(CONFIG)
         remove_local()
-        print(t("Agent loco retiré de ce poste.", "loco agent removed from this machine.")
-              + (t(" Retirez-le aussi de la liste du parc dans le portail.", " Also remove it from the fleet list in the portal.") if conf.get("token") else ""))
+        print(t("Agent loco retiré de ce poste.", "loco agent removed from this machine.", "Agente loco retirado de este equipo.")
+              + (t(" Retirez-le aussi de la liste du parc dans le portail.", " Also remove it from the fleet list in the portal.", " Retírelo también de la lista del parque en el portal.") if conf.get("token") else ""))
         return 0
     print(__doc__, file=sys.stderr)
     return 2
