@@ -15,6 +15,16 @@ cli() { (cd /opt/loco/portal && sudo -u loco env LOCO_DATA=/srv/loco LOCO_STATE=
 with_admin_lock() {
     sudo sh -c 'umask 077; exec flock -o -w 900 /var/lib/loco-agent/lock "$@"' sh "$@"
 }
+# Le miroir amont (archive.ubuntu.com) renvoie parfois une erreur 500 passagère à travers le cache
+# quand il est lent : réessayer les commandes qui le sollicitent évite d'échouer sur un simple ralentissement.
+retry() {
+    local n=1
+    until "$@"; do
+        if [ "$n" -ge 4 ]; then return 1; fi
+        echo "Nouvelle tentative $n : $*" >&2
+        n=$((n + 1)); sleep 5
+    done
+}
 build_deb() {
     local kind=$1
     mkdir -p "$work/$kind/DEBIAN" "$work/$kind/usr/bin"
@@ -46,7 +56,7 @@ HOST=$(. /etc/loco/loco.conf && echo "$HOST")
 if [ -f "$work/old-ca" ]; then
     [ "$(id -u loco)" = "$old_uid" ]
     [ ! -d /etc/local-repo ]
-    with_admin_lock apt-get update -o APT::Update::Error-Mode=any >/dev/null
+    retry with_admin_lock apt-get update -o APT::Update::Error-Mode=any >/dev/null
     [ "$(sudo sha256sum /etc/loco/tls/ca.crt | cut -d' ' -f1)" = "$(cat "$work/old-ca")" ]
     sudo cmp "$work/legacy.deb" /srv/loco/apt/pool/lr-e2e_1.0_all.deb
     grep -q 'lr-e2e' /srv/loco/apt/Packages
@@ -73,23 +83,23 @@ sudo cmp "$work/native.deb" "/srv/loco/apt/repositories/$REPO/pool/lr-e2e_1.0_al
 sudo cmp "$work/foreign.deb" /srv/loco/apt/repositories/ubuntu/isolation-e2e/pool/lr-e2e_1.0_all.deb
 step "Poste : détection automatique, source deb822, signatures et HTTPS"
 curl -fsSL "http://$HOST:8088/linux/setup.sh" > "$work/setup.sh"
-with_admin_lock sh "$work/setup.sh" --trust-ca
+retry with_admin_lock sh "$work/setup.sh" --trust-ca
 curl -fsSL "https://$HOST:8443/linux/setup.sh" > "$work/setup.sh"
 SOURCE=/etc/apt/sources.list.d/loco.sources
 grep -q "https://$HOST:8443/apt/repositories/$REPO/" "$SOURCE"
 [ ! -e /etc/apt/sources.list.d/loco.list ]
 curl -fsS "https://$HOST:8443/healthz" >/dev/null
-with_admin_lock apt-get install -y -q lr-e2e >/dev/null
+retry with_admin_lock apt-get install -y -q lr-e2e >/dev/null
 [ "$(lr-e2e)" = loco-native-ok ]
 step "Version absente : échec sans changer le dépôt en place"
 sudo cp "$SOURCE" "$work/source-before"
 if with_admin_lock sh "$work/setup.sh" --distribution debian --suite not-created; then echo 'Une version absente doit être refusée.' >&2; exit 1; fi
 sudo cmp "$SOURCE" "$work/source-before"
 step "Cache seul et retour au dépôt détecté"
-with_admin_lock sh "$work/setup.sh" --cache-only >/dev/null
+retry with_admin_lock sh "$work/setup.sh" --cache-only >/dev/null
 [ ! -e "$SOURCE" ]
 [ -e /etc/apt/apt.conf.d/01loco-proxy ]
-with_admin_lock sh "$work/setup.sh" >/dev/null
+retry with_admin_lock sh "$work/setup.sh" >/dev/null
 if [ -f "$work/old-ca" ]; then
     step "Compatibilité explicite du dépôt historique"
     with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
