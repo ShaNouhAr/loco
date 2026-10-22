@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.40.0 — 2026-10-22
+
+- **Page *Réglages du parc* plus claire** : la carte de l'adresse du serveur affiche l'adresse actuelle avec une pastille de confirmation (« 3/3 agents l'ont confirmée ») et replie le mode d'emploi dans un « Comment changer l'adresse sans perdre les postes ? » en trois étapes ; une adresse annoncée en attente de bascule a son propre encart. Le seuil des pastilles gagne une légende de couleurs (à jour · 1 à N · N ou plus), et la clé d'inscription affiche un aperçu masqué.
+
 ## 2.39.0 — 2026-10-22
 
 - **MSI Windows prêt à l'emploi** : « Télécharger le MSI » depuis la page *Enrôlement* donne désormais un installeur tout prêt — un **double-clic installe le service ET inscrit le poste**, sans aucune commande, comme le paquet `.deb` sous Linux. Le portail grave l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité dans le MSI au téléchargement. La commande PowerShell et le déploiement en masse (GPO) restent disponibles sous « Autres méthodes » (MSI générique, sans inscription).
