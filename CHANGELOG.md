@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.37.0 — 2026-10-22
+
+- **Processeur et mémoire du serveur dans la vue d'ensemble** : deux tuiles, à côté de « Disque », montrent la charge du serveur sur lequel tourne loco — **Processeur** (pourcentage d'utilisation, charge sur 1 min et nombre de cœurs) et **Mémoire** (utilisée sur totale), avec une jauge (orange puis rouge quand ça se remplit). Les valeurs s'actualisent en direct comme le reste de la page. Lues sur le serveur (`/proc`) ; masquées si indisponibles.
+
 ## 2.36.0 — 2026-10-22
 
 - **Terminal des postes repensé** (shell Linux comme PowerShell Windows, même affichage) : vraie palette ANSI 16 couleurs lisible, accordée au thème choisi (OLED, sombre, clair — fond blanc et couleurs adaptées en thème clair) ; le curseur et la sélection reprennent votre couleur d'accent et se mettent à jour en direct quand vous changez de thème ou d'accent. Police à chasse fixe moderne, interligne plus aéré et défilement doux pour les longues sorties, fond accordé à la surface (plus de liseré autour de la marge) et ascenseur fin et discret. Les boutons **A− / A+** règlent la taille du texte, mémorisée dans le navigateur.
