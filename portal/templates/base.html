@@ -11,7 +11,7 @@
 <body class="{% block body_class %}{% endblock %}">
 {% block body %}
 {% set ep = request.endpoint or '' %}
-{% from '_nav_icons.html' import nav_icon, theme_toggle with context %}
+{% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu with context %}
 <header class="top">
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
@@ -61,6 +61,7 @@
     </nav>
     <div class="top-r">
       {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="{{ _('Aller à une page (Ctrl+K)') }}" title="{{ _('Aller à une page') }}"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
+      {{ language_menu() }}
       {{ theme_toggle() }}
       {% if current_user %}
       <div class="userbox">

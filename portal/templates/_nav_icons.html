@@ -34,6 +34,8 @@
   <rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4M12 7.5v5M9.5 10h5"/>
 {% elif name == 'server' %}
   <rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M16 6.5h2M16 17.5h2"/>
+{% elif name == 'globe' %}
+  <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z"/>
 {% endif %}
 </svg>
 {%- endmacro %}
@@ -67,7 +69,9 @@
 <button type="button" class="accent-choice accent-{{ key }}" data-set-accent="{{ key }}" role="menuitemradio" aria-checked="false" aria-label="{{ label }}" title="{{ label }}"></button>
 {% endfor %}
 </div>
-<div class="menu-label">{{ _("Langue") }}</div>
+{%- endmacro %}
+
+{% macro language_choices() -%}
 {% for key, name in langs.items() %}
 <form method="post" action="{{ url_for('set_language') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="lang" value="{{ key }}">
@@ -79,7 +83,14 @@
 
 {% macro theme_toggle() -%}
 <details class="menu theme-menu">
-  <summary class="theme-toggle" aria-label="{{ _("Apparence : thème, couleur d'accent et langue") }}" title="{{ _("Apparence") }}">{{ nav_icon('palette') }}</summary>
+  <summary class="theme-toggle" aria-label="{{ _("Apparence : thème et couleur d'accent") }}" title="{{ _("Apparence") }}">{{ nav_icon('palette') }}</summary>
   <div class="menu-list" role="menu">{{ appearance_choices() }}</div>
+</details>
+{%- endmacro %}
+
+{% macro language_menu() -%}
+<details class="menu theme-menu lang-menu">
+  <summary class="theme-toggle" aria-label="{{ _("Langue : %(langs)s", langs=langs.values()|join(', ')) }}" title="{{ _("Langue") }}">{{ nav_icon('globe') }}</summary>
+  <div class="menu-list" role="menu">{{ language_choices() }}</div>
 </details>
 {%- endmacro %}

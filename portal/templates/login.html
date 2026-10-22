@@ -2,7 +2,7 @@
 {% from "_logo.html" import logo %}
 {% block title %}{{ _("Connexion") }}{% endblock %}
 {% block body %}
-{% from '_nav_icons.html' import theme_toggle with context %}
+{% from '_nav_icons.html' import theme_toggle, language_menu with context %}
 <div class="login">
   <div class="login-box">
     <div class="brand">{{ logo() }}<b>loco</b><span>{{ host }}</span></div>
@@ -23,6 +23,7 @@
     </form>
     <div class="foot">
       <span>loco {{ version }}</span>
+      {{ language_menu() }}
       {{ theme_toggle() }}
     </div>
   </div>
