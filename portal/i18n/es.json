@@ -1996,6 +1996,7 @@
  "suivie par les agents": "seguida por los agentes",
  "sur %(items)s": "de %(items)s",
  "sur %(n)s": "de %(n)s",
+ "sur %(total)s": "de %(total)s",
  "sur %(total)s poste%(v)s": "de %(total)s equipo%(v)s",
  "sur disque": "en disco",
  "systemd requis.": "systemd requerido.",

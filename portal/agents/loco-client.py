@@ -655,6 +655,11 @@ class RemoteProcess:
                 try:
                     home = pwd.getpwuid(os.geteuid()).pw_dir
                     env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor", HOME=home)
+                    # Le shell de connexion joue /etc/profile puis le ~/.bashrc du poste (couleurs, alias, invite).
+                    # S'il n'en ressort aucune invite colorée, en poser une par défaut pour une vraie allure de
+                    # terminal — un PS1 déjà coloré ou un PROMPT_COMMAND du poste restent prioritaires.
+                    default_ps1 = r"\[\e[1;32m\]\u@\h\[\e[0m\]:\[\e[1;34m\]\w\[\e[0m\]\$ "
+                    env["PROMPT_COMMAND"] = "case \"$PS1\" in *'\\['*) ;; *) PS1='%s' ;; esac" % default_ps1
                     shell = "/bin/bash" if os.path.isfile("/bin/bash") else "/bin/sh"
                     bootstrap = "import fcntl,termios,os; fcntl.ioctl(0,termios.TIOCSCTTY,0); os.execv(%r,[%r,'-l'])" % (shell, shell)
                     self.process = subprocess.Popen([sys.executable, "-c", bootstrap], stdin=slave, stdout=slave, stderr=slave,

@@ -47,8 +47,8 @@
     </div>{% endif %}
     {% if d.mem %}<div class="metric">
       <div class="k">{{ _("Mémoire") }}</div>
-      <div class="v"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span></div>
-      <div class="s">{{ _("utilisés sur %(total)s", total=d.mem.total|human) }}</div>
+      <div class="v"><span data-bind="mem.pct" data-fmt="pct">{{ d.mem.pct }} %</span></div>
+      <div class="s"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span> {{ _("sur %(total)s", total=d.mem.total|human) }}</div>
       <div class="meter {{ 'err' if d.mem.pct >= 90 else 'warn' if d.mem.pct >= 80 }}"><i data-bind="mem.pct" data-fmt="meter" data-width="{{ d.mem.pct }}"></i></div>
     </div>{% endif %}
     <div class="metric">

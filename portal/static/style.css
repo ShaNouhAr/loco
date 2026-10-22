@@ -241,7 +241,7 @@ main { max-width: var(--w); margin: 0 auto; padding: 36px 32px 96px; }
 .panel-h.sub h2 { font-size: 13.5px; }
 
 /* Rangée d'indicateurs : une tuile par valeur. */
-.metrics { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(172px, 1fr)); gap: 12px; }
 .metric { padding: 16px 18px; min-width: 0; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); box-shadow: var(--shadow-card); }
 .k { font-size: 13px; font-weight: 500; color: var(--text-2); }
 .v { margin-top: 8px; font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
