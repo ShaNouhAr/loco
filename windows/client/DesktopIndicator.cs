@@ -32,7 +32,7 @@ namespace Loco
                 Directory.SetAccessControl(DesktopStatus.DirectoryPath, security);
                 if (color != "green" && color != "red" && color != "orange") color = "grey";
                 string json = new JavaScriptSerializer().Serialize(new {
-                    color = color, reason = reason ?? Lang.T("Informations en attente", "Awaiting information"), updated_at = DateTime.UtcNow.ToString("o") });
+                    color = color, reason = reason ?? Lang.T("Informations en attente", "Awaiting information", "Información en espera"), updated_at = DateTime.UtcNow.ToString("o") });
                 string tmp = Path.Combine(DesktopStatus.DirectoryPath, Guid.NewGuid().ToString("N") + ".tmp");
                 try
                 {
@@ -43,7 +43,7 @@ namespace Loco
                 }
                 finally { if (File.Exists(tmp)) File.Delete(tmp); }
             }
-            catch (Exception e) { Agent.Log(Lang.T("indicateur : ", "indicator: ") + e.Message); }
+            catch (Exception e) { Agent.Log(Lang.T("indicateur : ", "indicator: ", "indicador: ") + e.Message); }
         }
 
         public static void Unavailable(string reason)
@@ -82,13 +82,13 @@ namespace Loco
         static void Start(int session)
         {
             try { using (var process = Launch(session, Executable, "")) { } }
-            catch (Exception e) { Agent.Log(Lang.T("indicateur de session : ", "session indicator: ") + e.Message); }
+            catch (Exception e) { Agent.Log(Lang.T("indicateur de session : ", "session indicator: ", "indicador de sesión: ") + e.Message); }
         }
 
         internal static Process StartDesktop(string pipeName)
         {
             string file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "loco-desktop.exe");
-            if (!WindowsIdentity.GetCurrent().IsSystem || !File.Exists(file)) throw new IOException(Lang.T("Compagnon de bureau indisponible.", "Desktop companion unavailable."));
+            if (!WindowsIdentity.GetCurrent().IsSystem || !File.Exists(file)) throw new IOException(Lang.T("Compagnon de bureau indisponible.", "Desktop companion unavailable.", "Compañero de escritorio no disponible."));
             IntPtr sessions; int count;
             if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out sessions, out count)) throw new Win32Exception();
             try
@@ -101,7 +101,7 @@ namespace Loco
                     if (session.Id > 0 && session.State == 0) { if (selected < 0 || session.Id == console) selected = session.Id; }
                 }
                 if (selected < 0 && console > 0) selected = console;
-                if (selected < 0) throw new IOException(Lang.T("Aucune session interactive disponible sur ce poste Windows.", "No interactive session available on this Windows machine."));
+                if (selected < 0) throw new IOException(Lang.T("Aucune session interactive disponible sur ce poste Windows.", "No interactive session available on this Windows machine.", "Ninguna sesión interactiva disponible en este equipo Windows."));
                 return Launch(selected, file, " --pipe " + pipeName, true);
             }
             finally { WTSFreeMemory(sessions); }

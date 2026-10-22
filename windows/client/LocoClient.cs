@@ -95,7 +95,7 @@ namespace Loco
             while (!stopping.WaitOne(delay))
             {
                 try { DesktopIndicator.StartSessions(); Agent.RunOnce(stopping); }
-                catch (Exception e) { Agent.Log(Lang.T("erreur : ", "error: ") + e.Message); }
+                catch (Exception e) { Agent.Log(Lang.T("erreur : ", "error: ", "error: ") + e.Message); }
                 delay = Agent.Interval * 1000;
             }
         }
@@ -272,7 +272,7 @@ namespace Loco
                 object previous;
                 conf.TryGetValue("servers", out previous);
                 bool listChanged = announced.Count > 0 && !(previous is ArrayList && ((ArrayList)previous).Cast<object>().Select(Convert.ToString).SequenceEqual(announced.Cast<string>()));
-                if (moved) Log(Lang.T("serveur joint à sa nouvelle adresse : ", "server reached at its new address: ") + server + Lang.T(" (au lieu de ", " (instead of ") + Str(conf, "server") + ")");
+                if (moved) Log(Lang.T("serveur joint à sa nouvelle adresse : ", "server reached at its new address: ", "servidor contactado en su nueva dirección: ") + server + Lang.T(" (au lieu de ", " (instead of ", " (en lugar de ") + Str(conf, "server") + ")");
                 if (moved || listChanged)
                 {
                     conf["server"] = server;
@@ -281,7 +281,7 @@ namespace Loco
                 }
                 return answer;
             }
-            throw failure ?? new Exception(Lang.T("aucune adresse de serveur connue", "no known server address"));
+            throw failure ?? new Exception(Lang.T("aucune adresse de serveur connue", "no known server address", "ninguna dirección de servidor conocida"));
         }
 
         static void Download(string url, string path, RemoteCertificateValidationCallback check = null, Action<int> percent = null)
@@ -316,7 +316,7 @@ namespace Loco
         internal static Dictionary<string, object> RemoteExchange(object data)
         {
             var conf = ReadJson(ConfigPath);
-            if (Str(conf, "token") == "") throw new IOException(Lang.T("Inscription du poste en attente", "Machine enrollment pending"));
+            if (Str(conf, "token") == "") throw new IOException(Lang.T("Inscription du poste en attente", "Machine enrollment pending", "Inscripción del equipo pendiente"));
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             if (ca == null) LoadCa();
             return Post(Str(conf, "server"), "/agent/api/remote", data, Str(conf, "token"), 10000);
@@ -346,7 +346,7 @@ namespace Loco
             var cert = new X509Certificate2(File.ReadAllBytes(tmp));
             string digest;
             using (var sha = SHA256.Create()) digest = BitConverter.ToString(sha.ComputeHash(cert.RawData)).Replace("-", "").ToLowerInvariant();
-            if (digest != pin) { File.Delete(tmp); throw new Exception(Lang.T("empreinte de l'autorité différente de celle attendue : inscription refusée", "authority fingerprint differs from the expected one: enrollment refused")); }
+            if (digest != pin) { File.Delete(tmp); throw new Exception(Lang.T("empreinte de l'autorité différente de celle attendue : inscription refusée", "authority fingerprint differs from the expected one: enrollment refused", "huella de la autoridad distinta de la esperada: inscripción rechazada")); }
             if (File.Exists(CaPath)) File.Delete(CaPath);
             File.Move(tmp, CaPath);
         }
@@ -368,7 +368,7 @@ namespace Loco
                 { "server", server }, { "uid", uid }, { "token", Str(answer, "token") }, { "enrolled", DateTime.Now.ToString("s") } };
             SaveJson(ConfigPath, conf);
             SaveJson(StatePath, new Dictionary<string, object> { { "last_scan", 0 }, { "scan_hours", 6 }, { "rescan", true } });
-            Log(Lang.T("poste inscrit auprès de ", "machine enrolled with ") + server);
+            Log(Lang.T("poste inscrit auprès de ", "machine enrolled with ", "equipo inscrito en ") + server);
             // La clé d'inscription n'est plus utile : retirée du registre (lisible par les utilisateurs du poste).
             try
             {
@@ -476,7 +476,7 @@ namespace Loco
                         { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) } });
                 }
             }
-            catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ") + e.Message; }
+            catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
             return new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
                 { "reboot_required", RebootRequired() }, { "error", error } };
         }
@@ -490,12 +490,12 @@ namespace Loco
             dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
             foreach (dynamic u in found.Updates)
             {
-                if ((bool)u.InstallationBehavior.CanRequestUserInput) { lines.Add(Lang.T("Ignorée (interactive) : ", "Skipped (interactive): ") + u.Title); continue; }
+                if ((bool)u.InstallationBehavior.CanRequestUserInput) { lines.Add(Lang.T("Ignorée (interactive) : ", "Skipped (interactive): ", "Omitida (interactiva): ") + u.Title); continue; }
                 if (!(bool)u.EulaAccepted) u.AcceptEula();
                 coll.Add(u);
             }
-            if ((int)coll.Count == 0) { lines.Add(Lang.T("Windows Update : aucune mise à jour.", "Windows Update: no updates.")); return true; }
-            lines.Add(Lang.T("Windows Update : ", "Windows Update: ") + coll.Count + Lang.T(" mise(s) à jour à installer.", " update(s) to install."));
+            if ((int)coll.Count == 0) { lines.Add(Lang.T("Windows Update : aucune mise à jour.", "Windows Update: no updates.", "Windows Update: sin actualizaciones.")); return true; }
+            lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + coll.Count + Lang.T(" mise(s) à jour à installer.", " update(s) to install.", " actualización(es) por instalar."));
             dynamic downloader = session.CreateUpdateDownloader();
             downloader.Updates = coll;
             downloader.Download();
@@ -507,12 +507,12 @@ namespace Loco
             {
                 dynamic r = result.GetUpdateResult(i);
                 int code = (int)r.ResultCode;
-                string state = code == 2 ? "OK" : code == 3 ? Lang.T("OK avec erreurs", "OK with errors") : code == 4 ? Lang.T("ÉCHEC", "FAILED") : code == 5 ? Lang.T("ANNULÉE", "CANCELLED") : "code " + code;
+                string state = code == 2 ? "OK" : code == 3 ? Lang.T("OK avec erreurs", "OK with errors", "OK con errores") : code == 4 ? Lang.T("ÉCHEC", "FAILED", "FALLO") : code == 5 ? Lang.T("ANNULÉE", "CANCELLED", "CANCELADA") : "code " + code;
                 if (code >= 4) ok = false;
                 int hr = (int)r.HResult;
                 lines.Add("  " + state + (hr != 0 ? string.Format(" (0x{0:X8})", hr) : "") + " : " + coll.Item(i).Title);
             }
-            if ((bool)result.RebootRequired) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish."));
+            if ((bool)result.RebootRequired) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish.", "Reinicio necesario para terminar."));
             return ok;
         }
 
@@ -521,10 +521,10 @@ namespace Loco
         {
             var script = cmd.ContainsKey("script") ? cmd["script"] as Dictionary<string, object> : null;
             string content = script == null ? "" : Str(script, "content");
-            if (script == null || Str(script, "platform") != "windows") { output = Lang.T("Script destiné à un autre système.", "Script intended for another system."); return 1; }
+            if (script == null || Str(script, "platform") != "windows") { output = Lang.T("Script destiné à un autre système.", "Script intended for another system.", "Script destinado a otro sistema."); return 1; }
             using (var sha = SHA256.Create())
                 if (BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(content))).Replace("-", "").ToLowerInvariant()
-                    != Str(script, "sha256").ToLowerInvariant()) { output = Lang.T("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run."); return 1; }
+                    != Str(script, "sha256").ToLowerInvariant()) { output = Lang.T("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run.", "Huella del script no válida: no ejecutado."); return 1; }
             string dir = Path.Combine(Path.GetTempPath(), "loco-script-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             try
@@ -554,12 +554,12 @@ namespace Loco
                 if (!p.WaitForExit(timeoutSeconds * 1000))
                 {
                     try { p.Kill(); } catch (Exception) { }
-                    lock (text) output = text + Lang.T("\nArrêté : pas terminé après ", "\nStopped: not finished after ") + timeoutSeconds + " s.";
+                    lock (text) output = text + Lang.T("\nArrêté : pas terminé après ", "\nStopped: not finished after ", "\nDetenido: no terminó tras ") + timeoutSeconds + " s.";
                     return -1;
                 }
                 p.WaitForExit();                              // fin de la lecture asynchrone des sorties
                 lock (text) output = text.ToString().TrimEnd();
-                if (output.Length == 0) output = Lang.T("(aucune sortie)", "(no output)");
+                if (output.Length == 0) output = Lang.T("(aucune sortie)", "(no output)", "(sin salida)");
                 return p.ExitCode;
             }
         }
@@ -572,7 +572,7 @@ namespace Loco
                 if (!p.WaitForExit(InstallerTimeout * 1000))
                 {
                     try { p.Kill(); } catch (Exception) { }
-                    throw new Exception(Lang.T("pas terminé après ", "not finished after ") + InstallerTimeout + Lang.T(" s (options silencieuses à vérifier)", " s (check the silent options)"));
+                    throw new Exception(Lang.T("pas terminé après ", "not finished after ", "no terminó tras ") + InstallerTimeout + Lang.T(" s (options silencieuses à vérifier)", " s (check the silent options)", " s (comprobar las opciones silenciosas)"));
                 }
                 return p.ExitCode;
             }
@@ -584,7 +584,7 @@ namespace Loco
         static bool InstallCatalogApps(string server, object appsValue, List<string> lines, Progress progress = null)
         {
             var apps = appsValue as ArrayList ?? new ArrayList();
-            if (apps.Count == 0) { lines.Add(Lang.T("Logiciels du catalogue : rien à mettre à jour.", "Catalog software: nothing to update.")); return true; }
+            if (apps.Count == 0) { lines.Add(Lang.T("Logiciels du catalogue : rien à mettre à jour.", "Catalog software: nothing to update.", "Programas del catálogo: nada que actualizar.")); return true; }
             bool ok = true;
             string dir = Path.Combine(Path.GetTempPath(), "loco-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
@@ -602,7 +602,7 @@ namespace Loco
                         Download(server + Str(a, "url"), dest, null,
                                  progress == null ? (Action<int>)null : p => progress("download", Str(a, "name"), rank, apps.Count, p));
                         if (progress != null) progress("verify", Str(a, "name"), rank, apps.Count, -1);
-                        if (Sha256File(dest) != Str(a, "sha256").ToLowerInvariant()) throw new Exception(Lang.T("somme SHA-256 invalide", "invalid SHA-256 checksum"));
+                        if (Sha256File(dest) != Str(a, "sha256").ToLowerInvariant()) throw new Exception(Lang.T("somme SHA-256 invalide", "invalid SHA-256 checksum", "suma SHA-256 no válida"));
                         if (progress != null) progress("install", Str(a, "name"), rank, apps.Count, -1);
                         string args = Str(a, "args");
                         int code;
@@ -617,11 +617,11 @@ namespace Loco
                                 code = 0;
                                 break;
                         }
-                        if (code == 0 || code == 1638 || code == 2359302) lines.Add(Lang.T("OK : ", "OK: ") + name);
-                        else if (code == 3010 || code == 1641) lines.Add(Lang.T("OK : ", "OK: ") + name + Lang.T(" (redémarrage nécessaire)", " (reboot required)"));
-                        else throw new Exception(Lang.T("code de sortie ", "exit code ") + code);
+                        if (code == 0 || code == 1638 || code == 2359302) lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + name);
+                        else if (code == 3010 || code == 1641) lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + name + Lang.T(" (redémarrage nécessaire)", " (reboot required)", " (reinicio necesario)"));
+                        else throw new Exception(Lang.T("code de sortie ", "exit code ", "código de salida ") + code);
                     }
-                    catch (Exception e) { ok = false; lines.Add(Lang.T("ÉCHEC : ", "FAILED: ") + name + " : " + e.Message); }
+                    catch (Exception e) { ok = false; lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + name + " : " + e.Message); }
                 }
             }
             finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
@@ -634,14 +634,14 @@ namespace Loco
             var data = new Dictionary<string, object> { { "id", id }, { "state", state }, { "output", output }, { "exit_code", code } };
             if (inventory != null) data["inventory"] = inventory;
             try { PublishIndicator(Post(Str(conf, "server"), "/agent/api/result", data, Str(conf, "token"))); }
-            catch (Exception e) { Log(Lang.T("résultat non transmis : ", "result not sent: ") + e.Message); }
+            catch (Exception e) { Log(Lang.T("résultat non transmis : ", "result not sent: ", "resultado no transmitido: ") + e.Message); }
         }
 
         static void PublishIndicator(Dictionary<string, object> answer)
         {
             object value;
             var indicator = answer.TryGetValue("indicator", out value) ? value as Dictionary<string, object> : null;
-            if (indicator == null) { DesktopIndicator.Unavailable(Lang.T("État du poste indisponible sur le serveur", "Machine status unavailable on the server")); return; }
+            if (indicator == null) { DesktopIndicator.Unavailable(Lang.T("État du poste indisponible sur le serveur", "Machine status unavailable on the server", "Estado del equipo no disponible en el servidor")); return; }
             DesktopIndicator.Publish(Str(indicator, "color"), Str(indicator, "reason"));
         }
 
@@ -670,7 +670,7 @@ namespace Loco
             foreach (var f in new[] { ConfigPath, StatePath, CaPath }) try { File.Delete(f); } catch (Exception) { }
             string code = ProductCode();
             if (code != "") Detached("msiexec.exe", "/x " + code + " /qn /norestart");
-            else Log(Lang.T("produit loco-client introuvable : désinstallation à faire à la main", "loco-client product not found: uninstall manually"));
+            else Log(Lang.T("produit loco-client introuvable : désinstallation à faire à la main", "loco-client product not found: uninstall manually", "producto loco-client no encontrado: desinstalación manual necesaria"));
         }
 
         // Proxy WinHTTP du poste dirigé vers le cache Windows Update de loco (sans DNS), piloté par le portail.
@@ -695,11 +695,11 @@ namespace Loco
                 if (RunCapture("netsh", "winhttp set proxy proxy-server=\"" + target + "\" bypass-list=\"" + bypass + "\"", 20, out output) == 0)
                 {
                     try { File.WriteAllText(WuProxyMarker, desired); } catch (Exception) { }
-                    Log(Lang.T("proxy WinHTTP dirigé vers ", "WinHTTP proxy pointed at ") + target + Lang.T(" (cache Windows Update)", " (Windows Update cache)"));
+                    Log(Lang.T("proxy WinHTTP dirigé vers ", "WinHTTP proxy pointed at ", "proxy WinHTTP dirigido a ") + target + Lang.T(" (cache Windows Update)", " (Windows Update cache)", " (caché de Windows Update)"));
                 }
-                else Log(Lang.T("proxy WinHTTP : échec du réglage (", "WinHTTP proxy: failed to set (") + output.Replace("\n", " ").Trim() + ")");
+                else Log(Lang.T("proxy WinHTTP : échec du réglage (", "WinHTTP proxy: failed to set (", "proxy WinHTTP: fallo al configurar (") + output.Replace("\n", " ").Trim() + ")");
             }
-            else ClearWuProxy(Lang.T("cache Windows Update par proxy désactivé", "Windows Update proxy cache disabled"));
+            else ClearWuProxy(Lang.T("cache Windows Update par proxy désactivé", "Windows Update proxy cache disabled", "caché de Windows Update por proxy desactivada"));
         }
 
         // Retire le proxy WinHTTP seulement s'il a été posé par loco (marqueur) : Windows Update repasse en direct.
@@ -710,7 +710,7 @@ namespace Loco
             if (RunCapture("netsh", "winhttp reset proxy", 20, out output) == 0)
             {
                 try { File.Delete(WuProxyMarker); } catch (Exception) { }
-                Log(Lang.T("proxy WinHTTP retiré (", "WinHTTP proxy removed (") + reason + ")");
+                Log(Lang.T("proxy WinHTTP retiré (", "WinHTTP proxy removed (", "proxy WinHTTP retirado (") + reason + ")");
             }
         }
 
@@ -732,11 +732,11 @@ namespace Loco
             try
             {
                 Download(Str(conf, "server") + "/agent/files/loco-client.msi", path);
-                if (Sha256File(path) != sha) { File.Delete(path); throw new Exception(Lang.T("empreinte du MSI incorrecte", "incorrect MSI fingerprint")); }
-                Log(Lang.T("mise à jour de l'agent : ", "agent update: ") + Version + " -> " + wanted);
+                if (Sha256File(path) != sha) { File.Delete(path); throw new Exception(Lang.T("empreinte du MSI incorrecte", "incorrect MSI fingerprint", "huella del MSI incorrecta")); }
+                Log(Lang.T("mise à jour de l'agent : ", "agent update: ", "actualización del agente: ") + Version + " -> " + wanted);
                 Detached("msiexec.exe", "/i \"" + path + "\" /qn /norestart /l*v \"" + Path.Combine(Root, "update.log") + "\"");
             }
-            catch (Exception e) { Log(Lang.T("mise à jour de l'agent impossible : ", "agent update failed: ") + e.Message); }
+            catch (Exception e) { Log(Lang.T("mise à jour de l'agent impossible : ", "agent update failed: ", "no se pudo actualizar el agente: ") + e.Message); }
         }
 
         static void Restart(string reason)
@@ -753,11 +753,11 @@ namespace Loco
                 var conf = ReadJson(ConfigPath);
                 if (Str(conf, "token") == "")
                 {
-                    DesktopIndicator.Unavailable(Lang.T("Inscription du poste en attente", "Machine enrollment pending"));
+                    DesktopIndicator.Unavailable(Lang.T("Inscription du poste en attente", "Machine enrollment pending", "Inscripción del equipo pendiente"));
                     try { conf = Enroll(conf); }
-                    catch (LocoHttpException e) { Log(e.Status == 403 ? Lang.T("clé d'inscription refusée", "enrollment key refused") : Lang.T("inscription refusée : ", "enrollment refused: ") + e.Message); return false; }
-                    catch (Exception e) { Log(Lang.T("inscription impossible : ", "enrollment failed: ") + e.Message); return false; }
-                    if (conf == null) { Log(Lang.T("poste non inscrit : adresse du serveur et clé absentes (installeur ou GPO)", "machine not enrolled: server address and key missing (installer or GPO)")); return false; }
+                    catch (LocoHttpException e) { Log(e.Status == 403 ? Lang.T("clé d'inscription refusée", "enrollment key refused", "clave de inscripción rechazada") : Lang.T("inscription refusée : ", "enrollment refused: ", "inscripción rechazada: ") + e.Message); return false; }
+                    catch (Exception e) { Log(Lang.T("inscription impossible : ", "enrollment failed: ", "inscripción imposible: ") + e.Message); return false; }
+                    if (conf == null) { Log(Lang.T("poste non inscrit : adresse du serveur et clé absentes (installeur ou GPO)", "machine not enrolled: server address and key missing (installer or GPO)", "equipo no inscrito: dirección del servidor y clave ausentes (instalador o GPO)")); return false; }
                 }
                 LoadCa();
                 var state = ReadJson(StatePath) ?? new Dictionary<string, object>();
@@ -778,20 +778,20 @@ namespace Loco
                 try { answer = Checkin(conf, data); firstRun = false; unreachable = 0; PublishIndicator(answer); }
                 catch (LocoHttpException e)
                 {
-                    DesktopIndicator.Unavailable(Lang.T("Contact avec loco refusé", "Contact with loco refused"));
+                    DesktopIndicator.Unavailable(Lang.T("Contact avec loco refusé", "Contact with loco refused", "Contacto con loco rechazado"));
                     if (e.Status == 401)
                     {
-                        Log(Lang.T("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it"));
-                        ClearWuProxy(Lang.T("poste refusé par loco", "machine refused by loco"));
+                        Log(Lang.T("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it", "token rechazado por el servidor (¿equipo retirado del parque?): reinstale el agente para volver a inscribirlo"));
+                        ClearWuProxy(Lang.T("poste refusé par loco", "machine refused by loco", "equipo rechazado por loco"));
                     }
-                    else Log(Lang.T("serveur : ", "server: ") + e.Message);
+                    else Log(Lang.T("serveur : ", "server: ", "servidor: ") + e.Message);
                     return false;
                 }
                 catch (Exception e)
                 {
-                    DesktopIndicator.Unavailable(Lang.T("Serveur loco injoignable", "loco server unreachable"));
-                    Log(Lang.T("serveur injoignable : ", "server unreachable: ") + e.Message);
-                    if (++unreachable >= UnreachableLimit) ClearWuProxy(Lang.T("loco injoignable depuis ", "loco unreachable for ") + unreachable + Lang.T(" contacts", " check-ins"));
+                    DesktopIndicator.Unavailable(Lang.T("Serveur loco injoignable", "loco server unreachable", "Servidor loco inaccesible"));
+                    Log(Lang.T("serveur injoignable : ", "server unreachable: ", "servidor inaccesible: ") + e.Message);
+                    if (++unreachable >= UnreachableLimit) ClearWuProxy(Lang.T("loco injoignable depuis ", "loco unreachable for ", "loco inaccesible desde hace ") + unreachable + Lang.T(" contacts", " check-ins", " contactos"));
                     if (data.ContainsKey("inventory")) rescan = true;
                     SaveState(lastScan, scanHours, rescan);
                     return false;
@@ -833,7 +833,7 @@ namespace Loco
                         {
                             progress("windows_update", "", 1, 1, -1);
                             try { ok = InstallWindowsUpdates(lines); }
-                            catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ") + e.Message); }
+                            catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
                         }
                         object apps;
                         cmd.TryGetValue("apps", out apps);
@@ -841,9 +841,9 @@ namespace Loco
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;
-                        if (reboot) lines.Add(Lang.T("Redémarrage dans une minute.", "Rebooting in one minute."));
+                        if (reboot) lines.Add(Lang.T("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."));
                         Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, inv);
-                        if (reboot) { SaveState(lastScan, scanHours, false); Restart(Lang.T("redémarrage après mise à jour", "reboot after update")); return true; }
+                        if (reboot) { SaveState(lastScan, scanHours, false); Restart(Lang.T("redémarrage après mise à jour", "reboot after update", "reinicio tras la actualización")); return true; }
                     }
                     else if (action == "run-script")
                     {
@@ -852,19 +852,19 @@ namespace Loco
                     }
                     else if (action == "reboot")
                     {
-                        Report(conf, id, "success", Lang.T("Redémarrage dans une minute.", "Rebooting in one minute."), 0, null);
+                        Report(conf, id, "success", Lang.T("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."), 0, null);
                         SaveState(lastScan, scanHours, true);
-                        Restart(Lang.T("redémarrage demandé", "reboot requested"));
+                        Restart(Lang.T("redémarrage demandé", "reboot requested", "reinicio solicitado"));
                         return true;
                     }
                     else if (action == "uninstall")
                     {
-                        Report(conf, id, "success", Lang.T("Agent retiré du poste.", "Agent removed from the machine."), 0, null);
-                        Log(Lang.T("retrait de l'agent demandé par le serveur", "agent removal requested by the server"));
+                        Report(conf, id, "success", Lang.T("Agent retiré du poste.", "Agent removed from the machine.", "Agente retirado del equipo."), 0, null);
+                        Log(Lang.T("retrait de l'agent demandé par le serveur", "agent removal requested by the server", "retirada del agente solicitada por el servidor"));
                         Uninstall();
                         return true;
                     }
-                    else Report(conf, id, "failed", Lang.T("Action non prise en charge : ", "Action not supported: ") + action, 1, null);
+                    else Report(conf, id, "failed", Lang.T("Action non prise en charge : ", "Action not supported: ", "Acción no admitida: ") + action, 1, null);
                 }
                 SaveState(lastScan, scanHours, rescan);
                 ApplyWuProxy(answer);
@@ -880,19 +880,19 @@ namespace Loco
             {
                 SaveJson(StatePath, new Dictionary<string, object> { { "last_scan", lastScan }, { "scan_hours", scanHours }, { "rescan", rescan } });
             }
-            catch (Exception e) { Log(Lang.T("état non enregistré : ", "status not saved: ") + e.Message); }
+            catch (Exception e) { Log(Lang.T("état non enregistré : ", "status not saved: ", "estado no guardado: ") + e.Message); }
         }
 
         public static void PrintStatus()
         {
             var conf = ReadJson(ConfigPath);
-            string server = conf != null ? Str(conf, "server") : Lang.T("non inscrit (", "not enrolled (") + Setting("Server") + ")";
+            string server = conf != null ? Str(conf, "server") : Lang.T("non inscrit (", "not enrolled (", "no inscrito (") + Setting("Server") + ")";
             var rows = new System.Collections.Generic.List<string[]> {
-                new[] { Lang.T("Agent", "Agent"), "loco-client " + Version },
-                new[] { Lang.T("Serveur", "Server"), server },
-                new[] { Lang.T("Identifiant", "ID"), conf != null ? Str(conf, "uid") : "-" } };
+                new[] { Lang.T("Agent", "Agent", "Agente"), "loco-client " + Version },
+                new[] { Lang.T("Serveur", "Server", "Servidor"), server },
+                new[] { Lang.T("Identifiant", "ID", "Identificador"), conf != null ? Str(conf, "uid") : "-" } };
             if (conf != null && KnownServers(conf).Count > 1)
-                rows.Add(new[] { Lang.T("De secours", "Fallback"), string.Join(" ", KnownServers(conf).Skip(1)) });
+                rows.Add(new[] { Lang.T("De secours", "Fallback", "De reserva"), string.Join(" ", KnownServers(conf).Skip(1)) });
             int width = 0; foreach (var r in rows) if (r[0].Length > width) width = r[0].Length;
             foreach (var r in rows) Console.WriteLine(r[0].PadRight(width) + " : " + r[1]);
         }

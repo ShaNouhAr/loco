@@ -80,11 +80,11 @@ namespace Loco
                 case "move": return Transfer(Str(h, "path"), Str(h, "to"), false, reply);
                 case "copy": return Transfer(Str(h, "path"), Str(h, "to"), true, reply);
                 case "delete": Delete(Str(h, "path")); return Empty;
-                case "chmod": throw new InvalidDataException(Lang.T("Droits POSIX non applicables sous Windows.", "POSIX permissions not applicable on Windows."));
+                case "chmod": throw new InvalidDataException(Lang.T("Droits POSIX non applicables sous Windows.", "POSIX permissions not applicable on Windows.", "Permisos POSIX no aplicables en Windows."));
                 case "read": return Read(Str(h, "path"), Long(h, "offset"), (int)Long(h, "length"), reply);
                 case "write": return Write(Str(h, "path"), Long(h, "offset"), data, Bool(h, "final"), reply);
                 case "write_cancel": CancelUpload(Str(h, "path")); return Empty;
-                default: throw new InvalidDataException(Lang.T("opération inconnue", "unknown operation"));
+                default: throw new InvalidDataException(Lang.T("opération inconnue", "unknown operation", "operación desconocida"));
             }
         }
 
@@ -156,7 +156,7 @@ namespace Loco
         byte[] Rename(string path, string name, Dictionary<string, object> reply)
         {
             string dest = Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileName(name));
-            if (File.Exists(dest) || Directory.Exists(dest)) throw new IOException(Lang.T("Un élément porte déjà ce nom.", "An item already has that name."));
+            if (File.Exists(dest) || Directory.Exists(dest)) throw new IOException(Lang.T("Un élément porte déjà ce nom.", "An item already has that name.", "Un elemento ya tiene ese nombre."));
             if (Directory.Exists(path)) Directory.Move(path, dest); else File.Move(path, dest);
             reply["path"] = dest; return Empty;
         }
@@ -164,7 +164,7 @@ namespace Loco
         byte[] Transfer(string path, string to, bool copy, Dictionary<string, object> reply)
         {
             string dest = Path.Combine(to, Path.GetFileName(path.TrimEnd('\\', '/')));
-            if (File.Exists(dest) || Directory.Exists(dest)) throw new IOException(Lang.T("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination."));
+            if (File.Exists(dest) || Directory.Exists(dest)) throw new IOException(Lang.T("Un élément porte déjà ce nom à destination.", "An item already has that name at the destination.", "Un elemento ya tiene ese nombre en el destino."));
             bool dir = Directory.Exists(path);
             if (copy) { if (dir) CopyTree(path, dest); else File.Copy(path, dest); }
             else { if (dir) Directory.Move(path, dest); else File.Move(path, dest); }
@@ -214,7 +214,7 @@ namespace Loco
                     handle = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
                     uploads[path] = handle; uploadTemp[path] = tmp;
                 }
-                else if (!uploads.TryGetValue(path, out handle)) throw new IOException(Lang.T("Téléversement sans début.", "Upload without a start."));
+                else if (!uploads.TryGetValue(path, out handle)) throw new IOException(Lang.T("Téléversement sans début.", "Upload without a start.", "Subida sin inicio."));
                 handle.Seek(offset, SeekOrigin.Begin);
                 handle.Write(data, 0, data.Length);
                 if (final)

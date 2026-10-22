@@ -1,15 +1,22 @@
-// Langue de l'agent : anglais, sauf si Windows est en français (langue d'affichage de la session, ou du compte
-// SYSTEM pour le service). Lang.T(fr, en) choisit le texte vu par l'utilisateur du poste ou renvoyé au portail.
-using System;
+// Langue de l'agent : français si Windows est en français, espagnol si en espagnol, anglais sinon (langue
+// d'affichage de la session, ou du compte SYSTEM pour le service). Lang.T(fr, en, es) choisit le texte vu par
+// l'utilisateur du poste ou renvoyé au portail.
 using System.Globalization;
 
 namespace Loco
 {
     static class Lang
     {
-        public static readonly bool En =
-            !CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("fr", StringComparison.OrdinalIgnoreCase);
+        static readonly string Code =
+            CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
 
-        public static string T(string fr, string en) { return En ? en : fr; }
+        public static string T(string fr, string en, string es)
+        {
+            if (Code == "fr") return fr;
+            if (Code == "es") return es;
+            return en;
+        }
+
+        public static string T(string fr, string en) { return T(fr, en, en); }
     }
 }
