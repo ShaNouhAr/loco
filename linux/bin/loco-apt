@@ -5,10 +5,10 @@
 #   loco-apt add ubuntu noble 24.04
 #   loco-apt rebuild
 set -euo pipefail
-# Langue du serveur : français si LANG/LC_* commence par « fr », anglais sinon.
-case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
-[ "$(id -u)" -eq 0 ] || { t "Lancez cette commande en root (sudo)." "Run this command as root (sudo)." >&2; exit 1; }
+# Langue du serveur : français si LANG/LC_* commence par « fr », espagnol par « es », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_LANG=fr ;; es*) LOCO_LANG=es ;; *) LOCO_LANG=en ;; esac
+t() { case "$LOCO_LANG" in fr) printf '%s\n' "$1" ;; es) printf '%s\n' "${3:-$2}" ;; *) printf '%s\n' "$2" ;; esac; }
+[ "$(id -u)" -eq 0 ] || { t "Lancez cette commande en root (sudo)." "Run this command as root (sudo)." "Ejecute este comando como root (sudo)." >&2; exit 1; }
 # shellcheck disable=SC1091
 . /etc/loco/loco.conf
 cd /opt/loco/portal

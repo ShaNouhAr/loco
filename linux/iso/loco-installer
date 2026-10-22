@@ -7,7 +7,7 @@ set -u
 TERM=${TERM:-linux}
 [ "$TERM" != dumb ] || TERM=linux
 export TERM
-[ "$(id -u)" -eq 0 ] || { echo "Lancez loco-installer en root. / Run loco-installer as root." >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo "Lancez loco-installer en root. / Run loco-installer as root. / Ejecute loco-installer como root." >&2; exit 1; }
 # shellcheck source=linux/lib/appliance.sh
 . /usr/local/lib/loco/appliance.sh
 
@@ -16,7 +16,7 @@ VERSION=$(cat "$SHARE/VERSION")
 ALPINE_BRANCH=$(cat "$SHARE/ALPINE_BRANCH")
 LOG=/tmp/loco-install.log
 TARGET=/mnt
-TITLE="$(t "loco $VERSION : installation" "loco $VERSION: installation")"
+TITLE="$(t "loco $VERSION : installation" "loco $VERSION: installation" "loco $VERSION: instalación")"
 MIN_DISK_GIB=8
 
 # Réglages (réponses), valeurs par défaut de l'assistant.
@@ -32,7 +32,7 @@ msg() { dialog --backtitle "$TITLE" --title "$1" --msgbox "$2" 0 0; }
 restore_terminal() { stty sane 2>/dev/null || true; clear; }
 installer_shell() {
     restore_terminal
-    printf '%s\n' "$(t "Console de dépannage loco. Tapez exit pour revenir à l'assistant." "loco troubleshooting console. Type exit to return to the wizard.")"
+    printf '%s\n' "$(t "Console de dépannage loco. Tapez exit pour revenir à l'assistant." "loco troubleshooting console. Type exit to return to the wizard." "consola de solución de problemas de loco. Escriba exit para volver al asistente.")"
     /bin/sh -i
     restore_terminal
 }
@@ -53,7 +53,7 @@ load_answers() {
         value=${line#*=}
         case " $(printf '%s' "$KEYS" | tr '\n' ' ') " in
             *" $key "*) ;;
-            *) printf '%s\n' "$(t "Clé inconnue ignorée : $key" "Unknown key ignored: $key")" >> "$LOG"; continue ;;
+            *) printf '%s\n' "$(t "Clé inconnue ignorée : $key" "Unknown key ignored: $key" "Clave desconocida omitida: $key")" >> "$LOG"; continue ;;
         esac
         case "$value" in
             \"*\") value=${value#\"}; value=${value%\"} ;;
@@ -144,42 +144,42 @@ resolve_interface() {
 
 problems() {
     out=""
-    [ -n "$DISK" ] && [ -n "$(disk_size "$DISK")" ] || out="$out\n- $(t "disque introuvable : ${DISK:-aucun} (DISK=auto exige un seul disque fixe)" "disk not found: ${DISK:-none} (DISK=auto requires a single fixed disk)")"
+    [ -n "$DISK" ] && [ -n "$(disk_size "$DISK")" ] || out="$out\n- $(t "disque introuvable : ${DISK:-aucun} (DISK=auto exige un seul disque fixe)" "disk not found: ${DISK:-none} (DISK=auto requires a single fixed disk)" "disco no encontrado: ${DISK:-ninguno} (DISK=auto requiere un único disco fijo)")"
     if [ -n "$DISK" ] && [ -e "/sys/block/$DISK" ]; then
-        case " $(excluded_disks | tr '\n' ' ') " in *" $DISK "*) out="$out\n- $(t "$DISK porte le média d'installation" "$DISK holds the installation media")" ;; esac
+        case " $(excluded_disks | tr '\n' ' ') " in *" $DISK "*) out="$out\n- $(t "$DISK porte le média d'installation" "$DISK holds the installation media" "$DISK contiene el medio de instalación")" ;; esac
         size=$(( $(cat "/sys/block/$DISK/size") / 2097152 ))
-        [ "$size" -ge "$MIN_DISK_GIB" ] || out="$out\n- $(t "disque trop petit : $size Gio (minimum $MIN_DISK_GIB)" "disk too small: $size GiB (minimum $MIN_DISK_GIB)")"
+        [ "$size" -ge "$MIN_DISK_GIB" ] || out="$out\n- $(t "disque trop petit : $size Gio (minimum $MIN_DISK_GIB)" "disk too small: $size GiB (minimum $MIN_DISK_GIB)" "disco demasiado pequeño: $size GiB (mínimo $MIN_DISK_GIB)")"
     fi
-    appliance_hostname_ok "$HOSTNAME" || out="$out\n- $(t "nom invalide : $HOSTNAME (minuscules, chiffres, tirets)" "invalid name: $HOSTNAME (lowercase, digits, hyphens)")"
-    [ -f "/usr/share/zoneinfo/$TIMEZONE" ] || out="$out\n- $(t "fuseau horaire inconnu : $TIMEZONE" "unknown time zone: $TIMEZONE")"
-    [ -n "$INTERFACE" ] && [ -e "/sys/class/net/$INTERFACE" ] || out="$out\n- $(t "interface réseau introuvable : ${INTERFACE:-aucune}" "network interface not found: ${INTERFACE:-none}")"
+    appliance_hostname_ok "$HOSTNAME" || out="$out\n- $(t "nom invalide : $HOSTNAME (minuscules, chiffres, tirets)" "invalid name: $HOSTNAME (lowercase, digits, hyphens)" "nombre no válido: $HOSTNAME (minúsculas, dígitos, guiones)")"
+    [ -f "/usr/share/zoneinfo/$TIMEZONE" ] || out="$out\n- $(t "fuseau horaire inconnu : $TIMEZONE" "unknown time zone: $TIMEZONE" "zona horaria desconocida: $TIMEZONE")"
+    [ -n "$INTERFACE" ] && [ -e "/sys/class/net/$INTERFACE" ] || out="$out\n- $(t "interface réseau introuvable : ${INTERFACE:-aucune}" "network interface not found: ${INTERFACE:-none}" "interfaz de red no encontrada: ${INTERFACE:-ninguna}")"
     case "$NETWORK" in
         dhcp) ;;
         static)
-            appliance_cidr_ok "$ADDRESS" || out="$out\n- $(t "adresse invalide : $ADDRESS (forme 192.168.1.10/24)" "invalid address: $ADDRESS (form 192.168.1.10/24)")"
-            if [ -n "$GATEWAY" ] && ! appliance_gateway_ok "$ADDRESS" "$GATEWAY"; then out="$out\n- $(t "passerelle invalide : $GATEWAY" "invalid gateway: $GATEWAY")"; fi
-            for d in $DNS; do appliance_ip_ok "$d" || out="$out\n- $(t "DNS invalide : $d" "invalid DNS: $d")"; done
-            [ -n "$DNS" ] || out="$out\n- $(t "au moins un serveur DNS est requis en adresse fixe" "at least one DNS server is required with a static address")"
+            appliance_cidr_ok "$ADDRESS" || out="$out\n- $(t "adresse invalide : $ADDRESS (forme 192.168.1.10/24)" "invalid address: $ADDRESS (form 192.168.1.10/24)" "dirección no válida: $ADDRESS (forma 192.168.1.10/24)")"
+            if [ -n "$GATEWAY" ] && ! appliance_gateway_ok "$ADDRESS" "$GATEWAY"; then out="$out\n- $(t "passerelle invalide : $GATEWAY" "invalid gateway: $GATEWAY" "puerta de enlace no válida: $GATEWAY")"; fi
+            for d in $DNS; do appliance_ip_ok "$d" || out="$out\n- $(t "DNS invalide : $d" "invalid DNS: $d" "DNS no válido: $d")"; done
+            [ -n "$DNS" ] || out="$out\n- $(t "au moins un serveur DNS est requis en adresse fixe" "at least one DNS server is required with a static address" "se requiere al menos un servidor DNS con una dirección fija")"
             ;;
-        *) out="$out\n- $(t "NETWORK : dhcp ou static" "NETWORK: dhcp or static")" ;;
+        *) out="$out\n- $(t "NETWORK : dhcp ou static" "NETWORK: dhcp or static" "NETWORK: dhcp o static")" ;;
     esac
-    [ ${#ROOT_PASSWORD} -ge 8 ] || out="$out\n- $(t "mot de passe root : au moins 8 caractères" "root password: at least 8 characters")"
+    [ ${#ROOT_PASSWORD} -ge 8 ] || out="$out\n- $(t "mot de passe root : au moins 8 caractères" "root password: at least 8 characters" "contraseña root: al menos 8 caracteres")"
     p=$(appliance_password_problem "$ADMIN_PASSWORD")
-    [ -z "$p" ] || out="$out\n- $(t "mot de passe admin du portail : $p" "portal admin password: $p")"
-    appliance_networks "$ALLOW" >/dev/null || out="$out\n- $(t "réseaux des postes invalides : $ALLOW" "invalid client networks: $ALLOW")"
-    appliance_networks "${ADMIN_ALLOW:-$ALLOW}" >/dev/null || out="$out\n- $(t "réseaux de l'interface invalides : $ADMIN_ALLOW" "invalid interface networks: $ADMIN_ALLOW")"
+    [ -z "$p" ] || out="$out\n- $(t "mot de passe admin du portail : $p" "portal admin password: $p" "contraseña admin del portal: $p")"
+    appliance_networks "$ALLOW" >/dev/null || out="$out\n- $(t "réseaux des postes invalides : $ALLOW" "invalid client networks: $ALLOW" "redes de equipos no válidas: $ALLOW")"
+    appliance_networks "${ADMIN_ALLOW:-$ALLOW}" >/dev/null || out="$out\n- $(t "réseaux de l'interface invalides : $ADMIN_ALLOW" "invalid interface networks: $ADMIN_ALLOW" "redes de la interfaz no válidas: $ADMIN_ALLOW")"
     for f in $FEATURES; do
-        case "$f" in http|wu|rpm|flatpak) ;; *) out="$out\n- $(t "fonction inconnue : $f (http wu rpm flatpak)" "unknown feature: $f (http wu rpm flatpak)")" ;; esac
+        case "$f" in http|wu|rpm|flatpak) ;; *) out="$out\n- $(t "fonction inconnue : $f (http wu rpm flatpak)" "unknown feature: $f (http wu rpm flatpak)" "función desconocida: $f (http wu rpm flatpak)")" ;; esac
     done
     if [ -n "$PROXY" ] && ! printf '%s' "$PROXY" | grep -Eq '^http://([A-Za-z0-9._~%!*+,;=:-]+@)?[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$'; then
-        out="$out\n- $(t "proxy invalide : $PROXY (http://hôte:port)" "invalid proxy: $PROXY (http://host:port)")"
+        out="$out\n- $(t "proxy invalide : $PROXY (http://hôte:port)" "invalid proxy: $PROXY (http://host:port)" "proxy no válido: $PROXY (http://host:puerto)")"
     fi
-    ssh_mode=$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY") || out="$out\n- $(t "SSH_MODE : off, password, key ou auto" "SSH_MODE: off, password, key or auto")"
-    if [ "$ssh_mode" = key ] && ! appliance_ssh_key_ok "$SSH_KEY"; then out="$out\n- $(t "une clé publique valide est requise pour SSH_MODE=key" "a valid public key is required for SSH_MODE=key")"; fi
-    case "$AFTER" in ''|poweroff|reboot) ;; *) out="$out\n- $(t "AFTER : poweroff ou reboot" "AFTER: poweroff or reboot")" ;; esac
+    ssh_mode=$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY") || out="$out\n- $(t "SSH_MODE : off, password, key ou auto" "SSH_MODE: off, password, key or auto" "SSH_MODE: off, password, key o auto")"
+    if [ "$ssh_mode" = key ] && ! appliance_ssh_key_ok "$SSH_KEY"; then out="$out\n- $(t "une clé publique valide est requise pour SSH_MODE=key" "a valid public key is required for SSH_MODE=key" "se requiere una clave pública válida para SSH_MODE=key")"; fi
+    case "$AFTER" in ''|poweroff|reboot) ;; *) out="$out\n- $(t "AFTER : poweroff ou reboot" "AFTER: poweroff or reboot" "AFTER: poweroff o reboot")" ;; esac
     for key in $KEYS; do
         eval "value=\${$key}"
-        if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then out="$out\n- $(t "caractères de contrôle interdits : $key" "control characters not allowed: $key")"; fi
+        if printf '%s' "$value" | LC_ALL=C grep -q '[[:cntrl:]]'; then out="$out\n- $(t "caractères de contrôle interdits : $key" "control characters not allowed: $key" "caracteres de control no permitidos: $key")"; fi
     done
     printf '%b' "$out"
 }
@@ -194,39 +194,39 @@ default_networks() {
 # ---------------------------------------------------------------- assistant
 
 wizard() {
-    choice=$(ask --title "$(t Bienvenue Welcome)" --nocancel --menu "$(t "Installation de loco $VERSION, serveur de dépôts et de caches (Alpine Linux).\n\nLe disque choisi sera entièrement effacé. Échap : retour à cet accueil." "Installing loco $VERSION, repository and cache server (Alpine Linux).\n\nThe chosen disk will be entirely erased. Esc: back to this home screen.")" 15 74 2 \
-        install "$(t 'Installer loco' 'Install loco')" shell "$(t 'Console de dépannage (root)' 'Troubleshooting console (root)')") || return 1
+    choice=$(ask --title "$(t Bienvenue Welcome)" --nocancel --menu "$(t "Installation de loco $VERSION, serveur de dépôts et de caches (Alpine Linux).\n\nLe disque choisi sera entièrement effacé. Échap : retour à cet accueil." "Installing loco $VERSION, repository and cache server (Alpine Linux).\n\nThe chosen disk will be entirely erased. Esc: back to this home screen." "Instalando loco $VERSION, servidor de repositorios y cachés (Alpine Linux).\n\nEl disco elegido se borrará por completo. Esc: volver a esta pantalla de inicio.")" 15 74 2 \
+        install "$(t 'Installer loco' 'Install loco' 'Instalar loco')" shell "$(t 'Console de dépannage (root)' 'Troubleshooting console (root)' 'Consola de solución de problemas (root)')") || return 1
     case "$choice" in
         install) ;;
         shell) installer_shell; return 1 ;;
         *) return 1 ;;
     esac
 
-    KEYMAP=$(ask --title "$(t Clavier Keyboard)" --default-item "$KEYMAP" --menu "$(t 'Disposition du clavier :' 'Keyboard layout:')" 15 50 7 \
-        "fr fr" "$(t 'Français (AZERTY)' 'French (AZERTY)')" "be be" "$(t Belge Belgian)" "ch ch-fr" "$(t 'Suisse romand' 'Swiss French')" "ca ca-fr" "$(t 'Canadien français' 'Canadian French')" \
-        "us us" "$(t 'Anglais (QWERTY US)' 'English (QWERTY US)')" "gb gb" "$(t 'Anglais (Royaume-Uni)' 'English (UK)')" "de de" "$(t Allemand German)") || return 1
+    KEYMAP=$(ask --title "$(t Clavier Keyboard)" --default-item "$KEYMAP" --menu "$(t 'Disposition du clavier :' 'Keyboard layout:' 'Distribución del teclado:')" 15 50 7 \
+        "fr fr" "$(t 'Français (AZERTY)' 'French (AZERTY)' 'Francés (AZERTY)')" "be be" "$(t Belge Belgian)" "ch ch-fr" "$(t 'Suisse romand' 'Swiss French' 'Francés suizo')" "ca ca-fr" "$(t 'Canadien français' 'Canadian French' 'Francés canadiense')" \
+        "us us" "$(t 'Anglais (QWERTY US)' 'English (QWERTY US)' 'Inglés (QWERTY US)')" "gb gb" "$(t 'Anglais (Royaume-Uni)' 'English (UK)' 'Inglés (Reino Unido)')" "de de" "$(t Allemand German)") || return 1
     # shellcheck disable=SC2086 # disposition et variante
     setup-keymap $KEYMAP >> "$LOG" 2>&1
 
     disks=$(list_disks)
-    if [ -z "$disks" ]; then msg "$(t Disque Disk)" "$(t 'Aucun disque utilisable.' 'No usable disk.')"; return 1; fi
+    if [ -z "$disks" ]; then msg "$(t Disque Disk)" "$(t 'Aucun disque utilisable.' 'No usable disk.' 'Ningún disco utilizable.')"; return 1; fi
     set --
     while read -r name size removable model; do
-        if [ "$removable" = 1 ]; then model="$model $(t '(amovible)' '(removable)')"; fi
+        if [ "$removable" = 1 ]; then model="$model $(t '(amovible)' '(removable)' '(extraíble)')"; fi
         set -- "$@" "$name" "$size Gio   $model"
     done <<EOF
 $disks
 EOF
-    DISK=$(ask --title "$(t Disque Disk)" --menu "$(t "Disque d'installation (ENTIÈREMENT effacé) :" "Installation disk (ENTIRELY erased):")" 15 70 6 "$@") || return 1
+    DISK=$(ask --title "$(t Disque Disk)" --menu "$(t "Disque d'installation (ENTIÈREMENT effacé) :" "Installation disk (ENTIRELY erased):" "Disco de instalación (BORRADO POR COMPLETO):")" 15 70 6 "$@") || return 1
 
     while :; do
-        HOSTNAME=$(ask --title "$(t Nom Name)" --inputbox "$(t 'Nom du serveur :' 'Server name:')" 8 50 "$HOSTNAME") || return 1
+        HOSTNAME=$(ask --title "$(t Nom Name)" --inputbox "$(t 'Nom du serveur :' 'Server name:' 'Nombre del servidor:')" 8 50 "$HOSTNAME") || return 1
         appliance_hostname_ok "$HOSTNAME" && break
-        msg "$(t Nom Name)" "$(t 'Minuscules, chiffres et tirets uniquement.' 'Lowercase, digits and hyphens only.')"
+        msg "$(t Nom Name)" "$(t 'Minuscules, chiffres et tirets uniquement.' 'Lowercase, digits and hyphens only.' 'Solo minúsculas, dígitos y guiones.')"
     done
 
     ifaces=$(appliance_interfaces)
-    if [ -z "$ifaces" ]; then msg "$(t Réseau Network)" "$(t 'Aucune carte réseau détectée.' 'No network card detected.')"; return 1; fi
+    if [ -z "$ifaces" ]; then msg "$(t Réseau Network)" "$(t 'Aucune carte réseau détectée.' 'No network card detected.' 'Ninguna tarjeta de red detectada.')"; return 1; fi
     if [ "$(printf '%s\n' "$ifaces" | grep -c .)" -gt 1 ]; then
         set --
         for i in $ifaces; do
@@ -234,88 +234,88 @@ EOF
             if [ "$(cat "/sys/class/net/$i/carrier" 2>/dev/null)" = 1 ]; then state=$(t reliée connected); fi
             set -- "$@" "$i" "$(cat "/sys/class/net/$i/address")   $state"
         done
-        INTERFACE=$(ask --title "$(t Réseau Network)" --menu "$(t 'Carte réseau :' 'Network card:')" 14 60 6 "$@") || return 1
+        INTERFACE=$(ask --title "$(t Réseau Network)" --menu "$(t 'Carte réseau :' 'Network card:' 'Tarjeta de red:')" 14 60 6 "$@") || return 1
     else
         INTERFACE=$ifaces
     fi
-    dialog --backtitle "$TITLE" --infobox "$(t "Recherche d'un serveur DHCP sur $INTERFACE…" "Looking for a DHCP server on $INTERFACE…")" 3 60
+    dialog --backtitle "$TITLE" --infobox "$(t "Recherche d'un serveur DHCP sur $INTERFACE…" "Looking for a DHCP server on $INTERFACE…" "Buscando un servidor DHCP en $INTERFACE…")" 3 60
     probe_dhcp "$INTERFACE"
     lease=$(appliance_current_cidr "$INTERFACE")
-    NETWORK=$(ask --title "$(t Réseau Network)" --default-item static --menu "$(t "Adresse du serveur${lease:+ (DHCP propose $lease)} :" "Server address${lease:+ (DHCP offers $lease)}:")" 12 66 2 \
-        static "$(t "Adresse fixe (recommandé : les postes s'y connectent)" "Static address (recommended: the machines connect to it)")" dhcp "DHCP") || return 1
+    NETWORK=$(ask --title "$(t Réseau Network)" --default-item static --menu "$(t "Adresse du serveur${lease:+ (DHCP propose $lease)} :" "Server address${lease:+ (DHCP offers $lease)}:" "Dirección del servidor${lease:+ (DHCP ofrece $lease)}:")" 12 66 2 \
+        static "$(t "Adresse fixe (recommandé : les postes s'y connectent)" "Static address (recommended: the machines connect to it)" "Dirección fija (recomendado: los equipos se conectan a ella)")" dhcp "DHCP") || return 1
     if [ "$NETWORK" = static ]; then
         ADDRESS=${ADDRESS:-$lease}
         GATEWAY=${GATEWAY:-$(appliance_current_gateway)}
         DNS=${DNS:-$(appliance_current_dns)}
         while :; do
-            values=$(ask --title "$(t 'Adresse fixe' 'Static address')" --form "Interface $INTERFACE :" 12 66 3 \
-                "$(t 'Adresse/préfixe' 'Address/prefix')" 1 1 "$ADDRESS" 1 20 40 0 \
+            values=$(ask --title "$(t 'Adresse fixe' 'Static address' 'Dirección fija')" --form "Interface $INTERFACE :" 12 66 3 \
+                "$(t 'Adresse/préfixe' 'Address/prefix' 'Dirección/prefijo')" 1 1 "$ADDRESS" 1 20 40 0 \
                 "$(t Passerelle Gateway)" 2 1 "$GATEWAY" 2 20 40 0 \
                 "DNS" 3 1 "$DNS" 3 20 40 0) || return 1
             ADDRESS=$(printf '%s\n' "$values" | sed -n 1p)
             GATEWAY=$(printf '%s\n' "$values" | sed -n 2p)
             DNS=$(printf '%s\n' "$values" | sed -n 3p)
             err=""
-            appliance_cidr_ok "$ADDRESS" || err="$(t 'Adresse invalide (forme 192.168.1.10/24).' 'Invalid address (form 192.168.1.10/24).')"
-            if [ -n "$GATEWAY" ] && ! appliance_gateway_ok "$ADDRESS" "$GATEWAY"; then err="$(t 'Passerelle invalide.' 'Invalid gateway.')"; fi
-            [ -n "$DNS" ] || err="$(t 'Au moins un serveur DNS.' 'At least one DNS server.')"
-            for d in $DNS; do appliance_ip_ok "$d" || err="$(t "DNS invalide : $d" "Invalid DNS: $d")"; done
+            appliance_cidr_ok "$ADDRESS" || err="$(t 'Adresse invalide (forme 192.168.1.10/24).' 'Invalid address (form 192.168.1.10/24).' 'Dirección no válida (forma 192.168.1.10/24).')"
+            if [ -n "$GATEWAY" ] && ! appliance_gateway_ok "$ADDRESS" "$GATEWAY"; then err="$(t 'Passerelle invalide.' 'Invalid gateway.' 'Puerta de enlace no válida.')"; fi
+            [ -n "$DNS" ] || err="$(t 'Au moins un serveur DNS.' 'At least one DNS server.' 'Al menos un servidor DNS.')"
+            for d in $DNS; do appliance_ip_ok "$d" || err="$(t "DNS invalide : $d" "Invalid DNS: $d" "DNS no válido: $d")"; done
             [ -z "$err" ] && break
-            msg "$(t 'Adresse fixe' 'Static address')" "$err"
+            msg "$(t 'Adresse fixe' 'Static address' 'Dirección fija')" "$err"
         done
     fi
 
     while :; do
-        TIMEZONE=$(ask --title "$(t 'Fuseau horaire' 'Time zone')" --inputbox "$(t 'Fuseau horaire (ex. Europe/Paris, America/Montreal, UTC) :' 'Time zone (e.g. Europe/Paris, America/Montreal, UTC):')" 8 60 "$TIMEZONE") || return 1
+        TIMEZONE=$(ask --title "$(t 'Fuseau horaire' 'Time zone' 'Zona horaria')" --inputbox "$(t 'Fuseau horaire (ex. Europe/Paris, America/Montreal, UTC) :' 'Time zone (e.g. Europe/Paris, America/Montreal, UTC):' 'Zona horaria (ej. Europe/Paris, America/Montreal, UTC):')" 8 60 "$TIMEZONE") || return 1
         [ -f "/usr/share/zoneinfo/$TIMEZONE" ] && break
-        msg "$(t 'Fuseau horaire' 'Time zone')" "$(t "Fuseau inconnu : $TIMEZONE" "Unknown zone: $TIMEZONE")"
+        msg "$(t 'Fuseau horaire' 'Time zone' 'Zona horaria')" "$(t "Fuseau inconnu : $TIMEZONE" "Unknown zone: $TIMEZONE" "Zona desconocida: $TIMEZONE")"
     done
 
     while :; do
-        p1=$(ask --title "$(t 'Compte root' 'Root account')" --insecure --passwordbox "$(t 'Mot de passe root (console du serveur, 8 caractères minimum) :' 'Root password (server console, 8 characters minimum):')" 9 60) || return 1
-        p2=$(ask --title "$(t 'Compte root' 'Root account')" --insecure --passwordbox "$(t Confirmation Confirmation) :" 8 60) || return 1
-        if [ "$p1" != "$p2" ]; then msg "$(t 'Compte root' 'Root account')" "$(t 'Les deux saisies diffèrent.' 'The two entries differ.')"
-        elif [ ${#p1} -lt 8 ]; then msg "$(t 'Compte root' 'Root account')" "$(t '8 caractères minimum.' '8 characters minimum.')"
+        p1=$(ask --title "$(t 'Compte root' 'Root account' 'Cuenta root')" --insecure --passwordbox "$(t 'Mot de passe root (console du serveur, 8 caractères minimum) :' 'Root password (server console, 8 characters minimum):' 'Contraseña root (consola del servidor, 8 caracteres mínimo):')" 9 60) || return 1
+        p2=$(ask --title "$(t 'Compte root' 'Root account' 'Cuenta root')" --insecure --passwordbox "$(t Confirmation Confirmation) :" 8 60) || return 1
+        if [ "$p1" != "$p2" ]; then msg "$(t 'Compte root' 'Root account' 'Cuenta root')" "$(t 'Les deux saisies diffèrent.' 'The two entries differ.' 'Las dos entradas difieren.')"
+        elif [ ${#p1} -lt 8 ]; then msg "$(t 'Compte root' 'Root account' 'Cuenta root')" "$(t '8 caractères minimum.' '8 characters minimum.' '8 caracteres mínimo.')"
         else ROOT_PASSWORD=$p1; break; fi
     done
     while :; do
-        p1=$(ask --title "$(t Portail Portal)" --insecure --passwordbox "$(t 'Mot de passe du compte admin du portail web (12 caractères minimum) :' 'Password for the web portal admin account (12 characters minimum):')" 9 66) || return 1
+        p1=$(ask --title "$(t Portail Portal)" --insecure --passwordbox "$(t 'Mot de passe du compte admin du portail web (12 caractères minimum) :' 'Password for the web portal admin account (12 characters minimum):' 'Contraseña de la cuenta admin del portal web (12 caracteres mínimo):')" 9 66) || return 1
         p2=$(ask --title "$(t Portail Portal)" --insecure --passwordbox "$(t Confirmation Confirmation) :" 8 66) || return 1
         problem=$(appliance_password_problem "$p1")
-        if [ "$p1" != "$p2" ]; then msg "$(t Portail Portal)" "$(t 'Les deux saisies diffèrent.' 'The two entries differ.')"
-        elif [ -n "$problem" ]; then msg "$(t Portail Portal)" "$(t "Mot de passe refusé : $problem." "Password refused: $problem.")"
+        if [ "$p1" != "$p2" ]; then msg "$(t Portail Portal)" "$(t 'Les deux saisies diffèrent.' 'The two entries differ.' 'Las dos entradas difieren.')"
+        elif [ -n "$problem" ]; then msg "$(t Portail Portal)" "$(t "Mot de passe refusé : $problem." "Password refused: $problem." "Contraseña rechazada: $problem.")"
         else ADMIN_PASSWORD=$p1; break; fi
     done
 
     ALLOW=${ALLOW:-$(default_networks)}
     while :; do
-        values=$(ask --title "$(t Accès Access)" --form "$(t 'Réseaux autorisés, séparés par des espaces :' 'Allowed networks, space-separated:')" 10 72 2 \
-            "$(t 'Postes clients' 'Client machines')" 1 1 "$ALLOW" 1 18 50 0 \
-            "$(t 'Interface web' 'Web interface')" 2 1 "${ADMIN_ALLOW:-$ALLOW}" 2 18 50 0) || return 1
+        values=$(ask --title "$(t Accès Access)" --form "$(t 'Réseaux autorisés, séparés par des espaces :' 'Allowed networks, space-separated:' 'Redes autorizadas, separadas por espacios:')" 10 72 2 \
+            "$(t 'Postes clients' 'Client machines' 'Equipos cliente')" 1 1 "$ALLOW" 1 18 50 0 \
+            "$(t 'Interface web' 'Web interface' 'Interfaz web')" 2 1 "${ADMIN_ALLOW:-$ALLOW}" 2 18 50 0) || return 1
         ALLOW=$(appliance_networks "$(printf '%s\n' "$values" | sed -n 1p)") \
             && ADMIN_ALLOW=$(appliance_networks "$(printf '%s\n' "$values" | sed -n 2p)") && break
-        msg "$(t Accès Access)" "$(t 'Réseau invalide (forme 192.168.1.0/24).' 'Invalid network (form 192.168.1.0/24).')"
+        msg "$(t Accès Access)" "$(t 'Réseau invalide (forme 192.168.1.0/24).' 'Invalid network (form 192.168.1.0/24).' 'Red no válida (forma 192.168.1.0/24).')"
     done
 
     on() { case " $FEATURES " in *" $1 "*) echo on ;; *) echo off ;; esac; }
-    values=$(ask --title "$(t Fonctions Features)" --separate-output --checklist "$(t 'Fonctions activées (modifiables ensuite dans le portail) :' 'Enabled features (changeable later in the portal):')" 14 74 5 \
-        http "$(t 'Accès HTTP des postes (port 8088)' 'HTTP access for machines (port 8088)')" "$(on http)" \
-        wu "$(t 'Cache Windows Update (ports 80 et 443)' 'Windows Update cache (ports 80 and 443)')" "$(on wu)" \
-        rpm "$(t 'Famille Red Hat : dépôts et cache RPM' 'Red Hat family: RPM repositories and cache')" "$(on rpm)" \
-        flatpak "$(t 'Flatpak : cache Flathub et dépôt local' 'Flatpak: Flathub cache and local repository')" "$(on flatpak)" \
-        ssh "$(t 'Accès SSH (mot de passe ou clé publique)' 'SSH access (password or public key)')" "$( [ "$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY")" != off ] && echo on || echo off)") || return 1
+    values=$(ask --title "$(t Fonctions Features)" --separate-output --checklist "$(t 'Fonctions activées (modifiables ensuite dans le portail) :' 'Enabled features (changeable later in the portal):' 'Funciones activadas (modificables luego en el portal):')" 14 74 5 \
+        http "$(t 'Accès HTTP des postes (port 8088)' 'HTTP access for machines (port 8088)' 'Acceso HTTP de los equipos (puerto 8088)')" "$(on http)" \
+        wu "$(t 'Cache Windows Update (ports 80 et 443)' 'Windows Update cache (ports 80 and 443)' 'Caché de Windows Update (puertos 80 y 443)')" "$(on wu)" \
+        rpm "$(t 'Famille Red Hat : dépôts et cache RPM' 'Red Hat family: RPM repositories and cache' 'Familia Red Hat: repositorios y caché RPM')" "$(on rpm)" \
+        flatpak "$(t 'Flatpak : cache Flathub et dépôt local' 'Flatpak: Flathub cache and local repository' 'Flatpak: caché Flathub y repositorio local')" "$(on flatpak)" \
+        ssh "$(t 'Accès SSH (mot de passe ou clé publique)' 'SSH access (password or public key)' 'Acceso SSH (contraseña o clave pública)')" "$( [ "$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY")" != off ] && echo on || echo off)") || return 1
     FEATURES=$(printf '%s\n' "$values" | tr '\n' ' ')
     case " $FEATURES " in
         *" ssh "*)
-            SSH_MODE=$(ask --title "$(t 'Connexion SSH' 'SSH access')" --default-item password --menu \
-                "$(t "Comment se connecter en SSH avec le compte root ?\nLe mode mot de passe utilise le mot de passe root défini dans cet assistant." "How to connect over SSH with the root account?\nPassword mode uses the root password set in this wizard.")" 14 76 3 \
-                password "$(t 'Mot de passe root (aucune clé nécessaire)' 'Root password (no key needed)')" \
-                key "$(t 'Clé publique uniquement' 'Public key only')" off "$(t 'SSH désactivé' 'SSH disabled')") || return 1
+            SSH_MODE=$(ask --title "$(t 'Connexion SSH' 'SSH access' 'Acceso SSH')" --default-item password --menu \
+                "$(t "Comment se connecter en SSH avec le compte root ?\nLe mode mot de passe utilise le mot de passe root défini dans cet assistant." "How to connect over SSH with the root account?\nPassword mode uses the root password set in this wizard." "¿Cómo conectarse por SSH con la cuenta root?\nEl modo contraseña usa la contraseña root definida en este asistente.")" 14 76 3 \
+                password "$(t 'Mot de passe root (aucune clé nécessaire)' 'Root password (no key needed)' 'Contraseña root (sin clave necesaria)')" \
+                key "$(t 'Clé publique uniquement' 'Public key only' 'Solo clave pública')" off "$(t 'SSH désactivé' 'SSH disabled' 'SSH desactivado')") || return 1
             if [ "$SSH_MODE" = key ]; then
                 while :; do
-                    SSH_KEY=$(ask --title "$(t 'Clé SSH' 'SSH key')" --inputbox "$(t 'Clé publique autorisée pour root (ssh-ed25519 AAAA…) :' 'Public key authorised for root (ssh-ed25519 AAAA…):')" 9 76 "$SSH_KEY") || return 1
+                    SSH_KEY=$(ask --title "$(t 'Clé SSH' 'SSH key' 'Clave SSH')" --inputbox "$(t 'Clé publique autorisée pour root (ssh-ed25519 AAAA…) :' 'Public key authorised for root (ssh-ed25519 AAAA…):' 'Clave pública autorizada para root (ssh-ed25519 AAAA…):')" 9 76 "$SSH_KEY") || return 1
                     appliance_ssh_key_ok "$SSH_KEY" && break
-                    msg "SSH" "$(t 'Clé publique OpenSSH attendue (une ligne).' 'OpenSSH public key expected (one line).')"
+                    msg "SSH" "$(t 'Clé publique OpenSSH attendue (une ligne).' 'OpenSSH public key expected (one line).' 'Se espera una clave pública OpenSSH (una línea).')"
                 done
             else
                 SSH_KEY=""
@@ -347,6 +347,13 @@ Time zone   $TIMEZONE, keyboard $KEYMAP
 Machines    $ALLOW
 Interface   ${ADMIN_ALLOW:-$ALLOW}
 Features    $feats
+SSH root    $ssh" "Disco       /dev/$DISK ($gib GiB, BORRADO)
+Nombre      $HOSTNAME
+Red         $INTERFACE: $net
+Zona horar. $TIMEZONE, teclado $KEYMAP
+Equipos     $ALLOW
+Interfaz    ${ADMIN_ALLOW:-$ALLOW}
+Funciones   $feats
 SSH root    $ssh")"
 }
 
@@ -363,7 +370,7 @@ root_partition() {
 install_system() {
     set -e
     trap 'umount "$TARGET/proc" "$TARGET/dev" "$TARGET" 2>/dev/null || true' EXIT
-    step "$(t 'Clavier, nom et réseau' 'Keyboard, name and network')"
+    step "$(t 'Clavier, nom et réseau' 'Keyboard, name and network' 'Teclado, nombre y red')"
     # shellcheck disable=SC2086
     setup-keymap $KEYMAP
     echo "$HOSTNAME" > /etc/hostname
@@ -373,12 +380,12 @@ install_system() {
     appliance_write_network "" "$INTERFACE" "$NETWORK" "$ADDRESS" "$GATEWAY" "$DNS"
     printf '%s\n' "root:$ROOT_PASSWORD" | chpasswd
 
-    step "$(t "Alpine Linux sur /dev/$DISK (effacement, partitions, noyau)" "Alpine Linux on /dev/$DISK (erase, partitions, kernel)")"
+    step "$(t "Alpine Linux sur /dev/$DISK (effacement, partitions, noyau)" "Alpine Linux on /dev/$DISK (erase, partitions, kernel)" "Alpine Linux en /dev/$DISK (borrado, particiones, kernel)")"
     ERASE_DISKS="/dev/$DISK" setup-disk -m sys -s 0 -k lts "/dev/$DISK" < /dev/null
 
-    step "$(t "Paquets de loco (depuis le média d'installation)" "loco packages (from the installation media)")"
+    step "$(t "Paquets de loco (depuis le média d'installation)" "loco packages (from the installation media)" "paquetes de loco (desde el medio de instalación)")"
     part=$(root_partition)
-    [ -n "$part" ] || { printf '%s\n' "$(t "Partition système introuvable sur $DISK" "System partition not found on $DISK")"; return 1; }
+    [ -n "$part" ] || { printf '%s\n' "$(t "Partition système introuvable sur $DISK" "System partition not found on $DISK" "Partición del sistema no encontrada en $DISK")"; return 1; }
     mkdir -p "$TARGET"
     mount "/dev/$part" "$TARGET"
     mount --bind /dev "$TARGET/dev"
@@ -387,7 +394,7 @@ install_system() {
     apk add --root "$TARGET" --repositories-file /etc/apk/repositories --no-progress $(cat "$SHARE/packages")
     umount "$TARGET/proc" "$TARGET/dev"
 
-    step "$(t 'Configuration du système installé' 'Configuring the installed system')"
+    step "$(t 'Configuration du système installé' 'Configuring the installed system' 'Configuración del sistema instalado')"
     printf 'https://dl-cdn.alpinelinux.org/alpine/%s/main\nhttps://dl-cdn.alpinelinux.org/alpine/%s/community\n' \
         "$ALPINE_BRANCH" "$ALPINE_BRANCH" > "$TARGET/etc/apk/repositories"
     ln -sf "/usr/share/zoneinfo/$TIMEZONE" "$TARGET/etc/localtime"
@@ -403,7 +410,7 @@ install_system() {
     done
     appliance_write_ssh "$TARGET" "$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY")" "$SSH_KEY"
 
-    step "$(t "Sources de loco $VERSION et premier démarrage" "loco $VERSION sources and first boot")"
+    step "$(t "Sources de loco $VERSION et premier démarrage" "loco $VERSION sources and first boot" "fuentes de loco $VERSION y primer arranque")"
     install -d "$TARGET/usr/local/src" "$TARGET/etc/loco"
     tar --no-same-owner -xzf "$SHARE/loco-$VERSION.tar.gz" -C "$TARGET/usr/local/src"
     src="/usr/local/src/loco-$VERSION"
@@ -427,7 +434,7 @@ install_system() {
     sync
     umount "$TARGET"
     trap - EXIT
-    step "$(t 'Installation terminée' 'Installation complete')"
+    step "$(t 'Installation terminée' 'Installation complete' 'Instalación completada')"
 }
 
 run_install() {
@@ -455,15 +462,15 @@ run_install() {
 finish() {
     if [ "$1" = unattended ]; then
         if [ "${AFTER:-poweroff}" = poweroff ]; then
-            console "loco-installer: $(t 'installation réussie, arrêt (retirez le média puis démarrez).' 'installation successful, powering off (remove the media then boot).')"
+            console "loco-installer: $(t 'installation réussie, arrêt (retirez le média puis démarrez).' 'installation successful, powering off (remove the media then boot).' 'instalación correcta, apagando (retire el medio y luego arranque).')"
             poweroff
         else
-            console "loco-installer: $(t 'installation réussie, redémarrage sur disque.' 'installation successful, rebooting from disk.')"
+            console "loco-installer: $(t 'installation réussie, redémarrage sur disque.' 'installation successful, rebooting from disk.' 'instalación correcta, reiniciando desde el disco.')"
             eject >/dev/null 2>&1 || true
             reboot
         fi
     else
-        msg "$(t Terminé Done)" "$(t "loco $VERSION est installé sur /dev/$DISK.\n\nRetirez le média d'installation puis validez : le serveur redémarre et termine l'installation de loco (quelques minutes). L'adresse du portail et l'empreinte du certificat s'affichent ensuite sur la console." "loco $VERSION is installed on /dev/$DISK.\n\nRemove the installation media then confirm: the server reboots and finishes installing loco (a few minutes). The portal address and the certificate fingerprint are then shown on the console.")"
+        msg "$(t Terminé Done)" "$(t "loco $VERSION est installé sur /dev/$DISK.\n\nRetirez le média d'installation puis validez : le serveur redémarre et termine l'installation de loco (quelques minutes). L'adresse du portail et l'empreinte du certificat s'affichent ensuite sur la console." "loco $VERSION is installed on /dev/$DISK.\n\nRemove the installation media then confirm: the server reboots and finishes installing loco (a few minutes). The portal address and the certificate fingerprint are then shown on the console." "loco $VERSION está instalado en /dev/$DISK.\n\nRetire el medio de instalación y confirme: el servidor se reinicia y termina de instalar loco (unos minutos). La dirección del portal y la huella del certificado se muestran luego en la consola.")"
         eject >/dev/null 2>&1 || true
         reboot
     fi
@@ -483,35 +490,35 @@ main() {
         if [ -z "$ALLOW" ]; then ALLOW=$(default_networks); fi
         errors=$(problems)
         if [ -z "$errors" ]; then
-            console "loco-installer: $(t "réponses lues, installation automatique sur /dev/$DISK dans 10 secondes." "answers read, automatic installation on /dev/$DISK in 10 seconds.")"
+            console "loco-installer: $(t "réponses lues, installation automatique sur /dev/$DISK dans 10 secondes." "answers read, automatic installation on /dev/$DISK in 10 seconds." "respuestas leídas, instalación automática en /dev/$DISK en 10 segundos.")"
             if [ "${CLI_YES:-0}" = 1 ]; then
                 mode=unattended
-            elif dialog --backtitle "$TITLE" --title "$(t 'Installation automatique' 'Automatic installation')" --pause \
-                "$(summary)$(t '\n\nInstallation dans 10 secondes. Annuler : assistant.' '\n\nInstalling in 10 seconds. Cancel: wizard.')" 20 76 10; then
+            elif dialog --backtitle "$TITLE" --title "$(t 'Installation automatique' 'Automatic installation' 'Instalación automática')" --pause \
+                "$(summary)$(t '\n\nInstallation dans 10 secondes. Annuler : assistant.' '\n\nInstalling in 10 seconds. Cancel: wizard.' '\n\nInstalando en 10 segundos. Cancelar: asistente.')" 20 76 10; then
                 mode=unattended
             fi
         else
-            console "loco-installer: $(t 'réponses invalides :' 'invalid answers:')$(printf '%s' "$errors" | tr '\n' ' ')"
+            console "loco-installer: $(t 'réponses invalides :' 'invalid answers:' 'respuestas no válidas:')$(printf '%s' "$errors" | tr '\n' ' ')"
             if [ "${CLI_YES:-0}" = 1 ]; then echo "$errors" >&2; return 1; fi
-            msg "$(t 'Fichier de réponses' 'Answer file')" "$(t "Réponses invalides, passage à l'assistant :" "Invalid answers, switching to the wizard:")\n$errors"
+            msg "$(t 'Fichier de réponses' 'Answer file' 'Archivo de respuestas')" "$(t "Réponses invalides, passage à l'assistant :" "Invalid answers, switching to the wizard:" "Respuestas no válidas, pasando al asistente:")\n$errors"
         fi
     fi
     while :; do
         if [ "$mode" = wizard ]; then
             wizard || continue
             errors=$(problems)
-            if [ -n "$errors" ]; then msg "$(t 'Réglages invalides' 'Invalid settings')" "$errors"; continue; fi
+            if [ -n "$errors" ]; then msg "$(t 'Réglages invalides' 'Invalid settings' 'Ajustes no válidos')" "$errors"; continue; fi
             dialog --backtitle "$TITLE" --title "$(t Récapitulatif Summary)" --yes-label "$(t Installer Install)" --no-label "$(t Modifier Edit)" \
-                --yesno "$(summary)$(t "\n\nLe disque /dev/$DISK sera ENTIÈREMENT effacé." "\n\nThe disk /dev/$DISK will be ENTIRELY erased.")" 18 76 || continue
+                --yesno "$(summary)$(t "\n\nLe disque /dev/$DISK sera ENTIÈREMENT effacé." "\n\nThe disk /dev/$DISK will be ENTIRELY erased." "\n\nEl disco /dev/$DISK se borrará POR COMPLETO.")" 18 76 || continue
         fi
         if run_install; then
             finish "$mode"
             return 0
         fi
-        console "loco-installer: $(t 'échec, journal /tmp/loco-install.log' 'failed, log /tmp/loco-install.log')"
+        console "loco-installer: $(t 'échec, journal /tmp/loco-install.log' 'failed, log /tmp/loco-install.log' 'error, registro /tmp/loco-install.log')"
         console "$(tail -n 40 "$LOG")"
         if [ "${CLI_YES:-0}" = 1 ]; then return 1; fi
-        dialog --backtitle "$TITLE" --title "$(t "Échec de l'installation" 'Installation failure')" --textbox "$LOG" 22 78
+        dialog --backtitle "$TITLE" --title "$(t "Échec de l'installation" 'Installation failure' 'Fallo de la instalación')" --textbox "$LOG" 22 78
         mode=wizard
     done
 }
@@ -523,13 +530,13 @@ case "${1:-}" in
         install_system
         exit 0 ;;
     --answers)
-        CLI_ANSWERS=${2:?"fichier requis / file required"}
+        CLI_ANSWERS=${2:?"fichier requis / file required / archivo requerido"}
         [ "${3:-}" != --yes ] || CLI_YES=1 ;;
     --help|-h)
-        printf '%s\n' "$(t 'loco-installer [--answers F [--yes]] : efface le disque validé, installe Alpine puis loco.' 'loco-installer [--answers F [--yes]]: erases the confirmed disk, installs Alpine then loco.')"
+        printf '%s\n' "$(t 'loco-installer [--answers F [--yes]] : efface le disque validé, installe Alpine puis loco.' 'loco-installer [--answers F [--yes]]: erases the confirmed disk, installs Alpine then loco.' 'loco-installer [--answers F [--yes]]: borra el disco confirmado, instala Alpine y luego loco.')"
         exit 0 ;;
     '') ;;
-    *) printf '%s\n' "$(t "Option inconnue : $1" "Unknown option: $1")" >&2; exit 2 ;;
+    *) printf '%s\n' "$(t "Option inconnue : $1" "Unknown option: $1" "Opción desconocida: $1")" >&2; exit 2 ;;
 esac
 trap restore_terminal EXIT
 main || exit $?

@@ -3,10 +3,10 @@
 # l'adresse ou le nom relance l'installation (certificat HTTPS et liens des postes mis à jour).
 # Les autres réglages se font dans le portail (Administration › Configuration) ou avec loco-config.
 set -u
-[ "$(id -u)" -eq 0 ] || { echo "Lancez setup-loco en root. / Run setup-loco as root." >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo "Lancez setup-loco en root. / Run setup-loco as root. / Ejecute setup-loco como root." >&2; exit 1; }
 # shellcheck source=linux/lib/appliance.sh
 . /opt/loco/lib/appliance.sh
-TITLE="$(t 'loco : réglages de la console' 'loco: console settings')"
+TITLE="$(t 'loco : réglages de la console' 'loco: console settings' 'loco: ajustes de la consola')"
 ask() { dialog --backtitle "$TITLE" "$@" 3>&1 1>&2 2>&3; }
 msg() { dialog --backtitle "$TITLE" --title "$1" --msgbox "$2" 0 0; }
 conf() { sed -n "s/^$1=//p" /etc/loco/loco.conf | tr -d '"'; }
@@ -14,12 +14,12 @@ conf() { sed -n "s/^$1=//p" /etc/loco/loco.conf | tr -d '"'; }
 reinstall() {
     src=$(conf SOURCE_DIR)
     clear
-    echo "$(t 'Application :' 'Applying:') bash $src/linux/install.sh $*"
+    echo "$(t 'Application :' 'Applying:' 'Aplicando:') bash $src/linux/install.sh $*"
     if bash "$src/linux/install.sh" "$@"; then
         appliance_issue
-        printf '\n%s' "$(t 'Terminé. Entrée pour continuer. ' 'Done. Press Enter to continue. ')"
+        printf '\n%s' "$(t 'Terminé. Entrée pour continuer. ' 'Done. Press Enter to continue. ' 'Listo. Pulse Intro para continuar. ')"
     else
-        printf '\n%s' "$(t 'Échec (journal : /var/log/loco-install.log). Entrée pour continuer. ' 'Failed (log: /var/log/loco-install.log). Press Enter to continue. ')"
+        printf '\n%s' "$(t 'Échec (journal : /var/log/loco-install.log). Entrée pour continuer. ' 'Failed (log: /var/log/loco-install.log). Press Enter to continue. ' 'Error (registro: /var/log/loco-install.log). Pulse Intro para continuar. ')"
     fi
     read -r _
 }
@@ -35,12 +35,12 @@ announce_agents() {
         if [ -z "$progress" ] || [ "$total" = 0 ] || [ "$known" = "$total" ]; then return 0; fi
         if [ "$waited" -ge 300 ]; then
             dialog --backtitle "$TITLE" --yes-label "$(t Continuer Continue)" --no-label "$(t Annuler Cancel)" --yesno \
-                "$(t "$known/$total poste(s) prévenu(s) après 5 minutes. Les autres (éteints ou hors réseau) ne retrouveront pas le serveur : il faudra relancer sur eux la commande d'installation de l'agent (ils gardent leur identité).\n\nChanger l'adresse quand même ?" "$known/$total machine(s) notified after 5 minutes. The others (off or off-network) will not find the server: you will need to re-run the agent install command on them (they keep their identity).\n\nChange the address anyway?")" 12 70 && return 0
+                "$(t "$known/$total poste(s) prévenu(s) après 5 minutes. Les autres (éteints ou hors réseau) ne retrouveront pas le serveur : il faudra relancer sur eux la commande d'installation de l'agent (ils gardent leur identité).\n\nChanger l'adresse quand même ?" "$known/$total machine(s) notified after 5 minutes. The others (off or off-network) will not find the server: you will need to re-run the agent install command on them (they keep their identity).\n\nChange the address anyway?" "$known/$total equipo(s) avisado(s) tras 5 minutos. Los demás (apagados o fuera de red) no encontrarán el servidor: deberá volver a ejecutar en ellos el comando de instalación del agente (conservan su identidad).\n\n¿Cambiar la dirección de todos modos?")" 12 70 && return 0
             loco-fleet forget "$url" >/dev/null 2>&1
             return 1
         fi
-        dialog --backtitle "$TITLE" --title "$(t 'Agents du parc' 'Fleet agents')" --infobox \
-            "$(t "Annonce de la nouvelle adresse aux agents :\n$url\n\n$known/$total poste(s) prévenu(s). Chaque agent la reçoit à son prochain contact (2 minutes au plus)." "Announcing the new address to agents:\n$url\n\n$known/$total machine(s) notified. Each agent receives it at its next check-in (2 minutes at most).")" 9 72
+        dialog --backtitle "$TITLE" --title "$(t 'Agents du parc' 'Fleet agents' 'Agentes del parque')" --infobox \
+            "$(t "Annonce de la nouvelle adresse aux agents :\n$url\n\n$known/$total poste(s) prévenu(s). Chaque agent la reçoit à son prochain contact (2 minutes au plus)." "Announcing the new address to agents:\n$url\n\n$known/$total machine(s) notified. Each agent receives it at its next check-in (2 minutes at most)." "Anunciando la nueva dirección a los agentes:\n$url\n\n$known/$total equipo(s) avisado(s). Cada agente la recibe en su próximo contacto (2 minutos como máximo).")" 9 72
         sleep 5
         waited=$((waited + 5))
     done
@@ -49,33 +49,33 @@ announce_agents() {
 network() {
     iface=$(appliance_interfaces | head -1)
     current=$(appliance_current_cidr "$iface")
-    mode=$(ask --title "$(t Réseau Network)" --default-item static --menu "$(t "Interface $iface, adresse actuelle ${current:-aucune} :" "Interface $iface, current address ${current:-none}:")" 12 66 2 \
-        static "$(t 'Adresse fixe (recommandé)' 'Static address (recommended)')" dhcp "DHCP") || return 0
+    mode=$(ask --title "$(t Réseau Network)" --default-item static --menu "$(t "Interface $iface, adresse actuelle ${current:-aucune} :" "Interface $iface, current address ${current:-none}:" "Interfaz $iface, dirección actual ${current:-ninguna}:")" 12 66 2 \
+        static "$(t 'Adresse fixe (recommandé)' 'Static address (recommended)' 'Dirección fija (recomendado)')" dhcp "DHCP") || return 0
     cidr="" gw="" dns=""
     if [ "$mode" = static ]; then
         cidr=$current gw=$(appliance_current_gateway) dns=$(appliance_current_dns)
         while :; do
-            values=$(ask --title "$(t 'Adresse fixe' 'Static address')" --form "Interface $iface :" 12 66 3 \
-                "$(t 'Adresse/préfixe' 'Address/prefix')" 1 1 "$cidr" 1 20 40 0 "$(t Passerelle Gateway)" 2 1 "$gw" 2 20 40 0 "DNS" 3 1 "$dns" 3 20 40 0) || return 0
+            values=$(ask --title "$(t 'Adresse fixe' 'Static address' 'Dirección fija')" --form "Interface $iface :" 12 66 3 \
+                "$(t 'Adresse/préfixe' 'Address/prefix' 'Dirección/prefijo')" 1 1 "$cidr" 1 20 40 0 "$(t Passerelle Gateway)" 2 1 "$gw" 2 20 40 0 "DNS" 3 1 "$dns" 3 20 40 0) || return 0
             cidr=$(printf '%s\n' "$values" | sed -n 1p)
             gw=$(printf '%s\n' "$values" | sed -n 2p)
             dns=$(printf '%s\n' "$values" | sed -n 3p)
             err=""
-            appliance_cidr_ok "$cidr" || err="$(t 'Adresse invalide (forme 192.168.1.10/24).' 'Invalid address (form 192.168.1.10/24).')"
-            if [ -n "$gw" ] && ! appliance_gateway_ok "$cidr" "$gw"; then err="$(t 'Passerelle invalide.' 'Invalid gateway.')"; fi
-            [ -n "$dns" ] || err="$(t 'Au moins un serveur DNS.' 'At least one DNS server.')"
-            for d in $dns; do appliance_ip_ok "$d" || err="$(t "DNS invalide : $d" "Invalid DNS: $d")"; done
+            appliance_cidr_ok "$cidr" || err="$(t 'Adresse invalide (forme 192.168.1.10/24).' 'Invalid address (form 192.168.1.10/24).' 'Dirección no válida (forma 192.168.1.10/24).')"
+            if [ -n "$gw" ] && ! appliance_gateway_ok "$cidr" "$gw"; then err="$(t 'Passerelle invalide.' 'Invalid gateway.' 'Puerta de enlace no válida.')"; fi
+            [ -n "$dns" ] || err="$(t 'Au moins un serveur DNS.' 'At least one DNS server.' 'Al menos un servidor DNS.')"
+            for d in $dns; do appliance_ip_ok "$d" || err="$(t "DNS invalide : $d" "Invalid DNS: $d" "DNS no válido: $d")"; done
             [ -z "$err" ] && break
-            msg "$(t 'Adresse fixe' 'Static address')" "$err"
+            msg "$(t 'Adresse fixe' 'Static address' 'Dirección fija')" "$err"
         done
     fi
-    dialog --backtitle "$TITLE" --yesno "$(t 'Appliquer ? Les postes devront utiliser la nouvelle adresse, et la session SSH éventuelle sera coupée.' 'Apply? The machines will need to use the new address, and any SSH session will be cut.')" 8 66 || return 0
+    dialog --backtitle "$TITLE" --yesno "$(t 'Appliquer ? Les postes devront utiliser la nouvelle adresse, et la session SSH éventuelle sera coupée.' 'Apply? The machines will need to use the new address, and any SSH session will be cut.' '¿Aplicar? Los equipos deberán usar la nueva dirección, y cualquier sesión SSH se cortará.')" 8 66 || return 0
     if [ "$mode" = static ] && [ "${cidr%/*}" != "$(conf HOST)" ]; then
         address=${cidr%/*}
         case "$address" in *:*) address="[$address]" ;; esac      # IPv6 entre crochets dans l'URL
         announce_agents "https://$address:$(conf HTTPS_PORT)" || return 0
     elif [ "$mode" = dhcp ]; then
-        dialog --backtitle "$TITLE" --yesno "$(t "En DHCP, la nouvelle adresse n'est pas connue à l'avance : les agents du parc ne pourront pas la suivre si elle change. Une adresse fixe est recommandée.\n\nContinuer en DHCP ?" "With DHCP, the new address is not known in advance: fleet agents cannot follow it if it changes. A static address is recommended.\n\nContinue with DHCP?")" 10 70 || return 0
+        dialog --backtitle "$TITLE" --yesno "$(t "En DHCP, la nouvelle adresse n'est pas connue à l'avance : les agents du parc ne pourront pas la suivre si elle change. Une adresse fixe est recommandée.\n\nContinuer en DHCP ?" "With DHCP, the new address is not known in advance: fleet agents cannot follow it if it changes. A static address is recommended.\n\nContinue with DHCP?" "Con DHCP, la nueva dirección no se conoce de antemano: los agentes del parque no pueden seguirla si cambia. Se recomienda una dirección fija.\n\n¿Continuar con DHCP?")" 10 70 || return 0
     fi
     cp /etc/network/interfaces /etc/network/interfaces.loco-previous
     cp /etc/hosts /etc/hosts.loco-previous
@@ -85,16 +85,16 @@ network() {
     printf '127.0.0.1\tlocalhost\n::1\t\tlocalhost\n' > /etc/hosts
     if [ "$mode" = static ]; then printf '%s\t%s\n' "${cidr%/*}" "$host" >> /etc/hosts; fi
     clear
-    printf '%s\n' "$(t 'Redémarrage du réseau…' 'Restarting the network…')"
+    printf '%s\n' "$(t 'Redémarrage du réseau…' 'Restarting the network…' 'Reiniciando la red…')"
     rc-service networking restart
     new=$(appliance_current_cidr "$iface")
     if [ -z "$new" ]; then
-        printf '%s\n' "$(t 'Aucune adresse obtenue : retour à la configuration précédente.' 'No address obtained: reverting to the previous configuration.')"
+        printf '%s\n' "$(t 'Aucune adresse obtenue : retour à la configuration précédente.' 'No address obtained: reverting to the previous configuration.' 'Ninguna dirección obtenida: volviendo a la configuración anterior.')"
         mv /etc/network/interfaces.loco-previous /etc/network/interfaces
         mv /etc/hosts.loco-previous /etc/hosts
         mv /etc/resolv.conf.loco-previous /etc/resolv.conf
         rc-service networking restart
-        printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ')"
+        printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ' 'Pulse Intro para continuar. ')"
         read -r _
         return 0
     fi
@@ -104,9 +104,9 @@ network() {
 
 name() {
     while :; do
-        new=$(ask --title "$(t Nom Name)" --inputbox "$(t 'Nom du serveur :' 'Server name:')" 8 50 "$(hostname)") || return 0
+        new=$(ask --title "$(t Nom Name)" --inputbox "$(t 'Nom du serveur :' 'Server name:' 'Nombre del servidor:')" 8 50 "$(hostname)") || return 0
         appliance_hostname_ok "$new" && break
-        msg "$(t Nom Name)" "$(t 'Minuscules, chiffres et tirets uniquement.' 'Lowercase, digits and hyphens only.')"
+        msg "$(t Nom Name)" "$(t 'Minuscules, chiffres et tirets uniquement.' 'Lowercase, digits and hyphens only.' 'Solo minúsculas, dígitos y guiones.')"
     done
     echo "$new" > /etc/hostname
     hostname "$new"
@@ -117,15 +117,15 @@ name() {
 root_password() {
     clear
     passwd root
-    printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ')"
+    printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ' 'Pulse Intro para continuar. ')"
     read -r _
 }
 
 admin_password() {
     clear
-    printf '%s\n' "$(t 'Mot de passe temporaire du compte admin du portail (à changer à la connexion) :' 'Temporary password for the portal admin account (change it at sign-in):')"
+    printf '%s\n' "$(t 'Mot de passe temporaire du compte admin du portail (à changer à la connexion) :' 'Temporary password for the portal admin account (change it at sign-in):' 'Contraseña temporal de la cuenta admin del portal (cámbiela al iniciar sesión):')"
     loco-user passwd admin
-    printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ')"
+    printf '%s' "$(t 'Entrée pour continuer. ' 'Press Enter to continue. ' 'Pulse Intro para continuar. ')"
     read -r _
 }
 
@@ -135,31 +135,31 @@ ssh_access() {
         current=key
         if /usr/sbin/sshd -T 2>/dev/null | grep -qx 'passwordauthentication yes'; then current=password; fi
     fi
-    mode=$(ask --title "$(t 'Connexion SSH' 'SSH access')" --default-item "$current" --menu \
-        "$(t 'Accès SSH du compte root. Le mode mot de passe utilise le mot de passe root actuel.' 'SSH access for the root account. Password mode uses the current root password.')" 13 76 3 \
-        password "$(t 'Mot de passe root (aucune clé nécessaire)' 'Root password (no key needed)')" \
-        key "$(t 'Clé publique uniquement' 'Public key only')" off "$(t 'SSH désactivé' 'SSH disabled')") || return 0
+    mode=$(ask --title "$(t 'Connexion SSH' 'SSH access' 'Acceso SSH')" --default-item "$current" --menu \
+        "$(t 'Accès SSH du compte root. Le mode mot de passe utilise le mot de passe root actuel.' 'SSH access for the root account. Password mode uses the current root password.' 'Acceso SSH de la cuenta root. El modo contraseña usa la contraseña root actual.')" 13 76 3 \
+        password "$(t 'Mot de passe root (aucune clé nécessaire)' 'Root password (no key needed)' 'Contraseña root (sin clave necesaria)')" \
+        key "$(t 'Clé publique uniquement' 'Public key only' 'Solo clave pública')" off "$(t 'SSH désactivé' 'SSH disabled' 'SSH desactivado')") || return 0
     key=""
     if [ "$mode" = key ]; then
         while :; do
-            key=$(ask --title "$(t 'Clé SSH' 'SSH key')" --inputbox "$(t 'Clé publique autorisée pour root (ssh-ed25519 AAAA…) :' 'Public key authorised for root (ssh-ed25519 AAAA…):')" 9 76) || return 0
+            key=$(ask --title "$(t 'Clé SSH' 'SSH key' 'Clave SSH')" --inputbox "$(t 'Clé publique autorisée pour root (ssh-ed25519 AAAA…) :' 'Public key authorised for root (ssh-ed25519 AAAA…):' 'Clave pública autorizada para root (ssh-ed25519 AAAA…):')" 9 76) || return 0
             appliance_ssh_key_ok "$key" && break
-            msg "SSH" "$(t 'Clé publique OpenSSH attendue (une ligne).' 'OpenSSH public key expected (one line).')"
+            msg "SSH" "$(t 'Clé publique OpenSSH attendue (une ligne).' 'OpenSSH public key expected (one line).' 'Se espera una clave pública OpenSSH (una línea).')"
         done
     fi
-    appliance_write_ssh "" "$mode" "$key" || { msg "SSH" "$(t 'Configuration SSH invalide.' 'Invalid SSH configuration.')"; return 1; }
+    appliance_write_ssh "" "$mode" "$key" || { msg "SSH" "$(t 'Configuration SSH invalide.' 'Invalid SSH configuration.' 'Configuración SSH no válida.')"; return 1; }
     if [ "$mode" = off ]; then
         rc-service sshd stop >/dev/null 2>&1
-        msg "SSH" "$(t 'Accès SSH désactivé.' 'SSH access disabled.')"
+        msg "SSH" "$(t 'Accès SSH désactivé.' 'SSH access disabled.' 'Acceso SSH desactivado.')"
         return 0
     fi
     ssh-keygen -A >/dev/null
-    /usr/sbin/sshd -t || { msg "SSH" "$(t 'Configuration refusée par sshd ; consultez la console.' 'Configuration refused by sshd; check the console.')"; return 1; }
+    /usr/sbin/sshd -t || { msg "SSH" "$(t 'Configuration refusée par sshd ; consultez la console.' 'Configuration refused by sshd; check the console.' 'Configuración rechazada por sshd; consulte la consola.')"; return 1; }
     if rc-service sshd restart >/dev/null 2>&1 || rc-service sshd start >/dev/null; then
-        if [ "$mode" = password ]; then msg "SSH" "$(t 'Accès SSH activé : root et son mot de passe, sans clé publique requise.' 'SSH access enabled: root with its password, no public key required.')"
-        else msg "SSH" "$(t 'Accès SSH root par clé activé (mot de passe refusé).' 'SSH root access by key enabled (password refused).')"; fi
+        if [ "$mode" = password ]; then msg "SSH" "$(t 'Accès SSH activé : root et son mot de passe, sans clé publique requise.' 'SSH access enabled: root with its password, no public key required.' 'Acceso SSH activado: root con su contraseña, sin clave pública requerida.')"
+        else msg "SSH" "$(t 'Accès SSH root par clé activé (mot de passe refusé).' 'SSH root access by key enabled (password refused).' 'Acceso SSH root por clave activado (contraseña rechazada).')"; fi
     else
-        msg "SSH" "$(t "Le service SSH n'a pas démarré ; consultez la console." "The SSH service did not start; check the console.")"
+        msg "SSH" "$(t "Le service SSH n'a pas démarré ; consultez la console." "The SSH service did not start; check the console." "El servicio SSH no arrancó; consulte la consola.")"
         return 1
     fi
 }
@@ -167,19 +167,19 @@ ssh_access() {
 while :; do
     appliance_issue
     choice=$(ask --title "$(t Réglages Settings)" --cancel-label "$(t Quitter Quit)" --menu "$(sed -n '3,4p' /etc/issue)" 17 76 6 \
-        reseau "$(t 'Adresse réseau (fixe ou DHCP)' 'Network address (static or DHCP)')" \
-        nom "$(t 'Nom du serveur' 'Server name')" \
-        root "$(t 'Mot de passe root' 'Root password')" \
-        admin "$(t 'Mot de passe du compte admin du portail' 'Portal admin account password')" \
-        ssh "$(t 'Accès SSH (mot de passe, clé ou désactivé)' 'SSH access (password, key or disabled)')" \
-        autres "$(t 'Autres réglages : portail (Configuration) ou loco-config' 'Other settings: portal (Configuration) or loco-config')") || break
+        reseau "$(t 'Adresse réseau (fixe ou DHCP)' 'Network address (static or DHCP)' 'Dirección de red (fija o DHCP)')" \
+        nom "$(t 'Nom du serveur' 'Server name' 'Nombre del servidor')" \
+        root "$(t 'Mot de passe root' 'Root password' 'Contraseña root')" \
+        admin "$(t 'Mot de passe du compte admin du portail' 'Portal admin account password' 'Contraseña de la cuenta admin del portal')" \
+        ssh "$(t 'Accès SSH (mot de passe, clé ou désactivé)' 'SSH access (password, key or disabled)' 'Acceso SSH (contraseña, clave o desactivado)')" \
+        autres "$(t 'Autres réglages : portail (Configuration) ou loco-config' 'Other settings: portal (Configuration) or loco-config' 'Otros ajustes: portal (Configuración) o loco-config')") || break
     case "$choice" in
         reseau) network ;;
         nom) name ;;
         root) root_password ;;
         admin) admin_password ;;
         ssh) ssh_access ;;
-        autres) clear; loco-config show; printf '\n%s' "$(t 'Modifier : loco-config set CLÉ=VALEUR. Entrée pour continuer. ' 'Edit: loco-config set KEY=VALUE. Press Enter to continue. ')"; read -r _ ;;
+        autres) clear; loco-config show; printf '\n%s' "$(t 'Modifier : loco-config set CLÉ=VALEUR. Entrée pour continuer. ' 'Edit: loco-config set KEY=VALUE. Press Enter to continue. ' 'Editar: loco-config set CLAVE=VALOR. Pulse Intro para continuar. ')"; read -r _ ;;
     esac
 done
 clear

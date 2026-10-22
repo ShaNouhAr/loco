@@ -7,9 +7,9 @@ name="loco-firstboot"
 description="loco : installation au premier démarrage"
 ARGS=/etc/loco/firstboot.args
 LOG=/var/log/loco-firstboot.log
-# Langue de la console : français si LANG/LC_* commence par « fr », anglais sinon.
-case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_EN=0 ;; *) LOCO_EN=1 ;; esac
-t() { if [ "$LOCO_EN" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+# Langue de la console : français si LANG/LC_* commence par « fr », espagnol par « es », anglais sinon.
+case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in fr*) LOCO_LANG=fr ;; es*) LOCO_LANG=es ;; *) LOCO_LANG=en ;; esac
+t() { case "$LOCO_LANG" in fr) printf '%s' "$1" ;; es) printf '%s' "${3:-$2}" ;; *) printf '%s' "$2" ;; esac; }
 
 depend() {
     need localmount net
@@ -18,7 +18,7 @@ depend() {
 
 start() {
     [ -f "$ARGS" ] || return 0
-    ebegin "$(t 'Installation de loco (premier démarrage, quelques minutes)' 'Installing loco (first boot, a few minutes)')"
+    ebegin "$(t 'Installation de loco (premier démarrage, quelques minutes)' 'Installing loco (first boot, a few minutes)' 'Instalando loco (primer arranque, unos minutos)')"
     src=$(head -n 1 "$ARGS")
     set --
     while IFS= read -r arg; do set -- "$@" "$arg"; done <<EOT
@@ -33,6 +33,6 @@ EOT
         tail -n 15 "$LOG" >&2
         # shellcheck source=linux/lib/appliance.sh
         . "$src/linux/lib/appliance.sh" && appliance_issue
-        eend 1 "$(t "échec : $LOG (nouvelle tentative au prochain démarrage)" "failed: $LOG (retry at next boot)")"
+        eend 1 "$(t "échec : $LOG (nouvelle tentative au prochain démarrage)" "failed: $LOG (retry at next boot)" "error: $LOG (nuevo intento en el próximo arranque)")"
     fi
 }

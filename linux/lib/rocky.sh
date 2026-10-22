@@ -33,7 +33,7 @@ rocky_packages() {
     if [ "$OS_MAJOR" = 8 ]; then rocky_nginx_runtime; fi
     if ! dnf install -y "${PACKAGES[@]}" >> "$LOG" 2>&1; then
         tail -20 "$LOG" >&2
-        die "installation DNF impossible (journal : $LOG)." "DNF installation failed (log: $LOG)."
+        die "installation DNF impossible (journal : $LOG)." "DNF installation failed (log: $LOG)." "instalación DNF fallida (registro: $LOG)."
     fi
     # Runtime isolé : les comptes/sauvegardes scrypt restent compatibles entre distributions.
     local runtime=/usr/local/lib/loco/venv
@@ -71,7 +71,7 @@ rocky_nginx_runtime() {
 rocky_build_apt() {
     local deps=/usr/local/lib/loco/apt build
     if [ -x "$deps/bin/apt-ftparchive" ] && [ "$(cat "$deps/version" 2>/dev/null)" = 2.6.1 ]; then return; fi
-    say "Compilation de l'indexeur APT (Rocky 8, source Debian vérifiée)" "Compiling the APT indexer (Rocky 8, verified Debian source)"
+    say "Compilation de l'indexeur APT (Rocky 8, source Debian vérifiée)" "Compiling the APT indexer (Rocky 8, verified Debian source)" "Compilación del indexador APT (Rocky 8, fuente Debian verificada)"
     build=$(mktemp -d)
     curl -fSL --retry 3 https://deb.debian.org/debian/pool/main/a/apt/apt_2.6.1.tar.xz -o "$build/apt.tar.xz" >> "$LOG" 2>&1
     curl -fSL --retry 3 https://deb.debian.org/debian/pool/main/t/triehash/triehash_0.3.orig.tar.gz -o "$build/triehash.tar.gz" >> "$LOG" 2>&1
@@ -113,7 +113,7 @@ rocky_build_acng() {
         case "$patch_file" in ''|'#'*) continue ;; esac
         patch -d "$source" -p1 < "$source/debian/patches/$patch_file" >> "$LOG" 2>&1
     done < "$series"
-    say "Compilation du cache APT (Rocky 10, source vérifiée)" "Compiling the APT cache (Rocky 10, verified source)"
+    say "Compilation du cache APT (Rocky 10, source vérifiée)" "Compiling the APT cache (Rocky 10, verified source)" "Compilación de la caché APT (Rocky 10, fuente verificada)"
     cmake -S "$source" -B "$build/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$deps" \
         -DCMAKE_INSTALL_SYSCONFDIR=/etc -DCMAKE_INSTALL_RPATH="$deps/lib64;$deps/lib" -DACNG_CACHE_DIR=/var/cache/apt-cacher-ng \
         -DAVAHIDIR="$deps/etc/avahi/services" -DACNG_LOG_DIR=/var/log/apt-cacher-ng -DENABLE_TOOLS=OFF >> "$LOG" 2>&1
@@ -260,7 +260,7 @@ rocky_access() {
         done
         for port in "$HTTPS_PORT" "$PORTAL_PORT" 3142; do
             if ! semanage port -l | awk '$1=="http_port_t" && $2=="tcp" {for(i=3;i<=NF;i++){gsub(/,/,"",$i);print $i}}' | grep -qx "$port"; then
-                semanage port -a -t http_port_t -p tcp "$port" >> "$LOG" 2>&1 || die "SELinux : port $port réservé à un autre service ; choisissez un autre port." "SELinux: port $port reserved for another service; choose another port."
+                semanage port -a -t http_port_t -p tcp "$port" >> "$LOG" 2>&1 || die "SELinux : port $port réservé à un autre service ; choisissez un autre port." "SELinux: port $port reserved for another service; choose another port." "SELinux: puerto $port reservado para otro servicio; elija otro puerto."
                 echo "$port" >> "$ROCKY_STATE/rocky-selinux-ports"
             fi
         done
@@ -289,13 +289,13 @@ rocky_context() {
     local existing
     existing=$(semanage fcontext -l -C | python3 -c 'import sys; print(next((row.split()[-1].split(":")[2] for row in sys.stdin if row.split() and row.split()[0]==sys.argv[1]), ""))' "$1")
     if [ -n "$existing" ]; then
-        [ "$existing" = "$2" ] || die "SELinux : $3 possède une règle personnalisée incompatible avec $2." "SELinux: $3 has a custom rule incompatible with $2."
+        [ "$existing" = "$2" ] || die "SELinux : $3 possède une règle personnalisée incompatible avec $2." "SELinux: $3 has a custom rule incompatible with $2." "SELinux: $3 tiene una regla personalizada incompatible con $2."
     else
         semanage fcontext -a -t "$2" "$1" >> "$LOG" 2>&1
         grep -Fxq "$1" "$ROCKY_STATE/rocky-selinux-contexts" 2>/dev/null || echo "$1" >> "$ROCKY_STATE/rocky-selinux-contexts"
     fi
     if ! matchpathcon -n "$3" | grep -q ":$2:"; then
-        die "SELinux : $3 possède une règle personnalisée incompatible avec $2." "SELinux: $3 has a custom rule incompatible with $2."
+        die "SELinux : $3 possède une règle personnalisée incompatible avec $2." "SELinux: $3 has a custom rule incompatible with $2." "SELinux: $3 tiene una regla personalizada incompatible con $2."
     fi
 }
 

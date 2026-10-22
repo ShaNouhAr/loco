@@ -30,7 +30,7 @@ alpine_packages() {
     # Appliance (ISO) : tout est déjà installé depuis le média, éventuellement sans accès à Internet.
     if [ ${#missing[@]} -gt 0 ] && ! apk add --no-progress "${wanted[@]}" >> "$LOG" 2>&1; then
         tail -15 "$LOG" >&2
-        die "installation des paquets impossible (journal complet : $LOG)." "package installation failed (full log: $LOG)."
+        die "installation des paquets impossible (journal complet : $LOG)." "package installation failed (full log: $LOG)." "no se pudieron instalar los paquetes (registro completo: $LOG)."
     fi
     # nginx et le portail sont lancés par supervisord : le service nginx d'Alpine resterait en conflit.
     rc-update del nginx default >/dev/null 2>&1 || true
@@ -96,9 +96,9 @@ alpine_services() {
     rc-update add loco default >/dev/null
     rc-update add loco-agent default >/dev/null
     rc-service loco restart >/dev/null 2>&1 || rc-service loco start >/dev/null \
-        || die "le service loco ne démarre pas (/var/log/loco/)." "the loco service does not start (/var/log/loco/)."
+        || die "le service loco ne démarre pas (/var/log/loco/)." "the loco service does not start (/var/log/loco/)." "el servicio loco no arranca (/var/log/loco/)."
     # Lancé depuis l'agent (mise à jour depuis le portail), l'agent se relance seul quand son code change.
-    rc-service loco-agent status >/dev/null 2>&1 || rc-service loco-agent start >/dev/null 2>&1 || die "le service loco-agent ne démarre pas (/var/log/loco/agent.log)." "the loco-agent service does not start (/var/log/loco/agent.log)."
+    rc-service loco-agent status >/dev/null 2>&1 || rc-service loco-agent start >/dev/null 2>&1 || die "le service loco-agent ne démarre pas (/var/log/loco/agent.log)." "the loco-agent service does not start (/var/log/loco/agent.log)." "el servicio loco-agent no arranca (/var/log/loco/agent.log)."
     # Appliance installée depuis l'ISO : console (setup-loco) et bannière avec l'adresse et l'empreinte.
     if [ -f "$ETC/appliance" ]; then
         ln -sf "$PREFIX/bin/setup-loco" /usr/local/sbin/setup-loco
@@ -117,10 +117,10 @@ alpine_check() {
         sleep 0.5
     done
     curl -fsk --connect-timeout 2 --max-time 5 "https://127.0.0.1:$HTTPS_PORT/healthz" >/dev/null \
-        || die "le portail ne répond pas (journaux : /var/log/loco/)." "the portal does not respond (logs: /var/log/loco/)."
+        || die "le portail ne répond pas (journaux : /var/log/loco/)." "the portal does not respond (logs: /var/log/loco/)." "el portal no responde (registros: /var/log/loco/)."
     # Cache APT nginx : refuse ce qui n'est pas un fichier de dépôt.
     status=$(curl -s --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:3142/) || true
-    [ "$status" = 403 ] || die "le cache APT ne répond pas correctement (HTTP $status)." "the APT cache does not respond correctly (HTTP $status)."
+    [ "$status" = 403 ] || die "le cache APT ne répond pas correctement (HTTP $status)." "the APT cache does not respond correctly (HTTP $status)." "la caché APT no responde correctamente (HTTP $status)."
 }
 
 alpine_remove() {
