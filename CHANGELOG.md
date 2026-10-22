@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.39.0 — 2026-10-22
+
+- **MSI Windows prêt à l'emploi** : « Télécharger le MSI » depuis la page *Enrôlement* donne désormais un installeur tout prêt — un **double-clic installe le service ET inscrit le poste**, sans aucune commande, comme le paquet `.deb` sous Linux. Le portail grave l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité dans le MSI au téléchargement. La commande PowerShell et le déploiement en masse (GPO) restent disponibles sous « Autres méthodes » (MSI générique, sans inscription).
+- **Mises à jour depuis GitLab** : loco peut tirer ses versions d'un **projet GitLab** (y compris un GitLab interne), pas seulement de GitHub. Dans *Mises à jour › Source des mises à jour*, indiquez `owner/repo` (GitHub) ou l'URL d'un projet GitLab. Section retravaillée, plus lisible.
+- **Compteur de mises à jour de sécurité** du parc : au lieu d'un « dont N sécurité » en rouge, une **pastille bouclier** discrète, sur la liste du parc et la fiche de chaque poste.
+
 ## 2.38.0 — 2026-10-22
 
 - **Vue d'ensemble plus lisible** : les tuiles (caches, Processeur, Mémoire, Disque) s'enroulent au lieu d'être tassées sur une seule ligne, donc plus de valeurs coupées. La tuile **Mémoire** montre désormais un **pourcentage** d'utilisation (comme le Processeur) avec « utilisée sur totale » en dessous, au lieu d'un nombre d'octets tronqué.
