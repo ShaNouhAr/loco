@@ -20,6 +20,15 @@ for p in Path('/etc/yum.repos.d').glob('*.repo'):
 PY
 fi
 PW=Native-Rocky-E2e-Password-2026
+# Les images cloud Rocky embarquent parfois des métadonnées de dépôt périmées (404 sur un hash de repodata
+# retiré après une version mineure) : vider le cache dnf force un repomd frais, avec quelques tentatives si
+# un miroir est lent. Sans effet sur le produit — ne concerne que la VM jetable du test.
+for attempt in 1 2 3 4; do
+    dnf clean all >/dev/null 2>&1 || true
+    if dnf -y makecache >/dev/null 2>&1; then break; fi
+    [ "$attempt" = 4 ] && { echo 'Rafraîchissement des métadonnées dnf impossible.' >&2; exit 1; }
+    sleep 5
+done
 dnf install -y nginx firewalld rpm-build >/dev/null
 systemctl enable --now firewalld >/dev/null
 [ "$(getenforce)" = Enforcing ]
