@@ -20,6 +20,7 @@
 #   --max-upload T           taille max d'un fichier envoyé au portail (défaut : 8g)
 #   --backup-keep N          sauvegardes quotidiennes conservées (défaut : 3 ; 0 = désactivées)
 #   --backup-dir DIR         dossier des sauvegardes (défaut : /var/backups/loco)
+#   --github-repo OWNER/REPO dépôt GitHub des mises à jour de loco (défaut : dépôt officiel)
 #   --password MDP           définit le mot de passe du compte « admin »
 #   --tls-cert F --tls-key F certificat fourni au lieu de l'autorité locale
 #   --no-wu / --wu           sans / avec le cache Windows Update (ports 80 et 443)
@@ -126,7 +127,7 @@ if [[ " $* " != *" --help "* && " $* " != *" -h "* ]]; then migrate_local_repo; 
 PORTAL_PORT=8088 HTTPS_PORT=8443 HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
 RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 WU_PROXY_PORT=3128 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
 MAX_UPLOAD=8g BACKUP_KEEP=3 BACKUP_DIR=/var/backups/loco FLATPAK_ENABLED=1 FLATPAK_CACHE_SIZE=""
-RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE=""
+RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE="" GITHUB_REPO=""
 # shellcheck disable=SC1091
 [ -f "$ETC/loco.conf" ] && . "$ETC/loco.conf"
 PASSWORD="" TLS_CERT="" TLS_KEY=""
@@ -149,6 +150,7 @@ while [ $# -gt 0 ]; do
         --max-upload) need "$@"; MAX_UPLOAD="$2"; shift 2 ;;
         --backup-keep) need "$@"; BACKUP_KEEP="$2"; shift 2 ;;
         --backup-dir) need "$@"; BACKUP_DIR="$2"; shift 2 ;;
+        --github-repo) need "$@"; GITHUB_REPO="$2"; shift 2 ;;
         --password) need "$@"; PASSWORD="$2"; shift 2 ;;
         --tls-cert) need "$@"; TLS_CERT="$2"; shift 2 ;;
         --tls-key) need "$@"; TLS_KEY="$2"; shift 2 ;;
@@ -180,6 +182,7 @@ num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-kee
 [[ "$APT_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--apt-cache-size : taille invalide (ex. 50g)." "--apt-cache-size: invalid size (e.g. 50g)." "--apt-cache-size: tamaño no válido (ej. 50g)."
 if [[ ! "$DATA" =~ ^/[A-Za-z0-9._/-]+$ || "$DATA" == "/" ]]; then die "--data : chemin absolu simple attendu." "--data: a simple absolute path is expected." "--data: se espera una ruta absoluta simple."; fi
 [[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] || die "--backup-dir : chemin absolu simple attendu." "--backup-dir: a simple absolute path is expected." "--backup-dir: se espera una ruta absoluta simple."
+[ -z "$GITHUB_REPO" ] || [[ "$GITHUB_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "--github-repo : dépôt owner/repo attendu." "--github-repo: owner/repo expected." "--github-repo: se espera owner/repo."
 if [ -n "$UPSTREAM_PROXY" ]; then
     [[ "$UPSTREAM_PROXY" =~ ^http://[^[:space:]\"\']+$ ]] || die "--proxy : adresse http://hôte:port attendue." "--proxy: an http://host:port address is expected." "--proxy: se espera una dirección http://host:puerto."
 fi
@@ -330,6 +333,7 @@ MAX_UPLOAD=$MAX_UPLOAD
 BACKUP_KEEP=$BACKUP_KEEP
 BACKUP_DIR=$BACKUP_DIR
 SOURCE_DIR=$(printf '%q' "$ROOT")
+GITHUB_REPO=$(printf '%q' "${GITHUB_REPO:-}")
 EOF
 chmod 644 "$ETC/loco.conf"
 

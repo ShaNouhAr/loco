@@ -367,13 +367,14 @@ class TestSystemPackages(TempAgent):
             with self.assertRaisesRegex(ValueError, "Alpine"):
                 locoadmin.update_system(lambda _t: None, security_only=True)
 
-    def test_appliance_actions_are_refused_elsewhere(self):
+    def test_configure_is_appliance_only_but_loco_update_is_not(self):
         with mock.patch.object(locoadmin, "ALPINE", False):
-            for action in ("update-loco", "configure"):
-                with self.subTest(action=action), self.assertRaises(ValueError):
-                    locoadmin.request(action, {"WU_CACHE_SIZE": "40g"} if action == "configure" else None)
+            with self.assertRaises(ValueError):                       # configure : appliance seulement
+                locoadmin.request("configure", {"WU_CACHE_SIZE": "40g"})
+            locoadmin.request("update-loco", user="admin")           # loco : tout serveur Linux
+            locoadmin.request("set-repo", {"repo": "octo/loco"}, user="admin")
             locoadmin.request("update-security", user="admin")
-        self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 1)
+        self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 3)
 
 
 class TestPages(TempAgent):
@@ -451,9 +452,8 @@ class TestPages(TempAgent):
             self.assertIn("6.12.57+deb13-amd64", html)
             self.assertIn("ssh.service", html)
             self.assertNotIn("/system/configuration", html)           # réglages : appliance seulement
-            self.assertNotIn('value="update-loco"', html)
-            r = self.b.post("/system/updates", {"action": "update-loco"}, page="/system/updates")
-            self.assertEqual(r.status_code, 400)
+            self.assertIn("ShaNouhAr/loco", html)                      # dépôt GitHub par défaut, modifiable
+            self.assertIn('value="set-repo"', html)
             with mock.patch.object(locoadmin, "ALPINE", False):
                 r = self.b.post("/system/updates", {"action": "update-security"}, page="/system/updates")
             self.assertEqual(r.status_code, 302)

@@ -47,11 +47,12 @@ HERE = os.path.abspath(__file__)
 _snapshot_spec = importlib.util.spec_from_file_location("locosnapshot", os.path.join(os.path.dirname(HERE), "locosnapshot.py"))
 locosnapshot = importlib.util.module_from_spec(_snapshot_spec)
 _snapshot_spec.loader.exec_module(locosnapshot)
-REPO = "ShaNouhAr/loco"
-API = f"https://api.github.com/repos/{REPO}/releases/latest"
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure")
-# Réservées à l'appliance Alpine (sources et réglages gérés par loco) ; ailleurs, install.sh s'en charge.
-APPLIANCE_ACTIONS = ("update-loco", "configure")
+DEFAULT_REPO = "ShaNouhAr/loco"
+REPO_RE = re.compile(r"[\w.-]+/[\w.-]+")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo")
+# Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
+# La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
+APPLIANCE_ACTIONS = ("configure",)
 JOB_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$")
 CHECK_EVERY = 86400
 RETRY_EVERY = 3600
@@ -258,8 +259,18 @@ def _get(url, timeout=15):
     return opener.open(req, timeout=timeout)
 
 
+def repo():
+    """Dépôt GitHub source des mises à jour de loco (réglage loco.conf GITHUB_REPO, défaut DEFAULT_REPO)."""
+    configured = read_conf().get("GITHUB_REPO", "").strip()
+    return configured if REPO_RE.fullmatch(configured) else DEFAULT_REPO
+
+
+def _api():
+    return f"https://api.github.com/repos/{repo()}/releases/latest"
+
+
 def latest_release():
-    with _get(API) as r:
+    with _get(_api()) as r:
         data = json.load(r)
     version = data["tag_name"].lstrip("v")
     if not re.fullmatch(r"[0-9]+(\.[0-9]+){1,3}", version):
@@ -311,7 +322,7 @@ def _run(cmd, log, **kw):
 
 def check(log=print):
     """Versions disponibles (loco publié sur GitHub, paquets du système) ; résultat gardé dans STATUS."""
-    values = {"checked": _now(), "current": current_version(), "errors": []}
+    values = {"checked": _now(), "current": current_version(), "repo": repo(), "errors": []}
     try:
         values["latest"] = latest_release()
     except (OSError, ValueError, KeyError) as e:
@@ -688,7 +699,8 @@ def _snapshot():
 def _rollback(work, source, log):
     """Relance les sources précédentes avec la configuration et la base antérieures."""
     log(t("Échec : restauration de la configuration et de la version précédentes.", "Failed: restoring the previous configuration and version.", "Error: restaurando la configuración y la versión anteriores."))
-    _run(["rc-service", "loco", "stop"], log)
+    if ALPINE:
+        _run(["rc-service", "loco", "stop"], log)
     shutil.copy2(os.path.join(work, "loco.conf"), CONF)
     snapshot_db = os.path.join(work, "portal.db")
     if os.path.isfile(snapshot_db):
@@ -863,6 +875,41 @@ def configure(changes, log=print):
         return ok
 
 
+def _set_conf(key, value):
+    """Écrit (ou remplace) KEY="value" dans loco.conf (root) ; install.sh source ce fichier et conserve la valeur."""
+    try:
+        with open(CONF, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        lines = []
+    out, found = [], False
+    for line in lines:
+        if line.split("=", 1)[0].strip() == key:
+            out.append(f'{key}="{value}"')
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f'{key}="{value}"')
+    tmp = CONF + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("\n".join(out) + "\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, CONF)
+
+
+def set_repo(params, log=print):
+    """Change le dépôt GitHub source puis revérifie les versions. Le dépôt doit être « owner/repo »."""
+    new = str((params or {}).get("repo", "")).strip()
+    if not REPO_RE.fullmatch(new):
+        raise ValueError(t("dépôt GitHub invalide (format attendu : owner/repo)",
+                           "invalid GitHub repository (expected owner/repo)",
+                           "repositorio GitHub no válido (formato esperado: owner/repo)"))
+    _set_conf("GITHUB_REPO", new)
+    log(t(f"Dépôt GitHub : {new}", f"GitHub repository: {new}", f"Repositorio GitHub: {new}"))
+    return check(log)
+
+
 def reboot(log=print):
     log(t("Redémarrage du serveur dans 5 secondes.", "Server rebooting in 5 seconds.", "El servidor se reinicia en 5 segundos."))
     subprocess.Popen(["sh", "-c", "sleep 5; exec reboot"], start_new_session=True, stdin=subprocess.DEVNULL,
@@ -883,6 +930,8 @@ def _operation(action, params, log):
         return configure(params, log)
     if action == "reboot":
         return reboot(log)
+    if action == "set-repo":
+        return set_repo(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1062,6 +1111,11 @@ def agent():
                         params = validate(req.get("params"))
                     except ValueError:
                         continue
+                elif req["action"] == "set-repo":
+                    new = str((req.get("params") or {}).get("repo", "")).strip()
+                    if not REPO_RE.fullmatch(new):
+                        continue
+                    params = {"repo": new}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1100,9 +1154,17 @@ def request(action, params=None, user=""):
     """Dépôt d'une demande par le portail ; l'agent la revalide avant de l'exécuter."""
     if action not in ACTIONS or (action in APPLIANCE_ACTIONS and not ALPINE):
         raise ValueError("action inconnue")
-    params = validate(params or {}) if action == "configure" else {}
-    if action == "configure" and not params:
-        raise ValueError("aucun changement")
+    if action == "configure":
+        params = validate(params or {})
+        if not params:
+            raise ValueError("aucun changement")
+    elif action == "set-repo":
+        new = str((params or {}).get("repo", "")).strip()
+        if not REPO_RE.fullmatch(new):
+            raise ValueError("dépôt GitHub invalide")
+        params = {"repo": new}
+    else:
+        params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
     try:
         with open(path + ".tmp", "x") as f:

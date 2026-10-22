@@ -19,7 +19,7 @@ if config.SERVER_UPDATES:
 
 ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": L_("Mise à jour de loco"),
                  "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
-                 "configure": L_("Réglages"), "reboot": L_("Redémarrage")}
+                 "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Dépôt GitHub")}
 TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
 
 
@@ -138,6 +138,7 @@ def appliance_updates():
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
         reboot_texts=[_reboot_text(r) for r in status.get("reboot_reasons") or []],
+        repo=status.get("repo") or locoadmin.DEFAULT_REPO,
         errors=[_error_text(e) for e in status.get("errors") or []],
         packages=packages, security=[p for p in packages if p.get("security")],
         key_count=sum(1 for p in packages if p.get("tags")),
@@ -169,11 +170,11 @@ def appliance_operations_state():
 def appliance_updates_post():
     _require_agent()
     action = request.form.get("action", "")
-    allowed = ("check", "update-system", "update-security", "reboot") + (("update-loco",) if config.APPLIANCE else ())
-    if action not in allowed:
+    if action not in ("check", "update-system", "update-security", "reboot", "update-loco", "set-repo"):
         abort(400)
     require("system.view" if action == "check" else "system.reboot" if action == "reboot" else "system.update")
-    if _submit(action):
+    params = {"repo": request.form.get("repo", "").strip()} if action == "set-repo" else None
+    if _submit(action, params):
         audit(f"systeme.{action}", ACTION_LABELS[action])
         flash((_('Redémarrage demandé.') if action == "reboot" else (_('Installation des correctifs de sécurité lancée.') if action == "update-security" else _('%(ACTION_LABELS)s lancée.', ACTION_LABELS=ACTION_LABELS[action]))), "ok")
     return back("appliance_updates")
