@@ -969,7 +969,7 @@ def fleet():
 @login_required
 def fleet_settings():
     return render_template("fleet_settings.html", red_threshold=red_threshold(), checkin=CHECKIN,
-                           server_coverage=addresses.coverage(db()))
+                           server_coverage=addresses.coverage(db()), enroll_key=enroll_key())
 
 
 @app.route("/fleet/addresses", methods=["POST"])
