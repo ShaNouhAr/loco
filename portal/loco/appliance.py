@@ -25,6 +25,8 @@ TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
 
 def _reboot_text(r):
     """Raison de redémarrage (code renvoyé par l'agent) en toutes lettres, dans la langue de la personne."""
+    if isinstance(r, str):  # État conservé avant les messages structurés, jusqu'à la prochaine vérification.
+        return r
     code = r.get("code")
     if code == "kernel-modules":
         return _("noyau mis à jour (les modules du noyau en cours ont été remplacés)")
@@ -40,6 +42,8 @@ def _reboot_text(r):
 
 def _error_text(e):
     """Erreur d'état (code renvoyé par l'agent) dans la langue de la personne ; le détail reste tel quel."""
+    if isinstance(e, str):
+        return e
     if e.get("code") == "loco-release":
         return _("Version publiée de loco introuvable : %(detail)s", detail=e.get("detail", ""))
     if e.get("code") == "system-packages":

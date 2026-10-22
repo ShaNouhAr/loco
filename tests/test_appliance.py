@@ -400,6 +400,20 @@ class TestPages(TempAgent):
         html = self.b.c.get("/system/configuration").get_data(as_text=True)
         self.assertIn('value="10.0.0.0/8 192.168.0.0/16"', html)
 
+    def test_cached_status_from_before_structured_messages_remains_readable(self):
+        reason = "redémarrage demandé par libc6"
+        error = "Version publiée de loco introuvable : <miroir indisponible>"
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-21 06:00:00", "reboot_required": True,
+                       "reboot_reasons": [reason], "errors": [error]}, f)
+        response = self.b.c.get("/system/updates")
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn(reason, html)
+        self.assertIn("&lt;miroir indisponible&gt;", html)
+        self.assertNotIn("<miroir indisponible>", html)
+        self.assertEqual(locoadmin._error_log(error), error)
+
     def test_settings_are_sent_to_the_agent(self):
         form = {k: v for k, v in locoadmin.read_conf().items() if k in locoadmin.SETTINGS}
         form.update(WU_CACHE_SIZE="60g", ADMIN_ALLOW="127.0.0.0/8 192.168.43.0/24")

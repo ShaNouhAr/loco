@@ -10,6 +10,8 @@
 
 - **Sélecteur de langue dédié** : une icône globe, en haut à droite et sur l'écran de connexion, ouvre un menu *Français / English / Español* accessible depuis n'importe quelle page. Le choix de langue sort du menu *Apparence* (palette) pour devenir une action d'un seul clic.
 
+- **Mise à niveau depuis une ancienne version** : les motifs de redémarrage et erreurs déjà en cache restent lisibles sur la page Mises à jour et en console, jusqu'à la prochaine vérification par l'agent.
+
 
 ## 2.34.0 — 2026-10-21
 

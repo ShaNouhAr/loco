@@ -361,6 +361,8 @@ def check(log=print):
 
 def _error_log(e):
     """Un message d'erreur d'état en toutes lettres, pour le journal (langue du serveur)."""
+    if isinstance(e, str):  # État conservé avant les messages structurés.
+        return e
     if e.get("code") == "loco-release":
         return t(f"Version publiée de loco introuvable : {e['detail']}",
                  f"Published loco version not found: {e['detail']}",
