@@ -948,6 +948,15 @@ def _valid_tz(tz):
     return bool(TZ_RE.fullmatch(tz)) and os.path.isfile(os.path.join("/usr/share/zoneinfo", tz))
 
 
+def _is_container():
+    """Conteneur (LXC, Docker…) : l'horloge est celle de l'hôte, la synchro NTP ne se règle pas ici."""
+    try:
+        out = subprocess.run(["systemd-detect-virt", "--container"], capture_output=True, text=True, timeout=3).stdout
+        return out.strip() not in ("none", "")
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def _ntp_backend():
     """Mécanisme NTP du système : systemd-timesyncd (Debian/Ubuntu) ou chrony (famille Red Hat)."""
     if os.path.exists("/lib/systemd/systemd-timesyncd") or os.path.exists("/usr/lib/systemd/systemd-timesyncd"):
@@ -984,6 +993,11 @@ def _set_timezone(tz, log):
 
 def _set_ntp(enabled, server, log):
     """Synchronise l'horloge sur un serveur NTP amont (client NTP), par timesyncd ou chrony selon le système."""
+    if _is_container():
+        log(t("Conteneur : l'horloge est gérée par l'hôte, synchronisation NTP ignorée.",
+              "Container: the clock is managed by the host, NTP synchronisation skipped.",
+              "Contenedor: el reloj lo gestiona el anfitrión, sincronización NTP omitida."))
+        return
     backend = _ntp_backend()
     if backend == "timesyncd":
         dropin = "/etc/systemd/timesyncd.conf.d/loco.conf"

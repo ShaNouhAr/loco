@@ -22,7 +22,12 @@ if config.SERVER_UPDATES:
 def server_time():
     """Fuseau horaire et état de la synchronisation NTP du serveur, en lecture seule (appliqués par l'agent root)."""
     info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False,
-            "synchronized": False, "server": "", "backend": ""}
+            "synchronized": False, "server": "", "container": False}
+    try:
+        info["container"] = subprocess.run(["systemd-detect-virt", "--container"], capture_output=True,
+                                            text=True, timeout=3).stdout.strip() not in ("none", "")
+    except (OSError, subprocess.SubprocessError):
+        pass
     try:
         out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
                              capture_output=True, text=True, timeout=5).stdout
