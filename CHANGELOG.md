@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.41.0 — 2026-10-23
+
+- **Heure du serveur** (page *Système*) : choisir le **fuseau horaire** du serveur et, si on le souhaite, **synchroniser l'horloge sur un serveur NTP** amont (le serveur devient client NTP, il n'en héberge pas). Appliqué par l'agent — `timedatectl` pour le fuseau, `systemd-timesyncd` (Debian/Ubuntu) ou `chrony` (Red Hat) pour le NTP.
+- **Agent invité QEMU** (page *Système*) : quand loco tourne dans une VM Proxmox/QEMU, une carte affiche l'état de `qemu-guest-agent` et permet de l'**installer en un clic** (arrêt propre, adresses IP dans Proxmox, gel des fichiers pour des sauvegardes cohérentes). Masquée sur les conteneurs et le matériel physique.
+
 ## 2.40.0 — 2026-10-22
 
 - **Page *Réglages du parc* plus claire** : la carte de l'adresse du serveur affiche l'adresse actuelle avec une pastille de confirmation (« 3/3 agents l'ont confirmée ») et replie le mode d'emploi dans un « Comment changer l'adresse sans perdre les postes ? » en trois étapes ; une adresse annoncée en attente de bascule a son propre encart. Le seuil des pastilles gagne une légende de couleurs (à jour · 1 à N · N ou plus), et la clé d'inscription affiche un aperçu masqué.
