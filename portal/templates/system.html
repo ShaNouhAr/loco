@@ -82,6 +82,23 @@
   </section>
   {% endif %}
 
+  {% if qemu and (qemu.qemu or qemu.installed) %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Agent invité QEMU") }}</h2>
+      <div class="aside">{% if qemu.running %}<span class="st ok">{{ _("actif") }}</span>{% elif qemu.installed %}<span class="st warn">{{ _("installé, arrêté") }}</span>{% else %}<span class="muted small">{{ _("non installé") }}</span>{% endif %}</div>
+    </div>
+    <div class="panel-b">
+      <p class="muted small">{{ _("Permet à Proxmox/QEMU de dialoguer avec ce serveur : arrêt propre, adresses IP dans l'interface Proxmox, gel des fichiers pour des sauvegardes cohérentes. Utile quand loco tourne dans une machine virtuelle QEMU/KVM.") }}</p>
+      {% if can('system.configure') and not qemu.running %}
+      <form method="post" action="{{ url_for('system_qemu_agent') }}" data-ajax data-confirm="{{ _('Installer l\'agent invité QEMU ?') }}" data-confirm-text="{{ _('Installe le paquet qemu-guest-agent et démarre le service.') }}" data-confirm-ok="{{ _('Installer') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn sm"><span class="spin"></span>{{ _("Démarrer l'agent invité QEMU") if qemu.installed else _("Installer l'agent invité QEMU") }}</button>
+      </form>
+      {% elif qemu.running %}<p class="small muted">{{ _("Rien à faire : l'agent invité répond à Proxmox.") }}</p>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+
   <div class="cols even">
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>

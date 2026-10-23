@@ -67,6 +67,18 @@ def timezones():
             if "/" in rel:
                 found.append(rel)
     return sorted(set(found) | {"UTC"})
+
+
+def qemu_agent():
+    """État de l'agent invité QEMU : virtualisation détectée, paquet installé, service actif."""
+    virt = ""
+    try:
+        virt = subprocess.run(["systemd-detect-virt"], capture_output=True, text=True, timeout=3).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    installed = any(os.path.exists(p) for p in ("/usr/sbin/qemu-ga", "/usr/bin/qemu-ga"))
+    return {"qemu": virt in ("qemu", "kvm"), "virt": virt, "installed": installed,
+            "running": service_active("qemu-guest-agent")}
 from .wupdate import wu_stats
 
 UNITS = [
@@ -250,7 +262,28 @@ def system():
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
         time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
         timezones=timezones() if config.SERVER_UPDATES and not config.WINDOWS else [],
+        qemu=qemu_agent() if config.SERVER_UPDATES and not config.WINDOWS else None,
     )
+
+
+@app.route("/system/qemu-agent", methods=["POST"])
+@login_required
+def system_qemu_agent():
+    """Installe l'agent invité QEMU (qemu-guest-agent) via l'agent root, utile quand loco tourne dans une VM."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    if locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request("install-qemu-agent", user=g.user["username"] if g.get("user") else "")
+            audit("systeme.qemu-agent", _("Agent invité QEMU"))
+            flash(_("Installation de l'agent invité QEMU lancée."), "ok")
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
 
 
 @app.route("/system/time", methods=["POST"])

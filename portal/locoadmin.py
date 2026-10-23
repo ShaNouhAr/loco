@@ -57,7 +57,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
@@ -1027,6 +1027,25 @@ def set_time(params, log=print):
     return True
 
 
+def install_qemu_agent(log=print):
+    """Installe et active l'agent invité QEMU (qemu-guest-agent), utile quand loco tourne dans une VM Proxmox/QEMU."""
+    if shutil.which("apt-get"):
+        _run(["apt-get", "install", "-y", "qemu-guest-agent"], log, env=dict(os.environ, DEBIAN_FRONTEND="noninteractive"))
+    elif shutil.which("dnf"):
+        _run(["dnf", "install", "-y", "qemu-guest-agent"], log)
+    elif shutil.which("apk"):
+        _run(["apk", "add", "qemu-guest-agent"], log)
+    else:
+        raise ValueError(t("gestionnaire de paquets inconnu", "unknown package manager", "gestor de paquetes desconocido"))
+    if shutil.which("systemctl"):
+        _run(["systemctl", "enable", "--now", "qemu-guest-agent"], log)
+    elif shutil.which("rc-update"):
+        _run(["rc-update", "add", "qemu-guest-agent"], log)
+        _run(["rc-service", "qemu-guest-agent", "start"], log)
+    log(t("Agent invité QEMU installé et activé.", "QEMU guest agent installed and started.", "Agente invitado QEMU instalado y activado."))
+    return True
+
+
 def reboot(log=print):
     log(t("Redémarrage du serveur dans 5 secondes.", "Server rebooting in 5 seconds.", "El servidor se reinicia en 5 segundos."))
     subprocess.Popen(["sh", "-c", "sleep 5; exec reboot"], start_new_session=True, stdin=subprocess.DEVNULL,
@@ -1051,6 +1070,8 @@ def _operation(action, params, log):
         return set_repo(params, log)
     if action == "set-time":
         return set_time(params, log)
+    if action == "install-qemu-agent":
+        return install_qemu_agent(log)
     raise ValueError(f"action inconnue : {action}")
 
 
