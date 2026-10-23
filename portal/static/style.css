@@ -358,6 +358,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .rule-group + .rule-group { border-top: 1px solid var(--line); }
 .rule-group-title { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
 .rule-controls { display: flex; align-items: center; gap: 12px; flex: none; }
+.threshold { display: inline-flex; align-items: baseline; gap: 6px; }
+.threshold-unit { font-size: 12.5px; color: var(--text-3); min-width: 2.5em; }
 .test-row { gap: 12px; }
 .test-result { font-size: 13px; }
 .test-result.ok { color: var(--ok, #2ea043); }
@@ -365,7 +367,7 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 
 /* Sauvegardes : liste compacte + réglages */
 .backups { padding-top: 4px; padding-bottom: 4px; }
-.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 10px 0; border-top: 1px solid var(--line); }
 .backups .backup-row:first-child { border-top: 0; }
 .backup-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .backup-when { display: flex; align-items: baseline; gap: 10px; font-size: 14px; font-weight: 600; color: var(--text); }
@@ -377,6 +379,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .backup-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
 .backup-setting-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .backup-setting-text .set-label { margin-bottom: 0; }
+.offsite-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.offsite-head h3 { margin: 0; font-size: 14px; }
 .field-xs { width: 100px !important; display: inline-block; }
 .inline-form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .inline-form select { height: 28px; width: auto; padding: 0 28px 0 9px; font-size: 13px; }

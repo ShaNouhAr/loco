@@ -35,17 +35,19 @@ RULES = {
     "service_down":     (lambda: _("Service arrêté"),            lambda: _("Un service de loco (nginx, cache, portail, agent) n'est plus actif."),
                          "server", "critical", None, 1800, False),
     "cert_expiring":    (lambda: _("Certificat HTTPS qui expire"), lambda: _("Le certificat du serveur arrive à expiration."),
-                         "server", "warning", ("days", 21, 1, 365), 86400, False),
+                         "server", "warning", ("days", 21, 1, 365, lambda: _("jours")), 86400, False),
     "backup_overdue":   (lambda: _("Sauvegarde en retard"),      lambda: _("Aucune sauvegarde récente (la sauvegarde quotidienne a manqué)."),
                          "server", "warning", None, 86400, False),
+    "offsite_failed":   (lambda: _("Copie hors-site en échec"),  lambda: _("La dernière copie de sauvegarde vers le stockage externe a échoué."),
+                         "server", "warning", None, 21600, False),
     "disk_high":        (lambda: _("Disque presque plein"),      lambda: _("L'espace de stockage des données dépasse le seuil."),
-                         "server", "warning", ("percent", 90, 50, 99), 21600, False),
+                         "server", "warning", ("percent", 90, 50, 99, lambda: "%"), 21600, False),
     "login_failures":   (lambda: _("Échecs de connexion"),       lambda: _("Beaucoup d'échecs de connexion au portail en 24 h."),
-                         "security", "warning", ("count", 10, 1, 1000), 10800, False),
+                         "security", "warning", ("count", 10, 1, 1000, lambda: _("échecs / 24 h")), 10800, False),
     "security_updates": (lambda: _("Mises à jour de sécurité en attente"), lambda: _("Des postes du parc ont des mises à jour de sécurité en attente."),
-                         "fleet", "warning", ("count", 1, 1, 1000), 86400, True),
+                         "fleet", "warning", ("count", 1, 1, 1000, lambda: _("mises à jour")), 86400, True),
     "devices_offline":  (lambda: _("Postes hors contact"),       lambda: _("Des postes du parc n'ont pas contacté loco récemment."),
-                         "fleet", "warning", ("count", 1, 1, 1000), 21600, True),
+                         "fleet", "warning", ("count", 1, 1, 1000, lambda: _("postes")), 21600, True),
 }
 GROUPS = (("server", lambda: _("Serveur")), ("fleet", lambda: _("Parc")), ("security", lambda: _("Sécurité")))
 
@@ -162,6 +164,12 @@ def evaluate(conn, cfg=None):
             add("backup_overdue", _("Aucune sauvegarde n'a encore été faite."))
         elif _age(backups[0]["mtime"])["late"]:
             add("backup_overdue", _("La dernière sauvegarde remonte à %(age)s.", age=_age(backups[0]["mtime"])["text"]))
+
+    if _rule_on(cfg, "offsite_failed"):
+        from . import offsite
+        st = offsite.state(conn)
+        if offsite.configured(offsite.load(conn)) and st.get("last_error") and st.get("last_failed", "") > st.get("last_ok", ""):
+            add("offsite_failed", _("La dernière copie hors-site a échoué : %(error)s", error=st["last_error"][:200]))
 
     if _rule_on(cfg, "disk_high"):
         pct = disk_usage()["pct"]
@@ -335,7 +343,7 @@ def _rules_view(cfg):
                 "severity": spec[3], "on": _rule_on(cfg, key), "threshold": None}
         if spec[4]:
             rule["threshold"] = {"field": spec[4][0], "value": _threshold(cfg, key),
-                                 "min": spec[4][2], "max": spec[4][3]}
+                                 "min": spec[4][2], "max": spec[4][3], "unit": spec[4][4]()}
         view.append(rule)
     return view
 
@@ -379,7 +387,7 @@ def _form_config():
         rule = cfg["rules"][key]
         rule["on"] = request.form.get(f"rule_{key}") == "1"
         if spec[4]:
-            field, _d, low, high = spec[4]
+            field, low, high = spec[4][0], spec[4][2], spec[4][3]
             raw = request.form.get(f"rule_{key}_{field}", "")
             if raw.isdigit():
                 rule[field] = max(low, min(high, int(raw)))

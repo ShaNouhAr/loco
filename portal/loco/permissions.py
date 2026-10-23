@@ -148,6 +148,7 @@ ENDPOINTS = {
     "system_backup_download": "system.configure", "system_restore": "system.configure",
     "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",
     "system_backup_delete": "system.configure",
+    "system_offsite": "system.configure", "system_offsite_test": "system.configure",
     "alerts": "alerts.view", "alerts_save": "alerts.configure", "alerts_test": "alerts.configure",
     "appliance_updates": "system.view", "appliance_job": "system.view",
     "appliance_operations_state": "system.view", "appliance_updates_post": "system.view",

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.51.0 — 2026-10-24
+
+- **Sauvegarde hors-site** (*Système → Sauvegardes*) : copie automatique de la dernière sauvegarde quotidienne vers un stockage externe — **S3-compatible** (cloud AWS/Backblaze/Wasabi/OVH/Scaleway/R2 ou MinIO on-prem), **SFTP** (clé SSH), ou **dossier / point de montage** (2ᵉ disque, support externe, partage SMB/NFS monté). Chiffrement AES-256 optionnel avant envoi, bouton **Tester**, secrets chiffrés au repos. La rétention suit le réglage « Sauvegardes conservées ». Une alerte « Copie hors-site en échec » prévient en cas de problème.
+- **Unités sur les seuils d'alerte** (*Alertes → Règles*) : chaque seuil affiche son unité (jours, %, échecs / 24 h, mises à jour, postes).
+- **Panneau Sauvegardes revu** : liste plus régulière (actions toujours alignées à droite) et copie hors-site intégrée au même panneau.
+
 ## 2.50.0 — 2026-10-23
 
 - **Alertes et notifications** (*Administration → Alertes*) : être prévenu par **e-mail (SMTP)** ou **webhook** (Slack, Teams, Discord ou relais maison, avec signature HMAC) quand l'état du serveur ou du parc le demande. Règles activables avec seuils — service arrêté, certificat HTTPS qui expire, sauvegarde en retard, disque plein, échecs de connexion, mises à jour de sécurité en attente, postes hors contact — et une gravité minimale par canal. Bouton **Tester**, secrets chiffrés au repos, évaluation côté serveur toutes les minutes sans répétition, avec réémission en cas d'échec. Nouveau droit *Configurer les alertes* et interrupteur de fonctionnalité dédié.

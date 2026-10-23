@@ -109,9 +109,8 @@
   </section>
   {% endif %}
 
-  <div class="cols even">
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>
       <div class="table-wrap">
         <table>
           <tbody>
@@ -185,8 +184,69 @@
         {{ cmd('backup-create', backup_cmd ~ ' create', '#' if not windows else 'PS>') }}
         {{ cmd('backup-restore', backup_cmd ~ ' restore ARCHIVE', '#' if not windows else 'PS>') }}
       </div>
+      {% if offsite %}
+      <div class="panel-b offsite-block">
+        <div class="offsite-head"><h3>{{ _("Copie hors-site") }}</h3><div class="aside">{% if offsite.configured and offsite.state.last_error and (offsite.state.last_failed or '') > (offsite.state.last_ok or '') %}<span class="st err">{{ _("échec") }}</span>{% elif offsite.configured and offsite.state.last_ok %}<span class="st ok">{{ _("copié") }}</span>{% elif offsite.configured %}<span class="st warn">{{ _("en attente") }}</span>{% endif %}</div></div>
+      <form method="post" action="{{ url_for('system_offsite') }}" class="stack-sm">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p class="muted small">{{ _("Copie automatique de la dernière sauvegarde quotidienne vers un stockage externe — la seule copie qui survit si le serveur est perdu.") }}</p>
+      {% if offsite.configured and offsite.state.last_error and (offsite.state.last_failed or '') > (offsite.state.last_ok or '') %}<p class="note warn">{{ _("Dernière copie en échec : %(error)s", error=offsite.state.last_error) }}</p>{% endif %}
+      <div class="seg" role="radiogroup" aria-label="{{ _('Destination') }}">
+        {% for value, label in (('none', _('Aucune')), ('s3', _('S3 / Cloud')), ('sftp', 'SFTP'), ('folder', _('Dossier / point de montage'))) %}
+        <label><input type="radio" name="offsite_type" value="{{ value }}" {{ 'checked' if offsite.cfg.type == value }} {{ 'disabled' if not offsite.can_edit }}><span>{{ label }}</span></label>
+        {% endfor %}
+      </div>
+
+      <div data-show-for="offsite_type:s3" class="stack-sm">
+        <div class="grid2">
+          <label class="f"><span>{{ _("Point d'accès (endpoint)") }}</span><input type="text" name="s3_endpoint" value="{{ offsite.cfg.s3.endpoint }}" placeholder="s3.amazonaws.com" spellcheck="false" class="mono"></label>
+          <label class="f"><span>{{ _("Région") }}</span><input type="text" name="s3_region" value="{{ offsite.cfg.s3.region }}" placeholder="us-east-1" spellcheck="false" class="mono field-sm"></label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Compartiment (bucket)") }}</span><input type="text" name="s3_bucket" value="{{ offsite.cfg.s3.bucket }}" spellcheck="false" class="mono"></label>
+          <label class="f"><span>{{ _("Préfixe") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="text" name="s3_prefix" value="{{ offsite.cfg.s3.prefix }}" spellcheck="false" class="mono"></label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Clé d'accès") }}</span><input type="text" name="s3_access_key" value="{{ offsite.cfg.s3.access_key }}" autocomplete="off" spellcheck="false" class="mono"></label>
+          <label class="f"><span>{{ _("Clé secrète") }}</span><input type="password" name="s3_secret_key" value="{{ offsite.cfg.s3.secret_key }}" autocomplete="new-password" placeholder="{{ _('inchangé') }}"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="s3_use_ssl" value="1" {{ 'checked' if offsite.cfg.s3.use_ssl }}> {{ _("HTTPS (TLS)") }}</label>
+      </div>
+
+      <div data-show-for="offsite_type:sftp" class="stack-sm">
+        <div class="grid2">
+          <label class="f"><span>{{ _("Hôte") }}</span><input type="text" name="sftp_host" value="{{ offsite.cfg.sftp.host }}" spellcheck="false" class="mono"></label>
+          <label class="f"><span>{{ _("Port") }}</span><input type="number" name="sftp_port" value="{{ offsite.cfg.sftp.port }}" min="1" max="65535" class="field-sm"></label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Utilisateur") }}</span><input type="text" name="sftp_username" value="{{ offsite.cfg.sftp.username }}" autocomplete="off" spellcheck="false" class="mono"></label>
+          <label class="f"><span>{{ _("Dossier distant") }}</span><input type="text" name="sftp_base_dir" value="{{ offsite.cfg.sftp.base_dir }}" placeholder="loco-backups" spellcheck="false" class="mono"></label>
+        </div>
+        <label class="f"><span>{{ _("Clé privée SSH") }} <em class="faint">{{ _("(authentification par clé)") }}</em></span><textarea name="sftp_private_key" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----">{{ offsite.cfg.sftp.private_key }}</textarea></label>
+        <p class="hint">{{ _("Première connexion : la clé d'hôte du serveur SFTP est mémorisée. Déposez la clé publique correspondante sur ce serveur.") }}</p>
+      </div>
+
+      <div data-show-for="offsite_type:folder" class="stack-sm">
+        <label class="f"><span>{{ _("Chemin") }}</span><input type="text" name="folder_path" value="{{ offsite.cfg.folder.path }}" placeholder="/mnt/nas/loco" spellcheck="false" class="mono"></label>
+        <p class="hint">{{ _("Un 2ᵉ disque, un support externe, ou un partage SMB/NFS monté par le système ; loco (compte « loco ») doit pouvoir y écrire.") }}</p>
+      </div>
+
+      <div data-show-for="offsite_type:s3 sftp folder" class="stack-sm">
+        <label class="f"><span>{{ _("Chiffrer avant envoi") }} <em class="faint">{{ _("(phrase de passe, optionnel)") }}</em></span><input type="password" name="crypt_passphrase" value="{{ offsite.cfg.crypt.passphrase }}" autocomplete="new-password" placeholder="{{ _('non chiffré') }}" class="field-md"></label>
+        <p class="hint">{{ _("Le nombre de « Sauvegardes conservées » ci-dessus vaut aussi pour le stockage distant. Sans phrase de passe, l'archive part telle quelle (base et clés incluses) ; avec, elle est chiffrée en AES-256 — gardez la phrase, elle est nécessaire pour restaurer.") }}</p>
+      </div>
+
+      {% if offsite.can_edit %}
+      <div class="row test-row">
+        <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+        <button type="button" class="btn sm" data-test-offsite><span class="spin"></span>{{ _("Tester") }}</button>
+        <span class="test-result" data-offsite-result></span>
+      </div>
+      {% endif %}
+      </form>
+      </div>
+      {% endif %}
     </section>
-  </div>
 
   <div class="cols even">
     <section class="panel">

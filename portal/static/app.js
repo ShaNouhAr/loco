@@ -147,6 +147,21 @@
     });
   });
 
+  /* ------------------------------------------------ test de la destination hors-site (page Système) */
+  $$("[data-test-offsite]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var form = btn.closest("form");
+      var out = form.querySelector("[data-offsite-result]");
+      var data = new FormData(form);
+      btn.disabled = true;
+      if (out) { out.textContent = ""; out.className = "test-result"; }
+      fetch("/system/offsite/test", { method: "POST", body: data }).then(function (r) { return r.json(); })
+        .then(function (j) { if (out) { out.textContent = j.message; out.className = "test-result " + (j.ok ? "ok" : "err"); } })
+        .catch(function () { if (out) { out.textContent = t("Envoi impossible."); out.className = "test-result err"; } })
+        .finally(function () { btn.disabled = false; });
+    });
+  });
+
   /* ---------------------------------------------------------------- notifications */
 
   function toast(msg, kind) {

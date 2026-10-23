@@ -281,6 +281,7 @@ def system():
         backups=backups,
         backup_dir=config.BACKUP_DIR,
         backup_keep=backup_keep(),
+        offsite=offsite_panel(),
         paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
         time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
@@ -377,6 +378,11 @@ def system_restore():
 
 UPLOAD_SPOOL = os.path.join(config.STATE, "restore-uploads")
 MAX_UPLOAD = 4 * 1024 ** 3                        # 4 Gio : une sauvegarde (hors caches) reste bien en dessous
+
+
+def offsite_panel():
+    from . import offsite
+    return offsite.panel() if config.SERVER_UPDATES and not config.WINDOWS else None
 
 
 def backup_keep():

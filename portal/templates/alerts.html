@@ -84,7 +84,7 @@
         <div class="feature-row {{ 'off' if not r.on }}">
           <span class="feature-text"><strong>{{ r.label }}</strong><small>{{ r.description }}</small></span>
           <span class="rule-controls">
-            {% if r.threshold %}<input type="number" name="rule_{{ r.key }}_{{ r.threshold.field }}" value="{{ r.threshold.value }}" min="{{ r.threshold.min }}" max="{{ r.threshold.max }}" class="field-xs" aria-label="{{ _('Seuil pour %(rule)s', rule=r.label) }}" {{ 'disabled' if not can_edit }}>{% endif %}
+            {% if r.threshold %}<span class="threshold"><input type="number" name="rule_{{ r.key }}_{{ r.threshold.field }}" value="{{ r.threshold.value }}" min="{{ r.threshold.min }}" max="{{ r.threshold.max }}" class="field-xs" autocomplete="off" aria-label="{{ _('Seuil pour %(rule)s', rule=r.label) }}" {{ 'disabled' if not can_edit }}><span class="threshold-unit">{{ r.threshold.unit }}</span></span>{% endif %}
             <span class="switch"><input type="checkbox" name="rule_{{ r.key }}" value="1" role="switch" {{ 'checked' if r.on }} {{ 'disabled' if not can_edit }}><i aria-hidden="true"></i></span>
           </span>
         </div>
