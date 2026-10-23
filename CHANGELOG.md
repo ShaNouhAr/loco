@@ -2,6 +2,7 @@
 
 ## 2.42.0 — 2026-10-23
 
+- **Heure du serveur, NTP dans les conteneurs** : sur un serveur conteneurisé (LXC), la carte *Système › Heure du serveur* indique désormais que l'horloge vient de l'hôte (la synchronisation NTP se règle sur l'hôte) au lieu d'un interrupteur sans effet ; sur une vraie VM ou un serveur physique, le réglage du serveur NTP amont fonctionne normalement.
 - **Agent invité QEMU pré-installé sur l'appliance** : l'ISO installe et active désormais `qemu-guest-agent` d'office (l'appliance tourne toujours en VM Proxmox/QEMU) — arrêt propre, adresses IP dans Proxmox et sauvegardes cohérentes marchent dès l'installation. Sur les autres serveurs, la carte *Système › Agent invité QEMU* permet toujours de l'installer en un clic.
 
 ## 2.41.0 — 2026-10-23
