@@ -127,47 +127,52 @@
       <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
       {% set can_backup = not windows and can('system.configure') %}
       {% if backups %}
-      <div class="table-wrap">
-        <table>
-          <tbody>
-          {% for b in backups %}<tr>
-            <td><span>{{ b.when|date_fr }}</span><span class="sub mono">{{ b.name }}</span></td>
-            <td class="num muted">{{ b.size|human }}</td>
-            {% if can_backup %}<td class="row-tools">
-              <a class="btn sm" href="{{ url_for('system_backup_download', name=b.name) }}" download>{{ _("Télécharger") }}</a>
-              {% if server_updates %}<form method="post" action="{{ url_for('system_restore') }}" data-confirm="{{ _('Restaurer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Le serveur va redémarrer ; comptes, base, clés et dépôts seront remplacés par ceux de cette sauvegarde. La configuration propre au serveur (adresse, ports, réseaux) est conservée.') }}" data-confirm-ok="{{ _('Restaurer') }}">
-                <input type="hidden" name="csrf" value="{{ csrf }}">
-                <input type="hidden" name="archive" value="{{ b.name }}">
-                <button class="btn sm danger">{{ _("Restaurer") }}</button>
-              </form>
-              <form method="post" action="{{ url_for('system_backup_delete', name=b.name) }}" data-confirm="{{ _('Supprimer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Cette sauvegarde sera définitivement supprimée du serveur.') }}" data-confirm-ok="{{ _('Supprimer') }}">
-                <input type="hidden" name="csrf" value="{{ csrf }}">
-                <button class="btn sm ghost danger">{{ _("Supprimer") }}</button>
-              </form>{% endif %}
-            </td>{% endif %}
-          </tr>{% endfor %}
-          </tbody>
-        </table>
+      <div class="panel-b backups">
+        {% for b in backups %}
+        <div class="backup-row">
+          <div class="backup-info">
+            <div class="backup-when">{{ b.when|date_fr }}<span class="backup-size">{{ b.size|human }}</span></div>
+            <div class="backup-name mono">{{ b.name }}</div>
+          </div>
+          {% if can_backup %}
+          <div class="backup-actions">
+            <a class="btn sm" href="{{ url_for('system_backup_download', name=b.name) }}" download>{{ _("Télécharger") }}</a>
+            {% if server_updates %}
+            <form method="post" action="{{ url_for('system_restore') }}" data-confirm="{{ _('Restaurer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Le serveur va redémarrer ; comptes, base, clés et dépôts seront remplacés par ceux de cette sauvegarde. La configuration propre au serveur (adresse, ports, réseaux) est conservée.') }}" data-confirm-ok="{{ _('Restaurer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="archive" value="{{ b.name }}">
+              <button class="btn sm">{{ _("Restaurer") }}</button>
+            </form>
+            <form method="post" action="{{ url_for('system_backup_delete', name=b.name) }}" data-confirm="{{ _('Supprimer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Cette sauvegarde sera définitivement supprimée du serveur.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn icon sm ghost danger" title="{{ _('Supprimer') }}" aria-label="{{ _('Supprimer %(name)s', name=b.name) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
+            </form>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
       </div>
       {% else %}
       <div class="empty">{{ _("Aucune sauvegarde pour l'instant.") }}</div>
       {% endif %}
       {% if can_backup and server_updates %}
-      <div class="panel-b">
-        <div class="set-row">
-          <form method="post" action="{{ url_for('system_backup_retention') }}" class="row">
-            <input type="hidden" name="csrf" value="{{ csrf }}">
-            <label class="f"><span>{{ _("Sauvegardes conservées") }}</span>
-              <input type="number" name="keep" min="1" max="60" value="{{ backup_keep }}" class="field-sm" required></label>
-            <button class="btn sm">{{ _("Enregistrer") }}</button>
-          </form>
-          <span class="set-aside muted small">{{ _("les plus anciennes au-delà sont supprimées") }}</span>
-        </div>
-        <form method="post" action="{{ url_for('system_restore_upload') }}" enctype="multipart/form-data" class="set-row" data-confirm="{{ _('Restaurer depuis ce fichier ?') }}" data-confirm-text="{{ _('Le fichier est vérifié, puis le serveur redémarre ; comptes, base, clés et dépôts sont remplacés par ceux de l\'archive.') }}" data-confirm-ok="{{ _('Vérifier et restaurer') }}">
+      <div class="panel-b backup-settings">
+        <form method="post" action="{{ url_for('system_backup_retention') }}" class="backup-setting">
           <input type="hidden" name="csrf" value="{{ csrf }}">
-          <label class="f"><span>{{ _("Restaurer depuis un fichier .tar.gz (vérifié avant restauration)") }}</span>
-            <input type="file" name="archive" accept=".gz,.tgz" required></label>
-          <button class="btn sm danger">{{ _("Vérifier et restaurer") }}</button>
+          <div class="backup-setting-text"><span class="set-label">{{ _("Sauvegardes conservées") }}</span><span class="muted small">{{ _("les plus anciennes au-delà sont supprimées") }}</span></div>
+          <div class="row">
+            <input type="number" name="keep" min="1" max="60" value="{{ backup_keep }}" class="field-xs" required>
+            <button class="btn sm">{{ _("Enregistrer") }}</button>
+          </div>
+        </form>
+        <form method="post" action="{{ url_for('system_restore_upload') }}" enctype="multipart/form-data" class="backup-setting" data-confirm="{{ _('Restaurer depuis ce fichier ?') }}" data-confirm-text="{{ _('Le fichier est vérifié, puis le serveur redémarre ; comptes, base, clés et dépôts sont remplacés par ceux de l\'archive.') }}" data-confirm-ok="{{ _('Vérifier et restaurer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <div class="backup-setting-text"><span class="set-label">{{ _("Restaurer depuis un fichier") }}</span><span class="muted small">{{ _("archive .tar.gz, vérifiée avant restauration") }}</span></div>
+          <div class="row">
+            <input type="file" name="archive" accept=".gz,.tgz" required>
+            <button class="btn sm danger">{{ _("Vérifier et restaurer") }}</button>
+          </div>
         </form>
       </div>
       {% endif %}

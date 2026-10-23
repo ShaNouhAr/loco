@@ -1,6 +1,18 @@
+<div align="center">
+
 # loco
 
+### Dépôts, caches et gestion de parc, pour tout un réseau d'entreprise
+
+Un seul serveur pour les mises à jour **Linux** et **Windows**, les logiciels et la supervision du parc —
+même hors ligne ou derrière un proxy d'entreprise.
+
 [![CI](https://github.com/ShaNouhAr/loco/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaNouhAr/loco/actions/workflows/ci.yml)
+[![Dernière version](https://img.shields.io/github/v/release/ShaNouhAr/loco?sort=semver&label=version&color=2ea043)](https://github.com/ShaNouhAr/loco/releases)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+![Plateformes](https://img.shields.io/badge/Debian_·_Ubuntu_·_Rocky_·_Windows_·_Proxmox_·_Docker-444)
+
+</div>
 
 Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Debian, Ubuntu, Rocky Linux ou Windows
 (installation native, recommandée), dans un **conteneur LXC Proxmox VE** ou avec **Docker Compose** :
@@ -23,6 +35,13 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 |---|---|
 | ![Vue d'ensemble, thème OLED](docs/dashboard-oled.png) | ![Vue d'ensemble, thème clair](docs/dashboard-light.png) |
 | ![Catalogue de logiciels Windows](docs/apps.png) | ![Cache Windows Update](docs/windows-update.png) |
+
+## Sommaire
+
+- **Installer** — [Choisir son installation](#choisir-son-installation) · [Serveur Linux](#serveur-linux) · [Serveur Windows](#serveur-windows)
+- **Déployer** — [Brancher les postes](#brancher-les-postes) · [Mon parc : agent des postes](#mon-parc--agent-des-postes) · [Centre de logiciels Windows](#centre-de-logiciels-windows) · [Scripts](#scripts)
+- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires LDAP et RADIUS](#annuaires-ldap-et-radius) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
+- **Références** — [Sécurité](SECURITY.md) · [Développement](#développement) · [Changelog](CHANGELOG.md) · [Licence](#licence)
 
 ## Choisir son installation
 
@@ -267,6 +286,12 @@ Les droits **Gérer les groupes de logiciels**, **Gérer les groupes de machines
 
 ## Mon parc : agent des postes
 
+L'agent `loco-client` (Windows et Linux) remonte l'inventaire des postes et exécute les actions reçues de loco —
+mises à jour, logiciels, scripts, redémarrage. Un poste reste rattaché même quand son adresse IP change.
+
+<details>
+<summary><b>Lire le détail</b></summary>
+
 La page **Mon parc** liste les postes équipés de l'agent `loco-client`. Pour en ajouter un, ouvrez **Enrôlement**
 (barre de navigation, ou *Ajouter un poste* dans Mon parc) : un onglet par système (Windows ; Debian, Ubuntu ;
 Rocky, AlmaLinux, RHEL) avec l'installeur de l'agent à télécharger — **MSI**, paquet **.deb** ou **.rpm** — et sa
@@ -340,7 +365,15 @@ resté éteint pendant toute l'annonce se réinscrit avec la commande d'installa
 
 Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session utilisateur. Sa pastille reprend l'état de Mon parc : vert sans mise à jour, orange de 1 à 9 mises à jour, rouge à partir de 10 (seuil réglable). Un état indisponible ou ancien est gris. Le menu et le double-clic affichent uniquement des détails : **aucune action de mise à jour n'est accessible à l'utilisateur**. Le compagnon ne contacte pas le serveur et ne lit aucun jeton ; il consulte un fichier d'état public, accessible uniquement en lecture aux utilisateurs standards. Le service privilégié reste seul responsable des actions reçues de loco.
 
+</details>
+
 ## Sessions distantes via l’agent
+
+Terminal, bureau noVNC et gestionnaire de fichiers d’un poste, pilotés par l’agent via un relais HTTPS
+sortant — aucun port entrant, serveur VNC ou compte SSH sur le poste.
+
+<details>
+<summary><b>Lire le détail</b></summary>
 
 Dans la fiche d’un poste de **Mon parc**, un administrateur peut ouvrir un **Terminal / PowerShell** ou le **Bureau noVNC**. Les boutons **Plein écran** et **Nouvel onglet** sont disponibles dans les deux vues. En **plein écran du bureau**, l’image occupe tout l’écran et les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, fermeture) passent dans un **rail latéral gauche rétractable** : une poignée au bord de l’écran le déploie ou le replie. Le curseur du poste reste affiché et aligné en plein écran comme au retour. Le nouvel onglet ouvre une **console dédiée**, sans la navigation du portail : une petite barre d’outils et tout l’espace disponible pour le poste. La fiche de l’appareil reste ouverte dans son onglet ; chaque console dispose de sa connexion indépendante.
 
@@ -365,6 +398,8 @@ Sur Windows, l’agent 2.13 suit le bureau sécurisé lors d’une demande UAC e
 Le **panneau de commandes** de la console noVNC envoie **Ctrl+Alt+Suppr** et les raccourcis courants (menu Démarrer, Exécuter, Explorateur, Afficher le bureau, Verrouiller, Gestionnaire des tâches, Alt+Tab, Alt+F4, Échap, Impr. écran, menu contextuel). Les touches Ctrl, Alt, Maj et Win peuvent être maintenues jusqu’au clic suivant. **Envoyer du texte** tape un texte caractère par caractère, quelle que soit la disposition du clavier du poste (mots de passe, commandes) ; rien n’est conservé. Sous Windows, la séquence sécurisée n’est acceptée que d’un service : le compagnon de bureau la signale au service loco-client, qui l’envoie uniquement pendant une session de bureau à distance (agent 2.14).
 
 Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
+
+</details>
 
 ## Scripts
 
@@ -398,6 +433,12 @@ Les secrets (mot de passe du compte de service, secret partagé) sont chiffrés 
 
 ## Utilisateurs et profils d’accès
 
+Six profils intégrés (Administrateur, Lecture seule, Opérateur, Gestionnaire des dépôts, Auditeur, Sans accès)
+et **57 permissions** granulaires ; profils personnalisables et délégation qui respecte les droits de chacun.
+
+<details>
+<summary><b>Lire le détail</b></summary>
+
 Dans **Administration → Comptes**, attribuez un profil à chaque utilisateur. **Profils d’accès** permet de consulter les droits, dupliquer un modèle et créer ou modifier vos propres profils. Les comptes existants conservent leur profil et leur mot de passe à la mise à jour.
 
 | Profil intégré | Accès par défaut |
@@ -429,6 +470,8 @@ sudo loco-user passwd admin                  # récupérer l’accès au compte 
 ```
 
 Sur Windows natif, utilisez `loco user …` ; sur l’appliance Alpine, `loco-user …` en root.
+
+</details>
 
 ## Journal
 

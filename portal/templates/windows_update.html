@@ -16,7 +16,7 @@
 <div class="stack" data-poll="{{ url_for('api_wu') }}" data-poll-kind="wu" data-poll-every="5000">
   {% if not nginx %}
   <div class="note err">{{ _("Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.") }}{% if can('system.view') %}{{ _("Voir <a href=\"%(v)s\">Système</a>.", v=url_for('system')) }}{% endif %}</div>
-  {% elif not wu.last %}
+  {% elif not wu.cache_size and not wu.period.hit and not wu.period.miss %}
   <div class="note warn">{% if proxy_available %}{{ _("Aucun poste n'est encore passé par loco. Les postes Windows enrôlés sont dirigés vers le cache automatiquement (par proxy, activé par défaut) ; pour les postes non gérés, utilisez la redirection DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% else %}{{ _("Aucun poste n'est encore passé par loco. Dirigez les postes Windows vers le cache par DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% endif %}</div>
   {% endif %}
 

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.49.0 — 2026-10-23
+
+- **Sauvegardes repensées** (page *Système*) : liste plus compacte (date et taille sur une ligne, nom de fichier en dessous), actions groupées avec une icône de suppression, et une zone de réglages claire pour la rétention et la restauration depuis un fichier.
+- **Message Windows Update corrigé** : l'avertissement « aucun poste n'est encore passé par loco » ne s'affiche plus dès qu'il n'y a pas eu de requête récente ; il n'apparaît que lorsque le cache n'a réellement rien servi (aucun trafic sur 14 jours et cache vide).
+- **README retravaillé** : en-tête, badges, sommaire et sections détaillées repliables, pour une lecture plus agréable.
+
 ## 2.48.0 — 2026-10-23
 
 - **Supprimer une sauvegarde** (page *Système › Sauvegardes*) : un bouton *Supprimer* sur chaque sauvegarde, avec une confirmation avant suppression définitive. Effectué par l'agent root. Réservé au droit *Configurer le serveur*.
