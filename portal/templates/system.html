@@ -54,6 +54,34 @@
     </div>
   </div>
 
+  {% if time_info %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Heure du serveur") }}</h2>
+      <div class="aside">{% if time_info.ntp %}<span class="st {{ 'ok' if time_info.synchronized else 'warn' }}">{{ _("horloge synchronisée") if time_info.synchronized else _("synchronisation en cours") }}</span>{% else %}<span class="muted small">{{ _("synchronisation NTP désactivée") }}</span>{% endif %}</div>
+    </div>
+    <form method="post" action="{{ url_for('system_time') }}" class="panel-b time-form" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="set-row">
+        <label class="f">
+          <span>{{ _("Fuseau horaire") }}</span>
+          <select name="timezone" class="field-md">
+            {% for tz in timezones %}<option value="{{ tz }}" {{ 'selected' if tz == time_info.timezone }}>{{ tz }}</option>{% endfor %}
+          </select>
+        </label>
+        <div class="set-aside muted small">{{ _("Heure locale : %(t)s", t=time_info.local) }}</div>
+      </div>
+      <div class="time-ntp">
+        <label class="check"><input type="checkbox" name="ntp" value="1" {{ 'checked' if time_info.ntp }}> <span>{{ _("Synchroniser l'horloge sur un serveur NTP") }}</span></label>
+        <label class="f">
+          <span>{{ _("Serveur NTP amont — vide : serveurs par défaut du système") }}</span>
+          <input type="text" name="ntp_server" value="{{ time_info.server }}" placeholder="pool.ntp.org" spellcheck="false" class="mono field-md">
+        </label>
+      </div>
+      <div><button class="btn sm"><span class="spin"></span>{{ _("Appliquer") }}</button></div>
+    </form>
+  </section>
+  {% endif %}
+
   <div class="cols even">
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>

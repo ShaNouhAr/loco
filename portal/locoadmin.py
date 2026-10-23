@@ -57,7 +57,9 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time")
+TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
+NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
 APPLIANCE_ACTIONS = ("configure",)
@@ -942,6 +944,89 @@ def set_repo(params, log=print):
     return check(log)
 
 
+def _valid_tz(tz):
+    return bool(TZ_RE.fullmatch(tz)) and os.path.isfile(os.path.join("/usr/share/zoneinfo", tz))
+
+
+def _ntp_backend():
+    """Mécanisme NTP du système : systemd-timesyncd (Debian/Ubuntu) ou chrony (famille Red Hat)."""
+    if os.path.exists("/lib/systemd/systemd-timesyncd") or os.path.exists("/usr/lib/systemd/systemd-timesyncd"):
+        return "timesyncd"
+    if shutil.which("chronyd"):
+        return "chrony"
+    return ""
+
+
+def _write_conf_file(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        f.write(content)
+    os.chmod(path + ".tmp", 0o644)
+    os.replace(path + ".tmp", path)
+
+
+def _set_timezone(tz, log):
+    if not _valid_tz(tz):
+        raise ValueError(t(f"fuseau horaire inconnu : {tz}", f"unknown time zone: {tz}", f"zona horaria desconocida: {tz}"))
+    if shutil.which("timedatectl"):
+        _run(["timedatectl", "set-timezone", tz], log)
+    else:                                                 # Alpine/OpenRC : lien + fichier
+        try:
+            os.remove("/etc/localtime.tmp")
+        except OSError:
+            pass
+        os.symlink(os.path.join("/usr/share/zoneinfo", tz), "/etc/localtime.tmp")
+        os.replace("/etc/localtime.tmp", "/etc/localtime")
+        with open("/etc/timezone", "w") as f:
+            f.write(tz + "\n")
+    log(t(f"Fuseau horaire : {tz}", f"Time zone: {tz}", f"Zona horaria: {tz}"))
+
+
+def _set_ntp(enabled, server, log):
+    """Synchronise l'horloge sur un serveur NTP amont (client NTP), par timesyncd ou chrony selon le système."""
+    backend = _ntp_backend()
+    if backend == "timesyncd":
+        dropin = "/etc/systemd/timesyncd.conf.d/loco.conf"
+        if server:
+            _write_conf_file(dropin, f"# Géré par loco\n[Time]\nNTP={server}\n")
+        elif os.path.exists(dropin):
+            os.remove(dropin)
+        _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log)
+        if enabled:
+            _run(["systemctl", "restart", "systemd-timesyncd"], log)
+    elif backend == "chrony":
+        confdir = "/etc/chrony/conf.d" if os.path.isdir("/etc/chrony/conf.d") else "/etc/chrony.d"
+        dropin = os.path.join(confdir, "loco.conf")
+        if server:
+            _write_conf_file(dropin, f"# Géré par loco\nserver {server} iburst\n")
+        elif os.path.exists(dropin):
+            os.remove(dropin)
+        if shutil.which("timedatectl"):
+            _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log)
+        service = "chronyd" if os.path.exists("/usr/lib/systemd/system/chronyd.service") else "chrony"
+        _run(["systemctl", "restart" if enabled else "stop", service], log)
+    else:
+        log(t("Synchronisation NTP non gérée sur ce système.", "NTP synchronisation not managed on this system.", "Sincronización NTP no gestionada en este sistema."))
+        return
+    state = t("activée", "enabled", "activada") if enabled else t("désactivée", "disabled", "desactivada")
+    via = f" ({server})" if server and enabled else ""
+    log(t(f"Synchronisation NTP {state}{via}.", f"NTP synchronisation {state}{via}.", f"Sincronización NTP {state}{via}."))
+
+
+def set_time(params, log=print):
+    """Règle le fuseau horaire du serveur et sa synchronisation NTP (le serveur se base sur un serveur NTP amont)."""
+    params = params or {}
+    tz = str(params.get("timezone", "")).strip()
+    server = str(params.get("ntp_server", "")).strip()
+    enabled = str(params.get("ntp", "")) in ("1", "true", "on", "yes")
+    if server and not NTP_SERVER_RE.fullmatch(server):
+        raise ValueError(t("serveur NTP invalide", "invalid NTP server", "servidor NTP no válido"))
+    if tz:
+        _set_timezone(tz, log)
+    _set_ntp(enabled, server, log)
+    return True
+
+
 def reboot(log=print):
     log(t("Redémarrage du serveur dans 5 secondes.", "Server rebooting in 5 seconds.", "El servidor se reinicia en 5 segundos."))
     subprocess.Popen(["sh", "-c", "sleep 5; exec reboot"], start_new_session=True, stdin=subprocess.DEVNULL,
@@ -964,6 +1049,8 @@ def _operation(action, params, log):
         return reboot(log)
     if action == "set-repo":
         return set_repo(params, log)
+    if action == "set-time":
+        return set_time(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1148,6 +1235,14 @@ def agent():
                     if not valid_source(new):
                         continue
                     params = {"repo": new}
+                elif req["action"] == "set-time":
+                    p = req.get("params") or {}
+                    tz = str(p.get("timezone", "")).strip()
+                    server = str(p.get("ntp_server", "")).strip()
+                    if (tz and not _valid_tz(tz)) or (server and not NTP_SERVER_RE.fullmatch(server)):
+                        continue
+                    params = {"timezone": tz, "ntp_server": server,
+                              "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else ""}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1195,6 +1290,15 @@ def request(action, params=None, user=""):
         if not valid_source(new):
             raise ValueError("dépôt GitHub invalide")
         params = {"repo": new}
+    elif action == "set-time":
+        tz = str((params or {}).get("timezone", "")).strip()
+        server = str((params or {}).get("ntp_server", "")).strip()
+        if tz and not _valid_tz(tz):
+            raise ValueError("fuseau horaire inconnu")
+        if server and not NTP_SERVER_RE.fullmatch(server):
+            raise ValueError("serveur NTP invalide")
+        params = {"timezone": tz, "ntp_server": server,
+                  "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else ""}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")

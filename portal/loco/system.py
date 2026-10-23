@@ -2,17 +2,71 @@
 
 import datetime
 import os
+import re
 import subprocess
 import sys
 
-from flask import Response, render_template
+from flask import Response, abort, flash, g, redirect, render_template, request, url_for
 
 from . import app, config
 from .i18n import L_, _
-from .auth import login_required
+from .auth import audit, login_required, require
 from .db import db
 from .linux import list_debs
-from .util import disk_usage, read_stats, service_active
+from .util import back, disk_usage, read_stats, service_active
+
+if config.SERVER_UPDATES:
+    import locoadmin
+
+
+def server_time():
+    """Fuseau horaire et état de la synchronisation NTP du serveur, en lecture seule (appliqués par l'agent root)."""
+    info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False,
+            "synchronized": False, "server": "", "backend": ""}
+    try:
+        out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
+                             capture_output=True, text=True, timeout=5).stdout
+        values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        info["timezone"] = values.get("Timezone", "")
+        info["ntp"] = values.get("NTP") == "yes"
+        info["synchronized"] = values.get("NTPSynchronized") == "yes"
+    except (OSError, subprocess.SubprocessError, ValueError):
+        pass
+    if not info["timezone"]:
+        try:
+            info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
+        except OSError:
+            pass
+    for path in ("/etc/systemd/timesyncd.conf.d/loco.conf", "/etc/chrony/conf.d/loco.conf", "/etc/chrony.d/loco.conf"):
+        try:
+            with open(path) as f:
+                match = re.search(r"(?:NTP=|server\s+)(\S+)", f.read())
+            if match:
+                info["server"] = match.group(1)
+                break
+        except OSError:
+            pass
+    return info
+
+
+def timezones():
+    """Fuseaux horaires proposés dans le menu (liste du système, repli sur zoneinfo)."""
+    try:
+        out = subprocess.run(["timedatectl", "list-timezones"], capture_output=True, text=True, timeout=5).stdout
+        zones = out.split()
+        if zones:
+            return zones
+    except (OSError, subprocess.SubprocessError):
+        pass
+    base, found = "/usr/share/zoneinfo", []
+    for root, _dirs, files in os.walk(base):
+        if any(skip in root for skip in ("/posix", "/right", "/SystemV", "/Etc")):
+            continue
+        for name in files:
+            rel = os.path.relpath(os.path.join(root, name), base)
+            if "/" in rel:
+                found.append(rel)
+    return sorted(set(found) | {"UTC"})
 from .wupdate import wu_stats
 
 UNITS = [
@@ -194,7 +248,33 @@ def system():
         backup_dir=config.BACKUP_DIR,
         paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
+        time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
+        timezones=timezones() if config.SERVER_UPDATES and not config.WINDOWS else [],
     )
+
+
+@app.route("/system/time", methods=["POST"])
+@login_required
+def system_time():
+    """Fuseau horaire et synchronisation NTP du serveur, appliqués par l'agent root (locoadmin)."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    params = {"timezone": request.form.get("timezone", "").strip(),
+              "ntp": "1" if request.form.get("ntp") == "1" else "",
+              "ntp_server": request.form.get("ntp_server", "").strip()}
+    if locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request("set-time", params, user=g.user["username"] if g.get("user") else "")
+            audit("systeme.heure", ", ".join(x for x in (params["timezone"],
+                  (_("NTP %(s)s", s=params["ntp_server"] or _("serveurs par défaut")) if params["ntp"] else _("NTP désactivé"))) if x))
+            flash(_("Réglages de l'heure en cours d'application."), "ok")
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
 
 
 @app.route("/healthz")
