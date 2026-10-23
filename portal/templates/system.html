@@ -86,12 +86,13 @@
   </section>
   {% endif %}
 
-  {% if qemu and (qemu.qemu or qemu.installed) %}
+  {% if qemu %}
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Agent invité QEMU") }}</h2>
-      <div class="aside">{% if qemu.running %}<span class="st ok">{{ _("actif") }}</span>{% elif qemu.installed %}<span class="st warn">{{ _("installé, arrêté") }}</span>{% else %}<span class="muted small">{{ _("non installé") }}</span>{% endif %}</div>
+      <div class="aside">{% if qemu.running %}<span class="st ok">{{ _("actif") }}</span>{% elif qemu.installed %}<span class="st warn">{{ _("installé, arrêté") }}</span>{% elif qemu.qemu %}<span class="muted small">{{ _("non installé") }}</span>{% else %}<span class="muted small">{{ _("non applicable") }}</span>{% endif %}</div>
     </div>
     <div class="panel-b">
+      {% if qemu.qemu or qemu.installed %}
       <p class="muted small">{{ _("Permet à Proxmox/QEMU de dialoguer avec ce serveur : arrêt propre, adresses IP dans l'interface Proxmox, gel des fichiers pour des sauvegardes cohérentes. Utile quand loco tourne dans une machine virtuelle QEMU/KVM.") }}</p>
       {% if can('system.configure') and not qemu.running %}
       <form method="post" action="{{ url_for('system_qemu_agent') }}" data-ajax data-confirm="{{ _('Installer l\'agent invité QEMU ?') }}" data-confirm-text="{{ _('Installe le paquet qemu-guest-agent et démarre le service.') }}" data-confirm-ok="{{ _('Installer') }}">
@@ -99,6 +100,11 @@
         <button class="btn sm"><span class="spin"></span>{{ _("Démarrer l'agent invité QEMU") if qemu.installed else _("Installer l'agent invité QEMU") }}</button>
       </form>
       {% elif qemu.running %}<p class="small muted">{{ _("Rien à faire : l'agent invité répond à Proxmox.") }}</p>{% endif %}
+      {% elif qemu.container %}
+      <p class="muted small">{{ _("Ce serveur est un conteneur : la virtualisation est gérée par l'hôte, l'agent invité QEMU ne s'applique pas ici.") }}</p>
+      {% else %}
+      <p class="muted small">{{ _("L'agent invité QEMU n'est utile que lorsque loco tourne dans une machine virtuelle QEMU/KVM (par exemple sur Proxmox). Ce serveur n'en est pas une.") }}</p>
+      {% endif %}
     </div>
   </section>
   {% endif %}

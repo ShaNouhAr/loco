@@ -23,11 +23,7 @@ def server_time():
     """Fuseau horaire et état de la synchronisation NTP du serveur, en lecture seule (appliqués par l'agent root)."""
     info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False,
             "synchronized": False, "server": "", "container": False}
-    try:
-        info["container"] = subprocess.run(["systemd-detect-virt", "--container"], capture_output=True,
-                                            text=True, timeout=3).stdout.strip() not in ("none", "")
-    except (OSError, subprocess.SubprocessError):
-        pass
+    info["container"] = _virt()[1]
     try:
         out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
                              capture_output=True, text=True, timeout=5).stdout
@@ -74,15 +70,35 @@ def timezones():
     return sorted(set(found) | {"UTC"})
 
 
-def qemu_agent():
-    """État de l'agent invité QEMU : virtualisation détectée, paquet installé, service actif."""
-    virt = ""
+def _dmi(name):
+    try:
+        with open("/sys/class/dmi/id/" + name) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _virt():
+    """(type de virtualisation, est un conteneur) : systemd-detect-virt si présent, sinon DMI — l'appliance Alpine
+    n'a pas systemd, mais une VM QEMU/KVM se reconnaît à son fabricant DMI « QEMU »."""
     try:
         virt = subprocess.run(["systemd-detect-virt"], capture_output=True, text=True, timeout=3).stdout.strip()
+        container = subprocess.run(["systemd-detect-virt", "--container"], capture_output=True, text=True,
+                                   timeout=3).stdout.strip() not in ("none", "")
+        return virt, container
     except (OSError, subprocess.SubprocessError):
         pass
+    vendor, product = _dmi("sys_vendor"), _dmi("product_name")
+    if "QEMU" in vendor or "QEMU" in product or "KVM" in vendor + product:
+        return "qemu", False
+    return "", False
+
+
+def qemu_agent():
+    """État de l'agent invité QEMU : virtualisation détectée, conteneur, paquet installé, service actif."""
+    virt, container = _virt()
     installed = any(os.path.exists(p) for p in ("/usr/sbin/qemu-ga", "/usr/bin/qemu-ga"))
-    return {"qemu": virt in ("qemu", "kvm"), "virt": virt, "installed": installed,
+    return {"qemu": virt in ("qemu", "kvm"), "virt": virt, "container": container, "installed": installed,
             "running": service_active("qemu-guest-agent")}
 from .wupdate import wu_stats
 
