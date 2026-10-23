@@ -258,5 +258,53 @@ class TestLastLoginAddress(unittest.TestCase):
         conn.close()
 
 
+class TestBackups(unittest.TestCase):
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+        self.tmp = tempfile.mkdtemp()
+        self._orig = config.BACKUP_DIR
+        config.BACKUP_DIR = self.tmp
+        self.name = "loco-test-20250101-000000.tar.gz"
+        with open(os.path.join(self.tmp, self.name), "wb") as f:
+            f.write(b"\x1f\x8b\x08\x00backup-content")
+
+    def tearDown(self):
+        config.BACKUP_DIR = self._orig
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_download_rejects_bad_names_and_unknown_files(self):
+        self.assertEqual(self.admin.c.get("/system/backups/..%2f..%2fetc%2fpasswd").status_code, 404)
+        self.assertEqual(self.admin.c.get("/system/backups/loco-x.tar.gz").status_code, 404)
+        self.assertEqual(self.admin.c.get("/system/backups/loco-absent-20990101-000000.tar.gz").status_code, 404)
+
+    def test_download_serves_the_archive_as_attachment(self):
+        r = self.admin.c.get("/system/backups/" + self.name)
+        try:
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("attachment", r.headers.get("Content-Disposition", ""))
+            self.assertEqual(r.data, b"\x1f\x8b\x08\x00backup-content")
+        finally:
+            r.close()
+
+    def test_restore_submits_the_chosen_backup_to_the_agent(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/restore", {"archive": self.name}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_called_once()
+            self.assertEqual(la.request.call_args[0][0], "restore")
+            self.assertEqual(la.request.call_args[0][1], {"archive": self.name})
+
+    def test_restore_refuses_an_unknown_archive(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/restore", {"archive": "loco-absent-20990101-000000.tar.gz"}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

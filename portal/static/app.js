@@ -119,6 +119,18 @@
     applyAppearance();
   });
 
+  /* ------------------------------------------------ avertissements qu'on peut fermer */
+  // Reste masqué tant que le jeton ne change pas (ex. tant que le nombre d'échecs n'augmente pas).
+  $$("[data-dismissible]").forEach(function (box) {
+    var key = "lr-dismiss-" + box.dataset.dismissible, token = box.dataset.token || "1";
+    try { if (localStorage.getItem(key) === token) { box.remove(); return; } } catch (err) { /* navigation privée */ }
+    var btn = $("[data-dismiss]", box);
+    if (btn) btn.addEventListener("click", function () {
+      try { localStorage.setItem(key, token); } catch (err) { /* navigation privée */ }
+      box.remove();
+    });
+  });
+
   /* ---------------------------------------------------------------- notifications */
 
   function toast(msg, kind) {

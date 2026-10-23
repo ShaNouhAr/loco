@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import service %}
 {% from "_charts.html" import daily_bars, status_bar, usage_bar %}
+{% from "_software_logo.html" import software_logo %}
 {% block title %}{{ _("Vue d'ensemble") }}{% endblock %}
 {% block content %}
 <div class="head">
@@ -147,7 +148,7 @@
           <tbody>
           {% for e in activity %}
             <tr>
-              <td>{{ e.title }}<span class="sub">{{ _('Paquet APT') if e.kind == 'linux' else 'Windows' }} · {{ e.detail }}</span></td>
+              <td><div class="store-card-top">{{ software_logo(e.package_id, e.title, 'small') }}<div>{{ e.title }}<span class="sub">{{ _('Paquet APT') if e.kind == 'linux' else 'Windows' }} · {{ e.detail }}</span></div></div></td>
               <td class="num faint small nowrap">{{ e.when|date_fr }}</td>
             </tr>
           {% endfor %}

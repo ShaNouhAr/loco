@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.46.0 — 2026-10-23
+
+- **Télécharger et restaurer les sauvegardes** (page *Système*) : chaque sauvegarde a un bouton **Télécharger** (pour la garder ailleurs) et un bouton **Restaurer** en un clic. La restauration passe par l'agent root — arrêt du portail, remise en place de la base, des comptes, des clés et des dépôts, régénération des services, puis redémarrage ; la configuration propre au serveur (adresse, ports, réseaux) est conservée, et un repli automatique rétablit l'état précédent en cas d'échec. La commande reste disponible pour restaurer sur un autre serveur. Réservé au droit *Configurer le serveur*.
+- **Logos des logiciels dans « Derniers ajouts »** (Vue d'ensemble) : chaque logiciel récemment ajouté montre son logo (icône réelle pour les apps WinGet, sinon une pastille avec l'initiale), comme dans le Centre de logiciels.
+- **Avertissement du Journal fermable** : la bannière « N échec(s) de connexion ces dernières 24 heures » a une croix pour la fermer ; elle reste masquée tant qu'aucun nouvel échec ne survient.
+
 ## 2.45.0 — 2026-10-23
 
 - **Trouver ses machines dans la recherche (Ctrl+K)** : la palette de recherche de la barre de navigation liste désormais les **postes du parc** en plus des pages. On tape un nom de machine, une adresse IP ou un système, et on ouvre sa fiche d'un *Entrée*. Réservé aux profils qui ont accès au parc (droit *Voir le parc*).

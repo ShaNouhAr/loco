@@ -17,9 +17,12 @@
 
 <div class="stack">
   {% if failures and args.get('echecs') != '1' %}
-  <div class="note err row-between">
+  <div class="note err row-between" data-dismissible="journal-failures" data-token="{{ failures }}">
     <span>{{ _("%(failures)s échec%(v)s de connexion ces dernières 24 heures.", failures=failures, v='s' if failures > 1) }}</span>
-    <a href="{{ url_for('journal', echecs='1') }}">{{ _("Voir") }}</a>
+    <span class="row">
+      <a href="{{ url_for('journal', echecs='1') }}">{{ _("Voir") }}</a>
+      <button type="button" class="dlg-x" data-dismiss aria-label="{{ _('Fermer') }}" title="{{ _('Fermer') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </span>
   </div>
   {% endif %}
 

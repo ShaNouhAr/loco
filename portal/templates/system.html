@@ -125,11 +125,23 @@
 
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
+      {% set can_backup = not windows and can('system.configure') %}
       {% if backups %}
       <div class="table-wrap">
         <table>
           <tbody>
-          {% for b in backups %}<tr><td><span>{{ b.when|date_fr }}</span><span class="sub mono">{{ b.name }}</span></td><td class="num muted">{{ b.size|human }}</td></tr>{% endfor %}
+          {% for b in backups %}<tr>
+            <td><span>{{ b.when|date_fr }}</span><span class="sub mono">{{ b.name }}</span></td>
+            <td class="num muted">{{ b.size|human }}</td>
+            {% if can_backup %}<td class="row-tools">
+              <a class="btn sm" href="{{ url_for('system_backup_download', name=b.name) }}" download>{{ _("Télécharger") }}</a>
+              {% if server_updates %}<form method="post" action="{{ url_for('system_restore') }}" data-confirm="{{ _('Restaurer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Le serveur va redémarrer ; comptes, base, clés et dépôts seront remplacés par ceux de cette sauvegarde. La configuration propre au serveur (adresse, ports, réseaux) est conservée.') }}" data-confirm-ok="{{ _('Restaurer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <input type="hidden" name="archive" value="{{ b.name }}">
+                <button class="btn sm danger">{{ _("Restaurer") }}</button>
+              </form>{% endif %}
+            </td>{% endif %}
+          </tr>{% endfor %}
           </tbody>
         </table>
       </div>
@@ -137,7 +149,11 @@
       <div class="empty">{{ _("Aucune sauvegarde pour l'instant.") }}</div>
       {% endif %}
       <div class="panel-b system-commands">
+        {% if can_backup and server_updates %}
+        <p class="small muted">{{ _("Télécharger une sauvegarde pour la garder ailleurs ; <strong>Restaurer</strong> remet le serveur dans l'état de la sauvegarde choisie (il redémarre). Pour restaurer sur un <em>autre</em> serveur, utilisez la commande :") }}</p>
+        {% else %}
         <p class="small muted">{{ _("Configuration, comptes, clés, dépôts et catalogue, dans <span class=\"mono\">%(backup_dir)s</span>. Sur le serveur :", backup_dir=backup_dir) }}</p>
+        {% endif %}
         {{ cmd('backup-create', backup_cmd ~ ' create', '#' if not windows else 'PS>') }}
         {{ cmd('backup-restore', backup_cmd ~ ' restore ARCHIVE', '#' if not windows else 'PS>') }}
       </div>

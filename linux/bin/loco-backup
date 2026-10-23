@@ -41,7 +41,9 @@ case "${1:-}" in
             -C / "${paths[@]}" \
             -C "$work" portal.db || rc=$?
         [ "$rc" -le 1 ] || { t "Échec de l'archivage (tar : $rc)." "Archiving failed (tar: $rc)." "Error al archivar (tar: $rc)." >&2; exit 1; }
-        install -m 600 "$work/$name" "$DEST/$name"
+        # 640 root:loco : le portail (compte loco, membre du groupe loco) peut proposer le téléchargement ;
+        # l'archive ne contient rien que le portail ne manipule déjà en clair (base, clés, dépôts).
+        install -m 640 -g loco "$work/$name" "$DEST/$name"
         if [ "$KEEP" -gt 0 ]; then
             # shellcheck disable=SC2012  # noms générés par ce script
             ls -1t "$DEST"/loco-*.tar.gz 2>/dev/null | tail -n +"$((KEEP + 1))" | xargs -r rm -f

@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-from flask import Response, abort, flash, g, render_template, request
+from flask import Response, abort, flash, g, render_template, request, send_file
 
 from . import app, config
 from .i18n import L_, _
@@ -302,6 +302,50 @@ def system_qemu_agent():
             locoadmin.request("install-qemu-agent", user=g.user["username"] if g.get("user") else "")
             audit("systeme.qemu-agent", _("Agent invité QEMU"))
             flash(_("Installation de l'agent invité QEMU lancée."), "ok")
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
+
+
+BACKUP_NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
+
+
+@app.route("/system/backups/<name>")
+@login_required
+def system_backup_download(name):
+    """Télécharge une sauvegarde (archive .tar.gz) du serveur. Réservé à la configuration du serveur."""
+    if config.WINDOWS:
+        abort(404)
+    if not BACKUP_NAME_RE.fullmatch(name) or name not in {b["name"] for b in list_backups()}:
+        abort(404)
+    path = os.path.join(config.BACKUP_DIR, name)
+    if not os.path.isfile(path):
+        abort(404)
+    try:
+        audit("systeme.sauvegarde.telechargement", name)
+        return send_file(path, mimetype="application/gzip", as_attachment=True, download_name=name)
+    except PermissionError:
+        abort(503)
+
+
+@app.route("/system/restore", methods=["POST"])
+@login_required
+def system_restore():
+    """Restaure une sauvegarde via l'agent root : base, comptes, clés et dépôts, puis le serveur redémarre."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    name = request.form.get("archive", "").strip()
+    if not BACKUP_NAME_RE.fullmatch(name) or name not in {b["name"] for b in list_backups()}:
+        flash(_("Sauvegarde introuvable."), "error")
+    elif locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request("restore", {"archive": name}, user=g.user["username"] if g.get("user") else "")
+            audit("systeme.restauration", name)
+            flash(_("Restauration lancée : le serveur va redémarrer. Reconnectez-vous dans un instant."), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
     return back("system")

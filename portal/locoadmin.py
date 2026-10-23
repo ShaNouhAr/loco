@@ -57,7 +57,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
@@ -1073,6 +1073,83 @@ def reboot(log=print):
     return True
 
 
+# Noms d'archives produits par loco-backup : « loco-HÔTE-DATE-HEURE.tar.gz » (et local-repo-… d'avant le renommage).
+BACKUP_NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
+
+
+def _share_backups():
+    """Rend les sauvegardes lisibles par le groupe loco (640) pour que le portail puisse les proposer au téléchargement."""
+    directory = read_conf().get("BACKUP_DIR", "/var/backups/loco")
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return
+    for name in names:
+        if not BACKUP_NAME_RE.fullmatch(name):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            if stat.S_ISREG(os.lstat(path).st_mode):
+                shutil.chown(path, group="loco")
+                os.chmod(path, 0o640)
+        except OSError:
+            continue
+
+
+def restore(params, log=print):
+    """Restaure une sauvegarde loco (même serveur) : base, comptes, clés, dépôts et catalogue, puis régénère services
+    et configuration via install.sh. La configuration propre au serveur (IP, ports, réseaux) est conservée."""
+    name = str((params or {}).get("archive", ""))
+    if not BACKUP_NAME_RE.fullmatch(name):
+        raise ValueError("nom de sauvegarde invalide")
+    conf = read_conf()
+    archive = os.path.join(conf.get("BACKUP_DIR", "/var/backups/loco"), name)
+    data = conf.get("DATA", "")
+    source = conf.get("SOURCE_DIR", "")
+    if not os.path.isfile(archive):
+        raise ValueError(t("sauvegarde introuvable", "backup not found", "copia de seguridad no encontrada"))
+    if not data:
+        raise ValueError("DATA absent de la configuration")
+    if not source or not os.path.isfile(os.path.join(source, "linux", "install.sh")):
+        raise ValueError(f"sources de loco introuvables (SOURCE_DIR de {CONF})")
+    with tarfile.open(archive) as tar:
+        if "portal.db" not in tar.getnames():
+            raise ValueError(t("ce n'est pas une sauvegarde loco", "this is not a loco backup", "no es una copia de seguridad de loco"))
+    log(t(f"Restauration de {name}.", f"Restoring {name}.", f"Restaurando {name}."))
+    # Arrêter le portail avant de réécrire la base et les données.
+    _run(["rc-service", "loco", "stop"] if ALPINE else ["systemctl", "stop", "loco-portal"], log)
+    backup_py = os.path.join(os.path.dirname(HERE), "loco", "backup.py")
+    with _snapshot() as snapshot:
+        try:
+            _run([sys.executable, "-I", backup_py, archive, data], log)
+            _restore_ownership(data, log)
+            log(t("Régénération des services et de la configuration.", "Regenerating services and configuration.",
+                  "Regenerando servicios y configuración."))
+            ok = _install(source, [], log) == 0
+        except (OSError, subprocess.SubprocessError, ValueError, tarfile.TarError) as e:
+            log(f"Restauration interrompue : {e}")
+            ok = False
+        if not ok:
+            _rollback(snapshot, source, log)
+            return False
+    log(t("Sauvegarde restaurée.", "Backup restored.", "Copia de seguridad restaurada."))
+    return True
+
+
+def _restore_ownership(data, log):
+    """Rend les fichiers restaurés au bon propriétaire (loco), comme le fait loco-backup après une restauration."""
+    with contextlib.suppress(OSError):
+        shutil.chown(os.path.join(ETC, "portal.secret"), "root", "loco")
+    for suffix in ("-wal", "-shm"):
+        with contextlib.suppress(OSError):
+            os.unlink(os.path.join(STATE, "portal.db" + suffix))
+    targets = [STATE, os.path.join(data, "apt"), os.path.join(data, "win")]
+    targets += [os.path.join(data, extra) for extra in ("flatpak", "rpm") if os.path.isdir(os.path.join(data, extra))]
+    for target in targets:
+        if os.path.exists(target):
+            _run(["chown", "-R", "loco:loco", target], log)
+
+
 def _operation(action, params, log):
     if action == "check":
         return check(log)
@@ -1092,6 +1169,8 @@ def _operation(action, params, log):
         return set_time(params, log)
     if action == "install-qemu-agent":
         return install_qemu_agent(log)
+    if action == "restore":
+        return restore(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1234,6 +1313,7 @@ def _prune_jobs(keep=40):
 def agent():
     """Service loco-agent : traite les demandes du portail et vérifie les versions chaque jour."""
     _prepare_dirs()
+    _share_backups()
     code = os.stat(HERE).st_mtime_ns
     beat = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.
@@ -1284,6 +1364,11 @@ def agent():
                         continue
                     params = {"timezone": tz, "ntp_server": server,
                               "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else ""}
+                elif req["action"] == "restore":
+                    name = str((req.get("params") or {}).get("archive", "")).strip()
+                    if not BACKUP_NAME_RE.fullmatch(name):
+                        continue
+                    params = {"archive": name}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1340,6 +1425,11 @@ def request(action, params=None, user=""):
             raise ValueError("serveur NTP invalide")
         params = {"timezone": tz, "ntp_server": server,
                   "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else ""}
+    elif action == "restore":
+        name = str((params or {}).get("archive", "")).strip()
+        if not BACKUP_NAME_RE.fullmatch(name):
+            raise ValueError("nom de sauvegarde invalide")
+        params = {"archive": name}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
