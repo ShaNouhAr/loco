@@ -925,5 +925,17 @@ class TestScheduling(FleetTest):
         self.assertEqual(self.admin.post(f"/fleet/{self.dev}/cancel/{cid}", {}, page=f"/fleet/{self.dev}").status_code, 404)
 
 
+class TestSearch(FleetTest):
+    def test_devices_appear_in_the_command_palette(self):
+        Agent(WINDOWS, "192.168.43.50").enroll()
+        Agent(LINUX, "192.168.43.60").enroll()
+        data = self.admin.c.get("/fleet/search.json").get_json()
+        by_name = {d["title"]: d for d in data["devices"]}
+        self.assertIn("pc-compta", by_name)
+        self.assertIn("srv-web", by_name)
+        self.assertIn("192.168.43.60", by_name["srv-web"]["sub"])
+        self.assertRegex(by_name["srv-web"]["href"], r"^/fleet/\d+$")
+
+
 if __name__ == "__main__":
     unittest.main()

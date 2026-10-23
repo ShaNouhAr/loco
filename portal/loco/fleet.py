@@ -965,6 +965,21 @@ def fleet():
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 
 
+@app.route("/fleet/search.json")
+@login_required
+def fleet_search():
+    """Postes du parc pour la palette de recherche (Ctrl+K) : nom, système et adresse, lien vers la fiche."""
+    devices = []
+    for d in db().execute("SELECT id, hostname, os_name, os_family, ip, addresses FROM devices "
+                          "WHERE state != 'removed' ORDER BY hostname COLLATE NOCASE"):
+        own = (d["addresses"] or "").split()
+        address = own[0] if own else (d["ip"] or "")
+        sub = " · ".join(p for p in (d["os_name"] or d["os_family"], address) if p)
+        devices.append({"title": d["hostname"] or _("Poste sans nom"),
+                        "sub": sub, "href": url_for("fleet_device", dev_id=d["id"])})
+    return {"devices": devices}
+
+
 @app.route("/fleet/settings")
 @login_required
 def fleet_settings():

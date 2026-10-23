@@ -270,6 +270,25 @@
       if (extra) $$("a", extra.content).forEach(function (a) { add(a, a.dataset.group || ""); });
       $$(".userbox a").forEach(function (a) { add(a, "Mon compte"); });
     };
+    var cmdkDevicesDone = false;
+    var cmdkLoadDevices = function () {               // postes du parc, ajoutés à la palette une seule fois
+      if (cmdkDevicesDone) return;
+      cmdkDevicesDone = true;
+      var url = cmdk.dataset.devices;
+      if (!url || !cmdkPages) return;
+      fetch(url, { headers: { "X-Requested-With": "fetch" } }).then(function (r) {
+        return r.ok ? r.json() : null;
+      }).then(function (data) {
+        if (!data || !data.devices) return;
+        var group = t("Mon parc");
+        data.devices.forEach(function (d) {
+          if (!d.href) return;
+          cmdkPages.push({ href: d.href, title: d.title, sub: d.sub || group,
+                           key: cmdkFold(d.title + " " + (d.sub || "") + " " + group) });
+        });
+        if (cmdk.open) cmdkRender();
+      }).catch(function () {});
+    };
     var cmdkRender = function () {
       var words = cmdkFold(cmdkInput.value).split(/\s+/).filter(Boolean);
       cmdkHits = cmdkPages.filter(function (p) { return words.every(function (w) { return p.key.indexOf(w) >= 0; }); });
@@ -299,6 +318,7 @@
     var cmdkOpen = function () {
       if (cmdk.open) return;
       if (!cmdkPages) cmdkCollect();
+      cmdkLoadDevices();
       cmdkInput.value = "";
       cmdkCurrent = 0;
       cmdkRender();

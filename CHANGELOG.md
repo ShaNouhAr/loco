@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.45.0 — 2026-10-23
+
+- **Trouver ses machines dans la recherche (Ctrl+K)** : la palette de recherche de la barre de navigation liste désormais les **postes du parc** en plus des pages. On tape un nom de machine, une adresse IP ou un système, et on ouvre sa fiche d'un *Entrée*. Réservé aux profils qui ont accès au parc (droit *Voir le parc*).
+
 ## 2.44.0 — 2026-10-23
 
 - **Brancher un hôte Proxmox VE sur le cache** : nouvelle section sur la page *Paquets*, à côté de « Brancher un poste Linux ». Une seule commande sur l'hôte Proxmox branche ses dépôts sur loco, au choix **sans abonnement** (gratuit, mis en cache) — recommandé — ou **entreprise** (abonnement requis, en direct HTTPS). Debian et le dépôt sans-abonnement passent par le cache ; `--trust-ca` pour le premier branchement, `--remove` pour revenir en arrière.
