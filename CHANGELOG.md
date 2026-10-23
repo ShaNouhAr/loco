@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.48.0 — 2026-10-23
+
+- **Supprimer une sauvegarde** (page *Système › Sauvegardes*) : un bouton *Supprimer* sur chaque sauvegarde, avec une confirmation avant suppression définitive. Effectué par l'agent root. Réservé au droit *Configurer le serveur*.
+- **Message Windows Update à jour** : quand aucun poste n'est encore passé par le cache, le message explique désormais que les postes Windows enrôlés sont dirigés automatiquement vers le cache (par proxy, activé par défaut) et renvoie à la section « Diriger les postes vers le cache » pour les postes non gérés, au lieu de ne parler que de la redirection DNS.
+
 ## 2.47.0 — 2026-10-23
 
 - **Restaurer depuis un fichier téléversé** (page *Système › Sauvegardes*) : on peut envoyer une archive `.tar.gz` (une sauvegarde gardée ailleurs, ou venant d'un autre serveur) pour la restaurer. Le fichier est **vérifié avant toute écriture** — c'est bien une sauvegarde loco/local-repo (présence de la base et de la configuration, chemins sûrs, pas de `..` ni de lien symbolique, `.tar.gz` lisible) — côté portail puis une seconde fois par l'agent root avant d'appliquer.

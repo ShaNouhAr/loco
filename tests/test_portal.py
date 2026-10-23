@@ -308,6 +308,23 @@ class TestBackups(unittest.TestCase):
             self.assertEqual(r.status_code, 302)
             la.request.assert_not_called()
 
+    def test_delete_submits_to_the_agent(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/backups/" + self.name + "/delete", {}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(la.request.call_args[0][0], "delete-backup")
+            self.assertEqual(la.request.call_args[0][1], {"name": self.name})
+
+    def test_delete_rejects_an_unknown_backup(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/backups/loco-absent-20990101-000000.tar.gz/delete", {}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_not_called()
+
     @staticmethod
     def _archive_bytes(entries):
         buf = io.BytesIO()

@@ -17,7 +17,7 @@
   {% if not nginx %}
   <div class="note err">{{ _("Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.") }}{% if can('system.view') %}{{ _("Voir <a href=\"%(v)s\">Système</a>.", v=url_for('system')) }}{% endif %}</div>
   {% elif not wu.last %}
-  <div class="note warn">{{ _("Aucun poste n'est encore passé par loco. Faites répondre <span class=\"mono\">%(host)s</span> par le DNS du réseau pour les domaines redirigés (script DNS ci-dessus pour Active Directory).", host=host) }}</div>
+  <div class="note warn">{% if proxy_available %}{{ _("Aucun poste n'est encore passé par loco. Les postes Windows enrôlés sont dirigés vers le cache automatiquement (par proxy, activé par défaut) ; pour les postes non gérés, utilisez la redirection DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% else %}{{ _("Aucun poste n'est encore passé par loco. Dirigez les postes Windows vers le cache par DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% endif %}</div>
   {% endif %}
 
   <div class="metrics">

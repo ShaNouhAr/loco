@@ -139,6 +139,10 @@
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <input type="hidden" name="archive" value="{{ b.name }}">
                 <button class="btn sm danger">{{ _("Restaurer") }}</button>
+              </form>
+              <form method="post" action="{{ url_for('system_backup_delete', name=b.name) }}" data-confirm="{{ _('Supprimer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Cette sauvegarde sera définitivement supprimée du serveur.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn sm ghost danger">{{ _("Supprimer") }}</button>
               </form>{% endif %}
             </td>{% endif %}
           </tr>{% endfor %}

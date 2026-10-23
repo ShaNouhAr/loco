@@ -57,7 +57,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
@@ -1199,6 +1199,22 @@ def set_backup_keep(params, log=print):
     return True
 
 
+def delete_backup(params, log=print):
+    """Supprime une sauvegarde nommée de BACKUP_DIR (fichier ordinaire, jamais un lien symbolique)."""
+    name = str((params or {}).get("name", ""))
+    if not BACKUP_NAME_RE.fullmatch(name):
+        raise ValueError("nom de sauvegarde invalide")
+    path = os.path.join(read_conf().get("BACKUP_DIR", "/var/backups/loco"), name)
+    try:
+        if not stat.S_ISREG(os.lstat(path).st_mode):
+            raise ValueError("pas un fichier ordinaire")
+        os.unlink(path)
+    except OSError:
+        raise ValueError(t("sauvegarde introuvable", "backup not found", "copia de seguridad no encontrada")) from None
+    log(t(f"Sauvegarde supprimée : {name}.", f"Backup deleted: {name}.", f"Copia eliminada: {name}."))
+    return True
+
+
 def _operation(action, params, log):
     if action == "check":
         return check(log)
@@ -1222,6 +1238,8 @@ def _operation(action, params, log):
         return restore(params, log)
     if action == "set-backup-keep":
         return set_backup_keep(params, log)
+    if action == "delete-backup":
+        return delete_backup(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1432,6 +1450,11 @@ def agent():
                     if not 1 <= keep <= 60:
                         continue
                     params = {"keep": keep}
+                elif req["action"] == "delete-backup":
+                    name = str((req.get("params") or {}).get("name", "")).strip()
+                    if not BACKUP_NAME_RE.fullmatch(name):
+                        continue
+                    params = {"name": name}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1507,6 +1530,11 @@ def request(action, params=None, user=""):
         if not 1 <= keep <= 60:
             raise ValueError("nombre de sauvegardes hors limites (1 à 60)")
         params = {"keep": keep}
+    elif action == "delete-backup":
+        name = str((params or {}).get("name", "")).strip()
+        if not BACKUP_NAME_RE.fullmatch(name):
+            raise ValueError("nom de sauvegarde invalide")
+        params = {"name": name}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")

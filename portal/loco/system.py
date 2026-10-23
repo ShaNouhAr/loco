@@ -330,6 +330,28 @@ def system_backup_download(name):
         abort(503)
 
 
+@app.route("/system/backups/<name>/delete", methods=["POST"])
+@login_required
+def system_backup_delete(name):
+    """Supprime une sauvegarde via l'agent root (le dossier des sauvegardes n'est pas accessible en écriture au portail)."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    if not BACKUP_NAME_RE.fullmatch(name) or name not in {b["name"] for b in list_backups()}:
+        flash(_("Sauvegarde introuvable."), "error")
+    elif locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request("delete-backup", {"name": name}, user=g.user["username"] if g.get("user") else "")
+            audit("systeme.sauvegarde.suppression", name)
+            flash(_("Sauvegarde supprimée : %(name)s.", name=name), "ok")
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
+
+
 @app.route("/system/restore", methods=["POST"])
 @login_required
 def system_restore():
