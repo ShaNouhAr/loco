@@ -405,7 +405,18 @@ install_system() {
           "$TARGET/etc/motd" "$TARGET/etc/local.d/loco-installer.start"
     rm -rf "$TARGET/root/.ssh"
     mkdir -p "$TARGET/etc/runlevels/boot" "$TARGET/etc/runlevels/default"
-    for s in chronyd:default acpid:default networking:boot local:default; do
+    # Alpine ne fournit que le binaire qemu-ga : service OpenRC minimal pour l'agent invité QEMU (l'appliance est une VM).
+    cat > "$TARGET/etc/init.d/qemu-guest-agent" <<'QGA'
+#!/sbin/openrc-run
+name="QEMU Guest Agent"
+description="Agent invité QEMU : dialogue avec l'hyperviseur Proxmox/QEMU"
+command="/usr/bin/qemu-ga"
+command_background=true
+pidfile="/run/qemu-ga.pid"
+depend() { need localmount; after bootmisc; }
+QGA
+    chmod 755 "$TARGET/etc/init.d/qemu-guest-agent"
+    for s in chronyd:default acpid:default qemu-guest-agent:default networking:boot local:default; do
         ln -sf "/etc/init.d/${s%%:*}" "$TARGET/etc/runlevels/${s##*:}/${s%%:*}"
     done
     appliance_write_ssh "$TARGET" "$(appliance_ssh_mode "$SSH_MODE" "$SSH_KEY")" "$SSH_KEY"

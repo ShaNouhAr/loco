@@ -110,9 +110,12 @@ for mode in ${LOCO_ISO_MODES:-bios uefi}; do
     grep -qE 'installation réussie|installation successful|instalación correcta' "$LOG_DIR/$mode-serial.log"
     echo "$mode : démarrage sur disque, sans ISO ni fichier de réponses"
     boot_disk() {
+        # Canal de l'agent invité QEMU : l'appliance doit démarrer qemu-guest-agent (pré-installé sur l'ISO).
         qemu-system-x86_64 "${accel[@]}" "${fw[@]}" -m 2048 -smp 2 -display none -monitor none \
             -serial "file:$LOG_DIR/$mode-serial.log" -drive "file=$WORK/$mode.qcow2,if=virtio,format=qcow2" \
             -netdev "user,id=n,hostfwd=tcp:127.0.0.1:$port-:22" -device virtio-net-pci,netdev=n \
+            -chardev "socket,path=$WORK/$mode-qga.sock,server=on,wait=off,id=qga" -device virtio-serial-pci \
+            -device "virtserialport,chardev=qga,name=org.qemu.guest_agent.0" \
             > "$LOG_DIR/$mode-qemu.log" 2>&1 &
         pid=$!
     }
@@ -129,7 +132,7 @@ for mode in ${LOCO_ISO_MODES:-bios uefi}; do
         echo 'Anciennes réponses SSH_KEY : clé acceptée, mot de passe refusé : OK'
     fi
     access python3 - https://10.0.2.15:8443 < "$ROOT/tests/https_redirect.py"
-    access 'set -eu; rc-service loco status; rc-service loco-agent status; test -x /usr/local/sbin/setup-loco; test -x /usr/local/sbin/loco-config; test -x /usr/local/sbin/loco-update; grep -q "https://10.0.2.15:8443" /etc/issue; test ! -e /etc/local.d/loco-installer.start; test ! -e /etc/loco-answers.conf; ! grep -q "root::" /etc/shadow; loco-config set BACKUP_KEEP=5 >/dev/null; grep -qx BACKUP_KEEP=5 /etc/loco/loco.conf; loco-backup create' \
+    access 'set -eu; rc-service loco status; rc-service loco-agent status; rc-service qemu-guest-agent status; test -x /usr/local/sbin/setup-loco; test -x /usr/local/sbin/loco-config; test -x /usr/local/sbin/loco-update; grep -q "https://10.0.2.15:8443" /etc/issue; test ! -e /etc/local.d/loco-installer.start; test ! -e /etc/loco-answers.conf; ! grep -q "root::" /etc/shadow; loco-config set BACKUP_KEEP=5 >/dev/null; grep -qx BACKUP_KEEP=5 /etc/loco/loco.conf; loco-backup create' \
         > "$LOG_DIR/$mode-installed.log" 2>&1
     # Vérifie réellement le mot de passe choisi et les deux pages avec la CA installée.
     access "python3 - '$adminpw'" <<'PY'

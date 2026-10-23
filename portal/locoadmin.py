@@ -1035,6 +1035,12 @@ def install_qemu_agent(log=print):
         _run(["dnf", "install", "-y", "qemu-guest-agent"], log)
     elif shutil.which("apk"):
         _run(["apk", "add", "qemu-guest-agent"], log)
+        initd = "/etc/init.d/qemu-guest-agent"       # Alpine ne fournit que le binaire : service OpenRC minimal.
+        if not os.path.exists(initd):
+            with open(initd, "w") as f:
+                f.write('#!/sbin/openrc-run\nname="QEMU Guest Agent"\n'
+                        'command="/usr/bin/qemu-ga"\ncommand_background=true\npidfile="/run/qemu-ga.pid"\n')
+            os.chmod(initd, 0o755)
     else:
         raise ValueError(t("gestionnaire de paquets inconnu", "unknown package manager", "gestor de paquetes desconocido"))
     if shutil.which("systemctl"):

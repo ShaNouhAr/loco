@@ -34,3 +34,4 @@ dosfstools
 dialog
 chrony
 acpid
+qemu-guest-agent
