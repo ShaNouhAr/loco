@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.42.0 — 2026-10-23
+
+- **Agent invité QEMU pré-installé sur l'appliance** : l'ISO installe et active désormais `qemu-guest-agent` d'office (l'appliance tourne toujours en VM Proxmox/QEMU) — arrêt propre, adresses IP dans Proxmox et sauvegardes cohérentes marchent dès l'installation. Sur les autres serveurs, la carte *Système › Agent invité QEMU* permet toujours de l'installer en un clic.
+
 ## 2.41.0 — 2026-10-23
 
 - **Heure du serveur** (page *Système*) : choisir le **fuseau horaire** du serveur et, si on le souhaite, **synchroniser l'horloge sur un serveur NTP** amont (le serveur devient client NTP, il n'en héberge pas). Appliqué par l'agent — `timedatectl` pour le fuseau, `systemd-timesyncd` (Debian/Ubuntu) ou `chrony` (Red Hat) pour le NTP.
