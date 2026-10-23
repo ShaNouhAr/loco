@@ -22,6 +22,13 @@ def linux_setup():
     return Response(script, mimetype="text/x-shellscript")
 
 
+@app.route("/linux/proxmox.sh")
+def linux_proxmox():
+    script = render_template("proxmox.sh", base=client_base(), https_url=config.HTTPS_URL,
+                             host=config.HOST, acng_port=config.ACNG_PORT)
+    return Response(script, mimetype="text/x-shellscript")
+
+
 @app.route("/linux/repositories/<distribution>/<suite>.sources")
 def linux_repository_source(distribution, suite):
     from .linux import require_repository, repository_url

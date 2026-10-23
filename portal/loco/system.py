@@ -6,11 +6,11 @@ import re
 import subprocess
 import sys
 
-from flask import Response, abort, flash, g, redirect, render_template, request, url_for
+from flask import Response, abort, flash, g, render_template, request
 
 from . import app, config
 from .i18n import L_, _
-from .auth import audit, login_required, require
+from .auth import audit, login_required
 from .db import db
 from .linux import list_debs
 from .util import back, disk_usage, read_stats, service_active

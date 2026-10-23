@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.44.0 — 2026-10-23
+
+- **Brancher un hôte Proxmox VE sur le cache** : nouvelle section sur la page *Paquets*, à côté de « Brancher un poste Linux ». Une seule commande sur l'hôte Proxmox branche ses dépôts sur loco, au choix **sans abonnement** (gratuit, mis en cache) — recommandé — ou **entreprise** (abonnement requis, en direct HTTPS). Debian et le dépôt sans-abonnement passent par le cache ; `--trust-ca` pour le premier branchement, `--remove` pour revenir en arrière.
+- **Les dépôts Proxmox sont remplacés, jamais dupliqués** : le script repère le dépôt Proxmox VE où qu'il soit — fichiers `.sources` (deb822, Proxmox 9) comme anciens `.list` dans `sources.list.d` et `sources.list` — le retire et écrit un unique `loco-proxmox.sources` avec la variante choisie. Les dépôts Debian et Ceph ne sont pas touchés.
+
 ## 2.43.0 — 2026-10-23
 
 - **Carte « Agent invité QEMU » visible sur l'appliance** : l'appliance tourne sous Alpine (sans systemd), où la détection de VM échouait, donc le bouton d'installation restait caché. loco reconnaît maintenant une VM QEMU/KVM par son fabricant DMI. La carte (page *Système*) est désormais toujours présente, avec un message clair selon le serveur : installer sur une VM QEMU, « horloge/virtualisation gérée par l'hôte » dans un conteneur, « non applicable » sur un serveur physique.

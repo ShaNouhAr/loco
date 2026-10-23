@@ -182,6 +182,26 @@ class TestClients(unittest.TestCase):
         self.assertIn('Acquire::https::Proxy "DIRECT";', s)
         self.assertIn('APT::Update::Error-Mode=any', s)
 
+    def test_proxmox_script(self):
+        c = loco.app.test_client()
+        s = c.get("/linux/proxmox.sh", base_url="http://repo.test:8088").get_data(as_text=True)
+        self.assertIn('BASE="http://repo.test:8088"', s)
+        self.assertIn('Acquire::https::Proxy "DIRECT";', s)
+        self.assertIn('APT::Update::Error-Mode=any', s)
+        # Choix de la variante et retrait.
+        self.assertIn("--enterprise", s)
+        self.assertIn("--no-subscription", s)
+        self.assertIn("--remove", s)
+        self.assertIn("--trust-ca", s)
+        # Remplace (ne duplique pas) le dépôt Proxmox trouvé dans sources.list.d.
+        self.assertIn("/etc/apt/sources.list.d/*.sources", s)
+        self.assertIn("/debian/pve", s)
+        self.assertIn("pve-no-subscription", s)
+        self.assertIn("pve-enterprise", s)
+        self.assertIn("download.proxmox.com/debian/pve", s)
+        self.assertIn("enterprise.proxmox.com/debian/pve", s)
+        self.assertIn("proxmox-archive-keyring.gpg", s)
+
     def test_flatpak_endpoints(self):
         os.makedirs(config.APT_DIR, exist_ok=True)
         with open(os.path.join(config.APT_DIR, "loco.gpg"), "wb") as f:

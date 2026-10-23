@@ -93,6 +93,21 @@
     </div>
   </section>
 
+  {% if apt %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Brancher un hôte Proxmox VE") }}</h2><div class="aside">{{ _("dépôts PVE par le cache de loco") }}</div></div>
+    <div class="panel-b">
+      <p class="hint">{{ _("Sur un hôte Proxmox VE : remplace son dépôt Proxmox par la variante choisie et fait passer Debian (et le dépôt sans-abonnement) par le cache de loco. Les dépôts existants sont remplacés, jamais dupliqués, où qu'ils soient dans sources.list.d.") }}</p>
+      <span class="cmd-label">{{ _("Sans abonnement (gratuit, mis en cache) — recommandé :") }}</span>
+      {{ cmd('pve-free', 'curl -fsSL ' ~ client_url ~ '/linux/proxmox.sh | sudo sh', '#') }}
+      <span class="cmd-label">{{ _("Avec abonnement (dépôt entreprise, non mis en cache) :") }}</span>
+      {{ cmd('pve-ent', 'curl -fsSL ' ~ client_url ~ '/linux/proxmox.sh | sudo sh -s -- --enterprise', '#') }}
+      {% if http_url %}<p class="hint">{{ _("Premier branchement, autorité pas encore importée :") }} <code>{{ _("curl -fsSL %(http_url)s/linux/proxmox.sh | sudo sh -s -- --trust-ca", http_url=http_url) }}</code></p>{% endif %}
+      <p class="hint">{{ _("Retrait de la configuration loco :") }} <code>… /linux/proxmox.sh | sudo sh -s -- --remove</code></p>
+    </div>
+  </section>
+  {% endif %}
+
   <div class="section-h" id="depots">
     <div><h2>{{ _("Vos dépôts") }}</h2><p>{{ _("Vos propres paquets, publiés et signés par loco, un dépôt par distribution et version. Les postes branchés ci-dessus les installent avec <code>apt</code> ou <code>dnf</code>.") }}</p></div>
     {% if can_upload %}<div class="actions"><button type="button" class="btn primary" data-open="#pkg-add">{{ _("Ajouter des paquets à %(label)s", label=label) }}</button></div>{% endif %}
