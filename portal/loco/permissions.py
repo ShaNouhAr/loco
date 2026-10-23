@@ -67,6 +67,8 @@ GROUPS = [
         ("system.configure", L_("Configurer le serveur"), L_("Réseaux autorisés, fonctions, proxy et stockage de l'appliance."), ("system.view",), True),
         ("system.update", L_("Mettre à jour le serveur"), L_("Paquets du système (noyau, correctifs de sécurité) et, sur l'appliance, loco."), ("system.view",), True),
         ("system.reboot", L_("Redémarrer le serveur"), L_("Demander un redémarrage du serveur loco."), ("system.view",), True),
+        ("alerts.view", L_("Consulter les alertes"), L_("Voir la configuration des notifications et leur état."), (), False),
+        ("alerts.configure", L_("Configurer les alertes"), L_("Canaux (e-mail, webhook), règles et seuils des notifications."), ("alerts.view",), True),
     ]),
     (L_("Scripts"), [
         ("scripts.view", L_("Consulter les scripts"), L_("Bibliothèque de scripts et résultats de leurs exécutions."), (), False),
@@ -102,7 +104,7 @@ DEFAULTS = {
     "repository_manager": (N_("Gestionnaire des dépôts"), N_("Gestion des paquets et installeurs. Aucun déploiement sur les postes."),
                            {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
     "auditor": (N_("Auditeur"), N_("Consultation, journal et son export, comptes et profils. Aucune modification."),
-                VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view", "audit.export"}),
+                VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view", "audit.export", "alerts.view"}),
 }
 
 # Chaque route privée est déclarée. Une nouvelle route oubliée est refusée par défaut.
@@ -146,6 +148,7 @@ ENDPOINTS = {
     "system_backup_download": "system.configure", "system_restore": "system.configure",
     "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",
     "system_backup_delete": "system.configure",
+    "alerts": "alerts.view", "alerts_save": "alerts.configure", "alerts_test": "alerts.configure",
     "appliance_updates": "system.view", "appliance_job": "system.view",
     "appliance_operations_state": "system.view", "appliance_updates_post": "system.view",
     "appliance_settings": "system.configure", "appliance_settings_post": "system.configure",

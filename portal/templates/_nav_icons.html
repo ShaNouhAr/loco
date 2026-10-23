@@ -2,6 +2,8 @@
 <svg class="nav-icon{{ ' nav-chevron' if name == 'chevron' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
 {% if name == 'overview' %}
   <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+{% elif name == 'bell' %}
+  <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 7H4c0-1 2-2 2-7Z"/><path d="M10 20a2 2 0 0 0 4 0"/>
 {% elif name == 'linux' %}
   <path d="M8 9V7a4 4 0 0 1 8 0v2c0 2 3 4 3 8 0 2-3 3-7 3s-7-1-7-3c0-4 3-6 3-8Z"/><path d="M9 12c-2 4-1 6 3 6s5-2 3-6M9 20l-4 1-1-2m11 1 4 1 1-2M10 9l2 2 2-2-2-1Z"/><path d="M10 6.5h.01M14 6.5h.01" stroke-width="2.5"/>
 {% elif name == 'windows' %}

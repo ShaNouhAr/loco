@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Alertes") }}{% endblock %}
+{% macro severity_select(name, current) -%}
+<select name="{{ name }}">
+  <option value="info" {{ 'selected' if current == 'info' }}>{{ _("Info et plus") }}</option>
+  <option value="warning" {{ 'selected' if current == 'warning' }}>{{ _("Avertissement et plus") }}</option>
+  <option value="critical" {{ 'selected' if current == 'critical' }}>{{ _("Critique seulement") }}</option>
+</select>
+{%- endmacro %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Alertes") }}</h1>
+    <p>{{ _("Soyez prévenu par e-mail ou webhook quand l'état du serveur ou du parc le demande. Activez un canal, choisissez les règles, testez — c'est tout.") }}</p>
+  </div>
+</div>
+
+{% if not configured %}
+<div class="note">{{ _("Aucun canal activé pour l'instant : activez l'e-mail ou le webhook ci-dessous pour recevoir des alertes.") }}</div>
+{% elif last_error %}
+<div class="note warn">{{ _("Le dernier envoi a échoué : %(error)s", error=last_error) }}{% if pending %} {{ _("(%(n)s en attente de réémission)", n=pending) }}{% endif %}</div>
+{% endif %}
+
+<form method="post" class="stack" {{ 'data-readonly' if not can_edit }}>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <div class="cols even">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("E-mail (SMTP)") }}</h2>
+        <span class="switch"><input type="checkbox" name="email_enabled" value="1" role="switch" {{ 'checked' if cfg.email.enabled }} {{ 'disabled' if not can_edit }}><i aria-hidden="true"></i></span>
+      </div>
+      <div class="panel-b stack-sm">
+        <div class="grid2">
+          <label class="f"><span>{{ _("Serveur SMTP") }}</span><input type="text" name="email_host" value="{{ cfg.email.host }}" placeholder="smtp.exemple.com" spellcheck="false" class="mono" {{ 'disabled' if not can_edit }}></label>
+          <label class="f"><span>{{ _("Port") }}</span><input type="number" name="email_port" value="{{ cfg.email.port }}" min="1" max="65535" class="field-sm" {{ 'disabled' if not can_edit }}></label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Chiffrement") }}</span>
+            <select name="email_security" {{ 'disabled' if not can_edit }}>
+              <option value="starttls" {{ 'selected' if cfg.email.security == 'starttls' }}>STARTTLS</option>
+              <option value="tls" {{ 'selected' if cfg.email.security == 'tls' }}>TLS / SSL</option>
+              <option value="none" {{ 'selected' if cfg.email.security == 'none' }}>{{ _("Aucun") }}</option>
+            </select>
+          </label>
+          <label class="f"><span>{{ _("Gravité minimale") }}</span>{{ severity_select('email_min_severity', cfg.email.min_severity) }}</label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Identifiant") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="text" name="email_username" value="{{ cfg.email.username }}" autocomplete="off" spellcheck="false" {{ 'disabled' if not can_edit }}></label>
+          <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" name="email_password" value="{{ cfg.email.password }}" autocomplete="new-password" placeholder="{{ _('inchangé') }}" {{ 'disabled' if not can_edit }}></label>
+        </div>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Expéditeur") }}</span><input type="text" name="email_sender" value="{{ cfg.email.sender }}" placeholder="loco@exemple.com" spellcheck="false" class="mono" {{ 'disabled' if not can_edit }}></label>
+          <label class="f"><span>{{ _("Destinataires") }} <em class="faint">{{ _("(séparés par des virgules)") }}</em></span><input type="text" name="email_recipients" value="{{ cfg.email.recipients }}" placeholder="it@exemple.com, admin@exemple.com" spellcheck="false" class="mono" {{ 'disabled' if not can_edit }}></label>
+        </div>
+        {% if can_edit %}<div class="row test-row"><button type="button" class="btn sm" data-test-channel="email"><span class="spin"></span>{{ _("Tester") }}</button><span class="test-result" data-test-result="email"></span></div>{% endif %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Webhook") }}</h2>
+        <span class="switch"><input type="checkbox" name="webhook_enabled" value="1" role="switch" {{ 'checked' if cfg.webhook.enabled }} {{ 'disabled' if not can_edit }}><i aria-hidden="true"></i></span>
+      </div>
+      <div class="panel-b stack-sm">
+        <label class="f"><span>{{ _("URL") }}</span><input type="url" name="webhook_url" value="{{ cfg.webhook.url }}" placeholder="https://hooks.exemple.com/services/…" spellcheck="false" class="mono" {{ 'disabled' if not can_edit }}></label>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Secret HMAC") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="password" name="webhook_secret" value="{{ cfg.webhook.secret }}" autocomplete="new-password" placeholder="{{ _('inchangé') }}" {{ 'disabled' if not can_edit }}></label>
+          <label class="f"><span>{{ _("Gravité minimale") }}</span>{{ severity_select('webhook_min_severity', cfg.webhook.min_severity) }}</label>
+        </div>
+        <p class="hint">{{ _("POST JSON (<span class=\"mono\">source, host, severity, subject, text</span>). Fonctionne avec les webhooks entrants de Slack, Teams, Discord ou un relais maison ; le secret signe l'envoi (en-tête <span class=\"mono\">X-Loco-Signature</span>).") }}</p>
+        {% if can_edit %}<div class="row test-row"><button type="button" class="btn sm" data-test-channel="webhook"><span class="spin"></span>{{ _("Tester") }}</button><span class="test-result" data-test-result="webhook"></span></div>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Règles") }}</h2><div class="aside">{{ _("ce qui déclenche une alerte") }}</div></div>
+    {% for gkey, glabel in groups %}
+    {% set group_rules = rules | selectattr('group', 'equalto', gkey) | list %}
+    {% if group_rules %}
+    <div class="panel-b rule-group">
+      <h3 class="rule-group-title">{{ glabel }}</h3>
+      <div class="feature-list">
+        {% for r in group_rules %}
+        <div class="feature-row {{ 'off' if not r.on }}">
+          <span class="feature-text"><strong>{{ r.label }}</strong><small>{{ r.description }}</small></span>
+          <span class="rule-controls">
+            {% if r.threshold %}<input type="number" name="rule_{{ r.key }}_{{ r.threshold.field }}" value="{{ r.threshold.value }}" min="{{ r.threshold.min }}" max="{{ r.threshold.max }}" class="field-xs" aria-label="{{ _('Seuil pour %(rule)s', rule=r.label) }}" {{ 'disabled' if not can_edit }}>{% endif %}
+            <span class="switch"><input type="checkbox" name="rule_{{ r.key }}" value="1" role="switch" {{ 'checked' if r.on }} {{ 'disabled' if not can_edit }}><i aria-hidden="true"></i></span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </section>
+
+  {% if can_edit %}
+  <div class="panel-f sticky-actions row-between">
+    <span class="muted small">{{ _("Évaluation côté serveur toutes les minutes ; chaque condition a un délai anti-répétition.") }}</span>
+    <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

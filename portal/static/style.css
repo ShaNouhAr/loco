@@ -354,6 +354,15 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .field-sm { max-width: 110px; }
 .field-xs { max-width: 68px; }
 
+/* Alertes : contrôles de règle + résultat du test */
+.rule-group + .rule-group { border-top: 1px solid var(--line); }
+.rule-group-title { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+.rule-controls { display: flex; align-items: center; gap: 12px; flex: none; }
+.test-row { gap: 12px; }
+.test-result { font-size: 13px; }
+.test-result.ok { color: var(--ok, #2ea043); }
+.test-result.err { color: var(--err); }
+
 /* Sauvegardes : liste compacte + réglages */
 .backups { padding-top: 4px; padding-bottom: 4px; }
 .backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 10px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }

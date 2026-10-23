@@ -382,6 +382,24 @@ MIGRATIONS = [
     """
     ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT '';
     """,
+    # 19 : alertes et notifications — délai de répétition par condition et file d'envoi (e-mail, webhook).
+    """
+    CREATE TABLE alert_state (
+        key TEXT PRIMARY KEY,
+        last_fired TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE alert_outbox (
+        id INTEGER PRIMARY KEY,
+        created TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        body TEXT NOT NULL,
+        channels TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_try TEXT NOT NULL DEFAULT '',
+        last_error TEXT NOT NULL DEFAULT ''
+    );
+    """,
 ]
 
 

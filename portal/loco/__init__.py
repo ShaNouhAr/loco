@@ -131,10 +131,10 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts, enrollment, schedules)
+                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts)
 
 
 def startup():

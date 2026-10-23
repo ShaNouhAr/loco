@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.50.0 — 2026-10-23
+
+- **Alertes et notifications** (*Administration → Alertes*) : être prévenu par **e-mail (SMTP)** ou **webhook** (Slack, Teams, Discord ou relais maison, avec signature HMAC) quand l'état du serveur ou du parc le demande. Règles activables avec seuils — service arrêté, certificat HTTPS qui expire, sauvegarde en retard, disque plein, échecs de connexion, mises à jour de sécurité en attente, postes hors contact — et une gravité minimale par canal. Bouton **Tester**, secrets chiffrés au repos, évaluation côté serveur toutes les minutes sans répétition, avec réémission en cas d'échec. Nouveau droit *Configurer les alertes* et interrupteur de fonctionnalité dédié.
+
 ## 2.49.0 — 2026-10-23
 
 - **Sauvegardes repensées** (page *Système*) : liste plus compacte (date et taille sur une ligne, nom de fichier en dessous), actions groupées avec une icône de suppression, et une zone de réglages claire pour la rétention et la restauration depuis un fichier.
