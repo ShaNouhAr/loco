@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.43.0 — 2026-10-23
+
+- **Carte « Agent invité QEMU » visible sur l'appliance** : l'appliance tourne sous Alpine (sans systemd), où la détection de VM échouait, donc le bouton d'installation restait caché. loco reconnaît maintenant une VM QEMU/KVM par son fabricant DMI. La carte (page *Système*) est désormais toujours présente, avec un message clair selon le serveur : installer sur une VM QEMU, « horloge/virtualisation gérée par l'hôte » dans un conteneur, « non applicable » sur un serveur physique.
+
 ## 2.42.0 — 2026-10-23
 
 - **Heure du serveur, NTP dans les conteneurs** : sur un serveur conteneurisé (LXC), la carte *Système › Heure du serveur* indique désormais que l'horloge vient de l'hôte (la synchronisation NTP se règle sur l'hôte) au lieu d'un interrupteur sans effet ; sur une vraie VM ou un serveur physique, le réglage du serveur NTP amont fonctionne normalement.
