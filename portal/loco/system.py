@@ -3,6 +3,7 @@
 import datetime
 import os
 import re
+import secrets
 import subprocess
 import sys
 
@@ -279,6 +280,7 @@ def system():
         stats=read_stats(),
         backups=backups,
         backup_dir=config.BACKUP_DIR,
+        backup_keep=backup_keep(),
         paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
         time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
@@ -346,6 +348,95 @@ def system_restore():
             locoadmin.request("restore", {"archive": name}, user=g.user["username"] if g.get("user") else "")
             audit("systeme.restauration", name)
             flash(_("Restauration lancée : le serveur va redémarrer. Reconnectez-vous dans un instant."), "ok")
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
+
+
+UPLOAD_SPOOL = os.path.join(config.STATE, "restore-uploads")
+MAX_UPLOAD = 4 * 1024 ** 3                        # 4 Gio : une sauvegarde (hors caches) reste bien en dessous
+
+
+def backup_keep():
+    """Nombre de sauvegardes conservées (BACKUP_KEEP de loco.conf), relu à chaque affichage. 3 par défaut."""
+    try:
+        with open(os.path.join(config.ETC, "loco.conf"), encoding="utf-8") as f:
+            match = re.search(r'^BACKUP_KEEP="?(\d+)"?', f.read(), re.M)
+        return int(match.group(1)) if match else 3
+    except (OSError, ValueError):
+        return 3
+
+
+@app.route("/system/restore/upload", methods=["POST"])
+@login_required
+def system_restore_upload():
+    """Téléverse une archive .tar.gz, la vérifie (sauvegarde loco valide), puis lance la restauration via l'agent."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    try:
+        request.max_content_length = MAX_UPLOAD   # borne la taille lue (Werkzeug lève 413 au-delà)
+    except AttributeError:
+        pass
+    if locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+        return back("system")
+    if not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+        return back("system")
+    upload = request.files.get("archive")
+    if upload is None or not upload.filename:
+        flash(_("Choisissez un fichier de sauvegarde (.tar.gz)."), "error")
+        return back("system")
+    os.makedirs(UPLOAD_SPOOL, exist_ok=True)
+    name = secrets.token_hex(16) + ".tar.gz"
+    path = os.path.join(UPLOAD_SPOOL, name)
+    from .backup import verify
+    try:
+        upload.save(path)
+        verify(path, data=config.DATA, etc=config.ETC, state=config.STATE)
+    except ValueError as e:
+        _discard(path)
+        flash(_("Archive refusée : %(reason)s", reason=str(e)), "error")
+        return back("system")
+    except OSError:
+        _discard(path)
+        flash(_("Le téléversement a échoué."), "error")
+        return back("system")
+    try:
+        locoadmin.request("restore", {"upload": name}, user=g.user["username"] if g.get("user") else "")
+        audit("systeme.restauration", _("fichier téléversé"))
+        flash(_("Sauvegarde vérifiée. Restauration lancée : le serveur va redémarrer. Reconnectez-vous dans un instant."), "ok")
+    except ValueError as e:
+        _discard(path)
+        flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return back("system")
+
+
+def _discard(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+@app.route("/system/backup-retention", methods=["POST"])
+@login_required
+def system_backup_retention():
+    """Nombre de sauvegardes quotidiennes conservées (BACKUP_KEEP), appliqué par l'agent root."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    keep = request.form.get("keep", "").strip()
+    if not keep.isdigit() or not 1 <= int(keep) <= 60:
+        flash(_("Nombre de sauvegardes invalide (1 à 60)."), "error")
+    elif locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request("set-backup-keep", {"keep": int(keep)}, user=g.user["username"] if g.get("user") else "")
+            audit("systeme.sauvegarde.retention", keep)
+            flash(_("Conservation des sauvegardes : %(n)s. Les plus anciennes au-delà sont supprimées.", n=keep), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
     return back("system")

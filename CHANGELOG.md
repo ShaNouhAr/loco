@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.47.0 — 2026-10-23
+
+- **Restaurer depuis un fichier téléversé** (page *Système › Sauvegardes*) : on peut envoyer une archive `.tar.gz` (une sauvegarde gardée ailleurs, ou venant d'un autre serveur) pour la restaurer. Le fichier est **vérifié avant toute écriture** — c'est bien une sauvegarde loco/local-repo (présence de la base et de la configuration, chemins sûrs, pas de `..` ni de lien symbolique, `.tar.gz` lisible) — côté portail puis une seconde fois par l'agent root avant d'appliquer.
+- **Rétention des sauvegardes configurable** : un champ *Sauvegardes conservées* (1 à 60) écrit `BACKUP_KEEP` et supprime aussitôt les plus anciennes au-delà de la limite. Réservé au droit *Configurer le serveur*.
+
 ## 2.46.0 — 2026-10-23
 
 - **Télécharger et restaurer les sauvegardes** (page *Système*) : chaque sauvegarde a un bouton **Télécharger** (pour la garder ailleurs) et un bouton **Restaurer** en un clic. La restauration passe par l'agent root — arrêt du portail, remise en place de la base, des comptes, des clés et des dépôts, régénération des services, puis redémarrage ; la configuration propre au serveur (adresse, ports, réseaux) est conservée, et un repli automatique rétablit l'état précédent en cas d'échec. La commande reste disponible pour restaurer sur un autre serveur. Réservé au droit *Configurer le serveur*.

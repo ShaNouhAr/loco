@@ -6,7 +6,15 @@ import tempfile
 import unittest
 
 import test_portal  # initialise le portail isolé et son chemin d'import
-from loco.backup import restore_linux
+from loco.backup import restore_linux, verify
+
+
+def _archive(path, entries):
+    with tarfile.open(path, 'w:gz') as tar:
+        for name, content in entries:
+            member = tarfile.TarInfo(name)
+            member.size = len(content)
+            tar.addfile(member, io.BytesIO(content))
 
 
 class TestBackupMigration(unittest.TestCase):
@@ -47,6 +55,31 @@ class TestBackupMigration(unittest.TestCase):
             with self.assertRaises(ValueError):
                 restore_linux(archive, root / 'data', root / 'etc', root / 'state')
             self.assertFalse((root / 'state').exists())
+
+
+class TestVerify(unittest.TestCase):
+    def test_a_valid_backup_passes_and_bad_archives_are_rejected(self):
+        with tempfile.TemporaryDirectory(dir=test_portal.TMP) as work:
+            root = Path(work)
+            d, e, s = str(root / 'd'), str(root / 'e'), str(root / 's')
+            good = root / 'good.tar.gz'
+            _archive(good, [('etc/loco/loco.conf', b'DATA=/srv/loco\n'), ('portal.db', b'db')])
+            self.assertTrue(verify(good, data=d, etc=e, state=s))
+
+            nodb = root / 'nodb.tar.gz'
+            _archive(nodb, [('etc/loco/loco.conf', b'DATA=/srv/loco\n')])
+            with self.assertRaises(ValueError):
+                verify(nodb, data=d, etc=e, state=s)
+
+            evil = root / 'evil.tar.gz'
+            _archive(evil, [('etc/loco/loco.conf', b'DATA=/srv/loco\n'), ('portal.db', b'db'), ('../../etc/passwd', b'x')])
+            with self.assertRaises(ValueError):
+                verify(evil, data=d, etc=e, state=s)
+
+            notgz = root / 'notgz.tar.gz'
+            notgz.write_bytes(b'this is clearly not a gzip archive')
+            with self.assertRaises(ValueError):
+                verify(notgz, data=d, etc=e, state=s)
 
 
 if __name__ == '__main__':

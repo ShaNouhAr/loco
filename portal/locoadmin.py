@@ -57,7 +57,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
@@ -1096,42 +1096,66 @@ def _share_backups():
             continue
 
 
+UPLOAD_SPOOL = os.path.join(STATE, "restore-uploads")
+UPLOAD_NAME_RE = re.compile(r"[0-9a-f]{32}\.tar\.gz")
+
+
+def _cleanup_upload(upload):
+    if upload and UPLOAD_NAME_RE.fullmatch(upload):
+        with contextlib.suppress(OSError):
+            os.unlink(os.path.join(UPLOAD_SPOOL, upload))
+
+
 def restore(params, log=print):
     """Restaure une sauvegarde loco (même serveur) : base, comptes, clés, dépôts et catalogue, puis régénère services
-    et configuration via install.sh. La configuration propre au serveur (IP, ports, réseaux) est conservée."""
-    name = str((params or {}).get("archive", ""))
-    if not BACKUP_NAME_RE.fullmatch(name):
-        raise ValueError("nom de sauvegarde invalide")
+    et configuration via install.sh. La configuration propre au serveur (IP, ports, réseaux) est conservée. La
+    sauvegarde vient de BACKUP_DIR (« archive ») ou d'un fichier téléversé dans le spool (« upload »)."""
+    params = params or {}
+    upload, name = str(params.get("upload", "")), str(params.get("archive", ""))
     conf = read_conf()
-    archive = os.path.join(conf.get("BACKUP_DIR", "/var/backups/loco"), name)
-    data = conf.get("DATA", "")
-    source = conf.get("SOURCE_DIR", "")
-    if not os.path.isfile(archive):
-        raise ValueError(t("sauvegarde introuvable", "backup not found", "copia de seguridad no encontrada"))
+    data, source = conf.get("DATA", ""), conf.get("SOURCE_DIR", "")
+    if upload:
+        if not UPLOAD_NAME_RE.fullmatch(upload):
+            raise ValueError("fichier téléversé invalide")
+        archive, label = os.path.join(UPLOAD_SPOOL, upload), t("la sauvegarde téléversée", "the uploaded backup", "la copia subida")
+    else:
+        if not BACKUP_NAME_RE.fullmatch(name):
+            raise ValueError("nom de sauvegarde invalide")
+        archive, label = os.path.join(conf.get("BACKUP_DIR", "/var/backups/loco"), name), name
     if not data:
         raise ValueError("DATA absent de la configuration")
     if not source or not os.path.isfile(os.path.join(source, "linux", "install.sh")):
         raise ValueError(f"sources de loco introuvables (SOURCE_DIR de {CONF})")
-    with tarfile.open(archive) as tar:
-        if "portal.db" not in tar.getnames():
-            raise ValueError(t("ce n'est pas une sauvegarde loco", "this is not a loco backup", "no es una copia de seguridad de loco"))
-    log(t(f"Restauration de {name}.", f"Restoring {name}.", f"Restaurando {name}."))
+    try:                                          # fichier ordinaire, jamais un lien symbolique
+        if not stat.S_ISREG(os.lstat(archive).st_mode):
+            raise ValueError("archive")
+    except OSError:
+        raise ValueError(t("sauvegarde introuvable", "backup not found", "copia de seguridad no encontrada")) from None
+    backup_py = os.path.join(os.path.dirname(HERE), "loco", "backup.py")
+    # Vérifier l'archive avant toute écriture (indispensable pour un fichier téléversé, non produit par ce serveur).
+    if _run([sys.executable, "-I", backup_py, "--verify", archive], log) != 0:
+        _cleanup_upload(upload)
+        raise ValueError(t("archive invalide : ce n'est pas une sauvegarde loco valide", "invalid archive: not a valid loco backup",
+                           "archivo no válido: no es una copia de seguridad de loco válida"))
+    log(t(f"Restauration de {label}.", f"Restoring {label}.", f"Restaurando {label}."))
     # Arrêter le portail avant de réécrire la base et les données.
     _run(["rc-service", "loco", "stop"] if ALPINE else ["systemctl", "stop", "loco-portal"], log)
-    backup_py = os.path.join(os.path.dirname(HERE), "loco", "backup.py")
     with _snapshot() as snapshot:
         try:
-            _run([sys.executable, "-I", backup_py, archive, data], log)
+            if _run([sys.executable, "-I", backup_py, archive, data], log) != 0:
+                raise RuntimeError("échec de l'extraction de la sauvegarde")
             _restore_ownership(data, log)
             log(t("Régénération des services et de la configuration.", "Regenerating services and configuration.",
                   "Regenerando servicios y configuración."))
             ok = _install(source, [], log) == 0
-        except (OSError, subprocess.SubprocessError, ValueError, tarfile.TarError) as e:
+        except (OSError, subprocess.SubprocessError, RuntimeError, ValueError) as e:
             log(f"Restauration interrompue : {e}")
             ok = False
         if not ok:
             _rollback(snapshot, source, log)
+            _cleanup_upload(upload)
             return False
+    _cleanup_upload(upload)
     log(t("Sauvegarde restaurée.", "Backup restored.", "Copia de seguridad restaurada."))
     return True
 
@@ -1148,6 +1172,31 @@ def _restore_ownership(data, log):
     for target in targets:
         if os.path.exists(target):
             _run(["chown", "-R", "loco:loco", target], log)
+
+
+def set_backup_keep(params, log=print):
+    """Nombre de sauvegardes quotidiennes conservées : écrit BACKUP_KEEP dans loco.conf (lu par loco-backup) et
+    supprime tout de suite les plus anciennes au-delà de la limite."""
+    try:
+        keep = int(str((params or {}).get("keep", "")))
+    except ValueError:
+        raise ValueError("nombre de sauvegardes invalide") from None
+    if not 1 <= keep <= 60:
+        raise ValueError("nombre de sauvegardes hors limites (1 à 60)")
+    _set_conf("BACKUP_KEEP", keep)
+    log(t(f"Sauvegardes conservées : {keep}.", f"Backups kept: {keep}.", f"Copias conservadas: {keep}."))
+    directory = read_conf().get("BACKUP_DIR", "/var/backups/loco")
+    try:                                          # purge immédiate, comme loco-backup : seulement les « loco-*.tar.gz »
+        archives = sorted((os.path.join(directory, n) for n in os.listdir(directory)
+                           if BACKUP_NAME_RE.fullmatch(n) and n.startswith("loco-")),
+                          key=os.path.getmtime, reverse=True)
+    except OSError:
+        archives = []
+    for path in archives[keep:]:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+        log(t(f"Supprimée : {os.path.basename(path)}", f"Removed: {os.path.basename(path)}", f"Eliminada: {os.path.basename(path)}"))
+    return True
 
 
 def _operation(action, params, log):
@@ -1171,6 +1220,8 @@ def _operation(action, params, log):
         return install_qemu_agent(log)
     if action == "restore":
         return restore(params, log)
+    if action == "set-backup-keep":
+        return set_backup_keep(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1365,10 +1416,22 @@ def agent():
                     params = {"timezone": tz, "ntp_server": server,
                               "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else ""}
                 elif req["action"] == "restore":
-                    name = str((req.get("params") or {}).get("archive", "")).strip()
-                    if not BACKUP_NAME_RE.fullmatch(name):
+                    p = req.get("params") or {}
+                    upload, name = str(p.get("upload", "")).strip(), str(p.get("archive", "")).strip()
+                    if upload and UPLOAD_NAME_RE.fullmatch(upload):
+                        params = {"upload": upload}
+                    elif BACKUP_NAME_RE.fullmatch(name):
+                        params = {"archive": name}
+                    else:
                         continue
-                    params = {"archive": name}
+                elif req["action"] == "set-backup-keep":
+                    try:
+                        keep = int(str((req.get("params") or {}).get("keep", "")))
+                    except ValueError:
+                        continue
+                    if not 1 <= keep <= 60:
+                        continue
+                    params = {"keep": keep}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1426,10 +1489,24 @@ def request(action, params=None, user=""):
         params = {"timezone": tz, "ntp_server": server,
                   "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else ""}
     elif action == "restore":
-        name = str((params or {}).get("archive", "")).strip()
-        if not BACKUP_NAME_RE.fullmatch(name):
+        p = params or {}
+        upload, name = str(p.get("upload", "")).strip(), str(p.get("archive", "")).strip()
+        if upload:
+            if not UPLOAD_NAME_RE.fullmatch(upload):
+                raise ValueError("fichier téléversé invalide")
+            params = {"upload": upload}
+        elif BACKUP_NAME_RE.fullmatch(name):
+            params = {"archive": name}
+        else:
             raise ValueError("nom de sauvegarde invalide")
-        params = {"archive": name}
+    elif action == "set-backup-keep":
+        try:
+            keep = int(str((params or {}).get("keep", "")))
+        except ValueError:
+            raise ValueError("nombre de sauvegardes invalide") from None
+        if not 1 <= keep <= 60:
+            raise ValueError("nombre de sauvegardes hors limites (1 à 60)")
+        params = {"keep": keep}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")

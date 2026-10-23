@@ -148,6 +148,25 @@
       {% else %}
       <div class="empty">{{ _("Aucune sauvegarde pour l'instant.") }}</div>
       {% endif %}
+      {% if can_backup and server_updates %}
+      <div class="panel-b">
+        <div class="set-row">
+          <form method="post" action="{{ url_for('system_backup_retention') }}" class="row">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <label class="f"><span>{{ _("Sauvegardes conservées") }}</span>
+              <input type="number" name="keep" min="1" max="60" value="{{ backup_keep }}" class="field-sm" required></label>
+            <button class="btn sm">{{ _("Enregistrer") }}</button>
+          </form>
+          <span class="set-aside muted small">{{ _("les plus anciennes au-delà sont supprimées") }}</span>
+        </div>
+        <form method="post" action="{{ url_for('system_restore_upload') }}" enctype="multipart/form-data" class="set-row" data-confirm="{{ _('Restaurer depuis ce fichier ?') }}" data-confirm-text="{{ _('Le fichier est vérifié, puis le serveur redémarre ; comptes, base, clés et dépôts sont remplacés par ceux de l\'archive.') }}" data-confirm-ok="{{ _('Vérifier et restaurer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label class="f"><span>{{ _("Restaurer depuis un fichier .tar.gz (vérifié avant restauration)") }}</span>
+            <input type="file" name="archive" accept=".gz,.tgz" required></label>
+          <button class="btn sm danger">{{ _("Vérifier et restaurer") }}</button>
+        </form>
+      </div>
+      {% endif %}
       <div class="panel-b system-commands">
         {% if can_backup and server_updates %}
         <p class="small muted">{{ _("Télécharger une sauvegarde pour la garder ailleurs ; <strong>Restaurer</strong> remet le serveur dans l'état de la sauvegarde choisie (il redémarre). Pour restaurer sur un <em>autre</em> serveur, utilisez la commande :") }}</p>

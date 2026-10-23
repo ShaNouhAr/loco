@@ -351,6 +351,7 @@ input[type=file]::file-selector-button:hover { background: var(--bg-2); }
 label.check { display: inline-flex; align-items: center; gap: 8px; margin-right: 12px; font-size: 13.5px; color: var(--text-2); cursor: pointer; }
 .search-sm { width: 240px !important; height: 30px !important; font-size: 13.5px !important; }
 .field-md { max-width: 340px; }
+.field-sm { max-width: 110px; }
 .field-xs { width: 100px !important; display: inline-block; }
 .inline-form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .inline-form select { height: 28px; width: auto; padding: 0 28px 0 9px; font-size: 13px; }

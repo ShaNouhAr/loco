@@ -144,6 +144,7 @@ ENDPOINTS = {
     "remote_io": ("remote.terminal", "remote.desktop", "remote.files"),
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",
+    "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",
     "appliance_updates": "system.view", "appliance_job": "system.view",
     "appliance_operations_state": "system.view", "appliance_updates_post": "system.view",
     "appliance_settings": "system.configure", "appliance_settings_post": "system.configure",

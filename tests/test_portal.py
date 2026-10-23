@@ -1,9 +1,11 @@
 """Tests du portail (bibliothèque standard + Flask) : python3 -m unittest discover -s tests"""
 
 import atexit
+import io
 import os
 import re
 import shutil
+import tarfile
 import subprocess
 import sys
 import tempfile
@@ -272,6 +274,7 @@ class TestBackups(unittest.TestCase):
     def tearDown(self):
         config.BACKUP_DIR = self._orig
         shutil.rmtree(self.tmp, ignore_errors=True)
+        shutil.rmtree(os.path.join(config.STATE, "restore-uploads"), ignore_errors=True)
 
     def test_download_rejects_bad_names_and_unknown_files(self):
         self.assertEqual(self.admin.c.get("/system/backups/..%2f..%2fetc%2fpasswd").status_code, 404)
@@ -302,6 +305,57 @@ class TestBackups(unittest.TestCase):
             la.running_job.return_value = None
             la.agent_running.return_value = True
             r = self.admin.post("/system/restore", {"archive": "loco-absent-20990101-000000.tar.gz"}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_not_called()
+
+    @staticmethod
+    def _archive_bytes(entries):
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            for name, content in entries:
+                m = tarfile.TarInfo(name)
+                m.size = len(content)
+                tar.addfile(m, io.BytesIO(content))
+        return buf.getvalue()
+
+    def _upload(self, blob, filename="backup.tar.gz"):
+        return self.admin.c.post("/system/restore/upload", content_type="multipart/form-data",
+                                 data={"csrf": self.admin.token("/system"),
+                                       "archive": (io.BytesIO(blob), filename)})
+
+    def test_uploaded_backup_is_verified_then_submitted(self):
+        good = self._archive_bytes([("etc/loco/loco.conf", b"DATA=/srv/loco\n"), ("portal.db", b"db")])
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self._upload(good)
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_called_once()
+            self.assertEqual(la.request.call_args[0][0], "restore")
+            self.assertIn("upload", la.request.call_args[0][1])
+
+    def test_uploaded_invalid_archive_is_rejected_without_restoring(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self._upload(b"this is not a gzip archive")
+            self.assertEqual(r.status_code, 302)
+            la.request.assert_not_called()
+
+    def test_retention_is_sent_to_the_agent(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/backup-retention", {"keep": "5"}, page="/system")
+            self.assertEqual(r.status_code, 302)
+            self.assertEqual(la.request.call_args[0][0], "set-backup-keep")
+            self.assertEqual(la.request.call_args[0][1], {"keep": 5})
+
+    def test_retention_rejects_out_of_range(self):
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/backup-retention", {"keep": "999"}, page="/system")
             self.assertEqual(r.status_code, 302)
             la.request.assert_not_called()
 
