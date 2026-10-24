@@ -381,6 +381,13 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .backup-setting-text .set-label { margin-bottom: 0; }
 .offsite-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .offsite-head h3 { margin: 0; font-size: 14px; }
+
+/* Mon parc : sélection de postes */
+.select-col { width: 1%; white-space: nowrap; }
+.row-select-label { display: inline-grid; place-items: center; padding: 6px; margin: -6px; cursor: pointer; }
+.fleet-select-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 11px 16px; border-bottom: 1px solid var(--line); background: var(--bg-2); flex-wrap: wrap; border-top-left-radius: var(--r); border-top-right-radius: var(--r); }
+.fleet-select-count { font-size: 13.5px; color: var(--text-2); }
+.fleet-select-count strong { color: var(--text); }
 .field-xs { width: 100px !important; display: inline-block; }
 .inline-form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .inline-form select { height: 28px; width: auto; padding: 0 28px 0 9px; font-size: 13px; }

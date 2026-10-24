@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.52.0 — 2026-10-24
+
+- **Sélection de postes et mise à jour groupée** (*Mon parc*) : cocher des postes dans la liste (case « tout sélectionner » dans l'en-tête) fait apparaître une barre discrète en haut du tableau avec le nombre sélectionné et un bouton **Mettre à jour les sélectionnés** (option *Redémarrer si nécessaire*). Le rafraîchissement automatique se met en pause pendant la sélection. Réservé au droit *Mettre à jour un poste*.
+
 ## 2.51.0 — 2026-10-24
 
 - **Sauvegarde hors-site** (*Système → Sauvegardes*) : copie automatique de la dernière sauvegarde quotidienne vers un stockage externe — **S3-compatible** (cloud AWS/Backblaze/Wasabi/OVH/Scaleway/R2 ou MinIO on-prem), **SFTP** (clé SSH), ou **dossier / point de montage** (2ᵉ disque, support externe, partage SMB/NFS monté). Chiffrement AES-256 optionnel avant envoi, bouton **Tester**, secrets chiffrés au repos. La rétention suit le réglage « Sauvegardes conservées ». Une alerte « Copie hors-site en échec » prévient en cas de problème.

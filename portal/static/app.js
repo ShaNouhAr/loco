@@ -285,6 +285,43 @@
     });
   });
 
+  /* ------------------------------------------------ sélection de postes + mise à jour groupée (Mon parc) */
+  var selBar = $("[data-select-bar]");
+  if (selBar) {
+    var selTable = $("#fleet-table"), selAll = $("[data-select-all]");
+    var selBoxes = function () { return $$("[data-select]", selTable); };
+    var selChecked = function () { return selBoxes().filter(function (b) { return b.checked; }); };
+    var selSync = function () {
+      var boxes = selBoxes(), n = selChecked().length;
+      selBar.hidden = n === 0;
+      if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;   // ne pas rafraîchir pendant une sélection
+      var c = $("[data-select-count]"); if (c) c.textContent = n;
+      if (selAll) { selAll.checked = n > 0 && n === boxes.length; selAll.indeterminate = n > 0 && n < boxes.length; }
+    };
+    selTable.addEventListener("change", function (e) { if (e.target.matches("[data-select]")) selSync(); });
+    if (selAll) selAll.addEventListener("change", function () { selBoxes().forEach(function (b) { b.checked = selAll.checked; }); selSync(); });
+    var selClear = $("[data-select-clear]");
+    if (selClear) selClear.addEventListener("click", function () { selBoxes().forEach(function (b) { b.checked = false; }); selSync(); });
+    var selSubmit = $("[data-select-submit]");
+    if (selSubmit) selSubmit.addEventListener("click", function () {
+      var ids = selChecked().map(function (b) { return b.dataset.id; });
+      if (!ids.length) return;
+      confirmDialog(selSubmit.dataset.confirm, selSubmit.dataset.confirmText, selSubmit.dataset.confirmOk).then(function (ok) {
+        if (!ok) return;
+        var data = new FormData();
+        data.set("csrf", selSubmit.dataset.csrf);
+        ids.forEach(function (id) { data.append("ids", id); });
+        var rb = $("[data-select-reboot]"); if (rb && rb.checked) data.set("reboot", "1");
+        selSubmit.disabled = true; selSubmit.classList.add("loading");
+        fetch(selSubmit.dataset.action, { method: "POST", body: data })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function () { delete document.body.dataset.noReload; window.location.reload(); })
+          .catch(function () { selSubmit.disabled = false; selSubmit.classList.remove("loading"); toast(t("Action impossible."), "error"); });
+      });
+    });
+    selSync();
+  }
+
   /* ---------------------------------------------------------------- aller à une page (Ctrl+K) */
 
   var cmdk = $("#cmdk");

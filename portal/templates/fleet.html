@@ -8,6 +8,7 @@
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% block content %}
 {% include '_fleet_nav.html' %}
+{% set can_select = can('fleet.update') %}
 <div class="head">
   <div>
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
@@ -56,13 +57,24 @@
   </div>
 
   <section class="panel">
+    {% if rows and can_select %}
+    <div class="fleet-select-bar" data-select-bar hidden>
+      <span class="fleet-select-count"><strong data-select-count>0</strong> {{ _("sélectionné(s)") }}</span>
+      <div class="row">
+        {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" data-select-reboot> {{ _("Redémarrer si nécessaire") }}</label>{% endif %}
+        <button type="button" class="btn sm ghost" data-select-clear>{{ _("Désélectionner") }}</button>
+        <button type="button" class="btn sm primary" data-select-submit data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}" data-confirm-ok="{{ _('Mettre à jour') }}"><span class="spin"></span>{{ _("Mettre à jour les sélectionnés") }}</button>
+      </div>
+    </div>
+    {% endif %}
     {% if rows %}
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
-        <thead><tr><th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Groupes") }}</th><th class="hide-sm">{{ _("Contact") }}</th><th></th></tr></thead>
+        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Groupes") }}</th><th class="hide-sm">{{ _("Contact") }}</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
           <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=d.hostname or d.uid[:8]) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
               <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
               <span class="sub">{{ d.os_name or families.get(d.os_family, '') }}</span></td>

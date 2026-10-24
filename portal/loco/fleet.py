@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 
-from flask import Response, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
+from flask import Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from . import addresses, agentpkg, app, config, features, permissions
 from .i18n import L_, _
@@ -1164,6 +1164,31 @@ def fleet_update_all():
     audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
     flash((_('Mise à jour demandée sur %(count)s poste(s).', count=count) if count else _('Aucun poste à mettre à jour.')), "ok")
     return back("fleet", **({"group": group_id} if group_id else {}))
+
+
+@app.route("/fleet/update-selected", methods=["POST"])
+@login_required
+def fleet_update_selected():
+    """Met à jour les postes cochés dans la liste (ids). Mêmes droits qu'une mise à jour de poste."""
+    require("fleet.update")
+    try:
+        ids = {int(i) for i in request.form.getlist("ids")}
+    except ValueError:
+        abort(400)
+    if not ids or len(ids) > 5000:
+        abort(400)
+    reboot = request.form.get("reboot") == "1"
+    if reboot:
+        require("fleet.reboot")
+    rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
+    count = 0
+    for dev_id in ids:
+        r = rows.get(dev_id)
+        if r and r["d"]["state"] == "active" and queue(r["d"], "update", {"reboot": reboot}):
+            count += 1
+    db().commit()
+    audit("parc.mise-a-jour-selection", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
+    return {"ok": True, "count": count}
 
 
 @app.route("/fleet/key", methods=["POST"])

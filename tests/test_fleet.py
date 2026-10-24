@@ -153,7 +153,7 @@ class TestStatus(FleetTest):
         headers = {"X-Requested-With": "fetch"}
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=120)):
             page = self.admin.c.get("/fleet").get_data(as_text=True)
-            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
+            cells = [c for c in re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S) if 'data-select' not in c]
             self.assertIn('aria-label="En ligne"', cells[0])
             self.assertIn('class="st ok device-availability"', cells[0])
             self.assertIn('class="st err"', cells[2])
@@ -167,7 +167,7 @@ class TestStatus(FleetTest):
         # Sans nouvel événement ni nouvel inventaire, le franchissement du délai doit rafraîchir les deux pages.
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
             page = self.admin.c.get("/fleet").get_data(as_text=True)
-            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S)
+            cells = [c for c in re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', page, re.S) if 'data-select' not in c]
             self.assertIn('aria-label="Hors ligne"', cells[0])
             self.assertIn('class="st err device-availability"', cells[0])
             self.assertIn('aria-label="Mises à jour : à traiter"', cells[2])
@@ -175,7 +175,7 @@ class TestStatus(FleetTest):
                 self.assertNotEqual(self.admin.c.get(p, headers=headers).json["signature"], previous)
         a.checkin({"updates": []})
         with mock.patch.object(fleet, "_ago", return_value=datetime.timedelta(seconds=361)):
-            cells = re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', self.admin.c.get("/fleet").get_data(as_text=True), re.S)
+            cells = [c for c in re.findall(r'<td(?:\s[^>]*)?>(.*?)</td>', self.admin.c.get("/fleet").get_data(as_text=True), re.S) if 'data-select' not in c]
             self.assertIn('aria-label="Hors ligne"', cells[0])
             self.assertIn('aria-label="Mises à jour : à jour"', cells[2])
             self.assertIn('class="st ok"', cells[2])
@@ -935,6 +935,24 @@ class TestSearch(FleetTest):
         self.assertIn("srv-web", by_name)
         self.assertIn("192.168.43.60", by_name["srv-web"]["sub"])
         self.assertRegex(by_name["srv-web"]["href"], r"^/fleet/\d+$")
+
+
+class TestUpdateSelected(FleetTest):
+    def test_queues_update_only_for_selected_active_devices(self):
+        Agent(WINDOWS, "192.168.43.50").enroll()
+        Agent(LINUX, "192.168.43.60").enroll()
+        with transaction() as conn:
+            ids = {r["hostname"]: r["id"] for r in conn.execute("SELECT id, hostname FROM devices")}
+        r = self.admin.post("/fleet/update-selected", {"ids": [str(ids["pc-compta"])]}, page="/fleet")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json["ok"], True)
+        with transaction() as conn:
+            queued = {row[0] for row in conn.execute("SELECT device_id FROM device_commands WHERE action='update' AND state='queued'")}
+        self.assertIn(ids["pc-compta"], queued)
+        self.assertNotIn(ids["srv-web"], queued)
+
+    def test_empty_selection_is_rejected(self):
+        self.assertEqual(self.admin.post("/fleet/update-selected", {}, page="/fleet").status_code, 400)
 
 
 if __name__ == "__main__":
