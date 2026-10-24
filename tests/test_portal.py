@@ -260,6 +260,28 @@ class TestLastLoginAddress(unittest.TestCase):
         conn.close()
 
 
+class TestLease(unittest.TestCase):
+    def setUp(self):
+        with connect() as conn:
+            conn.execute("DELETE FROM settings WHERE key LIKE 'lease_%'")
+
+    def test_single_holder_until_it_expires(self):
+        import json
+        import time
+        from loco import db
+        self.assertTrue(db.lease("t", ttl=60))                 # libre : on le prend
+        self.assertTrue(db.lease("t", ttl=60))                 # même instance : renouvelle
+        with connect() as conn:                                # un autre processus le tient (frais)
+            conn.execute("INSERT INTO settings(key,value) VALUES('lease_t',?) "
+                         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (json.dumps({"holder": "OTHER", "until": time.time() + 120}),))
+        self.assertFalse(db.lease("t", ttl=60))                # occupé : on s'abstient
+        with connect() as conn:                                # bail expiré
+            conn.execute("UPDATE settings SET value=? WHERE key='lease_t'",
+                         (json.dumps({"holder": "OTHER", "until": time.time() - 1}),))
+        self.assertTrue(db.lease("t", ttl=60))                 # on reprend la main
+
+
 class TestBackups(unittest.TestCase):
     def setUp(self):
         self.admin = Browser()

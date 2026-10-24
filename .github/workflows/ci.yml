@@ -27,6 +27,11 @@ jobs:
             -g '!portal/agents/console/pyte/**' -g '!portal/agents/console/wcwidth/**' \
             | xargs pipx run pyflakes
           docker compose -f linux/docker/docker-compose.yml config -q
+      - name: Tests unitaires du portail (rapides, hors VM)
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends python3-flask apt-utils gnupg createrepo-c rpm
+          python3 -W error::ResourceWarning -m unittest discover -s tests
       - name: PowerShell (syntaxe des scripts Windows)
         shell: pwsh
         run: |

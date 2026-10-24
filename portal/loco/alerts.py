@@ -22,7 +22,7 @@ from flask import abort, flash, render_template, request
 from . import app, config, features
 from .i18n import _
 from .auth import audit, can, login_required, require
-from .db import db, transaction
+from .db import db, transaction, lease
 
 SETTING = "alerts_config"
 SEVERITY = {"info": 0, "warning": 1, "critical": 2}
@@ -317,8 +317,9 @@ def start_dispatcher():
         time.sleep(15)                          # laisser le serveur finir de démarrer
         while True:
             try:
-                with transaction() as conn:
-                    dispatch(conn)
+                if lease():                      # un seul processus agit (multi-workers)
+                    with transaction() as conn:
+                        dispatch(conn)
             except Exception:                    # un fil de fond ne doit jamais faire tomber le serveur
                 pass
             time.sleep(60)

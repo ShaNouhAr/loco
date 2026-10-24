@@ -1,12 +1,17 @@
 """Base SQLite : connexion par requête et migrations versionnées."""
 
+import json
 import os
+import secrets
 import sqlite3
+import time
 from contextlib import contextmanager
 
 from flask import g
 
 from . import config
+
+INSTANCE = secrets.token_hex(8)                 # identifiant de ce processus, pour l'élection des fils de fond
 
 MIGRATIONS = [
     # 1 : catalogue Windows (schéma historique)
@@ -408,6 +413,27 @@ def connect():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def lease(name="background", ttl=180):
+    """Élection d'un meneur pour les tâches de fond : un seul processus agit à la fois, même avec plusieurs workers.
+    Renvoie True si CE processus détient (ou prend) le bail, renouvelé à chaque passage ; False si un autre le tient."""
+    key, now = "lease_" + name, time.time()
+    try:
+        with transaction() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+            try:
+                held = json.loads(row[0]) if row else {}
+            except (TypeError, ValueError):
+                held = {}
+            if held.get("holder") not in (None, INSTANCE) and held.get("until", 0) > now:
+                return False
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (key, json.dumps({"holder": INSTANCE, "until": now + ttl})))
+            return True
+    except sqlite3.Error:
+        return False
 
 
 @contextmanager

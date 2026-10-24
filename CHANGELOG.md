@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.53.0 — 2026-10-24
+
+- **Robustesse des tâches de fond** : les évaluations périodiques (alertes, copie hors-site) n'agissent plus que sur un seul processus à la fois grâce à un bail en base, pour éviter tout doublon si le serveur tourne avec plusieurs workers. Reprise automatique si le processus meneur s'arrête.
+- **CI plus rapide** : les tests unitaires du portail s'exécutent désormais hors machine virtuelle, en quelques minutes, et conditionnent les tests VM plus longs.
+
 ## 2.52.0 — 2026-10-24
 
 - **Sélection de postes et mise à jour groupée** (*Mon parc*) : cocher des postes dans la liste (case « tout sélectionner » dans l'en-tête) fait apparaître une barre discrète en haut du tableau avec le nombre sélectionné et un bouton **Mettre à jour les sélectionnés** (option *Redémarrer si nécessaire*). Le rafraîchissement automatique se met en pause pendant la sélection. Réservé au droit *Mettre à jour un poste*.

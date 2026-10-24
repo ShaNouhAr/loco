@@ -26,7 +26,7 @@ from flask import abort, flash, request
 from . import app, config
 from .i18n import _
 from .auth import audit, can, login_required, require
-from .db import db, transaction
+from .db import db, transaction, lease
 
 CONFIG = "offsite_config"
 STATE = "offsite_state"
@@ -361,8 +361,9 @@ def start():
         time.sleep(30)
         while True:
             try:
-                with transaction() as conn:
-                    sync(conn)
+                if lease():                      # un seul processus agit (multi-workers)
+                    with transaction() as conn:
+                        sync(conn)
             except Exception:
                 pass
             time.sleep(300)
