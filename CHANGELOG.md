@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.55.0 — 2026-10-25
+
+- **Pastille « redémarrage nécessaire »** dans *Mon parc* : l'ancien texte d'avertissement devient une pastille ambrée avec icône, alignée proprement avec les compteurs de mises à jour et la pastille de sécurité.
+
 ## 2.54.0 — 2026-10-25
 
 - **Double authentification (TOTP)** pour les comptes locaux : depuis *Mon compte → Sécurité*, on l'active en scannant un QR (ou en saisissant la clé) avec une application d'authentification, puis un code à 6 chiffres est demandé à chaque connexion. Des **codes de secours** à usage unique permettent de se connecter en cas de perte du téléphone. Un administrateur peut retirer la 2FA d'un compte (droit *Réinitialiser les mots de passe*), et `loco-user mfa-reset NOM` la retire depuis la console en dernier recours. Le secret est chiffré au repos et les codes de secours sont hachés.

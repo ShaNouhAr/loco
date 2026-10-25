@@ -506,6 +506,8 @@ pre.log { margin: 0; padding: 12px 16px; max-height: 440px; overflow: auto; bord
 .count.err { color: var(--err); }
 .sec-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent); white-space: nowrap; vertical-align: middle; }
 .sec-pill svg { width: 13px; height: 13px; flex: none; stroke-linecap: round; stroke-linejoin: round; }
+.reboot-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); white-space: nowrap; vertical-align: middle; }
+.reboot-pill svg { width: 13px; height: 13px; flex: none; }
 .repo-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .repo-form input { flex: 1 1 320px; min-width: 0; }
 .repo-form .btn { flex: none; }
@@ -816,7 +818,10 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .fleet-table td { vertical-align: top; }
 .fleet-table td:first-child .st { margin-right: 4px; }
 .fleet-table .host { font-weight: 500; color: var(--text); }
-.fleet-update-state { display: inline-flex; align-items: baseline; gap: 8px; }
+.fleet-update-state { display: inline-flex; align-items: flex-start; gap: 8px; }
+.fleet-update-state > .st { margin-top: 5px; }
+.fleet-updates { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; min-width: 0; }
+.fleet-updates .count { margin-right: 0; }
 .head-option { display: inline-flex; align-items: center; gap: 8px; height: var(--h); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 13px; color: var(--text-2); cursor: pointer; }
 .head-option:hover { color: var(--text); background: var(--bg-2); }
 
