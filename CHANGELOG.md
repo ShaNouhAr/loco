@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.54.0 — 2026-10-25
+
+- **Double authentification (TOTP)** pour les comptes locaux : depuis *Mon compte → Sécurité*, on l'active en scannant un QR (ou en saisissant la clé) avec une application d'authentification, puis un code à 6 chiffres est demandé à chaque connexion. Des **codes de secours** à usage unique permettent de se connecter en cas de perte du téléphone. Un administrateur peut retirer la 2FA d'un compte (droit *Réinitialiser les mots de passe*), et `loco-user mfa-reset NOM` la retire depuis la console en dernier recours. Le secret est chiffré au repos et les codes de secours sont hachés.
+
 ## 2.53.0 — 2026-10-24
 
 - **Robustesse des tâches de fond** : les évaluations périodiques (alertes, copie hors-site) n'agissent plus que sur un seul processus à la fois grâce à un bail en base, pour éviter tout doublon si le serveur tourne avec plusieurs workers. Reprise automatique si le processus meneur s'arrête.

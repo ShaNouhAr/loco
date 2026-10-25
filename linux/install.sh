@@ -40,7 +40,7 @@ ETC=/etc/loco
 STATE=/var/lib/loco
 APP_PORT=8089
 PACKAGE_RECORD="$STATE/installed-packages"
-PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask python3-cryptography gunicorn curl openssl ca-certificates)
+PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask python3-cryptography python3-qrcode gunicorn curl openssl ca-certificates)
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10"
 
 # Langue du serveur : français si LANG/LC_* commence par « fr », espagnol par « es », anglais sinon.

@@ -51,6 +51,31 @@
       </ul></div>
     </section>
   </div>
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Double authentification") }}</h2>
+      <div class="aside">{% if current_user.mfa_enabled %}<span class="st ok">{{ _("activée") }}</span>{% else %}<span class="st warn">{{ _("désactivée") }}</span>{% endif %}</div>
+    </div>
+    <div class="panel-b">
+      {% if current_user.mfa_enabled %}
+      <p class="muted small">{{ _("Un code à usage unique de votre application est demandé à chaque connexion. Codes de secours restants : %(n)s.", n=mfa_recovery_left) }}</p>
+      <div class="mfa-actions">
+        <form method="post" action="{{ url_for('account_mfa_recovery') }}" class="row inline-mfa">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="{{ _('code à 6 chiffres') }}" class="field-sm mono" required>
+          <button class="btn sm">{{ _("Régénérer les codes de secours") }}</button>
+        </form>
+        <form method="post" action="{{ url_for('account_mfa_disable') }}" class="row inline-mfa" data-confirm="{{ _('Désactiver la double authentification ?') }}" data-confirm-text="{{ _('Votre compte ne sera plus protégé que par le mot de passe.') }}" data-confirm-ok="{{ _('Désactiver') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="{{ _('code à 6 chiffres') }}" class="field-sm mono" required>
+          <button class="btn sm ghost danger">{{ _("Désactiver") }}</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="muted small">{{ _("Ajoutez un second facteur : un code temporaire d'une application (Google Authenticator, Microsoft Authenticator, Aegis, 1Password…) en plus du mot de passe.") }}</p>
+      <a class="btn primary" href="{{ url_for('account_mfa_setup') }}">{{ _("Activer la double authentification") }}</a>
+      {% endif %}
+    </div>
+  </section>
   {% else %}
   <section class="panel"><div class="panel-b"><p>{{ _("Votre mot de passe est géré par votre fournisseur d’identité : changez-le auprès de celui-ci. Les règles de session de loco s’appliquent (inactivité de 8 heures, blocage après plusieurs échecs).") }}</p></div></section>
   {% endif %}

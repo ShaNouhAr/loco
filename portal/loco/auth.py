@@ -211,6 +211,21 @@ def _record_failure(ip, username):
     db().commit()
 
 
+def _complete_login(row, ip, directory=None):
+    """Ouvre la session après validation complète (mot de passe, et 2FA le cas échéant)."""
+    session.clear()
+    session.permanent = True
+    session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
+    if directory:
+        session["directory"] = directory
+    db().execute("DELETE FROM login_failures WHERE username=?", (row["username"],))
+    db().execute("UPDATE users SET last_login=?, last_ip=? WHERE id=?",
+                 (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ip, row["id"]))
+    db().commit()
+    g.user = row
+    audit("sso.connexion" if directory else "connexion")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if g.user is not None:
@@ -238,26 +253,63 @@ def login():
             flash(notice, "ok")
             return render_template("login.html", username=username), 202
         if row and valid and not row["disabled"] and not row["pending"] and row["auth_source"] in ("local", "directory"):
-            session.clear()
-            session.permanent = True
-            session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
-            if directory:
-                session["directory"] = directory
-            db().execute("DELETE FROM login_failures WHERE username=?", (username,))
-            db().execute("UPDATE users SET last_login=?, last_ip=? WHERE id=?",
-                         (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ip, row["id"]))
-            db().commit()
-            g.user = row
-            audit("sso.connexion" if directory else "connexion")
-            if row["must_change"]:
-                return redirect(url_for("account"))
-            return redirect(safe_next(request.args.get("next", "/")))
+            next_url = safe_next(request.args.get("next", "/"))
+            # Comptes locaux avec 2FA : mot de passe validé, on demande le code avant d'ouvrir la session.
+            if directory is None and row["auth_source"] == "local" and row["mfa_enabled"]:
+                session.clear()
+                session.permanent = True
+                session["mfa_pending"] = {"uid": row["id"], "pwv": row["pw_version"], "ip": ip,
+                                          "at": time.time(), "next": next_url}
+                return redirect(url_for("login_mfa"))
+            _complete_login(row, ip, directory)
+            return redirect(url_for("account") if row["must_change"] else next_url)
         _record_failure(ip, username)
         audit("connexion.echec", f"compte « {username} »", username="")
         time.sleep(0.5)
         flash(_('Identifiant ou mot de passe incorrect.'), "error")
         return render_template("login.html", username=username), 401
     return render_template("login.html", username="")
+
+
+@app.route("/login/mfa", methods=["GET", "POST"])
+def login_mfa():
+    """Deuxième étape : code TOTP (ou code de secours) après un mot de passe validé pour un compte local avec 2FA."""
+    from . import totp
+    if g.user is not None:
+        return redirect(url_for("index"))
+    pending = session.get("mfa_pending")
+    if not pending or time.time() - pending.get("at", 0) > 300:
+        session.pop("mfa_pending", None)
+        return redirect(url_for("login"))
+    row = db().execute("SELECT * FROM users WHERE id=?", (pending["uid"],)).fetchone()
+    if row is None or row["disabled"] or row["pending"] or not row["mfa_enabled"] or row["pw_version"] != pending["pwv"]:
+        session.pop("mfa_pending", None)
+        return redirect(url_for("login"))
+    if request.method == "POST":
+        ip = request.remote_addr or ""
+        if _blocked(ip, row["username"]):
+            audit("connexion.bloquee", f"compte « {row['username']} » (2FA)", username="")
+            flash(_('Trop de tentatives. Réessayez dans quelques minutes.'), "error")
+            return render_template("login_mfa.html"), 429
+        code = request.form.get("code", "")
+        ok = totp.verify(totp.unseal(row["totp_secret"]), code)
+        if not ok:
+            used, remaining = totp.use_recovery_code(row["recovery_codes"], code)
+            if used:
+                db().execute("UPDATE users SET recovery_codes=? WHERE id=?", (remaining, row["id"]))
+                db().commit()
+                ok = True
+        if ok:
+            next_url, must_change = pending.get("next", "/"), row["must_change"]
+            session.pop("mfa_pending", None)
+            _complete_login(row, ip)
+            return redirect(url_for("account") if must_change else safe_next(next_url))
+        _record_failure(ip, row["username"])
+        audit("connexion.echec", f"compte « {row['username']} » (2FA)", username="")
+        time.sleep(0.5)
+        flash(_('Code incorrect.'), "error")
+        return render_template("login_mfa.html"), 401
+    return render_template("login_mfa.html")
 
 
 @app.route("/logout", methods=["POST"])
@@ -326,13 +378,99 @@ def account():
     granted = permissions.role_permissions(db(), g.user["role"])
     activity = [{"r": r, **journal_view.describe(r["action"])} for r in db().execute(
         "SELECT * FROM audit WHERE username=? ORDER BY id DESC LIMIT 10", (g.user["username"],))]
+    from . import totp
     return render_template(template, min_password=config.MIN_PASSWORD, activity=activity,
+                           mfa_recovery_left=totp.recovery_left(g.user["recovery_codes"]) if g.user["mfa_enabled"] else 0,
                            granted_count=len(granted), total_permissions=len(permissions.PERMISSIONS),
                            granted_groups=[(label, [permissions.PERMISSIONS[item[0]] for item in items if item[0] in granted])
                                            for label, items in permissions.GROUPS])
 
 
+# --------------------------------------------------------------------------- double authentification (mon compte)
+
+@app.route("/account/mfa/setup", methods=["GET", "POST"])
+@login_required
+def account_mfa_setup():
+    from . import totp
+    if g.user["auth_source"] != "local" or g.user["mfa_enabled"]:
+        return redirect(url_for("account"))
+    secret = session.get("mfa_setup_secret") or totp.new_secret()
+    session["mfa_setup_secret"] = secret
+    if request.method == "POST":
+        if totp.verify(secret, request.form.get("code", "")):
+            plain, hashed = totp.new_recovery_codes()
+            db().execute("UPDATE users SET totp_secret=?, mfa_enabled=1, recovery_codes=? WHERE id=?",
+                         (totp.seal(secret), hashed, g.user["id"]))
+            db().commit()
+            session.pop("mfa_setup_secret", None)
+            session["mfa_recovery_shown"] = plain
+            audit("compte.2fa.activee")
+            flash(_("Double authentification activée."), "ok")
+            return redirect(url_for("account_mfa_codes"))
+        flash(_("Code incorrect, réessayez."), "error")
+    account_uri = totp.uri(secret, g.user["username"])
+    return render_template("mfa_setup.html", secret=secret, otpauth=account_uri, qr=totp.qr_svg(account_uri))
+
+
+@app.route("/account/mfa/codes")
+@login_required
+def account_mfa_codes():
+    codes = session.pop("mfa_recovery_shown", None)
+    if not codes:
+        return redirect(url_for("account"))
+    return render_template("mfa_codes.html", codes=codes)
+
+
+@app.route("/account/mfa/disable", methods=["POST"])
+@login_required
+def account_mfa_disable():
+    from . import totp
+    if g.user["auth_source"] != "local" or not g.user["mfa_enabled"]:
+        abort(403)
+    ok = (totp.verify(totp.unseal(g.user["totp_secret"]), request.form.get("code", ""))
+          or (request.form.get("password") and check_password_hash(g.user["password_hash"], request.form["password"])))
+    if not ok:
+        flash(_("Code ou mot de passe incorrect."), "error")
+        return redirect(url_for("account"))
+    db().execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (g.user["id"],))
+    db().commit()
+    audit("compte.2fa.desactivee")
+    flash(_("Double authentification désactivée."), "ok")
+    return redirect(url_for("account"))
+
+
+@app.route("/account/mfa/recovery", methods=["POST"])
+@login_required
+def account_mfa_recovery():
+    from . import totp
+    if g.user["auth_source"] != "local" or not g.user["mfa_enabled"]:
+        abort(403)
+    if not totp.verify(totp.unseal(g.user["totp_secret"]), request.form.get("code", "")):
+        flash(_("Code incorrect."), "error")
+        return redirect(url_for("account"))
+    plain, hashed = totp.new_recovery_codes()
+    db().execute("UPDATE users SET recovery_codes=? WHERE id=?", (hashed, g.user["id"]))
+    db().commit()
+    session["mfa_recovery_shown"] = plain
+    audit("compte.2fa.codes")
+    return redirect(url_for("account_mfa_codes"))
+
+
 # --------------------------------------------------------------------------- gestion des comptes
+
+@app.route("/accounts/<int:user_id>/mfa-reset", methods=["POST"])
+@login_required
+def users_mfa_reset(user_id):
+    conn = lock_access("users.reset")
+    row = _get_user(user_id)
+    if not can_manage_user(row) or not row["mfa_enabled"]:
+        abort(403)
+    conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (row["id"],))
+    audit("comptes.2fa.reinitialisation", row["username"], commit=False)
+    conn.commit()
+    flash(_("Double authentification retirée pour %(user)s.", user=row["username"]), "ok")
+    return back("users")
+
 
 @app.route("/accounts")
 @login_required

@@ -158,7 +158,7 @@ ENDPOINTS = {
     "users_approve": "users.approve",
     "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage",
     "directory_delete": "sso.manage", "directory_move": "sso.manage", "directory_test": "sso.manage",
-    "users_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
+    "users_reset": "users.reset", "users_mfa_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
     "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",
     "script_compose": "scripts.run", "script_run_start": "scripts.run", "script_run": "scripts.view",
@@ -169,7 +169,8 @@ ENDPOINTS = {
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
 }
-ACCOUNT_ENDPOINTS = {"login", "account", "logout", "set_language"}
+ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
+                     "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "run-script": "scripts.run",
                       "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 

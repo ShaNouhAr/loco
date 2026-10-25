@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Double authentification") }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Double authentification") }}</h1>
+    <p>{{ _("Scannez le QR avec votre application d'authentification, puis saisissez le code pour confirmer.") }}</p>
+  </div>
+</div>
+<div class="cols w21">
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("1. Ajouter le compte") }}</h2></div>
+    <div class="panel-b mfa-enroll">
+      {% if qr %}<div class="mfa-qr">{{ qr|safe }}</div>{% endif %}
+      <div class="mfa-key">
+        <p class="muted small">{{ _("Impossible de scanner ? Saisissez cette clé dans l'application :") }}</p>
+        <code class="mono mfa-secret">{{ secret }}</code>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("2. Confirmer") }}</h2></div>
+    <form method="post" class="panel-b">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>{{ _("Code à 6 chiffres de l'application") }}</span>
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required spellcheck="false" class="mono code-input" placeholder="123456"></label>
+      <div class="row"><a class="btn" href="{{ url_for('account') }}">{{ _("Annuler") }}</a><button class="btn primary"><span class="spin"></span>{{ _("Activer") }}</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

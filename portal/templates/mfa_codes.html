@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Codes de secours") }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Codes de secours") }}</h1>
+    <p>{{ _("Conservez ces codes en lieu sûr. Chacun ne sert qu'une fois, pour vous connecter si vous perdez votre application. Ils ne seront plus affichés.") }}</p>
+  </div>
+</div>
+<section class="panel">
+  <div class="panel-b">
+    <ul class="recovery-codes mono">{% for code in codes %}<li>{{ code }}</li>{% endfor %}</ul>
+    <div class="row"><a class="btn primary" href="{{ url_for('account') }}">{{ _("J'ai noté mes codes") }}</a></div>
+  </div>
+</section>
+{% endblock %}

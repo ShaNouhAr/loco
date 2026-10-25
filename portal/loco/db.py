@@ -405,6 +405,12 @@ MIGRATIONS = [
         last_error TEXT NOT NULL DEFAULT ''
     );
     """,
+    # 20 : double authentification (TOTP) des comptes locaux.
+    """
+    ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT '';
+    ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN recovery_codes TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

@@ -15,6 +15,7 @@
   user passwd NOM           nouveau mot de passe temporaire (à changer à la connexion)
   user set-password NOM     définit le mot de passe depuis $LOCO_PASSWORD
   user enable|disable NOM   active / désactive un compte
+  user mfa-reset NOM        retire la double authentification (téléphone perdu)
   fleet servers             adresses du serveur transmises aux agents, et postes prévenus
   fleet announce URL        annonce une future adresse (https://hôte:port) avant de changer celle du serveur
   fleet forget URL          retire une adresse annoncée
@@ -101,6 +102,11 @@ def user_command(args):
             permissions.revoke(conn, row["id"])
             _audit(conn, "comptes.modification", f"{row['username']} : {'désactivé' if cmd == 'disable' else 'réactivé'}")
             print(f"Compte {row['username']} {'désactivé' if cmd == 'disable' else 'réactivé'}.")
+        elif cmd == "mfa-reset":
+            row = _user(conn, name)
+            conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (row["id"],))
+            _audit(conn, "comptes.2fa.reinitialisation", row["username"])
+            print(f"Double authentification retirée pour {row['username']}.")
         else:
             sys.exit(__doc__)
 

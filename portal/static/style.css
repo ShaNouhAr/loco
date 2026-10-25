@@ -388,6 +388,18 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .fleet-select-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; padding: 11px 16px; border-bottom: 1px solid var(--line); background: var(--bg-2); flex-wrap: wrap; border-top-left-radius: var(--r); border-top-right-radius: var(--r); }
 .fleet-select-count { font-size: 13.5px; color: var(--text-2); }
 .fleet-select-count strong { color: var(--text); }
+
+/* Double authentification */
+.code-input { letter-spacing: 0.35em; font-size: 20px; text-align: center; max-width: 220px; }
+.mfa-enroll { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.mfa-qr { flex: none; line-height: 0; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px; background: #fff; }
+.mfa-qr svg { display: block; width: 180px; height: 180px; }
+.mfa-key { min-width: 0; }
+.mfa-secret { display: inline-block; margin-top: 4px; padding: 6px 10px; font-size: 15px; letter-spacing: 0.12em; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); word-break: break-all; }
+.mfa-actions { display: flex; flex-direction: column; gap: 12px; }
+.inline-mfa { gap: 8px; }
+.recovery-codes { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.recovery-codes li { padding: 8px 12px; font-size: 15px; letter-spacing: 0.08em; text-align: center; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
 .field-xs { width: 100px !important; display: inline-block; }
 .inline-form { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .inline-form select { height: 28px; width: auto; padding: 0 28px 0 9px; font-size: 13px; }
