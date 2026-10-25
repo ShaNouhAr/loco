@@ -95,6 +95,161 @@ def _require_bulk(selection, devices):
     return bulk
 
 
+# --------------------------------------------------------------------------- paquets Linux (store .deb/.rpm publiés)
+
+PKG_ID_RE = re.compile(r'(deb|rpm):[A-Za-z0-9][A-Za-z0-9.+_-]{0,200}')
+PKG_FAMILY = {'deb': 'debian', 'rpm': 'rhel'}
+
+
+def _package_catalog():
+    """Paquets publiés dans les dépôts loco (APT/RPM), dédupliqués par (type, nom) ; la version la plus récente est affichée."""
+    from . import features, linux, rpmrepo
+    off = features.disabled()
+    items = {}
+
+    def add(kind, name, version, arch, desc, repo):
+        if not name or not PKG_ID_RE.fullmatch(f'{kind}:{name}'):
+            return
+        key = f'{kind}:{name}'
+        it = items.get(key)
+        if it is None:
+            it = items[key] = {'id': key, 'kind': kind, 'family': PKG_FAMILY[kind], 'name': name,
+                               'version': version, 'arch': arch, 'desc': desc, 'repositories': set(), 'archs': set()}
+        elif fleet.version_key(version) > fleet.version_key(it['version']):
+            it.update(version=version, arch=arch, desc=desc or it['desc'])
+        it['repositories'].add(repo)
+        it['archs'].add(arch)
+
+    if 'apt' not in off:
+        for d in linux.list_debs():
+            add('deb', d['package'], d['version'], d['arch'], d.get('description', ''), d['repository'])
+    if 'rpm' not in off:
+        for p in rpmrepo.list_rpms():
+            add('rpm', p['name'], f"{p['version']}-{p['release']}", p['arch'], p.get('summary', ''), p['repository'])
+    return items
+
+
+def _selection_pkg(values):
+    packages = list(dict.fromkeys(values.getlist('package')))
+    if len(packages) > MAX_APPS or any(not PKG_ID_RE.fullmatch(p) for p in packages):
+        abort(400, _('Sélection de paquets invalide.'))
+    return {'packages': packages, 'devices': groups.identifiers(values.getlist('device')),
+            'device_groups': groups.identifiers(values.getlist('device_group'))}
+
+
+def _resolve_pkg(selection):
+    catalog = _package_catalog()
+    chosen = []
+    for pid in selection['packages']:
+        it = catalog.get(pid)
+        if it is None:
+            abort(400, _('Un paquet sélectionné n’est plus publié.'))
+        chosen.append(it)
+    devices, origins = {}, {'software': [], 'devices': []}
+    for dev_id in selection['devices']:
+        row = fleet._get(dev_id)
+        devices[row['id']] = row
+    for gid in selection['device_groups']:
+        group = groups._group('device', gid)
+        origins['devices'].append(group['name'])
+        members = db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
+                               "WHERE m.group_id=? AND d.state!='removed' ORDER BY d.hostname", (gid,)).fetchall()
+        if not members:
+            abort(400, _('Le groupe de machines « %(group)s » est vide.', group=group['name']))
+        devices.update((row['id'], row) for row in members)
+    if len(chosen) > MAX_APPS or len(devices) > MAX_DEVICES:
+        abort(400, _('Ce déploiement est trop volumineux : répartissez-le en plusieurs groupes.'))
+    return chosen, list(devices.values()), origins
+
+
+def _target_reason_pkg(device, families):
+    if device['os_family'] not in ('debian', 'rhel'):
+        return _('Paquets Linux : système non compatible')
+    if device['state'] != 'active':
+        return _('Agent en cours de retrait')
+    if device['os_family'] not in families:
+        return _('Aucun paquet compatible avec ce système')
+    return ''
+
+
+@app.route('/fleet/deployments/new-linux')
+@login_required
+def deployment_compose_linux():
+    selected = _selection_pkg(request.args)
+    catalog = sorted(_package_catalog().values(), key=lambda i: (i['name'].lower(), i['kind']))
+    for item in catalog:
+        item['repositories'] = sorted(item['repositories'])
+        item['archs'] = sorted(item['archs'])
+    return render_template('deployment_compose_linux.html', selected=selected, packages=catalog,
+                           device_groups=groups.listing('device'), families=fleet.FAMILIES,
+                           devices=db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall())
+
+
+@app.route('/fleet/deployments/prepare-linux', methods=['POST'])
+@login_required
+def deployment_preview_linux():
+    selected = _selection_pkg(request.form)
+    packages, devices, origins = _resolve_pkg(selected)
+    if not packages:
+        abort(400, _('Sélectionnez au moins un paquet.'))
+    families = {p['family'] for p in packages}
+    if not devices or not any(not _target_reason_pkg(d, families) for d in devices):
+        abort(400, _('Sélectionnez au moins un poste Linux compatible.'))
+    bulk = bool(selected['device_groups']) or len(devices) > 1
+    if bulk:
+        require('fleet.bulk_install')
+    conn = lock_access('fleet.install')
+    if bulk:
+        require('fleet.bulk_install')
+    snapshots = [{'name': p['name'], 'kind': p['kind'], 'family': p['family'], 'version': p['version'],
+                  'arch': p['arch'], 'repositories': sorted(p['repositories'])} for p in packages]
+    targets = [{'id': d['id'], 'uid': d['uid'], 'hostname': d['hostname'], 'os_family': d['os_family'],
+                'reason': _target_reason_pkg(d, families)} for d in devices]
+    title = request.form.get('title', '').strip()[:100] or ('Paquets Linux · ' + ', '.join(p['name'] for p in packages))[:100]
+    plan = {'kind': 'linux', 'apps': snapshots, 'devices': targets, 'groups': origins, 'bulk': bulk, 'force': False}
+    deployment_id = secrets.token_hex(16)
+    conn.execute('INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan) '
+                 'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, title, g.user['id'], g.user['username'], g.user['pw_version'],
+                 _owner(), fleet._now(), time.time() + 3600, json.dumps(plan)))
+    audit('deploiement.preparation', f'{title} : {len(packages)} paquet(s), {len(devices)} cible(s)', commit=False)
+    conn.commit()
+    return back('deployment_detail', deployment_id=deployment_id)
+
+
+def _confirm_linux(conn, deployment_id, plan):
+    """Confirmation d'un déploiement de paquets Linux : une commande install-package par poste compatible."""
+    catalog = _package_catalog()
+    ready = []
+    for snap in plan['apps']:
+        if catalog.get(f"{snap['kind']}:{snap['name']}") is None:
+            abort(409, _('Le paquet %(name)s n’est plus publié : préparez à nouveau le déploiement.', name=snap['name']))
+        ready.append(snap)
+    families = {p['family'] for p in ready}
+    queued = 0
+    for target in plan['devices']:
+        if target['reason']:
+            conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
+                         'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, None, target['uid'], target['hostname'],
+                         target['os_family'], None, '[]', '[]', target['reason']))
+            continue
+        dev = conn.execute('SELECT * FROM devices WHERE id=?', (target['id'],)).fetchone()
+        if dev is None or dev['uid'] != target['uid'] or _target_reason_pkg(dev, families):
+            abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
+        installed = [p for p in ready if p['family'] == dev['os_family']]
+        command_id = None
+        if installed:
+            params = {'packages': [p['name'] for p in installed], 'deployment_id': deployment_id,
+                      'bulk_install': plan['bulk'], 'kind': 'linux'}
+            command_id = conn.execute('INSERT INTO device_commands(device_id,action,params,created_at,created_by) '
+                                      "VALUES (?,'install-package',?,?,?)", (dev['id'], json.dumps(params, sort_keys=True),
+                                      fleet._now(), g.user['username'])).lastrowid
+            queued += 1
+        conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
+                     'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, dev['id'], target['uid'], target['hostname'],
+                     target['os_family'], command_id, json.dumps(installed), '[]', target['reason']))
+    return queued, len(ready)
+
+
 @app.route('/fleet/deployments/new')
 @login_required
 def deployment_compose():
@@ -242,7 +397,8 @@ def deployments():
         if wanted and state not in FILTERS[wanted][1]:
             continue
         campaigns.append({'row': row, 'state': state, 'devices': len(plan['devices']), 'apps': len(plan['apps']),
-                          'names': [a['name'] for a in plan['apps']], 'progress': _progress(targets)})
+                          'names': [a['name'] for a in plan['apps']], 'progress': _progress(targets),
+                          'kind': plan.get('kind', 'windows')})
     total = len(campaigns)
     pages = max(1, (total + 49) // 50)
     try:
@@ -258,9 +414,13 @@ def deployments():
 def deployment_detail(deployment_id):
     row = _get(deployment_id)
     plan = json.loads(row['plan'])
+    kind = plan.get('kind', 'windows')
     apps = []
     for snapshot in plan['apps']:
-        current, problem = _current(snapshot) if row['state'] == 'draft' else (None, '')
+        if kind == 'linux':
+            current, problem = None, ''
+        else:
+            current, problem = _current(snapshot) if row['state'] == 'draft' else (None, '')
         apps.append({'snapshot': snapshot, 'current': current, 'problem': problem})
     targets = _targets(deployment_id)
     state = _state(row, targets)
@@ -277,11 +437,15 @@ def deployment_detail(deployment_id):
                                           [(t['id'], t['state'], t['output'], t['progress']) for t in targets]]).encode()).hexdigest()[:16]
     if request.headers.get('X-Requested-With') == 'fetch':
         return {'signature': signature}
+    if kind == 'linux':
+        recompose = url_for("deployment_compose_linux", package=[f"{a['kind']}:{a['name']}" for a in plan['apps']],
+                            device=[d['id'] for d in plan['devices']])
+    else:
+        recompose = url_for("deployment_compose", app=[a['slug'] for a in plan['apps']],
+                            device=[d['id'] for d in plan['devices']])
     return render_template('deployment_detail.html', deployment=row, plan=plan, apps=apps, targets=targets,
                            state=state, states=STATES, confirmable=confirmable, blocked=blocked, signature=signature,
-                           progress=_progress(targets), families=fleet.FAMILIES,
-                           recompose=url_for("deployment_compose", app=[a['slug'] for a in plan['apps']],
-                                             device=[d['id'] for d in plan['devices']]))
+                           progress=_progress(targets), families=fleet.FAMILIES, kind=kind, recompose=recompose)
 
 
 def _pin(row):
@@ -384,6 +548,18 @@ def deployment_confirm(deployment_id):
     plan = json.loads(row['plan'])
     if plan['bulk']:
         require('fleet.bulk_install')
+    if plan.get('kind') == 'linux':
+        try:
+            queued_count, ready_n = _confirm_linux(conn, deployment_id, plan)
+        except (OSError, ValueError) as e:
+            conn.rollback()
+            flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
+            return back('deployment_detail', deployment_id=deployment_id)
+        conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
+        audit('deploiement.confirmation', f"{row['title']} : {queued_count} poste(s), {ready_n} paquet(s), {deployment_id}", commit=False)
+        conn.commit()
+        flash(_('Déploiement confirmé sur %(queued_count)s poste(s). Les agents installent les paquets à leur prochain contact.', queued_count=queued_count), 'ok')
+        return back('deployment_detail', deployment_id=deployment_id)
     ready = []
     for snapshot in plan['apps']:
         current, problem = _current(snapshot)

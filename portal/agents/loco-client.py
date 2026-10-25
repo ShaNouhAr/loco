@@ -415,6 +415,28 @@ def update():
     return code, "\n".join(logs)
 
 
+def install_package(cmd):
+    """Installe (ou met à niveau) des paquets nommés depuis les dépôts déjà configurés sur le poste (dépôt loco)."""
+    names = [n for n in cmd.get("packages", []) if isinstance(n, str) and n]
+    if not names:
+        return 1, t("Aucun paquet indiqué.", "No package given.", "Ningún paquete indicado.")
+    fam = family()
+    logs = []
+    if fam == "debian":
+        code, out = run(["apt-get", "update", "-q"], timeout=1800)
+        logs.append(out)
+        if code == 0:
+            code, out = run(["apt-get", "-y", "-q", "-o", "Dpkg::Options::=--force-confdef",
+                             "-o", "Dpkg::Options::=--force-confold", "install", *names])
+            logs.append(out)
+    elif fam == "rhel":
+        code, out = run(["dnf" if shutil.which("dnf") else "yum", "-y", "install", *names])
+        logs.append(out)
+    else:
+        return 1, t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
+    return code, "\n".join(logs)
+
+
 # --------------------------------------------------------------------------- service
 
 def report(conf, cmd_id, state, output="", code=None, inventory=None):
@@ -546,6 +568,11 @@ def service():
                 save(STATE, state)
                 subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage après mise à jour", "loco: reboot after update", "loco: reinicio tras la actualización")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 return 0
+        elif action == "install-package":
+            code, out = install_package(cmd)
+            inv = scan()
+            state["last_scan"] = time.time()
+            report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, inv)
         elif action == "run-script":
             code, out = run_script(cmd)
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)

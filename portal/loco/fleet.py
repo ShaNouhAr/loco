@@ -41,8 +41,8 @@ SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat")}
-ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "run-script": L_("Script"), "reboot": L_("Redémarrage"),
-           "uninstall": L_("Retrait de l'agent")}
+ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
+           "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -469,6 +469,13 @@ def _payload(dev, cmd):
         if a is None:
             return None
         out["apps"] = [app_payload(a)]
+    if cmd["action"] == "install-package":
+        if dev["os_family"] not in ("debian", "rhel"):
+            return None
+        packages = [p for p in params.get("packages", []) if isinstance(p, str) and p]
+        if not packages:
+            return None
+        out["packages"] = packages
     return out
 
 

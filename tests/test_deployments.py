@@ -436,3 +436,83 @@ class TestDeployments(FleetTest):
         self.assertEqual(response.status_code, 302)
         self.assertIn('group=', response.location)
         self.assertEqual([c['device_id'] for c in self.commands()], [device(self.agent.uid)['id']])
+
+
+def _linux_catalog():
+    """Catalogue de paquets publiés simulé : un .deb (Debian/Ubuntu) et un .rpm (Red Hat) du même nom."""
+    return {
+        'deb:acme-agent': {'id': 'deb:acme-agent', 'kind': 'deb', 'family': 'debian', 'name': 'acme-agent',
+                           'version': '1.2.0', 'arch': 'amd64', 'desc': 'Agent maison', 'repositories': {'debian/trixie'}, 'archs': {'amd64'}},
+        'rpm:acme-agent': {'id': 'rpm:acme-agent', 'kind': 'rpm', 'family': 'rhel', 'name': 'acme-agent',
+                           'version': '1.2.0-1.el9', 'arch': 'x86_64', 'desc': 'Agent maison', 'repositories': {'el9'}, 'archs': {'x86_64'}},
+    }
+
+
+class TestLinuxDeployments(FleetTest):
+    """Store de paquets Linux : même préparation/confirmation/suivi que Windows, action install-package des agents."""
+
+    def setUp(self):
+        super().setUp()
+        with transaction() as conn:
+            conn.execute('DELETE FROM deployments')
+        self.addCleanup(lambda: self._wipe())
+        self.agent = Agent(dict(WINDOWS, hostname='pc-compta'), '192.168.43.50')
+        self.assertEqual(self.agent.enroll().status_code, 200)
+        self.linux = Agent(LINUX, '192.168.43.52')
+        self.assertEqual(self.linux.enroll().status_code, 200)
+        patch = mock.patch.object(deployments, '_package_catalog', side_effect=_linux_catalog)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    @staticmethod
+    def _wipe():
+        with transaction() as conn:
+            conn.execute('DELETE FROM deployments')
+
+    def post(self, path, data=None, browser=None):
+        return (browser or self.admin).post(path, data, page='/account')
+
+    def commands(self):
+        with transaction() as conn:
+            return conn.execute('SELECT * FROM device_commands ORDER BY id').fetchall()
+
+    def test_compose_lists_published_packages(self):
+        html = self.admin.c.get('/fleet/deployments/new-linux').get_data(as_text=True)
+        self.assertIn('acme-agent', html)
+        self.assertIn('Debian / Ubuntu', html)
+        self.assertIn('Red Hat', html)
+
+    def test_deb_targets_debian_and_excludes_windows(self):
+        linux_id, win_id = device(self.linux.uid)['id'], device(self.agent.uid)['id']
+        response = self.post('/fleet/deployments/prepare-linux',
+                             {'package': 'deb:acme-agent', 'device': [str(linux_id), str(win_id)]})
+        self.assertEqual(response.status_code, 302, response.get_data(as_text=True))
+        path = _path(response.location)
+        html = self.admin.c.get(path).get_data(as_text=True)
+        self.assertIn('système non compatible', html)          # le poste Windows est signalé
+        self.assertEqual(self.post(path + '/confirm').status_code, 302)
+        commands = self.commands()
+        self.assertEqual(len(commands), 1)                     # rien pour le poste Windows
+        self.assertEqual(commands[0]['action'], 'install-package')
+        self.assertEqual(commands[0]['device_id'], linux_id)
+        self.assertEqual(json.loads(commands[0]['params'])['packages'], ['acme-agent'])
+
+    def test_agent_receives_install_package_command(self):
+        linux_id = device(self.linux.uid)['id']
+        path = _path(self.post('/fleet/deployments/prepare-linux',
+                               {'package': 'deb:acme-agent', 'device': str(linux_id)}).location)
+        self.post(path + '/confirm')
+        answer = self.linux.checkin().get_json()
+        actions = {c['action']: c for c in answer['commands']}
+        self.assertIn('install-package', actions)
+        self.assertEqual(actions['install-package']['packages'], ['acme-agent'])
+
+    def test_rpm_has_no_compatible_debian_target(self):
+        linux_id = device(self.linux.uid)['id']       # srv-web est Debian : un .rpm ne le concerne pas
+        response = self.post('/fleet/deployments/prepare-linux', {'package': 'rpm:acme-agent', 'device': str(linux_id)})
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_package_identifier_is_rejected(self):
+        linux_id = device(self.linux.uid)['id']
+        response = self.post('/fleet/deployments/prepare-linux', {'package': 'deb:../evil', 'device': str(linux_id)})
+        self.assertEqual(response.status_code, 400)

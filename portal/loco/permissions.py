@@ -129,6 +129,7 @@ ENDPOINTS = {
     "fleet_group_save": "fleet.groups", "fleet_group_delete": "fleet.groups", "fleet_group_membership": "fleet.groups",
     "deployments": ("deployments.view", "fleet.install"), "deployment_detail": ("deployments.view", "fleet.install"),
     "deployment_compose": "fleet.install", "deployment_preview": "fleet.install",
+    "deployment_compose_linux": "fleet.install", "deployment_preview_linux": "fleet.install",
     "deployment_confirm": "fleet.install", "deployment_cancel": "fleet.install",
     "deployments_legacy": ("deployments.view", "fleet.install"),
     "software_icon": ("windows.view", "store.view", "fleet.view"),
@@ -171,8 +172,8 @@ ENDPOINTS = {
 }
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery"}
-ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "run-script": "scripts.run",
-                      "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
+ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
+                      "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 
 
 def expand(values):

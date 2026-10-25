@@ -42,6 +42,7 @@
 <div class="stack" data-poll="{{ url_for('deployment_detail', deployment_id=deployment.id) }}" data-poll-kind="reload" data-poll-every="3000" data-signature="{{ signature }}">
   {% if state == 'draft' %}
     {% if blocked %}<p class="note warn">{{ blocked }}</p>
+    {% elif kind == 'linux' %}<p class="note">{{ _("Vérifiez les paquets et les postes ci-dessous, puis confirmez. Les paquets sont installés depuis les dépôts loco déjà configurés sur les postes ; un paquet .deb vise les postes Debian/Ubuntu et un .rpm les postes Red Hat.") }}{% if plan.bulk %} {{ _("Déploiement sur plusieurs postes.") }}{% endif %}</p>
     {% else %}<p class="note">{{ _("Vérifiez les logiciels et les postes ci-dessous, puis confirmez. Les postes ajoutés plus tard aux groupes ne rejoignent pas ce déploiement.") }}{% if plan.bulk %} {{ _("Déploiement sur plusieurs postes.") }}{% endif %}</p>{% endif %}
   {% elif state == 'expired' %}<p class="note warn">{{ _("Cette préparation a expiré (une heure). <a href=\"%(recompose)s\">Préparez-la à nouveau</a> pour reprendre la même sélection.", recompose=recompose) }}</p>
   {% endif %}
@@ -67,7 +68,7 @@
           {% for d in plan.devices %}
           <tr>
             <td class="nowrap">{{ d.hostname or d.uid[:8] }}</td>
-            <td><span class="st {{ 'warn' if d.reason else 'ok' }}">{{ d.reason or _('Poste Windows retenu') }}</span></td>
+            <td><span class="st {{ 'warn' if d.reason else 'ok' }}">{{ d.reason or (_('Poste Linux retenu') if kind == 'linux' else _('Poste Windows retenu')) }}</span></td>
             <td>{{ families.get(d.os_family, d.os_family) }}</td>
           </tr>
           {% endfor %}
@@ -75,7 +76,7 @@
           {% for t in targets %}{% set tcls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
           <tr>
             <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}
-              {% if t.apps %}<span class="sub sans">{{ _("%(apps)s logiciel%(v)s à installer", apps=t.apps|length, v='s' if t.apps|length > 1) }}</span>{% endif %}</td>
+              {% if t.apps %}<span class="sub sans">{% if kind == 'linux' %}{{ _("%(apps)s paquet%(v)s à installer", apps=t.apps|length, v='s' if t.apps|length > 1) }}{% else %}{{ _("%(apps)s logiciel%(v)s à installer", apps=t.apps|length, v='s' if t.apps|length > 1) }}{% endif %}</span>{% endif %}</td>
             <td class="nowrap"><span class="st {{ tcls }}">{{ states[t.state] }}</span>{% if t.sent_at and t.state in ('sent', 'running') %}<span class="sub sans">{{ _("transmis %(sent_at)s", sent_at=t.sent_at|date_fr) }}</span>{% elif t.finished_at %}<span class="sub sans">{{ t.finished_at|date_fr }}</span>{% endif %}</td>
             <td>
               {% if t.live %}<div class="live-step" aria-live="polite">
@@ -95,21 +96,23 @@
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Logiciels") }} <span class="h-count">{{ apps|length }}</span></h2><div class="aside">{{ _('versions vérifiées à la confirmation') if draft else _('versions conservées à la confirmation') }}</div></div>
+    <div class="panel-h"><h2>{{ _("Paquets") if kind == 'linux' else _("Logiciels") }} <span class="h-count">{{ apps|length }}</span></h2>
+      <div class="aside">{% if kind == 'linux' %}{{ _('installés depuis les dépôts loco') }}{% else %}{{ _('versions vérifiées à la confirmation') if draft else _('versions conservées à la confirmation') }}{% endif %}</div></div>
     <div class="table-wrap">
       <table>
         <tbody>
         {% for item in apps %}{% set a = item.snapshot %}
           <tr>
-            <td>{{ a.name }}</td>
-            <td class="mono nowrap">{{ a.version or '—' }}</td>
-            <td class="right">{% if item.problem %}<span class="st warn">{{ item.problem }}</span>{% else %}<span class="st ok" title="{{ _('SHA-256 %(v)s', v=a.sha256 or 'en attente du fichier') }}">{{ _('prêt') if draft else _('version conservée') }}</span>{% endif %}</td>
+            <td>{{ a.name }}{% if kind == 'linux' %} <span class="os-tag">{{ _("Debian / Ubuntu") if a.family == 'debian' else _("Red Hat") }}</span>{% endif %}</td>
+            <td class="mono nowrap">{{ a.version or '—' }}{% if kind == 'linux' and a.arch %} · {{ a.arch }}{% endif %}</td>
+            <td class="right">{% if kind == 'linux' %}<span class="st ok">{{ _('publié') }}</span>
+              {% elif item.problem %}<span class="st warn">{{ item.problem }}</span>{% else %}<span class="st ok" title="{{ _('SHA-256 %(v)s', v=a.sha256 or 'en attente du fichier') }}">{{ _('prêt') if draft else _('version conservée') }}</span>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
-    <div class="panel-f">{{ _("Un poste hors ligne reçoit sa commande à son prochain contact. Les logiciels déjà à jour et les installations identiques déjà en attente sont ignorés. Les résultats restent consultables même si un groupe est modifié ou supprimé.") }}</div>
+    <div class="panel-f">{% if kind == 'linux' %}{{ _("Un poste hors ligne reçoit sa commande à son prochain contact. Chaque poste n'installe que les paquets compatibles avec son système, depuis le dépôt loco déjà configuré. Les résultats restent consultables même si un groupe est modifié ou supprimé.") }}{% else %}{{ _("Un poste hors ligne reçoit sa commande à son prochain contact. Les logiciels déjà à jour et les installations identiques déjà en attente sont ignorés. Les résultats restent consultables même si un groupe est modifié ou supprimé.") }}{% endif %}</div>
   </section>
 </div>
 {% endblock %}

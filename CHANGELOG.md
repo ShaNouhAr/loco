@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.56.0 — 2026-10-25
+
+- **Déploiement de paquets Linux** : la section *Déploiements* propose désormais, à côté des logiciels Windows, un store des paquets `.deb` et `.rpm` publiés dans loco. On choisit des paquets, on cible des postes ou des groupes Linux, on prévisualise puis on confirme ; chaque poste n'installe que les paquets compatibles avec son système (`.deb` → Debian/Ubuntu, `.rpm` → Red Hat), depuis le dépôt loco déjà configuré. L'avancement est suivi poste par poste comme pour Windows. Nouvelle action d'agent `install-package` (droit *Déployer un logiciel*).
+
 ## 2.55.0 — 2026-10-25
 
 - **Pastille « redémarrage nécessaire »** dans *Mon parc* : l'ancien texte d'avertissement devient une pastille ambrée avec icône, alignée proprement avec les compteurs de mises à jour et la pastille de sécurité.

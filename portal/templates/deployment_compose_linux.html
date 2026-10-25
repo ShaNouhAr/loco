@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}{{ _("Préparer un déploiement Linux") }}{% endblock %}
+{% macro pkg_item(p) -%}
+<label class="selection-item" data-search="{{ p.name }} {{ p.desc }}"><input type="checkbox" name="package" value="{{ p.id }}" {{ 'checked' if p.id in selected.packages }}>
+  <span><strong>{{ p.name }}</strong> <span class="os-tag">{{ _("Debian / Ubuntu") if p.family == 'debian' else _("Red Hat") }}</span><small>{{ p.version }}{% if p.archs %} · {{ p.archs|join(', ') }}{% endif %}{% if p.desc %} · {{ p.desc }}{% endif %}</small></span></label>
+{%- endmacro %}
+{% macro device_item(device) -%}
+{% set usable = device.os_family in ('debian', 'rhel') and device.state == 'active' %}
+<label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
+  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family not in ('debian', 'rhel') %} {{ _("· non compatible (paquets Linux)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% endif %}</small></span></label>
+{%- endmacro %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('deployments') }}">{{ _("← Déploiements") }}</a></p>
+<div class="head">
+  <div>
+    <h1>{{ _("Préparer un déploiement Linux") }}</h1>
+    <p>{{ _("Installez vos paquets .deb et .rpm publiés dans loco sur les postes Linux équipés de l'agent. Chaque poste n'installe que les paquets compatibles avec son système.") }}</p>
+  </div>
+</div>
+<form method="post" action="{{ url_for('deployment_preview_linux') }}" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="cols deployment-columns">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("1 · Paquets") }}</h2><div class="aside"><span><span data-checked-count="input[name=package]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-b stack-sm">
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Dépôts loco") }}</h3>{% if packages %}<input class="search-sm" type="search" placeholder="{{ _('Rechercher') }}" data-filter="#deploy-pkgs .selection-item" aria-label="{{ _('Rechercher un paquet') }}">{% endif %}</div>
+          <div class="selection-list" id="deploy-pkgs">
+            {% for p in packages if p.id in selected.packages %}{{ pkg_item(p) }}{% endfor %}
+            {% for p in packages if p.id not in selected.packages %}{{ pkg_item(p) }}{% endfor %}
+            {% if not packages %}<p class="small muted pad">{{ _("Aucun paquet publié. Ajoutez des paquets depuis <a href=\"%(apt)s\">Paquets APT</a> ou <a href=\"%(rpm)s\">Paquets RPM</a>.", apt=url_for('linux'), rpm=url_for('rpm')) }}</p>{% endif %}
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("2 · Postes") }}</h2><div class="aside"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-b stack-sm">
+        {% if device_groups %}
+        <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>
+          <div class="selection-list short">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}" {{ 'checked' if group.id in selected.device_groups }} {{ 'disabled' if not can('fleet.bulk_install') }}><span><strong>{{ group.name }}</strong><small>{{ _("%(members)s appareil%(v)s", members=group.members, v='s' if group.members != 1) }}</small></span></label>{% endfor %}</div>
+          {% if not can('fleet.bulk_install') %}<p class="hint">{{ _("Le droit de déploiement sur plusieurs postes est requis pour cibler un groupe.") }}</p>{% endif %}
+        </div>
+        {% endif %}
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Appareils") }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#deploy-devices .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
+          <div class="selection-list" id="deploy-devices">
+            {% for device in devices if device.id in selected.devices %}{{ device_item(device) }}{% endfor %}
+            {% for device in devices if device.id not in selected.devices and device.os_family in ('debian', 'rhel') %}{{ device_item(device) }}{% endfor %}
+            {% for device in devices if device.id not in selected.devices and device.os_family not in ('debian', 'rhel') %}{{ device_item(device) }}{% endfor %}
+            {% if not devices %}<p class="small muted pad">{{ _("Aucun appareil inscrit : installez l'agent depuis <a href=\"%(v)s\">Mon parc</a>.", v=url_for('fleet')) }}</p>{% endif %}
+          </div>
+        </div>
+        <p class="hint">{{ _("Un paquet .deb vise les postes Debian/Ubuntu et un .rpm les postes Red Hat. Un poste présent dans plusieurs groupes ne reçoit ses paquets qu'une fois.") }}</p>
+      </div>
+    </section>
+  </div>
+  <section class="panel sticky-actions compose-bar">
+    <div class="panel-b compose-bar-in">
+      <label class="f compose-title"><span>{{ _("Nom du déploiement") }}</span><input type="text" name="title" maxlength="100" placeholder="{{ _('facultatif, par exemple Agent maison · Serveurs Linux') }}"></label>
+      <button class="btn primary"><span class="spin"></span>{{ _("Vérifier avant de déployer") }}</button>
+    </div>
+  </section>
+</form>
+{% endblock %}
