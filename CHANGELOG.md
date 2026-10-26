@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.58.0 — 2026-10-26
+
+- **Ports réseau dans Système** : une nouvelle section *Administration → Système* récapitule les ports à ouvrir **en entrée** sur le pare-feu pour que l'applicatif fonctionne — interface et agents en HTTPS (8443), amorçage HTTP des postes, cache de paquets Linux (3142), cache Windows Update (80/443) et proxy Windows Update (3128). La liste s'adapte à la configuration et aux fonctionnalités activées, précise le public concerné (administration, postes Linux, postes Windows) et rappelle que le port interne de l'application reste en local.
+
 ## 2.57.0 — 2026-10-26
 
 - **QR de double authentification fiable partout** : le code QR d'enrôlement s'affiche désormais même sans le paquet système `python3-qrcode` (appliance, installations minimales) grâce à un générateur QR embarqué sans dépendance. La page d'enrôlement liste aussi les **applications compatibles** (Microsoft Authenticator, Google Authenticator, Authy, 1Password, Bitwarden — toute application TOTP convient).

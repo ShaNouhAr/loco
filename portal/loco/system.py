@@ -6,6 +6,7 @@ import re
 import secrets
 import subprocess
 import sys
+import urllib.parse
 
 from flask import Response, abort, flash, g, render_template, request, send_file
 
@@ -252,6 +253,40 @@ def _age(mtime):
     return {"text": text, "late": hours > 48}
 
 
+def _url_port(url, default):
+    try:
+        return urllib.parse.urlsplit(url).port or default
+    except ValueError:
+        return default
+
+
+def firewall_ports():
+    """Ports à ouvrir en entrée sur le serveur loco, selon la configuration et les fonctionnalités actives.
+
+    Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local : il n'est pas listé."""
+    from . import features
+    off = features.disabled()
+    https = _url_port(config.HTTPS_URL, 8443)
+    rows = [{"port": str(https), "proto": "TCP", "service": _("Interface web, agents du parc et dépôts (APT, RPM, Flatpak, fichiers)"),
+             "audience": _("Administration + postes"), "scheme": "HTTPS", "on": True, "always": True}]
+    if config.HTTP_URL:
+        rows.append({"port": str(_url_port(config.HTTP_URL, 8088)), "proto": "TCP",
+                     "service": _("Amorçage HTTP des postes (déploiement de l'autorité et des dépôts)"),
+                     "audience": _("Postes"), "scheme": "HTTP", "on": True, "always": False})
+    if "apt" not in off:
+        rows.append({"port": str(config.ACNG_PORT), "proto": "TCP",
+                     "service": _("Cache de paquets Linux (apt-cacher-ng)"), "audience": _("Postes Linux"),
+                     "scheme": "HTTP", "on": True, "always": False})
+    if "wu" not in off:
+        rows.append({"port": "80, 443", "proto": "TCP", "service": _("Cache Windows Update (redirection DNS des postes)"),
+                     "audience": _("Postes Windows"), "scheme": "HTTP/TLS", "on": True, "always": False})
+    if "wu_proxy" not in off:
+        rows.append({"port": str(config.WU_PROXY_PORT), "proto": "TCP",
+                     "service": _("Proxy Windows Update (Squid, sans redirection DNS)"), "audience": _("Postes Windows"),
+                     "scheme": "HTTP", "on": True, "always": False})
+    return rows
+
+
 @app.route("/system")
 @login_required
 def system():
@@ -262,6 +297,7 @@ def system():
     return render_template(
         "system.html",
         services=services, stopped=[unit for unit, _, active in services if not active],
+        firewall=firewall_ports(),
         last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
         ca=cert_info(os.path.join(config.TLS_DIR, "ca.crt")),

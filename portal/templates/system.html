@@ -123,6 +123,29 @@
     </section>
 
     <section class="panel">
+      <div class="panel-h"><h2>{{ _("Ports réseau") }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
+      <div class="panel-b">
+        <p class="muted small">{{ _("Ports en écoute du serveur loco à autoriser <strong>en entrée</strong> depuis le réseau des postes (et depuis le poste d'administration pour le premier). Ils reflètent la configuration et les fonctionnalités activées de ce serveur.") }}</p>
+      </div>
+      <div class="table-wrap">
+        <table class="ports-table">
+          <thead><tr><th>{{ _("Port") }}</th><th>{{ _("Protocole") }}</th><th>{{ _("Service") }}</th><th class="hide-sm">{{ _("Pour") }}</th></tr></thead>
+          <tbody>
+          {% for p in firewall %}
+            <tr>
+              <td class="nowrap"><span class="mono port-badge">{{ p.port }}</span></td>
+              <td class="nowrap"><span class="sub sans">{{ p.proto }}</span> {{ p.scheme }}</td>
+              <td>{{ p.service }}{% if p.always %} <span class="os-tag">{{ _("essentiel") }}</span>{% endif %}</td>
+              <td class="hide-sm nowrap">{{ p.audience }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas. En sortie, le serveur doit joindre les miroirs amont (dépôts des distributions, Microsoft Update, Flathub) en HTTP/HTTPS pour alimenter les caches.") }}</div>
+    </section>
+
+    <section class="panel">
       <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
       {% set can_backup = not windows and can('system.configure') %}
       {% if backups %}

@@ -399,5 +399,34 @@ class TestBackups(unittest.TestCase):
             la.request.assert_not_called()
 
 
+class TestFirewallPorts(unittest.TestCase):
+    """Référence des ports à ouvrir dans Système : port HTTPS toujours listé, le reste suit les fonctionnalités."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+
+    def test_section_lists_the_https_port(self):
+        import urllib.parse
+        port = str(urllib.parse.urlsplit(config.HTTPS_URL).port or 8443)
+        html = self.admin.c.get("/system").get_data(as_text=True)
+        self.assertIn("Ports réseau", html)
+        self.assertIn(port, html)
+
+    def test_ports_follow_enabled_features(self):
+        from loco import system
+        with loco.app.test_request_context():
+            with mock.patch("loco.features.disabled", return_value=set()):
+                ports = {p["port"] for p in system.firewall_ports()}
+            self.assertIn(str(config.ACNG_PORT), ports)              # APT actif → cache 3142
+            self.assertIn("80, 443", ports)                          # Windows Update actif
+            with mock.patch("loco.features.disabled", return_value={"apt", "wu", "wu_proxy"}):
+                after = system.firewall_ports()
+            ports = {p["port"] for p in after}
+            self.assertNotIn(str(config.ACNG_PORT), ports)           # APT coupé → plus de 3142
+            self.assertNotIn("80, 443", ports)                       # Windows Update coupé
+            self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
+
+
 if __name__ == "__main__":
     unittest.main()
