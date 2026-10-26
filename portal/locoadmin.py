@@ -1017,8 +1017,11 @@ def _set_ntp(enabled, server, log):
             os.remove(dropin)
         if shutil.which("timedatectl"):
             _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log)
-        service = "chronyd" if os.path.exists("/usr/lib/systemd/system/chronyd.service") else "chrony"
-        _run(["systemctl", "restart" if enabled else "stop", service], log)
+        if shutil.which("systemctl"):
+            service = "chronyd" if os.path.exists("/usr/lib/systemd/system/chronyd.service") else "chrony"
+            _run(["systemctl", "restart" if enabled else "stop", service], log)
+        else:                                             # Alpine/OpenRC (appliance) : pas de systemctl
+            _run(["rc-service", "chronyd", "restart" if enabled else "stop"], log)
     else:
         log(t("Synchronisation NTP non gérée sur ce système.", "NTP synchronisation not managed on this system.", "Sincronización NTP no gestionada en este sistema."))
         return

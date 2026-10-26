@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.60.0 — 2026-10-26
+
+- **Synchronisation NTP corrigée sur l'appliance Alpine** : le réglage du serveur NTP depuis *Système → heure du serveur* rechargeait le service via `systemctl`, absent sur l'appliance Alpine (OpenRC) — le nouveau serveur n'était donc pris en compte qu'au redémarrage. Le service est désormais rechargé avec `rc-service` quand `systemctl` n'existe pas. Validé de bout en bout contre un serveur NTP conteneurisé. Couvert par des tests (Debian → `systemctl`, Alpine → `rc-service`, conteneur → ignoré).
+
 ## 2.59.0 — 2026-10-26
 
 - **`ufw` présent dans l'appliance (ISO)** : le pare-feu `ufw` est désormais installé dans l'image Alpine, mais **ni activé ni configuré** — il n'applique aucune règle et ne filtre rien par défaut. Il est simplement disponible si vous souhaitez poser des règles vous-même plus tard (`ufw enable`, `ufw allow …`).
