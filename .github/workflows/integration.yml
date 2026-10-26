@@ -1,0 +1,291 @@
+name: Tests d'intégration
+# Machines virtuelles (Debian, Ubuntu, Rocky, AlmaLinux, Alpine), Docker, ISO de l'appliance et serveurs Windows.
+# Lancés quand un push touche ce qu'ils vérifient, à la demande (onglet Actions) et avant chaque publication
+# (release.yml, qui récupère l'ISO et l'agent Windows construits ici). Aucun secret ni serveur requis.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'install.sh'
+      - 'linux/**'
+      - 'windows/**'
+      - 'conf/**'
+      - 'portal/agents/**'
+      - 'portal/locoadmin.py'
+      - 'portal/templates/*.sh'
+      - 'tests/*.sh'
+      - 'tests/*.ps1'
+      - 'tests/*.json'
+      - '.github/workflows/integration.yml'
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: integration-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+jobs:
+  plan:
+    name: Plateformes à tester
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: platforms
+        run: |
+          echo "matrix=$(jq -c '{include:map({platform:.id})}' tests/platforms.json)" >> "$GITHUB_OUTPUT"
+          echo "rpm=$(jq -c '{include:map({platform:.id})}' tests/rpm-platforms.json)" >> "$GITHUB_OUTPUT"
+    outputs:
+      platforms: ${{ steps.platforms.outputs.matrix }}
+      rpm: ${{ steps.platforms.outputs.rpm }}
+
+  vm:
+    name: VM / ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.platforms) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Outils de virtualisation
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Installation, migration, isolation, Flatpak, sauvegarde et désinstallation
+        run: tests/vm-e2e.sh '${{ matrix.platform }}'
+      - name: Conserver les résultats
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: resultats-${{ matrix.platform }}
+          path: test-results/
+          retention-days: 14
+  rpm:
+    name: Postes Red Hat / ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.rpm) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Outils de virtualisation
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Serveur Debian 13 et poste ${{ matrix.platform }} (dépôt local, cache, EPEL, retrait)
+        run: tests/vm-rpm-e2e.sh '${{ matrix.platform }}'
+      - name: Conserver les résultats
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: resultats-rpm-${{ matrix.platform }}
+          path: test-results/
+          retention-days: 14
+  docker:
+    name: Docker / Debian 13
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Outils de virtualisation
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Image, docker compose, poste client, recréation, sauvegarde
+        run: tests/vm-docker-e2e.sh
+      - name: Conserver les résultats
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: resultats-docker
+          path: test-results/
+          retention-days: 14
+
+  alpine-server:
+    name: Serveur natif / Alpine 3.24
+    runs-on: ubuntu-24.04
+    needs: windows-packages
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: windows-packages
+          path: test-results/packages
+      - name: Outils de virtualisation
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Installation, agent, GUI et CLI, mises à jour, retour arrière et désinstallation
+        run: LOCO_FIXTURES="$PWD/test-results/packages" tests/vm-alpine-server-e2e.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: resultats-alpine
+          path: test-results/alpine-server/
+          retention-days: 14
+
+  iso-alpine:
+    name: ISO appliance / Alpine BIOS et UEFI
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Outils de virtualisation et ISO
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage xorriso ovmf
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Fabrique ISO, installation BIOS / UEFI, démarrage sans média, portail et commandes
+        run: tests/vm-alpine-iso-build.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: loco-iso
+          path: |
+            test-results/alpine-build/
+            test-results/alpine-iso/
+          retention-days: 14
+
+  rocky-server:
+    name: Serveur natif / ${{ matrix.platform }}
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [rocky-8, rocky-9, rocky-10]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Outils de virtualisation
+        run: |
+          sudo apt-get update -q -o APT::Update::Error-Mode=any
+          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - name: Serveur Rocky, SELinux, pare-feu, paquets, sauvegarde et désinstallation
+        run: tests/vm-rocky-server-e2e.sh '${{ matrix.platform }}'
+      - name: Conserver les résultats
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: resultats-serveur-${{ matrix.platform }}
+          path: test-results/
+          retention-days: 14
+
+  windows-packages:
+    name: Paquets Windows (agent MSI et paquets de test)
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Construire de vrais paquets Debian et RPM
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q rpm
+          tests/windows-fixtures.sh test-results/packages
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-packages
+          path: test-results/packages/
+          retention-days: 14
+
+      - name: Compiler loco-client.exe et construire loco-client.msi (Mono, msitools de Debian 13)
+        run: |
+          version=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' portal/loco/config.py)
+          docker run --rm -v "$PWD:/src" -w /src -e VERSION="$version" debian:13 sh -euc '
+            apt-get update -q >/dev/null
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends mono-devel wixl msitools python3 >/dev/null
+            python3 -m unittest discover -s tests -p test_desktop_encoding.py -v
+            windows/client/build.sh "$VERSION" test-results/windows-client
+            msiinfo export test-results/windows-client/loco-client.msi File | tr -d "\\r" | grep -P "^ClientExe\\tService\\t[^\\t]+\\t[0-9]+\\t$VERSION.0\\t"
+            msiinfo export test-results/windows-client/loco-client.msi File | tr -d "\\r" | grep -P "^TrayExe\\tService\\t[^\\t]+\\t[0-9]+\\t$VERSION.0\\t"
+            msiinfo export test-results/windows-client/loco-client.msi File | tr -d "\\r" | grep -P "^DesktopExe\\tService\\t[^\\t]+\\t[0-9]+\\t$VERSION.0\\t"
+            windows/client/build.sh "$VERSION" test-results/windows-client/reinstall
+            msiinfo export test-results/windows-client/loco-client.msi Property | tr -d "\\r" | grep -qxP "ProductVersion\\t$VERSION"
+            msiinfo export test-results/windows-client/loco-client.msi ServiceInstall | grep -q loco-client
+            chown -R "$(stat -c %u:%g .)" test-results'
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: loco-client-msi
+          path: |
+            test-results/windows-client/loco-client.msi
+            test-results/windows-client/reinstall/loco-client.msi
+          retention-days: 30
+
+  windows:
+    name: Serveur natif / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: windows-packages
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: windows-packages
+          path: test-results/packages
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: loco-client-msi
+          path: portal/agents
+      - name: Installation, portail, signatures, caches, agent du parc, sauvegarde, retrait et purge
+        shell: powershell
+        run: |
+          # Les images hébergées ont IIS/HTTP.sys actif ; ce runner est jetable.
+          Stop-Service HTTP -Force
+          $legacy = Join-Path $env:RUNNER_TEMP 'local-repo-1.9.0'
+          New-Item $legacy -ItemType Directory -Force | Out-Null
+          git archive --format=tar -o "$env:RUNNER_TEMP\legacy.tar" v1.9.0
+          tar.exe -xf "$env:RUNNER_TEMP\legacy.tar" -C $legacy
+          .\tests\windows-e2e.ps1 -Fixtures "$env:GITHUB_WORKSPACE\test-results\packages" -LegacySource $legacy
+      - name: Journaux en cas d'échec
+        if: failure()
+        shell: powershell
+        run: |
+          New-Item test-results/logs -ItemType Directory -Force | Out-Null
+          Copy-Item "$env:ProgramData\loco\logs\*" test-results/logs -ErrorAction SilentlyContinue
+          Get-Service loco -ErrorAction SilentlyContinue | Out-File test-results/logs/service.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: resultats-${{ matrix.os }}
+          path: test-results/logs/
+          retention-days: 14

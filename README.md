@@ -510,17 +510,23 @@ tests/vm-rpm-e2e.sh rocky-9                     # serveur Debian 13 + poste Rock
 tests/vm-docker-e2e.sh                          # image Docker et docker compose dans une VM Debian 13 jetable
 ```
 
-Le workflow CI lance `shellcheck`, `pyflakes` puis une VM QEMU pour chaque entrée de
-[`tests/platforms.json`](tests/platforms.json) : Debian 12/13 et Ubuntu 22.04/24.04/26.04 ;
-puis, pour chaque poste de [`tests/rpm-platforms.json`](tests/rpm-platforms.json) (Rocky Linux et
-AlmaLinux 8, 9, 10), un serveur et ce poste : dépôt local, cache des dépôts officiels, EPEL et retrait ;
-enfin le déploiement Docker (construction, poste client, recréation du conteneur, sauvegarde) et les
-serveurs natifs Rocky 8/9/10 (installation, publication APT/RPM, caches, réinstallation, sauvegarde,
-restauration et désinstallation avec SELinux et firewalld actifs).
-Il fonctionne à chaque PR/push, chaque semaine et à la demande, avec conservation des journaux.
-Les images des VM sont vérifiées par leur empreinte avant le démarrage.
-Les tests couvrent la mise à jour depuis 1.0.0 sur les systèmes déjà pris en charge, la détection du poste,
-l'isolation des paquets, Flatpak, une restauration et la désinstallation. Le workflow est publié et actif sur GitHub.
+### Intégration continue et publication
+
+Tout tourne sur les machines de GitHub : un fork n'a besoin d'aucun secret, d'aucun serveur ni d'aucun réglage
+(il suffit d'activer *Actions* sur le fork).
+
+| Workflow | Quand | Contenu | Durée |
+|---|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | chaque push et pull request | `shellcheck`, `pyflakes`, tests unitaires, syntaxe PowerShell — sans VM | ~3 min |
+| [`integration.yml`](.github/workflows/integration.yml) | push touchant installeurs, agents, ISO ou tests VM ; à la demande ; avant chaque publication | une VM QEMU par entrée de [`tests/platforms.json`](tests/platforms.json) (Debian 12/13, Ubuntu 22.04/24.04/26.04), serveur + poste pour [`tests/rpm-platforms.json`](tests/rpm-platforms.json) (Rocky et AlmaLinux 8/9/10), Docker, serveurs natifs Rocky 8/9/10 et Alpine, ISO de l'appliance (BIOS et UEFI), serveurs Windows 2022/2025 et agent MSI | ~20 min |
+| [`release.yml`](.github/workflows/release.yml) | push d'un tag `vX.Y.Z` | vérifications + intégration complète, puis publication des sources, de l'ISO et de l'agent Windows testés dans ce même run | ~25 min |
+
+Publier une version : mettre à jour `VERSION` dans `portal/loco/config.py` et le [CHANGELOG](CHANGELOG.md), puis
+`git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`. Rien n'est publié si un test échoue.
+Les images des VM sont vérifiées par leur empreinte officielle avant le démarrage ; les journaux de chaque test
+sont conservés 14 jours. Les tests couvrent la mise à jour depuis 1.9.0, la détection du poste, l'isolation des
+paquets, Flatpak, une restauration et la désinstallation.
+
 Historique : [CHANGELOG.md](CHANGELOG.md).
 
 ## Licence

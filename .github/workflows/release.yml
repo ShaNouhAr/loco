@@ -1,43 +1,55 @@
 name: Release
+# Publication d'une version : pousser un tag « vX.Y.Z » (git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3) ;
+# pour retenter, « Re-run » sur ce run dans l'onglet Actions. Rien n'est publié sans les vérifications et l'intégration complètes de ce même run ;
+# l'ISO de l'appliance et l'agent Windows publiés sont ceux qui viennent d'être testés. Seul le jeton fourni par
+# GitHub (GITHUB_TOKEN) est utilisé : un fork publie ses propres versions sans autre réglage.
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag existant à publier (ex. v2.1.0), avec CI réussie'
-        required: true
-        type: string
+  push:
+    tags: ['v*.*.*']
 permissions:
   contents: write
   actions: read
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  integration:
+    uses: ./.github/workflows/integration.yml
   publish:
+    name: Publication
+    needs: [checks, integration]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Vérifier le tag et sa CI, récupérer l'ISO et l'agent Windows validés
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: loco-iso
+          path: /tmp/loco-release-iso
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: loco-client-msi
+          path: /tmp/loco-release-msi
+      - name: Vérifier le tag et rassembler les sources, l'ISO, l'agent Windows et les empreintes
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag invalide : $RELEASE_TAG"; exit 1; }
           revision=$(git rev-parse "$RELEASE_TAG^{commit}")
+          test "$revision" = "$(git rev-parse HEAD)" || { echo "Le run ne correspond pas au tag $RELEASE_TAG"; exit 1; }
           version=${RELEASE_TAG#v}
-          git show "$revision:portal/loco/config.py" | grep -qx "VERSION = \"$version\""
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$revision&status=success" --jq '.workflow_runs[0].id // empty')
-          test -n "$run"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq .head_sha)" = "$revision"
-          mkdir -p /tmp/loco-release-iso dist
-          gh run download "$run" -n loco-iso -D /tmp/loco-release-iso
+          git show "$revision:portal/loco/config.py" | grep -qx "VERSION = \"$version\"" || { echo "VERSION de portal/loco/config.py différente de $version"; exit 1; }
+          mkdir -p dist
           cp /tmp/loco-release-iso/alpine-build/loco-v3.24-x86_64.iso "dist/loco-$version-x86_64.iso"
-          gh run download "$run" -n loco-client-msi -D /tmp/loco-release-msi
           cp /tmp/loco-release-msi/loco-client.msi "dist/loco-client-$version.msi"
           git archive --format=tar.gz --prefix="loco-$version/" "$revision" > "dist/loco-$version.tar.gz"
           (cd dist && sha256sum loco-* > SHA256SUMS)
-      - name: Publier les sources, l'ISO, l'agent Windows et les empreintes
+      - name: Publier
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
         run: gh release create "$RELEASE_TAG" --verify-tag --title "loco ${RELEASE_TAG#v}" --generate-notes dist/*
