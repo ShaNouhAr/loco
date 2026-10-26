@@ -396,6 +396,10 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .mfa-qr svg { display: block; width: 180px; height: 180px; }
 .mfa-key { min-width: 0; }
 .mfa-secret { display: inline-block; margin-top: 4px; padding: 6px 10px; font-size: 15px; letter-spacing: 0.12em; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r-sm); word-break: break-all; }
+.mfa-apps { flex-basis: 100%; }
+.mfa-apps .app-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.app-chip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px 5px 9px; font-size: 13px; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+.app-chip svg { width: 15px; height: 15px; flex: none; stroke-linecap: round; stroke-linejoin: round; color: var(--accent); }
 .mfa-actions { display: flex; flex-direction: column; gap: 12px; }
 .inline-mfa { gap: 8px; }
 .recovery-codes { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }

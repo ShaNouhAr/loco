@@ -4,7 +4,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Double authentification") }}</h1>
-    <p>{{ _("Scannez le QR avec votre application d'authentification, puis saisissez le code pour confirmer.") }}</p>
+    <p>{{ _("Installez une application d'authentification sur votre téléphone, scannez le QR, puis saisissez le code à 6 chiffres pour confirmer.") }}</p>
   </div>
 </div>
 <div class="cols w21">
@@ -15,6 +15,16 @@
       <div class="mfa-key">
         <p class="muted small">{{ _("Impossible de scanner ? Saisissez cette clé dans l'application :") }}</p>
         <code class="mono mfa-secret">{{ secret }}</code>
+      </div>
+      <div class="mfa-apps">
+        <p class="muted small">{{ _("Applications compatibles — toute application TOTP convient :") }}</p>
+        <ul class="app-list">
+          <li class="app-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M11 18h2"/></svg>Microsoft Authenticator</li>
+          <li class="app-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Google Authenticator</li>
+          <li class="app-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/></svg>Authy</li>
+          <li class="app-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>1Password</li>
+          <li class="app-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/></svg>Bitwarden</li>
+        </ul>
       </div>
     </div>
   </section>

@@ -84,6 +84,19 @@ class MfaTest(unittest.TestCase):
         with connect() as conn:
             self.assertEqual(conn.execute("SELECT mfa_enabled FROM users WHERE username='admin'").fetchone()[0], 0)
 
+    def test_enrollment_page_shows_a_qr(self):
+        b = Browser()
+        b.login("admin", ADMIN_PW)
+        html = b.c.get("/account/mfa/setup").get_data(as_text=True)
+        self.assertIn("mfa-qr", html)                           # le QR est présent…
+        self.assertIn("<svg", html)                             # …rendu en SVG (cœur vendorisé si python3-qrcode absent)
+        self.assertIn("Microsoft Authenticator", html)          # applications compatibles listées
+
+    def test_qr_svg_always_renders(self):
+        svg = totp.qr_svg(totp.uri("JBSWY3DPEHPK3PXP", "admin"))
+        self.assertIsNotNone(svg)
+        self.assertTrue(svg.startswith("<svg"))
+
     def test_admin_reset_removes_mfa(self):
         self.enroll()
         with connect() as conn:

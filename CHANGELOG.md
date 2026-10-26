@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.57.0 — 2026-10-26
+
+- **QR de double authentification fiable partout** : le code QR d'enrôlement s'affiche désormais même sans le paquet système `python3-qrcode` (appliance, installations minimales) grâce à un générateur QR embarqué sans dépendance. La page d'enrôlement liste aussi les **applications compatibles** (Microsoft Authenticator, Google Authenticator, Authy, 1Password, Bitwarden — toute application TOTP convient).
+
 ## 2.56.0 — 2026-10-25
 
 - **Déploiement de paquets Linux** : la section *Déploiements* propose désormais, à côté des logiciels Windows, un store des paquets `.deb` et `.rpm` publiés dans loco. On choisit des paquets, on cible des postes ou des groupes Linux, on prévisualise puis on confirme ; chaque poste n'installe que les paquets compatibles avec son système (`.deb` → Debian/Ubuntu, `.rpm` → Red Hat), depuis le dépôt loco déjà configuré. L'avancement est suivi poste par poste comme pour Windows. Nouvelle action d'agent `install-package` (droit *Déployer un logiciel*).

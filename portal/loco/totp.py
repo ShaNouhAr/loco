@@ -69,11 +69,11 @@ def uri(secret, username, issuer="loco"):
 
 
 def qr_svg(data, scale=5):
-    """QR en SVG (chaîne) à partir du texte, ou None si la bibliothèque qrcode n'est pas installée."""
+    """QR en SVG (chaîne). Utilise python3-qrcode si présent, sinon le cœur vendorisé (toujours disponible)."""
     try:
         import qrcode
     except ImportError:
-        return None
+        from ._vendor import qrcode
     qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=1, border=2)
     qr.add_data(data)
     qr.make(fit=True)
