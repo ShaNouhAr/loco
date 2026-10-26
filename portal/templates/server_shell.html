@@ -4,7 +4,7 @@
 {% from '_nav_icons.html' import ui_icon %}
 <div id="remote-session" class="remote-session" data-kind="terminal" data-label="{{ _('shell root du serveur') }}" data-io="{{ url_for('system_shell_io', sid=sid) }}" data-csrf="{{ csrf }}">
   <div class="head">
-    <div><p class="small"><a href="{{ url_for('system') }}">{{ _("Retour à Système") }}</a></p>
+    <div><p class="small"><a href="{{ url_for('system_shell_home') }}">{{ _("← Shell root") }}</a></p>
       <h1>{{ _("Shell root") }} <span class="muted">{{ host }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
       <p class="small muted remote-description">{{ _("Shell · root sur le serveur loco lui-même. Chaque ouverture et fermeture est journalisée.") }}</p>
     </div>
@@ -31,12 +31,12 @@
         <p class="small muted" id="remote-overlay-text">{{ _("Connexion au shell root du serveur loco.") }}</p>
         <div class="remote-overlay-actions" id="remote-overlay-actions" hidden>
           <button type="button" class="btn primary" id="remote-overlay-reconnect">{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
-          <a class="btn" href="{{ url_for('system') }}">{{ _("Retour à Système") }}</a>
+          <a class="btn" href="{{ url_for('system_shell_home') }}">{{ _("Shell root") }}</a>
         </div>
       </div>
     </div>
   </div>
-  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme le shell. La désactivation dans Système coupe immédiatement tous les shells ouverts.") }}</p>
+  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme le shell. La désactivation coupe immédiatement tous les shells ouverts.") }}</p>
 </div>
 {% endblock %}
 {% block scripts %}

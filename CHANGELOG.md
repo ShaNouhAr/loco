@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.64.0 — 2026-10-26
+
+- **Shell root mieux intégré** : il a désormais sa propre page dans le menu *Administration* (et donc dans la recherche Ctrl+K), avec son état en sous-titre (désactivé, redémarrage requis, actif). La page guide la mise en service en trois étapes — activer, redémarrer, ouvrir — et le terminal s'ouvre dans la même page. Quand le shell est actif, une icône terminal dans la barre du haut y donne accès en un clic. Le panneau a quitté la page *Système*.
+
 ## 2.63.0 — 2026-10-26
 
 - **Shell root du serveur dans le navigateur** (*Système → Shell root du serveur*) : un terminal root sur le serveur loco lui-même (installation Linux ou appliance), réservé au compte « admin » de l'installation. **Désactivé par défaut** ; l'activation demande le mot de passe du compte admin et **ne prend effet qu'après un redémarrage du serveur** (bouton de redémarrage proposé). La désactivation est immédiate et ferme les shells ouverts. Chaque activation, ouverture et fermeture est journalisée. Le terminal est servi par l'agent root via un socket local réservé au portail.

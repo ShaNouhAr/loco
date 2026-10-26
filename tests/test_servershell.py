@@ -99,10 +99,18 @@ class ShellPortalTest(unittest.TestCase):
     def post(self, path, data=None, browser=None):
         return (browser or self.admin).post(path, data or {}, page="/system")
 
-    def test_panel_is_shown_to_admin(self):
+    def test_menu_entry_and_page_follow_the_state(self):
         html = self.admin.c.get("/system").get_data(as_text=True)
-        self.assertIn("Shell root du serveur", html)
-        self.assertIn("Activer le shell root", html)
+        self.assertIn('href="/system/shell"', html)                 # menu Administration (et donc Ctrl+K)
+        self.assertNotIn("shell-quick", html)                         # icône de la barre : seulement si actif
+        page = self.admin.c.get("/system/shell").get_data(as_text=True)
+        self.assertIn("Activer le shell root", page)
+        self.shell_status.return_value = "pending"
+        self.assertIn("Annuler l'activation", self.admin.c.get("/system/shell").get_data(as_text=True))
+        self.shell_status.return_value = "active"
+        page = self.admin.c.get("/system/shell").get_data(as_text=True)
+        self.assertIn("Ouvrir le shell root", page)
+        self.assertIn("shell-quick", page)
 
     def test_enable_requires_the_password(self):
         self.post("/system/shell/enable", {"password": "faux"})
@@ -139,7 +147,8 @@ class ShellPortalTest(unittest.TestCase):
         ops = Browser()
         ops.login("shell-ops", "Shell-Ops-Test-2026")
         self.assertEqual(self.post("/system/shell/enable", {"password": "Shell-Ops-Test-2026"}, ops).status_code, 403)
-        self.assertNotIn("Shell root du serveur", ops.c.get("/system").get_data(as_text=True))
+        self.assertNotIn('href="/system/shell"', ops.c.get("/system").get_data(as_text=True))
+        self.assertEqual(ops.c.get("/system/shell").status_code, 403)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from '_nav_icons.html' import nav_icon %}
+{% block title %}{{ _("Shell root") }}{% endblock %}
+{% block content %}
+{% set step = {'off': 1, 'pending': 2, 'active': 3}[state] %}
+<div class="head">
+  <div>
+    <h1>{{ _("Shell root") }} <span class="muted">{{ host }}</span></h1>
+    <p>{{ _("Terminal root du serveur loco lui-même, dans le navigateur. Réservé au compte « admin » de l'installation ; chaque activation, ouverture et fermeture est journalisée.") }}</p>
+  </div>
+  <div class="actions">
+    <span class="st {{ 'ok' if state == 'active' else 'warn' if state == 'pending' else '' }}">{{ {'off': _('désactivé'), 'pending': _('redémarrage requis'), 'active': _('actif')}[state] }}</span>
+  </div>
+</div>
+
+<div class="stack">
+  {% if state == 'active' %}
+  <section class="panel shell-ready">
+    <div class="panel-b shell-ready-in">
+      <span class="shell-ready-icon">{{ nav_icon('terminal') }}</span>
+      <div class="shell-ready-text">
+        <h2>{{ _("Shell root disponible") }}</h2>
+        <p class="muted small">{{ _("Le terminal s'ouvre dans cette page. Fermer l'onglet ou la session ferme le shell.") }}{% if open_sessions %} {{ _("%(n)s session(s) ouverte(s) depuis cette connexion.", n=open_sessions) }}{% endif %}</p>
+      </div>
+      <form method="post" action="{{ url_for('system_shell_open') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn primary">{{ nav_icon('terminal') }}<span>{{ _("Ouvrir le shell root") }}</span></button>
+      </form>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Mise en service") }}</h2><div class="aside">{{ _("désactivé par défaut") }}</div></div>
+    <div class="panel-b setup-steps shell-steps">
+      <div class="setup-step {{ 'done' if step > 1 else 'current' }}">
+        <span class="step-n">{{ '✓' if step > 1 else '1' }}</span>
+        <div class="step-b">
+          <h3>{{ _("Activer") }}</h3>
+          {% if state == 'off' %}
+          <form method="post" action="{{ url_for('system_shell_enable') }}" class="stack-sm" data-confirm="{{ _('Activer le shell root ?') }}" data-confirm-text="{{ _('Toute personne connectée avec le compte admin pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.') }}" data-confirm-ok="{{ _('Activer') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <label class="f"><span>{{ _("Mot de passe du compte admin") }}</span><input type="password" name="password" required autocomplete="current-password"></label>
+            <div><button class="btn primary"><span class="spin"></span>{{ _("Activer le shell root") }}</button></div>
+          </form>
+          {% else %}<p class="muted small">{{ _("Activation enregistrée.") }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="setup-step {{ 'done' if step > 2 else 'current' if step == 2 else '' }}">
+        <span class="step-n">{{ '✓' if step > 2 else '2' }}</span>
+        <div class="step-b">
+          <h3>{{ _("Redémarrer le serveur") }}</h3>
+          {% if state == 'pending' %}
+          <p class="muted small">{{ _("Le shell ne devient disponible qu'après un redémarrage complet du serveur : une simple relance de loco ne suffit pas.") }}</p>
+          <div class="row">
+            {% if can("system.reboot") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
+              <button class="btn primary"><span class="spin"></span>{{ _("Redémarrer le serveur") }}</button>
+            </form>{% endif %}
+            <form method="post" action="{{ url_for('system_shell_disable') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn"><span class="spin"></span>{{ _("Annuler l'activation") }}</button>
+            </form>
+          </div>
+          {% elif state == 'active' %}<p class="muted small">{{ _("Serveur redémarré depuis l'activation.") }}</p>
+          {% else %}<p class="muted small">{{ _("Après l'activation, un redémarrage complet du serveur est demandé.") }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="setup-step {{ 'current' if step == 3 else '' }}">
+        <span class="step-n">3</span>
+        <div class="step-b">
+          <h3>{{ _("Ouvrir un shell") }}</h3>
+          <p class="muted small">{% if state == 'active' %}{{ _("Disponible : utilisez « Ouvrir le shell root » ci-dessus, le menu Administration ou Ctrl+K.") }}{% else %}{{ _("Le terminal apparaîtra ici une fois le serveur redémarré.") }}{% endif %}</p>
+        </div>
+      </div>
+    </div>
+    {% if state == 'active' %}
+    <div class="panel-f row-between">
+      <span>{{ _("La désactivation est immédiate et ferme les shells ouverts ; une réactivation demandera un nouveau redémarrage.") }}</span>
+      <form method="post" action="{{ url_for('system_shell_disable') }}" data-confirm="{{ _('Désactiver le shell root ?') }}" data-confirm-text="{{ _('Les shells ouverts sont fermés immédiatement. Une réactivation demandera un nouveau redémarrage.') }}" data-confirm-ok="{{ _('Désactiver') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger"><span class="spin"></span>{{ _("Désactiver") }}</button>
+      </form>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -42,7 +42,7 @@
       </details>
       {% endif %}
       {% if can_any("users.view", "roles.view", "audit.view", "system.view", "alerts.view") %}
-      <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts')) or ep in ('journal', 'system') }}">
+      <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts', 'system_shell')) or ep in ('journal', 'system') }}">
         <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">{{ _("Administration") }}</span><span class="nav-short">{{ _("Admin") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-admin">
           <div class="nav-panel">
@@ -53,6 +53,7 @@
             {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>{{ _("Système") }}</strong><small>{{ _("Services et sauvegardes") }}</small></span></a>{% endif %}
             {% if can("alerts.view") %}<a href="{{ url_for('alerts') }}" {% if ep.startswith('alerts') %}aria-current="page"{% endif %}>{{ nav_icon('bell') }}<span><strong>{{ _("Alertes") }}</strong><small>{{ _("Notifications e-mail et webhook") }}</small></span></a>{% endif %}
             {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Fonctionnalités") }}</strong><small>{{ _("Activer ou désactiver les fonctions") }}</small></span></a>{% endif %}
+            {% if server_shell %}<a href="{{ url_for('system_shell_home') }}" {% if ep.startswith('system_shell') %}aria-current="page"{% endif %}>{{ nav_icon('terminal') }}<span><strong>{{ _("Shell root") }}</strong><small>{{ {'off': _('Désactivé · terminal root du serveur'), 'pending': _('Redémarrage requis pour l\'activer'), 'active': _('Terminal root du serveur')}[server_shell] }}</small></span></a>{% endif %}
             {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>{{ _("Mises à jour") }}</strong><small>{{ _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité') }}</small></span></a>{% endif %}
             {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Configuration") }}</strong><small>{{ _("Accès, fonctions et stockage") }}</small></span></a>{% endif %}
           </div>
@@ -62,6 +63,7 @@
     </nav>
     <div class="top-r">
       {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="{{ _('Aller à une page (Ctrl+K)') }}" title="{{ _('Aller à une page') }}"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
+      {% if server_shell == 'active' %}<a class="shell-quick" href="{{ url_for('system_shell_home') }}" aria-label="{{ _('Shell root du serveur') }}" title="{{ _('Shell root du serveur') }}">{{ nav_icon('terminal') }}</a>{% endif %}
       {{ language_menu() }}
       {{ theme_toggle() }}
       {% if current_user %}
@@ -78,7 +80,7 @@
 </header>
 
 <main>
-  {% if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts')) or ep in ('journal', 'system') %}
+  {% if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts', 'system_shell')) or ep in ('journal', 'system') %}
   <div class="tabs subnav" aria-label="{{ _('Administration') }}">
     {% if can("users.view") %}<a href="{{ url_for('users') }}" class="{{ 'on' if ep.startswith('users') }}">{{ _("Comptes") }}</a>{% endif %}
     {% if can("roles.view") %}<a href="{{ url_for('roles') }}" class="{{ 'on' if ep.startswith('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
@@ -87,6 +89,7 @@
     {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">{{ _("Système") }}</a>{% endif %}
     {% if can("alerts.view") %}<a href="{{ url_for('alerts') }}" class="{{ 'on' if ep.startswith('alerts') }}">{{ _("Alertes") }}</a>{% endif %}
     {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">{{ _("Fonctionnalités") }}</a>{% endif %}
+    {% if server_shell %}<a href="{{ url_for('system_shell_home') }}" class="{{ 'on' if ep.startswith('system_shell') }}">{{ _("Shell root") }}</a>{% endif %}
     {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">{{ _("Mises à jour") }}</a>{% endif %}
     {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">{{ _("Configuration") }}</a>{% endif %}
   </div>

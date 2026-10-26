@@ -53,6 +53,24 @@ def _request(enabled):
     return True
 
 
+@app.context_processor
+def _shell_globals():
+    """État pour la navigation (menu Administration, icône de la barre) : seulement pour le compte admin."""
+    try:
+        state = status() if available() and g.get("user") is not None and is_super_admin() else None
+    except OSError:
+        state = None
+    return {"server_shell": state}
+
+
+@app.route("/system/shell")
+@login_required
+def system_shell_home():
+    _guard()
+    return render_template("server_shell_home.html", state=status(), host=request.host.split(":")[0],
+                           open_sessions=len(session.get("server_shells", [])))
+
+
 @app.route("/system/shell/enable", methods=["POST"])
 @login_required
 def system_shell_enable():
@@ -60,11 +78,11 @@ def system_shell_enable():
     if not check_password_hash(g.user["password_hash"], request.form.get("password", "")):
         audit("systeme.shell.refus", "mot de passe incorrect")
         flash(_("Mot de passe incorrect : shell root non activé."), "error")
-        return back("system")
+        return back("system_shell_home")
     if _request(True):
         audit("systeme.shell.activation", "effective au prochain redémarrage")
         flash(_("Shell root activé : redémarrez le serveur pour le rendre disponible."), "ok")
-    return back("system")
+    return back("system_shell_home")
 
 
 @app.route("/system/shell/disable", methods=["POST"])
@@ -74,7 +92,7 @@ def system_shell_disable():
     if _request(False):
         audit("systeme.shell.desactivation", "")
         flash(_("Shell root désactivé. Les shells ouverts sont fermés."), "ok")
-    return back("system")
+    return back("system_shell_home")
 
 
 @app.route("/system/shell/open", methods=["POST"])
@@ -83,7 +101,7 @@ def system_shell_open():
     _guard()
     if status() != "active":
         flash(_("Le shell root n'est pas actif sur ce serveur."), "error")
-        return back("system")
+        return back("system_shell_home")
     sid = secrets.token_hex(16)
     try:
         reply = locoadmin.shell_call({"op": "open", "sid": sid, "cols": 100, "rows": 30})
@@ -91,7 +109,7 @@ def system_shell_open():
         reply = {"state": "closed", "error": _("Broker du shell injoignable (service loco-agent).")}
     if reply.get("state") != "active":
         flash(reply.get("error") or _("Ouverture du shell impossible."), "error")
-        return back("system")
+        return back("system_shell_home")
     session["server_shells"] = (session.get("server_shells", []) + [sid])[-MAX_SESSIONS:]
     audit("systeme.shell.ouverture", sid)
     return redirect(url_for("system_shell", sid=sid))

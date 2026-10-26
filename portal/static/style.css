@@ -1359,3 +1359,19 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
   .permission-save .actions { width: 100%; }
   .permission-save .actions .primary { flex: 1; }
 }
+/* Shell root du serveur : carte « disponible », étapes de mise en service, accès rapide dans la barre. */
+.shell-ready { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.shell-ready-in { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.shell-ready-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.shell-ready-icon .nav-icon { width: 22px; height: 22px; }
+.shell-ready-text { flex: 1 1 260px; min-width: 0; }
+.shell-ready-text h2 { margin: 0 0 2px; font-size: 15px; }
+.btn .nav-icon { width: 16px; height: 16px; }
+.shell-steps .setup-step.current .step-n { background: var(--accent); color: var(--accent-fg); }
+.shell-steps .setup-step.done .step-n { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+.shell-steps .setup-step:not(.current):not(.done) .step-b > h3 { color: var(--text-3); }
+.shell-quick { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-sm); color: var(--accent); }
+.shell-quick:hover { background: var(--bg-2); }
+.shell-quick .nav-icon { width: 18px; height: 18px; }
+.shell-steps form.stack-sm { max-width: 380px; }
+.shell-steps .step-b > * + .row { margin-top: 12px; }
