@@ -8,6 +8,7 @@ sed
 tar
 procps
 iproute2
+ufw
 util-linux
 runuser
 shadow

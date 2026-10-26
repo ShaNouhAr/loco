@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.59.0 — 2026-10-26
+
+- **`ufw` présent dans l'appliance (ISO)** : le pare-feu `ufw` est désormais installé dans l'image Alpine, mais **ni activé ni configuré** — il n'applique aucune règle et ne filtre rien par défaut. Il est simplement disponible si vous souhaitez poser des règles vous-même plus tard (`ufw enable`, `ufw allow …`).
+
 ## 2.58.0 — 2026-10-26
 
 - **Ports réseau dans Système** : une nouvelle section *Administration → Système* récapitule les ports à ouvrir **en entrée** sur le pare-feu pour que l'applicatif fonctionne — interface et agents en HTTPS (8443), amorçage HTTP des postes, cache de paquets Linux (3142), cache Windows Update (80/443) et proxy Windows Update (3128). La liste s'adapte à la configuration et aux fonctionnalités activées, précise le public concerné (administration, postes Linux, postes Windows) et rappelle que le port interne de l'application reste en local.
