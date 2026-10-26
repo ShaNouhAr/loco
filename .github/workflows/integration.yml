@@ -17,6 +17,7 @@ on:
       - 'tests/*.ps1'
       - 'tests/*.json'
       - '.github/workflows/integration.yml'
+      - '.github/actions/**'
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -55,10 +56,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Outils de virtualisation
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Installation, migration, isolation, Flatpak, sauvegarde et désinstallation
         run: tests/vm-e2e.sh '${{ matrix.platform }}'
       - name: Conserver les résultats
@@ -81,10 +83,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Outils de virtualisation
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Serveur Debian 13 et poste ${{ matrix.platform }} (dépôt local, cache, EPEL, retrait)
         run: tests/vm-rpm-e2e.sh '${{ matrix.platform }}'
       - name: Conserver les résultats
@@ -105,10 +108,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Outils de virtualisation
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Image, docker compose, poste client, recréation, sauvegarde
         run: tests/vm-docker-e2e.sh
       - name: Conserver les résultats
@@ -133,10 +137,11 @@ jobs:
           name: windows-packages
           path: test-results/packages
       - name: Outils de virtualisation
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Installation, agent, GUI et CLI, mises à jour, retour arrière et désinstallation
         run: LOCO_FIXTURES="$PWD/test-results/packages" tests/vm-alpine-server-e2e.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -156,10 +161,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Outils de virtualisation et ISO
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage xorriso ovmf
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage xorriso ovmf
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Fabrique ISO, installation BIOS / UEFI, démarrage sans média, portail et commandes
         run: tests/vm-alpine-iso-build.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -186,10 +192,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Outils de virtualisation
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
-          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+        uses: ./.github/actions/apt-install
+        with:
+          packages: qemu-system-x86 qemu-utils genisoimage
+      - name: Accès à KVM
+        run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Serveur Rocky, SELinux, pare-feu, paquets, sauvegarde et désinstallation
         run: tests/vm-rocky-server-e2e.sh '${{ matrix.platform }}'
       - name: Conserver les résultats
@@ -209,11 +216,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Outil rpm
+        uses: ./.github/actions/apt-install
+        with:
+          packages: rpm
       - name: Construire de vrais paquets Debian et RPM
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q rpm
-          tests/windows-fixtures.sh test-results/packages
+        run: tests/windows-fixtures.sh test-results/packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-packages

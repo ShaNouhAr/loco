@@ -1,0 +1,43 @@
+name: Paquets Ubuntu (avec cache)
+description: >-
+  Installe des paquets Ubuntu sur le runner sans dépendre du miroir à chaque run : les .deb téléchargés une fois
+  sont gardés dans le cache GitHub Actions, par version de l'image du runner et par liste de paquets. Cache vide,
+  périmé ou inutilisable : installation normale depuis le miroir, qui remplit le cache pour les runs suivants.
+inputs:
+  packages:
+    description: Paquets à installer, séparés par des espaces
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      # ImageOS et ImageVersion sont fournis par les runners GitHub : une nouvelle image renouvelle le cache.
+      run: echo "key=apt-${ImageOS:-ubuntu}-${ImageVersion:-0}-$(printf '%s' "$PACKAGES" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/loco-apt
+        key: ${{ steps.key.outputs.key }}
+    - shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        debs="$HOME/.cache/loco-apt"
+        if [ "$HIT" = true ] && compgen -G "$debs/*.deb" >/dev/null; then
+          if sudo dpkg -i "$debs"/*.deb >/dev/null; then
+            echo "Installé depuis le cache GitHub Actions : $(find "$debs" -name '*.deb' | wc -l) paquet(s), sans miroir."
+            exit 0
+          fi
+          echo "Cache inutilisable : installation depuis le miroir."
+          sudo dpkg --configure -a || true
+        fi
+        mkdir -p "$debs/partial"
+        sudo apt-get update -q -o Acquire::Retries=5 -o APT::Update::Error-Mode=any
+        # shellcheck disable=SC2086 # liste de paquets volontairement découpée
+        sudo apt-get install -y -q -o Acquire::Retries=5 -o Dir::Cache::archives="$debs" -o APT::Keep-Downloaded-Packages=true --no-install-recommends $PACKAGES
+        sudo rm -rf "$debs/partial" "$debs/lock"
+        sudo chown -R "$(id -u):$(id -g)" "$debs"

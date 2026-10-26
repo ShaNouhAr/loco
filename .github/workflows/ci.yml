@@ -31,11 +31,12 @@ jobs:
             -g '!portal/agents/console/pyte/**' -g '!portal/agents/console/wcwidth/**' -g '!portal/loco/_vendor/**' \
             | xargs pipx run pyflakes
           docker compose -f linux/docker/docker-compose.yml config -q
+      - name: Paquets des tests unitaires
+        uses: ./.github/actions/apt-install
+        with:
+          packages: python3-flask apt-utils gnupg createrepo-c rpm
       - name: Tests unitaires du portail (rapides, hors VM)
-        run: |
-          sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends python3-flask apt-utils gnupg createrepo-c rpm
-          python3 -W error::ResourceWarning -m unittest discover -s tests
+        run: python3 -W error::ResourceWarning -m unittest discover -s tests
       - name: PowerShell (syntaxe des scripts Windows)
         shell: pwsh
         run: |
