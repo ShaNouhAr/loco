@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.67.0 — 2026-10-27
+
+- **Shell root : le terminal directement** : une fois le shell activé (et le serveur redémarré), *Administration → Shell root*, l'icône de la barre et Ctrl+K ouvrent directement le terminal root, sans page intermédiaire. Un bouton **« Désactiver le shell root »** bien visible sur le terminal ferme tous les shells et coupe l'accès (confirmation demandée) ; on revient alors à la mise en service. La page d'étapes ne sert plus que tant que le shell n'est pas actif. Le shell ne démarre qu'au premier échange du terminal (protégé contre le CSRF), jamais au simple affichage de la page.
+
 ## 2.66.0 — 2026-10-26
 
 Cette version publie aussi le contenu de 2.64.0 et 2.65.0 (page Shell root dédiée, passe d'ergonomie et de design), non publiées séparément.

@@ -1260,6 +1260,11 @@ def shell_handle(req, sessions, active=None):
                         "packets": [], "ack": 0}
             sessions[sid] = _ShellSession(cols, rows)
         return {"state": "active", "error": "", "packets": [], "ack": 0}
+    created = False
+    if session is None and op == "io" and req.get("create") and active and len(sessions) < SHELL_MAX:
+        # Premier échange du terminal (le portail ne l'autorise qu'avant toute sortie reçue) : le shell démarre ici.
+        session = sessions[sid] = _ShellSession(cols, rows)
+        created = True
     if session is None:
         return {"state": "closed", "error": t("Session terminée (agent redémarré ?) : ouvrez un nouveau shell.",
                                               "Session ended (agent restarted?): open a new shell.",
@@ -1295,7 +1300,7 @@ def shell_handle(req, sessions, active=None):
         session.close()
         del sessions[sid]
     return {"state": state, "error": "" if state == "active" else t("Shell terminé.", "Shell ended.", "Shell terminado."),
-            "packets": out, "ack": session.in_seq}
+            "packets": out, "ack": session.in_seq, "created": created}
 
 
 def _shell_housekeeping(sessions, active):

@@ -4,7 +4,7 @@
 {% from '_nav_icons.html' import ui_icon %}
 <div id="remote-session" class="remote-session" data-kind="terminal" data-label="{{ _('shell root du serveur') }}" data-io="{{ url_for('system_shell_io', sid=sid) }}" data-csrf="{{ csrf }}">
   <div class="head">
-    <div><p class="small"><a href="{{ url_for('system_shell_home') }}">{{ _("← Shell root") }}</a></p>
+    <div>
       <h1>{{ _("Shell root") }} <span class="muted">{{ host }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
       <p class="small muted remote-description">{{ _("Shell · root sur le serveur loco lui-même. Chaque ouverture et fermeture est journalisée.") }}</p>
     </div>
@@ -14,10 +14,11 @@
         <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>
       <button class="btn" id="remote-fullscreen" aria-pressed="false">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
-      <button class="btn danger" id="remote-close">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
-      <form method="post" action="{{ url_for('system_shell_open') }}">
+      <button class="btn" id="remote-close">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
+      <a class="btn primary" id="remote-reconnect" href="{{ url_for('system_shell_home') }}" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></a>
+      <form method="post" action="{{ url_for('system_shell_disable') }}" data-confirm="{{ _('Désactiver le shell root ?') }}" data-confirm-text="{{ _('Ce shell et tous les autres sont fermés immédiatement. Pour le réactiver, il faudra saisir le mot de passe admin puis redémarrer le serveur.') }}" data-confirm-ok="{{ _('Désactiver') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="btn primary" id="remote-reconnect" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
+        <button class="btn danger shell-disable">{{ ui_icon('shield') }}<span>{{ _("Désactiver le shell root") }}</span></button>
       </form>
     </div>
   </div>
@@ -31,12 +32,11 @@
         <p class="small muted" id="remote-overlay-text">{{ _("Connexion au shell root du serveur loco.") }}</p>
         <div class="remote-overlay-actions" id="remote-overlay-actions" hidden>
           <button type="button" class="btn primary" id="remote-overlay-reconnect">{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
-          <a class="btn" href="{{ url_for('system_shell_home') }}">{{ _("Shell root") }}</a>
         </div>
       </div>
     </div>
   </div>
-  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme le shell. La désactivation coupe immédiatement tous les shells ouverts.") }}</p>
+  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme ce shell. « Désactiver le shell root » ferme tous les shells et coupe l'accès jusqu'à une nouvelle activation suivie d'un redémarrage.") }}</p>
 </div>
 {% endblock %}
 {% block scripts %}

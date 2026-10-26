@@ -1,6 +1,7 @@
 """Shell root du serveur : désactivé par défaut, actif seulement après un redémarrage, réservé au compte admin."""
 import base64
 import os
+import re
 import tempfile
 import time
 import unittest
@@ -99,40 +100,51 @@ class ShellPortalTest(unittest.TestCase):
     def post(self, path, data=None, browser=None):
         return (browser or self.admin).post(path, data or {}, page="/system")
 
-    def test_menu_entry_and_page_follow_the_state(self):
+    def test_menu_entry_and_setup_page_until_active(self):
         html = self.admin.c.get("/system").get_data(as_text=True)
         self.assertIn('href="/system/shell"', html)                 # menu Administration (et donc Ctrl+K)
         self.assertNotIn("shell-quick", html)                         # icône de la barre : seulement si actif
-        page = self.admin.c.get("/system/shell").get_data(as_text=True)
-        self.assertIn("Activer le shell root", page)
+        self.assertIn("Activer le shell root", self.admin.c.get("/system/shell").get_data(as_text=True))
         self.shell_status.return_value = "pending"
         self.assertIn("Annuler l'activation", self.admin.c.get("/system/shell").get_data(as_text=True))
+
+    def test_active_shell_opens_the_terminal_directly(self):
         self.shell_status.return_value = "active"
         page = self.admin.c.get("/system/shell").get_data(as_text=True)
-        self.assertIn("Ouvrir le shell root", page)
+        self.assertIn('id="remote-session"', page)                   # le terminal, pas la mise en service
+        self.assertIn("Désactiver le shell root", page)              # bouton de désactivation sur le terminal
+        self.assertNotIn("Mise en service", page)
         self.assertIn("shell-quick", page)
-
-    def test_enable_requires_the_password(self):
-        self.post("/system/shell/enable", {"password": "faux"})
-        self.request.assert_not_called()
-        self.post("/system/shell/enable", {"password": ADMIN_PW})
-        self.request.assert_called_once_with("set-shell", {"enabled": "1"}, user="admin")
-
-    def test_open_and_relay_only_when_active(self):
-        self.assertEqual(self.post("/system/shell/open").status_code, 302)
-        self.shell_call.assert_not_called()                      # pas actif : rien d'ouvert
-        self.shell_status.return_value = "active"
-        self.shell_call.return_value = {"state": "active"}
-        r = self.post("/system/shell/open")
-        sid = r.headers["Location"].rstrip("/").rsplit("/", 1)[-1]
-        self.assertEqual(self.admin.c.get(f"/system/shell/{sid}").status_code, 200)
-        self.shell_call.return_value = {"state": "active", "error": "", "packets": [{"seq": 1, "data": "aGk="}], "ack": 1}
-        data = self.post(f"/system/shell/{sid}/io", {"seq": "1", "data": "bHMK", "ack": "0"}).get_json()
+        self.shell_call.assert_not_called()                          # un simple affichage ne démarre aucun shell
+        sid = re.search(r'data-io="/system/shell/([0-9a-f]{32})/io"', page).group(1)
+        self.shell_call.return_value = {"state": "active", "error": "", "packets": [{"seq": 1, "data": "aGk="}],
+                                        "ack": 0, "created": True}
+        data = self.post(f"/system/shell/{sid}/io", {"ack": "0"}).get_json()   # premier échange : le shell démarre
         self.assertEqual(data["packets"][0]["data"], "aGk=")
-        self.assertEqual(self.shell_call.call_args[0][0]["op"], "io")
+        self.assertTrue(self.shell_call.call_args[0][0]["create"])
+        self.post(f"/system/shell/{sid}/io", {"ack": "1"})
+        self.assertFalse(self.shell_call.call_args[0][0]["create"])   # ensuite, plus de création possible
         other = Browser()
-        other.login("admin", ADMIN_PW)                           # autre connexion : la session ne la suit pas
-        self.assertEqual(other.c.get(f"/system/shell/{sid}").status_code, 404)
+        other.login("admin", ADMIN_PW)                               # autre connexion : la session ne la suit pas
+        self.assertEqual(other.post(f"/system/shell/{sid}/io", {"ack": "0"}, page="/system").status_code, 404)
+
+    def test_disable_goes_back_to_setup_without_reopening(self):
+        self.shell_status.return_value = "active"
+        self.request.side_effect = lambda *a, **k: setattr(self.shell_status, "return_value", "off")
+        r = self.post("/system/shell/disable")
+        self.request.assert_called_once_with("set-shell", {"enabled": ""}, user="admin")
+        page = self.admin.c.get(r.headers["Location"]).get_data(as_text=True)
+        self.assertIn("Activer le shell root", page)                 # retour à la mise en service
+        self.shell_status.return_value = "active"                    # agent encore en retard sur la demande
+        with self.admin.c.session_transaction() as sess:
+            sess["shell_disabling"] = time.time()
+        page = self.admin.c.get("/system/shell").get_data(as_text=True)
+        self.assertIn("Désactivation en cours", page)
+        self.assertNotIn('id="remote-session"', page)               # jamais de nouveau terminal entre-temps
+
+    def test_old_addresses_redirect_to_the_shell_page(self):
+        self.assertEqual(self.post("/system/shell/open").status_code, 302)
+        self.assertTrue(self.admin.c.get("/system/shell/" + "a" * 32).headers["Location"].endswith("/system/shell"))
 
     @staticmethod
     def _drop_ops():

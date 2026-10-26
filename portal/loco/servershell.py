@@ -4,6 +4,7 @@ Désactivé par défaut ; activé, il ne devient disponible qu'après un redéma
 « admin » de l'installation. Le terminal (remote.js) parle au broker de l'agent root par un socket Unix.
 """
 import secrets
+import time
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash
@@ -66,9 +67,19 @@ def _shell_globals():
 @app.route("/system/shell")
 @login_required
 def system_shell_home():
+    """Shell actif : le terminal directement. Sinon : la mise en service (activer, redémarrer)."""
     _guard()
-    return render_template("server_shell_home.html", state=status(), host=request.host.split(":")[0],
-                           open_sessions=len(session.get("server_shells", [])))
+    state, host = status(), request.host.split(":")[0]
+    if state != "active":
+        session.pop("shell_disabling", None)
+    elif time.time() - session.get("shell_disabling", 0) < 30:
+        state = "disabling"                   # désactivation demandée, pas encore appliquée : ne pas rouvrir de shell
+    if state != "active":
+        return render_template("server_shell_home.html", state=state, host=host)
+    # Rien ne démarre ici (simple affichage) : le shell s'ouvre au premier échange du terminal, protégé par le CSRF.
+    sid = secrets.token_hex(16)
+    session["server_shells"] = (session.get("server_shells", []) + [sid])[-MAX_SESSIONS:]
+    return render_template("server_shell.html", sid=sid, host=host)
 
 
 @app.route("/system/shell/enable", methods=["POST"])
@@ -91,36 +102,23 @@ def system_shell_disable():
     _guard()
     if _request(False):
         audit("systeme.shell.desactivation", "")
+        for _i in range(24):                  # l'agent root applique la demande en 2 à 3 s : l'attendre, sans plus
+            if status() != "active":
+                break
+            time.sleep(0.25)
+        if status() == "active":
+            session["shell_disabling"] = time.time()
         flash(_("Shell root désactivé. Les shells ouverts sont fermés."), "ok")
     return back("system_shell_home")
 
 
 @app.route("/system/shell/open", methods=["POST"])
-@login_required
-def system_shell_open():
-    _guard()
-    if status() != "active":
-        flash(_("Le shell root n'est pas actif sur ce serveur."), "error")
-        return back("system_shell_home")
-    sid = secrets.token_hex(16)
-    try:
-        reply = locoadmin.shell_call({"op": "open", "sid": sid, "cols": 100, "rows": 30})
-    except (OSError, ValueError):
-        reply = {"state": "closed", "error": _("Broker du shell injoignable (service loco-agent).")}
-    if reply.get("state") != "active":
-        flash(reply.get("error") or _("Ouverture du shell impossible."), "error")
-        return back("system_shell_home")
-    session["server_shells"] = (session.get("server_shells", []) + [sid])[-MAX_SESSIONS:]
-    audit("systeme.shell.ouverture", sid)
-    return redirect(url_for("system_shell", sid=sid))
-
-
 @app.route("/system/shell/<sid>")
 @login_required
-def system_shell(sid):
+def system_shell_open(sid=None):
+    """Anciennes adresses (avant 2.67) : la page Shell root ouvre désormais le terminal elle-même."""
     _guard()
-    _owned(sid)
-    return render_template("server_shell.html", sid=sid, host=request.host.split(":")[0])
+    return redirect(url_for("system_shell_home"))
 
 
 @app.route("/system/shell/<sid>/io", methods=["POST"])
@@ -135,11 +133,15 @@ def system_shell_io(sid):
         session["server_shells"] = [s for s in session.get("server_shells", []) if s != sid]
         audit("systeme.shell.fermeture", sid)
     else:
+        # Tant qu'aucune sortie n'est reçue (ack 0), le broker peut démarrer le shell de cette session.
         req = {"op": "io", "sid": sid, "seq": request.form.get("seq", 0), "data": request.form.get("data", ""),
-               "ack": request.form.get("ack", 0), "cols": request.form.get("cols", 100), "rows": request.form.get("rows", 30)}
+               "ack": request.form.get("ack", 0), "cols": request.form.get("cols", 100), "rows": request.form.get("rows", 30),
+               "create": str(request.form.get("ack", "0")) == "0"}
     try:
         reply = locoadmin.shell_call(req)
     except (OSError, ValueError):
         reply = {"state": "closed", "error": _("Broker du shell injoignable (service loco-agent)."), "packets": [], "ack": 0}
+    if reply.get("created"):
+        audit("systeme.shell.ouverture", sid)
     return ({"state": reply.get("state", "closed"), "error": reply.get("error", ""), "packets": reply.get("packets", []),
              "ack": reply.get("ack", 0)}, 200, {"Cache-Control": "no-store"})
