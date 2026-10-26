@@ -1,4 +1,5 @@
 #!/bin/sh
-# Appliance loco : bannière de la console (adresse du portail, empreinte de l'autorité HTTPS), à chaque démarrage.
+# Appliance loco : bannière console /etc/issue (portail, empreinte HTTPS) et MOTD /etc/motd (après connexion,
+# console et SSH), régénérées à chaque démarrage.
 # shellcheck source=linux/lib/appliance.sh
-. /opt/loco/lib/appliance.sh && appliance_issue
+. /opt/loco/lib/appliance.sh && appliance_issue && appliance_motd

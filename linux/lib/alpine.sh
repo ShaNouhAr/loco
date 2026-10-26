@@ -106,7 +106,7 @@ alpine_services() {
         install -m 755 "$SRC/conf/loco-issue.start" /etc/local.d/loco-issue.start
         rc-update add local default >/dev/null 2>&1 || true
         # shellcheck source=linux/lib/appliance.sh
-        (. "$SRC/lib/appliance.sh" && appliance_issue)
+        (. "$SRC/lib/appliance.sh" && appliance_issue && appliance_motd)
     fi
 }
 

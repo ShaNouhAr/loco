@@ -89,7 +89,7 @@ PasswordAuthentication no' ;;
         off) ssh_policy='PermitRootLogin no
 PasswordAuthentication no' ;;
     esac
-    printf '%s\nPermitEmptyPasswords no\nKbdInteractiveAuthentication no\n' "$ssh_policy" \
+    printf '%s\nPermitEmptyPasswords no\nKbdInteractiveAuthentication no\nPrintMotd yes\n' "$ssh_policy" \
         > "$ssh_root/etc/ssh/sshd_config.d/loco.conf"
     if ! grep -q '^Include /etc/ssh/sshd_config.d/' "$ssh_root/etc/ssh/sshd_config"; then
         sed -i '1i Include /etc/ssh/sshd_config.d/*.conf' "$ssh_root/etc/ssh/sshd_config"
@@ -177,4 +177,27 @@ appliance_issue() {
         fi
         printf '\n  %s\n\n' "$(t 'Console (root) : setup-loco (réseau, mots de passe), loco-update, loco-config' 'Console (root): setup-loco (network, passwords), loco-update, loco-config' 'Consola (root): setup-loco (red, contraseñas), loco-update, loco-config')"
     } > /etc/issue
+}
+
+# MOTD (après connexion, console et SSH) : logo loco, version, adresse du portail.
+appliance_motd() {
+    host="" port=8443
+    if [ -f /etc/loco/loco.conf ]; then
+        host=$(sed -n 's/^HOST=//p' /etc/loco/loco.conf)
+        port=$(sed -n 's/^HTTPS_PORT=//p' /etc/loco/loco.conf)
+    fi
+    version=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' /opt/loco/portal/loco/config.py 2>/dev/null)
+    G=$(printf '\033[1;32m'); B=$(printf '\033[1m'); D=$(printf '\033[2m'); N=$(printf '\033[0m')
+    {
+        printf '\n%s   _%s\n' "$G" ""
+        printf '  | | ___   ___ ___\n'
+        printf '  | |/ _ \\ / __/ _ \\\n'
+        printf '  | | (_) | (_| (_) |\n'
+        printf '  |_|\\___/ \\___\\___/%s  %s%s%s\n\n' "$N" "$D" "$(t 'gestion de parc et caches' 'fleet & cache management' 'gestión de parque y cachés')" "$N"
+        printf '  %sloco %s%s  %s·  Alpine Linux %s%s\n' "$B" "${version:-?}" "$N" "$D" "$(cat /etc/alpine-release 2>/dev/null)" "$N"
+        if [ -n "$host" ]; then
+            printf '  %s%-9s%s https://%s:%s\n' "$D" "$(t 'Portail' 'Portal' 'Portal')" "$N" "$host" "$port"
+        fi
+        printf '  %s%-9s%s setup-loco · loco-update · loco-config\n\n' "$D" "$(t 'Console' 'Console' 'Consola')" "$N"
+    } > /etc/motd
 }
