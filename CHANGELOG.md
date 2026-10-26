@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.62.0 — 2026-10-26
+
+- **`ufw` présent aussi sur les appliances existantes** : en 2.59 le paquet `ufw` n'était ajouté qu'à l'image ISO (nouvelles installations). Il est désormais aussi dans la liste de paquets appliquée par `install.sh`, donc une appliance déjà installée reçoit `ufw` à sa prochaine mise à jour de loco. Toujours installé sans être activé ni configuré.
+
 ## 2.61.0 — 2026-10-26
 
 - **État NTP correct sur l'appliance Alpine** : *Système → heure du serveur* lisait l'état de synchronisation uniquement via `timedatectl`, absent sur l'appliance Alpine — le bandeau affichait donc toujours « synchronisation NTP désactivée », même quand chrony était actif et synchronisé. L'état (activé / synchronisé / en cours) est désormais lu depuis chrony quand `timedatectl` n'existe pas. À utiliser avec le correctif de 2.60 (rechargement de chrony par `rc-service`).

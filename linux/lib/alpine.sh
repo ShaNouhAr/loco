@@ -5,7 +5,7 @@
 # Pas d'apt-cacher-ng sur Alpine : le cache APT est servi par nginx (même gabarit que sous Windows),
 # les index APT/RPM sont produits en Python (debpkg, rpmpkg).
 
-ALPINE_PACKAGES=(bash coreutils findutils grep sed tar procps iproute2 util-linux runuser shadow
+ALPINE_PACKAGES=(bash coreutils findutils grep sed tar procps iproute2 ufw util-linux runuser shadow
                  nginx nginx-mod-stream python3 py3-flask py3-gunicorn py3-cryptography py3-zstandard gnupg
                  curl openssl ca-certificates supervisor squid logrotate tzdata)
 
