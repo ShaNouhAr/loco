@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Shell root") }} · {{ host }}{% endblock %}
+{% block content %}
+{% from '_nav_icons.html' import ui_icon %}
+<div id="remote-session" class="remote-session" data-kind="terminal" data-label="{{ _('shell root du serveur') }}" data-io="{{ url_for('system_shell_io', sid=sid) }}" data-csrf="{{ csrf }}">
+  <div class="head">
+    <div><p class="small"><a href="{{ url_for('system') }}">{{ _("Retour à Système") }}</a></p>
+      <h1>{{ _("Shell root") }} <span class="muted">{{ host }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
+      <p class="small muted remote-description">{{ _("Shell · root sur le serveur loco lui-même. Chaque ouverture et fermeture est journalisée.") }}</p>
+    </div>
+    <div class="actions">
+      <div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
+        <button type="button" class="btn sm" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
+        <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
+      </div>
+      <button class="btn" id="remote-fullscreen" aria-pressed="false">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
+      <button class="btn danger" id="remote-close">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
+      <form method="post" action="{{ url_for('system_shell_open') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn primary" id="remote-reconnect" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
+      </form>
+    </div>
+  </div>
+  <div class="remote-stage" id="remote-stage">
+    <div id="remote-screen" class="remote-screen terminal"></div>
+    <div class="remote-overlay" id="remote-overlay">
+      <div class="remote-overlay-box">
+        <span class="spin remote-spinner" id="remote-overlay-spinner" aria-hidden="true"></span>
+        <span class="remote-overlay-icon" id="remote-overlay-icon" hidden>{{ ui_icon('unplug') }}</span>
+        <p class="remote-overlay-title" id="remote-overlay-title">{{ _("Ouverture du shell…") }}</p>
+        <p class="small muted" id="remote-overlay-text">{{ _("Connexion au shell root du serveur loco.") }}</p>
+        <div class="remote-overlay-actions" id="remote-overlay-actions" hidden>
+          <button type="button" class="btn primary" id="remote-overlay-reconnect">{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
+          <a class="btn" href="{{ url_for('system') }}">{{ _("Retour à Système") }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme le shell. La désactivation dans Système coupe immédiatement tous les shells ouverts.") }}</p>
+</div>
+{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/xterm-6.0.0/css/xterm.css') }}">
+<script src="{{ url_for('static', filename='vendor/xterm-6.0.0/lib/xterm.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/xterm-fit-0.11.0/lib/addon-fit.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='remote.js') }}?v={{ asset_v }}"></script>
+{% endblock %}

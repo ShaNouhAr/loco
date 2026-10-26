@@ -11,6 +11,7 @@ revalide, lance une opération à la fois et publie l'état (STATUS, JOBS) en le
 L'état de l'agent est dans un dossier appartenant à root : le compte loco ne peut pas y substituer de liens.
 """
 
+import base64
 import contextlib
 import datetime
 import fcntl
@@ -19,14 +20,20 @@ import ipaddress
 import importlib.util
 import json
 import os
+import pty
 import re
+import select
 import shlex
 import shutil
+import socket
 import stat
+import struct
 import subprocess
 import sys
 import tarfile
 import tempfile
+import termios
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -57,7 +64,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
@@ -1076,6 +1083,295 @@ def reboot(log=print):
     return True
 
 
+# --------------------------------------------------------------------------- shell root du serveur
+# Désactivé par défaut. L'activation enregistre le jeton du démarrage en cours (dans /run, vidé à chaque démarrage) :
+# le shell ne devient disponible qu'après un redémarrage du serveur. La désactivation est immédiate.
+# Le portail (utilisateur loco) parle au broker de l'agent root par un socket Unix réservé au groupe loco.
+SHELL_FLAG = os.path.join(ETC, "server-shell")
+SHELL_RUN = "/run/loco-shell"
+SHELL_BOOT = os.path.join(SHELL_RUN, "boot")
+SHELL_SOCK = os.path.join(SHELL_RUN, "shell.sock")
+SHELL_SID_RE = re.compile(r"[0-9a-f]{32}")
+SHELL_MAX = 4                      # sessions simultanées
+SHELL_IDLE = 120                   # sans échange du navigateur (onglet fermé) : session fermée
+SHELL_TTL = 8 * 3600               # durée maximale d'une session
+SHELL_BUFFER = 2 * 1024 * 1024     # sortie non acquittée gardée au plus (au-delà, le shell attend)
+SHELL_REPLY = 1024 * 1024          # sortie renvoyée au plus par échange
+
+
+def shell_status():
+    """« off » (désactivé), « pending » (activé, en attente d'un redémarrage) ou « active »."""
+    try:
+        with open(SHELL_FLAG) as f:
+            flag = json.load(f)
+    except (OSError, ValueError):
+        return "off"
+    try:
+        with open(SHELL_BOOT) as f:
+            boot = f.read().strip()
+    except OSError:
+        boot = ""                  # /run vidé depuis l'activation : le serveur a redémarré
+    return "pending" if boot and isinstance(flag, dict) and flag.get("boot") == boot else "active"
+
+
+def _shell_runtime():
+    """Dossier d'exécution (root:loco 0750) et jeton du démarrage en cours ; renvoie le jeton."""
+    os.makedirs(SHELL_RUN, exist_ok=True)
+    shutil.chown(SHELL_RUN, "root", "loco")
+    os.chmod(SHELL_RUN, 0o750)
+    if not os.path.exists(SHELL_BOOT):
+        with open(SHELL_BOOT + ".tmp", "w") as f:
+            f.write(uuid.uuid4().hex)
+        os.chmod(SHELL_BOOT + ".tmp", 0o644)
+        os.replace(SHELL_BOOT + ".tmp", SHELL_BOOT)
+    with open(SHELL_BOOT) as f:
+        return f.read().strip()
+
+
+def set_shell(params, log=print):
+    """Active (effectif au prochain redémarrage) ou désactive (immédiat) le shell root du portail."""
+    if str((params or {}).get("enabled", "")) == "1":
+        boot = _shell_runtime()
+        _write_conf_file(SHELL_FLAG, json.dumps({"boot": boot, "at": _now()}) + "\n")
+        log(t("Shell root activé : il sera disponible après le redémarrage du serveur.",
+              "Root shell enabled: it will be available after the server reboots.",
+              "Shell root activado: estará disponible tras reiniciar el servidor."))
+    else:
+        try:
+            os.remove(SHELL_FLAG)
+        except FileNotFoundError:
+            pass
+        log(t("Shell root désactivé ; les sessions ouvertes sont fermées.",
+              "Root shell disabled; open sessions are closed.",
+              "Shell root desactivado; las sesiones abiertas se cierran."))
+    return True
+
+
+class _ShellSession:
+    """Shell de connexion root dans un pseudo-terminal ; sortie découpée en paquets numérotés à acquitter."""
+
+    def __init__(self, cols, rows):
+        self.created = self.seen = time.time()
+        self.in_seq = self.out_seq = 0
+        self.packets = []          # [(seq, octets)] non acquittés
+        self.alive, self.error = True, ""
+        pid, fd = pty.fork()
+        if pid == 0:               # enfant : rien de l'agent ne doit fuir dans le shell
+            try:
+                os.closerange(3, 65536)
+                try:
+                    os.chdir("/root")
+                except OSError:
+                    os.chdir("/")
+                shell = "/bin/bash" if os.path.exists("/bin/bash") else "/bin/sh"
+                env = {"TERM": "xterm-256color", "HOME": "/root", "USER": "root", "LOGNAME": "root", "SHELL": shell,
+                       "LANG": "C.UTF-8", "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+                os.execve(shell, [shell, "-l"], env)
+            finally:
+                os._exit(127)
+        self.pid, self.fd = pid, fd
+        os.set_blocking(fd, False)
+        self.resize(cols, rows)
+
+    def resize(self, cols, rows):
+        try:
+            fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+        except OSError:
+            pass
+
+    def pump(self):
+        """Lit la sortie disponible (sans dépasser le tampon) et constate la fin du shell."""
+        pending = sum(len(d) for _, d in self.packets)
+        while self.alive and pending < SHELL_BUFFER:
+            try:
+                data = os.read(self.fd, 65536)
+            except BlockingIOError:
+                break
+            except OSError:        # EIO : le shell est terminé
+                data = b""
+            if not data:
+                self.alive = False
+                break
+            self.out_seq += 1
+            self.packets.append((self.out_seq, data))
+            pending += len(data)
+        if self.alive:
+            try:
+                if os.waitpid(self.pid, os.WNOHANG)[0]:
+                    self.alive = False
+            except ChildProcessError:
+                self.alive = False
+
+    def write(self, data):
+        view = memoryview(data)
+        deadline = time.time() + 2
+        while view and time.time() < deadline:
+            try:
+                n = os.write(self.fd, view)
+                view = view[n:]
+            except BlockingIOError:
+                select.select([], [self.fd], [], 0.1)
+            except OSError:
+                self.alive = False
+                return
+
+    def close(self):
+        for sig in (1, 9):         # SIGHUP puis SIGKILL
+            try:
+                os.killpg(self.pid, sig)
+            except OSError:
+                pass
+            time.sleep(0.05)
+        try:
+            os.waitpid(self.pid, os.WNOHANG)
+        except ChildProcessError:
+            pass
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+        self.alive = False
+
+
+def _shell_number(value, low, high, default):
+    try:
+        return min(high, max(low, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def shell_handle(req, sessions, active=None):
+    """Une demande du portail : open / io / close. Réponse au format du relais des terminaux (remote.js)."""
+    active = shell_status() == "active" if active is None else active
+    sid = str(req.get("sid", ""))
+    if not SHELL_SID_RE.fullmatch(sid):
+        return {"state": "closed", "error": "session invalide", "packets": [], "ack": 0}
+    op = req.get("op")
+    cols = _shell_number(req.get("cols"), 20, 500, 100)
+    rows = _shell_number(req.get("rows"), 5, 200, 30)
+    session = sessions.get(sid)
+    if op == "open":
+        if not active:
+            return {"state": "closed", "error": t("Shell root non activé.", "Root shell not enabled.", "Shell root no activado."),
+                    "packets": [], "ack": 0}
+        if session is None:
+            if len(sessions) >= SHELL_MAX:
+                return {"state": "closed", "error": t("Trop de shells ouverts.", "Too many open shells.", "Demasiados shells abiertos."),
+                        "packets": [], "ack": 0}
+            sessions[sid] = _ShellSession(cols, rows)
+        return {"state": "active", "error": "", "packets": [], "ack": 0}
+    if session is None:
+        return {"state": "closed", "error": t("Session terminée (agent redémarré ?) : ouvrez un nouveau shell.",
+                                              "Session ended (agent restarted?): open a new shell.",
+                                              "Sesión terminada (¿agente reiniciado?): abra un nuevo shell."), "packets": [], "ack": 0}
+    if op == "close" or not active:
+        session.close()
+        del sessions[sid]
+        return {"state": "closed", "error": "" if op == "close" else t("Shell root désactivé.", "Root shell disabled.", "Shell root desactivado."),
+                "packets": [], "ack": session.in_seq}
+    if op != "io":
+        return {"state": "closed", "error": "opération inconnue", "packets": [], "ack": session.in_seq}
+    session.seen = time.time()
+    seq = _shell_number(req.get("seq"), 0, 2**53, 0)
+    if seq and seq == session.in_seq + 1 and session.alive:
+        try:
+            data = base64.b64decode(str(req.get("data", "")), validate=True)
+        except ValueError:
+            data = b""
+        session.write(data[:256 * 1024])
+        session.in_seq = seq
+    session.resize(cols, rows)
+    ack = _shell_number(req.get("ack"), 0, 2**53, 0)
+    session.packets = [(s, d) for s, d in session.packets if s > ack]
+    session.pump()
+    out, size = [], 0
+    for s, d in session.packets:
+        if out and size + len(d) > SHELL_REPLY:
+            break
+        out.append({"seq": s, "data": base64.b64encode(d).decode()})
+        size += len(d)
+    state = "active" if session.alive or session.packets else "closed"
+    if state == "closed":
+        session.close()
+        del sessions[sid]
+    return {"state": state, "error": "" if state == "active" else t("Shell terminé.", "Shell ended.", "Shell terminado."),
+            "packets": out, "ack": session.in_seq}
+
+
+def _shell_housekeeping(sessions, active):
+    now = time.time()
+    for sid, session in list(sessions.items()):
+        if active:
+            session.pump()
+        if not active or now - session.seen > SHELL_IDLE or now - session.created > SHELL_TTL:
+            session.close()
+            del sessions[sid]
+
+
+def shell_broker(path=None):
+    """Service du shell root (fil de l'agent) : une demande JSON par connexion sur le socket Unix."""
+    path = path or SHELL_SOCK
+    sessions = {}
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(path)
+    if path == SHELL_SOCK:
+        shutil.chown(path, "root", "loco")
+    os.chmod(path, 0o660)
+    server.listen(8)
+    checked, active = 0, False
+    while True:
+        if time.time() - checked > 0.5:
+            checked, active = time.time(), shell_status() == "active"
+            _shell_housekeeping(sessions, active)
+        ready, _, _ = select.select([server], [], [], 0.2)
+        if not ready:
+            continue
+        conn, _ = server.accept()
+        try:
+            conn.settimeout(3)
+            buf = b""
+            while not buf.endswith(b"\n") and len(buf) < 600 * 1024:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    break
+                buf += chunk
+            try:
+                req = json.loads(buf)
+                # État relu à chaque demande : une désactivation vaut tout de suite, sans fenêtre de course.
+                reply = shell_handle(req, sessions) if isinstance(req, dict) else {"state": "closed", "error": "demande invalide"}
+            except ValueError:
+                reply = {"state": "closed", "error": "demande invalide", "packets": [], "ack": 0}
+            conn.sendall(json.dumps(reply).encode() + b"\n")
+        except OSError:
+            pass
+        finally:
+            conn.close()
+
+
+def shell_call(req, path=None, timeout=5):
+    """Côté portail : envoie une demande au broker et renvoie sa réponse."""
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout)
+    try:
+        client.connect(path or SHELL_SOCK)
+        client.sendall(json.dumps(req).encode() + b"\n")
+        buf = b""
+        while not buf.endswith(b"\n"):
+            chunk = client.recv(262144)
+            if not chunk:
+                break
+            buf += chunk
+            if len(buf) > 4 * 1024 * 1024:
+                raise ValueError("réponse trop longue")
+    finally:
+        client.close()
+    return json.loads(buf)
+
+
 # Noms d'archives produits par loco-backup : « loco-HÔTE-DATE-HEURE.tar.gz » (et local-repo-… d'avant le renommage).
 BACKUP_NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
 
@@ -1243,6 +1539,8 @@ def _operation(action, params, log):
         return set_backup_keep(params, log)
     if action == "delete-backup":
         return delete_backup(params, log)
+    if action == "set-shell":
+        return set_shell(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1386,6 +1684,12 @@ def agent():
     """Service loco-agent : traite les demandes du portail et vérifie les versions chaque jour."""
     _prepare_dirs()
     _share_backups()
+    # Shell root du portail : jeton de ce démarrage, puis broker (refuse tout tant que le shell n'est pas actif).
+    try:
+        _shell_runtime()
+        threading.Thread(target=shell_broker, name="loco-shell", daemon=True).start()
+    except OSError as e:
+        print(f"shell root indisponible : {e}", file=sys.stderr)
     code = os.stat(HERE).st_mtime_ns
     beat = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.
@@ -1458,6 +1762,8 @@ def agent():
                     if not BACKUP_NAME_RE.fullmatch(name):
                         continue
                     params = {"name": name}
+                elif req["action"] == "set-shell":
+                    params = {"enabled": "1" if str((req.get("params") or {}).get("enabled", "")) == "1" else ""}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -1538,6 +1844,8 @@ def request(action, params=None, user=""):
         if not BACKUP_NAME_RE.fullmatch(name):
             raise ValueError("nom de sauvegarde invalide")
         params = {"name": name}
+    elif action == "set-shell":
+        params = {"enabled": "1" if str((params or {}).get("enabled", "")) == "1" else ""}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")

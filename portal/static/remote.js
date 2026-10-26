@@ -11,7 +11,7 @@ const encoder = new TextEncoder();
 let running = true, inputSeq = 0, outputAck = 0, queue = new Uint8Array(), pending = null;
 let terminal, fit, rfb, channel, failures = 0, cols = 100, rows = 30;
 let pollTimer, inFlight = false, quiet = 0, rtt = 0, lastLabel = '';
-let remoteLabel = root.dataset.kind === 'terminal' ? t('terminal du poste') : t('bureau du poste'), secureDesktop = false;
+let remoteLabel = root.dataset.label || (root.dataset.kind === 'terminal' ? t('terminal du poste') : t('bureau du poste')), secureDesktop = false;
 function schedulePoll(delay = 0) {
   if (!running || inFlight) return;
   clearTimeout(pollTimer); pollTimer = setTimeout(poll, delay);

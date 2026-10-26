@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.63.0 — 2026-10-26
+
+- **Shell root du serveur dans le navigateur** (*Système → Shell root du serveur*) : un terminal root sur le serveur loco lui-même (installation Linux ou appliance), réservé au compte « admin » de l'installation. **Désactivé par défaut** ; l'activation demande le mot de passe du compte admin et **ne prend effet qu'après un redémarrage du serveur** (bouton de redémarrage proposé). La désactivation est immédiate et ferme les shells ouverts. Chaque activation, ouverture et fermeture est journalisée. Le terminal est servi par l'agent root via un socket local réservé au portail.
+
 ## 2.62.0 — 2026-10-26
 
 - **`ufw` présent aussi sur les appliances existantes** : en 2.59 le paquet `ufw` n'était ajouté qu'à l'image ISO (nouvelles installations). Il est désormais aussi dans la liste de paquets appliquée par `install.sh`, donc une appliance déjà installée reçoit `ufw` à sa prochaine mise à jour de loco. Toujours installé sans être activé ni configuré.

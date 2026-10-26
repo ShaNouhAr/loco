@@ -17,6 +17,8 @@ from .auth import audit, login_required
 from .db import db
 from .linux import list_debs
 from .util import back, disk_usage, read_stats, service_active
+from .features import is_super_admin
+from . import servershell
 
 if config.SERVER_UPDATES:
     import locoadmin
@@ -341,6 +343,7 @@ def system():
         time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
         timezones=timezones() if config.SERVER_UPDATES and not config.WINDOWS else [],
         qemu=qemu_agent() if config.SERVER_UPDATES and not config.WINDOWS else None,
+        shell=servershell.status() if servershell.available() and is_super_admin() else None,
     )
 
 

@@ -145,6 +145,43 @@
       <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas. En sortie, le serveur doit joindre les miroirs amont (dépôts des distributions, Microsoft Update, Flathub) en HTTP/HTTPS pour alimenter les caches.") }}</div>
     </section>
 
+    {% if shell %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Shell root du serveur") }}</h2>
+        <div class="aside"><span class="st {{ 'ok' if shell == 'active' else 'warn' if shell == 'pending' else '' }}">{{ {'off': _('désactivé'), 'pending': _('redémarrage requis'), 'active': _('actif')}[shell] }}</span></div></div>
+      <div class="panel-b stack-sm">
+        <p class="muted small">{{ _("Terminal root du serveur loco dans le navigateur, réservé au compte « admin » de l'installation. Désactivé par défaut : une fois activé, il ne devient disponible qu'après un redémarrage du serveur. La désactivation est immédiate et coupe les shells ouverts.") }}</p>
+        {% if shell == 'off' %}
+        <form method="post" action="{{ url_for('system_shell_enable') }}" class="stack-sm" data-confirm="{{ _('Activer le shell root ?') }}" data-confirm-text="{{ _('Toute personne connectée avec le compte admin pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.') }}" data-confirm-ok="{{ _('Activer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label class="f"><span>{{ _("Mot de passe du compte admin") }}</span><input type="password" name="password" required autocomplete="current-password" class="field-md"></label>
+          <div><button class="btn"><span class="spin"></span>{{ _("Activer le shell root") }}</button></div>
+        </form>
+        {% elif shell == 'pending' %}
+        <p class="note warn">{{ _("Activation enregistrée : redémarrez le serveur pour rendre le shell root disponible.") }}</p>
+        <div class="row">
+          {% if can("system.reboot") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
+            <button class="btn primary"><span class="spin"></span>{{ _("Redémarrer le serveur") }}</button>
+          </form>{% endif %}
+          <form method="post" action="{{ url_for('system_shell_disable') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn"><span class="spin"></span>{{ _("Annuler l'activation") }}</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="row">
+          <form method="post" action="{{ url_for('system_shell_open') }}" target="_blank" rel="noopener">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary">{{ _("Ouvrir un shell root") }}</button>
+          </form>
+          <form method="post" action="{{ url_for('system_shell_disable') }}" data-confirm="{{ _('Désactiver le shell root ?') }}" data-confirm-text="{{ _('Les shells ouverts sont fermés immédiatement. Une réactivation demandera un nouveau redémarrage.') }}" data-confirm-ok="{{ _('Désactiver') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn danger"><span class="spin"></span>{{ _("Désactiver") }}</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
       {% set can_backup = not windows and can('system.configure') %}
