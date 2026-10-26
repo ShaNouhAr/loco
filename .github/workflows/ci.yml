@@ -34,7 +34,7 @@ jobs:
       - name: Tests unitaires du portail (rapides, hors VM)
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends python3-flask apt-utils gnupg createrepo-c rpm
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends python3-flask apt-utils gnupg createrepo-c rpm
           python3 -W error::ResourceWarning -m unittest discover -s tests
       - name: PowerShell (syntaxe des scripts Windows)
         shell: pwsh

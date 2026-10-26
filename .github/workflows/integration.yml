@@ -57,7 +57,7 @@ jobs:
       - name: Outils de virtualisation
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Installation, migration, isolation, Flatpak, sauvegarde et désinstallation
         run: tests/vm-e2e.sh '${{ matrix.platform }}'
@@ -83,7 +83,7 @@ jobs:
       - name: Outils de virtualisation
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Serveur Debian 13 et poste ${{ matrix.platform }} (dépôt local, cache, EPEL, retrait)
         run: tests/vm-rpm-e2e.sh '${{ matrix.platform }}'
@@ -107,7 +107,7 @@ jobs:
       - name: Outils de virtualisation
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Image, docker compose, poste client, recréation, sauvegarde
         run: tests/vm-docker-e2e.sh
@@ -135,7 +135,7 @@ jobs:
       - name: Outils de virtualisation
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Installation, agent, GUI et CLI, mises à jour, retour arrière et désinstallation
         run: LOCO_FIXTURES="$PWD/test-results/packages" tests/vm-alpine-server-e2e.sh
@@ -158,7 +158,7 @@ jobs:
       - name: Outils de virtualisation et ISO
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage xorriso ovmf
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage xorriso ovmf
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Fabrique ISO, installation BIOS / UEFI, démarrage sans média, portail et commandes
         run: tests/vm-alpine-iso-build.sh
@@ -188,7 +188,7 @@ jobs:
       - name: Outils de virtualisation
         run: |
           sudo apt-get update -q -o APT::Update::Error-Mode=any
-          sudo apt-get install -y -q --no-install-recommends qemu-system-x86 qemu-utils genisoimage
+          sudo apt-get install -y -q -o Acquire::Retries=5 --no-install-recommends qemu-system-x86 qemu-utils genisoimage
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
       - name: Serveur Rocky, SELinux, pare-feu, paquets, sauvegarde et désinstallation
         run: tests/vm-rocky-server-e2e.sh '${{ matrix.platform }}'

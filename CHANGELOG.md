@@ -2,6 +2,8 @@
 
 ## 2.66.0 — 2026-10-26
 
+Cette version publie aussi le contenu de 2.64.0 et 2.65.0 (page Shell root dédiée, passe d'ergonomie et de design), non publiées séparément.
+
 - **Intégration continue plus rapide et plus sobre, simple à reprendre** : chaque push ne lance plus que les vérifications rapides (lint, tests unitaires, syntaxe PowerShell — ~3 min, sans machine virtuelle). Les tests d'intégration complets (VM Linux, Docker, ISO, serveurs Windows) tournent quand un push touche les installeurs, les agents ou l'ISO, et toujours avant une publication : pousser un tag `vX.Y.Z` vérifie, teste et publie en un seul run (ISO et agent Windows publiés = ceux testés). Plus de bridage du parallélisme, QEMU installé sans paquets graphiques (43 paquets au lieu de 298), plus de lancement hebdomadaire automatique. Un fork fonctionne sans secret ni serveur : voir *Intégration continue et publication* dans le README.
 
 ## 2.65.0 — 2026-10-26
