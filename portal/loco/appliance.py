@@ -19,7 +19,27 @@ if config.SERVER_UPDATES:
 
 ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": L_("Mise à jour de loco"),
                  "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
-                 "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Source des mises à jour")}
+                 "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Source des mises à jour"),
+                 "set-time": L_("Heure du serveur"), "install-qemu-agent": L_("Installation de l'agent invité QEMU"),
+                 "restore": L_("Restauration d'une sauvegarde"), "set-backup-keep": L_("Conservation des sauvegardes"),
+                 "delete-backup": L_("Suppression d'une sauvegarde"), "set-shell": L_("Shell root du serveur")}
+
+
+def job_detail(job):
+    """Résumé lisible des paramètres d'une opération (au lieu de « clé=valeur »)."""
+    p, action = job.get("params") or {}, job.get("action")
+    if action == "set-shell":
+        return _("activation (effective au redémarrage)") if p.get("enabled") == "1" else _("désactivation")
+    if action == "set-backup-keep":
+        return _("%(n)s sauvegardes conservées", n=p.get("keep", "?"))
+    if action == "set-time":
+        ntp = _("NTP %(s)s", s=p.get("ntp_server") or _("serveurs par défaut")) if p.get("ntp") else _("NTP désactivé")
+        return " · ".join(x for x in (p.get("timezone", ""), ntp) if x)
+    if action in ("restore", "delete-backup"):
+        return p.get("archive") or p.get("name") or (_("fichier téléversé") if p.get("upload") else "")
+    if action == "set-repo":
+        return p.get("repo", "")
+    return " ".join(f"{k}={v}" for k, v in p.items())
 TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
 
 
@@ -137,7 +157,7 @@ def appliance_updates():
     return render_template(
         "appliance_updates.html", status=status, latest=latest, jobs=jobs, job=job,
         signature=f"{jobs[0]['id']}:{jobs[0]['state']}" if jobs else "",
-        job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS,
+        job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS, job_detail=job_detail,
         update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),

@@ -40,6 +40,8 @@
       <div class="s">{{ _("applications Flatpak") }}</div>
     </div>
     {% endif %}
+  </div>
+  <div class="metrics">
     {% if d.cpu %}<div class="metric">
       <div class="k">{{ _("Processeur") }}</div>
       <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>

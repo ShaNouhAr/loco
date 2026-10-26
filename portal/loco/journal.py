@@ -9,12 +9,12 @@ from .i18n import L_, _
 CATEGORIES = {
     "connexions": (L_("Connexions"), ("connexion", "deconnexion", "sso.connexion", "sso.echec")),
     "distant": (L_("Accès distant"), ("parc.session.",)),
-    "parc": (L_("Parc"), ("parc.", "groupes.machines", "groupes.appartenance", "deploiement.")),
+    "parc": (L_("Parc"), ("parc.", "groupes.machines", "groupes.appartenance", "deploiement.", "planifications.")),
     "logiciels": (L_("Logiciels Windows"), ("windows.", "groupes.")),
     "linux": (L_("Dépôts Linux"), ("linux.", "rpm.", "flatpak.")),
     "wu": (L_("Windows Update"), ("windows_update.",)),
     "comptes": (L_("Comptes et profils"), ("comptes.", "compte.", "profils.", "sso.")),
-    "serveur": (L_("Serveur"), ("systeme.",)),
+    "serveur": (L_("Serveur"), ("systeme.", "alertes.")),
     "journal": (L_("Journal"), ("journal.",)),
     "scripts": (L_("Scripts"), ("scripts.",)),
 }
@@ -55,8 +55,21 @@ LABELS = {
     "scripts.ajout": L_("Script créé"), "scripts.modification": L_("Script modifié"), "scripts.suppression": L_("Script supprimé"),
     "scripts.execution": L_("Script exécuté sur des postes"),
     "scripts.historique": L_("Historique des scripts nettoyé"),
+    "compte.2fa.activee": L_("Double authentification activée"), "compte.2fa.desactivee": L_("Double authentification désactivée"),
+    "compte.2fa.codes": L_("Codes de secours régénérés"), "comptes.2fa.reinitialisation": L_("Double authentification retirée d'un compte"),
+    "parc.mise-a-jour-selection": L_("Mise à jour des postes sélectionnés"), "parc.install-package": L_("Installation de paquet demandée"),
+    "planifications.creation": L_("Planification créée"), "planifications.modification": L_("Planification modifiée"),
+    "planifications.suppression": L_("Planification supprimée"), "planifications.pause": L_("Planification suspendue"),
+    "planifications.reprise": L_("Planification reprise"), "planifications.execution": L_("Planification exécutée"),
+    "systeme.restauration": L_("Restauration d'une sauvegarde"), "systeme.sauvegarde.telechargement": L_("Sauvegarde téléchargée"),
+    "systeme.sauvegarde.suppression": L_("Sauvegarde supprimée"), "systeme.sauvegarde.retention": L_("Conservation des sauvegardes modifiée"),
+    "systeme.sauvegarde.hors-site": L_("Copie hors-site configurée"),
+    "systeme.shell.activation": L_("Shell root activé"), "systeme.shell.desactivation": L_("Shell root désactivé"),
+    "systeme.shell.ouverture": L_("Shell root ouvert"), "systeme.shell.fermeture": L_("Shell root fermé"),
+    "systeme.shell.refus": L_("Activation du shell root refusée"),
+    "alertes.configuration": L_("Alertes configurées"),
 }
-FAILURES = ("echec", "bloquee")
+FAILURES = ("echec", "bloquee", "refus")
 PERIODS = {"jour": (L_("Aujourd'hui"), 0), "7j": (L_("7 jours"), 6), "30j": (L_("30 jours"), 29), "tout": (L_("Tout"), None)}
 
 

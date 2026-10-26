@@ -361,7 +361,7 @@ def system_qemu_agent():
             flash(_("Installation de l'agent invité QEMU lancée."), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="reglages")
 
 
 BACKUP_NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
@@ -404,7 +404,7 @@ def system_backup_delete(name):
             flash(_("Sauvegarde supprimée : %(name)s.", name=name), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="sauvegardes")
 
 
 @app.route("/system/restore", methods=["POST"])
@@ -427,7 +427,7 @@ def system_restore():
             flash(_("Restauration lancée : le serveur va redémarrer. Reconnectez-vous dans un instant."), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="sauvegardes")
 
 
 UPLOAD_SPOOL = os.path.join(config.STATE, "restore-uploads")
@@ -461,14 +461,14 @@ def system_restore_upload():
         pass
     if locoadmin.running_job():
         flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
-        return back("system")
+        return back("system", _anchor="sauvegardes")
     if not locoadmin.agent_running():
         flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
-        return back("system")
+        return back("system", _anchor="sauvegardes")
     upload = request.files.get("archive")
     if upload is None or not upload.filename:
         flash(_("Choisissez un fichier de sauvegarde (.tar.gz)."), "error")
-        return back("system")
+        return back("system", _anchor="sauvegardes")
     os.makedirs(UPLOAD_SPOOL, exist_ok=True)
     name = secrets.token_hex(16) + ".tar.gz"
     path = os.path.join(UPLOAD_SPOOL, name)
@@ -479,11 +479,11 @@ def system_restore_upload():
     except ValueError as e:
         _discard(path)
         flash(_("Archive refusée : %(reason)s", reason=str(e)), "error")
-        return back("system")
+        return back("system", _anchor="sauvegardes")
     except OSError:
         _discard(path)
         flash(_("Le téléversement a échoué."), "error")
-        return back("system")
+        return back("system", _anchor="sauvegardes")
     try:
         locoadmin.request("restore", {"upload": name}, user=g.user["username"] if g.get("user") else "")
         audit("systeme.restauration", _("fichier téléversé"))
@@ -491,7 +491,7 @@ def system_restore_upload():
     except ValueError as e:
         _discard(path)
         flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="sauvegardes")
 
 
 def _discard(path):
@@ -521,7 +521,7 @@ def system_backup_retention():
             flash(_("Conservation des sauvegardes : %(n)s. Les plus anciennes au-delà sont supprimées.", n=keep), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="sauvegardes")
 
 
 @app.route("/system/time", methods=["POST"])
@@ -545,7 +545,7 @@ def system_time():
             flash(_("Réglages de l'heure en cours d'application."), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system")
+    return back("system", _anchor="reglages")
 
 
 @app.route("/healthz")

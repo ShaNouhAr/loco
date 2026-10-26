@@ -52,6 +52,7 @@
 </section>
 {%- endmacro %}
 {% block content %}
+{% if can('fleet.view') %}{% include '_fleet_nav.html' %}{% endif %}
 {% set apt = can('linux.view') and feature('apt') %}
 {% set rpm = rpm_enabled and can('rpm.view') and feature('rpm') %}
 {% set flat = flatpak_enabled and can('flatpak.view') and feature('flatpak') %}
@@ -156,7 +157,7 @@
     {% if flat %}{{ flatpak_step(ns) }}{% endif %}
   </div>
 </div>
-{% if key %}<p class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription de ce serveur : ne les partagez qu'avec les personnes qui installent les postes.") }}{% if can('fleet.settings') %}{{ _("Changer de clé : <a href=\"%(v)s\">Mon parc › Réglages</a>.", v=url_for('fleet_settings')) }}{% endif %}</p>{% endif %}
+{% if key %}<p class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription de ce serveur : ne les partagez qu'avec les personnes qui installent les postes.") }}{% if can('fleet.settings') %} {{ _("Changer de clé : <a href=\"%(v)s\">Mon parc › Réglages</a>.", v=url_for('fleet_settings')) }}{% endif %}</p>{% endif %}
 {% else %}
 <div class="panel"><div class="empty">{{ _("Aucune méthode d'enrôlement disponible avec vos droits ou les fonctionnalités activées.") }}</div></div>
 {% endif %}

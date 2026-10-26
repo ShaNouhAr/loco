@@ -454,5 +454,38 @@ class TestServerTimeDisplay(unittest.TestCase):
         self.assertTrue(info["synchronized"])
 
 
+class TestNavigation(unittest.TestCase):
+    """Navigation rangée : administration par sections, onglets contextuels, Système en onglets, menu compte."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+
+    def subnav(self, path):
+        html = self.admin.c.get(path).get_data(as_text=True)
+        block = html.split('<nav class="tabs subnav" aria-label="Administration">', 1)
+        return re.findall(r'>([^<]+)</a>', block[1].split("</nav>", 1)[0]) if len(block) == 2 else []
+
+    def test_admin_tabs_follow_the_current_section(self):
+        self.assertEqual(self.subnav("/accounts"), ["Comptes", "Profils d'accès", "Annuaires"])
+        self.assertIn("Système", self.subnav("/system"))
+        self.assertNotIn("Comptes", self.subnav("/system"))
+        self.assertEqual(self.subnav("/log"), ["Journal", "Alertes"])
+
+    def test_admin_menu_has_sections_and_account_menu_groups_settings(self):
+        html = self.admin.c.get("/").get_data(as_text=True)
+        for title in ("Accès", "Serveur", "Suivi"):
+            self.assertIn(f'<div class="nav-section-h">{title}</div>', html)
+        menu = html.split('<details class="menu user-menu">', 1)[1].split("</details>", 1)[0]
+        for part in ('href="/account"', 'data-set-theme="light"', 'name="lang" value="en"', 'action="/logout"'):
+            self.assertIn(part, menu)
+
+    def test_system_page_is_split_in_tabs(self):
+        html = self.admin.c.get("/system").get_data(as_text=True)
+        for tab in ("etat", "sauvegardes", "reseau"):
+            self.assertIn(f'data-tab="{tab}"', html)
+            self.assertIn(f'data-panel="{tab}"', html)
+
+
 if __name__ == "__main__":
     unittest.main()

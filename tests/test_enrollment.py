@@ -117,7 +117,8 @@ class TestEnrollmentPage(FleetTest):
         self.assertIn(f"sudo dnf install ./loco-client-{config.VERSION}-1.depots.noarch.rpm", page)
         self.assertIn("Dépôts seuls, sans agent", page)
         self.assertIn("/linux/setup.sh | sudo sh", page)
-        self.assertIn('href="/enrollment" class="nav-enroll on"', page)
+        self.assertIn('href="/enrollment" class="on">Enrôlement</a>', page)        # onglet de Mon parc
+        self.assertIn('href="/fleet" class="on"', page)                           # Mon parc en surbrillance
         self.assertNotIn("Brancher un poste", self.admin.c.get("/").get_data(as_text=True))
         self.assertIn('href="/enrollment">Ajouter un poste', self.admin.c.get("/fleet").get_data(as_text=True))
 

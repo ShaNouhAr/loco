@@ -409,7 +409,7 @@ def system_offsite():
     audit("systeme.sauvegarde.hors-site", _("Copie hors-site"))
     flash(_("Destination hors-site enregistrée."), "ok")
     from .util import back
-    return back("system")
+    return back("system", _anchor="sauvegardes")
 
 
 @app.route("/system/offsite/test", methods=["POST"])

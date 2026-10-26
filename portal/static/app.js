@@ -203,7 +203,12 @@
     if (!b) return;
     var tabs = b.closest(".tabs");
     $$("[data-tab]", tabs).forEach(function (x) { x.setAttribute("aria-selected", x === b); });
-    $$("[data-panel]", tabs.parentElement).forEach(function (p) { p.classList.toggle("on", p.dataset.panel === b.dataset.tab); });
+    var scope = tabs.parentElement;
+    $$("[data-panel]", scope).forEach(function (p) {
+      var up = p.parentElement.closest("[data-panel]");
+      if (up && scope.contains(up)) return;     // panneau d'un groupe d'onglets imbriqué : il garde son état
+      p.classList.toggle("on", p.dataset.panel === b.dataset.tab);
+    });
     if (b.dataset.cmd && tabs.dataset.target) $(tabs.dataset.target).textContent = b.dataset.cmd;
     // Onglet mémorisé dans l'adresse : conservé lors du rechargement automatique de la page.
     if (tabs.hasAttribute("data-hash")) history.replaceState(null, "", "#" + b.dataset.tab);

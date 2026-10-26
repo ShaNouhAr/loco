@@ -20,7 +20,7 @@
   <button type="button" data-tab="activite" aria-selected="false">{{ _("Activité récente") }}</button>
 </div>
 
-<div class="tab-panel on" data-panel="securite">
+<div class="tab-panel on" data-panel="securite"><div class="stack">
   {% if local %}
   <div class="cols w21">
     <section class="panel">
@@ -79,7 +79,7 @@
   {% else %}
   <section class="panel"><div class="panel-b"><p>{{ _("Votre mot de passe est géré par votre fournisseur d’identité : changez-le auprès de celui-ci. Les règles de session de loco s’appliquent (inactivité de 8 heures, blocage après plusieurs échecs).") }}</p></div></section>
   {% endif %}
-</div>
+</div></div>
 
 <div class="tab-panel" data-panel="apparence">
   <section class="panel">

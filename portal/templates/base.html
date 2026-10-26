@@ -11,14 +11,15 @@
 <body class="{% block body_class %}{% endblock %}">
 {% block body %}
 {% set ep = request.endpoint or '' %}
-{% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu with context %}
+{% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu, language_choices, appearance_choices with context %}
 <header class="top">
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
     <nav class="nav" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
-      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if ep.startswith(('fleet', 'remote', 'deployment', 'script')) }}" {% if ep.startswith(('fleet', 'remote', 'deployment', 'script')) %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
-      {% if can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
+      {% set fleet_on = ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment' %}
+      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
+      {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
         <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
@@ -41,21 +42,38 @@
         </div>
       </details>
       {% endif %}
-      {% if can_any("users.view", "roles.view", "audit.view", "system.view", "alerts.view") %}
-      <details class="nav-group nav-admin {{ 'on' if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts', 'system_shell')) or ep in ('journal', 'system') }}">
+      {% set admin_items = [
+        ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
+        ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),
+        ('access', can('sso.manage'), 'sso_settings', ep.startswith(('sso', 'directory')), 'user', _('Annuaires'), _('Connexion LDAP et RADIUS')),
+        ('server', can('system.view'), 'system', ep == 'system', 'server', _('Système'), _('État, sauvegardes, réseau, heure')),
+        ('server', server_updates and can('system.view'), 'appliance_updates', ep.startswith('appliance_updates') or ep == 'appliance_job', 'update', _('Mises à jour'), _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité')),
+        ('server', appliance and can('system.configure'), 'appliance_settings', ep.startswith('appliance_settings'), 'settings', _('Configuration'), _('Accès, fonctions et stockage')),
+        ('server', is_super_admin(), 'features', ep.startswith('features'), 'layers', _('Fonctionnalités'), _('Activer ou désactiver les fonctions')),
+        ('server', server_shell, 'system_shell_home', ep.startswith('system_shell'), 'terminal', _('Shell root'), {'off': _('Désactivé · terminal root du serveur'), 'pending': _('Redémarrage requis pour l\'activer'), 'active': _('Terminal root du serveur')}.get(server_shell, '')),
+        ('watch', can('audit.view'), 'journal', ep == 'journal', 'journal', _('Journal'), _('Historique des actions')),
+        ('watch', can('alerts.view'), 'alerts', ep.startswith('alerts'), 'bell', _('Alertes'), _('Notifications e-mail et webhook')),
+      ] %}
+      {% set admin_sections = [('access', _('Accès')), ('server', _('Serveur')), ('watch', _('Suivi'))] %}
+      {% set adminnav = namespace(any=false, on=none) %}
+      {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok %}{% set adminnav.any = true %}{% if on %}{% set adminnav.on = sec %}{% endif %}{% endfor %}
+      {% if adminnav.any %}
+      <details class="nav-group nav-admin {{ 'on' if adminnav.on }}">
         <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">{{ _("Administration") }}</span><span class="nav-short">{{ _("Admin") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-admin">
-          <div class="nav-panel">
-            {% if can("users.view") %}<a href="{{ url_for('users') }}" {% if ep.startswith('users') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>{{ _("Comptes") }}</strong><small>{{ _("Utilisateurs et permissions") }}</small></span></a>{% endif %}
-            {% if can("roles.view") %}<a href="{{ url_for('roles') }}" {% if ep.startswith('roles') %}aria-current="page"{% endif %}>{{ nav_icon('users') }}<span><strong>{{ _("Profils d'accès") }}</strong><small>{{ _("Droits par action") }}</small></span></a>{% endif %}
-            {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" {% if ep.startswith(('sso', 'directory')) %}aria-current="page"{% endif %}>{{ nav_icon('user') }}<span><strong>{{ _("Annuaires") }}</strong><small>{{ _("Connexion LDAP et RADIUS") }}</small></span></a>{% endif %}
-            {% if can("audit.view") %}<a href="{{ url_for('journal') }}" {% if ep == 'journal' %}aria-current="page"{% endif %}>{{ nav_icon('journal') }}<span><strong>{{ _("Journal") }}</strong><small>{{ _("Historique des actions") }}</small></span></a>{% endif %}
-            {% if can("system.view") %}<a href="{{ url_for('system') }}" {% if ep == 'system' %}aria-current="page"{% endif %}>{{ nav_icon('server') }}<span><strong>{{ _("Système") }}</strong><small>{{ _("Services et sauvegardes") }}</small></span></a>{% endif %}
-            {% if can("alerts.view") %}<a href="{{ url_for('alerts') }}" {% if ep.startswith('alerts') %}aria-current="page"{% endif %}>{{ nav_icon('bell') }}<span><strong>{{ _("Alertes") }}</strong><small>{{ _("Notifications e-mail et webhook") }}</small></span></a>{% endif %}
-            {% if is_super_admin() %}<a href="{{ url_for('features') }}" {% if ep.startswith('features') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Fonctionnalités") }}</strong><small>{{ _("Activer ou désactiver les fonctions") }}</small></span></a>{% endif %}
-            {% if server_shell %}<a href="{{ url_for('system_shell_home') }}" {% if ep.startswith('system_shell') %}aria-current="page"{% endif %}>{{ nav_icon('terminal') }}<span><strong>{{ _("Shell root") }}</strong><small>{{ {'off': _('Désactivé · terminal root du serveur'), 'pending': _('Redémarrage requis pour l\'activer'), 'active': _('Terminal root du serveur')}[server_shell] }}</small></span></a>{% endif %}
-            {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" {% if ep.startswith('appliance_updates') or ep == 'appliance_job' %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>{{ _("Mises à jour") }}</strong><small>{{ _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité') }}</small></span></a>{% endif %}
-            {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" {% if ep.startswith('appliance_settings') %}aria-current="page"{% endif %}>{{ nav_icon('settings') }}<span><strong>{{ _("Configuration") }}</strong><small>{{ _("Accès, fonctions et stockage") }}</small></span></a>{% endif %}
+          <div class="nav-panel nav-sections">
+            {% for key, title in admin_sections %}
+            {% set block = namespace(any=false) %}
+            {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok and sec == key %}{% set block.any = true %}{% endfor %}
+            {% if block.any %}
+            <div class="nav-section nav-section-{{ key }}">
+              <div class="nav-section-h">{{ title }}</div>
+              {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok and sec == key %}
+              <a href="{{ url_for(endpoint) }}" {% if on %}aria-current="page"{% endif %}>{{ nav_icon(icon) }}<span><strong>{{ label }}</strong><small>{{ desc }}</small></span></a>
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% endfor %}
           </div>
         </div>
       </details>
@@ -64,35 +82,44 @@
     <div class="top-r">
       {% if current_user %}<button type="button" class="cmdk-open" data-cmdk aria-label="{{ _('Aller à une page (Ctrl+K)') }}" title="{{ _('Aller à une page') }}"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><kbd>Ctrl K</kbd></button>{% endif %}
       {% if server_shell == 'active' %}<a class="shell-quick" href="{{ url_for('system_shell_home') }}" aria-label="{{ _('Shell root du serveur') }}" title="{{ _('Shell root du serveur') }}">{{ nav_icon('terminal') }}</a>{% endif %}
-      {{ language_menu() }}
-      {{ theme_toggle() }}
       {% if current_user %}
       <div class="userbox">
-        <a href="{{ url_for('account') }}" class="{{ 'on' if ep == 'account' }}" title="{{ _(roles.get(current_user.role, _("Profil indisponible"))) }}">{{ nav_icon('user') }}<span>{{ current_user.username }}</span></a>
-        <form method="post" action="{{ url_for('logout') }}">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <button type="submit" class="linkbtn logout" aria-label="{{ _('Déconnexion') }}" title="{{ _('Déconnexion') }}">{{ nav_icon('logout') }}</button>
-        </form>
+        <details class="menu user-menu">
+          <summary class="user-chip {{ 'on' if ep == 'account' }}" aria-label="{{ _('Compte, langue et apparence') }}"><span class="user-avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span><span class="user-name">{{ current_user.username }}</span>{{ nav_icon('chevron') }}</summary>
+          <div class="menu-list" role="menu">
+            <div class="menu-user"><strong>{{ current_user.username }}</strong><small>{{ _(roles.get(current_user.role, _("Profil indisponible"))) }}</small></div>
+            <a class="menu-item" role="menuitem" href="{{ url_for('account') }}">{{ nav_icon('user') }}<span>{{ _("Mon compte") }}</span></a>
+            <hr>
+            <div class="menu-label">{{ _("Langue") }}</div>
+            <div class="lang-row">{{ language_choices() }}</div>
+            {{ appearance_choices() }}
+            <hr>
+            <form method="post" action="{{ url_for('logout') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button type="submit" class="menu-item" role="menuitem">{{ nav_icon('logout') }}<span>{{ _("Déconnexion") }}</span></button>
+            </form>
+          </div>
+        </details>
       </div>
+      {% else %}
+      {{ language_menu() }}
+      {{ theme_toggle() }}
       {% endif %}
     </div>
   </div>
 </header>
 
 <main>
-  {% if ep.startswith(('users', 'roles', 'appliance', 'sso', 'directory', 'features', 'alerts', 'system_shell')) or ep in ('journal', 'system') %}
-  <div class="tabs subnav" aria-label="{{ _('Administration') }}">
-    {% if can("users.view") %}<a href="{{ url_for('users') }}" class="{{ 'on' if ep.startswith('users') }}">{{ _("Comptes") }}</a>{% endif %}
-    {% if can("roles.view") %}<a href="{{ url_for('roles') }}" class="{{ 'on' if ep.startswith('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
-    {% if can("sso.manage") %}<a href="{{ url_for('sso_settings') }}" class="{{ 'on' if ep.startswith(('sso', 'directory')) }}">{{ _("Annuaires") }}</a>{% endif %}
-    {% if can("audit.view") %}<a href="{{ url_for('journal') }}" class="{{ 'on' if ep == 'journal' }}">{{ _("Journal") }}</a>{% endif %}
-    {% if can("system.view") %}<a href="{{ url_for('system') }}" class="{{ 'on' if ep == 'system' }}">{{ _("Système") }}</a>{% endif %}
-    {% if can("alerts.view") %}<a href="{{ url_for('alerts') }}" class="{{ 'on' if ep.startswith('alerts') }}">{{ _("Alertes") }}</a>{% endif %}
-    {% if is_super_admin() %}<a href="{{ url_for('features') }}" class="{{ 'on' if ep.startswith('features') }}">{{ _("Fonctionnalités") }}</a>{% endif %}
-    {% if server_shell %}<a href="{{ url_for('system_shell_home') }}" class="{{ 'on' if ep.startswith('system_shell') }}">{{ _("Shell root") }}</a>{% endif %}
-    {% if server_updates and can("system.view") %}<a href="{{ url_for('appliance_updates') }}" class="{{ 'on' if ep.startswith('appliance_updates') }}">{{ _("Mises à jour") }}</a>{% endif %}
-    {% if appliance and can("system.configure") %}<a href="{{ url_for('appliance_settings') }}" class="{{ 'on' if ep.startswith('appliance_settings') }}">{{ _("Configuration") }}</a>{% endif %}
-  </div>
+  {% if adminnav and adminnav.on %}
+  {% set current = namespace(count=0) %}
+  {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok and sec == adminnav.on %}{% set current.count = current.count + 1 %}{% endfor %}
+  {% if current.count > 1 %}
+  <nav class="tabs subnav" aria-label="{{ _('Administration') }}">
+    {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok and sec == adminnav.on %}
+    <a href="{{ url_for(endpoint) }}" class="{{ 'on' if on }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
   {% endif %}
   {% block content %}{% endblock %}
 </main>
@@ -110,6 +137,7 @@
 {# Pages des sous-menus absentes de l'en-tête : proposées par la palette. #}
 <template id="cmdk-links">
   {% if can("fleet.view") %}
+  <a href="{{ url_for('enrollment') }}" data-group="{{ _('Mon parc') }}">{{ _("Enrôlement") }}</a>
   <a href="{{ url_for('fleet_groups') }}" data-group="{{ _('Mon parc') }}">{{ _("Groupes de machines") }}</a>
   {% if can_any('deployments.view', 'fleet.install') %}<a href="{{ url_for('deployments') }}" data-group="{{ _('Mon parc') }}">{{ _("Déploiements") }}</a>{% endif %}
   {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" data-group="{{ _('Mon parc') }}">{{ _("Scripts") }}</a>{% endif %}

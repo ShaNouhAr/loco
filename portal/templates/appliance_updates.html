@@ -159,7 +159,7 @@
         {% for j in jobs %}
           <tr class="{{ 'sel' if job and j.id == job.id }}">
             <td class="muted nowrap"><a href="{{ url_for('appliance_updates', operation=j.id) }}">{{ (j.started or j.queued)|date_fr }}</a></td>
-            <td>{{ labels.get(j.action, j.action) }}{% if j.params %}<span class="sub">{% for k, v in j.params.items() %}{{ k }}={{ v }}{{ ' ' if not loop.last }}{% endfor %}</span>{% endif %}</td>
+            <td>{{ labels.get(j.action, j.action) }}{% set detail = job_detail(j) %}{% if detail %}<span class="sub">{{ detail }}</span>{% endif %}</td>
             <td class="muted hide-sm">{{ j.user or '—' }}</td>
             <td>{% if j.state == 'success' %}<span class="st ok">{{ _("réussie") }}</span>{% elif j.state == 'failed' %}<span class="st err">{{ _("échec") }}</span>{% else %}<span class="st warn">{{ _("en cours") }}</span>{% endif %}</td>
           </tr>

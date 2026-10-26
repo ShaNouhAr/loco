@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 2.65.0 — 2026-10-26
+
+Passe d'ergonomie et de design sur tout le portail, pour se repérer plus vite.
+
+- **Barre du haut désencombrée** : cinq entrées (Vue d'ensemble, Mon parc, Linux, Windows, Administration). La langue, l'apparence, le compte et la déconnexion sont réunis dans un **menu compte** (avatar). Plus rien ne déborde, même en 1280 px.
+- **Administration rangée par sections** : le menu présente *Accès* (comptes, profils, annuaires), *Serveur* (système, mises à jour, configuration, fonctionnalités, shell root) et *Suivi* (journal, alertes). Les onglets ne montrent plus que ceux de la section en cours.
+- **Enrôlement rejoint Mon parc**, en onglet à côté des appareils, des groupes et des déploiements.
+- **Système en onglets** : *État* (services, emplacements, versions), *Sauvegardes*, *Réseau et certificats*, *Heure et matériel*. Les indicateurs du haut mènent à l'onglet correspondant, et les actions ramènent sur le bon onglet. Le panneau QEMU n'apparaît que s'il s'applique.
+- **Vue d'ensemble** : les indicateurs des caches et ceux du serveur forment deux rangées distinctes.
+- **Journal et opérations lisibles** : libellés pour la double authentification, les planifications, les sauvegardes, le shell root et les alertes, au lieu des codes techniques ; résumé lisible des paramètres des opérations du serveur.
+- **Corrections** : la barre de sélection de *Mon parc* restait affichée sans sélection ; espacements dans *Mon compte* ; espaces manquants dans *Enrôlement* et *Windows Update* ; option « Redémarrer si nécessaire » allégée.
+
 ## 2.64.0 — 2026-10-26
 
 - **Shell root mieux intégré** : il a désormais sa propre page dans le menu *Administration* (et donc dans la recherche Ctrl+K), avec son état en sous-titre (désactivé, redémarrage requis, actif). La page guide la mise en service en trois étapes — activer, redémarrer, ouvrir — et le terminal s'ouvre dans la même page. Quand le shell est actif, une icône terminal dans la barre du haut y donne accès en un clic. Le panneau a quitté la page *Système*.
