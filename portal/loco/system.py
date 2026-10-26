@@ -4,6 +4,7 @@ import datetime
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import urllib.parse
@@ -21,20 +22,37 @@ if config.SERVER_UPDATES:
     import locoadmin
 
 
+def _chrony_state():
+    """État NTP via chrony quand timedatectl est absent (appliance Alpine/OpenRC) : (activé, synchronisé)."""
+    try:
+        out = subprocess.run(["chronyc", "-n", "tracking"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return False, False
+    if out.returncode != 0:                     # chronyd arrêté (synchro désactivée)
+        return False, False
+    values = dict((k.strip(), v.strip()) for k, _, v in (line.partition(":") for line in out.stdout.splitlines()))
+    # Reference ID 00000000 = source non encore sélectionnée ; Leap « Normal » = horloge saine.
+    synchronized = values.get("Leap status", "").startswith("Normal") and not values.get("Reference ID", "").startswith("00000000")
+    return True, synchronized
+
+
 def server_time():
     """Fuseau horaire et état de la synchronisation NTP du serveur, en lecture seule (appliqués par l'agent root)."""
     info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False,
             "synchronized": False, "server": "", "container": False}
     info["container"] = _virt()[1]
-    try:
-        out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
-                             capture_output=True, text=True, timeout=5).stdout
-        values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
-        info["timezone"] = values.get("Timezone", "")
-        info["ntp"] = values.get("NTP") == "yes"
-        info["synchronized"] = values.get("NTPSynchronized") == "yes"
-    except (OSError, subprocess.SubprocessError, ValueError):
-        pass
+    if shutil.which("timedatectl"):
+        try:
+            out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
+                                 capture_output=True, text=True, timeout=5).stdout
+            values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+            info["timezone"] = values.get("Timezone", "")
+            info["ntp"] = values.get("NTP") == "yes"
+            info["synchronized"] = values.get("NTPSynchronized") == "yes"
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+    elif not info["container"]:                 # Alpine/OpenRC : pas de timedatectl, lire l'état de chrony
+        info["ntp"], info["synchronized"] = _chrony_state()
     if not info["timezone"]:
         try:
             info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]

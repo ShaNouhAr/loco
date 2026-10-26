@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.61.0 — 2026-10-26
+
+- **État NTP correct sur l'appliance Alpine** : *Système → heure du serveur* lisait l'état de synchronisation uniquement via `timedatectl`, absent sur l'appliance Alpine — le bandeau affichait donc toujours « synchronisation NTP désactivée », même quand chrony était actif et synchronisé. L'état (activé / synchronisé / en cours) est désormais lu depuis chrony quand `timedatectl` n'existe pas. À utiliser avec le correctif de 2.60 (rechargement de chrony par `rc-service`).
+
 ## 2.60.0 — 2026-10-26
 
 - **Synchronisation NTP corrigée sur l'appliance Alpine** : le réglage du serveur NTP depuis *Système → heure du serveur* rechargeait le service via `systemctl`, absent sur l'appliance Alpine (OpenRC) — le nouveau serveur n'était donc pris en compte qu'au redémarrage. Le service est désormais rechargé avec `rc-service` quand `systemctl` n'existe pas. Validé de bout en bout contre un serveur NTP conteneurisé. Couvert par des tests (Debian → `systemctl`, Alpine → `rc-service`, conteneur → ignoré).

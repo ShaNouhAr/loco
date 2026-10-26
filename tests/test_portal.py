@@ -428,5 +428,31 @@ class TestFirewallPorts(unittest.TestCase):
             self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
 
 
+class TestServerTimeDisplay(unittest.TestCase):
+    """État NTP affiché : via timedatectl (systemd), ou via chrony quand timedatectl est absent (appliance Alpine)."""
+
+    def test_chrony_state_reads_tracking(self):
+        from loco import system
+        synced = mock.Mock(returncode=0, stdout="Reference ID    : AC110002 (10.0.0.2)\nLeap status     : Normal\n")
+        with mock.patch("loco.system.subprocess.run", return_value=synced):
+            self.assertEqual(system._chrony_state(), (True, True))
+        starting = mock.Mock(returncode=0, stdout="Reference ID    : 00000000 ()\nLeap status     : Not synchronised\n")
+        with mock.patch("loco.system.subprocess.run", return_value=starting):
+            self.assertEqual(system._chrony_state(), (True, False))           # chronyd actif, pas encore synchro
+        with mock.patch("loco.system.subprocess.run", return_value=mock.Mock(returncode=1, stdout="")):
+            self.assertEqual(system._chrony_state(), (False, False))          # chronyd arrêté
+
+    def test_server_time_falls_back_to_chrony_without_timedatectl(self):
+        from loco import system
+        synced = mock.Mock(returncode=0, stdout="Reference ID : AC110002 (x)\nLeap status : Normal\n")
+        with mock.patch("loco.system.shutil.which", return_value=None), \
+             mock.patch("loco.system._virt", return_value=("qemu", False)), \
+             mock.patch("loco.system.subprocess.run", return_value=synced), \
+             mock.patch("loco.system.os.readlink", return_value="zoneinfo/Europe/Paris"):
+            info = system.server_time()
+        self.assertTrue(info["ntp"])                                          # plus « désactivée » à tort sur Alpine
+        self.assertTrue(info["synchronized"])
+
+
 if __name__ == "__main__":
     unittest.main()
