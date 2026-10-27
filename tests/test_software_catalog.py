@@ -78,7 +78,7 @@ class TestSoftwareCatalog(FleetTest):
         prefix = "/windows-apps" if kind == "software" else "/fleet"
         r = self.admin.post(prefix + "/groups/save", {"name": name, "description": description,
                                                               "members": [str(m) for m in members]}, page=prefix + "/groups")
-        return int(r.headers["Location"].rstrip("/").split("/")[-1])
+        return int(r.headers["Location"].rsplit("#group-", 1)[1])
 
     def test_group_list_previews_members_and_their_state(self):
         with transaction() as conn:

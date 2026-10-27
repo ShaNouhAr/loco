@@ -1233,7 +1233,7 @@ label.f > span.password-field { display: block; margin: 0; font-size: inherit; f
 .planned-item .muted { margin-left: auto; white-space: nowrap; }
 .schedules-table td { vertical-align: middle; }
 .schedules-table tr.faded td:not(:last-child) { color: var(--text-3); }
-.schedules-table tr:target { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.schedules-table tr:target, .groups-table tr:target { background: color-mix(in srgb, var(--accent) 10%, transparent); }
 .when { display: inline-flex; align-items: center; gap: 8px; }
 .when .ui-icon { color: var(--text-3); }
 .empty-rich { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; }

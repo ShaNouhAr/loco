@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.69.1 — 2026-10-27
+
+- **Groupes de machines et de logiciels** : après l'enregistrement d'un groupe (création ou modification), on revient à la liste des groupes, positionné sur le groupe enregistré et surligné, au lieu de rester dans l'éditeur.
+
 ## 2.69.0 — 2026-10-27
 
 - **Flux sortants à autoriser sur le pare-feu** : *Système → Réseau et certificats* liste désormais, sous les ports entrants, les destinations Internet que le serveur doit joindre **en sortie**, avec ports et protocoles : résolveurs DNS, serveurs NTP réglés, dépôts du système du serveur, source des mises à jour de loco (GitHub ou GitLab), miroirs Linux réellement vus dans le cache apt-cacher-ng, dépôts RPM et Flathub, domaines Windows Update, winget et hôtes des installeurs du catalogue Windows, et, s'ils sont configurés, serveur SMTP, webhook d'alertes et sauvegarde hors site (S3 ou SFTP). Tout est tiré de la configuration et des fonctionnalités actives ; un bouton copie la liste au format « une destination par ligne » pour l'équipe réseau.

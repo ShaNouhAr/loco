@@ -71,7 +71,8 @@ class TestDeployments(FleetTest):
         prefix = '/windows-apps' if kind == 'software' else '/fleet'
         response = self.post(prefix + '/groups/save', {'name': name, 'members': [str(i) for i in members]})
         self.assertEqual(response.status_code, 302)
-        return int(response.location.rsplit('/', 1)[1])
+        self.assertIn(prefix + '/groups#group-', response.location)            # retour à la liste
+        return int(response.location.rsplit('-', 1)[1])
 
     def preview(self, data=None, browser=None):
         values = data if data is not None else {'app': self.app['slug'], 'device': str(device(self.agent.uid)['id'])}

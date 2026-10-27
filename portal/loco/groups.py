@@ -126,7 +126,8 @@ def _save(kind, group_id):
     audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {len(selected)} membre(s)", commit=False)
     conn.commit()
     flash(_('Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.'), "ok")
-    return back("software_group_editor" if software else "fleet_group_editor", group_id=group_id)
+    # Retour à la liste, sur le groupe enregistré (surligné), plutôt que de rester dans l'éditeur.
+    return back("software_groups" if software else "fleet_groups", _anchor=f"group-{group_id}")
 
 
 def _delete(kind, group_id):

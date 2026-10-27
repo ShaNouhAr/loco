@@ -20,7 +20,7 @@
       <thead><tr><th>{{ _("Groupe") }}</th><th>{{ _('Logiciels') if software else _('Appareils') }}</th><th class="hide-sm">{{ _("État") }}</th><th></th></tr></thead>
       <tbody>
       {% for group in groups %}{% set o = overview.get(group.id, {'members': [], 'states': {}}) %}
-        <tr>
+        <tr id="group-{{ group.id }}">
           <td><a href="{{ url_for(editor, group_id=group.id) }}" class="strong-link">{{ group.name }}</a>
             <span class="sub sans">{{ group.description or _('Sans description') }}</span></td>
           <td>
