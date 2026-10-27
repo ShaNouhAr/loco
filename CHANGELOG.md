@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.69.0 — 2026-10-27
+
+- **Flux sortants à autoriser sur le pare-feu** : *Système → Réseau et certificats* liste désormais, sous les ports entrants, les destinations Internet que le serveur doit joindre **en sortie**, avec ports et protocoles : résolveurs DNS, serveurs NTP réglés, dépôts du système du serveur, source des mises à jour de loco (GitHub ou GitLab), miroirs Linux réellement vus dans le cache apt-cacher-ng, dépôts RPM et Flathub, domaines Windows Update, winget et hôtes des installeurs du catalogue Windows, et, s'ils sont configurés, serveur SMTP, webhook d'alertes et sauvegarde hors site (S3 ou SFTP). Tout est tiré de la configuration et des fonctionnalités actives ; un bouton copie la liste au format « une destination par ligne » pour l'équipe réseau.
+
 ## 2.68.0 — 2026-10-27
 
 - **Heure du serveur, refonte NTP** : l'état de l'heure affiché était souvent faux. Il est désormais mesuré par l'agent root (le portail, non privilégié, ne peut pas interroger chrony) et le bloc *Système → Heure et matériel* a été repensé : pastille d'état claire (synchronisée / en cours / désactivée / gérée par l'hôte), résumé (heure locale, fuseau, **source en usage, strate, écart**) et tableau par serveur (en usage / joignable / injoignable…). La synchronisation NTP accepte **plusieurs serveurs** (IP v4/v6 ou noms, séparés par des espaces), prioritaires sur ceux de la distribution, et le réglage réseau passe avant le fuseau horaire. Sur l'appliance (chrony avec `cmdport 0`), le port de commande local est réactivé automatiquement pour que l'état redevienne lisible ; prise en charge de timesyncd (Debian/Ubuntu) et de chrony (Red Hat, Alpine), avec « include » pour les distributions sans *confdir* (Rocky, AlmaLinux) et persistance du choix au redémarrage sur l'appliance (OpenRC).

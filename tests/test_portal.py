@@ -429,6 +429,63 @@ class TestFirewallPorts(unittest.TestCase):
             self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
 
 
+class TestFirewallEgress(unittest.TestCase):
+    """Flux sortants vers Internet dans Système : tirés de la configuration et des fonctionnalités actives."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+
+    def _egress(self, off=frozenset(), **kw):
+        from loco import system
+        with loco.app.test_request_context(), \
+             mock.patch("loco.features.disabled", return_value=set(off)), \
+             mock.patch("loco.system._os_repositories", return_value=["http://deb.debian.org/debian", "file:/srv/x"]), \
+             mock.patch("loco.system._acng_hosts", return_value=[]), \
+             mock.patch.object(system.locoadmin, "source", return_value="ShaNouhAr/loco"):
+            return {e["service"]: e for e in system.firewall_egress(**kw)}
+
+    def test_lists_upstreams_of_enabled_features(self):
+        rows = self._egress(time_info={"container": False, "servers": ["10.0.0.5", "fr.pool.ntp.org"]})
+        ntp = rows["Synchronisation de l'heure (NTP)"]
+        self.assertEqual((ntp["hosts"], ntp["ports"], ntp["proto"]), (["10.0.0.5", "fr.pool.ntp.org"], "123", "UDP"))
+        self.assertEqual(rows["Mises à jour du système du serveur"]["hosts"], ["deb.debian.org"])   # file: ignoré
+        self.assertIn("api.github.com", rows["Mises à jour de loco (GitHub)"]["hosts"])
+        self.assertIn("deb.debian.org", rows["Cache de paquets Linux (miroirs des postes)"]["hosts"])
+        wu = rows["Cache Windows Update"]
+        self.assertIn("*.windowsupdate.com", wu["hosts"])
+        self.assertEqual(wu["ports"], "80, 443")
+        self.assertIn("cdn.winget.microsoft.com", rows["Catalogue de logiciels Windows (winget et éditeurs)"]["hosts"])
+
+    def test_disabled_features_and_containers_drop_their_flows(self):
+        rows = self._egress(off={"apt", "rpm", "flatpak", "wu", "wu_proxy", "windows_apps"},
+                            time_info={"container": True, "servers": []})
+        self.assertNotIn("Synchronisation de l'heure (NTP)", rows)        # heure gérée par l'hôte
+        self.assertNotIn("Cache Windows Update", rows)
+        self.assertNotIn("Cache de paquets Linux (miroirs des postes)", rows)
+        self.assertIn("Mises à jour de loco (GitHub)", rows)               # toujours nécessaire
+
+    def test_configured_alerts_and_offsite_backup_appear(self):
+        from loco import alerts, offsite
+        cfg = alerts.defaults()
+        cfg["email"].update(enabled=True, host="SMTP.example.org", port=465)
+        cfg["webhook"].update(enabled=True, url="https://hooks.example.org:8443/x")
+        bk = offsite.defaults()
+        bk.update(type="sftp")
+        bk["sftp"].update(host="backup.example.org", port=2222)
+        with mock.patch("loco.alerts.load", return_value=cfg), mock.patch("loco.offsite.load", return_value=bk):
+            rows = self._egress()
+        self.assertEqual((rows["Alertes par e-mail (SMTP)"]["hosts"], rows["Alertes par e-mail (SMTP)"]["ports"]),
+                         (["smtp.example.org"], "465"))
+        self.assertEqual(rows["Alertes par webhook"]["ports"], "8443")
+        self.assertEqual(rows["Sauvegarde hors site (SFTP)"]["ports"], "2222")
+
+    def test_page_shows_the_section_and_a_copyable_list(self):
+        html = self.admin.c.get("/system").get_data(as_text=True)
+        self.assertIn("Flux sortants", html)
+        self.assertIn('class="btn sm copy"', html)
+
+
 class TestServerTimeDisplay(unittest.TestCase):
     """État NTP affiché : lu dans le fichier déposé par l'agent root (le portail n'est pas privilégié) ;
     repli sur timedatectl (hôtes systemd) quand ce fichier manque."""

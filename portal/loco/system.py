@@ -1,6 +1,7 @@
 """Page Système, contrôle de santé et métriques Prometheus."""
 
 import datetime
+import glob
 import json
 import os
 import re
@@ -305,6 +306,155 @@ def firewall_ports():
     return rows
 
 
+def _endpoint(url):
+    """(hôte, port) d'une URL ; port par défaut selon le schéma. None si l'URL est locale ou illisible."""
+    if re.match(r"(file|cdrom|copy|mirror\+file):|/", url):
+        return None
+    try:
+        u = urllib.parse.urlsplit(url if "://" in url else "https://" + url)
+        host, port = (u.hostname or "").lower(), u.port or (80 if u.scheme == "http" else 443)
+    except ValueError:
+        return None
+    if not host or host in ("localhost", config.HOST.lower()) or host.startswith("127."):
+        return None
+    return host, port
+
+
+def _os_repositories():
+    """Dépôts du système du serveur lui-même (mises à jour du système) : apk, APT ou dnf."""
+    urls = []
+    try:
+        with open("/etc/apk/repositories") as f:
+            urls += [line.strip() for line in f if line.strip() and not line.lstrip().startswith("#")]
+    except OSError:
+        pass
+    apt = ["/etc/apt/sources.list"] + sorted(glob.glob("/etc/apt/sources.list.d/*.list"))
+    for path in apt + sorted(glob.glob("/etc/apt/sources.list.d/*.sources")):
+        try:
+            with open(path) as f:
+                for line in f:
+                    line = line.split("#", 1)[0].strip()
+                    if path.endswith(".sources") and line.lower().startswith("uris:"):
+                        urls += line.split(":", 1)[1].split()
+                    elif re.match(r"deb(-src)?\s", line):
+                        urls += [w for w in line.split() if "://" in w][:1]
+        except OSError:
+            pass
+    for path in sorted(glob.glob("/etc/yum.repos.d/*.repo")):
+        try:
+            with open(path) as f:
+                text = f.read()
+        except OSError:
+            continue
+        for section in re.split(r"^\[", text, flags=re.M):
+            if re.search(r"^enabled\s*=\s*0", section, re.M):
+                continue
+            urls += re.findall(r"^(?:baseurl|mirrorlist|metalink)\s*=\s*(\S+)", section, re.M)
+    return urls
+
+
+def _acng_hosts():
+    """Miroirs réellement demandés par les postes au cache apt-cacher-ng (un dossier par miroir)."""
+    remap = {"debrep": "deb.debian.org", "secdeb": "security.debian.org", "uburep": "archive.ubuntu.com"}
+    try:
+        names = os.listdir("/var/cache/apt-cacher-ng")
+    except OSError:
+        return []
+    return sorted({remap.get(n, n) for n in names if n in remap or ("." in n and not n.startswith("_"))})
+
+
+def firewall_egress(time_info=None):
+    """Flux à autoriser en SORTIE du serveur loco vers Internet, selon la configuration et les fonctionnalités actives.
+
+    Chaque ligne : service, hôtes de destination, ports, protocole. Les hôtes viennent de la configuration réelle
+    (dépôts du système, source des mises à jour, catalogue, alertes, sauvegarde hors site) quand c'est possible."""
+    from . import alerts, features, offsite
+    from .wupdate import read_wu_domains
+    off, rows = features.disabled(), []
+
+    def add(service, endpoints, proto="TCP", note="", essential=False):
+        endpoints = [e for e in endpoints if e]
+        if not endpoints:
+            return
+        hosts = list(dict.fromkeys(h for h, _p in endpoints))
+        ports = sorted({p for _h, p in endpoints}, key=lambda p: (not str(p).isdigit(), int(p) if str(p).isdigit() else 0))
+        rows.append({"service": service, "hosts": hosts, "ports": ", ".join(str(p) for p in ports), "proto": proto,
+                     "note": note, "essential": essential})
+
+    # Résolution de noms : indispensable à tout le reste (souvent un résolveur interne).
+    resolvers = []
+    for path in ("/run/systemd/resolve/resolv.conf", "/etc/resolv.conf"):
+        try:
+            with open(path) as f:
+                resolvers = [m for m in re.findall(r"^nameserver\s+(\S+)", f.read(), re.M) if not m.startswith("127.")]
+        except OSError:
+            continue
+        if resolvers:
+            break
+    add(_("Résolution DNS"), [(r, 53) for r in resolvers], "UDP/TCP", _("souvent un résolveur interne"), True)
+
+    # Heure : serveurs NTP réglés, ou ceux de la distribution.
+    if time_info and not time_info.get("container"):
+        servers = time_info.get("servers") or []
+        add(_("Synchronisation de l'heure (NTP)"), [(h, 123) for h in servers or ["pool.ntp.org"]], "UDP",
+            "" if servers else _("serveurs par défaut de la distribution (pool.ntp.org ou équivalent)"))
+
+    # Mises à jour du système du serveur et de loco lui-même.
+    add(_("Mises à jour du système du serveur"), [_endpoint(u) for u in _os_repositories()])
+    if config.SERVER_UPDATES:
+        src = locoadmin.source()
+        if "://" in src:
+            add(_("Mises à jour de loco (GitLab)"), [_endpoint(src)], essential=False)
+        else:
+            add(_("Mises à jour de loco (GitHub)"), [(h, 443) for h in ("api.github.com", "github.com",
+                "release-assets.githubusercontent.com", "objects.githubusercontent.com")])
+
+    # Caches et catalogues, selon les fonctionnalités actives.
+    if "apt" not in off:
+        seen = _acng_hosts() if not config.APT_NGINX else []
+        hosts = seen or ["deb.debian.org", "security.debian.org", "archive.ubuntu.com", "security.ubuntu.com"]
+        add(_("Cache de paquets Linux (miroirs des postes)"), [(h, 80) for h in hosts], note=(
+            _("miroirs vus dans le cache ; ajoutez tout autre miroir configuré sur les postes") if seen else
+            _("miroirs par défaut ; ajoutez ceux configurés sur les postes")))
+    if "rpm" not in off:
+        add(_("Cache de paquets RPM (Rocky, AlmaLinux, EPEL)"), [_endpoint(u) for _n, u in config.RPM_UPSTREAMS.values()])
+    if "flatpak" not in off:
+        add(_("Cache Flathub"), [_endpoint(config.FLATHUB_URL)])
+    if "wu" not in off:
+        add(_("Cache Windows Update"), [(d if d.startswith("*.") else "*." + d, p)
+                                        for d in read_wu_domains() for p in (80, 443)],
+            note=_("domaines et sous-domaines"))
+    if "windows_apps" not in off:
+        installers = [_endpoint(r[0]) for r in db().execute(
+            "SELECT DISTINCT source_url FROM win_apps WHERE source_url != ''").fetchall()]
+        if any(e and e[0] == "github.com" for e in installers):        # les fichiers GitHub sont servis ailleurs
+            installers += [("release-assets.githubusercontent.com", 443), ("objects.githubusercontent.com", 443)]
+        add(_("Catalogue de logiciels Windows (winget et éditeurs)"),
+            [("cdn.winget.microsoft.com", 443)] + sorted({e for e in installers if e}),
+            note=_("hôtes des installeurs déjà présents au catalogue ; un nouveau logiciel peut en ajouter"))
+
+    # Notifications et sauvegarde hors site : seulement si elles sont configurées.
+    if "alerts" not in off:
+        try:
+            cfg = alerts.load()
+        except Exception:
+            cfg = None
+        if cfg and cfg["email"]["enabled"] and cfg["email"]["host"]:
+            add(_("Alertes par e-mail (SMTP)"), [(cfg["email"]["host"].lower(), int(cfg["email"]["port"] or 587))])
+        if cfg and cfg["webhook"]["enabled"] and cfg["webhook"]["url"]:
+            add(_("Alertes par webhook"), [_endpoint(cfg["webhook"]["url"])])
+    try:
+        bk = offsite.load()
+    except Exception:
+        bk = None
+    if bk and bk["type"] == "s3" and bk["s3"]["endpoint"]:
+        scheme = "https://" if bk["s3"].get("use_ssl", True) else "http://"
+        add(_("Sauvegarde hors site (S3)"), [_endpoint(scheme + bk["s3"]["endpoint"].split("://")[-1])])
+    elif bk and bk["type"] == "sftp" and bk["sftp"]["host"]:
+        add(_("Sauvegarde hors site (SFTP)"), [(bk["sftp"]["host"].lower(), int(bk["sftp"]["port"] or 22))])
+    return rows
+
+
 @app.route("/system")
 @login_required
 def system():
@@ -312,10 +462,12 @@ def system():
     if not (config.CONTAINER or config.ALPINE or config.WINDOWS) and os.path.exists("/etc/squid/squid.conf"):
         services.append(("squid", "Proxy cache Windows Update (sans DNS)", service_active("squid")))
     backups = list_backups()
+    time_info = server_time() if config.SERVER_UPDATES and not config.WINDOWS else None
     return render_template(
         "system.html",
         services=services, stopped=[unit for unit, _, active in services if not active],
         firewall=firewall_ports(),
+        egress=firewall_egress(time_info),
         last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
         ca=cert_info(os.path.join(config.TLS_DIR, "ca.crt")),
@@ -338,7 +490,7 @@ def system():
         offsite=offsite_panel(),
         paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
-        time_info=server_time() if config.SERVER_UPDATES and not config.WINDOWS else None,
+        time_info=time_info,
         timezones=timezones() if config.SERVER_UPDATES and not config.WINDOWS else [],
         qemu=qemu_agent() if config.SERVER_UPDATES and not config.WINDOWS else None,
     )

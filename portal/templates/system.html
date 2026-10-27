@@ -242,8 +242,38 @@
           </tbody>
         </table>
       </div>
-      <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas. En sortie, le serveur doit joindre les miroirs amont (dépôts des distributions, Microsoft Update, Flathub) en HTTP/HTTPS pour alimenter les caches.") }}</div>
+      <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas.") }}</div>
     </section>
+
+    {% if egress %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Flux sortants") }}</h2><div class="aside">{{ _("à autoriser vers Internet") }}</div></div>
+      <div class="panel-b">
+        <p class="muted small">{{ _("Destinations que le serveur loco doit pouvoir joindre <strong>en sortie</strong> pour alimenter ses caches et se mettre à jour. Elles sont tirées de la configuration et des fonctionnalités activées de ce serveur.") }}</p>
+      </div>
+      <div class="table-wrap">
+        <table class="egress-table">
+          <thead><tr><th>{{ _("Service") }}</th><th>{{ _("Destinations") }}</th><th>{{ _("Port") }}</th><th class="hide-sm">{{ _("Protocole") }}</th></tr></thead>
+          <tbody>
+          {% for e in egress %}
+            <tr>
+              <td>{{ e.service }}{% if e.essential %} <span class="os-tag">{{ _("essentiel") }}</span>{% endif %}{% if e.note %}<span class="sub">{{ e.note }}</span>{% endif %}</td>
+              <td><ul class="host-list">{% for h in e.hosts %}<li class="mono">{{ h }}</li>{% endfor %}</ul></td>
+              <td class="nowrap"><span class="mono port-badge">{{ e.ports }}</span></td>
+              <td class="hide-sm nowrap">{{ e.proto }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-f egress-copy">
+        <span>{{ _("Une liste prête à transmettre à l'équipe réseau, une destination par ligne.") }}</span>
+        <code hidden>{% for e in egress %}{% for h in e.hosts %}{{ h }}  {{ e.ports }} {{ e.proto }}  # {{ e.service }}
+{% endfor %}{% endfor %}</code>
+        <button type="button" class="btn sm copy">{{ _("Copier") }}</button>
+      </div>
+    </section>
+    {% endif %}
 
   <div class="cols even">
     <section class="panel">

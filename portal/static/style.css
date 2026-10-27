@@ -549,6 +549,10 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .time-sources th, .time-sources td { padding: 8px 12px; font-size: 13px; }
 .time-sources th { background: var(--bg-2); }
 .time-sources td.mono { font-size: 12.5px; }
+.host-list { margin: 0; padding: 0; list-style: none; }
+.host-list li { font-size: 12.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.egress-table td { vertical-align: top; }
+.egress-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .plain-list { margin: 0; padding: 0; list-style: none; }
 .plain-list li { padding: 3px 0; overflow-wrap: anywhere; }
 
