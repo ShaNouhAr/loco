@@ -7,8 +7,11 @@
     <span class="avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>
     <div>
       <h1>{{ current_user.username }}</h1>
-      <p><span class="pill">{{ roles.get(current_user.role, _("Profil indisponible")) }}</span>
-        <span class="muted">· {{ _('compte local') if local else _('connexion par un fournisseur d’identité') }}{% if current_user.last_login %} {{ _("· session ouverte le %(last_login)s", last_login=current_user.last_login|date_fr) }}{% endif %}{% if current_user.created_at %} {{ _("· créé le %(v)s", v=current_user.created_at[:10]) }}{% endif %}</span></p>
+      <p class="account-meta"><span class="pill">{{ roles.get(current_user.role, _("Profil indisponible")) }}</span>
+        <span>{{ _('Compte local') if local else _('Fournisseur d’identité') }}</span>
+        {% if current_user.last_login %}<span>{{ _("Dernière connexion %(v)s", v=current_user.last_login|date_fr) }}</span>{% endif %}
+        {% if current_user.created_at %}<span>{{ _("Créé le %(v)s", v=current_user.created_at|date_fr) }}</span>{% endif %}
+      </p>
     </div>
   </div>
 </div>

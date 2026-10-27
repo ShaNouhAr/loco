@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.74.1 — 2026-10-27
+
+- **Mon compte, plus lisible.** En-tête en étiquettes compactes (profil, type de compte, dernière connexion, création) avec un seul format de date. Onglet Sécurité : champs de largeur raisonnable et règles du mot de passe affichées à côté, en liste de vérification ; encart « Bon à savoir » plus discret ; double authentification avec son explication et son bouton sur une même ligne.
+
 ## 2.74.0 — 2026-10-27
 
 - **Création de compte repensée.** La page Comptes affiche la liste en pleine largeur et un bouton **Nouveau compte** en haut (le doublon « Profils d'accès » disparaît, l'onglet reste). La création se fait dans une fenêtre en trois parties : l'identifiant avec sa règle affichée ; le **profil d'accès en cartes**, chacune avec ce qu'elle permet (seuls les profils que vous pouvez attribuer sont proposés) ; le mot de passe (saisi, généré au dé ou laissé vide) et le choix de le faire changer à la première connexion. Si la création est refusée (identifiant pris, mot de passe trop faible), la fenêtre se rouvre avec la saisie.

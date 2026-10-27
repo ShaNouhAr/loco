@@ -1558,3 +1558,20 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 .page-tabs { margin-bottom: 0; }
 a.metric-link { display: block; color: inherit; transition: border-color .12s, background .12s; }
 a.metric-link:hover { text-decoration: none; border-color: var(--line-2); background: var(--bg-2); }
+/* Mon compte : repères compacts dans l'en-tête, formulaire resserré avec ses règles à côté, encarts plus calmes. */
+.account-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.account-meta > span:not(.pill) { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--text-2); }
+[data-panel="securite"] .password-form { display: grid; grid-template-columns: minmax(0, 420px) minmax(200px, 1fr); gap: 16px 32px; align-items: start; }
+[data-panel="securite"] .password-form > * + * { margin-top: 0; }
+[data-panel="securite"] .password-form > label.f, [data-panel="securite"] .password-form > .row { grid-column: 1; }
+[data-panel="securite"] .password-form > .password-rules { grid-column: 2; grid-row: 1 / span 3; grid-template-columns: 1fr; gap: 10px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-2); }
+.account-notes li { position: relative; padding: 8px 0 8px 16px; font-size: 13px; line-height: 1.5; }
+.account-notes li::before { content: ""; position: absolute; left: 0; top: 15px; width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
+[data-panel="securite"] .stack > section.panel > .panel-b { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+[data-panel="securite"] .stack > section.panel > .panel-b > p { max-width: 640px; margin: 0; }
+@media (max-width: 900px) {
+  [data-panel="securite"] .password-form { grid-template-columns: minmax(0, 1fr); }
+  [data-panel="securite"] .password-form > .password-rules { grid-column: 1; grid-row: auto; }
+}
+.account-notes li + li { border-top: 0; }
