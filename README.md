@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+  <img src="docs/logo-light.svg" alt="Logo de loco" width="160">
+</picture>
+
 # loco
 
 ### Dépôts, caches et gestion de parc, pour tout un réseau d'entreprise
