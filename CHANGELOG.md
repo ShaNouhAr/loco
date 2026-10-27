@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.68.0 — 2026-10-27
+
+- **Heure du serveur, refonte NTP** : l'état de l'heure affiché était souvent faux. Il est désormais mesuré par l'agent root (le portail, non privilégié, ne peut pas interroger chrony) et le bloc *Système → Heure et matériel* a été repensé : pastille d'état claire (synchronisée / en cours / désactivée / gérée par l'hôte), résumé (heure locale, fuseau, **source en usage, strate, écart**) et tableau par serveur (en usage / joignable / injoignable…). La synchronisation NTP accepte **plusieurs serveurs** (IP v4/v6 ou noms, séparés par des espaces), prioritaires sur ceux de la distribution, et le réglage réseau passe avant le fuseau horaire. Sur l'appliance (chrony avec `cmdport 0`), le port de commande local est réactivé automatiquement pour que l'état redevienne lisible ; prise en charge de timesyncd (Debian/Ubuntu) et de chrony (Red Hat, Alpine), avec « include » pour les distributions sans *confdir* (Rocky, AlmaLinux) et persistance du choix au redémarrage sur l'appliance (OpenRC).
+
 ## 2.67.0 — 2026-10-27
 
 - **Shell root : le terminal directement** : une fois le shell activé (et le serveur redémarré), *Administration → Shell root*, l'icône de la barre et Ctrl+K ouvrent directement le terminal root, sans page intermédiaire. Un bouton **« Désactiver le shell root »** bien visible sur le terminal ferme tous les shells et coupe l'accès (confirmation demandée) ; on revient alors à la mise en service. La page d'étapes ne sert plus que tant que le shell n'est pas actif. Le shell ne démarre qu'au premier échange du terminal (protégé contre le CSRF), jamais au simple affichage de la page.

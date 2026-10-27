@@ -2,6 +2,7 @@
 
 import atexit
 import io
+import json
 import os
 import re
 import shutil
@@ -429,29 +430,47 @@ class TestFirewallPorts(unittest.TestCase):
 
 
 class TestServerTimeDisplay(unittest.TestCase):
-    """État NTP affiché : via timedatectl (systemd), ou via chrony quand timedatectl est absent (appliance Alpine)."""
+    """État NTP affiché : lu dans le fichier déposé par l'agent root (le portail n'est pas privilégié) ;
+    repli sur timedatectl (hôtes systemd) quand ce fichier manque."""
 
-    def test_chrony_state_reads_tracking(self):
+    def test_reads_the_agent_status_file(self):
+        import json
+        import tempfile
+        import time as _time
         from loco import system
-        synced = mock.Mock(returncode=0, stdout="Reference ID    : AC110002 (10.0.0.2)\nLeap status     : Normal\n")
-        with mock.patch("loco.system.subprocess.run", return_value=synced):
-            self.assertEqual(system._chrony_state(), (True, True))
-        starting = mock.Mock(returncode=0, stdout="Reference ID    : 00000000 ()\nLeap status     : Not synchronised\n")
-        with mock.patch("loco.system.subprocess.run", return_value=starting):
-            self.assertEqual(system._chrony_state(), (True, False))           # chronyd actif, pas encore synchro
-        with mock.patch("loco.system.subprocess.run", return_value=mock.Mock(returncode=1, stdout="")):
-            self.assertEqual(system._chrony_state(), (False, False))          # chronyd arrêté
-
-    def test_server_time_falls_back_to_chrony_without_timedatectl(self):
-        from loco import system
-        synced = mock.Mock(returncode=0, stdout="Reference ID : AC110002 (x)\nLeap status : Normal\n")
-        with mock.patch("loco.system.shutil.which", return_value=None), \
+        data = {"at": _time.time(), "container": False, "backend": "chrony", "enabled": True, "synchronized": True,
+                "source": "162.159.200.1", "stratum": 3, "offset_ms": -1.2, "servers": ["fr.pool.ntp.org", "10.0.0.5"],
+                "sources": [{"address": "162.159.200.1", "state": "used", "stratum": 3, "reach": "377"},
+                            {"address": "10.0.0.5", "state": "unreachable", "stratum": 0, "reach": "0"}]}
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        self.addCleanup(os.remove, path)
+        with mock.patch.object(system.locoadmin, "TIME_STATUS", path), \
              mock.patch("loco.system._virt", return_value=("qemu", False)), \
-             mock.patch("loco.system.subprocess.run", return_value=synced), \
              mock.patch("loco.system.os.readlink", return_value="zoneinfo/Europe/Paris"):
             info = system.server_time()
-        self.assertTrue(info["ntp"])                                          # plus « désactivée » à tort sur Alpine
-        self.assertTrue(info["synchronized"])
+        self.assertTrue(info["fresh"])
+        self.assertTrue(info["ntp"] and info["synchronized"])
+        self.assertEqual(info["source"], "162.159.200.1")
+        self.assertEqual(info["stratum"], 3)
+        self.assertEqual(info["servers"], ["fr.pool.ntp.org", "10.0.0.5"])            # plusieurs serveurs NTP
+        self.assertEqual([x["state"] for x in info["sources"]], ["used", "unreachable"])
+        self.assertEqual(info["timezone"], "Europe/Paris")
+
+    def test_stale_file_falls_back_to_timedatectl(self):
+        import time as _time
+        from loco import system
+        stale = json.dumps({"at": _time.time() - 600, "enabled": True, "synchronized": True})
+        show = mock.Mock(returncode=0, stdout="NTP=yes\nNTPSynchronized=yes\n")
+        with mock.patch("loco.system.open", mock.mock_open(read_data=stale)), \
+             mock.patch("loco.system.shutil.which", return_value="/usr/bin/timedatectl"), \
+             mock.patch("loco.system._virt", return_value=("qemu", False)), \
+             mock.patch("loco.system.subprocess.run", return_value=show), \
+             mock.patch("loco.system.os.readlink", return_value="zoneinfo/UTC"):
+            info = system.server_time()
+        self.assertFalse(info["fresh"])                                               # fichier périmé ignoré
+        self.assertTrue(info["ntp"] and info["synchronized"])                          # repli timedatectl
 
 
 class TestNavigation(unittest.TestCase):

@@ -299,34 +299,75 @@
   {% if time_info or (qemu and (qemu.qemu or qemu.installed)) %}
   <div class="tab-panel" data-panel="reglages"><div class="stack">
   {% if time_info %}
-  <section class="panel">
+  {% set st_labels = {"used": _("en usage"), "ok": _("joignable"), "unreachable": _("injoignable"), "falseticker": _("incohérente"), "unstable": _("instable"), "unknown": _("état inconnu")} %}
+  {% set st_class = {"used": "ok", "ok": "ok", "falseticker": "bad", "unstable": "warn", "unreachable": "warn"} %}
+  <section class="panel time-panel">
     <div class="panel-h"><h2>{{ _("Heure du serveur") }}</h2>
-      <div class="aside">{% if time_info.container %}<span class="muted small">{{ _("horloge gérée par l'hôte") }}</span>{% elif time_info.ntp %}<span class="st {{ 'ok' if time_info.synchronized else 'warn' }}">{{ _("horloge synchronisée") if time_info.synchronized else _("synchronisation en cours") }}</span>{% else %}<span class="muted small">{{ _("synchronisation NTP désactivée") }}</span>{% endif %}</div>
+      <div class="aside">
+        {%- if time_info.container %}<span class="st">{{ _("gérée par l'hôte") }}</span>
+        {%- elif not time_info.ntp %}<span class="st">{{ _("synchronisation désactivée") }}</span>
+        {%- elif time_info.synchronized %}<span class="st ok">{{ _("synchronisée") }}</span>
+        {%- else %}<span class="st warn">{{ _("synchronisation en cours") }}</span>{% endif %}
+      </div>
     </div>
-    <form method="post" action="{{ url_for('system_time') }}" class="panel-b time-form" data-ajax>
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <div class="set-row">
+    <div class="panel-b stack">
+      <dl class="kv-grid time-summary">
+        <div><dt>{{ _("Heure locale") }}</dt><dd class="mono">{{ time_info.local }}</dd></div>
+        <div><dt>{{ _("Fuseau horaire") }}</dt><dd>{{ time_info.timezone or "—" }}</dd></div>
+        {%- if not time_info.container %}
+        <div><dt>{{ _("Source en usage") }}</dt><dd class="mono">{{ time_info.source or "—" }}</dd></div>
+        {%- if time_info.stratum %}<div><dt>{{ _("Strate") }}</dt><dd>{{ time_info.stratum }}</dd></div>{% endif %}
+        {%- if time_info.offset_ms is not none %}<div><dt>{{ _("Écart") }}</dt><dd class="mono">{{ "%+.1f ms"|format(time_info.offset_ms) }}</dd></div>{% endif %}
+        {%- endif %}
+      </dl>
+
+      {% if time_info.container %}
+      <p class="muted small">{{ _("Ce serveur est un conteneur : son horloge vient de l'hôte. La synchronisation NTP se règle sur l'hôte (Proxmox), pas ici.") }}</p>
+      <form method="post" action="{{ url_for('system_time') }}" class="time-form stack" data-ajax>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
         <label class="f">
           <span>{{ _("Fuseau horaire") }}</span>
           <select name="timezone" class="field-md">
+            {% if not time_info.timezone %}<option value="" selected>{{ _("— inchangé —") }}</option>{% endif %}
             {% for tz in timezones %}<option value="{{ tz }}" {{ 'selected' if tz == time_info.timezone }}>{{ tz }}</option>{% endfor %}
           </select>
         </label>
-        <div class="set-aside muted small">{{ _("Heure locale : %(t)s", t=time_info.local) }}</div>
-      </div>
-      {% if time_info.container %}
-      <p class="muted small">{{ _("Ce serveur est un conteneur : son horloge vient de l'hôte. La synchronisation NTP se règle sur l'hôte (Proxmox), pas ici.") }}</p>
+        <div><button class="btn sm"><span class="spin"></span>{{ _("Appliquer") }}</button></div>
+      </form>
       {% else %}
-      <div class="time-ntp">
-        <label class="check"><input type="checkbox" name="ntp" value="1" {{ 'checked' if time_info.ntp }}> <span>{{ _("Synchroniser l'horloge sur un serveur NTP") }}</span></label>
-        <label class="f">
-          <span>{{ _("Serveur NTP amont — vide : serveurs par défaut du système") }}</span>
-          <input type="text" name="ntp_server" value="{{ time_info.server }}" placeholder="pool.ntp.org" spellcheck="false" class="mono field-md">
-        </label>
-      </div>
+      {% if time_info.ntp and time_info.sources %}
+      <table class="tbl time-sources">
+        <thead><tr><th>{{ _("Serveur") }}</th><th>{{ _("État") }}</th><th>{{ _("Strate") }}</th></tr></thead>
+        <tbody>
+          {% for s in time_info.sources %}
+          <tr>
+            <td class="mono">{{ s.address }}</td>
+            <td><span class="st {{ st_class.get(s.state, '') }}">{{ st_labels.get(s.state, s.state) }}</span></td>
+            <td>{{ s.stratum if s.stratum else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
       {% endif %}
-      <div><button class="btn sm"><span class="spin"></span>{{ _("Appliquer") }}</button></div>
-    </form>
+      <form method="post" action="{{ url_for('system_time') }}" class="time-form stack" data-ajax>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="check"><input type="checkbox" name="ntp" value="1" {{ 'checked' if time_info.ntp }}> <span>{{ _("Synchroniser l'horloge via NTP") }}</span></label>
+        <label class="f">
+          <span>{{ _("Serveurs NTP") }}</span>
+          <input type="text" name="ntp_server" value="{{ time_info.servers|join(' ') }}" placeholder="fr.pool.ntp.org 192.168.1.1" spellcheck="false" class="mono field-lg">
+          <small class="muted">{{ _("Une ou plusieurs adresses IP ou noms, séparées par des espaces. Laisser vide pour les serveurs par défaut du système.") }}</small>
+        </label>
+        <label class="f">
+          <span>{{ _("Fuseau horaire") }}</span>
+          <select name="timezone" class="field-md">
+            {% if not time_info.timezone %}<option value="" selected>{{ _("— inchangé —") }}</option>{% endif %}
+            {% for tz in timezones %}<option value="{{ tz }}" {{ 'selected' if tz == time_info.timezone }}>{{ tz }}</option>{% endfor %}
+          </select>
+        </label>
+        <div><button class="btn sm"><span class="spin"></span>{{ _("Appliquer") }}</button></div>
+      </form>
+      {% endif %}
+    </div>
   </section>
   {% endif %}
 

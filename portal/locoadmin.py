@@ -66,7 +66,6 @@ def valid_source(value):
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
-NTP_SERVER_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.:_-]*[A-Za-z0-9])?")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
 APPLIANCE_ACTIONS = ("configure",)
@@ -965,7 +964,7 @@ def _is_container():
 
 
 def _ntp_backend():
-    """Mécanisme NTP du système : systemd-timesyncd (Debian/Ubuntu) ou chrony (famille Red Hat)."""
+    """Mécanisme NTP du système : systemd-timesyncd (Debian/Ubuntu classiques) ou chrony (Red Hat, Alpine, Ubuntu récents)."""
     if os.path.exists("/lib/systemd/systemd-timesyncd") or os.path.exists("/usr/lib/systemd/systemd-timesyncd"):
         return "timesyncd"
     if shutil.which("chronyd"):
@@ -998,57 +997,251 @@ def _set_timezone(tz, log):
     log(t(f"Fuseau horaire : {tz}", f"Time zone: {tz}", f"Zona horaria: {tz}"))
 
 
-def _set_ntp(enabled, server, log):
-    """Synchronise l'horloge sur un serveur NTP amont (client NTP), par timesyncd ou chrony selon le système."""
+NTP_HOST_RE = re.compile(r"(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.?")
+NTP_MAX_SERVERS = 4
+TIMESYNCD_DROPIN = "/etc/systemd/timesyncd.conf.d/loco.conf"
+
+
+def ntp_servers(text):
+    """Serveurs NTP saisis : adresses IPv4, IPv6 ou noms, séparés par des espaces, virgules ou points-virgules."""
+    out = []
+    for item in re.split(r"[\s,;]+", str(text or "").strip()):
+        item = item.strip().strip("[]")
+        if not item:
+            continue
+        try:
+            item = str(ipaddress.ip_address(item))
+        except ValueError:
+            if not NTP_HOST_RE.fullmatch(item):
+                raise ValueError(t(f"serveur NTP invalide : {item}", f"invalid NTP server: {item}",
+                                   f"servidor NTP no válido: {item}")) from None
+            item = item.rstrip(".").lower()
+        if item not in out:
+            out.append(item)
+    if len(out) > NTP_MAX_SERVERS:
+        raise ValueError(t(f"au plus {NTP_MAX_SERVERS} serveurs NTP", f"at most {NTP_MAX_SERVERS} NTP servers",
+                           f"como máximo {NTP_MAX_SERVERS} servidores NTP"))
+    return out
+
+
+def _chrony_conf():
+    for path in ("/etc/chrony/chrony.conf", "/etc/chrony.conf"):
+        if os.path.isfile(path):
+            return path
+    return ""
+
+
+def _chrony_dropin():
+    """(fichier des serveurs de loco, chrony.conf à compléter d'un « include » ou vide). Debian, Ubuntu et Alpine lisent
+    un dossier « confdir » ; Rocky et AlmaLinux n'en ont pas : le fichier y est alors inclus explicitement."""
+    conf = _chrony_conf()
+    text = ""
+    try:
+        if conf:
+            with open(conf) as f:
+                text = f.read()
+    except OSError:
+        text = ""
+    for line in text.splitlines():
+        m = re.match(r"\s*confdir\s+(\S+)", line)
+        if m:
+            return os.path.join(m.group(1), "loco.conf"), ""
+    return os.path.join(os.path.dirname(conf) or "/etc", "chrony.loco.conf"), conf
+
+
+def _configured_ntp():
+    """Serveurs actuellement réglés par loco (lus dans son fichier)."""
+    paths = [TIMESYNCD_DROPIN] if _ntp_backend() == "timesyncd" else [_chrony_dropin()[0]]
+    servers = []
+    for path in paths:
+        try:
+            with open(path) as f:
+                for line in f:
+                    m = re.match(r"\s*NTP=(.*)", line) or re.match(r"\s*server\s+(\S+)", line)
+                    if m:
+                        servers += m.group(1).split()
+        except OSError:
+            pass
+    return servers
+
+
+def _chrony_cmd_blocked():
+    """Vrai si chrony.conf désactive le port de commande (« cmdport 0 » : le défaut Alpine de l'appliance). Il faut
+    alors le réactiver, sinon même root ne peut pas lire l'état via chronyc (ni port UDP ni socket Unix)."""
+    conf = _chrony_conf()
+    try:
+        with open(conf) as f:
+            return bool(re.search(r"^\s*cmdport\s+0\b", f.read(), re.M)) if conf else False
+    except OSError:
+        return False
+
+
+def _write_chrony(servers, log):
+    """Fichier chrony géré par loco : serveurs saisis (« prefer », prioritaires sur le pool de la distribution) et, si
+    besoin, réactivation du port de commande pour que l'agent root puisse lire l'état. Inclus via confdir, ou via un
+    « include » ajouté une seule fois à chrony.conf (Rocky/AlmaLinux, qui n'ont pas de confdir)."""
+    dropin, conf = _chrony_dropin()
+    header = "cmdport 323\n" if _chrony_cmd_blocked() else ""       # localhost seulement (défaut chrony)
+    _write_conf_file(dropin, "# Géré par loco : serveurs NTP et accès à l'état pour l'agent root\n" + header
+                     + "".join(f"server {s} iburst prefer\n" for s in servers))
+    if conf:
+        with open(conf) as f:
+            text = f.read()
+        if not re.search(r"^\s*include\s+" + re.escape(dropin) + r"\s*$", text, re.M):
+            with open(conf, "a") as f:
+                f.write(("" if text.endswith("\n") else "\n") + f"# Réglages NTP de loco\ninclude {dropin}\n")
+            log(t(f"{conf} : inclusion de {dropin}", f"{conf}: includes {dropin}", f"{conf}: incluye {dropin}"))
+
+
+def _ensure_chrony_readable(log=lambda *_: None):
+    """Au démarrage de l'agent : sur l'appliance (chrony + cmdport 0) l'état est illisible même pour root. Si chronyc
+    ne répond pas alors que c'est dû à cmdport 0, réactiver le port de commande puis recharger chronyd (une seule fois :
+    aux démarrages suivants chronyc répond et rien n'est fait)."""
+    if _is_container() or _ntp_backend() != "chrony":
+        return
+    if _quiet(["chronyc", "-n", "-c", "tracking"])[0] == 0 or not _chrony_cmd_blocked():
+        return
+    _write_chrony(_configured_ntp(), log)
+    if shutil.which("systemctl"):
+        service = "chronyd" if os.path.exists("/usr/lib/systemd/system/chronyd.service") else "chrony"
+        _run(["systemctl", "reload-or-restart", service], log)
+    else:
+        _run(["rc-service", "chronyd", "restart"], log)
+    log(t("Accès à l'état de l'heure réactivé (chrony).", "Time state access re-enabled (chrony).",
+          "Acceso al estado de la hora reactivado (chrony)."))
+
+
+def _set_ntp(enabled, servers, log):
+    """Client NTP du serveur, par timesyncd ou chrony. Les serveurs saisis sont prioritaires sur ceux de la distribution."""
     if _is_container():
         log(t("Conteneur : l'horloge est gérée par l'hôte, synchronisation NTP ignorée.",
               "Container: the clock is managed by the host, NTP synchronisation skipped.",
               "Contenedor: el reloj lo gestiona el anfitrión, sincronización NTP omitida."))
-        return
-    backend = _ntp_backend()
+        return True
+    backend, ok = _ntp_backend(), True
     if backend == "timesyncd":
-        dropin = "/etc/systemd/timesyncd.conf.d/loco.conf"
-        if server:
-            _write_conf_file(dropin, f"# Géré par loco\n[Time]\nNTP={server}\n")
-        elif os.path.exists(dropin):
-            os.remove(dropin)
-        _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log)
+        if servers:
+            _write_conf_file(TIMESYNCD_DROPIN, "# Géré par loco\n[Time]\nNTP=" + " ".join(servers) + "\n")
+        elif os.path.exists(TIMESYNCD_DROPIN):
+            os.remove(TIMESYNCD_DROPIN)
+        ok = _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log) == 0
         if enabled:
-            _run(["systemctl", "restart", "systemd-timesyncd"], log)
+            ok = _run(["systemctl", "restart", "systemd-timesyncd"], log) == 0 and ok
     elif backend == "chrony":
-        confdir = "/etc/chrony/conf.d" if os.path.isdir("/etc/chrony/conf.d") else "/etc/chrony.d"
-        dropin = os.path.join(confdir, "loco.conf")
-        if server:
-            _write_conf_file(dropin, f"# Géré par loco\nserver {server} iburst\n")
-        elif os.path.exists(dropin):
-            os.remove(dropin)
-        if shutil.which("timedatectl"):
-            _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log)
+        _write_chrony(servers, log)
         if shutil.which("systemctl"):
+            if shutil.which("timedatectl"):
+                ok = _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log) == 0
             service = "chronyd" if os.path.exists("/usr/lib/systemd/system/chronyd.service") else "chrony"
-            _run(["systemctl", "restart" if enabled else "stop", service], log)
-        else:                                             # Alpine/OpenRC (appliance) : pas de systemctl
-            _run(["rc-service", "chronyd", "restart" if enabled else "stop"], log)
+            ok = _run(["systemctl", "restart" if enabled else "stop", service], log) == 0 and ok
+        else:                                             # Alpine/OpenRC (appliance) : réglage gardé au redémarrage
+            _run(["rc-update", "add" if enabled else "del", "chronyd", "default"], log)
+            ok = _run(["rc-service", "chronyd", "restart" if enabled else "stop"], log) == 0
     else:
         log(t("Synchronisation NTP non gérée sur ce système.", "NTP synchronisation not managed on this system.", "Sincronización NTP no gestionada en este sistema."))
-        return
+        return False
     state = t("activée", "enabled", "activada") if enabled else t("désactivée", "disabled", "desactivada")
-    via = f" ({server})" if server and enabled else ""
+    via = f" ({', '.join(servers)})" if servers and enabled else ""
     log(t(f"Synchronisation NTP {state}{via}.", f"NTP synchronisation {state}{via}.", f"Sincronización NTP {state}{via}."))
+    return ok
+
+
+def _current_tz():
+    try:
+        return os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
+    except OSError:
+        try:
+            with open("/etc/timezone") as f:
+                return f.read().strip()
+        except OSError:
+            return ""
 
 
 def set_time(params, log=print):
-    """Règle le fuseau horaire du serveur et sa synchronisation NTP (le serveur se base sur un serveur NTP amont)."""
+    """Synchronisation NTP puis fuseau horaire : le NTP est appliqué d'abord et ne dépend pas du fuseau."""
     params = params or {}
     tz = str(params.get("timezone", "")).strip()
-    server = str(params.get("ntp_server", "")).strip()
+    servers = ntp_servers(params.get("ntp_server", ""))
     enabled = str(params.get("ntp", "")) in ("1", "true", "on", "yes")
-    if server and not NTP_SERVER_RE.fullmatch(server):
-        raise ValueError(t("serveur NTP invalide", "invalid NTP server", "servidor NTP no válido"))
-    if tz:
-        _set_timezone(tz, log)
-    _set_ntp(enabled, server, log)
-    return True
+    ok = _set_ntp(enabled, servers, log)
+    error = None
+    if tz and tz != _current_tz():
+        try:
+            _set_timezone(tz, log)
+        except (OSError, ValueError) as e:
+            error = e
+    write_time_status()
+    if error:
+        raise ValueError(t(f"synchronisation NTP appliquée, mais fuseau horaire refusé : {error}",
+                           f"NTP synchronisation applied, but time zone refused: {error}",
+                           f"sincronización NTP aplicada, pero zona horaria rechazada: {error}"))
+    return ok
+
+
+# --------------------------------------------------------------------------- état de l'heure (lu par le portail)
+# Mesuré en root (chronyc n'est pas accessible à l'utilisateur du portail : « cmdport 0 » sur Alpine et Debian) et
+# écrit dans un fichier lisible par le portail ; rafraîchi par l'agent toutes les 15 s et après chaque réglage.
+TIME_STATUS = os.path.join(AGENT_DIR, "time.json")
+CHRONY_STATES = {"*": "used", "+": "ok", "-": "ok", "?": "unreachable", "x": "falseticker", "~": "unstable"}
+
+
+def _quiet(cmd):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        return p.returncode, p.stdout
+    except (OSError, subprocess.SubprocessError):
+        return 1, ""
+
+
+def time_status():
+    st = {"at": time.time(), "container": _is_container(), "backend": _ntp_backend(), "enabled": False,
+          "synchronized": False, "source": "", "stratum": None, "offset_ms": None, "servers": _configured_ntp(),
+          "sources": []}
+    if st["container"]:
+        return st
+    if st["backend"] == "timesyncd" or (shutil.which("timedatectl") and st["backend"] != "chrony"):
+        code, out = _quiet(["timedatectl", "show", "-p", "NTP", "-p", "NTPSynchronized"])
+        values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+        st["enabled"], st["synchronized"] = values.get("NTP") == "yes", values.get("NTPSynchronized") == "yes"
+        if st["enabled"]:                                 # inutile (et lent) d'interroger la source si timesyncd est arrêté
+            code, out = _quiet(["timedatectl", "show-timesync", "-p", "ServerAddress", "-p", "ServerName"])
+            values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+            st["source"] = values.get("ServerAddress") or values.get("ServerName", "")
+        return st
+    if st["backend"] == "chrony":
+        code, out = _quiet(["chronyc", "-n", "-c", "tracking"])
+        if code != 0 or not out.strip():
+            return st                                     # chronyd arrêté : synchronisation désactivée
+        st["enabled"] = True
+        f = out.strip().split(",")
+        # -c tracking : ID de référence, adresse, strate, heure de référence, écart du système (s), …, état de saut
+        ref, addr = f[0], f[1] if len(f) > 1 else ""
+        st["stratum"] = int(f[2]) if len(f) > 2 and f[2].isdigit() else None
+        try:
+            st["offset_ms"] = round(float(f[4]) * 1000, 3)
+        except (IndexError, ValueError):
+            pass
+        st["synchronized"] = ref not in ("00000000", "") and (f[-1].strip() if f else "") == "Normal"
+        st["source"] = addr if st["synchronized"] else ""
+        code, out = _quiet(["chronyc", "-n", "-c", "sources"])
+        for line in out.splitlines():
+            c = line.split(",")
+            if len(c) >= 6 and c[0] in ("^", "="):
+                st["sources"].append({"address": c[2], "state": CHRONY_STATES.get(c[1], "unknown"),
+                                      "stratum": int(c[3]) if c[3].isdigit() else None, "reach": c[5]})
+    return st
+
+
+def write_time_status():
+    try:
+        os.makedirs(AGENT_DIR, exist_ok=True)
+        tmp = TIME_STATUS + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(time_status(), f)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, TIME_STATUS)
+    except OSError:
+        pass
 
 
 def install_qemu_agent(log=print):
@@ -1696,7 +1889,7 @@ def agent():
     except OSError as e:
         print(f"shell root indisponible : {e}", file=sys.stderr)
     code = os.stat(HERE).st_mtime_ns
-    beat = 0
+    beat = timecheck = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.
     for job in jobs(limit=40):
         if job.get("state") in ("queued", "running") and not _alive(job.get("pid")):
@@ -1706,6 +1899,12 @@ def agent():
     # vérification une minute plus tard, le temps que le réseau soit prêt.
     status = read_status()
     recheck = time.time() + 60 if (status.get("reboot_required") or status.get("stale_services") or "os" not in status) else 0
+    # Sur l'appliance (chrony + cmdport 0), rendre l'état de l'heure lisible pour l'agent, puis le publier aussitôt.
+    try:
+        _ensure_chrony_readable()
+        write_time_status()
+    except Exception as e:                                 # l'heure ne doit jamais empêcher l'agent de démarrer
+        print(f"état de l'heure indisponible : {e}", file=sys.stderr)
     while True:
         for job in jobs(limit=40):
             if job.get("state") in ("queued", "running") and job.get("pid") and not _alive(job["pid"]):
@@ -1740,8 +1939,11 @@ def agent():
                 elif req["action"] == "set-time":
                     p = req.get("params") or {}
                     tz = str(p.get("timezone", "")).strip()
-                    server = str(p.get("ntp_server", "")).strip()
-                    if (tz and not _valid_tz(tz)) or (server and not NTP_SERVER_RE.fullmatch(server)):
+                    try:
+                        server = " ".join(ntp_servers(p.get("ntp_server", "")))
+                    except ValueError:
+                        continue
+                    if tz and not _valid_tz(tz):
                         continue
                     params = {"timezone": tz, "ntp_server": server,
                               "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else ""}
@@ -1781,6 +1983,9 @@ def agent():
             _submit("check", user="loco-agent")
             recheck = 0
         _prune_jobs()
+        if time.time() - timecheck > 15:
+            timecheck = time.time()
+            write_time_status()
         if time.time() - beat > 20:
             beat = time.time()
             with open(HEARTBEAT, "w") as f:
@@ -1818,11 +2023,9 @@ def request(action, params=None, user=""):
         params = {"repo": new}
     elif action == "set-time":
         tz = str((params or {}).get("timezone", "")).strip()
-        server = str((params or {}).get("ntp_server", "")).strip()
+        server = " ".join(ntp_servers((params or {}).get("ntp_server", "")))
         if tz and not _valid_tz(tz):
             raise ValueError("fuseau horaire inconnu")
-        if server and not NTP_SERVER_RE.fullmatch(server):
-            raise ValueError("serveur NTP invalide")
         params = {"timezone": tz, "ntp_server": server,
                   "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else ""}
     elif action == "restore":

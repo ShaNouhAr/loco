@@ -1,12 +1,14 @@
 """Page Système, contrôle de santé et métriques Prometheus."""
 
 import datetime
+import json
 import os
 import re
 import secrets
 import shutil
 import subprocess
 import sys
+import time
 import urllib.parse
 
 from flask import Response, abort, flash, g, render_template, request, send_file
@@ -22,51 +24,49 @@ if config.SERVER_UPDATES:
     import locoadmin
 
 
-def _chrony_state():
-    """État NTP via chrony quand timedatectl est absent (appliance Alpine/OpenRC) : (activé, synchronisé)."""
-    try:
-        out = subprocess.run(["chronyc", "-n", "tracking"], capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.SubprocessError):
-        return False, False
-    if out.returncode != 0:                     # chronyd arrêté (synchro désactivée)
-        return False, False
-    values = dict((k.strip(), v.strip()) for k, _, v in (line.partition(":") for line in out.stdout.splitlines()))
-    # Reference ID 00000000 = source non encore sélectionnée ; Leap « Normal » = horloge saine.
-    synchronized = values.get("Leap status", "").startswith("Normal") and not values.get("Reference ID", "").startswith("00000000")
-    return True, synchronized
-
-
 def server_time():
-    """Fuseau horaire et état de la synchronisation NTP du serveur, en lecture seule (appliqués par l'agent root)."""
-    info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False,
-            "synchronized": False, "server": "", "container": False}
-    info["container"] = _virt()[1]
-    if shutil.which("timedatectl"):
+    """Fuseau horaire et état NTP du serveur, en lecture seule. L'état fin (source en cours, strate, écart, liste des
+    sources) est mesuré par l'agent root — le portail, non privilégié, ne peut pas interroger chrony sur l'appliance —
+    puis déposé dans un fichier que l'on relit ici ; repli sur une lecture directe quand ce fichier manque."""
+    info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False, "synchronized": False,
+            "source": "", "stratum": None, "offset_ms": None, "servers": [], "sources": [],
+            "container": _virt()[1], "fresh": False}
+    try:
+        info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
+    except OSError:
+        pass
+    data = None
+    if config.SERVER_UPDATES:
         try:
-            out = subprocess.run(["timedatectl", "show", "-p", "Timezone", "-p", "NTP", "-p", "NTPSynchronized"],
+            with open(locoadmin.TIME_STATUS) as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            data = None
+    if data and time.time() - data.get("at", 0) < 90:     # état frais mesuré par l'agent root
+        info["fresh"], info["container"], info["ntp"] = True, data.get("container", info["container"]), bool(data.get("enabled"))
+        for key in ("synchronized", "source", "stratum", "offset_ms", "servers", "sources"):
+            info[key] = data.get(key, info[key])
+    elif shutil.which("timedatectl"):                     # repli non privilégié (hôtes systemd)
+        try:
+            out = subprocess.run(["timedatectl", "show", "-p", "NTP", "-p", "NTPSynchronized"],
                                  capture_output=True, text=True, timeout=5).stdout
             values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
-            info["timezone"] = values.get("Timezone", "")
-            info["ntp"] = values.get("NTP") == "yes"
-            info["synchronized"] = values.get("NTPSynchronized") == "yes"
+            info["ntp"], info["synchronized"] = values.get("NTP") == "yes", values.get("NTPSynchronized") == "yes"
         except (OSError, subprocess.SubprocessError, ValueError):
             pass
-    elif not info["container"]:                 # Alpine/OpenRC : pas de timedatectl, lire l'état de chrony
-        info["ntp"], info["synchronized"] = _chrony_state()
-    if not info["timezone"]:
-        try:
-            info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
-        except OSError:
-            pass
-    for path in ("/etc/systemd/timesyncd.conf.d/loco.conf", "/etc/chrony/conf.d/loco.conf", "/etc/chrony.d/loco.conf"):
-        try:
-            with open(path) as f:
-                match = re.search(r"(?:NTP=|server\s+)(\S+)", f.read())
-            if match:
-                info["server"] = match.group(1)
+    if not info["servers"]:                               # serveurs réglés par loco, pour pré-remplir le champ
+        for path in ("/etc/systemd/timesyncd.conf.d/loco.conf", "/etc/chrony/conf.d/loco.conf",
+                     "/etc/chrony.d/loco.conf", "/etc/chrony.loco.conf"):
+            try:
+                with open(path) as f:
+                    for line in f:
+                        m = re.match(r"\s*NTP=(.*)", line) or re.match(r"\s*server\s+(\S+)", line)
+                        if m:
+                            info["servers"] += m.group(1).split()
+            except OSError:
+                continue
+            if info["servers"]:
                 break
-        except OSError:
-            pass
     return info
 
 
