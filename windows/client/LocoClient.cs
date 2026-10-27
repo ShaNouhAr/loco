@@ -24,6 +24,7 @@ using System.Net.NetworkInformation;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -380,6 +381,91 @@ namespace Loco
         }
 
         // ------------------------------------------------------------ poste
+
+        // ------------------------------------------------------------ supervision
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct FileTime { public uint Low, High; public ulong Value { get { return ((ulong)High << 32) | Low; } } }
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GetSystemTimes(out FileTime idle, out FileTime kernel, out FileTime user);
+        [DllImport("kernel32.dll")]
+        static extern ulong GetTickCount64();
+
+        static ulong lastCpuIdle, lastCpuTotal;
+        static long lastNetRx = -1, lastNetTx = -1;
+        static DateTime lastSample = DateTime.MinValue;
+
+        // Relevé joint à chaque contact : processeur et réseau en moyenne depuis le contact précédent, mémoire, fichier
+        // d'échange, disques fixes et durée depuis le démarrage.
+        static Dictionary<string, object> Metrics()
+        {
+            var m = new Dictionary<string, object> { { "cores", Environment.ProcessorCount } };
+            DateTime now = DateTime.UtcNow;
+            double elapsed = (now - lastSample).TotalSeconds;
+            bool recent = elapsed > 0 && elapsed < 1800;
+            try
+            {
+                FileTime idle, kernel, user;
+                if (GetSystemTimes(out idle, out kernel, out user))
+                {
+                    ulong total = kernel.Value + user.Value;           // le temps noyau inclut le temps inactif
+                    if (recent && total > lastCpuTotal)
+                        m["cpu"] = Math.Round(100.0 * (1 - (double)(idle.Value - lastCpuIdle) / (total - lastCpuTotal)), 1);
+                    lastCpuIdle = idle.Value; lastCpuTotal = total;
+                }
+            }
+            catch (Exception) { }
+            try
+            {
+                long rx = 0, tx = 0;
+                foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                    var stats = nic.GetIPv4Statistics();
+                    rx += stats.BytesReceived; tx += stats.BytesSent;
+                }
+                if (recent && lastNetRx >= 0 && rx >= lastNetRx && tx >= lastNetTx)
+                {
+                    m["net_rx"] = (long)((rx - lastNetRx) / elapsed);
+                    m["net_tx"] = (long)((tx - lastNetTx) / elapsed);
+                }
+                lastNetRx = rx; lastNetTx = tx;
+            }
+            catch (Exception) { }
+            lastSample = now;
+            try
+            {
+                using (var q = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM Win32_OperatingSystem"))
+                    foreach (ManagementObject o in q.Get())
+                    {
+                        long total = Convert.ToInt64(o["TotalVisibleMemorySize"]) * 1024, free = Convert.ToInt64(o["FreePhysicalMemory"]) * 1024;
+                        m["mem_total"] = total; m["mem_used"] = Math.Max(0, total - free);
+                    }
+                long swapTotal = 0, swapUsed = 0;
+                using (var q = new ManagementObjectSearcher("SELECT AllocatedBaseSize, CurrentUsage FROM Win32_PageFileUsage"))
+                    foreach (ManagementObject o in q.Get())
+                    {
+                        swapTotal += Convert.ToInt64(o["AllocatedBaseSize"]) * 1024 * 1024;
+                        swapUsed += Convert.ToInt64(o["CurrentUsage"]) * 1024 * 1024;
+                    }
+                m["swap_total"] = swapTotal; m["swap_used"] = swapUsed;
+            }
+            catch (Exception) { }
+            try { m["uptime"] = (long)(GetTickCount64() / 1000); } catch (Exception) { }
+            var disks = new List<object>();
+            try
+            {
+                foreach (var d in DriveInfo.GetDrives())
+                {
+                    if (disks.Count >= 16 || d.DriveType != DriveType.Fixed || !d.IsReady) continue;
+                    disks.Add(new Dictionary<string, object> { { "mount", d.Name.TrimEnd('\\') }, { "fs", d.DriveFormat },
+                        { "total", d.TotalSize }, { "used", d.TotalSize - d.TotalFreeSpace } });
+                }
+            }
+            catch (Exception) { }
+            m["disks"] = disks;
+            return m;
+        }
 
         static Dictionary<string, object> Identity()
         {
@@ -768,6 +854,7 @@ namespace Loco
                 if (state.TryGetValue("rescan", out v)) rescan = Convert.ToBoolean(v);
                 double now = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
                 var data = Identity();
+                data["metrics"] = Metrics();
                 if (rescan || firstRun || now - lastScan > scanHours * 3600)
                 {
                     data["inventory"] = Inventory();

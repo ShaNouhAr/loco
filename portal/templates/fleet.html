@@ -7,6 +7,7 @@
 {%- endmacro %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% block content %}
+{% from '_charts.html' import resources %}
 {% include '_fleet_nav.html' %}
 {% set can_select = can('fleet.update') %}
 <div class="head">
@@ -70,7 +71,7 @@
     {% if rows %}
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
-        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Groupes") }}</th><th class="hide-sm">{{ _("Contact") }}</th><th></th></tr></thead>
+        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th class="hide-sm">{{ _("Groupes") }}</th><th class="hide-sm">{{ _("Contact") }}</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
           <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
@@ -94,6 +95,7 @@
               </span>
               </span>
             </td>
+            <td class="hide-sm" data-label="{{ _('Ressources') }}">{{ resources(r.mon) }}</td>
             <td class="hide-sm" data-label="{{ _('Groupes') }}">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
             <td class="muted nowrap hide-sm" data-label="{{ _('Contact') }}" title="{{ d.last_seen }}">{{ r.seen }}</td>
             <td class="right nowrap card-action">

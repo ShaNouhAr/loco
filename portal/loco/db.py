@@ -411,6 +411,17 @@ MIGRATIONS = [
     ALTER TABLE users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN recovery_codes TEXT NOT NULL DEFAULT '';
     """,
+    # 21 : supervision des postes (dernier relevé + historique de 7 jours).
+    """
+    ALTER TABLE devices ADD COLUMN metrics TEXT NOT NULL DEFAULT '';
+    CREATE TABLE IF NOT EXISTS device_metrics (
+        device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        at INTEGER NOT NULL,
+        cpu REAL, mem REAL, swap REAL, disk REAL, net_rx REAL, net_tx REAL
+    );
+    CREATE INDEX IF NOT EXISTS device_metrics_device_at ON device_metrics(device_id, at);
+    CREATE INDEX IF NOT EXISTS device_metrics_at ON device_metrics(at);
+    """,
 ]
 
 

@@ -347,6 +347,98 @@ def system_info():
     return info
 
 
+# Systèmes de fichiers locaux supervisés (les pseudo-systèmes, réseaux et images en lecture seule sont ignorés).
+LOCAL_FS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "jfs", "reiserfs", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk"}
+
+
+def _cpu_times():
+    with open("/proc/stat") as f:
+        values = [int(v) for v in f.readline().split()[1:]]
+    idle = values[3] + (values[4] if len(values) > 4 else 0)          # idle + iowait
+    return sum(values[:8]), idle
+
+
+def _net_bytes():
+    rx = tx = 0
+    with open("/proc/net/dev") as f:
+        for line in f.readlines()[2:]:
+            name, _, rest = line.partition(":")
+            fields = rest.split()
+            if name.strip() != "lo" and len(fields) >= 9:
+                rx, tx = rx + int(fields[0]), tx + int(fields[8])
+    return rx, tx
+
+
+def metrics(state):
+    """Relevé de supervision joint à chaque contact : processeur et réseau en moyenne depuis le contact précédent
+    (relevés gardés dans l'état), mémoire, swap, disques locaux, charge et durée depuis le démarrage."""
+    out, now = {"cores": os.cpu_count() or 0}, time.time()
+    previous = state.get("metrics_sample") or {}
+    sample = {"at": now}
+    try:
+        total, idle = _cpu_times()
+        sample.update(cpu_total=total, cpu_idle=idle)
+        spent = total - previous.get("cpu_total", total)
+        if spent > 0 and now - previous.get("at", 0) < 1800:
+            out["cpu"] = round(100 * (1 - (idle - previous.get("cpu_idle", idle)) / spent), 1)
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        rx, tx = _net_bytes()
+        sample.update(net_rx=rx, net_tx=tx)
+        elapsed = now - previous.get("at", now)
+        if 0 < elapsed < 1800 and rx >= previous.get("net_rx", rx) and tx >= previous.get("net_tx", tx):
+            out["net_rx"] = int((rx - previous["net_rx"]) / elapsed)
+            out["net_tx"] = int((tx - previous["net_tx"]) / elapsed)
+    except (OSError, ValueError, KeyError):
+        pass
+    state["metrics_sample"] = sample
+    try:
+        mem = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, value = line.partition(":")
+                if value.split():
+                    mem[key] = int(value.split()[0]) * 1024
+        out["mem_total"] = mem.get("MemTotal", 0)
+        out["mem_used"] = max(0, mem.get("MemTotal", 0) - mem.get("MemAvailable", mem.get("MemFree", 0)))
+        out["swap_total"] = mem.get("SwapTotal", 0)
+        out["swap_used"] = max(0, mem.get("SwapTotal", 0) - mem.get("SwapFree", 0))
+    except (OSError, ValueError):
+        pass
+    try:
+        out["load"] = [round(x, 2) for x in os.getloadavg()]
+    except OSError:
+        pass
+    try:
+        with open("/proc/uptime") as f:
+            out["uptime"] = int(float(f.read().split()[0]))
+    except (OSError, ValueError, IndexError):
+        pass
+    disks, seen = [], set()
+    try:
+        with open("/proc/mounts") as f:
+            mounts = [line.split() for line in f]
+    except OSError:
+        mounts = []
+    # Un même périphérique monté plusieurs fois (montages liés) : garder « / » puis le chemin le plus court.
+    for m in sorted((m for m in mounts if len(m) >= 3), key=lambda m: (m[1] != "/", len(m[1]))):
+        if m[2] not in LOCAL_FS or m[0] in seen or len(disks) >= 16:
+            continue
+        mount = m[1].replace("\\040", " ")
+        try:
+            st = os.statvfs(mount)
+        except OSError:
+            continue
+        total = st.f_blocks * st.f_frsize
+        if total < 64 * 1024 * 1024:                                      # petites partitions (EFI, boot) : peu utiles
+            continue
+        seen.add(m[0])
+        disks.append({"mount": mount, "fs": m[2], "total": total, "used": total - st.f_bfree * st.f_frsize})
+    out["disks"] = disks
+    return out
+
+
 def scan():
     """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
     installés, caractéristiques du poste."""
@@ -524,6 +616,7 @@ def service():
     ensure_remote_service()
     state = load(STATE)
     data = identity()
+    data["metrics"] = metrics(state)
     last = state.get("last_scan", 0)
     # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
     # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).

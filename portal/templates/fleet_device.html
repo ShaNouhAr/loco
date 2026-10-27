@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ dev.hostname }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
+{% from "_charts.html" import line_chart, legend %}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False) -%}
 <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}
@@ -106,6 +107,7 @@
       {% if inv.apps %}<button type="button" data-tab="logiciels" aria-selected="false">{{ _("Logiciels installés") }} <span class="h-count">{{ inv.apps|length }}</span></button>{% endif %}
       {% if soft.packages %}<button type="button" data-tab="paquets" aria-selected="false">{{ _("Paquets installés") }} <span class="h-count">{{ soft.packages|length }}</span></button>{% endif %}
       {% if soft.flatpaks %}<button type="button" data-tab="flatpak" aria-selected="false">Flatpak <span class="h-count">{{ soft.flatpaks|length }}</span></button>{% endif %}
+      <button type="button" data-tab="supervision" aria-selected="false">{{ _("Supervision") }}{% if mon.now and not mon.now.stale and (mon.now.levels.values()|select('equalto', 'err')|list) %} <span class="st err" aria-label="{{ _('seuil dépassé') }}"></span>{% endif %}</button>
       <button type="button" data-tab="historique" aria-selected="false">{{ _("Historique") }}{% if history %} <span class="h-count">{{ history|length }}</span>{% endif %}</button>
       {% if files_ready and active %}<button type="button" data-tab="fichiers" aria-selected="false">{{ _("Fichiers") }}</button>{% endif %}
       <button type="button" data-tab="details" aria-selected="false">{{ _("Détails") }}</button>
@@ -151,6 +153,61 @@
       </div>
       {% else %}
       <div class="empty">{{ _("Catalogue vide : ajoutez des logiciels dans <a href=\"%(v)s\">Logiciels Windows</a>.", v=url_for('windows_apps')) }}</div>
+      {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="tab-panel" data-panel="supervision">
+      {% set m = mon.now %}
+      <div class="panel-h sub"><h2>{{ _("Supervision") }}</h2>
+        <div class="aside">{% if m %}<span class="small muted">{{ _("relevé : %(age)s", age=m.age_text) }}</span>{% endif %}
+          <div class="seg" role="group" aria-label="{{ _('Période') }}">{% for p in mon.periods %}<a class="seg-btn{{ ' on' if p == mon.period }}" href="{{ url_for('fleet_device', dev_id=dev.id, periode=p) }}#supervision">{{ _('24 h') if p == '24h' else _('7 jours') }}</a>{% endfor %}</div>
+        </div>
+      </div>
+      {% if not m %}
+      <div class="empty">{{ _("Aucun relevé pour l'instant. La supervision arrive avec l'agent 2.71 (mis à jour automatiquement) : premières valeurs au contact suivant, puis toutes les 2 minutes.") }}</div>
+      {% else %}
+      {% if m.stale %}<p class="note warn">{{ _("Poste hors contact : valeurs du dernier relevé, il y a %(age)s.", age=m.age_text) }}</p>{% endif %}
+      <div class="metrics mon-tiles{{ ' stale' if m.stale }}">
+        <div class="metric"><div class="k">{{ _("Processeur") }}</div>
+          <div class="v">{{ '%d'|format(m.cpu|round) if m.cpu is not none else '—' }}{% if m.cpu is not none %}<small> %</small>{% endif %}</div>
+          <div class="s">{% if m.levels.cpu in ('warn', 'err') %}<span class="st {{ m.levels.cpu }}">{{ _("élevé") }}</span> {% endif %}{{ _("%(n)s cœurs", n=m.raw.cores) if m.raw.cores }}{% if m.raw.load %} · {{ _("charge %(l)s", l=m.raw.load[0]) }}{% endif %}</div></div>
+        <div class="metric"><div class="k">{{ _("Mémoire") }}</div>
+          <div class="v">{{ '%d'|format(m.mem|round) if m.mem is not none else '—' }}{% if m.mem is not none %}<small> %</small>{% endif %}</div>
+          <div class="s">{% if m.levels.mem in ('warn', 'err') %}<span class="st {{ m.levels.mem }}">{{ _("saturée") if m.levels.mem == 'err' else _("élevée") }}</span> {% endif %}{{ _("%(used)s sur %(total)s", used=m.raw.mem_used|human, total=m.raw.mem_total|human) if m.raw.mem_total }}</div></div>
+        <div class="metric"><div class="k">{{ _("Disque le plus rempli") }}</div>
+          <div class="v">{{ '%d'|format(m.disk|round) if m.disk is not none else '—' }}{% if m.disk is not none %}<small> %</small>{% endif %}</div>
+          <div class="s">{% if m.levels.disk in ('warn', 'err') %}<span class="st {{ m.levels.disk }}">{{ _("presque plein") }}</span> {% endif %}<span class="mono">{{ m.disk_mount }}</span></div></div>
+        <div class="metric" title="{{ _('Débit moyen depuis le contact précédent (2 min)') }}"><div class="k">{{ _("Réseau") }}</div>
+          <div class="v small-v">{% if m.raw.net_rx is defined %}↓ {{ m.raw.net_rx|human }}/s{% else %}—{% endif %}</div>
+          <div class="s">{% if m.raw.net_tx is defined %}↑ {{ m.raw.net_tx|human }}/s {{ _("envoyés") }}{% else %}{{ _("au prochain contact") }}{% endif %}</div></div>
+        <div class="metric"><div class="k">{{ _("Démarré depuis") }}</div>
+          <div class="v small-v">{{ m.uptime_text or '—' }}</div>
+          <div class="s">{% if m.swap is not none and m.raw.swap_total %}{{ _("échange %(p)s %%", p='%d'|format(m.swap|round)) }}{% else %}{{ _("pas de fichier d'échange") }}{% endif %}</div></div>
+      </div>
+      {% if mon.usage %}
+      <div class="mon-chart">
+        <div class="mon-chart-h"><h3>{{ _("Processeur et mémoire") }}</h3>{{ legend(mon.usage) }}</div>
+        {{ line_chart(mon.usage, _("Processeur et mémoire, en pourcentage")) }}
+      </div>
+      {% endif %}
+      {% if mon.network %}
+      <div class="mon-chart">
+        <div class="mon-chart-h"><h3>{{ _("Réseau") }}</h3>{{ legend(mon.network) }}</div>
+        {{ line_chart(mon.network, _("Débit réseau du poste")) }}
+      </div>
+      {% endif %}
+      {% if m.disks %}
+      <div class="table-wrap">
+        <table class="mon-disks">
+          <thead><tr><th>{{ _("Disque") }}</th><th class="hide-sm">{{ _("Système de fichiers") }}</th><th>{{ _("Occupation") }}</th><th class="num">{{ _("Utilisé") }}</th><th class="num hide-sm">{{ _("Libre") }}</th></tr></thead>
+          <tbody>{% for d in m.disks %}
+            <tr><td class="mono">{{ d.mount }}</td><td class="hide-sm muted">{{ d.fs }}</td>
+              <td><span class="disk-use"><svg class="res-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6" rx="3"/><rect class="fill lvl-{{ d.level }}" width="{{ [d.pct, 2]|max }}" height="6" rx="3"/></svg><span class="res-v{{ ' lvl-' ~ d.level if d.level in ('warn', 'err') }}">{{ '%d %%'|format(d.pct|round) }}</span></span></td>
+              <td class="num">{{ d.used|human }}</td><td class="num hide-sm">{{ (d.total - d.used)|human }}</td></tr>
+          {% endfor %}</tbody>
+        </table>
+      </div>
       {% endif %}
       {% endif %}
     </div>

@@ -30,6 +30,8 @@
   --sel: #f1f1f3;
   --viz-1: #2a78d6;        /* série principale (palette validée, contraste et daltonisme) */
   --viz-2: #86b6ef;        /* même teinte, palier clair */
+  --series-1: #2a78d6;     /* séries catégorielles (courbes de supervision), palette validée */
+  --series-2: #eb6834;
   --shadow-pop: 0 1px 2px rgb(16 24 40 / .05), 0 12px 32px rgb(16 24 40 / .12);
   --shadow-card: 0 1px 2px rgb(16 24 40 / .04), 0 1px 3px rgb(16 24 40 / .03);
   --shadow-btn: 0 1px 2px rgb(16 24 40 / .05);
@@ -53,6 +55,8 @@
   --sel: #121214;
   --viz-1: #5598e7;
   --viz-2: #184f95;
+  --series-1: #3987e5;
+  --series-2: #d95926;
   --shadow-pop: 0 0 0 1px rgb(255 255 255 / .02), 0 12px 32px rgb(0 0 0 / .8);
   --shadow-card: inset 0 1px 0 rgb(255 255 255 / .03);
   --shadow-btn: none;
@@ -76,6 +80,8 @@
   --sel: #202023;
   --viz-1: #6da7ec;
   --viz-2: #1c5cab;
+  --series-1: #3987e5;
+  --series-2: #d95926;
   --shadow-pop: 0 12px 32px rgb(0 0 0 / .5);
   --shadow-card: inset 0 1px 0 rgb(255 255 255 / .03), 0 1px 2px rgb(0 0 0 / .3);
   --shadow-btn: none;
@@ -750,6 +756,40 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .chart .axis { stroke: var(--line-2); }
 .chart .hover { fill: transparent; }
 .chart g:hover .hover { fill: var(--sel); }
+.line-chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.line-chart .s1 { stroke: var(--series-1); } .line-chart .s2 { stroke: var(--series-2); }
+.line-chart .dot.s1 { fill: var(--series-1); } .line-chart .dot.s2 { fill: var(--series-2); }
+.line-chart .key-line { stroke-width: 2; stroke-linecap: round; }
+.line-chart text { font-size: 12px; }
+.line-chart .end-label { fill: var(--text-2); font-size: 12.5px; }
+.line-chart .cross { stroke: var(--line-2); stroke-width: 1; opacity: 0; }
+.line-chart .cell:hover .cross { opacity: 1; }
+.line-chart .cell:hover .hover { fill: var(--sel); }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--text-2); }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend .key { width: 14px; height: 2px; border-radius: 1px; }
+.chart-legend .key.s1 { background: var(--series-1); } .chart-legend .key.s2 { background: var(--series-2); }
+.mon-chart { padding: 16px 20px 8px; border-top: 1px solid var(--line); }
+.mon-chart-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.mon-chart-h h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.mon-tiles { padding: 4px 20px 16px; }
+.mon-tiles.stale, .res.stale { opacity: .55; }
+.mon-tiles .v small { font-size: .55em; font-weight: 500; color: var(--text-2); }
+.mon-disks { border-top: 1px solid var(--line); }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--r-sm); background: var(--bg-3); }
+.seg-btn { padding: 3px 10px; border-radius: 6px; font-size: 12.5px; color: var(--text-2); text-decoration: none; }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.on { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.res { display: grid; gap: 3px; min-width: 150px; }
+.res-row, .disk-use { display: grid; grid-template-columns: 38px 1fr 40px; align-items: center; gap: 8px; font-size: 11.5px; }
+.disk-use { grid-template-columns: minmax(80px, 160px) 44px; }
+.res-k { color: var(--text-3); }
+.res-bar { display: block; width: 100%; height: 6px; }
+.res-bar .track { fill: var(--bg-3); }
+.res-bar .fill { fill: var(--viz-1); }
+.res-bar .fill.lvl-warn { fill: var(--warn); } .res-bar .fill.lvl-err { fill: var(--err); }
+.res-v { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.res-v.lvl-warn { color: var(--warn); font-weight: 600; } .res-v.lvl-err { color: var(--err); font-weight: 600; }
 .bar-hit { fill: var(--viz-1); background: var(--viz-1); }
 .bar-miss { fill: var(--viz-2); background: var(--viz-2); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 16px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }

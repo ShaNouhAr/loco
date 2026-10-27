@@ -48,6 +48,12 @@ RULES = {
                          "fleet", "warning", ("count", 1, 1, 1000, lambda: _("mises à jour")), 86400, True),
     "devices_offline":  (lambda: _("Postes hors contact"),       lambda: _("Des postes du parc n'ont pas contacté loco récemment."),
                          "fleet", "warning", ("count", 1, 1, 1000, lambda: _("postes")), 21600, True),
+    "device_disk_high": (lambda: _("Disque d'un poste presque plein"), lambda: _("Un disque d'un poste du parc dépasse le seuil d'occupation."),
+                         "fleet", "warning", ("percent", 90, 50, 99, lambda: "%"), 21600, True),
+    "device_memory_high": (lambda: _("Mémoire d'un poste saturée"), lambda: _("La mémoire d'un poste dépasse le seuil en moyenne sur 15 minutes."),
+                         "fleet", "warning", ("percent", 95, 50, 100, lambda: "%"), 10800, True),
+    "device_cpu_high":  (lambda: _("Processeur d'un poste saturé"), lambda: _("Le processeur d'un poste dépasse le seuil en moyenne sur 15 minutes."),
+                         "fleet", "warning", ("percent", 95, 50, 100, lambda: "%"), 10800, True),
 }
 GROUPS = (("server", lambda: _("Serveur")), ("fleet", lambda: _("Parc")), ("security", lambda: _("Sécurité")))
 
@@ -196,6 +202,32 @@ def evaluate(conn, cfg=None):
         if n >= _threshold(cfg, "devices_offline"):
             add("devices_offline", _("%(n)s poste(s) sans contact depuis plus de %(m)s min.",
                                      n=n, m=ONLINE_SECONDS // 60))
+
+    device_rules = [k for k in ("device_disk_high", "device_memory_high", "device_cpu_high") if _rule_on(cfg, k)]
+    if fleet_on and device_rules:
+        from . import monitoring
+        averages = monitoring.recent_averages(conn)
+        found = {k: [] for k in device_rules}
+        for row in conn.execute("SELECT id, hostname, metrics FROM devices WHERE state != 'removed' AND metrics != '' "
+                                "ORDER BY hostname").fetchall():
+            m = monitoring.latest(row)
+            if not m or m["stale"]:
+                continue                                  # poste hors contact : signalé par « Postes hors contact »
+            if "device_disk_high" in found:
+                for d in m["disks"]:
+                    if d["pct"] is not None and d["pct"] >= _threshold(cfg, "device_disk_high"):
+                        found["device_disk_high"].append(f"{row['hostname']} ({d['mount']} {d['pct']:.0f} %)")
+            avg = averages.get(row["id"])
+            if avg and avg["n"] >= 3:                     # au moins 3 relevés : jamais sur un simple pic
+                for key, field in (("device_memory_high", "mem"), ("device_cpu_high", "cpu")):
+                    if key in found and avg[field] is not None and avg[field] >= _threshold(cfg, key):
+                        found[key].append(f"{row['hostname']} ({avg[field]:.0f} %)")
+        bodies = {"device_disk_high": lambda v: _("Disques presque pleins : %(list)s.", list=v),
+                  "device_memory_high": lambda v: _("Mémoire saturée (moyenne sur 15 min) : %(list)s.", list=v),
+                  "device_cpu_high": lambda v: _("Processeur saturé (moyenne sur 15 min) : %(list)s.", list=v)}
+        for key, items in found.items():
+            if items:
+                add(key, bodies[key](", ".join(items[:20]) + (" …" if len(items) > 20 else "")))
 
     return fired
 

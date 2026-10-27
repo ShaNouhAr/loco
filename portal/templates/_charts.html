@@ -52,3 +52,35 @@
   {% endfor %}
 </svg>
 {%- endmacro %}
+
+{# Courbes de supervision (une échelle, une teinte catégorielle par série dans l'ordre fixe, légende + étiquette directe
+   au bord droit, survol : réticule vertical et infobulle par tranche de temps). #}
+{% macro line_chart(c, title) -%}
+<svg class="chart line-chart" viewBox="0 0 {{ c.w }} {{ c.h }}" role="img" aria-label="{{ title }}">
+  {% for g in c.grid %}<line class="{{ 'axis' if loop.first else 'grid' }}" x1="{{ c.left }}" x2="{{ c.right }}" y1="{{ g.y }}" y2="{{ g.y }}"/><text x="{{ c.left - 8 }}" y="{{ g.y + 4 }}" text-anchor="end">{{ g.label }}</text>{% endfor %}
+  {% for t in c.ticks %}<text x="{{ t.x }}" y="{{ c.h - 4 }}" text-anchor="middle">{{ t.label }}</text>{% endfor %}
+  {% for cell in c.cells %}<g class="cell"><title>{{ cell.title }}</title><rect class="hover" x="{{ cell.x }}" y="{{ c.top }}" width="{{ cell.w }}" height="{{ c.bottom - c.top }}"/><line class="cross" x1="{{ cell.cx }}" x2="{{ cell.cx }}" y1="{{ c.top }}" y2="{{ c.bottom }}"/></g>{% endfor %}
+  {% for s in c.series %}
+    {% for seg in s.segments %}<polyline class="line s{{ s.slot }}" points="{{ seg }}"/>{% endfor %}
+    {% for d in s.dots %}{% set xy = d.split(',') %}<circle class="dot s{{ s.slot }}" cx="{{ xy[0] }}" cy="{{ xy[1] }}" r="3"/>{% endfor %}
+    {% if s.end %}<line class="key-line s{{ s.slot }}" x1="{{ s.end.x }}" x2="{{ s.end.x + 10 }}" y1="{{ s.end.y - 4 }}" y2="{{ s.end.y - 4 }}"/><text class="end-label" x="{{ s.end.x + 14 }}" y="{{ s.end.y }}">{{ s.end.text }}</text>{% endif %}
+  {% endfor %}
+</svg>
+{%- endmacro %}
+
+{# Légende HTML d'une courbe (toujours présente dès deux séries). #}
+{% macro legend(c) -%}
+<div class="chart-legend">{% for s in c.series %}<span><i class="key s{{ s.slot }}" aria-hidden="true"></i>{{ s.label }}</span>{% endfor %}</div>
+{%- endmacro %}
+
+{# Mini-jauges de la liste du parc : processeur, mémoire, disque le plus rempli (valeur écrite, couleur d'état au-delà
+   des seuils), grisées si le dernier relevé est ancien. #}
+{% macro resources(m) -%}
+{% if m %}
+<div class="res{{ ' stale' if m.stale }}" title="{{ _('Relevé : %(age)s', age=m.age_text) }}{% if m.disk_mount %} · {{ _('disque le plus rempli : %(mount)s', mount=m.disk_mount) }}{% endif %}">
+  {% for key, label in (('cpu', _('CPU')), ('mem', _('RAM')), ('disk', _('Disque'))) %}{% set v = m[key] %}
+  <span class="res-row"><span class="res-k">{{ label }}</span><svg class="res-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6" rx="3"/>{% if v %}<rect class="fill lvl-{{ m.levels[key] }}" width="{{ [v, 3]|max }}" height="6" rx="3"/>{% endif %}</svg><span class="res-v{{ ' lvl-' ~ m.levels[key] if m.levels[key] in ('warn', 'err') }}">{{ '%d %%'|format(v|round) if v is not none else '—' }}</span></span>
+  {% endfor %}
+</div>
+{% else %}<span class="faint">—</span>{% endif %}
+{%- endmacro %}

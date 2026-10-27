@@ -494,6 +494,9 @@ def agent_checkin():
         conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
+    if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
+        from . import monitoring
+        monitoring.record(conn, dev["id"], data["metrics"])
     _expire(dev["id"])
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     from . import schedules
@@ -961,6 +964,9 @@ def fleet():
     if system in systems:
         rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
     rows = _enrich(rows)
+    from . import monitoring
+    for r in rows:
+        r["mon"] = monitoring.latest(r["d"])
     signature = hashlib.sha256(json.dumps([[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                             r["presence"]["online"], len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
@@ -1082,7 +1088,9 @@ def fleet_device(dev_id):
                "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
                "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
     from . import groups, schedules
-    return render_template("fleet_device.html", device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
+    from . import monitoring
+    mon = monitoring.view(db(), dev, request.args.get("periode", "24h"))
+    return render_template("fleet_device.html", mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
