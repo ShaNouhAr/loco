@@ -471,6 +471,8 @@ def system():
         last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
         ca=cert_info(os.path.join(config.TLS_DIR, "ca.crt")),
+        imported=cert_info(os.path.join(config.TLS_DIR, "imported.crt")) if config.SERVER_UPDATES and not config.WINDOWS else None,
+        tls_custom=tls_custom(), tls_manage=config.SERVER_UPDATES and not config.WINDOWS,
         versions=({"loco": config.VERSION, "nginx": package_version("nginx"),
                    "waitress": package_version("waitress"), "cryptography (signatures, TLS)": package_version("cryptography"),
                    "Python": sys.version.split()[0],
@@ -651,6 +653,124 @@ def _discard(path):
         os.unlink(path)
     except OSError:
         pass
+
+
+# --------------------------------------------------------------------------- certificat HTTPS (agent root)
+TLS_SPOOL = os.path.join(config.STATE, "tls-uploads")
+MAX_TLS_FILE = 64 * 1024
+
+
+def tls_custom():
+    """Certificat fourni à l'installation (--tls-cert) : pas d'autorité loco pour le renouveler."""
+    return os.path.exists(os.path.join(config.TLS_DIR, "custom"))
+
+
+def _agent_action(action, params, audit_action, audit_detail, done):
+    """Transmet une action à l'agent root et retourne à l'onglet Réseau et certificats."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    if locoadmin.running_job():
+        flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
+    elif not locoadmin.agent_running():
+        flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
+    else:
+        try:
+            locoadmin.request(action, params, user=g.user["username"] if g.get("user") else "")
+            audit(audit_action, audit_detail)
+            flash(done, "ok")
+            return True
+        except ValueError as e:
+            flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
+    return False
+
+
+def check_import(cert_pem, key_pem, host):
+    """Vérification immédiate d'un certificat à importer : (noms DNS, date d'expiration) ou ValueError lisible.
+    L'agent root refait les mêmes contrôles avant de l'installer."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    try:
+        certs = x509.load_pem_x509_certificates(cert_pem)
+    except (ValueError, AttributeError):
+        try:
+            certs = [x509.load_pem_x509_certificate(cert_pem)]
+        except ValueError:
+            raise ValueError(_("certificat illisible : fichier PEM attendu (.crt, .pem)")) from None
+    try:
+        key = serialization.load_pem_private_key(key_pem, password=None)
+    except (ValueError, TypeError):
+        raise ValueError(_("clé privée illisible : fichier PEM non chiffré attendu (.key)")) from None
+    leaf = certs[0]
+    spki = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    if leaf.public_key().public_bytes(*spki) != key.public_key().public_bytes(*spki):
+        raise ValueError(_("la clé ne correspond pas au certificat"))
+    end = getattr(leaf, "not_valid_after_utc", None) or leaf.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+    if end <= datetime.datetime.now(datetime.timezone.utc):
+        raise ValueError(_("certificat expiré"))
+    try:
+        names = leaf.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        names = []
+    if not names:
+        raise ValueError(_("aucun nom DNS dans le certificat : il doit couvrir le nom par lequel vous ouvrez le portail"))
+    covered = [n for n in names if n.lower() == host.lower() or (n.startswith("*.") and host.lower().endswith(n[1:].lower())
+                                                                   and host.count(".") == n.count("."))]
+    if covered:
+        raise ValueError(_("il couvre %(host)s, l'adresse utilisée par les agents du parc : ils perdraient la connexion. "
+                           "Importez un certificat pour un nom DNS distinct.", host=host))
+    return names, end
+
+
+@app.route("/system/certificate/renew", methods=["POST"])
+@login_required
+def system_cert_renew():
+    if tls_custom():
+        abort(409)
+    _agent_action("renew-cert", {}, "systeme.certificat.renouvellement", "",
+                  _("Renouvellement du certificat lancé : rechargez la page dans quelques secondes."))
+    return back("system", _anchor="reseau")
+
+
+@app.route("/system/certificate/import", methods=["POST"])
+@login_required
+def system_cert_import():
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    files = request.files.get("certificate"), request.files.get("key")
+    if not all(f and f.filename for f in files):
+        flash(_("Choisissez le certificat (.crt ou .pem) et sa clé privée (.key)."), "error")
+        return back("system", _anchor="reseau")
+    cert_pem, key_pem = (f.read(MAX_TLS_FILE + 1) for f in files)
+    if max(len(cert_pem), len(key_pem)) > MAX_TLS_FILE:
+        flash(_("Fichier trop volumineux pour un certificat."), "error")
+        return back("system", _anchor="reseau")
+    try:
+        agents = {h for h in (config.HOST, urllib.parse.urlsplit(config.HTTPS_URL).hostname) if h}
+        for host in sorted(agents):
+            names, _end = check_import(cert_pem, key_pem, host)
+    except ValueError as e:
+        flash(_("Certificat refusé : %(reason)s.", reason=str(e)), "error")
+        return back("system", _anchor="reseau")
+    os.makedirs(TLS_SPOOL, mode=0o700, exist_ok=True)
+    upload = secrets.token_hex(16)
+    paths = [os.path.join(TLS_SPOOL, upload + ext) for ext in (".crt", ".key")]
+    for path, data in zip(paths, (cert_pem, key_pem)):
+        with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+            f.write(data)
+    if not _agent_action("import-cert", {"upload": upload}, "systeme.certificat.import", ", ".join(names),
+                         _("Import du certificat lancé pour %(names)s : rechargez la page dans quelques secondes.",
+                           names=", ".join(names))):
+        for path in paths:
+            _discard(path)
+    return back("system", _anchor="reseau")
+
+
+@app.route("/system/certificate/imported/remove", methods=["POST"])
+@login_required
+def system_cert_remove():
+    _agent_action("remove-imported-cert", {}, "systeme.certificat.retrait", "",
+                  _("Retrait du certificat importé lancé."))
+    return back("system", _anchor="reseau")
 
 
 @app.route("/system/backup-retention", methods=["POST"])

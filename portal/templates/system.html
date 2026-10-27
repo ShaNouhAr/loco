@@ -2,6 +2,7 @@
 {% from "_macros.html" import cmd, service %}
 {% block title %}{{ _("Système") }}{% endblock %}
 {% block content %}
+{% from '_nav_icons.html' import ui_icon %}
 {% set backup_cmd = 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') %}
 {% set ca_url = (http_url or https_url) ~ '/ca.crt' %}
 <div class="head">
@@ -290,6 +291,46 @@
       </dl>
       {% else %}
       <div class="empty">{{ _("Certificat introuvable.") }}</div>
+      {% endif %}
+      {% if tls_manage and can('system.configure') %}
+      <div class="panel-f cert-actions">
+        {% if tls_custom %}
+        <span class="muted small">{{ _("Certificat fourni à l'installation : pour le remplacer, relancez install.sh avec le nouveau.") }}</span>
+        {% else %}
+        <span class="muted small">{{ _("Signé par l'autorité loco : un renouvellement ne change rien pour les postes qui lui font confiance.") }}</span>
+        <form method="post" action="{{ url_for('system_cert_renew') }}" data-confirm="{{ _('Renouveler le certificat ?') }}" data-confirm-text="{{ _('Nouveau certificat signé par l\'autorité loco, valable 825 jours, pour l\'adresse et les noms actuels du serveur. Les postes qui font confiance à l\'autorité ne voient aucune différence.') }}" data-confirm-ok="{{ _('Renouveler') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn sm">{{ ui_icon('refresh') }}<span>{{ _("Renouveler") }}</span></button>
+        </form>
+        {% endif %}
+      </div>
+      <div class="panel-b cert-import">
+        <h3>{{ _("Certificat pour un nom DNS") }}</h3>
+        {% if imported %}
+        <dl class="kv">
+          <dt>{{ _("Noms") }}</dt><dd class="mono">{{ imported.san|join(', ') }}</dd>
+          <dt>{{ _("Émis par") }}</dt><dd>{{ imported.issuer }}</dd>
+          <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=imported.start.text, text2=imported.end.text) }}
+            {% if imported.end.days is not none %}<span class="st {{ 'err' if imported.end.days < 30 else 'warn' if imported.end.days < 60 else 'ok' }}">{{ _('expire dans %(n)s j', n=imported.end.days) if imported.end.days < 60 else _('valide') }}</span>{% endif %}</dd>
+        </dl>
+        <form method="post" action="{{ url_for('system_cert_remove') }}" data-confirm="{{ _('Retirer le certificat importé ?') }}" data-confirm-text="{{ _('Le portail présentera de nouveau le certificat de l\'autorité loco pour ces noms.') }}" data-confirm-ok="{{ _('Retirer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn sm danger">{{ _("Retirer") }}</button>
+        </form>
+        {% else %}
+        <p class="muted small">{{ _("Pour ouvrir le portail par un nom (par exemple loco.entreprise.fr) avec un certificat reconnu par les navigateurs sans importer l'autorité loco : certificat de votre autorité d'entreprise, Let's Encrypt…") }}</p>
+        {% endif %}
+        <details class="cert-upload">
+          <summary>{{ _("Remplacer le certificat importé") if imported else _("Importer un certificat") }}</summary>
+          <form method="post" action="{{ url_for('system_cert_import') }}" enctype="multipart/form-data" class="stack-sm">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <label class="f"><span>{{ _("Certificat (PEM, chaîne complète)") }}</span><input type="file" name="certificate" accept=".crt,.pem,.cer" required></label>
+            <label class="f"><span>{{ _("Clé privée (PEM, non chiffrée)") }}</span><input type="file" name="key" accept=".key,.pem" required></label>
+            <p class="hint">{{ _("Servi seulement aux navigateurs qui ouvrent le portail par l'un des noms DNS du certificat. Les agents du parc, qui utilisent %(host)s, gardent le certificat de l'autorité loco : un certificat couvrant cette adresse est refusé.", host=https_url) }}</p>
+            <div><button class="btn sm primary"><span class="spin"></span>{{ _("Importer") }}</button></div>
+          </form>
+        </details>
+      </div>
       {% endif %}
     </section>
 

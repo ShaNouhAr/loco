@@ -549,6 +549,13 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .time-sources th, .time-sources td { padding: 8px 12px; font-size: 13px; }
 .time-sources th { background: var(--bg-2); }
 .time-sources td.mono { font-size: 12.5px; }
+.cert-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cert-import { border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.cert-import h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.cert-import .kv { margin: 0; }
+.cert-import .kv .st { margin-left: 8px; }
+.cert-upload > summary { font-size: 13px; color: var(--text-2); }
+.cert-upload[open] > form { margin-top: 12px; }
 .host-list { margin: 0; padding: 0; list-style: none; }
 .host-list li { font-size: 12.5px; line-height: 1.6; overflow-wrap: anywhere; }
 .egress-table td { vertical-align: top; }

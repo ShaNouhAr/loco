@@ -149,6 +149,7 @@ ENDPOINTS = {
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",
     "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",
+    "system_cert_renew": "system.configure", "system_cert_import": "system.configure", "system_cert_remove": "system.configure",
     "system_backup_delete": "system.configure",
     "system_offsite": "system.configure", "system_offsite_test": "system.configure",
     "system_shell_enable": "system.configure", "system_shell_disable": "system.configure", "system_shell_open": "system.configure",

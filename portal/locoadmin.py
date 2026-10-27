@@ -22,6 +22,7 @@ import json
 import os
 import pty
 import re
+import secrets
 import select
 import shlex
 import shutil
@@ -64,7 +65,7 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
@@ -1713,6 +1714,216 @@ def set_backup_keep(params, log=print):
     return True
 
 
+# --------------------------------------------------------------------------- certificat HTTPS
+# Les agents du parc épinglent l'autorité loco : le certificat présenté à l'adresse du serveur doit toujours en venir.
+# Un certificat importé (autorité d'entreprise, Let's Encrypt…) n'est donc servi que pour SES noms DNS, par SNI, dans
+# un second bloc nginx dérivé de celui du portail ; le bloc principal reste le serveur par défaut.
+TLS = os.path.join(ETC, "tls")
+TLS_SPOOL = os.path.join(STATE, "tls-uploads")
+TLS_UPLOAD_RE = re.compile(r"[0-9a-f]{32}")
+PORTAL_SITE = "/etc/nginx/sites-available/loco-portal.conf"
+SNI_SITE = "/etc/nginx/sites-available/loco-portal.sni.conf"    # trié APRÈS loco-portal.conf (« . » + « s » > « . » + « c »)
+SNI_LINK = "/etc/nginx/sites-enabled/loco-portal.sni.conf"
+CERT_NAME_RE = re.compile(r"(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+")
+
+
+def _ssl(args, log=None, data=None):
+    p = subprocess.run(["openssl", *args], input=data, capture_output=True, text=True, timeout=60)
+    if p.returncode != 0 and log:
+        log((p.stderr or p.stdout).strip()[-400:])
+    return p.returncode, p.stdout
+
+
+def _cert_dns_names(path):
+    code, out = _ssl(["x509", "-in", path, "-noout", "-ext", "subjectAltName"])
+    return [n for n in re.findall(r"DNS:([^\s,]+)", out) if CERT_NAME_RE.fullmatch(n)] if code == 0 else []
+
+
+def _name_covers(pattern, host):
+    pattern, host = pattern.lower(), host.lower()
+    if pattern.startswith("*."):
+        return host.endswith(pattern[1:]) and host.count(".") == pattern.count(".")
+    return pattern == host
+
+
+def _reload_nginx(log):
+    if _run(["nginx", "-t"], log) != 0:
+        return False
+    if shutil.which("systemctl") and subprocess.run(["systemctl", "is-active", "-q", "nginx"]).returncode == 0:
+        return _run(["systemctl", "reload", "nginx"], log) == 0
+    return _run(["nginx", "-s", "reload"], log) == 0                # Alpine : nginx lancé par supervisord
+
+
+def _https_block(text):
+    """Bloc « server { … } » HTTPS du portail (celui qui sert /etc/loco/tls/server.crt)."""
+    lines, depth, start = text.splitlines(keepends=True), 0, None
+    for i, line in enumerate(lines):
+        code = line.split("#", 1)[0]
+        if depth == 0 and re.match(r"\s*server\s*\{", code):
+            start = i
+        depth += code.count("{") - code.count("}")
+        if depth == 0 and start is not None:
+            block = "".join(lines[start:i + 1])
+            if os.path.join(TLS, "server.crt") in block:
+                return block
+            start = None
+    return ""
+
+
+def write_sni_site(log=print):
+    """(Re)génère le bloc nginx du certificat importé à partir du bloc du portail ; le retire s'il n'y en a pas.
+    Appelé après un import et par install.sh, pour ne jamais garder une copie périmée de la configuration."""
+    crt = os.path.join(TLS, "imported.crt")
+    names = _cert_dns_names(crt) if os.path.isfile(crt) and os.path.isfile(os.path.join(TLS, "imported.key")) else []
+    if not names:
+        for path in (SNI_LINK, SNI_SITE):
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+        return False
+    try:
+        with open(PORTAL_SITE) as f:
+            block = _https_block(f.read())
+    except OSError:
+        block = ""
+    if not block:
+        raise ValueError(t("configuration nginx du portail introuvable", "portal nginx configuration not found",
+                           "configuración nginx del portal no encontrada"))
+    block = re.sub(r"server_name\s+[^;]*;", "server_name " + " ".join(names) + ";", block, count=1)
+    block = block.replace(os.path.join(TLS, "server.crt"), crt).replace(os.path.join(TLS, "server.key"),
+                                                                         os.path.join(TLS, "imported.key"))
+    _write_conf_file(SNI_SITE, "# Géré par loco : certificat importé, servi seulement pour ses noms (SNI).\n"
+                     "# Régénéré depuis loco-portal.conf ; ne pas modifier.\n" + block)
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(SNI_LINK)
+    os.symlink("../sites-available/loco-portal.sni.conf", SNI_LINK)
+    return True
+
+
+def _swap_tls(files, log, after=None):
+    """Remplace des fichiers de /etc/loco/tls (nom → fichier préparé), applique, recharge nginx ; sinon restaure tout."""
+    saved = {}
+    for name, src in files.items():
+        dest = os.path.join(TLS, name)
+        if os.path.exists(dest):
+            saved[dest] = dest + ".loco-old"
+            shutil.copy2(dest, saved[dest])
+        else:
+            saved[dest] = None
+        if src is None:
+            os.unlink(dest)
+        else:
+            os.chmod(src, 0o600 if name.endswith(".key") else 0o644)
+            os.replace(src, dest)
+    ok = False
+    try:
+        if after:
+            after(log)
+        ok = _reload_nginx(log)
+    except (OSError, ValueError) as e:
+        log(str(e))
+    if not ok:
+        for dest, backup in saved.items():
+            if backup:
+                os.replace(backup, dest)
+            else:
+                with contextlib.suppress(OSError):
+                    os.unlink(dest)
+        with contextlib.suppress(OSError, ValueError):
+            write_sni_site(log)
+        _reload_nginx(log)
+        raise ValueError(t("nginx a refusé le certificat : configuration précédente rétablie",
+                           "nginx rejected the certificate: previous configuration restored",
+                           "nginx rechazó el certificado: configuración anterior restablecida"))
+    for backup in saved.values():
+        if backup:
+            with contextlib.suppress(OSError):
+                os.unlink(backup)
+
+
+def renew_cert(params=None, log=print):
+    """Nouveau certificat serveur signé par l'autorité loco (adresse et noms actuels), comme install.sh : les postes
+    qui font confiance à l'autorité ne voient aucune différence."""
+    if os.path.exists(os.path.join(TLS, "custom")):
+        raise ValueError(t("certificat fourni à l'installation (--tls-cert) : relancez install.sh avec le nouveau",
+                           "certificate supplied at installation (--tls-cert): rerun install.sh with the new one",
+                           "certificado proporcionado en la instalación (--tls-cert): vuelva a ejecutar install.sh con el nuevo"))
+    ca_crt, ca_key = os.path.join(TLS, "ca.crt"), os.path.join(TLS, "ca.key")
+    if not (os.path.isfile(ca_crt) and os.path.isfile(ca_key)):
+        raise ValueError(t("autorité locale introuvable", "local authority not found", "autoridad local no encontrada"))
+    host, name = read_conf().get("HOST", "") or "127.0.0.1", socket.gethostname()
+    try:
+        ipaddress.ip_address(host)
+        san = [f"IP:{host}"]
+    except ValueError:
+        san = [f"DNS:{host}"]
+    fqdn = socket.getfqdn()
+    san += ["IP:127.0.0.1", f"DNS:{name}", "DNS:localhost"] + ([f"DNS:{fqdn}"] if fqdn not in (name, "localhost") else [])
+    san = list(dict.fromkeys(san))
+    with tempfile.TemporaryDirectory(dir=TLS, prefix=".renew-") as tmp:
+        key, csr, crt, ext = (os.path.join(tmp, n) for n in ("server.key", "server.csr", "server.crt", "ext.cnf"))
+        with open(ext, "w") as f:
+            f.write("subjectAltName=" + ",".join(san) + "\nbasicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\n"
+                    "extendedKeyUsage=serverAuth\n")
+        steps = (["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", f"/O=loco/CN={name}",
+                  "-keyout", key, "-out", csr],
+                 ["x509", "-req", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-set_serial", "0x" + secrets.token_hex(16),
+                  "-days", "825", "-out", crt, "-extfile", ext],
+                 ["verify", "-CAfile", ca_crt, crt])
+        for step in steps:
+            if _ssl(step, log)[0] != 0:
+                raise ValueError(t("génération du certificat impossible", "certificate generation failed", "generación del certificado imposible"))
+        _swap_tls({"server.key": key, "server.crt": crt}, log)
+    log(t(f"Certificat renouvelé pour {', '.join(s.split(':', 1)[1] for s in san)} (825 jours).",
+          f"Certificate renewed for {', '.join(s.split(':', 1)[1] for s in san)} (825 days).",
+          f"Certificado renovado para {', '.join(s.split(':', 1)[1] for s in san)} (825 días)."))
+    return True
+
+
+def import_cert(params, log=print):
+    """Installe un certificat fourni (chaîne PEM + clé), servi par SNI pour ses seuls noms DNS."""
+    upload = str((params or {}).get("upload", ""))
+    if not TLS_UPLOAD_RE.fullmatch(upload):
+        raise ValueError("fichier téléversé invalide")
+    crt, key = (os.path.join(TLS_SPOOL, upload + ext) for ext in (".crt", ".key"))
+    try:
+        for path in (crt, key):
+            if not stat.S_ISREG(os.lstat(path).st_mode):
+                raise ValueError("fichier")
+        if _ssl(["x509", "-in", crt, "-noout", "-checkend", "0"], log)[0] != 0:
+            raise ValueError(t("certificat illisible ou expiré", "certificate unreadable or expired", "certificado ilegible o caducado"))
+        if _ssl(["x509", "-in", crt, "-noout", "-pubkey"])[1] != _ssl(["pkey", "-in", key, "-pubout"])[1]:
+            raise ValueError(t("la clé ne correspond pas au certificat", "the key does not match the certificate",
+                               "la clave no corresponde al certificado"))
+        names = _cert_dns_names(crt)
+        if not names:
+            raise ValueError(t("aucun nom DNS dans le certificat", "no DNS name in the certificate", "ningún nombre DNS en el certificado"))
+        host = read_conf().get("HOST", "")
+        if host and any(_name_covers(n, host) for n in names):
+            raise ValueError(t(f"il couvre {host}, l'adresse utilisée par les agents : ils perdraient la connexion",
+                               f"it covers {host}, the address used by the agents: they would lose the connection",
+                               f"cubre {host}, la dirección usada por los agentes: perderían la conexión"))
+        with tempfile.TemporaryDirectory(dir=TLS, prefix=".import-") as tmp:
+            staged = {}
+            for name, src in (("imported.crt", crt), ("imported.key", key)):
+                staged[name] = os.path.join(tmp, name)
+                shutil.copyfile(src, staged[name])
+            _swap_tls(staged, log, after=write_sni_site)
+    finally:
+        for path in (crt, key):
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+    log(t(f"Certificat importé, servi pour : {', '.join(names)}.", f"Certificate imported, served for: {', '.join(names)}.",
+          f"Certificado importado, servido para: {', '.join(names)}."))
+    return True
+
+
+def remove_imported_cert(params=None, log=print):
+    _swap_tls({n: None for n in ("imported.crt", "imported.key") if os.path.exists(os.path.join(TLS, n))}, log,
+              after=write_sni_site)
+    log(t("Certificat importé retiré.", "Imported certificate removed.", "Certificado importado retirado."))
+    return True
+
+
 def delete_backup(params, log=print):
     """Supprime une sauvegarde nommée de BACKUP_DIR (fichier ordinaire, jamais un lien symbolique)."""
     name = str((params or {}).get("name", ""))
@@ -1756,6 +1967,12 @@ def _operation(action, params, log):
         return delete_backup(params, log)
     if action == "set-shell":
         return set_shell(params, log)
+    if action == "renew-cert":
+        return renew_cert(params, log)
+    if action == "import-cert":
+        return import_cert(params, log)
+    if action == "remove-imported-cert":
+        return remove_imported_cert(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -1988,6 +2205,11 @@ def agent():
                     params = {"name": name}
                 elif req["action"] == "set-shell":
                     params = {"enabled": "1" if str((req.get("params") or {}).get("enabled", "")) == "1" else ""}
+                elif req["action"] == "import-cert":
+                    upload = str((req.get("params") or {}).get("upload", ""))
+                    if not TLS_UPLOAD_RE.fullmatch(upload):
+                        continue
+                    params = {"upload": upload}
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -2071,6 +2293,11 @@ def request(action, params=None, user=""):
         params = {"name": name}
     elif action == "set-shell":
         params = {"enabled": "1" if str((params or {}).get("enabled", "")) == "1" else ""}
+    elif action == "import-cert":
+        upload = str((params or {}).get("upload", ""))
+        if not TLS_UPLOAD_RE.fullmatch(upload):
+            raise ValueError("fichier téléversé invalide")
+        params = {"upload": upload}
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
@@ -2160,6 +2387,9 @@ def main(argv):
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "agent":
         agent()
+        return 0
+    if cmd == "tls-sni":                                   # install.sh : bloc nginx du certificat importé, à jour
+        write_sni_site()
         return 0
     if cmd == "run-job" and len(args) == 1:
         run_job(args[0])

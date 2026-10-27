@@ -22,7 +22,9 @@ ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": 
                  "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Source des mises à jour"),
                  "set-time": L_("Heure du serveur"), "install-qemu-agent": L_("Installation de l'agent invité QEMU"),
                  "restore": L_("Restauration d'une sauvegarde"), "set-backup-keep": L_("Conservation des sauvegardes"),
-                 "delete-backup": L_("Suppression d'une sauvegarde"), "set-shell": L_("Shell root du serveur")}
+                 "delete-backup": L_("Suppression d'une sauvegarde"), "set-shell": L_("Shell root du serveur"),
+                 "renew-cert": L_("Renouvellement du certificat HTTPS"), "import-cert": L_("Import d'un certificat HTTPS"),
+                 "remove-imported-cert": L_("Retrait du certificat importé")}
 
 
 def job_detail(job):

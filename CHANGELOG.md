@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.70.0 — 2026-10-27
+
+- **Certificat HTTPS : renouveler et importer depuis le portail** (*Système → Réseau et certificats*).
+  - **Renouveler** : nouveau certificat signé par l'autorité loco (825 jours, adresse et noms actuels du serveur). nginx est testé avant d'être rechargé, et l'ancien certificat est rétabli en cas d'échec. Les postes qui font confiance à l'autorité ne voient aucune différence.
+  - **Importer un certificat pour un nom DNS** (autorité d'entreprise, Let's Encrypt…) : chaîne PEM et clé, vérifiées (clé correspondante, validité, noms DNS). Il n'est servi qu'aux navigateurs qui ouvrent le portail par l'un de ses noms (SNI) ; les agents du parc, qui épinglent l'autorité loco, gardent le certificat loco sur l'adresse du serveur. Un certificat qui couvrirait cette adresse est refusé, puisque les agents perdraient la connexion. Le certificat importé peut être remplacé ou retiré, et son bloc nginx est régénéré à chaque mise à jour.
+
 ## 2.69.3 — 2026-10-27
 
 - **Création de compte : mot de passe au choix** : le formulaire *Nouveau compte* propose un champ **Mot de passe**. On peut en saisir un, cliquer sur le **dé** pour en générer un aléatoire (lisible, sans caractères ambigus, affiché en clair et sélectionné ; chaque clic en propose un autre), ou laisser vide pour qu'il soit généré à la création. Une ligne d'aide vérifie en direct la règle (12 caractères minimum, sans le nom du compte). Un interrupteur **« À changer à la première connexion »** (activé par défaut) laisse le choix d'imposer ou non le changement. Après la création, l'encart **Identifiants à transmettre** affiche le compte et son mot de passe avec un bouton Copier. Un appel scripté qui n'envoie pas l'interrupteur garde le changement obligatoire.

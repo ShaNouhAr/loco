@@ -429,6 +429,58 @@ class TestFirewallPorts(unittest.TestCase):
             self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
 
 
+class TestCertificateRoutes(unittest.TestCase):
+    """Système → certificat : renouveler (autorité loco) et importer un certificat pour un nom DNS (SNI)."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+        for name in ("running_job", "agent_running", "request"):
+            p = mock.patch.object(loco.system.locoadmin, name)
+            setattr(self, name, p.start())
+            self.addCleanup(p.stop)
+        self.running_job.return_value = None
+        self.agent_running.return_value = True
+
+    def pem(self, names, other_key=False):
+        d = tempfile.mkdtemp()
+        crt, key = os.path.join(d, "c.pem"), os.path.join(d, "k.pem")
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "30",
+                        "-subj", "/CN=x", "-addext", "subjectAltName=" + ",".join("DNS:" + n for n in names),
+                        "-keyout", key, "-out", crt], check=True, capture_output=True)
+        if other_key:
+            subprocess.run(["openssl", "genpkey", "-algorithm", "EC", "-pkeyopt", "ec_paramgen_curve:P-256", "-out", key],
+                           check=True, capture_output=True)
+        with open(crt, "rb") as c, open(key, "rb") as k:
+            return c.read(), k.read()
+
+    def upload(self, crt, key):
+        return self.admin.c.post("/system/certificate/import", content_type="multipart/form-data", data={
+            "csrf": self.admin.token("/system"), "certificate": (io.BytesIO(crt), "loco.crt"), "key": (io.BytesIO(key), "loco.key")})
+
+    def test_import_is_checked_then_handed_to_the_agent(self):
+        r = self.upload(*self.pem(["loco.example.org"]))
+        self.assertEqual(r.status_code, 302)
+        action, params = self.request.call_args[0][:2]
+        self.assertEqual(action, "import-cert")
+        spool = loco.system.TLS_SPOOL
+        self.assertTrue(os.path.isfile(os.path.join(spool, params["upload"] + ".key")))
+        self.assertEqual(oct(os.stat(os.path.join(spool, params["upload"] + ".key")).st_mode & 0o777), "0o600")
+
+    def test_import_refused_before_reaching_the_agent(self):
+        for pem in (self.pem([config.HOST]),                      # adresse des agents : ils perdraient la connexion
+                    self.pem(["web.example.org"], other_key=True)):  # clé d'un autre certificat
+            self.upload(*pem)
+        self.request.assert_not_called()
+
+    def test_renew_goes_to_the_agent_and_panel_shows_the_actions(self):
+        page = self.admin.c.get("/system").get_data(as_text=True)
+        self.assertIn("/system/certificate/renew", page)
+        self.assertIn("/system/certificate/import", page)
+        self.admin.post("/system/certificate/renew", {}, page="/system")
+        self.assertEqual(self.request.call_args[0][0], "renew-cert")
+
+
 class TestAccountCreation(unittest.TestCase):
     """Création de compte : mot de passe choisi ou généré, changement à la première connexion au choix."""
 
