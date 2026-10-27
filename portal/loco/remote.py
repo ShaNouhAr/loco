@@ -239,8 +239,15 @@ def remote_agent():
                        "terminal_fallback": bool(row["terminal_fallback"]),
                        "ack": row["output_seq"], "cols": row["cols"], "rows": row["rows"],
                        "expires_in": max(0, int(row["expires"] - time.time()))})
+    from . import monitoring
+    if isinstance(data.get("metrics"), dict):            # relevé en direct (agents 2.71 et plus)
+        monitoring.record_live(conn, dev["id"], data["metrics"])
+    live = monitoring.live_wanted(dev)
     fleet.record_contact(dev, conn)
     conn.commit()
     for detail in finished:
         audit("parc.session.fin", detail, username="agent")
-    return {"sessions": output, "interval": 0.025 if output else 5}, 200, {"Cache-Control": "no-store"}
+    answer = {"sessions": output, "interval": 0.025 if output else (monitoring.LIVE_INTERVAL if live else 5)}
+    if live:
+        answer["live"] = monitoring.LIVE_INTERVAL
+    return answer, 200, {"Cache-Control": "no-store"}

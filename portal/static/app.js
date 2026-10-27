@@ -1035,6 +1035,109 @@
     document.addEventListener("visibilitychange", function () { if (!document.hidden) { previous = null; sample(); } });
   }
 
+  /* ---------------------------------------------------------------- supervision en direct */
+  // Tant que l'onglet Supervision est visible, la page signale qu'elle regarde (l'agent envoie alors un relevé toutes
+  // les 2 s) et trace les 3 dernières minutes. Onglet quitté ou fenêtre cachée : plus aucune demande.
+  // Portée propre : tout app.js partage une seule fonction, et d'autres blocs déclarent aussi « tick », « start »…
+  if ($("[data-live]")) (function (liveBox) {
+    var SPAN = 180, X0 = 64, X1 = 1080, Y0 = 12, Y1 = 164;
+    var panel = liveBox.closest("[data-panel]"), stateEl = $("[data-live-state]", liveBox);
+    var svg = $(".live-chart", liveBox), tip = $(".live-tip", liveBox), cross = $(".live-cross", liveBox);
+    var pts = [], since = 0, timer = null, started = 0, offset = 0;
+    var lang = document.documentElement.lang || "fr";
+    var UNITS = lang === "en" ? ["B", "KB", "MB", "GB", "TB"] : lang === "es" ? ["B", "KB", "MB", "GB", "TB"] : ["o", "Ko", "Mo", "Go", "To"];
+    var human = function (n) {
+      n = Number(n) || 0;
+      for (var i = 0; i < UNITS.length; i++) {
+        if (n < 1024 || i === UNITS.length - 1) {
+          if (!i) return Math.round(n) + " " + UNITS[0];
+          var text = n < 10 ? n.toFixed(2) : n.toFixed(1);
+          return (lang === "en" ? text : text.replace(".", ",")) + " " + UNITS[i];
+        }
+        n /= 1024;
+      }
+    };
+    var serverNow = function () { return Date.now() / 1000 + offset; };
+    var xOf = function (at, now) { return X0 + (X1 - X0) * (1 - (now - at) / SPAN); };
+    var yOf = function (v) { return Y1 - (Y1 - Y0) * Math.min(100, Math.max(0, v)) / 100; };
+    var render = function () {
+      var now = serverNow(), ends = [];
+      ["cpu", "mem"].forEach(function (key) {
+        var line = $('[data-live-line="' + key + '"]', liveBox), end = $('[data-live-end="' + key + '"]', liveBox);
+        var shown = pts.filter(function (p) { return p[key] != null && now - p.at <= SPAN; });
+        line.setAttribute("points", shown.map(function (p) { return xOf(p.at, now).toFixed(1) + "," + yOf(p[key]).toFixed(1); }).join(" "));
+        var last = shown[shown.length - 1];
+        end.hidden = !last;
+        if (last) { $("span", end).textContent = Math.round(last[key]) + " %"; ends.push({ el: end, y: yOf(last[key]) }); }
+      });
+      ends.sort(function (a, b) { return a.y - b.y; });
+      for (var i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 15) ends[i].y = ends[i - 1].y + 15;   // jamais superposées
+      ends.forEach(function (e) { e.el.style.top = (e.y - 8) + "px"; });
+    };
+    var tile = function (key, html) { var el = $('[data-live-v="' + key + '"]'); if (el) el.innerHTML = html; };
+    var tiles = function (p) {
+      if (p.cpu != null) tile("cpu", Math.round(p.cpu) + "<small> %</small>");
+      if (p.mem != null) tile("mem", Math.round(p.mem) + "<small> %</small>");
+      if (p.net_rx != null) tile("net_rx", "↓ " + human(p.net_rx) + "/s");
+      if (p.net_tx != null) tile("net_tx", "↑ " + human(p.net_tx) + "/s " + t("envoyés"));
+    };
+    var status = function () {
+      var last = pts.length ? pts[pts.length - 1].at : 0, fresh = serverNow() - last < 8;
+      stateEl.classList.toggle("on", fresh);
+      stateEl.classList.toggle("off", !fresh && Date.now() - started > 15000);
+      stateEl.textContent = fresh ? t("en direct · toutes les 2 s") : Date.now() - started > 15000
+        ? t("le poste ne répond pas en direct (agent antérieur à 2.71) : courbes toutes les 2 min ci-dessous")
+        : t("connexion au poste…");
+    };
+    var visible = function () { return !document.hidden && panel && panel.classList.contains("on"); };
+    var tick = function () {
+      if (!visible()) { stop(); return; }
+      fetch(liveBox.dataset.live + "?since=" + since, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          offset = d.now - Date.now() / 1000;
+          d.points.forEach(function (p) { pts.push(p); since = p.at; });
+          pts = pts.filter(function (p) { return d.now - p.at <= SPAN + 4; });
+          if (pts.length) tiles(pts[pts.length - 1]);
+          render(); status();
+        })
+        .catch(function () { status(); });
+    };
+    var stop = function () {
+      if (!timer) return;
+      clearInterval(timer[0]); clearInterval(timer[1]); timer = null;
+      delete document.body.dataset.noReload;
+    };
+    var start = function () {
+      if (timer) return;
+      started = Date.now();
+      document.body.dataset.noReload = "1";        // pas de rechargement de la page pendant le direct
+      tick();
+      timer = [setInterval(tick, 2000), setInterval(function () { render(); status(); }, 500)];   // défilement continu
+    };
+    var check = function () { if (visible()) start(); else stop(); };
+    document.addEventListener("click", function (e) { if (e.target.closest(".tabs [data-tab]")) setTimeout(check, 0); });
+    document.addEventListener("visibilitychange", check);
+    setTimeout(check, 0);
+    // Survol : réticule et valeurs du relevé le plus proche.
+    svg.addEventListener("mousemove", function (e) {
+      var box = svg.getBoundingClientRect(), vx = (e.clientX - box.left) / box.width * 1200, now = serverNow();
+      var best = null;
+      pts.forEach(function (p) { var d = Math.abs(xOf(p.at, now) - vx); if (now - p.at <= SPAN && (!best || d < best.d)) best = { p: p, d: d }; });
+      if (!best || best.d > 40) { tip.hidden = true; cross.style.opacity = 0; return; }
+      var x = xOf(best.p.at, now);
+      cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.style.opacity = 1;
+      var parts = [t("il y a %(s)s s", { s: Math.max(0, Math.round(now - best.p.at)) })];
+      if (best.p.cpu != null) parts.push(t("Processeur") + " " + Math.round(best.p.cpu) + " %");
+      if (best.p.mem != null) parts.push(t("Mémoire") + " " + Math.round(best.p.mem) + " %");
+      if (best.p.net_rx != null) parts.push("↓ " + human(best.p.net_rx) + "/s ↑ " + human(best.p.net_tx) + "/s");
+      tip.textContent = parts.join(" · ");
+      tip.hidden = false;
+      tip.style.left = Math.min(box.width - tip.offsetWidth - 4, Math.max(0, e.clientX - box.left + 12)) + "px";
+    });
+    svg.addEventListener("mouseleave", function () { tip.hidden = true; cross.style.opacity = 0; });
+  })($("[data-live]"));
+
   var operations = $("[data-operations]");
   if (operations) {
     poll(operations.dataset.operations, 3000, function (d) {

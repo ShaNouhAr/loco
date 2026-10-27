@@ -43,6 +43,8 @@ namespace Loco
         {
             var sessions = new Dictionary<string, RemoteSession>();
             var lastOk = Stopwatch.StartNew(); int delay = 2000;
+            bool live = false;                                       // fiche du poste regardée : relevé toutes les 2 s
+            var sampler = new Agent.UsageSampler();
             try
             {
                 var waits = new[] { stopping, (WaitHandle)Activity };
@@ -54,8 +56,14 @@ namespace Loco
                     delay = 5000;
                     try
                     {
-                        var answer = Agent.RemoteExchange(new { sessions = sessions.Values.Select(s => s.Payload()).ToArray() });
+                        var payload = new Dictionary<string, object> { { "sessions", sessions.Values.Select(s => s.Payload()).ToArray() } };
+                        if (live) payload["metrics"] = Agent.LiveMetrics(sampler);
+                        var answer = Agent.RemoteExchange(payload);
                         lastOk.Restart();
+                        object wanted;
+                        bool liveNow = answer.TryGetValue("live", out wanted) && wanted != null && Convert.ToDouble(wanted) > 0;
+                        if (!liveNow) sampler.Reset();                  // prochain direct : repartir d'un relevé frais
+                        live = liveNow;
                         var descriptors = Items(answer, "sessions").ToDictionary(d => Str(d, "id"));
                         foreach (string sid in sessions.Keys.ToArray())
                             if (!descriptors.ContainsKey(sid) || Str(descriptors[sid], "state") == "closed")
@@ -71,6 +79,7 @@ namespace Loco
                         }
                         // Session ouverte : relancer vite (saisie reçue en ~6 ms en moyenne) ; aucune session : contact espacé.
                         delay = sessions.Count > 0 ? (sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any()) ? 0 : 12) : 5000;
+                        if (live) delay = Math.Min(delay, Math.Max(1000, (int)(Convert.ToDouble(wanted) * 1000)));
                     }
                     catch (Exception e)
                     {

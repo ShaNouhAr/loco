@@ -170,21 +170,41 @@
       {% if m.stale %}<p class="note warn">{{ _("Poste hors contact : valeurs du dernier relevé, il y a %(age)s.", age=m.age_text) }}</p>{% endif %}
       <div class="metrics mon-tiles{{ ' stale' if m.stale }}">
         <div class="metric"><div class="k">{{ _("Processeur") }}</div>
-          <div class="v">{{ '%d'|format(m.cpu|round) if m.cpu is not none else '—' }}{% if m.cpu is not none %}<small> %</small>{% endif %}</div>
+          <div class="v" data-live-v="cpu">{{ '%d'|format(m.cpu|round) if m.cpu is not none else '—' }}{% if m.cpu is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.cpu in ('warn', 'err') %}<span class="st {{ m.levels.cpu }}">{{ _("élevé") }}</span> {% endif %}{{ _("%(n)s cœurs", n=m.raw.cores) if m.raw.cores }}{% if m.raw.load %} · {{ _("charge %(l)s", l=m.raw.load[0]) }}{% endif %}</div></div>
         <div class="metric"><div class="k">{{ _("Mémoire") }}</div>
-          <div class="v">{{ '%d'|format(m.mem|round) if m.mem is not none else '—' }}{% if m.mem is not none %}<small> %</small>{% endif %}</div>
+          <div class="v" data-live-v="mem">{{ '%d'|format(m.mem|round) if m.mem is not none else '—' }}{% if m.mem is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.mem in ('warn', 'err') %}<span class="st {{ m.levels.mem }}">{{ _("saturée") if m.levels.mem == 'err' else _("élevée") }}</span> {% endif %}{{ _("%(used)s sur %(total)s", used=m.raw.mem_used|human, total=m.raw.mem_total|human) if m.raw.mem_total }}</div></div>
         <div class="metric"><div class="k">{{ _("Disque le plus rempli") }}</div>
           <div class="v">{{ '%d'|format(m.disk|round) if m.disk is not none else '—' }}{% if m.disk is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.disk in ('warn', 'err') %}<span class="st {{ m.levels.disk }}">{{ _("presque plein") }}</span> {% endif %}<span class="mono">{{ m.disk_mount }}</span></div></div>
         <div class="metric" title="{{ _('Débit moyen depuis le contact précédent (2 min)') }}"><div class="k">{{ _("Réseau") }}</div>
-          <div class="v small-v">{% if m.raw.net_rx is defined %}↓ {{ m.raw.net_rx|human }}/s{% else %}—{% endif %}</div>
-          <div class="s">{% if m.raw.net_tx is defined %}↑ {{ m.raw.net_tx|human }}/s {{ _("envoyés") }}{% else %}{{ _("au prochain contact") }}{% endif %}</div></div>
+          <div class="v small-v" data-live-v="net_rx">{% if m.raw.net_rx is defined %}↓ {{ m.raw.net_rx|human }}/s{% else %}—{% endif %}</div>
+          <div class="s" data-live-v="net_tx">{% if m.raw.net_tx is defined %}↑ {{ m.raw.net_tx|human }}/s {{ _("envoyés") }}{% else %}{{ _("au prochain contact") }}{% endif %}</div></div>
         <div class="metric"><div class="k">{{ _("Démarré depuis") }}</div>
           <div class="v small-v">{{ m.uptime_text or '—' }}</div>
           <div class="s">{% if m.swap is not none and m.raw.swap_total %}{{ _("échange %(p)s %%", p='%d'|format(m.swap|round)) }}{% else %}{{ _("pas de fichier d'échange") }}{% endif %}</div></div>
       </div>
+      {% if not m.stale %}
+      <div class="mon-chart mon-live" data-live="{{ url_for('fleet_device_live', dev_id=dev.id) }}">
+        <div class="mon-chart-h">
+          <h3>{{ _("En direct") }} <span class="live-state" data-live-state>{{ _("connexion au poste…") }}</span></h3>
+          <div class="chart-legend"><span><i class="key s1" aria-hidden="true"></i>{{ _("Processeur") }}</span><span><i class="key s2" aria-hidden="true"></i>{{ _("Mémoire") }}</span></div>
+        </div>
+        <div class="live-plot">
+          <svg class="chart line-chart live-chart" viewBox="0 0 1200 180" preserveAspectRatio="none" role="img" aria-label="{{ _('Processeur et mémoire en direct, 3 dernières minutes') }}">
+            {% for f, y in ((100, 12), (50, 88), (0, 164)) %}<line class="{{ 'axis' if f == 0 else 'grid' }}" x1="64" x2="1080" y1="{{ y }}" y2="{{ y }}"/>{% endfor %}
+            <polyline class="line s1" data-live-line="cpu" points=""/><polyline class="line s2" data-live-line="mem" points=""/>
+            <line class="live-cross" x1="0" x2="0" y1="12" y2="164"/>
+          </svg>
+          <div class="live-axis live-y"><span style="top: 12px">100 %</span><span style="top: 88px">50 %</span><span style="top: 164px">0 %</span></div>
+          <div class="live-axis live-x"><span>{{ _("−3 min") }}</span><span>{{ _("−2 min") }}</span><span>{{ _("−1 min") }}</span><span>{{ _("maintenant") }}</span></div>
+          <div class="live-end" data-live-end="cpu"><i class="key s1"></i><span></span></div>
+          <div class="live-end" data-live-end="mem"><i class="key s2"></i><span></span></div>
+          <div class="live-tip" hidden></div>
+        </div>
+      </div>
+      {% endif %}
       {% if mon.usage %}
       <div class="mon-chart">
         <div class="mon-chart-h"><h3>{{ _("Processeur et mémoire") }}</h3>{{ legend(mon.usage) }}</div>

@@ -6,6 +6,7 @@
   - **Fiche du poste → onglet Supervision** : valeurs actuelles (seuils signalés), courbes *Processeur et mémoire* et *Réseau* sur 24 h ou 7 jours (interrompues quand le poste était éteint, infobulle au survol), tableau des disques avec leur occupation. Un poste hors contact garde son dernier relevé, grisé.
   - **Mon parc → colonne Ressources** : mini-jauges processeur, mémoire et disque le plus rempli, en couleur d'état au-delà des seuils.
   - **Alertes** : trois nouvelles règles réglables pour les postes : disque presque plein, mémoire saturée et processeur saturé (moyenne sur 15 minutes, jamais sur un simple pic).
+  - **En direct** : tant que l'onglet Supervision est ouvert et visible, l'agent envoie un relevé **toutes les 2 secondes** (processeur, mémoire, réseau) par le canal qu'il garde déjà ouvert avec le serveur. Une courbe des 3 dernières minutes défile, les valeurs se mettent à jour et un témoin « en direct » s'allume. Dès que l'onglet est quitté ou la fenêtre cachée, plus rien n'est demandé : aucune charge supplémentaire le reste du temps.
   - Les agents se mettent à jour automatiquement ; la supervision apparaît dès leur premier contact en 2.71.
 
 ## 2.70.1 — 2026-10-27

@@ -1059,6 +1059,24 @@ def _get(dev_id):
     return dev
 
 
+@app.route("/fleet/<int:dev_id>/live")
+@login_required
+def fleet_device_live(dev_id):
+    """Supervision en direct : la page signale qu'elle regarde (l'agent passe à un relevé toutes les 2 s) et reçoit
+    les relevés arrivés depuis « since »."""
+    from . import monitoring
+    dev = _get(dev_id)
+    conn = db()
+    monitoring.watch(conn, dev["id"])
+    conn.commit()
+    try:
+        since = float(request.args.get("since", 0))
+    except ValueError:
+        since = 0.0
+    return ({"points": monitoring.live_points(conn, dev["id"], since), "interval": monitoring.LIVE_INTERVAL,
+             "now": time.time()}, 200, {"Cache-Control": "no-store"})
+
+
 @app.route("/fleet/<int:dev_id>")
 @login_required
 def fleet_device(dev_id):

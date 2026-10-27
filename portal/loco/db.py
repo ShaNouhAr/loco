@@ -422,6 +422,16 @@ MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS device_metrics_device_at ON device_metrics(device_id, at);
     CREATE INDEX IF NOT EXISTS device_metrics_at ON device_metrics(at);
     """,
+    # 22 : supervision en direct (relevés toutes les 2 s pendant qu'un administrateur regarde, 10 min gardées).
+    """
+    ALTER TABLE devices ADD COLUMN live_until REAL NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS device_live (
+        device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        at REAL NOT NULL,
+        cpu REAL, mem REAL, net_rx REAL, net_tx REAL
+    );
+    CREATE INDEX IF NOT EXISTS device_live_device_at ON device_live(device_id, at);
+    """,
 ]
 
 

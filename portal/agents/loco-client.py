@@ -439,6 +439,39 @@ def metrics(state):
     return out
 
 
+class LiveSampler:
+    """Relevé léger du mode direct (processeur, mémoire, réseau), en moyenne depuis le relevé précédent : envoyé à chaque
+    échange du canal distant tant qu'une fiche de ce poste est regardée."""
+    def __init__(self):
+        self.previous = None
+
+    def sample(self):
+        now, out = time.monotonic(), {}
+        try:
+            total, idle = _cpu_times()
+            rx, tx = _net_bytes()
+        except (OSError, ValueError, IndexError):
+            return out
+        p = self.previous
+        if p and now > p[0] and total > p[1]:
+            out["cpu"] = round(100 * (1 - (idle - p[2]) / (total - p[1])), 1)
+            if rx >= p[3] and tx >= p[4]:
+                out["net_rx"], out["net_tx"] = int((rx - p[3]) / (now - p[0])), int((tx - p[4]) / (now - p[0]))
+        self.previous = (now, total, idle, rx, tx)
+        try:
+            mem = {}
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    key, _, value = line.partition(":")
+                    if key in ("MemTotal", "MemAvailable", "MemFree") and value.split():
+                        mem[key] = int(value.split()[0]) * 1024
+            out["mem_total"] = mem.get("MemTotal", 0)
+            out["mem_used"] = max(0, mem.get("MemTotal", 0) - mem.get("MemAvailable", mem.get("MemFree", 0)))
+        except (OSError, ValueError):
+            pass
+        return out
+
+
 def scan():
     """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
     installés, caractéristiques du poste."""
@@ -946,6 +979,7 @@ def remote_service():
             return 0
         sessions, last_ok = {}, time.monotonic()
         transport = RemoteTransport()
+        live, sampler = False, LiveSampler()
         loaded = os.stat(PROGRAM)
         signature = (loaded.st_ino, loaded.st_mtime_ns, loaded.st_size)
         try:
@@ -959,8 +993,14 @@ def remote_service():
                     conf = load(CONFIG)
                     if not conf.get("token"):
                         break
-                    answer = transport.exchange(conf["server"], {"sessions": [s.payload() for s in sessions.values()]}, conf["token"])
+                    payload = {"sessions": [s.payload() for s in sessions.values()]}
+                    if live:
+                        payload["metrics"] = sampler.sample()
+                    answer = transport.exchange(conf["server"], payload, conf["token"])
                     last_ok = time.monotonic()
+                    if not answer.get("live"):
+                        sampler.previous = None                # prochain direct : repartir d'un relevé frais
+                    live = bool(answer.get("live"))
                     descriptors = {d["id"]: d for d in answer["sessions"]}
                     for sid in list(sessions):
                         if sid not in descriptors or descriptors[sid]["state"] == "closed":
@@ -977,6 +1017,8 @@ def remote_service():
                             sessions[sid].close()
                     busy = any(item.pending for item in sessions.values()) or any(d.get("packets") for d in descriptors.values())
                     delay = (0 if busy else 0.025) if sessions else 5
+                    if live:                                   # fiche regardée : un relevé toutes les 2 s
+                        delay = min(delay, max(1.0, float(answer.get("live") or 2)))
                 except (OSError, ValueError, KeyError) as e:
                     if getattr(e, "code", 0) == 429:
                         # Le navigateur doit vider sa file : réessayer le même paquet, sans coupure ni rejeu.

@@ -87,6 +87,21 @@ class AgentReadingTest(unittest.TestCase):
         self.assertEqual(monitoring.sanitize(second)["mem_total"], second["mem_total"])
 
 
+class LiveSamplerTest(unittest.TestCase):
+    def test_linux_live_sampler(self):
+        spec = importlib.util.spec_from_file_location("loco_client_live", os.path.join("portal", "agents", "loco-client.py"))
+        agent = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(agent)
+        sampler = agent.LiveSampler()
+        first = sampler.sample()
+        self.assertNotIn("cpu", first)
+        self.assertGreater(first["mem_total"], 0)
+        when, total, idle, rx, tx = sampler.previous
+        sampler.previous = (when - 2, total - 500, idle - 400, rx, tx)
+        second = sampler.sample()
+        self.assertTrue(0 <= second["cpu"] <= 100)
+
+
 class FleetMonitoringTest(unittest.TestCase):
     def setUp(self):
         self.admin = fixture.Browser()
@@ -134,6 +149,31 @@ class FleetMonitoringTest(unittest.TestCase):
         other.checkin()
         page = self.admin.c.get(f"/fleet/{device(other.uid)['id']}").get_data(as_text=True)
         self.assertIn("Aucun relevé pour l'instant", page)
+
+    def test_live_mode_only_while_someone_watches(self):
+        dev = device(self.agent.uid)
+        r = self.agent.post("/agent/api/remote", {"sessions": []}, self.agent.token)
+        self.assertNotIn("live", r.get_json())                            # personne ne regarde : rythme normal
+        self.assertEqual(r.get_json()["interval"], 5)
+        page = self.admin.c.get(f"/fleet/{dev['id']}/live", headers={"X-Requested-With": "fetch"})
+        self.assertEqual(page.get_json()["points"], [])
+        r = self.agent.post("/agent/api/remote", {"sessions": [], "metrics": {"cpu": 42.0, "mem_total": 8 * GIB,
+                                                                              "mem_used": 2 * GIB, "net_rx": 1000, "net_tx": 50}},
+                            self.agent.token)
+        self.assertEqual(r.get_json()["live"], 2)                         # la fiche est regardée : un relevé / 2 s
+        points = self.admin.c.get(f"/fleet/{dev['id']}/live").get_json()["points"]
+        self.assertEqual((points[-1]["cpu"], points[-1]["mem"], points[-1]["net_rx"]), (42.0, 25.0, 1000))
+        again = self.admin.c.get(f"/fleet/{dev['id']}/live?since={points[-1]['at']}").get_json()["points"]
+        self.assertEqual(again, [])                                       # seulement les nouveaux relevés
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET live_until=0 WHERE id=?", (dev["id"],))
+        self.assertNotIn("live", self.agent.post("/agent/api/remote", {"sessions": []}, self.agent.token).get_json())
+
+    def test_device_page_has_the_live_chart(self):
+        self.checkin(self.agent, reading())
+        page = self.admin.c.get(f"/fleet/{device(self.agent.uid)['id']}").get_data(as_text=True)
+        self.assertIn("data-live=", page)
+        self.assertIn('data-live-v="cpu"', page)
 
     def test_alerts_on_thresholds(self):
         for _ in range(3):

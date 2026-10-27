@@ -391,48 +391,81 @@ namespace Loco
         [DllImport("kernel32.dll")]
         static extern ulong GetTickCount64();
 
-        static ulong lastCpuIdle, lastCpuTotal;
-        static long lastNetRx = -1, lastNetTx = -1;
-        static DateTime lastSample = DateTime.MinValue;
+        [StructLayout(LayoutKind.Sequential)]
+        struct MemoryStatus { public uint Length, Load; public ulong TotalPhys, AvailPhys, TotalPageFile, AvailPageFile, TotalVirtual, AvailVirtual, AvailExtendedVirtual; }
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+
+        // Processeur et réseau en moyenne depuis l'appel précédent ; une instance par usage (relevé des 2 min, direct),
+        // chacune dans son propre fil : leurs états ne se mélangent pas.
+        internal sealed class UsageSampler
+        {
+            ulong lastIdle, lastTotal;
+            long lastRx = -1, lastTx = -1;
+            DateTime last = DateTime.MinValue;
+
+            internal void Reset() { last = DateTime.MinValue; lastRx = -1; lastTx = -1; }
+
+            internal void Sample(Dictionary<string, object> m)
+            {
+                DateTime now = DateTime.UtcNow;
+                double elapsed = (now - last).TotalSeconds;
+                bool recent = elapsed > 0 && elapsed < 1800;
+                try
+                {
+                    FileTime idle, kernel, user;
+                    if (GetSystemTimes(out idle, out kernel, out user))
+                    {
+                        ulong total = kernel.Value + user.Value;       // le temps noyau inclut le temps inactif
+                        if (recent && total > lastTotal)
+                            m["cpu"] = Math.Round(100.0 * (1 - (double)(idle.Value - lastIdle) / (total - lastTotal)), 1);
+                        lastIdle = idle.Value; lastTotal = total;
+                    }
+                }
+                catch (Exception) { }
+                try
+                {
+                    long rx = 0, tx = 0;
+                    foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+                    {
+                        if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+                        var stats = nic.GetIPv4Statistics();
+                        rx += stats.BytesReceived; tx += stats.BytesSent;
+                    }
+                    if (recent && lastRx >= 0 && rx >= lastRx && tx >= lastTx)
+                    {
+                        m["net_rx"] = (long)((rx - lastRx) / elapsed);
+                        m["net_tx"] = (long)((tx - lastTx) / elapsed);
+                    }
+                    lastRx = rx; lastTx = tx;
+                }
+                catch (Exception) { }
+                last = now;
+            }
+        }
+
+        static readonly UsageSampler checkinSampler = new UsageSampler();
+
+        // Relevé léger du mode direct (fiche du poste regardée) : processeur, mémoire, réseau.
+        internal static Dictionary<string, object> LiveMetrics(UsageSampler sampler)
+        {
+            var m = new Dictionary<string, object>();
+            sampler.Sample(m);
+            var status = new MemoryStatus { Length = (uint)Marshal.SizeOf(typeof(MemoryStatus)) };
+            if (GlobalMemoryStatusEx(ref status))
+            {
+                m["mem_total"] = (long)status.TotalPhys;
+                m["mem_used"] = (long)(status.TotalPhys - status.AvailPhys);
+            }
+            return m;
+        }
 
         // Relevé joint à chaque contact : processeur et réseau en moyenne depuis le contact précédent, mémoire, fichier
         // d'échange, disques fixes et durée depuis le démarrage.
         static Dictionary<string, object> Metrics()
         {
             var m = new Dictionary<string, object> { { "cores", Environment.ProcessorCount } };
-            DateTime now = DateTime.UtcNow;
-            double elapsed = (now - lastSample).TotalSeconds;
-            bool recent = elapsed > 0 && elapsed < 1800;
-            try
-            {
-                FileTime idle, kernel, user;
-                if (GetSystemTimes(out idle, out kernel, out user))
-                {
-                    ulong total = kernel.Value + user.Value;           // le temps noyau inclut le temps inactif
-                    if (recent && total > lastCpuTotal)
-                        m["cpu"] = Math.Round(100.0 * (1 - (double)(idle.Value - lastCpuIdle) / (total - lastCpuTotal)), 1);
-                    lastCpuIdle = idle.Value; lastCpuTotal = total;
-                }
-            }
-            catch (Exception) { }
-            try
-            {
-                long rx = 0, tx = 0;
-                foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
-                {
-                    if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-                    var stats = nic.GetIPv4Statistics();
-                    rx += stats.BytesReceived; tx += stats.BytesSent;
-                }
-                if (recent && lastNetRx >= 0 && rx >= lastNetRx && tx >= lastNetTx)
-                {
-                    m["net_rx"] = (long)((rx - lastNetRx) / elapsed);
-                    m["net_tx"] = (long)((tx - lastNetTx) / elapsed);
-                }
-                lastNetRx = rx; lastNetTx = tx;
-            }
-            catch (Exception) { }
-            lastSample = now;
+            checkinSampler.Sample(m);
             try
             {
                 using (var q = new ManagementObjectSearcher("SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM Win32_OperatingSystem"))

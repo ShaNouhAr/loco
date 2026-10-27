@@ -235,3 +235,39 @@ def recent_averages(conn, minutes=15):
     since = int(time.time()) - minutes * 60
     return {r[0]: {"cpu": r[1], "mem": r[2], "n": r[3]} for r in conn.execute(
         "SELECT device_id, AVG(cpu), AVG(mem), COUNT(*) FROM device_metrics WHERE at>=? GROUP BY device_id", (since,))}
+
+
+# --------------------------------------------------------------------------- direct
+# Tant qu'une fiche est regardée (onglet Supervision visible), la page le signale toutes les 2 s ; l'agent, qui contacte
+# déjà le serveur par son canal distant, envoie alors un relevé léger à chaque échange. Rien de plus le reste du temps.
+LIVE_INTERVAL = 2
+LIVE_WATCH = 20                     # secondes de direct après le dernier signe de vie de la page
+LIVE_KEEP = 600
+
+
+def watch(conn, dev_id):
+    conn.execute("UPDATE devices SET live_until=? WHERE id=?", (time.time() + LIVE_WATCH, dev_id))
+
+
+def live_wanted(dev):
+    try:
+        return (dev["live_until"] or 0) > time.time()
+    except (IndexError, KeyError):
+        return False
+
+
+def record_live(conn, dev_id, raw):
+    m = sanitize(raw)
+    if not m:
+        return
+    now = time.time()
+    conn.execute("INSERT INTO device_live (device_id, at, cpu, mem, net_rx, net_tx) VALUES (?,?,?,?,?,?)",
+                 (dev_id, now, m.get("cpu"), _pct(m.get("mem_used", 0), m.get("mem_total", 0)), m.get("net_rx"), m.get("net_tx")))
+    conn.execute("DELETE FROM device_live WHERE device_id=? AND at<?", (dev_id, now - LIVE_KEEP))
+
+
+def live_points(conn, dev_id, since=0.0, window=180):
+    """Relevés en direct postérieurs à « since » (au plus les 3 dernières minutes)."""
+    since = max(float(since or 0), time.time() - window)
+    return [{"at": r[0], "cpu": r[1], "mem": r[2], "net_rx": r[3], "net_tx": r[4]} for r in conn.execute(
+        "SELECT at, cpu, mem, net_rx, net_tx FROM device_live WHERE device_id=? AND at>? ORDER BY at LIMIT 200", (dev_id, since))]
