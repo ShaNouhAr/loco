@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 2.72.0 — 2026-10-27
+
+- **Shells plus agréables, comme un vrai terminal** (shell d'un poste et shell root du serveur) :
+  - **Presse-papiers** : sélectionner copie ; clic droit copie la sélection ou colle s'il n'y en a pas ; **Ctrl+Maj+C / Ctrl+Maj+V** et Maj+Inser ; **Ctrl+C avec une sélection copie** (sans interrompre la commande), sans sélection il part au shell comme d'habitude.
+  - **Liens cliquables** : Ctrl+clic (⌘+clic) ouvre l'adresse dans un nouvel onglet.
+  - **Recherche dans l'historique** : Ctrl+Maj+F, Entrée / Maj+Entrée pour naviguer, résultats surlignés, Échap pour fermer.
+  - **Taille du texte au clavier** : Ctrl + / Ctrl − / Ctrl 0, en plus des boutons A− / A+.
+  - **Plein écran** : le clavier est verrouillé (navigateurs Chromium) pour que Ctrl+W, Ctrl+T… aillent au shell au lieu de fermer l'onglet.
+  - **Rendu** : affichage WebGL (texte net, défilement immédiat, cadres et tableaux continus), police **JetBrains Mono** embarquée (flèches, tirets, symboles et cadres dans la même police, chargée avant l'ouverture pour des colonnes justes), largeur Unicode 11 (emojis et symboles larges alignés), contraste minimal garanti, historique de 10 000 lignes. Repli automatique sur l'ancien rendu si le navigateur n'a pas WebGL.
+  - Un rappel des raccourcis s'affiche sous le terminal.
+
 ## 2.71.1 — 2026-10-27
 
 - **Mise à jour automatique des agents Windows rétablie** : depuis la 2.39, le serveur annonçait aux postes l'empreinte du MSI d'origine alors qu'il leur sert le MSI « générique » (emplacements d'inscription vidés). L'agent Windows refusait donc chaque mise à jour (« empreinte du MSI incorrecte » dans son journal, toutes les 2 minutes) et restait sur sa version d'installation. L'empreinte annoncée est désormais celle du fichier réellement servi : les postes Windows se mettent à jour d'eux-mêmes et reçoivent la supervision de la 2.71.

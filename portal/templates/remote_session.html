@@ -106,14 +106,15 @@
     </div>
     {% endif %}
   </div>
+  {% if remote.kind == 'terminal' %}
+  <p class="small muted term-keys"><span>{{ _("Sélection = copie") }}</span><span>{{ _("Clic droit : copier ou coller") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>C</kbd> / <kbd>V</kbd> {{ _("copier / coller") }}</span><span><kbd>Ctrl</kbd>+{{ _("clic") }} {{ _("ouvre un lien") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>F</kbd> {{ _("rechercher") }}</span><span><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> {{ _("taille du texte") }}</span></p>
+  {% endif %}
   <p class="small muted remote-footnote">{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
 </div>
 {% endblock %}
 {% block scripts %}
 {% if remote.kind == 'terminal' %}
-<link rel="stylesheet" href="{{ url_for('static', filename='vendor/xterm-6.0.0/css/xterm.css') }}">
-<script src="{{ url_for('static', filename='vendor/xterm-6.0.0/lib/xterm.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/xterm-fit-0.11.0/lib/addon-fit.js') }}"></script>
+{% include '_xterm_assets.html' %}
 {% endif %}
 <script type="module" src="{{ url_for('static', filename='remote.js') }}?v={{ asset_v }}"></script>
 {% endblock %}

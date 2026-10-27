@@ -172,35 +172,142 @@ if (root.dataset.kind === 'terminal') {
   }
   const fontKey = 'lr-term-fontsize';
   let fontSize = 14;
-  try { fontSize = Math.min(22, Math.max(10, parseInt(localStorage.getItem(fontKey), 10) || 14)); } catch (e) { /* stockage indisponible */ }
+  try { fontSize = Math.min(24, Math.max(10, parseInt(localStorage.getItem(fontKey), 10) || 14)); } catch (e) { /* stockage indisponible */ }
+  // Police chargée AVANT d'ouvrir le terminal : xterm mesure la cellule une fois ; mesurée sur une police de repli, les
+  // colonnes se décaleraient ensuite.
+  const FONT = "'JetBrains Mono', 'Cascadia Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace";
+  try {
+    await Promise.race([Promise.all([document.fonts.load(`${fontSize}px "JetBrains Mono"`), document.fonts.load(`bold ${fontSize}px "JetBrains Mono"`)]),
+                        new Promise(resolve => setTimeout(resolve, 1500))]);
+  } catch (e) { /* police de repli */ }
   terminal = new window.Terminal({
     cursorBlink: true, cursorStyle: 'block', cursorInactiveStyle: 'outline',
-    fontSize, lineHeight: 1.3, letterSpacing: 0, scrollback: 5000, smoothScrollDuration: 90,
-    fontFamily: "'JetBrains Mono', 'Cascadia Code', 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace",
-    fontWeight: 400, fontWeightBold: 600, rightClickSelectsWord: true, theme: terminalTheme(),
+    fontSize, fontFamily: FONT, fontWeight: 400, fontWeightBold: 700, lineHeight: 1.2, letterSpacing: 0,
+    scrollback: 10000, smoothScrollDuration: 0, fastScrollModifier: 'alt', minimumContrastRatio: 4.5,
+    allowProposedApi: true, macOptionIsMeta: true, rightClickSelectsWord: false, theme: terminalTheme(),
   });
   const applyTheme = () => {
     terminal.options.theme = terminalTheme();
     root.style.setProperty('--term-bg', TERM_BG[document.documentElement.getAttribute('data-theme')] || TERM_BG.oled);
   };
   applyTheme();
-  fit = new window.FitAddon.FitAddon(); terminal.loadAddon(fit); terminal.open(screen);
+  fit = new window.FitAddon.FitAddon(); terminal.loadAddon(fit);
+  // Largeur Unicode 11 : emojis et symboles larges occupent bien deux colonnes (curseur et invites alignés).
+  if (window.Unicode11Addon) { terminal.loadAddon(new window.Unicode11Addon.Unicode11Addon()); terminal.unicode.activeVersion = '11'; }
+  terminal.open(screen);
+  // Rendu WebGL (texte net, défilement fluide, caractères de cadre dessinés au pixel) ; repli sur le rendu DOM si le
+  // navigateur n'a pas de WebGL ou perd le contexte.
+  if (window.WebglAddon) {
+    try {
+      const webgl = new window.WebglAddon.WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      terminal.loadAddon(webgl);
+    } catch (e) { /* rendu DOM */ }
+  }
+  // Liens : Ctrl+clic (⌘+clic sur Mac) ouvre l'adresse dans un nouvel onglet, comme dans un terminal de bureau.
+  if (window.WebLinksAddon) {
+    terminal.loadAddon(new window.WebLinksAddon.WebLinksAddon((event, uri) => {
+      if (event.ctrlKey || event.metaKey) window.open(uri, '_blank', 'noopener,noreferrer');
+    }));
+  }
   new ResizeObserver(() => {
     fit.fit(); cols = Math.max(20, Math.min(500, terminal.cols)); rows = Math.max(5, Math.min(200, terminal.rows));
     if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
   }).observe(screen);
   terminal.onData(data => send(encoder.encode(data)));
   terminal.onBinary(data => send(Uint8Array.from(data, c => c.charCodeAt(0) & 255)));
-  terminal.focus();
-  // Taille du texte : A−/A+, mémorisée dans ce navigateur.
+
+  // ---- presse-papiers : copie à la sélection, Ctrl+Maj+C / Ctrl+Maj+V, Ctrl+C avec une sélection, clic droit
+  const notice = text => { lastLabel = ''; message(text, 'ok'); setTimeout(() => { if (running) connectedMessage(); }, 1400); };
+  const copySelection = () => {
+    const text = terminal.getSelection();
+    if (!text) return false;
+    navigator.clipboard?.writeText(text).catch(() => {});
+    return true;
+  };
+  const paste = () => navigator.clipboard?.readText()
+    .then(text => { if (text) terminal.paste(text); terminal.focus(); })
+    .catch(() => notice(t('Collage refusé par le navigateur : utilisez Ctrl+V.')));
+  terminal.onSelectionChange(() => { if (terminal.hasSelection()) copySelection(); });
+  screen.addEventListener('contextmenu', event => {
+    event.preventDefault();                 // clic droit : copier s'il y a une sélection, sinon coller (comme PuTTY)
+    if (terminal.hasSelection()) { copySelection(); terminal.clearSelection(); notice(t('Copié')); }
+    else paste();
+  });
+
+  // ---- recherche dans l'historique (Ctrl+Maj+F) : barre discrète, Entrée / Maj+Entrée, Échap pour fermer
+  let search = null, searchBar = null;
+  if (window.SearchAddon) { search = new window.SearchAddon.SearchAddon(); terminal.loadAddon(search); }
+  const DECOR = { matchBackground: '#6cb6ff40', activeMatchBackground: '#e3c07b', matchOverviewRuler: '#6cb6ff', activeMatchColorOverviewRuler: '#e3c07b' };
+  const openSearch = () => {
+    if (!search) return;
+    if (!searchBar) {
+      searchBar = document.createElement('div');
+      searchBar.className = 'term-search';
+      searchBar.innerHTML = `<input type="search" spellcheck="false" aria-label="${t('Rechercher dans le terminal')}" placeholder="${t('Rechercher…')}">`
+        + `<span class="term-search-count"></span>`
+        + `<button type="button" data-dir="prev" title="${t('Précédent (Maj+Entrée)')}" aria-label="${t('Précédent')}">↑</button>`
+        + `<button type="button" data-dir="next" title="${t('Suivant (Entrée)')}" aria-label="${t('Suivant')}">↓</button>`
+        + `<button type="button" data-dir="close" title="${t('Fermer (Échap)')}" aria-label="${t('Fermer')}">✕</button>`;
+      screen.parentElement.appendChild(searchBar);
+      const input = searchBar.querySelector('input'), count = searchBar.querySelector('.term-search-count');
+      const go = back => {
+        if (!input.value) { search.clearDecorations(); count.textContent = ''; return; }
+        (back ? search.findPrevious : search.findNext).call(search, input.value, { decorations: DECOR, incremental: !back && document.activeElement === input });
+      };
+      search.onDidChangeResults?.(r => { count.textContent = r.resultCount ? `${r.resultIndex + 1}/${r.resultCount}` : (input.value ? t('aucun') : ''); });
+      input.addEventListener('input', () => go(false));
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); go(e.shiftKey); }
+        if (e.key === 'Escape') { e.preventDefault(); closeSearch(); }
+      });
+      searchBar.addEventListener('click', e => {
+        const dir = e.target.closest('button')?.dataset.dir;
+        if (dir === 'close') closeSearch(); else if (dir) go(dir === 'prev');
+      });
+    }
+    searchBar.hidden = false;
+    const input = searchBar.querySelector('input');
+    const selected = terminal.getSelection();
+    if (selected && !selected.includes('\n')) input.value = selected;
+    input.focus(); input.select();
+  };
+  const closeSearch = () => { if (!searchBar) return; searchBar.hidden = true; search.clearDecorations(); terminal.focus(); };
+
+  // ---- taille du texte : A−/A+, Ctrl + / Ctrl − / Ctrl 0, mémorisée dans ce navigateur
   const setFont = size => {
-    fontSize = Math.min(22, Math.max(10, size));
+    fontSize = Math.min(24, Math.max(10, size));
     terminal.options.fontSize = fontSize;
     try { localStorage.setItem(fontKey, String(fontSize)); } catch (e) { /* stockage indisponible */ }
     fit.fit(); terminal.focus();
   };
   document.getElementById('remote-font-dec')?.addEventListener('click', () => setFont(fontSize - 1));
   document.getElementById('remote-font-inc')?.addEventListener('click', () => setFont(fontSize + 1));
+
+  // ---- raccourcis : ceux du terminal passent avant ceux du navigateur
+  terminal.attachCustomKeyEventHandler(e => {
+    if (e.type !== 'keydown') return true;
+    const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+    if (ctrl && e.shiftKey && key === 'c') { e.preventDefault(); if (copySelection()) notice(t('Copié')); return false; }
+    if (ctrl && e.shiftKey && key === 'v') { e.preventDefault(); paste(); return false; }
+    if (ctrl && e.shiftKey && key === 'f') { e.preventDefault(); openSearch(); return false; }
+    if (e.shiftKey && key === 'insert') { e.preventDefault(); paste(); return false; }
+    // Ctrl+C avec une sélection : copier (et ne pas interrompre la commande) ; sans sélection, ^C part au shell.
+    if (ctrl && !e.shiftKey && !e.altKey && key === 'c' && terminal.hasSelection()) {
+      e.preventDefault(); copySelection(); terminal.clearSelection(); notice(t('Copié')); return false;
+    }
+    if (ctrl && !e.shiftKey && !e.altKey && (key === '=' || key === '+')) { e.preventDefault(); setFont(fontSize + 1); return false; }
+    if (ctrl && !e.shiftKey && !e.altKey && key === '-') { e.preventDefault(); setFont(fontSize - 1); return false; }
+    if (ctrl && !e.shiftKey && !e.altKey && key === '0') { e.preventDefault(); setFont(14); return false; }
+    return true;
+  });
+  // Plein écran : le clavier est verrouillé (navigateurs Chromium) pour que Ctrl+W, Ctrl+T, Ctrl+N… aillent au shell
+  // au lieu de fermer ou d'ouvrir un onglet. Échap maintenu quitte le plein écran.
+  document.addEventListener('fullscreenchange', () => {
+    if (!navigator.keyboard?.lock) return;
+    if (document.fullscreenElement === root) navigator.keyboard.lock().catch(() => {}); else navigator.keyboard.unlock();
+  });
+  terminal.focus();
   // Suivre en direct le thème et l'accent choisis dans le portail.
   new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
 } else {

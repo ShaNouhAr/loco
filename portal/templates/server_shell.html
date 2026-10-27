@@ -36,12 +36,11 @@
       </div>
     </div>
   </div>
+  <p class="small muted term-keys"><span>{{ _("Sélection = copie") }}</span><span>{{ _("Clic droit : copier ou coller") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>C</kbd> / <kbd>V</kbd> {{ _("copier / coller") }}</span><span><kbd>Ctrl</kbd>+{{ _("clic") }} {{ _("ouvre un lien") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>F</kbd> {{ _("rechercher") }}</span><span><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> {{ _("taille du texte") }}</span></p>
   <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme ce shell. « Désactiver le shell root » ferme tous les shells et coupe l'accès jusqu'à une nouvelle activation suivie d'un redémarrage.") }}</p>
 </div>
 {% endblock %}
 {% block scripts %}
-<link rel="stylesheet" href="{{ url_for('static', filename='vendor/xterm-6.0.0/css/xterm.css') }}">
-<script src="{{ url_for('static', filename='vendor/xterm-6.0.0/lib/xterm.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/xterm-fit-0.11.0/lib/addon-fit.js') }}"></script>
+{% include '_xterm_assets.html' %}
 <script type="module" src="{{ url_for('static', filename='remote.js') }}?v={{ asset_v }}"></script>
 {% endblock %}

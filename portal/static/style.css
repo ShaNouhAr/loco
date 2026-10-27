@@ -10,6 +10,9 @@
 @font-face { font-family: "Plex"; src: url("fonts/IBMPlexSans-SemiBold-Latin1.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "Plex Mono"; src: url("fonts/IBMPlexMono-Regular-Latin1.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Plex Mono"; src: url("fonts/IBMPlexMono-Medium-Latin1.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+/* Terminaux : police complète (flèches, tirets, symboles, cadres), chargée seulement par les pages de shell. */
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: block; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2"); font-weight: 700; font-display: block; }
 
 /* ------------------------------------------------------------------ thèmes */
 
@@ -1162,6 +1165,15 @@ label.f > small.pw-rule.bad { color: var(--warn); }
 .remote-screen.terminal .xterm-viewport::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 26%, transparent); border: 3px solid transparent; border-radius: 11px; background-clip: padding-box; }
 .remote-screen.terminal .xterm-viewport::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 42%, transparent); background-clip: padding-box; }
 .remote-screen.terminal .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+.term-search { position: absolute; top: 10px; right: 18px; z-index: 5; display: flex; align-items: center; gap: 2px; padding: 4px 4px 4px 10px;
+               border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); box-shadow: 0 6px 20px rgb(0 0 0 / .35); }
+.term-search[hidden] { display: none; }
+.term-search input { width: 220px; height: 28px; padding: 0 4px; border: 0; background: none; color: var(--text); font: 13px var(--mono); outline: none; }
+.term-search-count { min-width: 44px; font-size: 12px; color: var(--text-3); text-align: right; font-variant-numeric: tabular-nums; }
+.term-search button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--text-2); cursor: pointer; font-size: 13px; }
+.term-search button:hover { background: var(--bg-3); color: var(--text); }
+.term-keys { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.term-keys kbd { padding: 1px 5px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; font: 11px var(--mono); color: var(--text-2); background: var(--bg-2); }
 .remote-fontsize { display: inline-flex; gap: 4px; }
 .remote-fontsize .btn { min-width: 36px; justify-content: center; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
 .remote-viewport { position: absolute; inset: 0; display: flex; overflow: auto; scrollbar-width: thin; scrollbar-color: #4c4c4c transparent; }

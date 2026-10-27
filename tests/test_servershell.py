@@ -115,6 +115,9 @@ class ShellPortalTest(unittest.TestCase):
         self.assertIn("Désactiver le shell root", page)              # bouton de désactivation sur le terminal
         self.assertNotIn("Mise en service", page)
         self.assertIn("shell-quick", page)
+        for asset in ("addon-webgl.js", "addon-web-links.js", "addon-search.js", "addon-unicode11.js"):
+            self.assertIn(asset, page)                                   # vrai terminal : rendu, liens, recherche
+        self.assertIn("term-keys", page)                                 # rappel des raccourcis (copier, coller…)
         self.shell_call.assert_not_called()                          # un simple affichage ne démarre aucun shell
         sid = re.search(r'data-io="/system/shell/([0-9a-f]{32})/io"', page).group(1)
         self.shell_call.return_value = {"state": "active", "error": "", "packets": [{"seq": 1, "data": "aGk="}],
