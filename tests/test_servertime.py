@@ -156,6 +156,66 @@ class ChronyAlpine324Test(unittest.TestCase):
             self.assertEqual(locoadmin._chrony_dropin(), ("/etc/chrony/conf.d/loco.conf", ""))
 
 
+class NtpOnlyTest(unittest.TestCase):
+    """« Utiliser uniquement ces serveurs » : sources de la distribution commentées (réversible), et état de chaque
+    serveur saisi pour signaler qu'il ne répond pas (l'heure venant alors des serveurs de secours)."""
+
+    def test_distribution_sources_commented_then_restored(self):
+        d = tempfile.mkdtemp()
+        conf = os.path.join(d, "chrony.conf")
+        original = "confdir /etc/chrony/conf.d\npool pool.ntp.org iburst\nsourcedir /etc/chrony/sources.d\nmakestep 1.0 3\n"
+        with open(conf, "w") as f:
+            f.write(original)
+        with mock.patch.object(locoadmin, "_chrony_conf", return_value=conf):
+            locoadmin._chrony_only(True, log=lambda *_: None)
+            text = pathlib.Path(conf).read_text()
+            self.assertIn("#loco-ntp-only# pool pool.ntp.org iburst", text)
+            self.assertIn("#loco-ntp-only# sourcedir", text)
+            self.assertIn("\nmakestep 1.0 3", text)                         # le reste est intact
+            with mock.patch.object(locoadmin, "_ntp_backend", return_value="chrony"):
+                self.assertTrue(locoadmin._ntp_only_active())
+            locoadmin._chrony_only(True, log=lambda *_: None)                 # idempotent
+            self.assertEqual(pathlib.Path(conf).read_text().count("#loco-ntp-only#"), 2)
+            locoadmin._chrony_only(False, log=lambda *_: None)
+        self.assertEqual(pathlib.Path(conf).read_text(), original)
+
+    def test_timesyncd_disables_the_fallback(self):
+        files = {}
+        with mock.patch.object(locoadmin, "_is_container", return_value=False), \
+             mock.patch.object(locoadmin, "_ntp_backend", return_value="timesyncd"), \
+             mock.patch.object(locoadmin, "write_time_status"), \
+             mock.patch.object(locoadmin, "_run", return_value=0), \
+             mock.patch.object(locoadmin, "_write_conf_file", side_effect=lambda p, c: files.__setitem__(p, c)):
+            locoadmin.set_time({"ntp": "1", "ntp_server": "10.0.0.5", "ntp_only": "1"}, log=lambda *_: None)
+        self.assertIn("FallbackNTP=\n", files[locoadmin.TIMESYNCD_DROPIN])
+
+    def test_only_is_ignored_without_a_server(self):
+        calls = []
+        with mock.patch.object(locoadmin, "_is_container", return_value=False), \
+             mock.patch.object(locoadmin, "_ntp_backend", return_value="chrony"), \
+             mock.patch.object(locoadmin, "_write_chrony"), \
+             mock.patch.object(locoadmin, "_chrony_only", side_effect=lambda on, log: calls.append(on)), \
+             mock.patch.object(locoadmin, "write_time_status"), \
+             mock.patch.object(locoadmin, "_run", return_value=0), \
+             mock.patch.object(locoadmin.shutil, "which", return_value=None):
+            locoadmin.set_time({"ntp": "1", "ntp_server": "", "ntp_only": "1"}, log=lambda *_: None)
+        self.assertEqual(calls, [False])                                    # jamais sans aucune source
+
+    def test_status_relates_each_configured_server_to_its_state(self):
+        out = {("chronyc", "-n", "-c", "tracking"): "A29FC87B,162.159.200.123,4,1,0.0001,0,0,0,0,0,0,0,2,Normal\n",
+               ("chronyc", "-n", "-c", "sources"): "^,?,192.0.2.1,0,6,0,-,0,0,0\n^,*,162.159.200.123,3,6,377,1,0,0,0\n",
+               ("chronyc", "-N", "-c", "sources"): "^,?,192.0.2.1,0,6,0,-,0,0,0\n^,*,pool.ntp.org,3,6,377,1,0,0,0\n"}
+        with mock.patch.object(locoadmin, "_is_container", return_value=False), \
+             mock.patch.object(locoadmin, "_ntp_backend", return_value="chrony"), \
+             mock.patch.object(locoadmin, "_configured_ntp", return_value=["192.0.2.1"]), \
+             mock.patch.object(locoadmin, "_ntp_only_active", return_value=False), \
+             mock.patch.object(locoadmin, "_quiet", side_effect=lambda cmd: (0, out.get(tuple(cmd), ""))):
+            st = locoadmin.time_status()
+        self.assertTrue(st["synchronized"])
+        self.assertEqual(st["configured"], [{"name": "192.0.2.1", "state": "unreachable"}])
+        self.assertEqual(st["sources"][1]["name"], "pool.ntp.org")
+
+
 class ChronyCmdPortTest(unittest.TestCase):
     """Appliance Alpine : chrony.conf a « cmdport 0 », qui coupe l'accès de chronyc même pour root. loco doit
     réactiver le port de commande (localhost) pour pouvoir lire l'état de l'heure."""

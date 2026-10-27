@@ -377,6 +377,7 @@
       <div class="aside">
         {%- if time_info.container %}<span class="st">{{ _("gérée par l'hôte") }}</span>
         {%- elif not time_info.ntp %}<span class="st">{{ _("synchronisation désactivée") }}</span>
+        {%- elif time_info.synchronized and time_info.unused %}<span class="st warn">{{ _("synchronisée par les serveurs de secours") }}</span>
         {%- elif time_info.synchronized %}<span class="st ok">{{ _("synchronisée") }}</span>
         {%- else %}<span class="st warn">{{ _("synchronisation en cours") }}</span>{% endif %}
       </div>
@@ -391,6 +392,15 @@
         {%- if time_info.offset_ms is not none %}<div><dt>{{ _("Écart") }}</dt><dd class="mono">{{ "%+.1f ms"|format(time_info.offset_ms) }}</dd></div>{% endif %}
         {%- endif %}
       </dl>
+      {% if time_info.unused and not time_info.container %}
+      <div class="note {{ 'warn' if time_info.synchronized else 'err' }}">
+        <strong>{{ ngettext("Le serveur saisi ne répond pas :", "Aucun des serveurs saisis ne répond :", time_info.unused|length) }}</strong>
+        <span class="mono">{{ time_info.unused|join(', ') }}</span>.
+        {% if time_info.synchronized %}{{ _("L'heure vient des serveurs de secours de la distribution (%(source)s).", source=time_info.source) }}
+        {% else %}{{ _("Aucune autre source n'est utilisée : l'horloge du serveur n'est plus synchronisée.") }}{% endif %}
+        <span class="hint">{{ _("Sur ce serveur NTP, vérifiez qu'il accepte les clients de ce réseau (chrony : « allow » avec le réseau de loco ; Windows : service de temps configuré en serveur NTP) et que son pare-feu autorise UDP 123 en entrée.") }}</span>
+      </div>
+      {% endif %}
 
       {% if time_info.container %}
       <p class="muted small">{{ _("Ce serveur est un conteneur : son horloge vient de l'hôte. La synchronisation NTP se règle sur l'hôte (Proxmox), pas ici.") }}</p>
@@ -412,7 +422,7 @@
         <tbody>
           {% for s in time_info.sources %}
           <tr>
-            <td class="mono">{{ s.address }}</td>
+            <td class="mono">{{ s.address }}{% if s.name and s.name != s.address %}<span class="sub">{{ s.name }}</span>{% endif %}</td>
             <td><span class="st {{ st_class.get(s.state, '') }}">{{ st_labels.get(s.state, s.state) }}</span></td>
             <td>{{ s.stratum if s.stratum else "—" }}</td>
           </tr>
@@ -428,6 +438,8 @@
           <input type="text" name="ntp_server" value="{{ time_info.servers|join(' ') }}" placeholder="fr.pool.ntp.org 192.168.1.1" spellcheck="false" class="mono field-lg">
           <small class="muted">{{ _("Une ou plusieurs adresses IP ou noms, séparées par des espaces. Laisser vide pour les serveurs par défaut du système.") }}</small>
         </label>
+        <label class="check"><input type="checkbox" name="ntp_only" value="1" {{ 'checked' if time_info.only }}> <span>{{ _("Utiliser uniquement ces serveurs") }}</span></label>
+        <small class="muted ntp-only-hint">{{ _("Sinon, les serveurs de la distribution restent en secours si ceux-ci ne répondent pas. Sans serveur saisi, cette option est ignorée.") }}</small>
         <label class="f">
           <span>{{ _("Fuseau horaire") }}</span>
           <select name="timezone" class="field-md">

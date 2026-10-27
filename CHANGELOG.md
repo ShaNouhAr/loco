@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.70.1 — 2026-10-27
+
+- **NTP : serveur saisi qui ne répond pas, signalé clairement** : quand aucun des serveurs saisis n'est utilisé, *Système → Heure et matériel* l'affiche (« Le serveur saisi ne répond pas : 192.168.100.23 ») et précise d'où vient l'heure (serveurs de secours de la distribution, avec leur adresse), au lieu d'un simple « synchronisée ». La pastille devient « synchronisée par les serveurs de secours ». Une indication donne la piste côté serveur NTP : accepter les clients du réseau (chrony : `allow`) et autoriser UDP 123 en entrée. Le tableau des sources montre aussi le nom saisi (par exemple pool.ntp.org) sous l'adresse.
+- **« Utiliser uniquement ces serveurs »** : nouvelle option pour que les serveurs saisis soient les seules sources. Avec chrony, loco commente lui-même les sources de la distribution dans chrony.conf (pool, server, sourcedir), de façon réversible : décocher les rétablit à l'identique. Avec timesyncd, les serveurs de secours intégrés sont désactivés. Sans serveur saisi, l'option est ignorée, pour ne jamais laisser le serveur sans source.
+
 ## 2.70.0 — 2026-10-27
 
 - **Certificat HTTPS : renouveler et importer depuis le portail** (*Système → Réseau et certificats*).

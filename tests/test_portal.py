@@ -635,6 +635,28 @@ class TestServerTimeDisplay(unittest.TestCase):
         self.assertEqual([x["state"] for x in info["sources"]], ["used", "unreachable"])
         self.assertEqual(info["timezone"], "Europe/Paris")
 
+    def test_unresponsive_configured_server_is_reported(self):
+        import tempfile
+        import time as _time
+        from loco import system
+        data = {"at": _time.time(), "container": False, "enabled": True, "synchronized": True, "source": "213.251.128.249",
+                "servers": ["192.168.100.23"], "sources": [], "only": False,
+                "configured": [{"name": "192.168.100.23", "state": "unreachable"}]}
+        fd, path = tempfile.mkstemp()
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        self.addCleanup(os.remove, path)
+        with mock.patch.object(system.locoadmin, "TIME_STATUS", path), \
+             mock.patch("loco.system._virt", return_value=("qemu", False)):
+            info = system.server_time()
+        self.assertEqual(info["unused"], ["192.168.100.23"])
+        data["configured"][0]["state"] = "used"
+        with open(path, "w") as f:
+            json.dump(data, f)
+        with mock.patch.object(system.locoadmin, "TIME_STATUS", path), \
+             mock.patch("loco.system._virt", return_value=("qemu", False)):
+            self.assertEqual(system.server_time()["unused"], [])
+
     def test_stale_file_falls_back_to_timedatectl(self):
         import time as _time
         from loco import system

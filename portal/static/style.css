@@ -540,6 +540,8 @@ pre.log { margin: 0; padding: 12px 16px; max-height: 440px; overflow: auto; bord
 label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--text-2); }
 .field-lg { width: 100%; }
 /* Résumé de l'heure : grille clé/valeur sobre */
+.time-form .ntp-only-hint { display: block; margin-top: -10px; font-size: 12px; line-height: 1.4; }
+.time-panel .note .hint { display: block; margin-top: 6px; }
 .kv-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 28px; margin: 0; }
 .kv-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .kv-grid dt { font-size: 12.5px; color: var(--text-2); }

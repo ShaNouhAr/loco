@@ -1111,6 +1111,44 @@ def _write_chrony(servers, log):
             log(t(f"{conf} : inclusion de {dropin}", f"{conf}: includes {dropin}", f"{conf}: incluye {dropin}"))
 
 
+NTP_ONLY_MARK = "#loco-ntp-only# "
+DISTRO_SOURCE_RE = re.compile(r"^(\s*)(pool|server|peer|sourcedir)\b", re.M)
+
+
+def _chrony_only(on, log):
+    """« Uniquement ces serveurs » : commente (marque réversible) les sources de la distribution dans chrony.conf —
+    pool, server, peer, sourcedir (serveurs reçus par DHCP) — ou les rétablit."""
+    conf = _chrony_conf()
+    if not conf:
+        return
+    with open(conf) as f:
+        text = f.read()
+    if on:
+        new = DISTRO_SOURCE_RE.sub(lambda m: NTP_ONLY_MARK + m.group(0), text)
+    else:
+        new = text.replace(NTP_ONLY_MARK, "")
+    if new != text:
+        _write_conf_file(conf, new)
+        log(t(f"{conf} : sources de la distribution {'désactivées' if on else 'rétablies'}",
+              f"{conf}: distribution sources {'disabled' if on else 'restored'}",
+              f"{conf}: fuentes de la distribución {'desactivadas' if on else 'restablecidas'}"))
+
+
+def _ntp_only_active():
+    if _ntp_backend() == "timesyncd":
+        try:
+            with open(TIMESYNCD_DROPIN) as f:
+                return bool(re.search(r"^FallbackNTP=\s*$", f.read(), re.M))
+        except OSError:
+            return False
+    conf = _chrony_conf()
+    try:
+        with open(conf) as f:
+            return NTP_ONLY_MARK in f.read()
+    except OSError:
+        return False
+
+
 def _ensure_chrony_readable(log=lambda *_: None):
     """Au démarrage de l'agent : sur l'appliance (chrony + cmdport 0) l'état est illisible même pour root. Si chronyc
     ne répond pas alors que c'est dû à cmdport 0, réactiver le port de commande puis recharger chronyd (une seule fois :
@@ -1129,7 +1167,7 @@ def _ensure_chrony_readable(log=lambda *_: None):
           "Acceso al estado de la hora reactivado (chrony)."))
 
 
-def _set_ntp(enabled, servers, log):
+def _set_ntp(enabled, servers, log, only=False):
     """Client NTP du serveur, par timesyncd ou chrony. Les serveurs saisis sont prioritaires sur ceux de la distribution."""
     if _is_container():
         log(t("Conteneur : l'horloge est gérée par l'hôte, synchronisation NTP ignorée.",
@@ -1139,7 +1177,9 @@ def _set_ntp(enabled, servers, log):
     backend, ok = _ntp_backend(), True
     if backend == "timesyncd":
         if servers:
-            _write_conf_file(TIMESYNCD_DROPIN, "# Géré par loco\n[Time]\nNTP=" + " ".join(servers) + "\n")
+            # FallbackNTP vide : jamais les serveurs de secours compilés dans systemd (« uniquement ces serveurs »).
+            _write_conf_file(TIMESYNCD_DROPIN, "# Géré par loco\n[Time]\nNTP=" + " ".join(servers) + "\n"
+                             + ("FallbackNTP=\n" if only else ""))
         elif os.path.exists(TIMESYNCD_DROPIN):
             os.remove(TIMESYNCD_DROPIN)
         ok = _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log) == 0
@@ -1147,6 +1187,7 @@ def _set_ntp(enabled, servers, log):
             ok = _run(["systemctl", "restart", "systemd-timesyncd"], log) == 0 and ok
     elif backend == "chrony":
         _write_chrony(servers, log)
+        _chrony_only(bool(only and servers), log)            # sans serveur saisi, jamais sans source
         if shutil.which("systemctl"):
             if shutil.which("timedatectl"):
                 ok = _run(["timedatectl", "set-ntp", "true" if enabled else "false"], log) == 0
@@ -1181,7 +1222,8 @@ def set_time(params, log=print):
     tz = str(params.get("timezone", "")).strip()
     servers = ntp_servers(params.get("ntp_server", ""))
     enabled = str(params.get("ntp", "")) in ("1", "true", "on", "yes")
-    ok = _set_ntp(enabled, servers, log)
+    only = str(params.get("ntp_only", "")) in ("1", "true", "on", "yes")
+    ok = _set_ntp(enabled, servers, log, only=only)
     error = None
     if tz and tz != _current_tz():
         try:
@@ -1214,7 +1256,7 @@ def _quiet(cmd):
 def time_status():
     st = {"at": time.time(), "container": _is_container(), "backend": _ntp_backend(), "enabled": False,
           "synchronized": False, "source": "", "stratum": None, "offset_ms": None, "servers": _configured_ntp(),
-          "sources": []}
+          "sources": [], "only": False, "configured": []}
     if st["container"]:
         return st
     if st["backend"] == "timesyncd" or (shutil.which("timedatectl") and st["backend"] != "chrony"):
@@ -1225,6 +1267,9 @@ def time_status():
             code, out = _quiet(["timedatectl", "show-timesync", "-p", "ServerAddress", "-p", "ServerName"])
             values = dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
             st["source"] = values.get("ServerAddress") or values.get("ServerName", "")
+        used = {values.get("ServerAddress", "").lower(), values.get("ServerName", "").lower()} if st["synchronized"] else set()
+        st["only"] = _ntp_only_active()
+        st["configured"] = [{"name": s, "state": "used" if s.lower() in used else "unknown"} for s in st["servers"]]
         return st
     if st["backend"] == "chrony":
         code, out = _quiet(["chronyc", "-n", "-c", "tracking"])
@@ -1242,11 +1287,22 @@ def time_status():
         st["synchronized"] = ref not in ("00000000", "") and (f[-1].strip() if f else "") == "Normal"
         st["source"] = addr if st["synchronized"] else ""
         code, out = _quiet(["chronyc", "-n", "-c", "sources"])
-        for line in out.splitlines():
-            c = line.split(",")
+        rows = [line.split(",") for line in out.splitlines()]
+        # -N : nom tel qu'il a été saisi (même ordre), pour relier chaque serveur saisi à son état.
+        named = [line.split(",") for line in _quiet(["chronyc", "-N", "-c", "sources"])[1].splitlines()]
+        if len(named) != len(rows):
+            named = rows
+        for c, n in zip(rows, named):
             if len(c) >= 6 and c[0] in ("^", "="):
-                st["sources"].append({"address": c[2], "state": CHRONY_STATES.get(c[1], "unknown"),
+                st["sources"].append({"address": c[2], "name": n[2] if len(n) > 2 else c[2],
+                                      "state": CHRONY_STATES.get(c[1], "unknown"),
                                       "stratum": int(c[3]) if c[3].isdigit() else None, "reach": c[5]})
+    st["only"] = _ntp_only_active()
+    states = {}
+    for src in st["sources"]:
+        for key in (src["name"].lower(), src["address"].lower()):
+            states.setdefault(key, src["state"])
+    st["configured"] = [{"name": s, "state": states.get(s.lower(), "unknown")} for s in st["servers"]]
     return st
 
 
@@ -2180,7 +2236,8 @@ def agent():
                     if tz and not _valid_tz(tz):
                         continue
                     params = {"timezone": tz, "ntp_server": server,
-                              "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else ""}
+                              "ntp": "1" if str(p.get("ntp", "")) in ("1", "true", "on", "yes") else "",
+                              "ntp_only": "1" if str(p.get("ntp_only", "")) == "1" else ""}
                 elif req["action"] == "restore":
                     p = req.get("params") or {}
                     upload, name = str(p.get("upload", "")).strip(), str(p.get("archive", "")).strip()
@@ -2266,7 +2323,8 @@ def request(action, params=None, user=""):
         if tz and not _valid_tz(tz):
             raise ValueError("fuseau horaire inconnu")
         params = {"timezone": tz, "ntp_server": server,
-                  "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else ""}
+                  "ntp": "1" if str((params or {}).get("ntp", "")) in ("1", "true", "on", "yes") else "",
+                  "ntp_only": "1" if str((params or {}).get("ntp_only", "")) == "1" else ""}
     elif action == "restore":
         p = params or {}
         upload, name = str(p.get("upload", "")).strip(), str(p.get("archive", "")).strip()

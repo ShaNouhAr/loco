@@ -30,8 +30,8 @@ def server_time():
     sources) est mesuré par l'agent root — le portail, non privilégié, ne peut pas interroger chrony sur l'appliance —
     puis déposé dans un fichier que l'on relit ici ; repli sur une lecture directe quand ce fichier manque."""
     info = {"timezone": "", "local": datetime.datetime.now().strftime("%H:%M"), "ntp": False, "synchronized": False,
-            "source": "", "stratum": None, "offset_ms": None, "servers": [], "sources": [],
-            "container": _virt()[1], "fresh": False}
+            "source": "", "stratum": None, "offset_ms": None, "servers": [], "sources": [], "only": False,
+            "configured": [], "container": _virt()[1], "fresh": False}
     try:
         info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
     except OSError:
@@ -45,7 +45,7 @@ def server_time():
             data = None
     if data and time.time() - data.get("at", 0) < 90:     # état frais mesuré par l'agent root
         info["fresh"], info["container"], info["ntp"] = True, data.get("container", info["container"]), bool(data.get("enabled"))
-        for key in ("synchronized", "source", "stratum", "offset_ms", "servers", "sources"):
+        for key in ("synchronized", "source", "stratum", "offset_ms", "servers", "sources", "only", "configured"):
             info[key] = data.get(key, info[key])
     elif shutil.which("timedatectl"):                     # repli non privilégié (hôtes systemd)
         try:
@@ -55,6 +55,9 @@ def server_time():
             info["ntp"], info["synchronized"] = values.get("NTP") == "yes", values.get("NTPSynchronized") == "yes"
         except (OSError, subprocess.SubprocessError, ValueError):
             pass
+    # Serveurs saisis dont aucun n'est utilisé : l'heure vient alors des serveurs de secours (ou de nulle part).
+    info["unused"] = [c["name"] for c in info["configured"] if c["state"] != "used"] \
+        if info["ntp"] and info["configured"] and not any(c["state"] == "used" for c in info["configured"]) else []
     if not info["servers"]:                               # serveurs réglés par loco, pour pré-remplir le champ
         for path in ("/etc/systemd/timesyncd.conf.d/loco.conf", "/etc/chrony/conf.d/loco.conf",
                      "/etc/chrony.d/loco.conf", "/etc/chrony.loco.conf"):
@@ -804,7 +807,8 @@ def system_time():
         abort(404)
     params = {"timezone": request.form.get("timezone", "").strip(),
               "ntp": "1" if request.form.get("ntp") == "1" else "",
-              "ntp_server": request.form.get("ntp_server", "").strip()}
+              "ntp_server": request.form.get("ntp_server", "").strip(),
+              "ntp_only": "1" if request.form.get("ntp_only") == "1" else ""}
     if locoadmin.running_job():
         flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
     elif not locoadmin.agent_running():
