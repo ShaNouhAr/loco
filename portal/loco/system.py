@@ -35,10 +35,10 @@ def server_time():
         info["timezone"] = os.readlink("/etc/localtime").split("zoneinfo/", 1)[-1]
     except OSError:
         pass
-    data = None
-    if config.SERVER_UPDATES:
+    data, path = None, getattr(locoadmin, "TIME_STATUS", None) if config.SERVER_UPDATES else None
+    if isinstance(path, str):                             # jamais un entier : open(1) fermerait stdout
         try:
-            with open(locoadmin.TIME_STATUS) as f:
+            with open(path) as f:
                 data = json.load(f)
         except (OSError, ValueError):
             data = None
