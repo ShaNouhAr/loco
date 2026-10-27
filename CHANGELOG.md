@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.73.2 — 2026-10-27
+
+- **Mon parc : en-tête allégé.** La case « Redémarrer si nécessaire » ne flotte plus entre les boutons : « Tout mettre à jour » (ou « Mettre à jour ce groupe ») ouvre une fenêtre qui récapitule l'opération et propose l'interrupteur **Redémarrer les postes si nécessaire**, seulement pour ceux dont une mise à jour l'exige.
+
 ## 2.73.1 — 2026-10-27
 
 - **Groupes de machines et de logiciels : renommer et supprimer depuis la liste.** Chaque ligne a un menu « ⋯ » avec *Modifier les membres*, *Renommer…* (seul le nom change : membres, description et déploiements conservés ; un nom déjà pris est refusé) et *Supprimer…* (avec confirmation ; les appareils, logiciels et déploiements restent). Réservé aux comptes qui peuvent gérer les groupes.

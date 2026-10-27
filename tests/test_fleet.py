@@ -323,6 +323,21 @@ class TestActions(FleetTest):
         self.assertEqual([c["action"] for c in late.checkin().get_json()["commands"]], ["update"])
         self.assertEqual(fine.checkin().get_json()["commands"], [])
 
+    def test_update_all_dialog_holds_the_restart_option(self):
+        late = Agent(dict(LINUX, hostname="maj-dialogue"), "192.168.43.61")
+        late.enroll()
+        late.checkin({"updates": [{"name": "curl", "version": "8.14"}]})
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        start = page.index('<div class="actions">')
+        head = page[start:page.index("</div>", start)]
+        self.assertIn('data-open="#update-all"', head)                          # en-tête : un seul bouton
+        self.assertNotIn('name="reboot"', head)                                  # plus de case flottante
+        dialog = page[page.index('<dialog id="update-all"'):]
+        self.assertIn('name="reboot" value="1" role="switch"', dialog)          # l'option est dans la fenêtre
+        self.admin.post("/fleet/update-all", {"reboot": "1"}, page="/fleet")
+        cmd = late.checkin().get_json()["commands"][0]
+        self.assertEqual((cmd["action"], cmd.get("reboot")), ("update", True))
+
     def test_install_app_requires_a_ready_catalog_entry(self):
         self.add_app()
         a = Agent(WINDOWS, "192.168.43.50")

@@ -19,12 +19,7 @@
     {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">{{ _("Ajouter un poste") }}</a>{% endif %}
     {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">{{ _("Déployer sur ce groupe") }}</a>{% endif %}
     {% if can('fleet.bulk_update') and total %}
-    <form method="post" action="{{ url_for('fleet_update_all') }}" class="row" data-ajax data-confirm="{{ _('Mettre à jour %(to_update)s poste(s) ?', to_update=to_update) }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}{% if can('fleet.reboot') %} {{ _('Cochez « redémarrer si nécessaire » pour terminer les mises à jour qui l\'exigent.') }}{% endif %}" data-confirm-ok="{{ _('Mettre à jour') }}">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
-      {% if can("fleet.reboot") %}<label class="head-option"><input type="checkbox" name="reboot" value="1"> {{ _("Redémarrer si nécessaire") }}</label>{% endif %}
-      <button class="btn primary" {{ 'disabled' if not to_update }}><span class="spin"></span>{{ _('Mettre à jour ce groupe') if selected_group else _('Tout mettre à jour') }}{% if to_update %} ({{ to_update }}){% endif %}</button>
-    </form>
+    <button type="button" class="btn primary" data-open="#update-all" {{ 'disabled' if not to_update }}>{{ _('Mettre à jour ce groupe') if selected_group else _('Tout mettre à jour') }}{% if to_update %} ({{ to_update }}){% endif %}</button>
     {% if can('fleet.bulk_update') %}<button type="button" class="btn" data-open="#plan-all" title="{{ _('Planifier une mise à jour, une fois ou de façon récurrente') }}">{{ plan_icon('calendar') }}<span>{{ _("Planifier…") }}</span></button>{% endif %}
     {% endif %}
   </div>
@@ -123,4 +118,23 @@
 </div>
 
 {% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels du catalogue.', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels du catalogue.')) }}{% endif %}
+{% if can('fleet.bulk_update') and total and to_update %}
+<dialog id="update-all">
+  <form method="post" action="{{ url_for('fleet_update_all') }}" data-ajax>
+    <div class="dlg-h"><h2>{{ _('Mettre à jour %(to_update)s poste(s) ?', to_update=to_update) }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-b stack-sm">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
+      <p class="muted">{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}{% if selected_group %} {{ _('Seuls les postes du groupe %(name)s sont concernés.', name=selected_group.name) }}{% endif %}</p>
+      {% if can("fleet.reboot") %}
+      <label class="switch-row">
+        <span class="switch"><input type="checkbox" name="reboot" value="1" role="switch"><i aria-hidden="true"></i></span>
+        <span>{{ _("Redémarrer les postes si nécessaire") }}<span class="sub">{{ _("Seulement ceux dont une mise à jour l'exige, une fois installée.") }}</span></span>
+      </label>
+      {% endif %}
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Mettre à jour") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}
