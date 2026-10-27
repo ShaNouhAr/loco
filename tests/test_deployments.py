@@ -92,6 +92,30 @@ class TestDeployments(FleetTest):
         self.assertEqual(browser.login('deploy-test-' + role, 'Test-Deployment-2026').status_code, 302)
         return browser
 
+    def test_groups_can_be_renamed_and_deleted_from_the_list(self):
+        dev_id = device(self.agent.uid)['id']
+        first = self.group('device', 'Atelier', [dev_id])
+        self.group('device', 'Bureau', [])
+        software = self.group('software', 'Socle', [self.app['id']])
+        page = self.admin.c.get('/fleet/groups').get_data(as_text=True)
+        self.assertIn('data-open="#rename-group"', page)                      # menu de ligne : renommer…
+        self.assertIn(f'/fleet/groups/{first}/delete', page)                  # … et supprimer
+        r = self.post('/fleet/groups/rename', {'group_id': first, 'name': 'Atelier Nord'})
+        self.assertTrue(r.location.endswith(f'/fleet/groups#group-{first}'))
+        self.post('/windows-apps/groups/rename', {'group_id': software, 'name': 'Socle 2027'})
+        self.post('/fleet/groups/rename', {'group_id': first, 'name': 'Bureau'})   # nom déjà pris : refusé
+        with transaction() as conn:
+            self.assertEqual(conn.execute('SELECT name FROM device_groups WHERE id=?', (first,)).fetchone()[0], 'Atelier Nord')
+            self.assertEqual(conn.execute('SELECT name FROM software_groups WHERE id=?', (software,)).fetchone()[0], 'Socle 2027')
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM device_group_members WHERE group_id=?', (first,)).fetchone()[0], 1)
+        self.assertEqual(self.post('/fleet/groups/rename', {'group_id': first, 'name': ''}).status_code, 400)
+        viewer = self.account('viewer')
+        self.assertEqual(self.post('/fleet/groups/rename', {'group_id': first, 'name': 'Interdit'}, viewer).status_code, 403)
+        self.assertNotIn('rename-group', viewer.c.get('/fleet/groups').get_data(as_text=True))
+        self.assertEqual(self.post(f'/fleet/groups/{first}/delete').status_code, 302)
+        with transaction() as conn:
+            self.assertIsNone(conn.execute('SELECT 1 FROM device_groups WHERE id=?', (first,)).fetchone())
+
     def test_groups_allow_multiple_memberships_and_delete_only_the_group(self):
         dev_id = device(self.agent.uid)['id']
         first = self.group('device', 'Comptabilité', [dev_id])

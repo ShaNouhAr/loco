@@ -130,6 +130,33 @@ def _save(kind, group_id):
     return back("software_groups" if software else "fleet_groups", _anchor=f"group-{group_id}")
 
 
+def _rename(kind):
+    """Renommer un groupe depuis la liste : seul le nom change (description, membres et déploiements conservés)."""
+    software = kind == "software"
+    listing_page = "software_groups" if software else "fleet_groups"
+    conn = lock_access("windows.groups" if software else "fleet.groups")
+    try:
+        group_id = int(request.form.get("group_id", ""))
+    except ValueError:
+        abort(400)
+    group = _group(kind, group_id)
+    name = request.form.get("name", "").strip()
+    if not name or len(name) > 80 or any(ord(c) < 32 for c in name):
+        abort(400, _('Indiquez un nom de groupe de 1 à 80 caractères.'))
+    if name != group["name"]:
+        try:
+            conn.execute(f"UPDATE {'software_groups' if software else 'device_groups'} SET name=?,updated_at=? WHERE id=?",
+                         (name, fleet._now(), group_id))
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            flash(_('Ce nom de groupe existe déjà.'), "error")
+            return back(listing_page, _anchor=f"group-{group_id}")
+        audit("groupes.renommage", f"{kind} : {group['name']} → {name}", commit=False)
+        conn.commit()
+        flash(_("Groupe renommé en « %(name)s ».", name=name), "ok")
+    return back(listing_page, _anchor=f"group-{group_id}")
+
+
 def _delete(kind, group_id):
     software = kind == "software"
     conn = lock_access("windows.groups" if software else "fleet.groups")
@@ -162,6 +189,12 @@ def software_group_save(group_id):
     return _save("software", group_id)
 
 
+@app.route("/windows-apps/groups/rename", methods=["POST"])
+@login_required
+def software_group_rename():
+    return _rename("software")
+
+
 @app.route("/windows-apps/groups/<int:group_id>/delete", methods=["POST"])
 @login_required
 def software_group_delete(group_id):
@@ -186,6 +219,12 @@ def fleet_group_editor(group_id):
 @login_required
 def fleet_group_save(group_id):
     return _save("device", group_id)
+
+
+@app.route("/fleet/groups/rename", methods=["POST"])
+@login_required
+def fleet_group_rename():
+    return _rename("device")
 
 
 @app.route("/fleet/groups/<int:group_id>/delete", methods=["POST"])

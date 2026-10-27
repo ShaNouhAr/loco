@@ -4,6 +4,7 @@
 {% set editor = 'software_group_editor' if software else 'fleet_group_editor' %}
 {% block title %}{{ _("Groupes de %(v)s", v='logiciels' if software else 'machines') }}{% endblock %}
 {% block content %}
+{% set can_manage = can('windows.groups' if software else 'fleet.groups') %}
 {% include '_software_nav.html' if software else '_fleet_nav.html' %}
 <div class="head">
   <div>
@@ -15,7 +16,7 @@
 
 <section class="panel">
   {% if groups %}
-  <div class="table-wrap">
+  <div class="table-wrap menus-visible">
     <table class="groups-table" data-row-links>
       <thead><tr><th>{{ _("Groupe") }}</th><th>{{ _('Logiciels') if software else _('Appareils') }}</th><th class="hide-sm">{{ _("État") }}</th><th></th></tr></thead>
       <tbody>
@@ -57,6 +58,18 @@
               <a class="btn sm" href="{{ url_for('fleet', group=group.id) }}">{{ _("Voir dans Mon parc") }}</a>
               {% if o.members and can('fleet.install') and can('fleet.bulk_install') %}<a class="btn sm" href="{{ url_for('deployment_compose', device_group=group.id) }}">{{ _("Déployer") }}</a>{% endif %}
             {% endif %}
+            {% if can_manage %}
+            <details class="menu row-menu">
+              <summary class="btn sm icon-only" aria-label="{{ _('Actions du groupe %(name)s', name=group.name) }}" title="{{ _('Actions') }}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></summary>
+              <div class="menu-list" role="menu">
+                <a class="menu-item" role="menuitem" href="{{ url_for(editor, group_id=group.id) }}">{{ _("Modifier les membres") }}</a>
+                <button type="button" class="menu-item" role="menuitem" data-open="#rename-group" data-fill='{{ {"group_id": group.id, "name": group.name}|tojson }}'>{{ _("Renommer…") }}</button>
+                <form method="post" action="{{ url_for('software_group_delete' if software else 'fleet_group_delete', group_id=group.id) }}" data-confirm="{{ _('Supprimer le groupe %(name)s ?', name=group.name) }}" data-confirm-text="{{ _('Seul le groupe disparaît : les logiciels et les déploiements sont conservés.') if software else _('Seul le groupe disparaît : les appareils et les déploiements sont conservés.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger" role="menuitem">{{ _("Supprimer…") }}</button>
+                </form>
+              </div>
+            </details>
+            {% endif %}
           </td>
         </tr>
       {% endfor %}
@@ -68,4 +81,17 @@
   {% endif %}
   <div class="panel-f">{{ _("%(v)s Modifier un groupe ne change pas les déploiements déjà confirmés.", v=_('Déployer un groupe prépare un déploiement à vérifier avant confirmation.') if software else _('Mon parc filtre ses appareils et « Tout mettre à jour » sur le groupe choisi.')) }}</div>
 </section>
+{% if can_manage %}
+<dialog id="rename-group">
+  <form method="post" action="{{ url_for('software_group_rename' if software else 'fleet_group_rename') }}">
+    <div class="dlg-h"><h2>{{ _("Renommer le groupe") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-b">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="group_id">
+      <label class="f"><span>{{ _("Nom du groupe") }}</span><input type="text" name="name" required maxlength="80" autocomplete="off"></label>
+      <p class="hint">{{ _("Les membres, la description et les déploiements ne changent pas.") }}</p>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Renommer") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

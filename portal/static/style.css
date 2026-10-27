@@ -647,6 +647,13 @@ dialog.wide-dialog { width: min(760px, calc(100vw - 32px)); }
 dialog.wide-dialog .dlg-b > * + * { margin-top: 12px; }
 
 details.menu { position: relative; }
+.row-menu { display: inline-block; vertical-align: middle; margin-left: 4px; }
+.row-menu .menu-list { min-width: 200px; text-align: left; }
+.btn.icon-only { width: 30px; padding: 0; justify-content: center; }
+.btn.icon-only svg { width: 16px; height: 16px; }
+details.menu > summary.btn.icon-only::after { content: none; }
+/* Menus de ligne : le conteneur à défilement les couperait ; sur écran large le tableau tient sans défiler. */
+@media (min-width: 900px) { .table-wrap.menus-visible { overflow: visible; } }
 details.menu > summary { list-style: none; }
 details.menu > summary::-webkit-details-marker { display: none; }
 details.menu > summary.btn::after, details.menu > summary.chip::after { content: ""; width: 6px; height: 6px; margin: -3px 1px 0 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); opacity: .7; }

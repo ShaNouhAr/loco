@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.73.1 — 2026-10-27
+
+- **Groupes de machines et de logiciels : renommer et supprimer depuis la liste.** Chaque ligne a un menu « ⋯ » avec *Modifier les membres*, *Renommer…* (seul le nom change : membres, description et déploiements conservés ; un nom déjà pris est refusé) et *Supprimer…* (avec confirmation ; les appareils, logiciels et déploiements restent). Réservé aux comptes qui peuvent gérer les groupes.
+
 ## 2.73.0 — 2026-10-27
 
 - **Nouvelle police : Bricolage Grotesque** à la place d'IBM Plex Sans. Plus de caractère dans les titres et les grands chiffres, tout en restant sobre et lisible en petit grâce à sa taille optique variable. Chiffres de largeur fixe pour les tableaux, et couverture complète du français et de l'espagnol (y compris « — » et « ’ », qui s'affichaient auparavant dans une autre police). IBM Plex Mono reste pour les adresses et le code.

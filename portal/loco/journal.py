@@ -38,7 +38,7 @@ LABELS = {
     "parc.session.fermeture": L_("Session distante fermée"),
     "groupes.machines": L_("Groupe de machines modifié"), "groupes.appartenance": L_("Groupes d'un poste modifiés"),
     "groupes.logiciels": L_("Groupe de logiciels modifié"), "groupes.ajout-logiciel": L_("Logiciel ajouté à un groupe"),
-    "groupes.suppression": L_("Groupe supprimé"),
+    "groupes.suppression": L_("Groupe supprimé"), "groupes.renommage": L_("Groupe renommé"),
     "deploiement.preparation": L_("Déploiement préparé"), "deploiement.confirmation": L_("Déploiement confirmé"),
     "deploiement.annulation": L_("Déploiement annulé"),
     "windows.ajout": L_("Logiciel ajouté au catalogue"), "windows.modification": L_("Logiciel modifié"),
