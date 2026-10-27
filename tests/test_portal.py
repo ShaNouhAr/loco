@@ -429,6 +429,58 @@ class TestFirewallPorts(unittest.TestCase):
             self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
 
 
+class TestAccountCreation(unittest.TestCase):
+    """Création de compte : mot de passe choisi ou généré, changement à la première connexion au choix."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+        self.addCleanup(self._drop)
+
+    @staticmethod
+    def _drop():
+        with connect() as conn:
+            conn.execute("DELETE FROM users WHERE username LIKE 'pw-%'")
+
+    def _create(self, **data):
+        return self.admin.post("/accounts/add", {"role": "viewer", **data}, page="/accounts")
+
+    def _row(self, name):
+        with connect() as conn:
+            return conn.execute("SELECT must_change FROM users WHERE username=?", (name,)).fetchone()
+
+    def test_chosen_password_and_no_forced_change(self):
+        self._create(username="pw-choisi", password="Correct-Horse-42", must_change=["0"])
+        self.assertEqual(self._row("pw-choisi")[0], 0)
+        page = self.admin.c.get("/accounts").get_data(as_text=True)
+        self.assertIn("Correct-Horse-42", page)                          # encart « Identifiants à transmettre »
+        self.assertIn("tant qu'elle ne le change pas", page)
+        other = Browser()
+        self.assertEqual(other.login("pw-choisi", "Correct-Horse-42").status_code, 302)        # connexion acceptée
+        self.assertEqual(Browser().login("pw-choisi", "mauvais-mot-de-passe").status_code, 401)  # refusée
+
+    def test_empty_password_is_generated_and_must_change(self):
+        self._create(username="pw-genere", password="", must_change=["0", "1"])
+        self.assertEqual(self._row("pw-genere")[0], 1)
+        page = self.admin.c.get("/accounts").get_data(as_text=True)
+        self.assertRegex(page, r'id="issued-pw"[^>]*>[a-zA-Z2-9]{5}(-[a-zA-Z2-9]{5}){3}<')
+
+    def test_weak_password_is_refused(self):
+        self._create(username="pw-faible", password="court")
+        self.assertIsNone(self._row("pw-faible"))
+        self._create(username="pw-nom", password="pw-nom-pw-nom-123")            # contient le nom du compte
+        self.assertIsNone(self._row("pw-nom"))
+
+    def test_scripted_call_without_the_switch_still_forces_the_change(self):
+        self._create(username="pw-script")
+        self.assertEqual(self._row("pw-script")[0], 1)
+
+    def test_form_offers_the_generator(self):
+        page = self.admin.c.get("/accounts").get_data(as_text=True)
+        self.assertIn('data-generate="new-password"', page)
+        self.assertIn('name="must_change"', page)
+
+
 class TestDownloadErrors(unittest.TestCase):
     """Un certificat « pas encore valide » ou « expiré » désigne l'horloge du serveur, pas le site source."""
 

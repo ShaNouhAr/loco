@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.69.3 — 2026-10-27
+
+- **Création de compte : mot de passe au choix** : le formulaire *Nouveau compte* propose un champ **Mot de passe**. On peut en saisir un, cliquer sur le **dé** pour en générer un aléatoire (lisible, sans caractères ambigus, affiché en clair et sélectionné ; chaque clic en propose un autre), ou laisser vide pour qu'il soit généré à la création. Une ligne d'aide vérifie en direct la règle (12 caractères minimum, sans le nom du compte). Un interrupteur **« À changer à la première connexion »** (activé par défaut) laisse le choix d'imposer ou non le changement. Après la création, l'encart **Identifiants à transmettre** affiche le compte et son mot de passe avec un bouton Copier. Un appel scripté qui n'envoie pas l'interrupteur garde le changement obligatoire.
+
 ## 2.69.2 — 2026-10-27
 
 - **Téléchargements refusés « Certificat HTTPS invalide » (GIMP, SumatraPDF…)** : la vraie cause était l'horloge du serveur en retard. Un certificat émis après la date du serveur paraît « pas encore valide » : avec une horloge au 3 octobre, 7-Zip passe mais SumatraPDF et GIMP, dont les certificats sont plus récents, échouent. Le message désigne désormais l'horloge, avec la date du serveur, et renvoie vers *Système → Heure et matériel*.

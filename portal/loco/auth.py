@@ -481,7 +481,7 @@ def users():
                         "LEFT JOIN directory_identities di ON di.user_id=u.id LEFT JOIN auth_directories d ON d.id=di.directory_id "
                         "ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
-    return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user,
+    return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user, min_password=config.MIN_PASSWORD,
                            assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)})
 
 
@@ -507,9 +507,19 @@ def users_add():
     elif conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         flash(_('Le compte « %(username)s » existe déjà.', username=username), "error")
     else:
-        password = generate_password()
-        create_user(conn, username, password, role, must_change=True)
-        session["issued_password"] = {"username": username, "password": password}
+        # Mot de passe choisi (saisi ou généré dans le formulaire) ou, champ vide, généré ici et affiché une fois.
+        chosen = request.form.get("password", "")
+        # Champ caché « 0 » + case « 1 » : sans le champ (appel scripté), le changement reste exigé par défaut.
+        flags = request.form.getlist("must_change")
+        must_change = "1" in flags if flags else True
+        problem = password_problem(chosen, username) if chosen else None
+        if problem:
+            conn.rollback()
+            flash(problem, "error")
+            return back("users")
+        password = chosen or generate_password()
+        create_user(conn, username, password, role, must_change=must_change)
+        session["issued_password"] = {"username": username, "password": password, "must_change": must_change}
         audit("comptes.ajout", f"{username} ({permissions.role_labels(conn)[role]})", commit=False)
     conn.commit()
     return back("users")
@@ -526,7 +536,7 @@ def users_reset(user_id):
     set_password(conn, row["id"], password, must_change=True)
     if row["auth_source"] == "sso":
         conn.execute("UPDATE users SET auth_source='local' WHERE id=?", (row["id"],))
-    session["issued_password"] = {"username": row["username"], "password": password}
+    session["issued_password"] = {"username": row["username"], "password": password, "must_change": True}
     audit("comptes.reinitialisation", row["username"], commit=False)
     conn.commit()
     return back("users")

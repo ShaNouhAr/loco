@@ -733,6 +733,41 @@
     b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", t("Afficher le mot de passe")); b.title = t("Afficher le mot de passe");
     wrap.appendChild(b);
   });
+  // Générer un mot de passe : lisible (sans caractères ambigus), 4 groupes de 5, aléa du navigateur ; affiché en clair.
+  var PW_ALPHABET = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  function randomPassword() {
+    var bytes = new Uint32Array(20), out = "";
+    crypto.getRandomValues(bytes);
+    for (var i = 0; i < 20; i++) out += (i && i % 5 === 0 ? "-" : "") + PW_ALPHABET[bytes[i] % PW_ALPHABET.length];
+    return out;
+  }
+  function checkPwRule(input) {
+    var rule = document.getElementById(input.getAttribute("aria-describedby") || "");
+    if (!rule) return;
+    var v = input.value, form = input.form, user = form && form.username ? form.username.value.trim().toLowerCase() : "";
+    var ok = v.length >= +input.dataset.pwRules && new Set(v).size >= 5 && !(user && v.toLowerCase().indexOf(user) >= 0);
+    rule.classList.toggle("ok", !!v && ok);
+    rule.classList.toggle("bad", !!v && !ok);
+    rule.textContent = !v ? t("Vide : un mot de passe sera généré à la création") :
+      ok ? t("Mot de passe valide") : t("%(n)s caractères minimum, sans le nom du compte", {n: input.dataset.pwRules});
+  }
+  $$("input[data-pw-rules]").forEach(function (input) {
+    var update = function () { checkPwRule(input); };
+    input.addEventListener("input", update);
+    if (input.form && input.form.username) input.form.username.addEventListener("input", update);
+    update();
+  });
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-generate]");
+    if (!b) return;
+    var input = document.getElementById(b.dataset.generate), eye = $(".reveal", input.parentElement);
+    input.value = randomPassword();
+    input.type = "text";
+    if (eye) { eye.setAttribute("aria-pressed", "true"); eye.title = t("Masquer le mot de passe"); eye.setAttribute("aria-label", eye.title); }
+    b.classList.remove("spun"); void b.offsetWidth; b.classList.add("spun");
+    input.dispatchEvent(new Event("input", {bubbles: true}));
+    input.focus(); input.select();
+  });
   /* ---------------------------------------------------------------- choix conditionnels et planification */
 
   // [data-show-for="nom:v1 v2"] : visible (et ses champs envoyés) seulement si le bouton radio « nom » coché vaut v1 ou v2.

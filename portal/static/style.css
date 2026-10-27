@@ -1027,6 +1027,20 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .password-field { position: relative; display: block; min-width: 0; }
 label.f > span.password-field { display: block; margin: 0; font-size: inherit; font-weight: inherit; }
 .password-field input { width: 100%; padding-right: 40px; }
+.password-field.has-generate input { padding-right: 72px; }
+.password-field.has-generate input[type="text"] { font-family: var(--mono); letter-spacing: .02em; }
+.generate { position: absolute; top: 50%; right: 36px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+            width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-3); cursor: pointer; }
+.generate:hover { color: var(--accent); background: var(--bg-3); }
+.generate .ui-icon { width: 17px; height: 17px; }
+.generate.spun .ui-icon { animation: dice-roll .35s ease-out; }
+@keyframes dice-roll { from { transform: rotate(-180deg) scale(.7); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .generate.spun .ui-icon { animation: none; } }
+label.f > small.pw-rule { color: var(--text-3); }
+label.f > small.pw-rule.ok { color: var(--ok); }
+label.f > small.pw-rule.ok::before { content: "✓ "; }
+label.f > small.pw-rule.bad { color: var(--warn); }
+.switch-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; cursor: pointer; }
 .reveal { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
           width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--r-sm); background: none; color: var(--text-3); cursor: pointer; }
 .reveal:hover { color: var(--text); background: var(--bg-3); }

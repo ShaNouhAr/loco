@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Comptes") }}{% endblock %}
 {% block content %}
+{% from '_nav_icons.html' import ui_icon %}
 <div class="head">
   <div><h1>{{ _("Comptes") }}</h1><p>{{ _("Attribuez un profil à chaque utilisateur. Les droits s'appliquent aux pages comme aux actions.") }}</p></div>
   {% if can('roles.view') %}<a class="btn" href="{{ url_for('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
@@ -8,10 +9,10 @@
 <div class="stack">
   {% if issued %}
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Mot de passe temporaire") }}</h2><div class="aside">{{ _("affiché une seule fois") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Identifiants à transmettre") }}</h2><div class="aside">{{ _("affiché une seule fois") }}</div></div>
     <div class="panel-b issued"><span>{{ _("Compte") }} <b class="mono">{{ issued.username }}</b></span>
       <div class="cmd"><code id="issued-pw" data-prompt="">{{ issued.password }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
-      <span class="hint">{{ _("À transmettre à la personne : il devra être changé à la première connexion.") }}</span>
+      <span class="hint">{{ _("À transmettre à la personne : il devra être changé à la première connexion.") if issued.must_change is not defined or issued.must_change else _("À transmettre à la personne : il restera valable tant qu'elle ne le change pas.") }}</span>
     </div>
   </section>
   {% endif %}
@@ -63,8 +64,20 @@
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <label class="f"><span>{{ _("Identifiant") }}</span><input type="text" name="username" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="{{ _('prenom.nom') }}" autocapitalize="none" spellcheck="false"></label>
         <label class="f"><span>{{ _("Profil d'accès") }}</span><select name="role" required>{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="f"><span>{{ _("Mot de passe") }}</span>
+          <span class="password-field has-generate">
+            <input type="password" id="new-password" name="password" minlength="{{ min_password }}" autocomplete="new-password" spellcheck="false"
+                   placeholder="{{ _('Laisser vide pour en générer un') }}" data-pw-rules="{{ min_password }}" aria-describedby="new-password-rule">
+            <button type="button" class="generate" data-generate="new-password" title="{{ _('Générer un mot de passe aléatoire') }}" aria-label="{{ _('Générer un mot de passe aléatoire') }}">{{ ui_icon('dice') }}</button>
+          </span>
+          <small class="pw-rule" id="new-password-rule">{{ _("%(n)s caractères minimum", n=min_password) }}</small>
+        </label>
+        <label class="switch-row">
+          <input type="hidden" name="must_change" value="0"><span class="switch"><input type="checkbox" name="must_change" value="1" role="switch" checked><i aria-hidden="true"></i></span>
+          <span>{{ _("À changer à la première connexion") }}</span>
+        </label>
         <button class="btn primary"><span class="spin"></span>{{ _("Créer le compte") }}</button>
-        <p class="hint">{{ _("Un mot de passe temporaire est généré ; il devra être changé à la première connexion. Seuls les profils que vous pouvez attribuer sont proposés.") }}</p>
+        <p class="hint">{{ _("Seuls les profils que vous pouvez attribuer sont proposés.") }}</p>
       </form>
     </section>
     {% endif %}
