@@ -535,8 +535,11 @@ def agent_checkin():
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
         answer["wu_proxy"] = wu_proxy_directive()
-        path, sha = agent_msi()
-        if path:
+        path, _raw = agent_msi()
+        data, sha = canonical_msi() if path else (None, "")
+        if data:
+            # Empreinte du MSI réellement servi par /agent/files/loco-client.msi (emplacements d'inscription vidés),
+            # pas celle du fichier brut : sinon l'agent refuse chaque mise à jour (« empreinte du MSI incorrecte »).
             answer["agent_msi"] = {"version": config.VERSION, "sha256": sha}
         elif version_key(dev["agent_version"]) < version_key(config.VERSION):
             prefetch_msi()          # proposé au contact suivant, sans faire attendre l'agent

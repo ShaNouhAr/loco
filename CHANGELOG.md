@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.71.1 — 2026-10-27
+
+- **Mise à jour automatique des agents Windows rétablie** : depuis la 2.39, le serveur annonçait aux postes l'empreinte du MSI d'origine alors qu'il leur sert le MSI « générique » (emplacements d'inscription vidés). L'agent Windows refusait donc chaque mise à jour (« empreinte du MSI incorrecte » dans son journal, toutes les 2 minutes) et restait sur sa version d'installation. L'empreinte annoncée est désormais celle du fichier réellement servi : les postes Windows se mettent à jour d'eux-mêmes et reçoivent la supervision de la 2.71.
+
 ## 2.71.0 — 2026-10-27
 
 *Les versions 2.70.0 et 2.70.1 n'ont pas été publiées séparément (un test échouait sur Rocky 8) : leur contenu, décrit plus bas, est livré avec la 2.71.0.*

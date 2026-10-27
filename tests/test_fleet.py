@@ -410,6 +410,26 @@ class TestInstallers(FleetTest):
             self.assertIn("pas d'accès à GitHub", r.get_data(as_text=True))
             self.assertEqual(r.headers["Retry-After"], "30")
 
+    def test_update_offer_announces_the_fingerprint_of_the_msi_actually_served(self):
+        """Régression 2.39 → 2.71 : le contact annonçait l'empreinte du MSI brut, alors que le téléchargement sert le
+        MSI aux emplacements d'inscription vidés ; les agents Windows refusaient donc toute mise à jour."""
+        raw = b"MSI" + b"".join(placeholder for placeholder, _ in fleet._MSI_FIELDS) + b"fin"
+        with tempfile.TemporaryDirectory() as tmp:
+            msi = os.path.join(tmp, "loco-client.msi")
+            with open(msi, "wb") as f:
+                f.write(raw)
+            fleet._CANON.clear()
+            self.addCleanup(fleet._CANON.clear)
+            with mock.patch.object(fleet, "agent_msi", return_value=(msi, hashlib.sha256(raw).hexdigest())):
+                a = Agent(dict(WINDOWS, hostname="pc-maj", agent_version="2.38.0"), "192.168.43.55")
+                a.enroll()
+                offer = a.checkin().get_json()["agent_msi"]
+                r = self.admin.c.get("/agent/files/loco-client.msi")
+                served = r.get_data()
+                r.close()
+        self.assertNotEqual(served, raw)                                          # emplacements vidés au service
+        self.assertEqual(offer["sha256"], hashlib.sha256(served).hexdigest())   # l'agent vérifie ce qu'il reçoit
+
     def test_enrollment_page_offers_the_msi_with_its_install_command(self):
         sha = "e" * 64
         with mock.patch.object(fleet, "agent_msi", return_value=("/nulle/part.msi", sha)), \
