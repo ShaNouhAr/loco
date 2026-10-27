@@ -572,6 +572,19 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .cert-import .kv .st { margin-left: 8px; }
 .cert-upload > summary { font-size: 13px; color: var(--text-2); }
 .cert-upload[open] > form { margin-top: 12px; }
+.op-progress { padding: 16px 20px; display: grid; gap: 10px; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.op-progress-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.op-progress-h .spin.on { display: inline-block; }
+.op-step { color: var(--text-2); }
+.op-meta { margin-left: auto; display: inline-flex; gap: 10px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.op-meta [data-op-pct] { color: var(--text); font-weight: 600; }
+.op-bar { display: block; width: 100%; height: 8px; overflow: hidden; border-radius: 4px; }
+.op-bar .track { fill: var(--bg-3); }
+.op-bar .fill { fill: var(--accent); transition: width .6s ease; }
+.op-bar.indeterminate .fill { animation: op-slide 1.4s ease-in-out infinite; }
+@keyframes op-slide { from { transform: translateX(-35px); } to { transform: translateX(105px); } }
+@media (prefers-reduced-motion: reduce) { .op-bar.indeterminate .fill { animation: none; } .op-bar .fill { transition: none; } }
+.op-note { margin: 0; }
 .host-list { margin: 0; padding: 0; list-style: none; }
 .host-list li { font-size: 12.5px; line-height: 1.6; overflow-wrap: anywhere; }
 .egress-table td { vertical-align: top; }

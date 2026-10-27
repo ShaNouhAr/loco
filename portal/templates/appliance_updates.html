@@ -21,6 +21,21 @@
   {% endif %}
   {% for e in errors %}<p class="note warn">{{ e }}</p>{% endfor %}
 
+  {% if progress %}{% set pj = progress.job %}
+  <section class="panel op-progress" data-job-progress="{{ url_for('appliance_job', job_id=pj.id) }}" aria-live="polite">
+    <div class="op-progress-h">
+      <span class="spin on" aria-hidden="true"></span>
+      <strong>{{ labels.get(pj.action, pj.action) }}</strong>
+      <span class="op-step" data-op-step>{{ progress.step }}</span>
+      <span class="op-meta"><span data-op-pct>{{ '%d %%'|format(progress.pct) if progress.pct is not none }}</span><span data-op-elapsed data-elapsed="{{ progress.elapsed or 0 }}"></span></span>
+    </div>
+    <svg class="op-bar{{ ' indeterminate' if progress.pct is none }}" viewBox="0 0 100 8" preserveAspectRatio="none" role="progressbar" aria-label="{{ _('Avancement') }}" aria-valuemin="0" aria-valuemax="100"{% if progress.pct is not none %} aria-valuenow="{{ progress.pct }}"{% endif %}>
+      <rect class="track" width="100" height="8" rx="4"/><rect class="fill" data-op-fill width="{{ progress.pct if progress.pct is not none else 30 }}" height="8" rx="4"/>
+    </svg>
+    <p class="small muted op-note"><span data-op-note>{{ _("Le portail redémarre vers la fin de l'installation : la page se reconnecte d'elle-même.") if pj.action == 'update-loco' }}</span> <a href="#journal">{{ _("Voir le journal") }}</a></p>
+  </section>
+  {% endif %}
+
   <div class="metrics">
     <div class="metric">
       <div class="k">{{ _("Correctifs de sécurité") }}</div>
@@ -168,8 +183,8 @@
       </table>
     </div>
     {% if job %}
-    <div {% if job.state in ('queued', 'running') %}data-poll="{{ url_for('appliance_job', job_id=job.id) }}" data-poll-kind="job" data-poll-every="2000"{% endif %}>
-      <pre class="log" id="job-log">{{ job_log or _('Journal vide.') }}</pre>
+    <div id="journal" {% if job.state in ('queued', 'running') %}data-poll="{{ url_for('appliance_job', job_id=job.id) }}" data-poll-kind="job" data-poll-every="2000"{% endif %}>
+      <pre class="log" id="job-log" tabindex="-1">{{ job_log or _('Journal vide.') }}</pre>
     </div>
     {% endif %}
     {% else %}

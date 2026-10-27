@@ -1,6 +1,7 @@
 """Mises à jour du serveur (système ; loco sur l'appliance Alpine) et réglages de l'appliance, exécutés par l'agent
 root (locoadmin) : le portail dépose les demandes, l'agent les revalide et les applique."""
 
+import datetime
 import ipaddress
 import re
 import socket
@@ -146,6 +147,68 @@ def _packages(status):
     return [p for p in packages if isinstance(p, dict) and p.get("name")]
 
 
+INSTALL_STEPS = 10                                     # étapes « ==> » de linux/install.sh
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+FRACTION_RE = (re.compile(r"\((\d+)/(\d+)\)"),          # apk : « (12/40) Upgrading … »
+               re.compile(r"\s(\d+)/(\d+)\s*$"))         # dnf : « Upgrading : paquet   12/40 »
+APT_TOTAL_RE = re.compile(r"(\d+) upgraded, (\d+) newly installed")
+
+
+def job_progress(job, log_text):
+    """Avancement d'une opération, lu dans son journal : pourcentage (None : indéterminé), étape et durée.
+    Mise à jour de loco : téléchargement, empreinte, puis les étapes de l'installeur ; mises à jour du système :
+    paquet n sur N (apk, dnf, ou APT d'après son annonce « N upgraded »)."""
+    state, action = job.get("state", ""), job.get("action", "")
+    lines = [line for line in ANSI_RE.sub("", log_text or "").splitlines() if line.strip()]
+    out = {"pct": None, "step": "", "state": state, "elapsed": None}
+    try:
+        started = datetime.datetime.strptime(job.get("started") or job.get("queued") or "", "%Y-%m-%d %H:%M:%S")
+        out["elapsed"] = max(0, int((datetime.datetime.now() - started).total_seconds()))
+    except ValueError:
+        pass
+    if state == "queued":
+        out["step"] = _("En attente de l'agent…")
+        return out
+    if action == "update-loco":
+        steps = [line.split("==>", 1)[1].strip() for line in lines if "==>" in line]
+        if any(" est à jour" in line or "is up to date" in line or "está actualizado" in line for line in lines):
+            out.update(pct=100, step=_("loco est déjà à jour"))
+        elif steps:
+            out.update(pct=round(min(97, 22 + 75 * len(steps) / INSTALL_STEPS)), step=steps[-1],
+                       index=len(steps), total=max(INSTALL_STEPS, len(steps)))
+        elif any(line.split(" ", 1)[-1].startswith("Installation de loco") for line in lines):
+            out.update(pct=20, step=_("Installation de la nouvelle version"))
+        elif any("SHA-256" in line for line in lines):
+            out.update(pct=15, step=_("Empreinte de l'archive vérifiée"))
+        elif any(w in line for line in lines for w in ("Téléchargement de", "Downloading", "Descargando")):
+            out.update(pct=5, step=_("Téléchargement de la nouvelle version"))
+        else:
+            out.update(pct=2, step=_("Recherche de la nouvelle version"))
+    elif action in ("update-system", "update-security"):
+        done = total = 0
+        for line in reversed(lines):
+            match = next((m for m in (r.search(line) for r in FRACTION_RE) if m), None)
+            if match and int(match.group(2)) > 0:
+                done, total = int(match.group(1)), int(match.group(2))
+                break
+        if not total:                                    # APT : annonce du nombre de paquets, puis « Setting up »
+            announce = next((APT_TOTAL_RE.search(line) for line in lines if APT_TOTAL_RE.search(line)), None)
+            if announce:
+                total = int(announce.group(1)) + int(announce.group(2))
+                done = min(total, sum(1 for line in lines if "Setting up " in line))
+        if total:
+            out.update(pct=round(5 + 90 * done / total), step=_("Paquet %(n)s sur %(t)s", n=done, t=total))
+        else:
+            out["step"] = _("Préparation des paquets")
+    if state == "success":
+        out["pct"] = 100
+    elif state == "failed":
+        out["step"] = _("Échec : voir le journal")
+    if not out["step"]:
+        out["step"] = str(ACTION_LABELS.get(action, action))
+    return out
+
+
 @app.route("/system/updates")
 @login_required
 def appliance_updates():
@@ -162,6 +225,7 @@ def appliance_updates():
         job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS, job_detail=job_detail,
         update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
+        progress=_running_progress(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
         reboot_texts=[_reboot_text(r) for r in status.get("reboot_reasons") or []],
         repo=status.get("repo") or locoadmin.DEFAULT_REPO, default_repo=locoadmin.DEFAULT_REPO,
@@ -172,6 +236,11 @@ def appliance_updates():
     )
 
 
+def _running_progress():
+    job = locoadmin.running_job()
+    return {"job": job, **job_progress(job, locoadmin.job_log(job["id"]))} if job else None
+
+
 @app.route("/system/updates/operation/<job_id>")
 @login_required
 def appliance_job(job_id):
@@ -179,7 +248,8 @@ def appliance_job(job_id):
     job = next((j for j in locoadmin.jobs(limit=40) if j["id"] == job_id), None)
     if not job:
         abort(404)
-    return {"state": job.get("state", ""), "log": locoadmin.job_log(job_id)}
+    log = locoadmin.job_log(job_id)
+    return {"state": job.get("state", ""), "log": log, "progress": job_progress(job, log)}
 
 
 @app.route("/system/operations/state")

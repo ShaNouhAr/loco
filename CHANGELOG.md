@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.73.0 — 2026-10-27
+
+- **Nouvelle police : Bricolage Grotesque** à la place d'IBM Plex Sans. Plus de caractère dans les titres et les grands chiffres, tout en restant sobre et lisible en petit grâce à sa taille optique variable. Chiffres de largeur fixe pour les tableaux, et couverture complète du français et de l'espagnol (y compris « — » et « ’ », qui s'affichaient auparavant dans une autre police). IBM Plex Mono reste pour les adresses et le code.
+- **Barre d'avancement des opérations du serveur** (*Administration → Mises à jour*) : pendant une opération, une carte en haut de la page montre l'étape en cours, le pourcentage et le temps écoulé.
+  - **Mise à jour de loco** : téléchargement, vérification de l'empreinte, puis chacune des étapes de l'installeur (ports, paquets, copie du portail, certificat, nginx, services…).
+  - **Mises à jour du système** : « paquet n sur N » d'après apk, dnf ou APT.
+  - Autres opérations : barre animée.
+  - Quand le portail redémarre en fin d'installation, la carte l'indique et la page se reconnecte d'elle-même.
+
 ## 2.72.0 — 2026-10-27
 
 - **Shells plus agréables, comme un vrai terminal** (shell d'un poste et shell root du serveur) :

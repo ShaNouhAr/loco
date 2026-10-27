@@ -377,6 +377,36 @@ class TestSystemPackages(TempAgent):
         self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 3)
 
 
+class TestJobProgress(unittest.TestCase):
+    """Barre d'avancement : étape et pourcentage lus dans le journal de l'opération."""
+
+    @staticmethod
+    def progress(action, log, state="running"):
+        with fixture.loco.app.test_request_context():
+            return appliance.job_progress({"action": action, "state": state, "started": "2026-10-27 15:00:00"}, log)
+
+    def test_loco_update_follows_download_fingerprint_and_installer_steps(self):
+        self.assertEqual(self.progress("update-loco", "15:00:01 Téléchargement de https://x/loco.tar.gz\n")["pct"], 5)
+        self.assertEqual(self.progress("update-loco", "15:00:01 Empreinte SHA-256 vérifiée : abc\n")["pct"], 15)
+        log = ("15:00:02 Installation de loco 2.73.0 (de 2.72.0)\n15:00:03 \x1b[1;34m==>\x1b[0m Vérification des ports\n"
+               "15:00:09 \x1b[1;34m==>\x1b[0m Installation des paquets\n")
+        p = self.progress("update-loco", log)
+        self.assertEqual((p["step"], p["index"], p["total"], p["pct"]), ("Installation des paquets", 2, 10, 37))
+        self.assertIsNotNone(p["elapsed"])
+        self.assertEqual(self.progress("update-loco", log, state="success")["pct"], 100)
+        self.assertEqual(self.progress("update-loco", "15:00:01 loco 2.72.0 est à jour.\n")["pct"], 100)
+
+    def test_system_updates_read_the_package_manager(self):
+        apk = "(3/12) Upgrading musl (1.2.5-r9 -> 1.2.6-r1)\n(4/12) Upgrading busybox\n"
+        self.assertEqual(self.progress("update-system", apk)["step"], "Paquet 4 sur 12")
+        dnf = "  Upgrading        : openssl-libs-1:3.2.2-6.el9.x86_64        7/20 \n"
+        self.assertEqual(self.progress("update-security", dnf)["pct"], round(5 + 90 * 7 / 20))
+        apt = "3 upgraded, 1 newly installed, 0 to remove\nSetting up libssl3 (3.0.17)\nSetting up openssl (3.0.17)\n"
+        self.assertEqual(self.progress("update-system", apt)["step"], "Paquet 2 sur 4")
+        self.assertIsNone(self.progress("check", "")["pct"])                  # indéterminé : barre animée
+        self.assertEqual(self.progress("update-loco", "", state="queued")["step"], "En attente de l'agent…")
+
+
 class TestPages(TempAgent):
     def setUp(self):
         super().setUp()
@@ -399,6 +429,19 @@ class TestPages(TempAgent):
         self.assertIn("musl-1.2.6-r1", html)
         html = self.b.c.get("/system/configuration").get_data(as_text=True)
         self.assertIn('value="10.0.0.0/8 192.168.0.0/16"', html)
+
+    def test_running_operation_shows_a_progress_bar(self):
+        job = {"id": "20261027-150000-abcdef", "action": "update-loco", "state": "running", "started": "2026-10-27 15:00:00"}
+        with mock.patch.object(locoadmin, "running_job", return_value=job), \
+             mock.patch.object(locoadmin, "jobs", return_value=[job]), \
+             mock.patch.object(locoadmin, "job_log", return_value="\x1b[1;34m==>\x1b[0m Copie du portail dans /opt/loco\n"):
+            html = self.b.c.get("/system/updates").get_data(as_text=True)
+            data = self.b.c.get("/system/updates/operation/" + job["id"]).get_json()
+        self.assertIn("data-job-progress=", html)
+        self.assertIn("Copie du portail dans /opt/loco", html)
+        self.assertIn('aria-valuenow="30"', html)
+        self.assertEqual(data["progress"]["step"], "Copie du portail dans /opt/loco")
+        self.assertNotIn("data-job-progress", self.b.c.get("/system/updates").get_data(as_text=True))   # plus rien en cours
 
     def test_cached_status_from_before_structured_messages_remains_readable(self):
         reason = "redémarrage demandé par libc6"

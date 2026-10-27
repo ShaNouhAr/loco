@@ -1138,6 +1138,50 @@
     svg.addEventListener("mouseleave", function () { tip.hidden = true; cross.style.opacity = 0; });
   })($("[data-live]"));
 
+  /* ---------------------------------------------------------------- avancement d'une opération du serveur */
+  // Barre en haut de « Mises à jour du serveur » : étape et pourcentage lus dans le journal de l'opération (toutes
+  // les 2 s), durée écoulée chaque seconde. Pendant la mise à jour de loco, le portail redémarre : la barre l'annonce
+  // et la page se recharge dès qu'il répond de nouveau.
+  if ($("[data-job-progress]")) (function (box) {
+    var stepEl = $("[data-op-step]", box), pctEl = $("[data-op-pct]", box), timeEl = $("[data-op-elapsed]", box);
+    var noteEl = $("[data-op-note]", box), fill = $("[data-op-fill]", box), bar = $(".op-bar", box);
+    var elapsed = Number(timeEl.dataset.elapsed) || 0, failures = 0, done = false, baseNote = noteEl.textContent;
+    var duration = function (s) {
+      var m = Math.floor(s / 60);
+      return m ? t("%(m)s min %(s)s s", { m: m, s: s % 60 }) : t("%(s)s s", { s: s });
+    };
+    var showTime = function () { timeEl.textContent = duration(elapsed); };
+    showTime();
+    setInterval(function () { if (!done) { elapsed++; showTime(); } }, 1000);
+    var apply = function (p) {
+      if (p.elapsed != null) elapsed = p.elapsed;
+      stepEl.textContent = p.step || "";
+      var known = p.pct != null;
+      bar.classList.toggle("indeterminate", !known);
+      if (known) { fill.style.width = p.pct + "px"; bar.setAttribute("aria-valuenow", p.pct); pctEl.textContent = p.pct + " %"; }
+      else { fill.style.width = ""; bar.removeAttribute("aria-valuenow"); pctEl.textContent = ""; }
+    };
+    var tick = function () {
+      if (done || document.hidden) return;
+      fetch(box.dataset.jobProgress, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) {
+          if (failures) { noteEl.textContent = baseNote; failures = 0; }
+          apply(d.progress || {});
+          if (d.state !== "queued" && d.state !== "running") {
+            done = true;
+            setTimeout(function () { window.location.reload(); }, 1200);
+          }
+        })
+        .catch(function () {
+          // Portail injoignable : redémarrage de fin d'installation (ou réseau) ; on réessaie sans rien perdre.
+          if (++failures === 1) noteEl.textContent = t("Le portail redémarre pour terminer l'installation… reconnexion automatique.");
+          bar.classList.add("indeterminate");
+        });
+    };
+    setInterval(tick, 2000);
+  })($("[data-job-progress]"));
+
   var operations = $("[data-operations]");
   if (operations) {
     poll(operations.dataset.operations, 3000, function (d) {
