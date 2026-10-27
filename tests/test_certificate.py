@@ -58,7 +58,11 @@ class CertTest(unittest.TestCase):
         self.ca()
 
     def ca(self):
-        ssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "30",
+        # Configuration minimale, comme install.sh : OpenSSL 1.1 (Rocky 8) ajouterait sinon les extensions du fichier
+        # système à celles de -addext (deux basicConstraints : autorité invalide).
+        minimal = os.path.join(self.dir, "minimal.cnf")
+        pathlib.Path(minimal).write_text("[req]\ndistinguished_name=dn\n[dn]\n")
+        ssl("req", "-x509", "-config", minimal, "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "30",
             "-subj", "/CN=test CA", "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign",
             "-keyout", os.path.join(self.tls, "ca.key"), "-out", os.path.join(self.tls, "ca.crt"))
         ssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-days", "30", "-subj", "/CN=old",

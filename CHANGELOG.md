@@ -2,6 +2,8 @@
 
 ## 2.71.0 — 2026-10-27
 
+*Les versions 2.70.0 et 2.70.1 n'ont pas été publiées séparément (un test échouait sur Rocky 8) : leur contenu, décrit plus bas, est livré avec la 2.71.0.*
+
 - **Supervision des postes** : chaque agent (Linux et Windows) joint à son contact, toutes les 2 minutes, un relevé : processeur et débit réseau en moyenne depuis le contact précédent, mémoire, swap ou fichier d'échange, chaque disque local avec son point de montage, charge (Linux) et durée depuis le démarrage. loco garde le dernier relevé et 7 jours d'historique.
   - **Fiche du poste → onglet Supervision** : valeurs actuelles (seuils signalés), courbes *Processeur et mémoire* et *Réseau* sur 24 h ou 7 jours (interrompues quand le poste était éteint, infobulle au survol), tableau des disques avec leur occupation. Un poste hors contact garde son dernier relevé, grisé.
   - **Mon parc → colonne Ressources** : mini-jauges processeur, mémoire et disque le plus rempli, en couleur d'état au-delà des seuils.
