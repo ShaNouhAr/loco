@@ -527,6 +527,17 @@ class TestAccountCreation(unittest.TestCase):
         self._create(username="pw-script")
         self.assertEqual(self._row("pw-script")[0], 1)
 
+    def test_creation_dialog_offers_profiles_as_cards_and_keeps_a_refused_entry(self):
+        page = self.admin.c.get("/accounts").get_data(as_text=True)
+        self.assertIn('data-open="#new-account"', page)
+        self.assertIn('class="role-card"', page)
+        self.assertIn("Consultation des appareils", page)                  # description du profil Lecture seule
+        self.assertNotIn("data-open-on-load", page)
+        self._create(username="admin", password="")                         # identifiant déjà pris
+        page = self.admin.c.get("/accounts").get_data(as_text=True)
+        self.assertIn("data-open-on-load", page)                              # la fenêtre se rouvre…
+        self.assertIn('value="admin"', page)                                  # … avec la saisie
+
     def test_form_offers_the_generator(self):
         page = self.admin.c.get("/accounts").get_data(as_text=True)
         self.assertIn('data-generate="new-password"', page)

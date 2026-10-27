@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.74.0 — 2026-10-27
+
+- **Création de compte repensée.** La page Comptes affiche la liste en pleine largeur et un bouton **Nouveau compte** en haut (le doublon « Profils d'accès » disparaît, l'onglet reste). La création se fait dans une fenêtre en trois parties : l'identifiant avec sa règle affichée ; le **profil d'accès en cartes**, chacune avec ce qu'elle permet (seuls les profils que vous pouvez attribuer sont proposés) ; le mot de passe (saisi, généré au dé ou laissé vide) et le choix de le faire changer à la première connexion. Si la création est refusée (identifiant pris, mot de passe trop faible), la fenêtre se rouvre avec la saisie.
+
 ## 2.73.3 — 2026-10-27
 
 - **Mon parc : « redémarrage nécessaire » à sa place.** L'information n'est plus une pastille qui passait à la ligne selon la place disponible, décalée sous le décompte : c'est désormais une ligne d'état discrète (icône et texte orangés), toujours sous le nombre de mises à jour, alignée avec lui. Le décompte et la pastille « sécurité » ne se coupent plus.

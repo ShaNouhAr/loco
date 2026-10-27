@@ -482,7 +482,9 @@ def users():
                         "ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
     return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user, min_password=config.MIN_PASSWORD,
-                           assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)})
+                           assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)},
+                           role_choices=[r for r in permissions.role_details(db()) if can_assign(r["id"])],
+                           draft=session.pop("new_account_draft", None))
 
 
 def _get_user(user_id):
@@ -502,10 +504,13 @@ def users_add():
         abort(400)
     if not can_assign(role):
         abort(403)
+    draft = {"username": username, "role": role}             # rouvre la fenêtre avec la saisie si c'est refusé
     if not config.USERNAME_RE.match(username):
         flash(_('Identifiant invalide : 2 à 32 caractères, minuscules, chiffres, point, tiret.'), "error")
+        session["new_account_draft"] = draft
     elif conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
         flash(_('Le compte « %(username)s » existe déjà.', username=username), "error")
+        session["new_account_draft"] = draft
     else:
         # Mot de passe choisi (saisi ou généré dans le formulaire) ou, champ vide, généré ici et affiché une fois.
         chosen = request.form.get("password", "")
@@ -516,6 +521,7 @@ def users_add():
         if problem:
             conn.rollback()
             flash(problem, "error")
+            session["new_account_draft"] = draft
             return back("users")
         password = chosen or generate_password()
         create_user(conn, username, password, role, must_change=must_change)

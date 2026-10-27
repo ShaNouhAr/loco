@@ -233,6 +233,13 @@ def role_labels(conn):
             for r in conn.execute("SELECT id,label,builtin FROM access_roles ORDER BY builtin DESC,label COLLATE NOCASE")}
 
 
+def role_details(conn):
+    """Profils avec leur description (traduites pour les profils intégrés), dans l'ordre de role_labels."""
+    return [{"id": r["id"], "label": gettext(r["label"]) if r["builtin"] else r["label"],
+             "description": (gettext(r["description"]) if r["builtin"] else r["description"]) if r["description"] else ""}
+            for r in conn.execute("SELECT id,label,description,builtin FROM access_roles ORDER BY builtin DESC,label COLLATE NOCASE")]
+
+
 def revoke(conn, user_id):
     """Révocation atomique des connexions, sessions distantes et frappes en attente."""
     row = conn.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()

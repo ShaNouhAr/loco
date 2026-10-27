@@ -4,7 +4,7 @@
 {% from '_nav_icons.html' import ui_icon %}
 <div class="head">
   <div><h1>{{ _("Comptes") }}</h1><p>{{ _("Attribuez un profil à chaque utilisateur. Les droits s'appliquent aux pages comme aux actions.") }}</p></div>
-  {% if can('roles.view') %}<a class="btn" href="{{ url_for('roles') }}">{{ _("Profils d'accès") }}</a>{% endif %}
+  {% if can('users.create') %}<div class="actions"><button type="button" class="btn primary" data-open="#new-account">{{ ui_icon('plus') }}<span>{{ _("Nouveau compte") }}</span></button></div>{% endif %}
 </div>
 <div class="stack">
   {% if issued %}
@@ -16,7 +16,7 @@
     </div>
   </section>
   {% endif %}
-  <div class="{{ 'cols w21' if can('users.create') else 'stack' }}">
+  <div class="stack">
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Comptes") }} <span class="h-count">{{ users|length }}</span></h2>
         <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#users-table tbody tr" aria-label="{{ _('Filtrer les comptes') }}"></div>
@@ -59,11 +59,22 @@
       <div class="panel-f">{{ _("Vous pouvez gérer uniquement les comptes dont vous possédez tous les droits. Le profil Administrateur est réservé aux administrateurs complets. Votre propre profil et le dernier administrateur local actif sont protégés.") }}</div>
     </section>
     {% if can('users.create') %}
-    <section class="panel"><div class="panel-h"><h2>{{ _("Nouveau compte") }}</h2></div>
-      <form class="panel-b" method="post" action="{{ url_for('users_add') }}" data-ajax>
+    <dialog id="new-account" class="account-dialog"{% if draft %} data-open-on-load{% endif %}>
+      <form method="post" action="{{ url_for('users_add') }}" data-ajax>
+      <div class="dlg-h"><h2>{{ _("Nouveau compte") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button></div>
+      <div class="dlg-b account-form">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>{{ _("Identifiant") }}</span><input type="text" name="username" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="{{ _('prenom.nom') }}" autocapitalize="none" spellcheck="false"></label>
-        <label class="f"><span>{{ _("Profil d'accès") }}</span><select name="role" required>{% for key, label in assignable_roles.items() %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="f"><span>{{ _("Identifiant") }}</span><input type="text" name="username" required pattern="[a-z0-9][a-z0-9._\-]{1,31}" placeholder="{{ _('prenom.nom') }}" autocapitalize="none" spellcheck="false" value="{{ draft.username if draft else '' }}">
+          <small>{{ _("2 à 32 caractères : minuscules, chiffres, point, tiret.") }}</small></label>
+        <fieldset class="role-choices">
+          <legend>{{ _("Profil d'accès") }}</legend>
+          {% set chosen = draft.role if draft else 'viewer' %}
+          {% for r in role_choices %}
+          <label class="role-card"><input type="radio" name="role" value="{{ r.id }}" required {{ 'checked' if r.id == chosen }}>
+            <span><strong>{{ r.label }}</strong>{% if r.description %}<small>{{ r.description }}</small>{% endif %}</span></label>
+          {% endfor %}
+          <small class="hint">{{ _("Seuls les profils que vous pouvez attribuer sont proposés.") }}</small>
+        </fieldset>
         <label class="f"><span>{{ _("Mot de passe") }}</span>
           <span class="password-field has-generate">
             <input type="password" id="new-password" name="password" minlength="{{ min_password }}" autocomplete="new-password" spellcheck="false"
@@ -76,10 +87,10 @@
           <input type="hidden" name="must_change" value="0"><span class="switch"><input type="checkbox" name="must_change" value="1" role="switch" checked><i aria-hidden="true"></i></span>
           <span>{{ _("À changer à la première connexion") }}</span>
         </label>
-        <button class="btn primary"><span class="spin"></span>{{ _("Créer le compte") }}</button>
-        <p class="hint">{{ _("Seuls les profils que vous pouvez attribuer sont proposés.") }}</p>
+      </div>
+      <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Créer le compte") }}</button></div>
       </form>
-    </section>
+    </dialog>
     {% endif %}
   </div>
 </div>

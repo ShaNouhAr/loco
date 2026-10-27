@@ -539,6 +539,8 @@
   });
 
   /* ---------------------------------------------------------------- fenêtres */
+  // Fenêtre à rouvrir au chargement (saisie refusée par le serveur : on la retrouve telle quelle).
+  $$("dialog[data-open-on-load]").forEach(function (d) { d.showModal(); });
 
   document.addEventListener("click", function (e) {
     var open = e.target.closest("[data-open]");
