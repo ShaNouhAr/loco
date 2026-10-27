@@ -526,6 +526,7 @@
  "Certificat HTTPS qui expire": "Certificado HTTPS que caduca",
  "Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.": "Certificado proporcionado con <code>--tls-cert</code>: sin autoridad local.",
  "Certificat introuvable.": "Certificado no encontrado.",
+ "Certificat refusé car la date de ce serveur paraît fausse (%(date)s) : vérifiez la synchronisation NTP dans Système → Heure et matériel, puis réessayez.": "Certificado rechazado porque la fecha de este servidor parece incorrecta (%(date)s): compruebe la sincronización NTP en Sistema → Hora y hardware y vuelva a intentarlo.",
  "Certificats": "Certificados",
  "Cette préparation a expiré (une heure). <a href=\"%(recompose)s\">Préparez-la à nouveau</a> pour reprendre la même sélection.": "Esta preparación ha caducado (una hora). <a href=\"%(recompose)s\">Prepárela de nuevo</a> para retomar la misma selección.",
  "Cette sauvegarde sera définitivement supprimée du serveur.": "Esta copia se eliminará permanentemente del servidor.",

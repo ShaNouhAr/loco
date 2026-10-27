@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.69.2 — 2026-10-27
+
+- **Téléchargements refusés « Certificat HTTPS invalide » (GIMP, SumatraPDF…)** : la vraie cause était l'horloge du serveur en retard. Un certificat émis après la date du serveur paraît « pas encore valide » : avec une horloge au 3 octobre, 7-Zip passe mais SumatraPDF et GIMP, dont les certificats sont plus récents, échouent. Le message désigne désormais l'horloge, avec la date du serveur, et renvoie vers *Système → Heure et matériel*.
+- **NTP sur l'appliance Alpine 3.24** : son chrony.conf lit le dossier `conf.d` en tête puis désactive le port de commande (`cmdport 0`) plus bas ; le réglage de loco déposé dans `conf.d` était donc écrasé et l'état de l'heure restait illisible. loco s'inclut maintenant en fin de chrony.conf (et retire l'ancien fichier), ce qui rétablit la lecture de l'état et l'écart d'horloge dans le portail.
+
 ## 2.69.1 — 2026-10-27
 
 - **Groupes de machines et de logiciels** : après l'enregistrement d'un groupe (création ou modification), on revient à la liste des groupes, positionné sur le groupe enregistré et surligné, au lieu de rester dans l'éditeur.

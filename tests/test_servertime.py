@@ -126,6 +126,36 @@ class ChronyIncludeTest(unittest.TestCase):
         self.assertEqual(needs_include, "")                                          # déjà lu via confdir
 
 
+class ChronyAlpine324Test(unittest.TestCase):
+    """Alpine 3.24 : « confdir » en tête de chrony.conf puis « cmdport 0 » plus bas. Un fichier déposé dans confdir est
+    lu AVANT cmdport 0, qui l'emporterait : loco doit s'inclure en fin de fichier et retirer l'ancien fichier."""
+
+    def test_included_last_and_stale_confdir_file_removed(self):
+        d = tempfile.mkdtemp()
+        confd = os.path.join(d, "conf.d")
+        os.makedirs(confd)
+        conf = os.path.join(d, "chrony.conf")
+        with open(conf, "w") as f:
+            f.write(f"confdir {confd}\npool pool.ntp.org iburst\nmakestep 1.0 3\ncmdport 0\n")
+        with open(os.path.join(confd, "loco.conf"), "w") as f:
+            f.write("# Géré par loco : 2.68\ncmdport 323\n")
+        with mock.patch.object(locoadmin, "_chrony_conf", return_value=conf):
+            locoadmin._write_chrony(["10.0.0.5"], log=lambda *_: None)
+        dropin = os.path.join(d, "chrony.loco.conf")
+        text = pathlib.Path(conf).read_text()
+        self.assertTrue(text.rstrip().endswith("include " + dropin))           # dernier mot sur cmdport 0
+        self.assertIn("cmdport 323", pathlib.Path(dropin).read_text())
+        self.assertFalse(os.path.exists(os.path.join(confd, "loco.conf")))   # reste de la 2.68 retiré
+
+    def test_confdir_kept_when_nothing_overrides_it(self):
+        d = tempfile.mkdtemp()
+        conf = os.path.join(d, "chrony.conf")
+        with open(conf, "w") as f:
+            f.write("cmdport 0\nconfdir /etc/chrony/conf.d\n")                 # cmdport 0 AVANT confdir : sans effet
+        with mock.patch.object(locoadmin, "_chrony_conf", return_value=conf):
+            self.assertEqual(locoadmin._chrony_dropin(), ("/etc/chrony/conf.d/loco.conf", ""))
+
+
 class ChronyCmdPortTest(unittest.TestCase):
     """Appliance Alpine : chrony.conf a « cmdport 0 », qui coupe l'accès de chronyc même pour root. loco doit
     réactiver le port de commande (localhost) pour pouvoir lire l'état de l'heure."""

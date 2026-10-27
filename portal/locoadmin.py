@@ -1032,8 +1032,10 @@ def _chrony_conf():
 
 
 def _chrony_dropin():
-    """(fichier des serveurs de loco, chrony.conf à compléter d'un « include » ou vide). Debian, Ubuntu et Alpine lisent
-    un dossier « confdir » ; Rocky et AlmaLinux n'en ont pas : le fichier y est alors inclus explicitement."""
+    """(fichier de loco, chrony.conf à compléter d'un « include » ou vide). Debian et Ubuntu lisent un dossier
+    « confdir » : le fichier y est déposé. Mais confdir est lu à SA position dans chrony.conf : sur Alpine 3.24, le
+    « cmdport 0 » placé plus bas l'emporterait sur le nôtre. Sans confdir (Rocky, AlmaLinux) ou avec un cmdport 0
+    après lui, le fichier est donc gardé hors du dossier et inclus à la FIN de chrony.conf, pour avoir le dernier mot."""
     conf = _chrony_conf()
     text = ""
     try:
@@ -1042,11 +1044,25 @@ def _chrony_dropin():
                 text = f.read()
     except OSError:
         text = ""
-    for line in text.splitlines():
-        m = re.match(r"\s*confdir\s+(\S+)", line)
-        if m:
-            return os.path.join(m.group(1), "loco.conf"), ""
+    m = re.search(r"^\s*confdir\s+(\S+)", text, re.M)
+    if m and not re.search(r"^\s*cmdport\s+0\b", text[m.end():], re.M):
+        return os.path.join(m.group(1), "loco.conf"), ""
     return os.path.join(os.path.dirname(conf) or "/etc", "chrony.loco.conf"), conf
+
+
+def _drop_stale_confdir_file(conf):
+    """Retire le fichier de loco laissé dans confdir par la 2.68 quand il est désormais inclus en fin de fichier."""
+    try:
+        with open(conf) as f:
+            m = re.search(r"^\s*confdir\s+(\S+)", f.read(), re.M)
+        stale = os.path.join(m.group(1), "loco.conf") if m else ""
+        if stale:
+            with open(stale) as f:
+                managed = f.readline().startswith("# Géré par loco")
+            if managed:
+                os.remove(stale)
+    except OSError:
+        pass
 
 
 def _configured_ntp():
@@ -1085,6 +1101,7 @@ def _write_chrony(servers, log):
     _write_conf_file(dropin, "# Géré par loco : serveurs NTP et accès à l'état pour l'agent root\n" + header
                      + "".join(f"server {s} iburst prefer\n" for s in servers))
     if conf:
+        _drop_stale_confdir_file(conf)
         with open(conf) as f:
             text = f.read()
         if not re.search(r"^\s*include\s+" + re.escape(dropin) + r"\s*$", text, re.M):

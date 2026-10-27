@@ -66,6 +66,11 @@ def explain(exc):
             return _("Adresse introuvable : vérifiez le lien.")
         if "timed out" in reason:
             return _("Le serveur n'a pas répondu à temps.")
+        if "not yet valid" in reason or "has expired" in reason:
+            # Le site est presque toujours en règle : c'est l'horloge de ce serveur qui est fausse.
+            return _("Certificat refusé car la date de ce serveur paraît fausse (%(date)s) : vérifiez la synchronisation "
+                     "NTP dans Système → Heure et matériel, puis réessayez.",
+                     date=datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
         if "CERTIFICATE" in reason.upper():
             return _("Certificat HTTPS invalide sur le site source.")
         return _("Connexion impossible : %(reason)s", reason=reason)

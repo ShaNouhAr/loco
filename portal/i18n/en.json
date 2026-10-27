@@ -526,6 +526,7 @@
  "Certificat HTTPS qui expire": "HTTPS certificate expiring",
  "Certificat fourni avec <code>--tls-cert</code> : pas d'autorité locale.": "Certificate provided with <code>--tls-cert</code>: no local authority.",
  "Certificat introuvable.": "Certificate not found.",
+ "Certificat refusé car la date de ce serveur paraît fausse (%(date)s) : vérifiez la synchronisation NTP dans Système → Heure et matériel, puis réessayez.": "Certificate rejected because this server's date looks wrong (%(date)s): check NTP synchronisation in System → Time and hardware, then try again.",
  "Certificats": "Certificates",
  "Cette préparation a expiré (une heure). <a href=\"%(recompose)s\">Préparez-la à nouveau</a> pour reprendre la même sélection.": "This preparation has expired (one hour). <a href=\"%(recompose)s\">Prepare it again</a> to reuse the same selection.",
  "Cette sauvegarde sera définitivement supprimée du serveur.": "This backup will be permanently removed from the server.",

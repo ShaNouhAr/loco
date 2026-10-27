@@ -429,6 +429,22 @@ class TestFirewallPorts(unittest.TestCase):
             self.assertTrue(any(p["always"] for p in after))         # HTTPS reste
 
 
+class TestDownloadErrors(unittest.TestCase):
+    """Un certificat « pas encore valide » ou « expiré » désigne l'horloge du serveur, pas le site source."""
+
+    def test_clock_errors_point_to_the_server_time(self):
+        import urllib.error
+        from loco.util import explain
+        with loco.app.test_request_context():
+            early = explain(urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+                                                  "certificate is not yet valid (_ssl.c:1029)"))
+            other = explain(urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: "
+                                                  "unable to get local issuer certificate (_ssl.c:1029)"))
+        self.assertIn("date de ce serveur", early)
+        self.assertIn("NTP", early)
+        self.assertEqual(other, "Certificat HTTPS invalide sur le site source.")
+
+
 class TestFirewallEgress(unittest.TestCase):
     """Flux sortants vers Internet dans Système : tirés de la configuration et des fonctionnalités actives."""
 
