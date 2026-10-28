@@ -1575,3 +1575,6 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
   [data-panel="securite"] .password-form > .password-rules { grid-column: 1; grid-row: auto; }
 }
 .account-notes li + li { border-top: 0; }
+.wu-block { padding-top: 10px; }
+.wu-block .switch-row { align-items: flex-start; }
+.wu-block .switch-row > .switch { margin-top: 1px; }

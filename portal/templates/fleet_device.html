@@ -155,6 +155,19 @@
       <div class="empty">{{ _("Catalogue vide : ajoutez des logiciels dans <a href=\"%(v)s\">Logiciels Windows</a>.", v=url_for('windows_apps')) }}</div>
       {% endif %}
       {% endif %}
+
+      {% if windows and can('fleet.update') %}
+      <div class="panel-h sub"><h2>{{ _("Mises à jour Windows") }}</h2>{% if dev.block_windows_update %}<div class="aside"><span class="st warn">{{ _("pilotées par loco") }}</span></div>{% endif %}</div>
+      <form method="post" action="{{ url_for('fleet_windows_update', dev_id=dev.id) }}" class="panel-b wu-block">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="switch-row">
+          <span class="switch"><input type="checkbox" name="block" value="1" role="switch" data-autosubmit{{ ' checked' if dev.block_windows_update }}><i aria-hidden="true"></i></span>
+          <span><strong>{{ _("Bloquer les mises à jour automatiques de Windows") }}</strong>
+            <small class="sub">{{ _("Windows cesse d'installer ses mises à jour tout seul : c'est vous qui les lancez depuis loco. L'agent applique la consigne au prochain contact et la retire si vous décochez.") }}</small></span>
+        </label>
+        <noscript><button class="btn sm">{{ _("Appliquer") }}</button></noscript>
+      </form>
+      {% endif %}
     </div>
 
     <div class="tab-panel" data-panel="supervision">

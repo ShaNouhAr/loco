@@ -535,6 +535,7 @@ def agent_checkin():
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
         answer["wu_proxy"] = wu_proxy_directive()
+        answer["windows_update"] = {"blocked": bool(dev["block_windows_update"])}
         path, _raw = agent_msi()
         data, sha = canonical_msi() if path else (None, "")
         if data:
@@ -1156,6 +1157,22 @@ def fleet_action(dev_id):
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
     return back("fleet_device", dev_id=dev_id)
+
+
+@app.route("/fleet/<int:dev_id>/windows-update", methods=["POST"])
+@login_required
+def fleet_windows_update(dev_id):
+    require("fleet.update")
+    dev = _get(dev_id)
+    if dev["os_family"] != "windows":
+        abort(400)
+    blocked = request.form.get("block") == "1"
+    db().execute("UPDATE devices SET block_windows_update=? WHERE id=?", (1 if blocked else 0, dev_id))
+    db().commit()
+    audit("parc.windows-update", f"{dev['hostname']} : {'bloquées' if blocked else 'rendues à Windows'}")
+    flash(_("Mises à jour Windows bloquées sur %(dev)s : appliqué au prochain contact (moins de %(v)s min).", dev=dev["hostname"], v=CHECKIN // 60)
+          if blocked else _("Mises à jour Windows rendues à %(dev)s : appliqué au prochain contact.", dev=dev["hostname"]), "ok")
+    return back("fleet_device", dev_id=dev_id, _anchor="maj")
 
 
 @app.route("/fleet/<int:dev_id>/cancel/<int:cmd_id>", methods=["POST"])

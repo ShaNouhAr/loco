@@ -544,6 +544,48 @@ class TestAccountCreation(unittest.TestCase):
         self.assertIn('name="must_change"', page)
 
 
+class TestWindowsUpdateBlock(unittest.TestCase):
+    """Gel des mises à jour Windows par poste : case décochée par défaut, consigne portée au check-in."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+        with connect() as conn:
+            cur = conn.execute("INSERT INTO devices (uid, token_hash, hostname, os_family, os_name, enrolled_at) "
+                               "VALUES ('wu-dev', 'x', 'poste-win', 'windows', 'Windows 11', '2026-01-01 00:00:00')")
+            self.dev_id = cur.lastrowid
+        self.addCleanup(self._drop)
+
+    def _drop(self):
+        with connect() as conn:
+            conn.execute("DELETE FROM devices WHERE uid='wu-dev'")
+
+    def _blocked(self):
+        with connect() as conn:
+            return conn.execute("SELECT block_windows_update FROM devices WHERE id=?", (self.dev_id,)).fetchone()[0]
+
+    def test_default_is_off_and_the_toggle_shows_on_the_page(self):
+        self.assertEqual(self._blocked(), 0)
+        page = self.admin.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)
+        self.assertIn("Bloquer les mises à jour automatiques de Windows", page)
+        self.assertNotRegex(page, r'name="block"[^>]*checked')
+
+    def test_toggle_on_then_off(self):
+        self.admin.post(f"/fleet/{self.dev_id}/windows-update", {"block": "1"}, page=f"/fleet/{self.dev_id}")
+        self.assertEqual(self._blocked(), 1)
+        page = self.admin.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)
+        self.assertRegex(page, r'name="block"[^>]*checked')
+        self.admin.post(f"/fleet/{self.dev_id}/windows-update", {}, page=f"/fleet/{self.dev_id}")   # case décochée : rien envoyé
+        self.assertEqual(self._blocked(), 0)
+
+    def test_refused_on_a_non_windows_device(self):
+        with connect() as conn:
+            conn.execute("UPDATE devices SET os_family='debian' WHERE id=?", (self.dev_id,))
+        r = self.admin.post(f"/fleet/{self.dev_id}/windows-update", {"block": "1"}, page=f"/fleet/{self.dev_id}")
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self._blocked(), 0)
+
+
 class TestDownloadErrors(unittest.TestCase):
     """Un certificat « pas encore valide » ou « expiré » désigne l'horloge du serveur, pas le site source."""
 

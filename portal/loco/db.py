@@ -432,6 +432,10 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS device_live_device_at ON device_live(device_id, at);
     """,
+    # 23 : gel des mises à jour Windows par poste (l'agent impose la politique, loco garde la main).
+    """
+    ALTER TABLE devices ADD COLUMN block_windows_update INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

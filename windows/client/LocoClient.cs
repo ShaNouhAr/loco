@@ -786,6 +786,7 @@ namespace Loco
             DesktopIndicator.StopSessions();
             try { File.Delete(DesktopStatus.FilePath); } catch (Exception) { }
             try { if (File.Exists(WuProxyMarker)) { string o; RunCapture("netsh", "winhttp reset proxy", 20, out o); File.Delete(WuProxyMarker); } } catch (Exception) { }
+            try { if (File.Exists(WuBlockMarker)) { using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(WuPolicyKey, true)) if (k != null && k.GetValue("NoAutoUpdate") != null) k.DeleteValue("NoAutoUpdate", false); File.Delete(WuBlockMarker); } } catch (Exception) { }
             foreach (var f in new[] { ConfigPath, StatePath, CaPath }) try { File.Delete(f); } catch (Exception) { }
             string code = ProductCode();
             if (code != "") Detached("msiexec.exe", "/x " + code + " /qn /norestart");
@@ -830,6 +831,44 @@ namespace Loco
             {
                 try { File.Delete(WuProxyMarker); } catch (Exception) { }
                 Log(Lang.T("proxy WinHTTP retiré (", "WinHTTP proxy removed (", "proxy WinHTTP retirado (") + reason + ")");
+            }
+        }
+
+        // Gel des mises à jour Windows piloté par le portail. loco pose une politique « ne pas installer tout seul »
+        // (HKLM\...\WindowsUpdate\AU\NoAutoUpdate=1) et ne défait que ce qu'il a posé (marqueur local) : pas de collision
+        // avec une GPO d'entreprise déjà en place quand loco ne demande rien.
+        const string WuPolicyKey = @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU";
+        static readonly string WuBlockMarker = Path.Combine(Root, "windows-update-blocked");
+
+        static void ApplyWindowsUpdatePolicy(Dictionary<string, object> answer)
+        {
+            object v;
+            if (!answer.TryGetValue("windows_update", out v) || !(v is Dictionary<string, object>)) return;   // serveur plus ancien : ne rien changer
+            bool blocked = Convert.ToBoolean(((Dictionary<string, object>)v)["blocked"]);
+            bool posed = File.Exists(WuBlockMarker);
+            try
+            {
+                if (blocked)
+                {
+                    using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).CreateSubKey(WuPolicyKey))
+                        k.SetValue("NoAutoUpdate", 1, RegistryValueKind.DWord);
+                    if (!posed)
+                    {
+                        try { File.WriteAllText(WuBlockMarker, "1"); } catch (Exception) { }
+                        Log(Lang.T("mises à jour Windows gelées (pilotées par loco)", "Windows Update frozen (driven by loco)", "Windows Update congelado (gestionado por loco)"));
+                    }
+                }
+                else if (posed)
+                {
+                    using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(WuPolicyKey, true))
+                        if (k != null && k.GetValue("NoAutoUpdate") != null) k.DeleteValue("NoAutoUpdate", false);
+                    try { File.Delete(WuBlockMarker); } catch (Exception) { }
+                    Log(Lang.T("mises à jour Windows rendues à Windows", "Windows Update handed back to Windows", "Windows Update devuelto a Windows"));
+                }
+            }
+            catch (Exception e)
+            {
+                Log(Lang.T("politique Windows Update : échec (", "Windows Update policy: failed (", "política de Windows Update: fallo (") + e.Message + ")");
             }
         }
 
@@ -988,6 +1027,7 @@ namespace Loco
                 }
                 SaveState(lastScan, scanHours, rescan);
                 ApplyWuProxy(answer);
+                ApplyWindowsUpdatePolicy(answer);
                 SelfUpdate(conf, answer);
                 return true;
             }
