@@ -2470,6 +2470,26 @@ def _scan_acng(root):
     return total, count, objs
 
 
+def _entry_kind(area, name, context):
+    """Catégorie lisible d'un objet (le portail traduit le code en libellé) : à quoi le fichier correspond."""
+    low = name.lower() + " " + context.lower()
+    if area == "wu":
+        if any(k in low for k in ("defender", "mpam", "nis_", "am_delta", "am_base", "safeos")):
+            return "win-defender"
+        if "msedge" in low or "microsoftedge" in low:
+            return "win-edge"
+        if "office" in low or "officecdn" in low:
+            return "win-office"
+        if name.lower().endswith(".esd"):
+            return "win-image"
+        return "win-update"
+    if area in ("apt", "rpm"):
+        return "package" if name.lower().endswith((".deb", ".udeb", ".ddeb", ".rpm")) else "repo"
+    if area == "flatpak":
+        return "flatpak"
+    return ""
+
+
 def _cache_state(name):
     root = _cache_dir(name)
     if not os.path.isdir(root):
@@ -2477,6 +2497,7 @@ def _cache_state(name):
     total, count, objs = (_scan_nginx if _cache_kind(name) == "nginx" else _scan_acng)(root)
     entries = sorted(objs.values(), key=lambda o: o["at"], reverse=True)[:CACHE_MAX_ENTRIES]
     for o in entries:
+        o["kind"] = _entry_kind(name, o["name"], o["context"])
         o["at"] = _cache_iso(o["at"])
     return {"present": True, "bytes": total, "count": count, "shown": len(entries),
             "scanned": _now(), "entries": entries}

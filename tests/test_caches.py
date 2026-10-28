@@ -76,6 +76,27 @@ class TestCacheScan(unittest.TestCase):
         self.assertFalse(os.path.exists(pkg))
         self.assertFalse(os.path.exists(pkg + ".head"))    # en-têtes associés retirés aussi
 
+    def test_entry_kind_classification(self):
+        k = locoadmin._entry_kind
+        self.assertEqual(k("wu", "46180721_x.cab", "windowsupdate/c/msdownload/update/others"), "win-update")
+        self.assertEqual(k("wu", "mpam-fe.exe", "download.windowsupdate.com"), "win-defender")
+        self.assertEqual(k("wu", "msedge.cab", "msedge.sf.dl.delivery.mp.microsoft.com"), "win-edge")
+        self.assertEqual(k("apt", "InRelease", "debrep/dists/trixie"), "repo")
+        self.assertEqual(k("apt", "firefox_1_amd64.deb", "deb.debian.org"), "package")
+        self.assertEqual(k("rpm", "a-primary.xml.gz", "rocky/9/AppStream/x86_64/os/repodata"), "repo")
+        self.assertEqual(k("rpm", "kernel-5.14.0-503.el9.x86_64.rpm", "rocky/9"), "package")
+        self.assertEqual(k("flatpak", "x", ""), "flatpak")
+
+    def test_cache_state_adds_kind(self):
+        wu = os.path.join(self.root, "wucache")
+        os.makedirs(wu)
+        _nginx_file(wu, b"dl.ms.com/a/update.cab bytes=0-10", 20)
+        with mock.patch.object(locoadmin, "_cache_dir", return_value=wu), \
+             mock.patch.object(locoadmin, "_cache_kind", return_value="nginx"):
+            state = locoadmin._cache_state("wu")
+        self.assertTrue(state["present"])
+        self.assertEqual(state["entries"][0]["kind"], "win-update")
+
     def test_cache_request_validates(self):
         with self.assertRaises(ValueError):
             locoadmin.cache_request("purge", "nope", everything=True)

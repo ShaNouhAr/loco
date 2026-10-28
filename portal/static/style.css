@@ -571,8 +571,10 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .cache-note { margin: 0 0 12px; }
 .cache-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 .cache-name { font-weight: 600; overflow-wrap: anywhere; }
+.cache-file { overflow-wrap: anywhere; }
 .cache-ctx { font-size: 12.5px; overflow-wrap: anywhere; }
 .cache-state { text-align: center; padding: 16px 0 4px; margin: 0; font-size: 13.5px; }
+.cache-more { margin-top: 10px; }
 .pkg-sum { margin-bottom: 2px; }
 .wu-kv { margin-bottom: 18px; }
 .wu-kv .dd-lg { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }

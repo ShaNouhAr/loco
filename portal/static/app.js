@@ -1203,17 +1203,26 @@
     var area = panel.dataset.cache, csrf = panel.dataset.csrf, canPurge = panel.dataset.canPurge === "1";
     var rows = $("[data-cache-rows]", panel), note = $("[data-cache-state]", panel);
     var sum = $("[data-cache-sum]", panel), bar = $("[data-cache-bar]", panel), filter = $("[data-cache-filter]", panel);
-    var current = [], loaded = false, count = 0, shownCount = 0;
+    var more = $("[data-cache-more]", panel);
+    var current = [], loaded = false, count = 0, shownCount = 0, expanded = false;
+    var LIMIT = 5;    // n'afficher que les 5 plus récents, le reste se déplie
     var del = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+    // Code renvoyé par l'agent -> libellé « à quoi le fichier correspond » (traduit à l'initialisation).
+    var KIND = { "win-update": t("Mise à jour Windows"), "win-defender": t("Définitions Microsoft Defender"),
+                 "win-edge": t("Microsoft Edge"), "win-office": t("Microsoft Office"), "win-image": t("Image Windows"),
+                 "repo": t("Métadonnées du dépôt"), "flatpak": t("Objet Flatpak") };
 
     function setNote(msg) { note.textContent = msg; note.hidden = !msg; }
 
     function row(e) {
       var tr = document.createElement("tr");
-      tr.innerHTML = '<td><strong class="cache-name"></strong></td><td class="mono muted hide-sm cache-ctx"></td>' +
-        '<td class="num nowrap cache-size"></td><td class="muted nowrap hide-sm cache-at"></td>' +
+      tr.innerHTML = '<td><strong class="cache-name"></strong><span class="sub mono cache-file"></span></td>' +
+        '<td class="mono muted hide-sm cache-ctx"></td><td class="num nowrap cache-size"></td>' +
+        '<td class="muted nowrap hide-sm cache-at"></td>' +
         (canPurge ? '<td class="right"><button type="button" class="btn icon sm ghost danger" data-cache-del="' + esc(e.id) + '">' + del + '</button></td>' : "");
-      $(".cache-name", tr).textContent = e.name || "—";
+      var label = KIND[e.kind] || "";
+      $(".cache-name", tr).textContent = label || e.name || "—";
+      $(".cache-file", tr).textContent = label ? (e.name || "") : "";    // nom de fichier en second, sous le libellé
       $(".cache-ctx", tr).textContent = e.context || "";
       $(".cache-size", tr).textContent = bytes(e.bytes);
       if (e.parts > 1) $(".cache-size", tr).title = t("%(n)s fragments", { n: e.parts });
@@ -1223,15 +1232,17 @@
     }
 
     function render() {
-      var q = (filter && filter.value || "").trim().toLowerCase(), shown = 0;
+      var q = (filter && filter.value || "").trim().toLowerCase();
+      var matches = current.filter(function (e) { return !q || (e.name + " " + e.context).toLowerCase().indexOf(q) >= 0; });
       rows.textContent = "";
-      current.forEach(function (e) {
-        if (q && (e.name + " " + e.context).toLowerCase().indexOf(q) < 0) return;
-        rows.appendChild(row(e)); shown++;
-      });
+      matches.slice(0, expanded ? matches.length : LIMIT).forEach(function (e) { rows.appendChild(row(e)); });
+      if (more) {
+        if (matches.length > LIMIT) { more.hidden = false; more.textContent = expanded ? t("Réduire la liste") : t("Afficher les %(n)s autres", { n: matches.length - LIMIT }); }
+        else more.hidden = true;
+      }
       if (!loaded) setNote(t("Analyse du cache…"));
       else if (count === 0) setNote(t("Le cache est vide."));
-      else if (shown === 0) setNote(t("Aucun fichier ne correspond."));
+      else if (matches.length === 0) setNote(t("Aucun fichier ne correspond."));
       else if (shownCount < count) setNote(t("Les %(n)s objets les plus récents ; le reste du cache n'est pas listé.", { n: shownCount }));
       else setNote("");
     }
@@ -1262,7 +1273,8 @@
       });
     }
 
-    if (filter) filter.addEventListener("input", render);
+    if (filter) filter.addEventListener("input", function () { expanded = false; render(); });
+    if (more) more.addEventListener("click", function () { expanded = !expanded; render(); });
     var refresh = $("[data-cache-refresh]", panel);
     if (refresh) refresh.addEventListener("click", function () { if (loaded) setNote(t("Analyse du cache…")); load(true); [1500, 3000].forEach(function (ms) { setTimeout(function () { load(false); }, ms); }); });
     if (canPurge) panel.addEventListener("click", function (e) {

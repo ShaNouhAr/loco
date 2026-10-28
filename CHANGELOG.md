@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.89.0 — 2026-10-28
+
+- **Liste du cache plus lisible.** Dans les pages **Windows Update** et **Paquets Linux**, la liste des fichiers en cache n'affiche plus que les **5 plus récents** — le reste se déplie (et se replie) d'un clic — et chaque ligne indique **à quoi le fichier correspond** (« Mise à jour Windows », « Définitions Microsoft Defender », « Microsoft Edge », « Métadonnées du dépôt »…), avec le nom de fichier juste en dessous. Les paquets .deb et .rpm gardent leur nom tel quel, déjà parlant.
+
 ## 2.88.0 — 2026-10-28
 
 - **Voir et vider les caches.** Les pages **Windows Update** et **Paquets Linux** listent maintenant ce qui est réellement en cache — chaque fichier (mise à jour Windows, paquet Debian ou Ubuntu, miroir Red Hat ou EPEL) avec son origine, sa taille et sa date de mise en cache — et permettent de **supprimer un élément** ou de **vider tout le cache** d'un clic. Les tranches d'un même fichier (Windows Update) sont regroupées en un seul objet ; un fichier supprimé repart simplement de son serveur d'origine à la prochaine demande d'un poste, rien n'est perdu.
