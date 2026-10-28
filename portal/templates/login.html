@@ -1,31 +1,22 @@
-{% extends "base.html" %}
-{% from "_logo.html" import logo %}
+{% extends "_auth.html" %}
 {% block title %}{{ _("Connexion") }}{% endblock %}
-{% block body %}
-{% from '_nav_icons.html' import theme_toggle, language_menu with context %}
-<div class="login">
-  <div class="login-box">
-    <div class="brand">{{ logo() }}<b>loco</b><span>{{ host }}</span></div>
-    {% for category, message in get_flashed_messages(with_categories=true) %}<p class="note {{ category }}" role="status">{{ message }}</p>{% endfor %}
-    <form method="post" class="panel">
-      <div class="panel-h"><h2>{{ _("Connexion") }}</h2></div>
-      <div class="panel-b">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>{{ _("Identifiant") }}</span>
-          <input type="text" name="username" value="{{ username }}" required autocomplete="username" autocapitalize="none" spellcheck="false" {{ 'autofocus' if not username }}>
-        </label>
-        <label class="f"><span>{{ _("Mot de passe") }}</span>
-          <input type="password" name="password" required autocomplete="current-password" {{ 'autofocus' if username }}>
-        </label>
-        <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
-        {% if login_directories %}<p class="hint">{{ _("Compte local, ou votre compte d'entreprise en SSO (%(login_directories)s). Première connexion avec un compte d'entreprise : l'accès doit être approuvé par un administrateur.", login_directories=login_directories|join(', ')) }}</p>{% endif %}
-      </div>
-    </form>
-    <div class="foot">
-      <span>loco {{ version }}</span>
-      {{ language_menu() }}
-      {{ theme_toggle() }}
-    </div>
-  </div>
+{% block auth_title %}{{ _("Connexion") }}{% endblock %}
+{% block auth_sub %}{{ _("Avec votre compte loco ou votre compte d’entreprise.") if login_directories else _("Avec votre compte loco.") }}{% endblock %}
+{% block auth_body %}
+<form method="post" class="auth-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="f"><span>{{ _("Identifiant") }}</span>
+    <input type="text" name="username" value="{{ username }}" required autocomplete="username" autocapitalize="none" spellcheck="false" {{ 'autofocus' if not username }}>
+  </label>
+  <label class="f"><span>{{ _("Mot de passe") }}</span>
+    <input type="password" name="password" required autocomplete="current-password" {{ 'autofocus' if username }}>
+  </label>
+  <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
+</form>
+{% if login_directories %}
+<div class="auth-sso">
+  <p><span class="auth-sso-k">SSO</span>{{ login_directories|join(', ') }}</p>
+  <p class="faint">{{ _("Première connexion avec un compte d’entreprise : l’accès est ouvert après l’approbation d’un administrateur.") }}</p>
 </div>
+{% endif %}
 {% endblock %}

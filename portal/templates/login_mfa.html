@@ -1,28 +1,15 @@
-{% extends "base.html" %}
-{% from "_logo.html" import logo %}
+{% extends "_auth.html" %}
 {% block title %}{{ _("Vérification") }}{% endblock %}
-{% block body %}
-{% from '_nav_icons.html' import theme_toggle, language_menu with context %}
-<div class="login">
-  <div class="login-box">
-    <div class="brand">{{ logo() }}<b>loco</b><span>{{ host }}</span></div>
-    {% for category, message in get_flashed_messages(with_categories=true) %}<p class="note {{ category }}" role="status">{{ message }}</p>{% endfor %}
-    <form method="post" class="panel">
-      <div class="panel-h"><h2>{{ _("Double authentification") }}</h2></div>
-      <div class="panel-b">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="f"><span>{{ _("Code d'authentification") }}</span>
-          <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required spellcheck="false" class="mono code-input" placeholder="123456">
-        </label>
-        <button class="btn primary"><span class="spin"></span>{{ _("Vérifier") }}</button>
-        <p class="hint">{{ _("Code de votre application d'authentification, ou un code de secours si vous n'y avez plus accès.") }}</p>
-      </div>
-    </form>
-    <div class="foot">
-      <span>loco {{ version }}</span>
-      {{ language_menu() }}
-      {{ theme_toggle() }}
-    </div>
-  </div>
-</div>
+{% block auth_title %}{{ _("Double authentification") }}{% endblock %}
+{% block auth_sub %}{{ _("Saisissez le code à 6 chiffres affiché par votre application d’authentification.") }}{% endblock %}
+{% block auth_body %}
+<form method="post" class="auth-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="f"><span>{{ _("Code d'authentification") }}</span>
+    <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" autofocus required spellcheck="false" class="mono code-input" placeholder="123456">
+  </label>
+  <button class="btn primary"><span class="spin"></span>{{ _("Vérifier") }}</button>
+  <p class="hint">{{ _("Plus accès à l’application ? Saisissez l’un de vos codes de secours.") }}</p>
+</form>
 {% endblock %}
+{% block auth_after %}<p class="auth-alt"><a href="{{ url_for('login') }}">{{ _("Se connecter avec un autre compte") }}</a></p>{% endblock %}

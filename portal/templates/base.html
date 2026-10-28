@@ -159,9 +159,11 @@
 </dialog>
 {% endblock %}
 
+{% block toasts %}{# messages en notifications ; les écrans de connexion les affichent dans leur carte #}
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for cat, msg in messages %}<span hidden data-flash="{{ msg }}" data-kind="{{ cat }}"></span>{% endfor %}
 {% endwith %}
+{% endblock %}
 <div class="toasts" aria-live="polite"></div>
 {% if js_i18n %}<script type="application/json" id="i18n-js">{{ js_i18n|tojson }}</script>{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_v }}"></script>

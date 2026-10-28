@@ -1,0 +1,27 @@
+{# Mise en page commune des écrans hors session : connexion, double authentification, premier mot de passe. #}
+{% extends "base.html" %}
+{% block toasts %}{% endblock %}
+{% block body %}
+{% from "_logo.html" import logo %}
+{% from '_nav_icons.html' import theme_toggle, language_menu with context %}
+<main class="auth">
+  <div class="auth-top">
+    <span class="auth-brand">{{ logo() }}<b>loco</b><span class="mono">{{ host }}</span></span>
+    <div class="auth-prefs">{{ language_menu() }}{{ theme_toggle() }}</div>
+  </div>
+  <div class="auth-main">
+    <section class="auth-card">
+      <header class="auth-head">
+        <h1>{% block auth_title %}{% endblock %}</h1>
+        <p>{% block auth_sub %}{% endblock %}</p>
+      </header>
+      {% for category, message in get_flashed_messages(with_categories=true) %}
+      <p class="note {{ 'err' if category == 'error' else category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+      {% endfor %}
+      {% block auth_body %}{% endblock %}
+    </section>
+    {% block auth_after %}{% endblock %}
+  </div>
+  <footer class="auth-foot">loco {{ version }}</footer>
+</main>
+{% endblock %}
