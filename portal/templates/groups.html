@@ -64,6 +64,9 @@
               <div class="menu-list" role="menu">
                 <a class="menu-item" role="menuitem" href="{{ url_for(editor, group_id=group.id) }}">{{ _("Modifier les membres") }}</a>
                 <button type="button" class="menu-item" role="menuitem" data-open="#rename-group" data-fill='{{ {"group_id": group.id, "name": group.name}|tojson }}'>{{ _("Renommer…") }}</button>
+                {% if not software and o.windows and can('fleet.update') %}<hr>
+                {% if o.wu_blocked < o.windows %}<form method="post" action="{{ url_for('fleet_group_windows_update', group_id=group.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="block" value="1"><button class="menu-item" role="menuitem">{{ _("Geler Windows Update sur les membres") }}</button></form>{% endif %}
+                {% if o.wu_blocked %}<form method="post" action="{{ url_for('fleet_group_windows_update', group_id=group.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="block" value="0"><button class="menu-item" role="menuitem">{{ _("Rendre Windows Update aux membres") }}</button></form>{% endif %}{% endif %}
                 <form method="post" action="{{ url_for('software_group_delete' if software else 'fleet_group_delete', group_id=group.id) }}" data-confirm="{{ _('Supprimer le groupe %(name)s ?', name=group.name) }}" data-confirm-text="{{ _('Seul le groupe disparaît : les logiciels et les déploiements sont conservés.') if software else _('Seul le groupe disparaît : les appareils et les déploiements sont conservés.') }}" data-confirm-ok="{{ _('Supprimer') }}">
                   <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger" role="menuitem">{{ _("Supprimer…") }}</button>
                 </form>

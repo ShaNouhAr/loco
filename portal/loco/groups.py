@@ -66,10 +66,13 @@ def _overview(kind):
         rows = db().execute("SELECT m.group_id, d.* FROM device_group_members m JOIN devices d ON d.id=m.device_id "
                             "WHERE d.state!='removed' ORDER BY m.group_id, d.hostname COLLATE NOCASE")
         for r in rows:
-            g = out.setdefault(r["group_id"], {"members": [], "states": {}})
+            g = out.setdefault(r["group_id"], {"members": [], "states": {}, "windows": 0, "wu_blocked": 0})
             color = fleet.status(r, apps)[0]
             g["members"].append(r)
             g["states"][color] = g["states"].get(color, 0) + 1
+            if r["os_family"] == "windows":
+                g["windows"] += 1
+                g["wu_blocked"] += 1 if r["block_windows_update"] else 0
     return out
 
 

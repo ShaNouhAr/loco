@@ -1219,6 +1219,29 @@ def fleet_update_all():
     return back("fleet", **({"group": group_id} if group_id else {}))
 
 
+@app.route("/fleet/groups/<int:group_id>/windows-update", methods=["POST"])
+@login_required
+def fleet_group_windows_update(group_id):
+    """Gèle (ou rend) les mises à jour Windows sur tous les postes Windows d'un groupe, en une fois."""
+    require("fleet.update")
+    from . import groups
+    group = groups._group("device", group_id)
+    blocked = request.form.get("block") == "1"
+    cur = db().execute("UPDATE devices SET block_windows_update=? WHERE os_family='windows' AND state!='removed' "
+                       "AND id IN (SELECT device_id FROM device_group_members WHERE group_id=?)",
+                       (1 if blocked else 0, group_id))
+    db().commit()
+    n = cur.rowcount
+    audit("parc.windows-update-groupe", f"{group['name']} : {n} poste(s) {'bloqués' if blocked else 'rendus à Windows'}")
+    if not n:
+        flash(_("Aucun poste Windows dans le groupe %(name)s.", name=group["name"]), "error")
+    elif blocked:
+        flash(_("Mises à jour Windows bloquées sur %(n)s poste(s) du groupe %(name)s : appliqué au prochain contact.", n=n, name=group["name"]), "ok")
+    else:
+        flash(_("Mises à jour Windows rendues à %(n)s poste(s) du groupe %(name)s : appliqué au prochain contact.", n=n, name=group["name"]), "ok")
+    return back("fleet_groups", _anchor=f"group-{group_id}")
+
+
 @app.route("/fleet/update-selected", methods=["POST"])
 @login_required
 def fleet_update_selected():

@@ -585,6 +585,31 @@ class TestWindowsUpdateBlock(unittest.TestCase):
         self.assertEqual(r.status_code, 400)
         self.assertEqual(self._blocked(), 0)
 
+    def test_group_freezes_only_its_windows_members(self):
+        with connect() as conn:
+            linux = conn.execute("INSERT INTO devices (uid, token_hash, hostname, os_family, enrolled_at) "
+                                 "VALUES ('wu-lin', 'x', 'poste-deb', 'debian', '2026-01-01 00:00:00')").lastrowid
+            gid = conn.execute("INSERT INTO device_groups (name, updated_at) VALUES ('Atelier', '2026-01-01 00:00:00')").lastrowid
+            for d in (self.dev_id, linux):
+                conn.execute("INSERT INTO device_group_members (group_id, device_id) VALUES (?,?)", (gid, d))
+            self.addCleanup(lambda: self._drop_group(gid, linux))
+        page = self.admin.c.get("/fleet/groups").get_data(as_text=True)
+        self.assertIn("Geler Windows Update sur les membres", page)
+        self.admin.post(f"/fleet/groups/{gid}/windows-update", {"block": "1"}, page="/fleet/groups")
+        with connect() as conn:
+            self.assertEqual(conn.execute("SELECT block_windows_update FROM devices WHERE id=?", (self.dev_id,)).fetchone()[0], 1)
+            self.assertEqual(conn.execute("SELECT block_windows_update FROM devices WHERE id=?", (linux,)).fetchone()[0], 0)
+        page = self.admin.c.get("/fleet/groups").get_data(as_text=True)
+        self.assertIn("Rendre Windows Update aux membres", page)
+        self.admin.post(f"/fleet/groups/{gid}/windows-update", {"block": "0"}, page="/fleet/groups")
+        self.assertEqual(self._blocked(), 0)
+
+    @staticmethod
+    def _drop_group(gid, linux):
+        with connect() as conn:
+            conn.execute("DELETE FROM device_groups WHERE id=?", (gid,))
+            conn.execute("DELETE FROM devices WHERE id=?", (linux,))
+
 
 class TestDownloadErrors(unittest.TestCase):
     """Un certificat « pas encore valide » ou « expiré » désigne l'horloge du serveur, pas le site source."""

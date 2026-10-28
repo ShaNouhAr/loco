@@ -137,6 +137,7 @@ ENDPOINTS = {
     "windows_update_domains": "wu.configure",
     "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_device_live": "fleet.view", "fleet_action": "fleet.view",
     "fleet_cancel_command": "fleet.view", "fleet_search": "fleet.view", "fleet_windows_update": "fleet.update",
+    "fleet_group_windows_update": "fleet.update",
     "schedules": "fleet.view", "schedule_editor": ("fleet.update", "scripts.run"),
     "schedule_save": ("fleet.update", "scripts.run"), "schedule_toggle": ("fleet.update", "scripts.run"),
     "schedule_delete": ("fleet.update", "scripts.run"),
