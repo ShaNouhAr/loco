@@ -170,6 +170,16 @@ class TestScripts(FleetTest):
         with transaction() as conn:
             self.assertEqual(conn.execute("SELECT state FROM device_commands WHERE action='run-script'").fetchone()[0], "cancelled")
 
+    def test_python_script_reaches_both_a_windows_and_a_linux_machine(self):
+        sid = self.save(platform="python", name="Disque", content="import shutil; print(shutil.disk_usage('/'))")
+        for agent in (self.win, self.lin):
+            self.admin.post(f"/fleet/scripts/{sid}/run", {"version": "1", "device": str(device(agent.uid)["id"])}, page="/fleet/scripts")
+            cmd = agent.checkin().get_json()["commands"][0]
+            self.assertEqual(cmd["action"], "run-script")
+            self.assertEqual(cmd["script"]["platform"], "python")
+        page = self.admin.c.get(f"/fleet/scripts/{sid}/run").get_data(as_text=True)
+        self.assertIn("Python", page)
+
     def test_feature_off_hides_scripts_and_holds_commands(self):
         sid = self.save(platform="linux", content="echo bonjour")
         self.admin.post(f"/fleet/scripts/{sid}/run", {"version": "1", "device": str(device(self.lin.uid)["id"])}, page="/fleet/scripts")
@@ -200,6 +210,10 @@ class TestLinuxAgentScript(unittest.TestCase):
         self.assertEqual(self.agent.run_script(self.command("echo pirate", sha="0" * 64))[0], 1)
         self.assertEqual(self.agent.run_script(self.command("echo x", platform="windows")),
                          (1, "Script destiné à un autre système."))
+
+    def test_runs_a_python_script_with_the_interpreter(self):
+        code, out = self.agent.run_script(self.command("import sys\nprint('py', 1 + 1)\nsys.exit(3)", platform="python"))
+        self.assertEqual((code, out), (3, "py 2"))
 
 
 if __name__ == "__main__":

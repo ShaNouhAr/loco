@@ -436,6 +436,14 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN block_windows_update INTEGER NOT NULL DEFAULT 0;
     """,
+    # 24 : scripts Python (tout système) en plus de PowerShell/shell. On élargit la contrainte CHECK de la colonne
+    # platform sans reconstruire la table (ids et clé étrangère de script_runs préservés) via writable_schema.
+    """
+    PRAGMA writable_schema=ON;
+    UPDATE sqlite_master SET sql=replace(sql, "CHECK (platform IN ('windows', 'linux'))",
+        "CHECK (platform IN ('windows', 'linux', 'python'))") WHERE type='table' AND name='scripts';
+    PRAGMA writable_schema=OFF;
+    """,
 ]
 
 

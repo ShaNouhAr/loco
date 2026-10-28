@@ -575,19 +575,26 @@ def report(conf, cmd_id, state, output="", code=None, inventory=None):
 
 
 def run_script(cmd):
-    """Script de la bibliothèque loco : contenu vérifié par son empreinte, exécuté en root (sh, ou l'interpréteur du #!)."""
+    """Script de la bibliothèque loco : contenu vérifié par son empreinte, exécuté en root (sh, Python, ou l'interpréteur du #!)."""
     script = cmd.get("script") or {}
     content = script.get("content") or ""
-    if script.get("platform") != "linux":
+    platform = script.get("platform")
+    if platform not in ("linux", "python"):
         return 1, t("Script destiné à un autre système.", "Script intended for another system.", "Script destinado a otro sistema.")
     if hashlib.sha256(content.encode()).hexdigest() != (script.get("sha256") or "").lower():
         return 1, t("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run.", "Huella del script no válida: no ejecutado.")
-    fd, path = tempfile.mkstemp(prefix="loco-script-", suffix=".sh")
+    python = shutil.which("python3") or shutil.which("python")
+    if platform == "python" and not python:
+        return 1, t("Python introuvable sur ce poste.", "Python not found on this machine.", "Python no se encuentra en este equipo.")
+    fd, path = tempfile.mkstemp(prefix="loco-script-", suffix=".py" if platform == "python" else ".sh")
     try:
         with os.fdopen(fd, "w") as f:
             f.write(content)
         os.chmod(path, 0o700)
-        argv = [path] if content.startswith("#!") else ["/bin/sh", path]
+        if platform == "python":
+            argv = [python, path]
+        else:
+            argv = [path] if content.startswith("#!") else ["/bin/sh", path]
         try:
             done = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                   timeout=1800, cwd="/")

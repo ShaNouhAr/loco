@@ -10,7 +10,7 @@ from .auth import audit, lock_access, login_required
 from .db import db
 from .util import back
 
-PLATFORMS = {"windows": L_("Windows · PowerShell"), "linux": L_("Linux · shell")}
+PLATFORMS = {"windows": L_("Windows · PowerShell"), "linux": L_("Linux · shell"), "python": L_("Python · tous systèmes")}
 MAX_CONTENT = 64 * 1024
 MAX_TARGETS = 500
 ACTIVE = ("queued", "sent", "running")
@@ -25,8 +25,13 @@ def _script(script_id):
     return row
 
 
+def runs_on(platform, os_family):
+    """Un script Python tourne sur tout système ; PowerShell seulement sous Windows, shell seulement ailleurs."""
+    return platform == "python" or (os_family == "windows") == (platform == "windows")
+
+
 def _compatible(dev, platform):
-    return dev["state"] == "active" and (dev["os_family"] == "windows") == (platform == "windows")
+    return dev["state"] == "active" and runs_on(platform, dev["os_family"])
 
 
 def _targets(run_id):

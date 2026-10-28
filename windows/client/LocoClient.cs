@@ -640,21 +640,47 @@ namespace Loco
         {
             var script = cmd.ContainsKey("script") ? cmd["script"] as Dictionary<string, object> : null;
             string content = script == null ? "" : Str(script, "content");
-            if (script == null || Str(script, "platform") != "windows") { output = Lang.T("Script destiné à un autre système.", "Script intended for another system.", "Script destinado a otro sistema."); return 1; }
+            string platform = script == null ? "" : Str(script, "platform");
+            bool python = platform == "python";
+            if (script == null || (platform != "windows" && !python)) { output = Lang.T("Script destiné à un autre système.", "Script intended for another system.", "Script destinado a otro sistema."); return 1; }
             using (var sha = SHA256.Create())
                 if (BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(content))).Replace("-", "").ToLowerInvariant()
                     != Str(script, "sha256").ToLowerInvariant()) { output = Lang.T("Empreinte du script invalide : non exécuté.", "Invalid script fingerprint: not run.", "Huella del script no válida: no ejecutado."); return 1; }
+            string python_exe = python ? FindPython() : null;
+            if (python && python_exe == null) { output = Lang.T("Python introuvable sur ce poste.", "Python not found on this machine.", "Python no se encuentra en este equipo."); return 1; }
             string dir = Path.Combine(Path.GetTempPath(), "loco-script-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             try
             {
-                string file = Path.Combine(dir, "script.ps1");
-                File.WriteAllText(file, content, new UTF8Encoding(true));        // BOM : PowerShell 5.1 lit alors l'UTF-8
+                if (python)
+                {
+                    string file = Path.Combine(dir, "script.py");
+                    File.WriteAllText(file, content, new UTF8Encoding(false));
+                    // -X utf8 : Python écrit sa sortie en UTF-8 quelle que soit la page de code du poste.
+                    return RunCapture(python_exe, "-X utf8 \"" + file + "\"", InstallerTimeout, out output);
+                }
+                string ps1 = Path.Combine(dir, "script.ps1");
+                File.WriteAllText(ps1, content, new UTF8Encoding(true));          // BOM : PowerShell 5.1 lit alors l'UTF-8
                 string arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = " +
-                                   "[Text.Encoding]::UTF8; & '" + file.Replace("'", "''") + "'; exit $LASTEXITCODE\"";
+                                   "[Text.Encoding]::UTF8; & '" + ps1.Replace("'", "''") + "'; exit $LASTEXITCODE\"";
                 return RunCapture("powershell.exe", arguments, InstallerTimeout, out output);
             }
             finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
+        }
+
+        // Interpréteur Python du poste : le lanceur « py », puis python / python3 dans le PATH. null si aucun.
+        static string FindPython()
+        {
+            foreach (var name in new[] { "py.exe", "python.exe", "python3.exe" })
+            {
+                string o;
+                if (RunCapture("where", name, 10, out o) == 0)
+                {
+                    string line = (o ?? "").Split('\n')[0].Trim();
+                    if (line != "") return line;
+                }
+            }
+            return null;
         }
 
         static int RunCapture(string file, string arguments, int timeoutSeconds, out string output)

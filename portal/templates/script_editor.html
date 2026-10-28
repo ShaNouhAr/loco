@@ -8,7 +8,7 @@
 <div class="head">
   <div>
     <h1>{{ script.name if script else _('Nouveau script') }}</h1>
-    <p>{% if script %}<span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · modifié le %(updated_at)s par %(updated_by)s", version=script.version, updated_at=script.updated_at|date_fr, updated_by=script.updated_by) }}{% else %}{{ _("PowerShell pour Windows ou shell pour Linux, exécuté en SYSTEM ou root.") }}{% endif %}</p>
+    <p>{% if script %}<span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · modifié le %(updated_at)s par %(updated_by)s", version=script.version, updated_at=script.updated_at|date_fr, updated_by=script.updated_by) }}{% else %}{{ _("PowerShell pour Windows, shell pour Linux ou Python pour tout système, exécuté en SYSTEM ou root.") }}{% endif %}</p>
   </div>
   {% if script %}
   <div class="actions">
@@ -34,7 +34,7 @@
       <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="name" required maxlength="80" value="{{ script.name if script else '' }}" placeholder="{{ _('Nettoyer les fichiers temporaires') }}" {{ 'readonly' if not editable }}></label>
       <label class="f"><span>{{ _("Système") }}</span><select name="platform" {{ 'disabled' if not editable }}>{% for key, label in platforms.items() %}<option value="{{ key }}" {{ 'selected' if script and script.platform == key }}>{{ label }}</option>{% endfor %}</select></label>
       <label class="f wide"><span>{{ _("Description") }}</span><input type="text" name="description" maxlength="300" value="{{ script.description if script else '' }}" placeholder="{{ _('facultatif') }}" {{ 'readonly' if not editable }}></label>
-      <label class="f wide"><span>{{ _("Contenu") }}</span><textarea name="content" class="script-content" rows="18" spellcheck="false" required {{ 'readonly' if not editable }} placeholder="# PowerShell : Get-ChildItem $env:TEMP | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue&#10;# shell : apt-get clean">{{ script.content if script else '' }}</textarea>
+      <label class="f wide"><span>{{ _("Contenu") }}</span><textarea name="content" class="script-content" rows="18" spellcheck="false" required {{ 'readonly' if not editable }} placeholder="# PowerShell : Get-ChildItem $env:TEMP | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue&#10;# shell : apt-get clean&#10;# Python : import shutil; print(shutil.disk_usage('/'))">{{ script.content if script else '' }}</textarea>
         <span class="hint">{{ _("64 Kio au plus. Code de retour 0 = réussi ; la sortie standard et les erreurs sont remontées pour chaque poste. Délai maximal : 30 minutes.") }}</span></label>
     </div>
     {% if editable %}<div class="panel-f sticky-actions row-between"><span>{{ _("Modifier le contenu crée une nouvelle version ; les exécutions passées gardent la leur.") }}</span><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>{% endif %}

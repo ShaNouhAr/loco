@@ -3,14 +3,15 @@
 {% from "_schedule.html" import planner, icon as plan_icon with context %}
 {% block content %}
 {% include '_fleet_nav.html' %}
+{% set priv = 'SYSTEM' if script.platform == 'windows' else 'root' if script.platform == 'linux' else _('SYSTEM ou root') %}
 <p class="small back-link"><a href="{{ url_for('script_editor', script_id=script.id) }}">← {{ script.name }}</a></p>
 <div class="head">
   <div>
     <h1>{{ _("Exécuter %(name)s", name=script.name) }}</h1>
-    <p><span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · exécuté en", version=script.version) }} <strong>{{ 'SYSTEM' if script.platform == 'windows' else 'root' }}</strong> {{ _("au prochain contact de chaque agent.") }}</p>
+    <p><span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · exécuté en", version=script.version) }} <strong>{{ priv }}</strong> {{ _("au prochain contact de chaque agent.") }}</p>
   </div>
 </div>
-<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-alt-when="when:schedule" data-confirm-alt="{{ _('Planifier %(name)s ?', name=script.name) }}" data-confirm-text-alt="{{ _('Le script s’exécutera avec les pleins pouvoirs (%(v)s) à chaque occurrence, dans sa version %(version)s : s’il est modifié ensuite, la planification se met en pause.', v='SYSTEM' if script.platform == 'windows' else 'root', version=script.version) }}" data-confirm-ok-alt="{{ _('Planifier') }}" data-confirm="{{ _('Exécuter %(name)s sur les postes choisis ?', name=script.name) }}" data-confirm-text="{{ _('Le script s’exécute avec les pleins pouvoirs (%(v)s) sur chaque poste. Vérifiez son contenu avant de continuer.', v='SYSTEM' if script.platform == 'windows' else 'root') }}" data-confirm-ok="{{ _('Exécuter') }}">
+<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-alt-when="when:schedule" data-confirm-alt="{{ _('Planifier %(name)s ?', name=script.name) }}" data-confirm-text-alt="{{ _('Le script s’exécutera avec les pleins pouvoirs (%(v)s) à chaque occurrence, dans sa version %(version)s : s’il est modifié ensuite, la planification se met en pause.', v=priv, version=script.version) }}" data-confirm-ok-alt="{{ _('Planifier') }}" data-confirm="{{ _('Exécuter %(name)s sur les postes choisis ?', name=script.name) }}" data-confirm-text="{{ _('Le script s’exécute avec les pleins pouvoirs (%(v)s) sur chaque poste. Vérifiez son contenu avant de continuer.', v=priv) }}" data-confirm-ok="{{ _('Exécuter') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ script.version }}">
   <div class="cols">
     <section class="panel">
@@ -21,7 +22,7 @@
           <div class="selection-list short">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}"><span><strong>{{ group.name }}</strong><small>{{ _("%(members)s appareil%(v)s · seuls les postes compatibles sont retenus", members=group.members, v='s' if group.members != 1) }}</small></span></label>{% endfor %}</div>
         </div>
         {% endif %}
-        <div><div class="row-between"><h3 class="pick-title">{{ _("Appareils %(v)s", v='Windows' if script.platform == 'windows' else 'Linux') }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#script-devices .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Appareils %(v)s", v='Windows' if script.platform == 'windows' else _('tous systèmes') if script.platform == 'python' else 'Linux') }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#script-devices .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
           <div class="selection-list" id="script-devices">
             {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong>{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">{{ _("Aucun appareil compatible actif.") }}</p>{% endfor %}
           </div>

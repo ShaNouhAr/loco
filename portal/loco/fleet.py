@@ -453,8 +453,9 @@ def _payload(dev, cmd):
     if cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
     if cmd["action"] == "run-script":
+        from . import scripts
         run = db().execute("SELECT * FROM script_runs WHERE id=?", (params.get("run_id"),)).fetchone()
-        if run is None or (run["platform"] == "windows") != (dev["os_family"] == "windows"):
+        if run is None or not scripts.runs_on(run["platform"], dev["os_family"]):
             return None
         out["script"] = {"name": run["name"], "platform": run["platform"], "content": run["content"], "sha256": run["sha256"]}
         return out

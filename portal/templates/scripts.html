@@ -4,11 +4,12 @@
 {% block content %}
 {% include '_fleet_nav.html' %}
 {% set n_win = scripts|selectattr('platform', 'equalto', 'windows')|list|length %}
-{% set n_lin = scripts|length - n_win %}
+{% set n_py = scripts|selectattr('platform', 'equalto', 'python')|list|length %}
+{% set n_lin = scripts|length - n_win - n_py %}
 <div class="head">
   <div>
     <h1>{{ _("Scripts") }}</h1>
-    <p>{{ _("Vos scripts PowerShell (Windows) et shell (Linux), exécutés par l’agent en SYSTEM ou root sur les postes choisis, maintenant ou planifiés, avec la sortie de chaque poste.") }}</p>
+    <p>{{ _("Vos scripts PowerShell (Windows), shell (Linux) et Python (tout système), exécutés par l’agent en SYSTEM ou root sur les postes choisis, maintenant ou planifiés, avec la sortie de chaque poste.") }}</p>
   </div>
   {% if can('scripts.edit') %}<div class="actions"><a class="btn primary" href="{{ url_for('script_editor', script_id=0) }}">{{ _("Nouveau script") }}</a></div>{% endif %}
 </div>
@@ -27,11 +28,12 @@
       {% if scripts %}<div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer les scripts') }}" aria-label="{{ _('Filtrer les scripts') }}"></div>{% endif %}
     </div>
     {% if scripts %}
-    {% if n_win and n_lin %}
+    {% if [n_win, n_lin, n_py]|select|list|length > 1 %}
     <div class="chips-bar"><div class="chips" role="group" aria-label="{{ _('Filtrer par système') }}">
       <button type="button" class="chip on" data-chip="all" aria-pressed="true">{{ _("Tous") }} <b>{{ scripts|length }}</b></button>
-      <button type="button" class="chip" data-chip="windows" aria-pressed="false">Windows <b>{{ n_win }}</b></button>
-      <button type="button" class="chip" data-chip="linux" aria-pressed="false">Linux <b>{{ n_lin }}</b></button>
+      {% if n_win %}<button type="button" class="chip" data-chip="windows" aria-pressed="false">Windows <b>{{ n_win }}</b></button>{% endif %}
+      {% if n_lin %}<button type="button" class="chip" data-chip="linux" aria-pressed="false">Linux <b>{{ n_lin }}</b></button>{% endif %}
+      {% if n_py %}<button type="button" class="chip" data-chip="python" aria-pressed="false">Python <b>{{ n_py }}</b></button>{% endif %}
     </div></div>
     {% endif %}
     <div class="table-wrap">
@@ -41,7 +43,7 @@
         {% for s in scripts %}
           <tr data-{{ s.platform }}="1" data-search="{{ s.name }} {{ s.description }}">
             <td><a href="{{ url_for('script_editor', script_id=s.id) }}" class="strong-link">{{ s.name }}</a><span class="sub sans">{{ s.description or _('Sans description') }}</span></td>
-            <td class="nowrap" data-label="{{ _('Système') }}"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else 'Linux' }}</span></td>
+            <td class="nowrap" data-label="{{ _('Système') }}"><span class="tag">{{ 'PowerShell' if s.platform == 'windows' else 'Python' if s.platform == 'python' else 'shell' }}</span> <span class="muted small">{{ 'Windows' if s.platform == 'windows' else _('tous systèmes') if s.platform == 'python' else 'Linux' }}</span></td>
             <td class="hide-sm">{{ _("v%(version)s", version=s.version) }}<span class="sub">{{ s.updated_at|date_fr }} · {{ s.updated_by }}</span></td>
             <td class="hide-sm nowrap">{% if s.last_run %}{{ s.last_run|date_fr }}<span class="sub sans">{{ _("%(runs)s exécution%(v)s", runs=s.runs, v='s' if s.runs > 1) }}</span>{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
             <td class="right nowrap card-action">{% if can('scripts.run') %}<a class="btn sm" href="{{ url_for('script_compose', script_id=s.id) }}">{{ _("Exécuter…") }}</a>{% endif %}</td>
