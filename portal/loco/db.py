@@ -510,6 +510,8 @@ def migrate():
                 conn.execute(f"PRAGMA user_version = {number}")
         from .permissions import seed_roles
         seed_roles(conn)
+        from .builtin_scripts import seed as seed_scripts
+        seed_scripts(conn, time.strftime("%Y-%m-%d %H:%M:%S"))
         # Un téléchargement interrompu par un redémarrage ne reprendra jamais.
         conn.execute("UPDATE win_apps SET status='error', error='Interrompu (redémarrage du service)' "
                      "WHERE status='downloading'")

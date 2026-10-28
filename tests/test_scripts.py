@@ -216,5 +216,39 @@ class TestLinuxAgentScript(unittest.TestCase):
         self.assertEqual((code, out), (3, "py 2"))
 
 
+class TestBuiltinScripts(unittest.TestCase):
+    """Scripts intégrés semés une fois : le pilote NVIDIA est présent, PowerShell, et non ré-imposé après suppression."""
+
+    def setUp(self):
+        import sqlite3
+        from loco import builtin_scripts
+        self.builtin = builtin_scripts
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)")
+        self.conn.execute("CREATE TABLE scripts (id INTEGER PRIMARY KEY, name TEXT, description TEXT, platform TEXT, "
+                          "content TEXT, version INTEGER DEFAULT 1, created_at TEXT, updated_at TEXT, updated_by TEXT)")
+        self.addCleanup(self.conn.close)
+
+    def rows(self):
+        return self.conn.execute("SELECT name, platform, content FROM scripts").fetchall()
+
+    def test_seeds_the_nvidia_script_once(self):
+        self.builtin.seed(self.conn, "2026-01-01 00:00:00")
+        self.builtin.seed(self.conn, "2026-01-01 00:00:00")      # second passage : pas de doublon
+        rows = self.rows()
+        self.assertEqual(len(rows), 1)
+        name, platform, content = rows[0]
+        self.assertIn("NVIDIA", name)
+        self.assertEqual(platform, "windows")
+        self.assertIn("AjaxDriverService", content)
+        self.assertIn("-s -noreboot", content)
+
+    def test_deletion_is_not_undone(self):
+        self.builtin.seed(self.conn, "2026-01-01 00:00:00")
+        self.conn.execute("DELETE FROM scripts")                 # l'admin supprime le script intégré
+        self.builtin.seed(self.conn, "2026-01-01 00:00:00")      # il ne revient pas
+        self.assertEqual(self.rows(), [])
+
+
 if __name__ == "__main__":
     unittest.main()
