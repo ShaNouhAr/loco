@@ -3,6 +3,7 @@ root (locoadmin) : le portail dépose les demandes, l'agent les revalide et les 
 
 import datetime
 import ipaddress
+import os
 import re
 import socket
 import subprocess
@@ -209,6 +210,48 @@ def job_progress(job, log_text):
     return out
 
 
+_CHANGELOG = {"mtime": None, "entries": []}
+_VERSION_RE = re.compile(r"^##\s+(\S+)\s*(?:[—-]\s*(.+))?$")
+
+
+def _inline(text):
+    """Découpe un texte Markdown en segments gras (**…**) et normaux, pour un rendu échappé par le gabarit."""
+    parts = []
+    for i, seg in enumerate(text.split("**")):
+        if seg:
+            parts.append({"text": seg, "b": i % 2 == 1})
+    return parts
+
+
+def changelog(limit=40):
+    """Journal des versions (CHANGELOG.md livré) analysé en entrées {version, date, items} ; relu si le fichier change."""
+    try:
+        mtime = os.path.getmtime(config.CHANGELOG_PATH)
+    except OSError:
+        return []
+    if _CHANGELOG["mtime"] == mtime:
+        return _CHANGELOG["entries"]
+    entries, cur = [], None
+    try:
+        with open(config.CHANGELOG_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                m = _VERSION_RE.match(line)
+                if m:
+                    cur = {"version": m.group(1), "date": (m.group(2) or "").strip(), "notes": []}
+                    entries.append(cur)
+                elif cur is not None:
+                    stripped = line.lstrip()
+                    if stripped.startswith("- "):
+                        cur["notes"].append({"sub": len(line) - len(stripped) >= 2, "parts": _inline(stripped[2:])})
+                    elif stripped and cur["notes"]:                 # suite d'une puce sur la ligne suivante
+                        cur["notes"][-1]["parts"].extend(_inline(" " + stripped))
+    except OSError:
+        return _CHANGELOG["entries"]
+    _CHANGELOG.update(mtime=mtime, entries=entries[:limit])
+    return _CHANGELOG["entries"]
+
+
 @app.route("/system/updates")
 @login_required
 def appliance_updates():
@@ -233,6 +276,7 @@ def appliance_updates():
         packages=packages, security=[p for p in packages if p.get("security")],
         key_count=sum(1 for p in packages if p.get("tags")),
         security_supported=status.get("security_supported", False), kernel_short=_kernel_short,
+        changelog=changelog(),
     )
 
 

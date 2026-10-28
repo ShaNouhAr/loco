@@ -526,5 +526,35 @@ class TestPages(TempAgent):
         self.assertEqual(anonymous.c.get("/system/configuration").status_code, 302)
 
 
+class TestChangelog(unittest.TestCase):
+    """Journal des versions lu depuis CHANGELOG.md et exposé à la page de mise à jour."""
+
+    def _use(self, text):
+        fd, path = tempfile.mkstemp(suffix=".md")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        self.addCleanup(os.unlink, path)
+        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
+        appliance._CHANGELOG["mtime"] = None                        # forcer la relecture
+        patch = mock.patch.object(config, "CHANGELOG_PATH", path)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_parses_versions_bold_and_subitems(self):
+        self._use("# Journal\n\n## 2.80.0 — 2026-11-01\n\n- **Titre.** du corps.\n  - un sous-point.\n\n## 2.79.0 — 2026-10-28\n\n- autre chose.\n")
+        cl = appliance.changelog()
+        self.assertEqual([e["version"] for e in cl], ["2.80.0", "2.79.0"])
+        self.assertEqual(cl[0]["date"], "2026-11-01")
+        self.assertEqual(cl[0]["notes"][0]["parts"][0], {"text": "Titre.", "b": True})
+        self.assertFalse(cl[0]["notes"][0]["sub"])
+        self.assertTrue(cl[0]["notes"][1]["sub"])                   # « - » indenté de deux espaces
+
+    def test_missing_file_gives_no_entries(self):
+        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
+        with mock.patch.object(config, "CHANGELOG_PATH", "/pas-de-fichier/CHANGELOG.md"):
+            appliance._CHANGELOG["mtime"] = None
+            self.assertEqual(appliance.changelog(), [])
+
+
 if __name__ == "__main__":
     unittest.main()

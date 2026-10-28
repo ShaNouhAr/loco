@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.79.0"
+VERSION = "2.80.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -45,6 +45,8 @@ APT_SUITE_RE = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
 APT_DISTRIBUTIONS = {"debian": "Debian", "ubuntu": "Ubuntu"}
 WIN_DIR = os.path.join(DATA, "win")
 TMP_DIR = os.path.join(DATA, ".tmp")
+# Journal des versions, livré à la racine de l'installation (/opt/loco) à côté de portal/, consultable depuis le portail.
+CHANGELOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "CHANGELOG.md")
 DB_PATH = os.path.join(STATE, "portal.db")
 STATS_PATH = os.path.join(STATE, "stats.json")
 WU_DOMAINS_PATH = os.path.join(STATE, "wu-domains.txt")

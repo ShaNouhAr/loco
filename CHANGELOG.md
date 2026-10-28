@@ -1,5 +1,29 @@
 # Journal des versions
 
+## 2.80.0 — 2026-10-28
+
+- **Journal des versions dans le portail.** La page *Administration → Mises à jour* affiche désormais un panneau **Journal des versions** : ce qui change à chaque version de loco, hors ligne, sans passer par GitHub. La version installée et celle disponible sont repérées.
+
+## 2.79.0 — 2026-10-28
+
+- **Pilote NVIDIA en un clic.** Un script prêt à l'emploi arrive dans la bibliothèque *Scripts* : il détecte le GPU NVIDIA du poste, récupère le dernier pilote **Game Ready (DCH)** directement chez NVIDIA, le compare à la version installée et l'installe en silencieux. À lancer sur les postes Windows, maintenant ou sur une planification. Modifiable et supprimable comme n'importe quel script.
+
+## 2.78.0 — 2026-10-28
+
+- **Détection des pilotes dans Windows Update.** L'inventaire ne regardait que les mises à jour logicielles : les pilotes (carte graphique NVIDIA/AMD, chipset…) distribués par Windows Update n'apparaissaient jamais. Ils sont maintenant détectés, affichés avec une étiquette **pilote** sur la fiche du poste, et installés en même temps que les autres mises à jour.
+
+## 2.77.0 — 2026-10-28
+
+- **Scripts Python.** En plus de PowerShell (Windows) et shell (Linux), la bibliothèque accepte des scripts **Python compatibles avec tout système** : l'agent les exécute avec l'interpréteur Python du poste (Windows comme Linux), en SYSTEM ou root. Nouvelle pastille de filtre et étiquette dédiées.
+
+## 2.76.0 — 2026-10-28
+
+- **Geler Windows Update sur tout un groupe.** Le menu « ⋯ » d'un groupe de machines propose de **bloquer** ou de **rendre** les mises à jour Windows pour tous ses membres Windows en une fois.
+
+## 2.75.0 — 2026-10-28
+
+- **Geler les mises à jour Windows par poste.** Sur la page d'un poste Windows, un interrupteur (décoché par défaut) empêche Windows d'installer ses mises à jour tout seul : c'est vous qui les lancez depuis loco. L'agent applique la consigne au prochain contact et la retire si vous décochez.
+
 ## 2.74.1 — 2026-10-27
 
 - **Mon compte, plus lisible.** En-tête en étiquettes compactes (profil, type de compte, dernière connexion, création) avec un seul format de date. Onglet Sécurité : champs de largeur raisonnable et règles du mot de passe affichées à côté, en liste de vérification ; encart « Bon à savoir » plus discret ; double authentification avec son explication et son bouton sur une même ligne.

@@ -1578,3 +1578,13 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
 .wu-block { padding-top: 10px; }
 .wu-block .switch-row { align-items: flex-start; }
 .wu-block .switch-row > .switch { margin-top: 1px; }
+.changelog .chg { border-top: 1px solid var(--line); padding: 8px 0; }
+.changelog .chg:first-child { border-top: 0; }
+.changelog summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
+.changelog summary::-webkit-details-marker { display: none; }
+.changelog summary::before { content: "▸"; color: var(--text-3); font-size: 11px; }
+.changelog .chg[open] > summary::before { content: "▾"; }
+.chg-list { margin: 8px 0 4px; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.chg-list li { font-size: 13.5px; color: var(--text-2); line-height: 1.5; }
+.chg-list li.sub { margin-left: 18px; list-style: circle; }
+.chg-list li strong { color: var(--text-1); font-weight: 600; }

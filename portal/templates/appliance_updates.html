@@ -164,6 +164,22 @@
     </div>
   </section>
 
+  {% if changelog %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Journal des versions") }}</h2><div class="aside">{{ _("ce qui change à chaque version de loco") }}</div></div>
+    <div class="panel-b changelog">
+      {% for e in changelog %}
+      <details class="chg"{% if e.version == latest.version or (loop.first and not update_available) %} open{% endif %}>
+        <summary><strong>{{ e.version }}</strong>{% if e.date %} <span class="faint">{{ e.date }}</span>{% endif %}{% if e.version == version %} <span class="st ok">{{ _("installée") }}</span>{% elif update_available and e.version == latest.version %} <span class="st warn">{{ _("disponible") }}</span>{% endif %}</summary>
+        <ul class="chg-list">
+          {% for it in e.notes %}<li{% if it.sub %} class="sub"{% endif %}>{% for p in it.parts %}{% if p.b %}<strong>{{ p.text }}</strong>{% else %}{{ p.text }}{% endif %}{% endfor %}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Opérations") }}</h2><div class="aside">{{ _("journal de chaque vérification et mise à jour") }}</div></div>
     {% if jobs %}
