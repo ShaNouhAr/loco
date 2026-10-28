@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.88.0 — 2026-10-28
+
+- **Voir et vider les caches.** Les pages **Windows Update** et **Paquets Linux** listent maintenant ce qui est réellement en cache — chaque fichier (mise à jour Windows, paquet Debian ou Ubuntu, miroir Red Hat ou EPEL) avec son origine, sa taille et sa date de mise en cache — et permettent de **supprimer un élément** ou de **vider tout le cache** d'un clic. Les tranches d'un même fichier (Windows Update) sont regroupées en un seul objet ; un fichier supprimé repart simplement de son serveur d'origine à la prochaine demande d'un poste, rien n'est perdu.
+  - La liste se filtre, se rafraîchit en direct et reste bornée aux objets les plus récents sur un gros cache. L'analyse et la purge passent par l'agent (le contenu des caches n'est lisible que par lui) ; côté APT, le cache nginx de l'appliance comme apt-cacher-ng d'un serveur Debian sont pris en charge.
+- **Pages revues.** Présentation plus sobre : un résumé factuel (taille du cache, part servie localement, 14 derniers jours) remplace les grandes vignettes, et le contenu du cache prend la place centrale.
+
 ## 2.87.0 — 2026-10-28
 
 - **Mon parc : redémarrer depuis la liste.** Quand un poste attend un redémarrage, un bouton **Redémarrer** apparaît dans la liste, à l'endroit même de *Mettre à jour*. Si le poste a aussi des mises à jour en attente, les deux boutons cohabitent côte à côte. Le redémarrage est confirmé avant l'envoi et prévient la personne connectée.

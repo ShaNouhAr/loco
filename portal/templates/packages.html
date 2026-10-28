@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import cmd, service %}
+{% from "_macros.html" import cmd, service, cache_panel %}
 {% block title %}{{ _("Paquets Linux") }}{% endblock %}
 {% block content %}
 {% set apt = family == 'apt' %}
@@ -20,12 +20,21 @@
 </div>
 
 <div class="stack">
+  {% if cache_manage %}
+  <dl class="kv-grid pkg-sum">
+    <div><dt>{{ _("Vos paquets") }}</dt><dd>{{ own_packages }} <span class="faint">{{ _("dans %(n)s dépôt%(v)s, signés GPG", n=apt_repos|length + rpm_repos|length, v='s' if apt_repos|length + rpm_repos|length != 1) }}</span></dd></div>
+    {% if linux_devices is not none %}<div><dt>{{ _("Postes Linux du parc") }}</dt><dd>{{ linux_devices }} <span class="faint">· <a href="{{ url_for('fleet') }}">{{ _("voir Mon parc") }}</a></span></dd></div>{% endif %}
+  </dl>
+  {% if apt_repos or legacy_count or apt %}{{ cache_panel('apt', _("Cache Debian, Ubuntu"), can('linux.delete'), _("Mises à jour officielles téléchargées une fois chez Debian ou Ubuntu, puis servies en local.")) }}{% endif %}
+  {% if rpm_enabled and (rpm_repos or not apt) %}{{ cache_panel('rpm', _("Cache Rocky, AlmaLinux, RHEL"), can('rpm.delete'), _("Miroirs Red Hat et EPEL téléchargés une fois, puis servis en local aux postes.")) }}{% endif %}
+  {% else %}
   <div class="metrics">
     {% if apt_repos or legacy_count or apt %}<div class="metric"><div class="k">{{ _("Cache Debian, Ubuntu") }}</div><div class="v">{{ stats.get('acng', 0)|human }}</div><div class="s">{% if acng is not none %}{{ service(acng) }} · {% endif %}{{ _("paquets officiels gardés") }}</div></div>{% endif %}
     {% if rpm_enabled and (rpm_repos or not apt) %}<div class="metric"><div class="k">{{ _("Cache Rocky, AlmaLinux, RHEL") }}</div><div class="v">{{ stats.get('rpmcache', 0)|human }}</div><div class="s">{{ _("miroirs et EPEL, gardés 6 mois") }}</div></div>{% endif %}
     <div class="metric"><div class="k">{{ _("Vos paquets") }}</div><div class="v">{{ own_packages }}</div><div class="s">{{ _("dans %(apt_repos)s dépôt%(v)s, signés GPG", apt_repos=apt_repos|length + rpm_repos|length, v='s' if apt_repos|length + rpm_repos|length != 1) }}</div></div>
     {% if linux_devices is not none %}<div class="metric"><div class="k">{{ _("Postes Linux du parc") }}</div><div class="v">{{ linux_devices }}</div><div class="s"><a href="{{ url_for('fleet') }}">{{ _("voir Mon parc") }}</a></div></div>{% endif %}
   </div>
+  {% endif %}
 
   <section class="panel setup" data-setup data-https="{{ client_url }}" data-http="{{ http_url or '' }}">
     <div class="panel-h"><h2>{{ _("Brancher un poste Linux") }}</h2><div class="aside">{{ _("une commande, à lancer en root sur le poste") }}</div></div>

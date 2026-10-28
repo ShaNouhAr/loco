@@ -5,3 +5,32 @@
 {% macro service(active) -%}
 <span class="st {{ 'ok' if active else 'err' }}">{{ _('actif') if active else _('arrêté') }}</span>
 {%- endmacro %}
+
+{# Contenu d'un cache (Windows Update, APT, RPM…) : liste remplie en direct par app.js, purge au cas par cas ou en entier. #}
+{% macro cache_panel(area, title, can_purge, note='') -%}
+<section class="panel cache-panel" data-cache="{{ area }}" data-csrf="{{ csrf }}"{% if can_purge %} data-can-purge="1"{% endif %}>
+  <div class="panel-h">
+    <h2>{{ title }}</h2>
+    <div class="aside cache-aside">
+      <span class="cache-sum" data-cache-sum hidden></span>
+      <button type="button" class="btn sm ghost cache-refresh" data-cache-refresh title="{{ _('Analyser à nouveau le cache') }}" aria-label="{{ _('Actualiser') }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v5h-5"/></svg>{{ _("Actualiser") }}
+      </button>
+    </div>
+  </div>
+  <div class="panel-b">
+    {% if note %}<p class="hint cache-note">{{ note }}</p>{% endif %}
+    <div class="cache-bar" data-cache-bar hidden>
+      <input type="search" class="search-sm" data-cache-filter placeholder="{{ _('Filtrer les fichiers') }}" aria-label="{{ _('Filtrer les fichiers en cache') }}">
+      {% if can_purge %}<button type="button" class="btn sm ghost danger" data-cache-clear>{{ _("Vider le cache") }}</button>{% endif %}
+    </div>
+    <div class="table-wrap">
+      <table class="cache-table">
+        <thead><tr><th>{{ _("Fichier") }}</th><th class="hide-sm">{{ _("Origine") }}</th><th class="num">{{ _("Taille") }}</th><th class="hide-sm">{{ _("En cache depuis") }}</th>{% if can_purge %}<th></th>{% endif %}</tr></thead>
+        <tbody data-cache-rows></tbody>
+      </table>
+      <p class="cache-state muted" data-cache-state>{{ _("Analyse du cache…") }}</p>
+    </div>
+  </div>
+</section>
+{%- endmacro %}

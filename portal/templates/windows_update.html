@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import service, cmd %}
+{% from "_macros.html" import service, cmd, cache_panel %}
 {% from "_charts.html" import daily_bars %}
 {% block title %}Windows Update{% endblock %}
 {% block content %}
@@ -8,58 +8,39 @@
     <h1>Windows Update</h1>
     <p>{{ _("Chaque mise à jour est téléchargée une fois chez Microsoft, puis servie en local aux autres postes.") }}</p>
   </div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('windows_update_dns') }}">{{ _("Script DNS Active Directory") }}</a>
-  </div>
 </div>
 
 <div class="stack" data-poll="{{ url_for('api_wu') }}" data-poll-kind="wu" data-poll-every="5000">
   {% if not nginx %}
-  <div class="note err">{{ _("Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.") }}{% if can('system.view') %}{{ _("Voir <a href=\"%(v)s\">Système</a>.", v=url_for('system')) }}{% endif %}</div>
+  <div class="note err">{{ _("Le cache est arrêté (nginx) : les postes redirigés ne peuvent plus télécharger leurs mises à jour.") }}{% if can('system.view') %} {{ _("Voir <a href=\"%(v)s\">Système</a>.", v=url_for('system')) }}{% endif %}</div>
   {% elif not wu.cache_size and not wu.period.hit and not wu.period.miss %}
   <div class="note warn">{% if proxy_available %}{{ _("Aucun poste n'est encore passé par loco. Les postes Windows enrôlés sont dirigés vers le cache automatiquement (par proxy, activé par défaut) ; pour les postes non gérés, utilisez la redirection DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% else %}{{ _("Aucun poste n'est encore passé par loco. Dirigez les postes Windows vers le cache par DNS — voir « Diriger les postes vers le cache » plus bas.") }}{% endif %}</div>
   {% endif %}
 
-  <div class="metrics">
-    <div class="metric"><div class="k">{{ _("Servi par le cache") }}</div><div class="v" data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</div><div class="s"><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> {{ _("du trafic, 14 jours") }}</div></div>
-    <div class="metric"><div class="k">{{ _("Pris sur Internet") }}</div><div class="v" data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</div><div class="s">{{ _("premiers téléchargements, 14 jours") }}</div></div>
-    <div class="metric"><div class="k">{{ _("En cache") }}</div><div class="v" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</div><div class="s">{{ service(nginx) }}</div></div>
-    <div class="metric"><div class="k">{{ _("Dernière requête") }}</div><div class="v small-v" data-bind="last_text">{{ wu.last_text or _('aucune') }}</div><div class="s"><span data-bind="clients">{{ wu.clients }}</span> {{ _("poste(s) dans le journal récent") }}</div></div>
-  </div>
-
-  <div class="cols w21">
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("14 derniers jours") }}</h2><div class="aside">{% if chart.hit or chart.miss %}{{ _("%(ratio)s %% servis par le cache", ratio=chart.ratio) }}{% endif %}</div></div>
-      <div class="panel-b">
-        {% if chart.hit or chart.miss %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Activité du cache") }}</h2><div class="aside">{{ service(nginx) }}</div></div>
+    <div class="panel-b">
+      <dl class="kv-grid wu-kv">
+        <div><dt>{{ _("Taille du cache") }}</dt><dd class="dd-lg" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</dd></div>
+        <div><dt>{{ _("Servi depuis le cache") }} <span class="faint">· 14 j</span></dt><dd><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> <span class="faint">(<span data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</span>)</span></dd></div>
+        <div><dt>{{ _("Pris sur Internet") }} <span class="faint">· 14 j</span></dt><dd data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</dd></div>
+        <div><dt>{{ _("Dernière requête") }}</dt><dd class="small" data-bind="last_text">{{ wu.last_text or _('aucune') }}</dd></div>
+      </dl>
+      {% if chart.hit or chart.miss %}
+      <div class="wu-chart">
         {{ daily_bars(chart) }}
         <ul class="legend">
           <li><i class="key bar-hit"></i>{{ _("Depuis le cache") }} <span class="num">{{ chart.hit|human }}</span></li>
           <li><i class="key bar-miss"></i>{{ _("Depuis Internet") }} <span class="num">{{ chart.miss|human }}</span></li>
         </ul>
-        {% else %}
-        <p class="empty">{{ _("Aucun téléchargement sur la période.") }}</p>
-        {% endif %}
       </div>
-    </section>
+      {% endif %}
+    </div>
+  </section>
 
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("Domaines redirigés") }}</h2>
-        {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">{{ _("Modifier") }}</button></div>{% endif %}</div>
-      <div class="panel-b wu-domains">
-        <ul class="plain-list">{% for d in domains %}<li class="mono">{{ d }}</li>{% endfor %}</ul>
-        <p class="hint">{{ _("Sous-domaines compris. Le DNS du réseau doit répondre <span class=\"mono\">%(host)s</span> pour ces domaines.", host=host) }}</p>
-        <details class="hint">
-          <summary>{{ _("Fonctionnement") }}</summary>
-          <ol class="steps">
-            <li><span>{{ _("Les postes Windows envoient leurs téléchargements à loco au lieu de Microsoft.") }}</span></li>
-            <li><span>{{ _("Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.") }}</span></li>
-            <li><span>{{ _("Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache : seuls les fichiers immuables sont gardés.") }}</span></li>
-          </ol>
-        </details>
-      </div>
-    </section>
-  </div>
+  {% if cache_manage %}
+  {{ cache_panel('wu', _("Fichiers en cache"), can('wu.configure'), _("Les fichiers de mise à jour (HTTP immuable) gardés sur le serveur. Le HTTPS est seulement relayé, jamais mis en cache.")) }}
+  {% endif %}
 
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Diriger les postes vers le cache") }}</h2><div class="aside">{{ service(proxy_active) }}</div></div>
@@ -88,7 +69,24 @@
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Dernières requêtes") }}</h2><div class="aside">{{ _("en direct") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Domaines redirigés") }}</h2>
+      {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">{{ _("Modifier") }}</button></div>{% endif %}</div>
+    <div class="panel-b wu-domains">
+      <ul class="plain-list">{% for d in domains %}<li class="mono">{{ d }}</li>{% endfor %}</ul>
+      <p class="hint">{{ _("Sous-domaines compris. Le DNS du réseau doit répondre <span class=\"mono\">%(host)s</span> pour ces domaines.", host=host) }}</p>
+      <details class="hint">
+        <summary>{{ _("Fonctionnement") }}</summary>
+        <ol class="steps">
+          <li><span>{{ _("Les postes Windows envoient leurs téléchargements à loco au lieu de Microsoft.") }}</span></li>
+          <li><span>{{ _("Le premier téléchargement d'un fichier part chez Microsoft et reste en cache ; les suivants sont servis en local.") }}</span></li>
+          <li><span>{{ _("Le HTTPS de ces domaines est relayé sans être déchiffré ni mis en cache : seuls les fichiers immuables sont gardés.") }}</span></li>
+        </ol>
+      </details>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Dernières requêtes") }}</h2><div class="aside">{{ _("en direct") }} · <span data-bind="clients">{{ wu.clients }}</span> {{ _("poste(s)") }}</div></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>{{ _("Heure") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Fichier") }}</th><th class="num">{{ _("Taille") }}</th><th>{{ _("Source") }}</th></tr></thead>

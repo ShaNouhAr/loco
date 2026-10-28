@@ -2356,6 +2356,264 @@ def delete_backup(params, log=print):
     return True
 
 
+# --------------------------------------------------------------------------- caches (root)
+# Le portail (compte loco) ne peut pas lire les caches nginx (700, propriété nginx) ni le cache
+# apt-cacher-ng : l'agent les parcourt, publie un index lisible (0644) et applique les purges.
+
+CACHE_REQUESTS = os.path.join(AGENT_DIR, "cache")      # demandes du portail (0730 root:loco)
+CACHE_INDEX = os.path.join(AGENT_DIR, "cache.json")    # index publié (0644)
+CACHE_NAMES = ("wu", "rpm", "flatpak", "apt")
+CACHE_MAX_ENTRIES = 300        # objets listés par cache (les plus récents)
+CACHE_MAX_HEADERS = 8000       # en-têtes nginx lus par analyse (borne le coût d'un gros cache)
+_CACHE_ID_RE = re.compile(r"[0-9a-f]{16}")
+_SLICE_RE = re.compile(rb"[ /]?bytes=\d+-\d*\Z")       # suffixe de tranche nginx (WU) à fusionner
+
+
+def _cache_dir(name):
+    data = read_conf().get("DATA", "/srv/loco")
+    if name == "apt":
+        return os.path.join(data, "aptcache") if ALPINE else "/var/cache/apt-cacher-ng"
+    return os.path.join(data, {"wu": "wucache", "rpm": "rpmcache", "flatpak": "flatpakcache"}[name])
+
+
+def _cache_kind(name):
+    return "acng" if (name == "apt" and not ALPINE) else "nginx"
+
+
+def _cache_walk(root):
+    """Fichiers de données d'un cache, hors écritures en cours."""
+    for path, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in ("tmp", "_actmp")]   # nginx / apt-cacher-ng : transferts en cours
+        for name in files:
+            yield os.path.join(path, name)
+
+
+def _nginx_key(path):
+    """Clé de cache nginx, stockée en clair en tête du fichier : « \\nKEY: <clé>\\n »."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(4096)
+    except OSError:
+        return None
+    i = head.find(b"\nKEY: ")
+    if i < 0:
+        return None
+    end = head.find(b"\n", i + 6)
+    return head[i + 6:end] if end > 0 else None
+
+
+def _logical(key):
+    """Objet logique : les tranches (bytes=…) d'un même fichier sont fusionnées."""
+    return _SLICE_RE.sub(b"", key)
+
+
+def _entry_id(logical):
+    return hashlib.sha256(logical).hexdigest()[:16]
+
+
+def _entry_name(logical):
+    text = urllib.parse.unquote(logical.decode("utf-8", "replace")).split("?", 1)[0].rstrip("/")
+    name = text.rsplit("/", 1)[-1] or text
+    context = text[: len(text) - len(name)].strip("/")
+    return name[:160], context[:200]
+
+
+def _cache_iso(ts):
+    return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+def _scan_nginx(root):
+    files, total, count = [], 0, 0
+    for path in _cache_walk(root):
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        total += st.st_size
+        count += 1
+        files.append((st.st_mtime, st.st_size, path))
+    files.sort(reverse=True)                            # en-têtes lus sur les fichiers les plus récents d'abord
+    objs = {}
+    for mtime, size, path in files[:CACHE_MAX_HEADERS]:
+        key = _nginx_key(path)
+        if not key:
+            continue
+        logical = _logical(key)
+        eid = _entry_id(logical)
+        o = objs.get(eid)
+        if o is None:
+            name, context = _entry_name(logical)
+            o = objs[eid] = {"id": eid, "name": name, "context": context, "bytes": 0, "parts": 0, "at": 0}
+        o["bytes"] += size
+        o["parts"] += 1
+        o["at"] = max(o["at"], mtime)
+    return total, count, objs
+
+
+def _scan_acng(root):
+    """apt-cacher-ng : l'arborescence reflète l'URL ; chaque paquet a un fichier d'en-têtes « .head » à part."""
+    objs, total, count = {}, 0, 0
+    for path in _cache_walk(root):
+        rel = os.path.relpath(path, root)
+        base = os.path.basename(rel)
+        if base.endswith(".head") or rel.startswith("_") or base.startswith("."):
+            continue                                   # _xstore, index internes et fichiers de contrôle
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        total += st.st_size
+        count += 1
+        eid = _entry_id(rel.encode())
+        objs[eid] = {"id": eid, "name": base[:160], "context": rel[: len(rel) - len(base)].strip("/")[:200],
+                     "bytes": st.st_size, "parts": 1, "at": st.st_mtime}
+    return total, count, objs
+
+
+def _cache_state(name):
+    root = _cache_dir(name)
+    if not os.path.isdir(root):
+        return {"present": False}
+    total, count, objs = (_scan_nginx if _cache_kind(name) == "nginx" else _scan_acng)(root)
+    entries = sorted(objs.values(), key=lambda o: o["at"], reverse=True)[:CACHE_MAX_ENTRIES]
+    for o in entries:
+        o["at"] = _cache_iso(o["at"])
+    return {"present": True, "bytes": total, "count": count, "shown": len(entries),
+            "scanned": _now(), "entries": entries}
+
+
+def write_cache_index(names=None):
+    """(Re)construit l'index des caches demandés et le fusionne dans le fichier publié (0644)."""
+    index = _read_json(CACHE_INDEX)
+    caches = index.get("caches") if isinstance(index.get("caches"), dict) else {}
+    for name in (names or CACHE_NAMES):
+        if name in CACHE_NAMES:
+            try:
+                caches[name] = _cache_state(name)
+            except OSError as e:
+                caches[name] = {"present": False, "error": str(e)}
+    _write_json(CACHE_INDEX, {"updated": _now(), "caches": caches})
+
+
+def _unlink_size(path):
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = 0
+    try:
+        os.unlink(path)
+    except OSError:
+        return 0
+    return size
+
+
+def purge_cache(name, entry_id=None, everything=False):
+    """Supprime un objet (toutes ses tranches) ou vide le cache. Retourne les octets libérés."""
+    if name not in CACHE_NAMES:
+        return 0
+    root = _cache_dir(name)
+    if not os.path.isdir(root):
+        return 0
+    freed = 0
+    if everything:
+        for path in _cache_walk(root):
+            freed += _unlink_size(path)
+        for path, _dirs, _files in os.walk(root, topdown=False):
+            if path != root:
+                with contextlib.suppress(OSError):
+                    os.rmdir(path)
+        return freed
+    if not entry_id or not _CACHE_ID_RE.fullmatch(entry_id):
+        return 0
+    nginx = _cache_kind(name) == "nginx"
+    for path in _cache_walk(root):
+        if nginx:
+            key = _nginx_key(path)
+            if key and _entry_id(_logical(key)) == entry_id:
+                freed += _unlink_size(path)
+        elif not path.endswith(".head") and _entry_id(os.path.relpath(path, root).encode()) == entry_id:
+            freed += _unlink_size(path)
+            _unlink_size(path + ".head")               # en-têtes apt-cacher-ng associés
+    return freed
+
+
+def _cache_prepare():
+    os.makedirs(CACHE_REQUESTS, exist_ok=True)
+    shutil.chown(CACHE_REQUESTS, "root", "loco")       # le portail y dépose, sans lister ni lire les autres
+    os.chmod(CACHE_REQUESTS, 0o730)
+
+
+def cache_worker():
+    """Fil dédié de l'agent : applique les demandes d'analyse et de purge, hors du verrou des opérations."""
+    try:
+        _cache_prepare()
+    except OSError as e:
+        print(f"gestion du cache indisponible : {e}", file=sys.stderr)
+        return
+    if not os.path.exists(CACHE_INDEX):
+        with contextlib.suppress(OSError):
+            write_cache_index()
+    while True:
+        try:
+            names = sorted(os.listdir(CACHE_REQUESTS))
+        except OSError:
+            names = []
+        for fn in names:
+            path = os.path.join(CACHE_REQUESTS, fn)
+            if not fn.endswith(".json"):
+                if fn.endswith(".tmp") and time.time() - os.lstat(path).st_mtime > 300:
+                    _unlink_size(path)
+                continue
+            req = _read_request(path)
+            _unlink_size(path)
+            if not req:
+                continue
+            op, cache = req.get("op"), req.get("cache")
+            if cache is not None and cache != "" and cache not in CACHE_NAMES:
+                continue
+            try:
+                if op == "purge" and cache:
+                    purge_cache(cache, req.get("id"), bool(req.get("all")))
+                    write_cache_index([cache])
+                elif op == "scan":
+                    write_cache_index([cache] if cache else None)
+            except OSError:
+                pass
+        time.sleep(1.5)
+
+
+# -------- côté portail (compte loco) : dépôt de demandes et lecture de l'index
+
+def cache_request(op, cache="", entry_id="", everything=False, user=""):
+    """Dépôt d'une demande de cache par le portail ; l'agent la revalide et l'applique."""
+    if op not in ("scan", "purge"):
+        raise ValueError("opération inconnue")
+    if cache and cache not in CACHE_NAMES:
+        raise ValueError("cache inconnu")
+    payload = {"op": op, "cache": cache, "user": str(user)[:64]}
+    if op == "purge":
+        if not cache:
+            raise ValueError("cache requis")
+        if everything:
+            payload["all"] = True
+        elif _CACHE_ID_RE.fullmatch(str(entry_id)):
+            payload["id"] = str(entry_id)
+        else:
+            raise ValueError("élément invalide")
+    base = os.path.join(CACHE_REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
+    try:
+        with open(base + ".tmp", "x") as f:
+            json.dump(payload, f)
+        os.rename(base + ".tmp", base + ".json")
+    except OSError:
+        raise ValueError("agent d'administration indisponible (service loco-agent)") from None
+
+
+def cache_index():
+    """Index publié des caches, pour le portail (dict éventuellement vide)."""
+    return _read_json(CACHE_INDEX)
+
+
 def _operation(action, params, log):
     if action == "check":
         return check(log)
@@ -2523,6 +2781,8 @@ def _prepare_dirs():
     # Le portail y dépose des fichiers sans pouvoir lister ni lire ceux des autres.
     shutil.chown(REQUESTS, "root", "loco")
     os.chmod(REQUESTS, 0o730)
+    with contextlib.suppress(OSError):
+        _cache_prepare()
 
 
 def _prune_jobs(keep=40):
@@ -2548,6 +2808,7 @@ def agent():
         threading.Thread(target=shell_broker, name="loco-shell", daemon=True).start()
     except OSError as e:
         print(f"shell root indisponible : {e}", file=sys.stderr)
+    threading.Thread(target=cache_worker, name="loco-cache", daemon=True).start()
     code = os.stat(HERE).st_mtime_ns
     beat = timecheck = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.

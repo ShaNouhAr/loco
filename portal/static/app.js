@@ -452,7 +452,7 @@
       $(".dlg-b p", dlg).textContent = text || "";
       $("[data-ok]", dlg).textContent = okLabel || t("Confirmer");
       // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
-      var danger = /^(Supprimer|Retirer|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Delete|Remove|Forget|Abandon|Cancel|Restart|Reboot|Reset)/.test(okLabel || "");
+      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Vaciar|Eliminar|Quitar)/.test(okLabel || "");
       $("[data-ok]", dlg).classList.toggle("danger", danger);
       $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;
@@ -1196,6 +1196,86 @@
       if (d.signature !== operations.dataset.signature) window.location.reload();
     });
   }
+  /* ---------------------------------------------------------------- caches (Windows Update, APT, RPM…) */
+  // Contenu d'un cache listé en direct : /cache/state renvoie l'index publié par l'agent root.
+  // Lire l'index est gratuit (aucune analyse) ; seules l'ouverture, « Actualiser » et une purge demandent une analyse.
+  $$("[data-cache]").forEach(function (panel) {
+    var area = panel.dataset.cache, csrf = panel.dataset.csrf, canPurge = panel.dataset.canPurge === "1";
+    var rows = $("[data-cache-rows]", panel), note = $("[data-cache-state]", panel);
+    var sum = $("[data-cache-sum]", panel), bar = $("[data-cache-bar]", panel), filter = $("[data-cache-filter]", panel);
+    var current = [], loaded = false, count = 0, shownCount = 0;
+    var del = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+
+    function setNote(msg) { note.textContent = msg; note.hidden = !msg; }
+
+    function row(e) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><strong class="cache-name"></strong></td><td class="mono muted hide-sm cache-ctx"></td>' +
+        '<td class="num nowrap cache-size"></td><td class="muted nowrap hide-sm cache-at"></td>' +
+        (canPurge ? '<td class="right"><button type="button" class="btn icon sm ghost danger" data-cache-del="' + esc(e.id) + '">' + del + '</button></td>' : "");
+      $(".cache-name", tr).textContent = e.name || "—";
+      $(".cache-ctx", tr).textContent = e.context || "";
+      $(".cache-size", tr).textContent = bytes(e.bytes);
+      if (e.parts > 1) $(".cache-size", tr).title = t("%(n)s fragments", { n: e.parts });
+      $(".cache-at", tr).textContent = e.at || "";
+      if (canPurge) { var b = $("[data-cache-del]", tr); b.title = t("Supprimer du cache"); b.setAttribute("aria-label", t("Supprimer du cache")); }
+      return tr;
+    }
+
+    function render() {
+      var q = (filter && filter.value || "").trim().toLowerCase(), shown = 0;
+      rows.textContent = "";
+      current.forEach(function (e) {
+        if (q && (e.name + " " + e.context).toLowerCase().indexOf(q) < 0) return;
+        rows.appendChild(row(e)); shown++;
+      });
+      if (!loaded) setNote(t("Analyse du cache…"));
+      else if (count === 0) setNote(t("Le cache est vide."));
+      else if (shown === 0) setNote(t("Aucun fichier ne correspond."));
+      else if (shownCount < count) setNote(t("Les %(n)s objets les plus récents ; le reste du cache n'est pas listé.", { n: shownCount }));
+      else setNote("");
+    }
+
+    function apply(d) {
+      var info = d && d[area];
+      if (!info || !info.present) { loaded = true; current = []; count = 0; if (sum) sum.hidden = true; if (bar) bar.hidden = true; setNote(info ? t("Le cache est vide.") : t("Cache indisponible.")); return; }
+      loaded = true; current = info.entries || []; count = info.count || 0; shownCount = info.shown || current.length;
+      if (sum) { sum.hidden = false; sum.textContent = count + " " + (count === 1 ? t("fichier") : t("fichiers")) + " · " + bytes(info.bytes || 0); }
+      if (bar) bar.hidden = count === 0;
+      render();
+    }
+
+    function load(scan) {
+      fetch("/cache/state?areas=" + area + (scan ? "&scan=1" : ""), { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+        .then(function (r) { return r.json(); }).then(apply).catch(function () {});
+    }
+
+    function purge(body, title, text, ok) {
+      confirmDialog(title, text, ok).then(function (yes) {
+        if (!yes) return;
+        var data = new FormData(); data.set("csrf", csrf); data.set("area", area);
+        Object.keys(body).forEach(function (k) { data.set(k, body[k]); });
+        fetch("/cache/purge", { method: "POST", body: data, headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function () { setNote(t("Analyse du cache…")); [500, 1600, 3000].forEach(function (ms) { setTimeout(function () { load(false); }, ms); }); })
+          .catch(function () { toast(t("La purge du cache a échoué."), "error"); });
+      });
+    }
+
+    if (filter) filter.addEventListener("input", render);
+    var refresh = $("[data-cache-refresh]", panel);
+    if (refresh) refresh.addEventListener("click", function () { if (loaded) setNote(t("Analyse du cache…")); load(true); [1500, 3000].forEach(function (ms) { setTimeout(function () { load(false); }, ms); }); });
+    if (canPurge) panel.addEventListener("click", function (e) {
+      var d = e.target.closest("[data-cache-del]");
+      if (d) { purge({ id: d.dataset.cacheDel }, t("Supprimer ce fichier du cache ?"), t("Il repart du serveur d'origine à la prochaine demande d'un poste. Rien n'est perdu côté postes."), t("Supprimer")); return; }
+      if (e.target.closest("[data-cache-clear]")) purge({ all: "1" }, t("Vider tout le cache ?"), t("Tous les fichiers en cache sont supprimés. Ils seront retéléchargés à la demande ; rien n'est perdu côté postes."), t("Vider le cache"));
+    });
+
+    load(true);
+    [1300, 2800, 5000].forEach(function (ms) { setTimeout(function () { load(false); }, ms); });
+    poll("/cache/state?areas=" + area, 10000, apply);
+  });
+
   var live = $("[data-poll]");
   if (live) {
     var kind = live.dataset.pollKind;

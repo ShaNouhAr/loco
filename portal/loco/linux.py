@@ -233,10 +233,11 @@ def packages_page(family, selected):
         with transaction() as conn:
             linux_devices = conn.execute("SELECT COUNT(*) FROM devices WHERE state='active' AND os_family='linux'").fetchone()[0]
     own = sum(r["count"] for r in apt_repos) + legacy_count + sum(r["count"] for r in rpm_repos)
+    from . import caches
     return render_template("packages.html", family=family, selected=selected, current=current, label=label,
                            apt_repos=apt_repos, rpm_repos=rpm_repos, legacy=LEGACY, legacy_count=legacy_count,
                            distributions=config.APT_DISTRIBUTIONS, packages=packages, devices=devices,
-                           linux_devices=linux_devices, own_packages=own,
+                           linux_devices=linux_devices, own_packages=own, cache_manage=caches.available(),
                            stats=read_stats(), acng=service_active("apt-cacher-ng") if family == "apt" else None,
                            upstreams=config.RPM_UPSTREAMS)
 
