@@ -95,11 +95,25 @@
             <td class="muted nowrap hide-sm" data-label="{{ _('Contact') }}" title="{{ d.last_seen }}">{{ r.seen }}</td>
             <td class="right nowrap card-action">
               {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ _("%(v)s en attente", v=actions[r.pending[0].action]|lower) }}</span>
-              {% elif can('fleet.update') and r.needs_update %}
-              <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
-                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">
-                <button class="btn sm"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
-              </form>
+              {% else %}
+              {% set row_update = can('fleet.update') and r.needs_update %}
+              {% set row_reboot = can('fleet.reboot') and d.reboot_required and d.state == 'active' %}
+              {% if row_update or row_reboot %}
+              <div class="row-acts">
+                {% if row_update %}
+                <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">
+                  <button class="btn sm"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
+                </form>
+                {% endif %}
+                {% if row_reboot %}
+                <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax data-confirm="{{ _('Redémarrer %(name)s ?', name=d.hostname) }}" data-confirm-text="{{ _('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
+                  <button class="btn sm"><span class="spin"></span>{{ _("Redémarrer") }}</button>
+                </form>
+                {% endif %}
+              </div>
+              {% endif %}
               {% endif %}
             </td>
           </tr>

@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.87.0 — 2026-10-28
+
+- **Mon parc : redémarrer depuis la liste.** Quand un poste attend un redémarrage, un bouton **Redémarrer** apparaît dans la liste, à l'endroit même de *Mettre à jour*. Si le poste a aussi des mises à jour en attente, les deux boutons cohabitent côte à côte. Le redémarrage est confirmé avant l'envoi et prévient la personne connectée.
+
 ## 2.86.0 — 2026-10-28
 
 - **Écran de connexion repensé.** Une barre légère (loco, le serveur, la langue et le thème) et une carte centrée, plus aérée : titre et phrase d'accueil, champs plus confortables, et une mention **SSO** claire quand des annuaires d'entreprise sont actifs. Les erreurs (mot de passe incorrect, trop de tentatives) s'affichent dans la carte, une seule fois. Même présentation pour la double authentification (avec un lien pour changer de compte) et le choix du mot de passe à la première connexion.

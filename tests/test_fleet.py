@@ -269,6 +269,21 @@ class TestStatus(FleetTest):
 
 
 class TestActions(FleetTest):
+    def test_list_offers_restart_where_update_is_and_both_can_live_together(self):
+        both, restart_only = Agent(LINUX, "192.168.43.61"), Agent(WINDOWS, "192.168.43.62")
+        for agent in (both, restart_only):
+            agent.enroll()
+        both.checkin({"updates": [{"name": "curl", "version": "8.14", "security": False}], "reboot_required": True})
+        restart_only.checkin({"updates": [], "apps": [], "reboot_required": True})
+
+        def actions(page, dev_id):
+            row = page[page.index(f'/fleet/{dev_id}/action"'):]
+            return re.findall(r'name="action" value="(\w+)"', row[:row.index("</td>")])
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertEqual(actions(page, device(both.uid)["id"]), ["update", "reboot"])
+        self.assertEqual(actions(page, device(restart_only.uid)["id"]), ["reboot"])
+        self.assertIn("Le poste redémarre une minute après le prochain contact", page)       # confirmation
+
     def add_app(self):
         with transaction() as conn:
             conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect) "
