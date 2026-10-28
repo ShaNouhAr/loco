@@ -762,6 +762,21 @@ class TestLinuxInventory(FleetTest):
         page = self.admin.c.get(f"/fleet/{device(a.uid)['id']}").get_data(as_text=True)
         self.assertNotIn('data-tab="paquets"', page)
 
+    def test_windows_driver_updates_are_kept_and_tagged(self):
+        a = Agent(WINDOWS, "192.168.43.50")
+        a.enroll()
+        a.checkin({"updates": [
+            {"name": "2024-05 Cumulative Update", "version": "KB5037771", "security": True},
+            {"name": "NVIDIA Corporation - Display - 31.0.15.5222", "version": "", "driver": True},
+        ]})
+        inv = json.loads(device(a.uid)["inventory"])
+        driver = next(u for u in inv["updates"] if "NVIDIA" in u["name"])
+        self.assertTrue(driver["driver"])
+        self.assertFalse(driver["security"])
+        page = self.admin.c.get(f"/fleet/{device(a.uid)['id']}").get_data(as_text=True)
+        self.assertIn("NVIDIA Corporation", page)
+        self.assertIn(">pilote</span>", page)
+
     def test_oversized_inventory_is_capped(self):
         a = Agent(LINUX, "192.168.43.60")
         a.enroll()

@@ -2479,6 +2479,7 @@
  "pas de relevé": "no reading",
  "pas termine apres %(timeout)s s : l'installeur attend sans doute une action (verifiez les arguments silencieux)": "not finished after %(timeout)s s: the installer is probably waiting for input (check the silent arguments)",
  "pic sur %(s)s s : %(rate)s": "peak over %(s)s s: %(rate)s",
+ "pilote": "driver",
  "pilotées par loco": "driven by loco",
  "planifié pour %(run_after)s": "scheduled for %(run_after)s",
  "port invalide": "invalid port",

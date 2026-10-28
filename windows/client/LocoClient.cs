@@ -580,19 +580,29 @@ namespace Loco
             return false;
         }
 
+        static bool IsDriver(dynamic u)
+        {
+            try { return Convert.ToInt32(u.Type) == 2; }    // UpdateType : 1 = logiciel, 2 = pilote
+            catch (Exception) { return false; }
+        }
+
+        // Logiciels ET pilotes manquants : les pilotes (carte graphique NVIDIA/AMD, chipset…) distribués par Windows Update
+        // sont de type « Driver », exclus d'une recherche « Type='Software' ». On les ajoute pour qu'ils soient vus et posés.
+        const string UpdateCriteria = "IsInstalled=0 and IsHidden=0 and (Type='Software' or Type='Driver')";
+
         static Dictionary<string, object> Inventory()
         {
             var updates = new List<Dictionary<string, object>>();
             string error = "";
             try
             {
-                dynamic result = NewSession().CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software'");
+                dynamic result = NewSession().CreateUpdateSearcher().Search(UpdateCriteria);
                 foreach (dynamic u in result.Updates)
                 {
                     var kbs = new List<string>();
                     foreach (object kb in u.KBArticleIDs) kbs.Add("KB" + kb);
                     updates.Add(new Dictionary<string, object> { { "name", Convert.ToString(u.Title) },
-                        { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) } });
+                        { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) }, { "driver", IsDriver(u) } });
                 }
             }
             catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
@@ -605,7 +615,7 @@ namespace Loco
         static bool InstallWindowsUpdates(List<string> lines)
         {
             dynamic session = NewSession();
-            dynamic found = session.CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=0 and Type='Software'");
+            dynamic found = session.CreateUpdateSearcher().Search(UpdateCriteria);
             dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
             foreach (dynamic u in found.Updates)
             {

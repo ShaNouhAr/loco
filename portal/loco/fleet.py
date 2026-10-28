@@ -390,7 +390,7 @@ def _store_inventory(dev, inv):
     apps = [a for a in (inv.get("apps") or []) if isinstance(a, dict)][:2000]
     clean = {
         "updates": [{"name": _text(u.get("name")), "version": _text(u.get("version"), 80),
-                     "security": bool(u.get("security"))} for u in updates],
+                     "security": bool(u.get("security")), "driver": bool(u.get("driver"))} for u in updates],
         "apps": [{"name": _text(a.get("name")), "version": _text(a.get("version"), 80),
                   "publisher": _text(a.get("publisher"), 120)} for a in apps],
         "flatpak": int(inv.get("flatpak") or 0) if str(inv.get("flatpak") or 0).isdigit() else 0,

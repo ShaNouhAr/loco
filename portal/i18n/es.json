@@ -2479,6 +2479,7 @@
  "pas de relevé": "sin lectura",
  "pas termine apres %(timeout)s s : l'installeur attend sans doute une action (verifiez les arguments silencieux)": "no terminó tras %(timeout)s s: probablemente el instalador espera una acción (compruebe los argumentos silenciosos)",
  "pic sur %(s)s s : %(rate)s": "pico en %(s)s s: %(rate)s",
+ "pilote": "controlador",
  "pilotées par loco": "gestionadas por loco",
  "planifié pour %(run_after)s": "programado para %(run_after)s",
  "port invalide": "puerto no válido",

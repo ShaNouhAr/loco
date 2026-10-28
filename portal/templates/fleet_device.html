@@ -120,7 +120,7 @@
         <table>
           <tbody>
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
-            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
+            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
           {% endfor %}
           </tbody>
         </table>
