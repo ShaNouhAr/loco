@@ -269,10 +269,9 @@ def _system_env():
     return env
 
 
-def _get(url, timeout=15):
+def _get(url, timeout=15, accept="application/vnd.github+json"):
     opener = urllib.request.build_opener(urllib.request.ProxyHandler(_proxies()))
-    req = urllib.request.Request(url, headers={"User-Agent": f"loco/{current_version()}",
-                                               "Accept": "application/vnd.github+json"})
+    req = urllib.request.Request(url, headers={"User-Agent": f"loco/{current_version()}", "Accept": accept})
     return opener.open(req, timeout=timeout)
 
 
@@ -299,7 +298,7 @@ def _github_release(repo):
     version = data["tag_name"].lstrip("v")
     _check_version(version, data["tag_name"])
     assets = {a["name"]: a["browser_download_url"] for a in data.get("assets", [])}
-    return {"version": version, "url": data.get("html_url", ""), "published": data.get("published_at", ""),
+    return {"version": version, "tag": data["tag_name"], "url": data.get("html_url", ""), "published": data.get("published_at", ""),
             "notes": (data.get("body") or "")[:6000],
             "archive": assets.get(f"loco-{version}.tar.gz", ""), "sums": assets.get("SHA256SUMS", "")}
 
@@ -315,9 +314,41 @@ def _gitlab_release(url):
     version = rel["tag_name"].lstrip("v")
     _check_version(version, rel["tag_name"])
     links = {a["name"]: (a.get("direct_asset_url") or a.get("url")) for a in rel.get("assets", {}).get("links", [])}
-    return {"version": version, "url": rel.get("_links", {}).get("self", url), "published": rel.get("released_at", ""),
-            "notes": (rel.get("description") or "")[:6000],
+    return {"version": version, "tag": rel["tag_name"], "url": rel.get("_links", {}).get("self", url),
+            "published": rel.get("released_at", ""), "notes": (rel.get("description") or "")[:6000],
             "archive": links.get(f"loco-{version}.tar.gz", ""), "sums": links.get("SHA256SUMS", "")}
+
+
+CHANGELOG_MAX = 60_000              # nouveautés gardées dans l'état (status.json relu à chaque affichage de la page)
+_SECTION_RE = re.compile(r"^## +(\S+)", re.M)
+
+
+def newer_sections(text, current):
+    """Sections « ## X.Y.Z » d'un CHANGELOG.md plus récentes que la version installée (ordre du fichier conservé)."""
+    starts = [(m.start(), m.group(1)) for m in _SECTION_RE.finditer(text or "")]
+    kept = []
+    for i, (start, version) in enumerate(starts):
+        if re.fullmatch(r"[0-9]+(\.[0-9]+){1,3}", version) and version_key(version) > version_key(current or "0"):
+            end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
+            kept.append(text[start:end].strip())
+    return "\n\n".join(kept)[:CHANGELOG_MAX]
+
+
+def release_changelog(release):
+    """Journal des versions publié avec la nouvelle version (CHANGELOG.md au tag), par la même API que la version
+    elle-même : pas de nouveau flux sortant. Chaîne vide si le dépôt n'en a pas ou s'il est injoignable."""
+    src, tag = source(), release.get("tag") or "v" + release.get("version", "")
+    if "://" in src:
+        parts = urllib.parse.urlsplit(src)
+        project = urllib.parse.quote(parts.path.strip("/"), safe="")
+        url = (f"https://{parts.netloc}/api/v4/projects/{project}/repository/files/CHANGELOG.md/raw"
+               f"?ref={urllib.parse.quote(tag, safe='')}")
+        accept = "text/plain"
+    else:
+        url = f"https://api.github.com/repos/{src}/contents/CHANGELOG.md?ref={urllib.parse.quote(tag, safe='')}"
+        accept = "application/vnd.github.raw+json"
+    with _get(url, accept=accept) as r:
+        return r.read(1_000_000).decode("utf-8", "replace")
 
 
 
@@ -366,6 +397,15 @@ def check(log=print):
         values["latest"] = latest_release()
     except (OSError, ValueError, KeyError) as e:
         values["errors"].append({"code": "loco-release", "detail": str(e)})
+    latest = values.get("latest") or {}
+    if latest and version_key(latest["version"]) > version_key(values["current"] or "0"):
+        # Nouveautés de la version disponible, à lire avant d'installer : facultatif, sans erreur bloquante.
+        try:
+            latest["changelog"] = newer_sections(release_changelog(latest), values["current"])
+        except (OSError, ValueError) as e:
+            log(t(f"journal des versions de {latest['version']} indisponible : {e}",
+                  f"changelog of {latest['version']} unavailable: {e}",
+                  f"historial de versiones de {latest['version']} no disponible: {e}"))
     values.update(system_state())
     # État du système publié tout de suite : la liste des paquets peut prendre plusieurs minutes (miroirs lents).
     _update_status(**{k: v for k, v in values.items() if k not in ("checked", "errors")})

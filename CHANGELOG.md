@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.82.0 — 2026-10-28
+
+- **Page Mises à jour repensée.** Tout ce qui compte est visible d'un coup d'œil, en haut de page :
+  - Une carte **loco** (version installée → disponible, date de publication, versions d'écart, « Au programme » avec les nouveautés, bouton **Installer**) et une carte **Système** (paquets, correctifs de sécurité, noyau, encart **À corriger en priorité** trié par gravité, boutons **Installer les correctifs** et **Tout mettre à jour**).
+  - Un **bandeau de redémarrage** compact avec son bouton, quand un nouveau noyau ou des services l'exigent.
+  - Les **nouveautés de la version disponible** se lisent avant d'installer : à chaque vérification, loco récupère le journal des versions publié avec elle (même API GitHub ou GitLab, aucun nouveau flux sortant).
+  - **Journal des versions en frise** : nouveautés et version installée repérées, une ligne de résumé par version, l'historique ancien replié.
+  - **Opérations** : la liste et le journal de l'opération choisie côte à côte, sans codes de couleur parasites.
+  - La **source des mises à jour**, réglage rare, passe en bas de page, repliée.
+
 ## 2.81.0 — 2026-10-28
 
 - **Scripts de base prêts à l'emploi.** Deux nouveaux scripts Windows arrivent dans la bibliothèque, à côté du pilote NVIDIA : **Réparer Windows (DISM + SFC)** (répare l'image avec `DISM /RestoreHealth` puis vérifie les fichiers système avec `SFC /scannow`, sortie nettoyée) et **Nettoyer les fichiers temporaires** (dossiers Temp, cache de Windows Update et corbeille, avec l'espace libéré). Modifiables et supprimables comme n'importe quel script.

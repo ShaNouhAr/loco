@@ -430,6 +430,41 @@ class TestPages(TempAgent):
         html = self.b.c.get("/system/configuration").get_data(as_text=True)
         self.assertIn('value="10.0.0.0/8 192.168.0.0/16"', html)
 
+    def test_news_of_the_available_version_are_shown_before_installing(self):
+        news = "## 9.1.0 — 2026-11-02\n\n- **Grande nouveauté.** avec `loco-update`.\n\n## 9.0.0 — 2026-11-01\n\n- **Autre.** b\n"
+        shipped = os.path.join(self.work.name, "CHANGELOG.md")                # journal livré avec la version installée
+        with open(shipped, "w", encoding="utf-8") as f:
+            f.write(f"# Journal\n\n## {config.VERSION} — 2026-10-01\n\n- **Version actuelle.** x\n")
+        patch = mock.patch.object(config, "CHANGELOG_PATH", shipped)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
+        appliance._CHANGELOG["mtime"] = None
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-15 09:00:00", "latest": {"version": "9.1.0", "url": "", "published": "2026-11-02T10:00:00Z",
+                                                                  "changelog": news}, "packages": [], "errors": []}, f)
+        html = self.b.c.get("/system/updates").get_data(as_text=True)
+        self.assertIn("Installer 9.1.0", html)
+        self.assertIn("Au programme", html)                                   # aperçu dans la carte loco
+        self.assertIn("Grande nouveauté.", html)
+        self.assertIn('id="nouveautes"', html)
+        self.assertIn('class="tl-item is-new"', html)
+        self.assertIn("<code>loco-update</code>", html)                       # code en ligne rendu, échappé
+        self.assertIn('class="tl-item is-current"', html)                     # la version installée, depuis le journal livré
+        self.assertIn("Aucune mise à jour en attente.", html)                 # système à jour
+
+    def test_security_fixes_are_listed_by_severity(self):
+        pkgs = [{"name": n, "current": "1", "new": "2", "origin": "main", "security": True, "severity": s, "tags": []}
+                for n, s in (("low-pkg", "Low"), ("crit-pkg", "Critical"), ("med-pkg", "Medium"), ("high-pkg", "High"))]
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-15 09:00:00", "security_supported": True, "packages": pkgs, "errors": []}, f)
+        html = self.b.c.get("/system/updates").get_data(as_text=True)
+        box = html[html.index("À corriger en priorité"):]
+        self.assertLess(box.index("crit-pkg"), box.index("high-pkg"))
+        self.assertLess(box.index("high-pkg"), box.index("med-pkg"))
+        self.assertNotIn("low-pkg", box[:box.index("</ul>")])                  # trois au plus dans l'encart
+        self.assertIn("4 correctifs de sécurité", html)
+
     def test_running_operation_shows_a_progress_bar(self):
         job = {"id": "20261027-150000-abcdef", "action": "update-loco", "state": "running", "started": "2026-10-27 15:00:00"}
         with mock.patch.object(locoadmin, "running_job", return_value=job), \
@@ -524,6 +559,64 @@ class TestPages(TempAgent):
             self.assertEqual(self.b.c.get("/system/updates").status_code, 404)
         anonymous = fixture.Browser()
         self.assertEqual(anonymous.c.get("/system/configuration").status_code, 302)
+
+
+class TestReleaseChangelog(TempAgent):
+    """Nouveautés de la version disponible : rapatriées à la vérification, seules les versions plus récentes gardées."""
+
+    TEXT = ("# Journal\n\n## 2.3.0 — 2026-11-02\n\n- **Trois.** avec `code`.\n\n## 2.2.0 — 2026-11-01\n\n- **Deux.** b\n\n"
+            "## 2.1.0 — 2026-10-30\n\n- **Un.** a\n")
+    STATE = {"os": "Alpine Linux 3.24.1", "package_manager": "apk", "container": False,
+             "kernel": {"running": "6.12.57-0-lts", "installed": ""}, "security_supported": False,
+             "reboot_required": False, "reboot_reasons": [], "stale_services": {}}
+
+    def test_only_sections_newer_than_installed_are_kept(self):
+        kept = locoadmin.newer_sections(self.TEXT, "2.1.0")
+        self.assertIn("## 2.3.0", kept)
+        self.assertIn("## 2.2.0", kept)
+        self.assertNotIn("## 2.1.0", kept)
+        self.assertLess(kept.index("2.3.0"), kept.index("2.2.0"))            # ordre du fichier conservé
+        self.assertEqual(locoadmin.newer_sections(self.TEXT, "2.3.0"), "")
+        self.assertEqual(locoadmin.newer_sections("## Notes\n\n- rien\n", "1.0"), "")   # titre qui n'est pas une version
+
+    def check(self, changelog):
+        latest = {"version": "2.3.0", "tag": "v2.3.0", "url": "", "published": "", "notes": "", "archive": "", "sums": ""}
+        with mock.patch.object(locoadmin, "latest_release", return_value=latest), \
+             mock.patch.object(locoadmin, "release_changelog", changelog), \
+             mock.patch.object(locoadmin, "current_version", return_value="2.1.0"), \
+             mock.patch.object(locoadmin, "system_state", return_value=dict(self.STATE)), \
+             mock.patch.object(locoadmin, "pending_packages", return_value=[]):
+            locoadmin.check(log=lambda _t: None)
+        return locoadmin.read_status()
+
+    def test_check_keeps_the_news_of_the_available_version(self):
+        status = self.check(lambda release: self.TEXT)
+        self.assertIn("## 2.3.0", status["latest"]["changelog"])
+        self.assertNotIn("## 2.1.0", status["latest"]["changelog"])
+        self.assertEqual(status["errors"], [])
+
+    def test_unreachable_changelog_does_not_fail_the_check(self):
+        def broken(release):
+            raise OSError("introuvable")
+        status = self.check(broken)
+        self.assertEqual(status["latest"]["version"], "2.3.0")
+        self.assertNotIn("changelog", status["latest"])
+        self.assertEqual(status["errors"], [])
+
+    def test_github_and_gitlab_requests(self):
+        urls = []
+
+        def fake_get(url, timeout=15, accept=""):
+            urls.append((url, accept))
+            return FakeResponse(b"## 2.3.0\n")
+        with mock.patch.object(locoadmin, "_get", fake_get):
+            with mock.patch.object(locoadmin, "source", return_value="ShaNouhAr/loco"):
+                locoadmin.release_changelog({"version": "2.3.0", "tag": "v2.3.0"})
+            with mock.patch.object(locoadmin, "source", return_value="https://gitlab.exemple/infra/loco"):
+                locoadmin.release_changelog({"version": "2.3.0", "tag": "v2.3.0"})
+        self.assertEqual(urls[0], ("https://api.github.com/repos/ShaNouhAr/loco/contents/CHANGELOG.md?ref=v2.3.0",
+                                   "application/vnd.github.raw+json"))
+        self.assertEqual(urls[1][0], "https://gitlab.exemple/api/v4/projects/infra%2Floco/repository/files/CHANGELOG.md/raw?ref=v2.3.0")
 
 
 class TestChangelog(unittest.TestCase):

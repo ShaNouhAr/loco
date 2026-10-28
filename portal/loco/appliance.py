@@ -45,6 +45,8 @@ def job_detail(job):
         return p.get("repo", "")
     return " ".join(f"{k}={v}" for k, v in p.items())
 TAG_LABELS = {"noyau": "noyau", "loco": L_("service loco"), "socle": "socle"}
+# Gravité des avis de sécurité (APK, DNF, APT n'emploient pas les mêmes mots) : les plus graves d'abord.
+SEVERITY_RANK = {"critical": 0, "important": 1, "high": 1, "moderate": 2, "medium": 2, "low": 3}
 
 
 def _reboot_text(r):
@@ -214,42 +216,80 @@ _CHANGELOG = {"mtime": None, "entries": []}
 _VERSION_RE = re.compile(r"^##\s+(\S+)\s*(?:[—-]\s*(.+))?$")
 
 
+_INLINE_RE = re.compile(r"(\*\*.+?\*\*|`[^`]+`)")
+
+
 def _inline(text):
-    """Découpe un texte Markdown en segments gras (**…**) et normaux, pour un rendu échappé par le gabarit."""
+    """Découpe un texte Markdown en segments normaux, gras (**…**) et code (`…`), rendus échappés par le gabarit."""
     parts = []
-    for i, seg in enumerate(text.split("**")):
-        if seg:
-            parts.append({"text": seg, "b": i % 2 == 1})
+    for seg in _INLINE_RE.split(text):
+        if not seg:
+            continue
+        if len(seg) > 4 and seg.startswith("**") and seg.endswith("**"):
+            parts.append({"text": seg[2:-2], "b": True})
+        elif len(seg) > 2 and seg.startswith("`") and seg.endswith("`"):
+            parts.append({"text": seg[1:-1], "b": False, "c": True})
+        else:
+            parts.append({"text": seg, "b": False})
     return parts
 
 
+def _vkey(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or ""))
+
+
+def parse_changelog(text):
+    """CHANGELOG.md -> entrées {version, date, notes} dans l'ordre du fichier (gras et sous-puces repérés)."""
+    entries, cur = [], None
+    for line in (text or "").splitlines():
+        m = _VERSION_RE.match(line)
+        if m:
+            cur = {"version": m.group(1), "date": (m.group(2) or "").strip(), "notes": []}
+            entries.append(cur)
+        elif cur is not None:
+            stripped = line.lstrip()
+            if stripped.startswith("- "):
+                cur["notes"].append({"sub": len(line) - len(stripped) >= 2, "parts": _inline(stripped[2:])})
+            elif stripped and cur["notes"]:                     # suite d'une puce sur la ligne suivante
+                cur["notes"][-1]["parts"].extend(_inline(" " + stripped))
+    for e in entries:                       # résumé d'une ligne : la première phrase en gras, sinon le début du texte
+        tops = [n for n in e["notes"] if not n["sub"]]
+        first = tops[0]["parts"] if tops else []
+        e["title"] = (next((p["text"] for p in first if p["b"]), "") or "".join(p["text"] for p in first)).strip()
+        e["more"] = max(0, len(tops) - 1)
+    return entries
+
+
 def changelog(limit=40):
-    """Journal des versions (CHANGELOG.md livré) analysé en entrées {version, date, items} ; relu si le fichier change."""
+    """Journal livré avec la version installée (CHANGELOG.md), relu seulement si le fichier change."""
     try:
         mtime = os.path.getmtime(config.CHANGELOG_PATH)
     except OSError:
         return []
-    if _CHANGELOG["mtime"] == mtime:
-        return _CHANGELOG["entries"]
-    entries, cur = [], None
-    try:
-        with open(config.CHANGELOG_PATH, encoding="utf-8") as f:
-            for line in f:
-                line = line.rstrip("\n")
-                m = _VERSION_RE.match(line)
-                if m:
-                    cur = {"version": m.group(1), "date": (m.group(2) or "").strip(), "notes": []}
-                    entries.append(cur)
-                elif cur is not None:
-                    stripped = line.lstrip()
-                    if stripped.startswith("- "):
-                        cur["notes"].append({"sub": len(line) - len(stripped) >= 2, "parts": _inline(stripped[2:])})
-                    elif stripped and cur["notes"]:                 # suite d'une puce sur la ligne suivante
-                        cur["notes"][-1]["parts"].extend(_inline(" " + stripped))
-    except OSError:
-        return _CHANGELOG["entries"]
-    _CHANGELOG.update(mtime=mtime, entries=entries[:limit])
+    if _CHANGELOG["mtime"] != mtime:
+        try:
+            with open(config.CHANGELOG_PATH, encoding="utf-8") as f:
+                _CHANGELOG.update(mtime=mtime, entries=parse_changelog(f.read())[:limit])
+        except OSError:
+            pass
     return _CHANGELOG["entries"]
+
+
+def timeline(latest, installed):
+    """Frise des versions : nouveautés de la version disponible (rapatriées à la vérification) puis journal livré.
+    État de chaque entrée : « new » (entre l'installée et la disponible), « current » (installée) ou « old »."""
+    top = _vkey(latest.get("version")) if latest else ()
+    here, seen, out = _vkey(installed), set(), []
+    for e in parse_changelog(latest.get("changelog") or "") + changelog():
+        if e["version"] in seen:
+            continue
+        seen.add(e["version"])
+        k = _vkey(e["version"])
+        if k > here and not (top and k <= top):
+            continue                                            # plus récente que tout ce qui est publié : ignorée
+        out.append({**e, "state": "new" if k > here else "current" if k == here else "old"})
+    out.sort(key=lambda e: _vkey(e["version"]), reverse=True)
+    return out
 
 
 @app.route("/system/updates")
@@ -262,21 +302,31 @@ def appliance_updates():
     selected = request.args.get("operation", "")
     job = next((j for j in jobs if j["id"] == selected), None) or (jobs[0] if jobs else None)
     packages = _packages(status)
+    security = [p for p in packages if p.get("security")]
+    priority = (sorted(security, key=lambda p: SEVERITY_RANK.get((p.get("severity") or "").lower(), 9))
+                if security else [p for p in packages if p.get("tags")])[:3]
+    from .fleet import ago_text
+    versions = timeline(latest, config.VERSION)
+    news = [e for e in versions if e["state"] == "new"]
+    published = (latest.get("published") or "").replace("T", " ")
     return render_template(
         "appliance_updates.html", status=status, latest=latest, jobs=jobs, job=job,
         signature=f"{jobs[0]['id']}:{jobs[0]['state']}" if jobs else "",
-        job_log=locoadmin.job_log(job["id"]) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS, job_detail=job_detail,
-        update_available=bool(latest) and locoadmin.version_key(latest["version"]) > locoadmin.version_key(config.VERSION),
+        job_log=ANSI_RE.sub("", locoadmin.job_log(job["id"])) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS, job_detail=job_detail,
+        update_available=bool(latest) and _vkey(latest["version"]) > _vkey(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
         progress=_running_progress(),
         os_label=status.get("os") or (f"Alpine Linux {_alpine_release()}" if config.APPLIANCE else _("Système")),
         reboot_texts=[_reboot_text(r) for r in status.get("reboot_reasons") or []],
         repo=status.get("repo") or locoadmin.DEFAULT_REPO, default_repo=locoadmin.DEFAULT_REPO,
         errors=[_error_text(e) for e in status.get("errors") or []],
-        packages=packages, security=[p for p in packages if p.get("security")],
+        packages=packages, security=security, priority=priority,
         key_count=sum(1 for p in packages if p.get("tags")),
         security_supported=status.get("security_supported", False), kernel_short=_kernel_short,
-        changelog=changelog(),
+        checked_ago=ago_text(status["checked"]) if status.get("checked") else "",
+        published=published[:16] if re.match(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", published) else "",
+        news=news, current_entry=next((e for e in versions if e["state"] == "current"), None),
+        older=[e for e in versions if e["state"] == "old"],
     )
 
 
@@ -293,7 +343,7 @@ def appliance_job(job_id):
     if not job:
         abort(404)
     log = locoadmin.job_log(job_id)
-    return {"state": job.get("state", ""), "log": log, "progress": job_progress(job, log)}
+    return {"state": job.get("state", ""), "log": ANSI_RE.sub("", log), "progress": job_progress(job, log)}
 
 
 @app.route("/system/operations/state")

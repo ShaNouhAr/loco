@@ -1,21 +1,60 @@
 {% extends "base.html" %}
+{% from '_nav_icons.html' import ui_icon %}
 {% block title %}{{ _("Mises à jour") }}{% endblock %}
+
+{% macro tl_item(e, open=False) -%}
+<li class="tl-item is-{{ e.state }}">
+  <details{{ ' open' if open }}>
+    <summary>
+      <span class="tl-dot" aria-hidden="true"></span>
+      <strong class="tl-v">{{ e.version }}</strong>
+      {% if e.state == 'new' %}<span class="pill new">{{ _("nouveau") }}</span>{% elif e.state == 'current' %}<span class="pill ok">{{ _("installée") }}</span>{% endif %}
+      {% if e.date %}<span class="tl-date">{{ e.date }}</span>{% endif %}
+      <span class="tl-sum">{{ e.title }}{% if e.more %} <span class="faint">{{ _("+ %(n)s autre%(v)s", n=e.more, v='s' if e.more > 1) }}</span>{% endif %}</span>
+      {{ ui_icon('chevron') }}
+    </summary>
+    <ul class="tl-notes">
+      {% for it in e.notes %}<li{% if it.sub %} class="sub"{% endif %}>{% for p in it.parts %}{% if p.b %}<strong>{{ p.text }}</strong>{% elif p.c %}<code>{{ p.text }}</code>{% else %}{{ p.text }}{% endif %}{% endfor %}</li>{% endfor %}
+    </ul>
+  </details>
+</li>
+{%- endmacro %}
+
+{% macro reboot_form(cls='btn', label=None, icon=True) -%}
+<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
+  <button class="{{ cls }}" {{ 'disabled' if running or not agent }}><span class="spin"></span>{% if icon %}{{ ui_icon('power') }}{% endif %}<span>{{ label or _("Redémarrer") }}</span></button>
+</form>
+{%- endmacro %}
+
 {% block content %}
 {% set busy = running or not agent %}
+{% set can_update = can("system.update") %}
+{% set sec_n = security|length %}
+{% set kernel_pending = status.kernel and status.kernel.installed and status.kernel.installed != status.kernel.running and not status.container %}
+
 <div class="head">
   <div>
-    <h1>{{ _("Mises à jour du serveur") }}</h1>
-    <p>{{ _("%(os_label)s : noyau, correctifs de sécurité et services de loco", os_label=os_label) }}{% if appliance %}{{ _(", et loco lui-même") }}{% endif %}{{ _(". En ligne de commande : <code class=\"nowrap\">loco-update</code>.") }}</p>
+    <h1>{{ _("Mises à jour") }}</h1>
+    <p>{{ os_label }} · {% if checked_ago %}{{ _("vérifié %(ago)s", ago=checked_ago) }}{% else %}{{ _("jamais vérifié") }}{% endif %} · {{ _("vérification automatique chaque jour") }}</p>
   </div>
   <div class="actions">
     <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="check">
-      <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Vérifier maintenant") }}</button>
+      <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ ui_icon('refresh') }}<span>{{ _("Vérifier maintenant") }}</span></button>
     </form>
+    <details class="menu">
+      <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
+      <div class="menu-list" role="menu">
+        {% if can("system.reboot") %}{{ reboot_form('menu-item', _("Redémarrer le serveur…")) }}{% endif %}
+        <a class="menu-item" role="menuitem" href="#source">{{ ui_icon('git') }}<span>{{ _("Source des mises à jour") }}</span></a>
+        <a class="menu-item" role="menuitem" href="#operations">{{ ui_icon('history') }}<span>{{ _("Historique des opérations") }}</span></a>
+      </div>
+    </details>
   </div>
 </div>
 
-<div class="stack" data-operations="{{ url_for('appliance_operations_state') }}" data-signature="{{ signature }}">
+<div class="stack upd" data-operations="{{ url_for('appliance_operations_state') }}" data-signature="{{ signature }}">
   {% if not agent %}
   <p class="note err">{{ _("L'agent d'administration ne répond pas : les opérations sont indisponibles. Sur le serveur : <code>%(agent_restart)s</code>.", agent_restart=agent_restart) }}</p>
   {% endif %}
@@ -36,105 +75,145 @@
   </section>
   {% endif %}
 
-  <div class="metrics">
-    <div class="metric">
-      <div class="k">{{ _("Correctifs de sécurité") }}</div>
-      {% if security_supported %}
-      <div class="v">{{ security|length }}</div>
-      <div class="s">{% if security %}<span class="st err">{{ _("à installer") }}</span>{% elif status.checked %}<span class="st ok">{{ _("aucun en attente") }}</span>{% else %}{{ _("jamais vérifié") }}{% endif %}</div>
-      {% else %}
-      <div class="v small-v">—</div>
-      <div class="s">{% if appliance %}{{ _("branche stable : correctifs seulement") }}{% else %}{{ _("non signalés par ce système") }}{% endif %}</div>
+  <div class="upd-overview">
+    {# ---------------------------------------------------------------- loco #}
+    <section class="upd-card{{ ' is-new' if update_available }}" aria-labelledby="upd-loco">
+      <div class="upd-card-h">
+        <span class="upd-ico">{{ ui_icon('sparkles' if update_available else 'box') }}</span>
+        <div class="upd-card-t"><h2 id="upd-loco">loco</h2><span>{{ _("le portail, les dépôts et les caches") }}</span></div>
+        {% if update_available %}<span class="pill new">{{ _("Nouvelle version") }}</span>
+        {% elif latest %}<span class="pill ok">{{ _("À jour") }}</span>
+        {% else %}<span class="pill">{{ _("Version publiée inconnue") }}</span>{% endif %}
+      </div>
+      <div class="upd-version">
+        {% if update_available %}<span class="from">{{ version }}</span>{{ ui_icon('arrow-right') }}<span>{{ latest.version }}</span>
+        {% else %}<span>{{ version }}</span>{% endif %}
+      </div>
+      <p class="upd-facts">
+        {% if update_available %}
+          {% if published %}<span>{{ _("publiée le %(date)s", date=published|date_fr) }}</span>{% endif %}
+          {% if news|length > 1 %}<span>{{ _("%(n)s versions d'écart", n=news|length) }}</span>{% endif %}
+        {% elif latest %}<span>{{ _("Vous avez la dernière version publiée.") }}</span>{% endif %}
+        <a href="#source" class="upd-repo" title="{{ _('Source des mises à jour') }}">{{ ui_icon('git') }}<span class="mono">{{ repo }}</span></a>
+      </p>
+      {% if news %}
+      <div class="upd-news">
+        <span class="upd-news-h">{{ _("Au programme") }}</span>
+        <ul>
+          {% for e in news[:3] %}<li><span class="ver">{{ e.version }}</span><span class="t">{{ e.title }}</span></li>{% endfor %}
+          {% if news|length > 3 %}<li class="more"><a href="#nouveautes">{{ _("et %(n)s autre%(v)s version%(v)s", n=news|length - 3, v='s' if news|length - 3 > 1) }}</a></li>{% endif %}
+        </ul>
+      </div>
       {% endif %}
-    </div>
-    <div class="metric">
-      <div class="k">{{ _("Paquets à mettre à jour") }}</div>
-      <div class="v">{{ packages|length }}</div>
-      <div class="s">{% if key_count %}{{ _("dont %(key_count)s noyau, service ou socle", key_count=key_count) }}{% elif packages %}{{ _("paquets courants") }}{% elif status.checked %}<span class="st ok">{{ _("système à jour") }}</span>{% else %}{{ _("jamais vérifié") }}{% endif %}</div>
-    </div>
-    <div class="metric">
-      <div class="k">{{ _("Noyau") }}</div>
-      <div class="v small-v mono" title="{{ status.kernel.running if status.kernel }}">{{ kernel_short(status.kernel.running) if status.kernel else '—' }}</div>
-      <div class="s">{% if status.container %}{{ _("géré par l'hôte (conteneur)") }}{% elif status.kernel and status.kernel.installed and status.kernel.installed != status.kernel.running %}<span class="st warn" title="{{ status.kernel.installed }}">{{ _("%(v)s installé", v=kernel_short(status.kernel.installed)) }}</span>{% elif status.kernel %}<span class="st ok">{{ _("dernier installé") }}</span>{% else %}—{% endif %}</div>
-    </div>
-    <div class="metric">
-      <div class="k">{{ _("Redémarrage") }}</div>
-      <div class="v small-v">{{ _('nécessaire') if status.reboot_required else _('non nécessaire') }}</div>
-      <div class="s">{% if status.reboot_required %}<span class="st warn">{{ _("%(reboot_reasons)s raison%(v)s", reboot_reasons=status.reboot_reasons|length, v='s' if status.reboot_reasons|length > 1) }}</span>{% elif status.stale_services %}<span class="st warn">{{ _("%(stale_services)s service%(v)s à relancer", stale_services=status.stale_services|length, v='s' if status.stale_services|length > 1) }}</span>{% else %}{{ _("vérifié le %(checked)s", checked=status.checked|date_fr if status.checked else _('jamais')) }}{% endif %}</div>
-    </div>
-    <div class="metric">
-      <div class="k">loco</div>
-      <div class="v small-v mono">{{ version }}</div>
-      <div class="s">{% if update_available %}<span class="st warn">{{ _("%(version)s disponible", version=latest.version) }}</span>{% elif latest %}<span class="st ok">{{ _("dernière version") }}</span>{% else %}{{ _("version publiée inconnue") }}{% endif %}</div>
-    </div>
+      <div class="upd-actions">
+        {% if update_available and can_update %}
+        <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer loco %(version)s ?', version=latest.version) }}" data-confirm-text="{{ _('Archive vérifiée par SHA-256, puis installation : le portail redémarre quelques secondes. En cas d\'échec, la version %(version)s est rétablie automatiquement.', version=version) }}" data-confirm-ok="{{ _('Mettre à jour') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-loco">
+          <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer %(version)s", version=latest.version) }}</button>
+        </form>
+        {% endif %}
+        {% if news %}<a class="btn ghost" href="#nouveautes">{{ ui_icon('sparkles') }}<span>{{ _("Quoi de neuf ?") }}</span></a>
+        {% elif current_entry or older %}<a class="btn ghost" href="#nouveautes">{{ ui_icon('history') }}<span>{{ _("Journal des versions") }}</span></a>{% endif %}
+        {% if update_available and latest.url %}<a class="upd-ext" href="{{ latest.url }}" rel="noopener noreferrer" target="_blank">{{ _("Page de la version") }}{{ ui_icon('external') }}</a>{% endif %}
+      </div>
+    </section>
+
+    {# ---------------------------------------------------------------- système #}
+    <section class="upd-card{{ ' is-alert' if sec_n }}" aria-labelledby="upd-sys">
+      <div class="upd-card-h">
+        <span class="upd-ico">{{ ui_icon('shield' if sec_n else 'server') }}</span>
+        <div class="upd-card-t"><h2 id="upd-sys">{{ _("Système") }}</h2><span>{{ os_label }}</span></div>
+        {% if not status.checked %}<span class="pill">{{ _("Jamais vérifié") }}</span>
+        {% elif sec_n %}<span class="pill err">{{ _("%(n)s correctif%(v)s de sécurité", n=sec_n, v='s' if sec_n > 1) }}</span>
+        {% elif packages %}<span class="pill warn">{{ _("%(n)s mise%(v)s à jour", n=packages|length, v='s' if packages|length > 1) }}</span>
+        {% else %}<span class="pill ok">{{ _("À jour") }}</span>{% endif %}
+      </div>
+      <dl class="upd-stats">
+        <div><dt>{{ _("Paquets") }}</dt><dd>{{ packages|length if status.checked else '—' }}</dd></div>
+        <div{% if sec_n %} class="is-err"{% endif %} title="{{ '' if security_supported else (_('branche stable : correctifs seulement') if appliance else _('non signalés par ce système')) }}"><dt>{{ _("Sécurité") }}</dt><dd>{{ sec_n if security_supported and status.checked else '—' }}</dd></div>
+        <div title="{{ status.kernel.running if status.kernel }}"><dt>{{ _("Noyau") }}</dt><dd class="mono">{{ kernel_short(status.kernel.running) if status.kernel else '—' }}</dd></div>
+      </dl>
+      {% if priority %}
+      <div class="upd-news">
+        <span class="upd-news-h">{{ _("À corriger en priorité") if sec_n else _("Paquets sensibles") }}</span>
+        <ul>
+          {% for p in priority %}<li><span class="t">{{ p.name }}</span>{% if p.severity %}<span class="sev sev-{{ p.severity|lower }}">{{ p.severity|lower }}</span>{% elif p.tags %}<span class="tag">{{ tag_labels.get(p.tags[0], p.tags[0]) }}</span>{% endif %}<span class="nv">{{ p.new }}</span></li>{% endfor %}
+          {% set rest = (sec_n if sec_n else key_count) - priority|length %}
+          {% if rest > 0 %}<li class="more"><a href="#paquets">{{ _("et %(n)s autre%(v)s", n=rest, v='s' if rest > 1) }}</a></li>{% endif %}
+        </ul>
+      </div>
+      {% endif %}
+      {% if status.container or kernel_pending or key_count or not security_supported %}
+      <p class="upd-facts">
+        {% if status.container %}<span>{{ _("noyau géré par l'hôte (conteneur)") }}</span>
+        {% elif kernel_pending %}<span class="warn-text" title="{{ status.kernel.installed }}">{{ _("noyau %(v)s installé, actif au redémarrage", v=kernel_short(status.kernel.installed)) }}</span>{% endif %}
+        {% if key_count %}<span>{{ _("dont %(key_count)s noyau, service ou socle", key_count=key_count) }}</span>{% endif %}
+        {% if not security_supported %}<span>{{ _("correctifs de sécurité : %(v)s", v=_('branche stable, correctifs seulement') if appliance else _('non signalés par ce système')) }}</span>{% endif %}
+      </p>
+      {% endif %}
+      <div class="upd-actions">
+        {% if can_update and packages %}
+          {% if sec_n %}
+          <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer %(security)s correctif%(v)s de sécurité ?', security=sec_n, v='s' if sec_n > 1) }}" data-confirm-text="{{ _('Seuls les paquets signalés « sécurité » sont mis à jour (avec leurs dépendances). Les services de loco qui en dépendent sont relancés quelques secondes.') }}" data-confirm-ok="{{ _('Installer') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-security">
+            <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer les correctifs de sécurité") }}</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Mettre à jour les %(packages)s paquets ?', packages=packages|length) }}" data-confirm-text="{{ _('Tous les paquets en attente, noyau compris. Les services de loco concernés sont relancés quelques secondes ; un nouveau noyau demande un redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-system">
+            <button class="btn {{ '' if sec_n else 'primary' }}" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Tout mettre à jour") }}</button>
+          </form>
+          <a class="upd-link" href="#paquets">{{ _("Voir les paquets") }}</a>
+        {% elif status.checked and not packages %}
+          <span class="upd-ok">{{ ui_icon('check-circle') }}{{ _("Aucune mise à jour en attente.") }}</span>
+        {% elif not status.checked %}
+          <span class="faint small">{{ _("Pas encore vérifié : « Vérifier maintenant ».") }}</span>
+        {% endif %}
+      </div>
+    </section>
   </div>
 
-  {% if status.reboot_required %}
-  <div class="note warn">
-    <strong>{{ _("Redémarrage nécessaire") }}</strong> {{ _("pour appliquer complètement les mises à jour :") }}
-    <ul>{% for r in reboot_texts %}<li>{{ r }}</li>{% endfor %}</ul>
-  </div>
-  {% endif %}
-  {% if status.stale_services %}
-  <div class="note warn">
-    <strong>{{ _("Services qui utilisent d'anciennes bibliothèques") }}</strong> {{ _("(les correctifs ne les protègent qu'une fois relancés) :") }}
-    <span class="mono small">{% for unit, names in status.stale_services|dictsort %}{{ unit }}{% if names and names|join(', ') != unit %} ({{ names|join(', ') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}</span>{{ _(". Les services de loco sont relancés après chaque mise à jour faite ici ; pour les autres, redémarrez le serveur.") }}
-  </div>
-  {% endif %}
-
-  {% if update_available %}
-  <section class="panel">
-    <div class="panel-h"><h2>loco {{ latest.version }}</h2><div class="aside">{% if latest.published %}{{ _("publiée le %(v)s", v=latest.published[:10]) }}{% endif %}</div></div>
-    <div class="panel-f row">
-      {% if can("system.update") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer loco %(version)s ?', version=latest.version) }}" data-confirm-text="{{ _('Archive vérifiée par SHA-256, puis installation : le portail redémarre quelques secondes. En cas d\'échec, la version %(version)s est rétablie automatiquement.', version=version) }}" data-confirm-ok="{{ _('Mettre à jour') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-loco">
-        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer %(version)s", version=latest.version) }}</button>
-      </form>{% endif %}
-      {% if latest.url %}<a href="{{ latest.url }}" rel="noopener noreferrer" target="_blank">{{ _("Notes de version") }}</a>{% endif %}
+  {% if status.reboot_required or status.stale_services %}
+  <section class="upd-banner" aria-labelledby="upd-reboot">
+    <span class="upd-ico">{{ ui_icon('power') }}</span>
+    <div class="upd-banner-t">
+      <strong id="upd-reboot">{{ _("Redémarrage nécessaire") if status.reboot_required else _("Services à relancer") }}</strong>
+      <span>
+        {%- if status.reboot_required %}{{ reboot_texts|join(' · ') }}{% endif %}
+        {%- if status.stale_services %}{{ ' · ' if status.reboot_required and reboot_texts }}{{ _("anciennes bibliothèques encore chargées par %(s)s", s=status.stale_services|dictsort|map('first')|join(', ')) }}{% endif -%}
+      </span>
     </div>
+    {% if can("system.reboot") %}{{ reboot_form('btn primary' if status.reboot_required and not packages else 'btn', _("Redémarrer le serveur")) }}{% endif %}
   </section>
   {% endif %}
 
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Source des mises à jour") }}</h2></div>
-    <div class="panel-b">
-      <p class="muted small">{{ _("Dépôt où loco cherche ses nouvelles versions : « owner/repo » sur GitHub, ou l'URL d'un projet GitLab (même un GitLab interne). Laissez « %(default)s » pour le dépôt officiel.", default=default_repo) }}</p>
-      {% if can("system.update") %}
-      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax class="repo-form">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-repo">
-        <input type="text" name="repo" value="{{ repo }}" placeholder="owner/repo  ·  https://gitlab.exemple/groupe/projet" pattern="[\w.-]+/[\w.-]+|https://[\w.-]+(:\d+)?/[\w./-]+/[\w.-]+" required aria-label="{{ _('Source des mises à jour') }}" class="mono" spellcheck="false">
-        <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Enregistrer et vérifier") }}</button>
-      </form>
-      {% else %}<p class="mono small">{{ repo }}</p>{% endif %}
-    </div>
-  </section>
-
-  <section class="panel" data-pkgs="#sys-packages" data-empty="#sys-packages-empty">
+  {% if packages %}
+  <section class="panel" id="paquets" data-pkgs="#sys-packages" data-empty="#sys-packages-empty">
     <div class="panel-h">
-      <h2>{{ _("Paquets en attente") }}</h2>
-      <div class="aside">{% if packages %}<input type="search" class="search-sm" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}">{% endif %}</div>
+      <h2>{{ _("Paquets en attente") }} <span class="h-count">{{ packages|length }}</span></h2>
+      <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}"></div>
     </div>
-    {% if packages %}
+    {% if security or key_count %}
     <div class="chips-bar">
       <div class="chips" role="group" aria-label="{{ _('Filtrer les paquets') }}">
         <button type="button" class="chip on" data-chip="all" aria-pressed="true">{{ _("Tous") }} <b>{{ packages|length }}</b></button>
-        {% if security %}<button type="button" class="chip" data-chip="security" aria-pressed="false"><span class="st err"></span>{{ _("Sécurité") }} <b>{{ security|length }}</b></button>{% endif %}
+        {% if security %}<button type="button" class="chip" data-chip="security" aria-pressed="false"><span class="st err"></span>{{ _("Sécurité") }} <b>{{ sec_n }}</b></button>{% endif %}
         {% if key_count %}<button type="button" class="chip" data-chip="key" aria-pressed="false">{{ _("Noyau, services et socle") }} <b>{{ key_count }}</b></button>{% endif %}
       </div>
     </div>
+    {% endif %}
     <div class="table-wrap">
-      <table id="sys-packages">
-        <thead><tr><th>{{ _("Paquet") }}</th><th>{{ _("Installé") }}</th><th>{{ _("Disponible") }}</th><th class="hide-sm">{{ _("Source") }}</th></tr></thead>
+      <table id="sys-packages" class="upd-pkgs">
+        <thead><tr><th>{{ _("Paquet") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Source") }}</th></tr></thead>
         <tbody>
         {% for p in packages %}
           <tr{% if p.security %} data-security="1"{% endif %}{% if p.tags %} data-key="1"{% endif %}>
             <td>
-              <span class="mono">{{ p.name }}</span>
+              <span class="pkg-name">{{ p.name }}</span>
               {% for t in p.tags or [] %} <span class="tag">{{ tag_labels.get(t, t) }}</span>{% endfor %}
               {% if p.security %} <span class="pill err">{{ _("sécurité") }}{% if p.severity %} · {{ p.severity|lower }}{% endif %}</span>{% endif %}
             </td>
-            <td class="mono muted nowrap">{{ p.current or ('nouveau' if p.new else '—') }}</td>
-            <td class="mono nowrap">{{ p.new or '—' }}</td>
+            <td class="mono nowrap upd-ver">{% if p.current or p.new %}<span class="muted">{{ p.current or _('nouveau') }}</span><span class="arrow" aria-hidden="true">→</span><span>{{ p.new or '—' }}</span>{% else %}<span class="faint">—</span>{% endif %}</td>
             <td class="muted small hide-sm">{{ p.origin or '—' }}</td>
           </tr>
         {% endfor %}
@@ -142,70 +221,76 @@
       </table>
       <div id="sys-packages-empty" class="empty hidden">{{ _("Aucun paquet ne correspond.") }}</div>
     </div>
-    {% else %}
-    <div class="empty">{% if status.checked %}{{ _("Aucune mise à jour en attente (vérifié le %(checked)s).", checked=status.checked|date_fr) }}{% else %}{{ _("Pas encore vérifié : « Vérifier maintenant ».") }}{% endif %}</div>
-    {% endif %}
-    <div class="panel-f row">
-      {% if can("system.update") and packages %}
-      {% if security %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Installer %(security)s correctif%(v)s de sécurité ?', security=security|length, v='s' if security|length > 1) }}" data-confirm-text="{{ _('Seuls les paquets signalés « sécurité » sont mis à jour (avec leurs dépendances). Les services de loco qui en dépendent sont relancés quelques secondes.') }}" data-confirm-ok="{{ _('Installer') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-security">
-        <button class="btn primary" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Installer les correctifs de sécurité") }}</button>
-      </form>{% endif %}
-      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Mettre à jour les %(packages)s paquets ?', packages=packages|length) }}" data-confirm-text="{{ _('Tous les paquets en attente, noyau compris. Les services de loco concernés sont relancés quelques secondes ; un nouveau noyau demande un redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update-system">
-        <button class="btn {{ '' if security else 'primary' }}" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Tout mettre à jour") }}</button>
-      </form>
-      {% endif %}
-      {% if can("system.reboot") %}<form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
-        <button class="btn {{ 'primary' if status.reboot_required and not packages }}" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Redémarrer le serveur") }}</button>
-      </form>{% endif %}
-      <span class="faint small">{{ _("Vérification automatique chaque jour") }}{% if status.checked %} {{ _("· dernière le %(checked)s", checked=status.checked|date_fr) }}{% endif %}</span>
-    </div>
   </section>
+  {% endif %}
 
-  {% if changelog %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Journal des versions") }}</h2><div class="aside">{{ _("ce qui change à chaque version de loco") }}</div></div>
-    <div class="panel-b changelog">
-      {% for e in changelog %}
-      <details class="chg"{% if e.version == latest.version or (loop.first and not update_available) %} open{% endif %}>
-        <summary><strong>{{ e.version }}</strong>{% if e.date %} <span class="faint">{{ e.date }}</span>{% endif %}{% if e.version == version %} <span class="st ok">{{ _("installée") }}</span>{% elif update_available and e.version == latest.version %} <span class="st warn">{{ _("disponible") }}</span>{% endif %}</summary>
-        <ul class="chg-list">
-          {% for it in e.notes %}<li{% if it.sub %} class="sub"{% endif %}>{% for p in it.parts %}{% if p.b %}<strong>{{ p.text }}</strong>{% else %}{{ p.text }}{% endif %}{% endfor %}</li>{% endfor %}
-        </ul>
+  {% if news or current_entry or older %}
+  <section class="panel" id="nouveautes">
+    <div class="panel-h">
+      <h2>{{ _("Nouveautés de loco") if news else _("Journal des versions") }}</h2>
+      <div class="aside">{% if news %}{{ _("%(n)s version%(v)s depuis la %(installed)s", n=news|length, v='s' if news|length > 1, installed=version) }}{% else %}{{ _("ce qui change à chaque version de loco") }}{% endif %}</div>
+    </div>
+    <div class="panel-b">
+      <ol class="tl">
+        {% for e in news %}{{ tl_item(e, open=loop.first or news|length <= 3) }}{% endfor %}
+        {% if current_entry %}{{ tl_item(current_entry, open=not news) }}{% endif %}
+        {% for e in older[:3] %}{{ tl_item(e) }}{% endfor %}
+      </ol>
+      {% if older|length > 3 %}
+      <details class="tl-more">
+        <summary>{{ _("Afficher les %(n)s versions précédentes", n=older|length - 3) }}</summary>
+        <ol class="tl">{% for e in older[3:] %}{{ tl_item(e) }}{% endfor %}</ol>
       </details>
-      {% endfor %}
+      {% endif %}
     </div>
   </section>
   {% endif %}
 
-  <section class="panel">
+  <section class="panel" id="operations">
     <div class="panel-h"><h2>{{ _("Opérations") }}</h2><div class="aside">{{ _("journal de chaque vérification et mise à jour") }}</div></div>
     {% if jobs %}
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>{{ _("Date") }}</th><th>{{ _("Opération") }}</th><th class="hide-sm">{{ _("Par") }}</th><th>{{ _("État") }}</th></tr></thead>
-        <tbody>
-        {% for j in jobs %}
-          <tr class="{{ 'sel' if job and j.id == job.id }}">
-            <td class="muted nowrap"><a href="{{ url_for('appliance_updates', operation=j.id) }}">{{ (j.started or j.queued)|date_fr }}</a></td>
-            <td>{{ labels.get(j.action, j.action) }}{% set detail = job_detail(j) %}{% if detail %}<span class="sub">{{ detail }}</span>{% endif %}</td>
-            <td class="muted hide-sm">{{ j.user or '—' }}</td>
-            <td>{% if j.state == 'success' %}<span class="st ok">{{ _("réussie") }}</span>{% elif j.state == 'failed' %}<span class="st err">{{ _("échec") }}</span>{% else %}<span class="st warn">{{ _("en cours") }}</span>{% endif %}</td>
-          </tr>
+    <div class="upd-ops">
+      <ul class="ops-list">
+        {% for j in jobs %}{% set detail = job_detail(j) %}
+        <li><a class="op-row{{ ' sel' if job and j.id == job.id }}" href="{{ url_for('appliance_updates', operation=j.id) }}#operations"{% if job and j.id == job.id %} aria-current="true"{% endif %}>
+          <span class="op-state {{ j.state }}">{{ ui_icon('check-circle' if j.state == 'success' else 'alert' if j.state == 'failed' else 'refresh') }}</span>
+          <span class="op-txt"><strong>{{ labels.get(j.action, j.action) }}</strong><span>{{ (j.started or j.queued)|date_fr }}{% if j.user %} · {{ j.user }}{% endif %}{% if detail %} · {{ detail }}{% endif %}</span></span>
+        </a></li>
         {% endfor %}
-        </tbody>
-      </table>
+      </ul>
+      {% if job %}
+      <div class="ops-log">
+        <div class="ops-log-h">
+          {{ ui_icon('terminal') }}<strong>{{ labels.get(job.action, job.action) }}</strong><span class="faint">{{ (job.started or job.queued)|date_fr }}</span>
+          {% if job.state == 'success' %}<span class="pill ok">{{ _("réussie") }}</span>{% elif job.state == 'failed' %}<span class="pill err">{{ _("échec") }}</span>{% else %}<span class="pill warn">{{ _("en cours") }}</span>{% endif %}
+        </div>
+        <div id="journal" {% if job.state in ('queued', 'running') %}data-poll="{{ url_for('appliance_job', job_id=job.id) }}" data-poll-kind="job" data-poll-every="2000"{% endif %}>
+          <pre class="log" id="job-log" tabindex="-1">{{ job_log or _('Journal vide.') }}</pre>
+        </div>
+      </div>
+      {% endif %}
     </div>
-    {% if job %}
-    <div id="journal" {% if job.state in ('queued', 'running') %}data-poll="{{ url_for('appliance_job', job_id=job.id) }}" data-poll-kind="job" data-poll-every="2000"{% endif %}>
-      <pre class="log" id="job-log" tabindex="-1">{{ job_log or _('Journal vide.') }}</pre>
-    </div>
-    {% endif %}
     {% else %}
     <div class="empty">{{ _("Aucune opération pour l'instant.") }}</div>
     {% endif %}
+    <div class="panel-f">{{ _("En ligne de commande sur le serveur : <code class=\"nowrap\">loco-update</code>.") }}</div>
   </section>
+
+  <details class="panel upd-source" id="source">
+    <summary class="panel-h">
+      <h2>{{ ui_icon('git') }}{{ _("Source des mises à jour") }}</h2>
+      <div class="aside"><span class="mono">{{ repo }}</span>{% if repo == default_repo %}<span class="faint">{{ _("officielle") }}</span>{% endif %}{{ ui_icon('chevron') }}</div>
+    </summary>
+    <div class="panel-b">
+      <p class="muted small">{{ _("Dépôt où loco cherche ses nouvelles versions : « owner/repo » sur GitHub, ou l'URL d'un projet GitLab (même un GitLab interne). Laissez « %(default)s » pour le dépôt officiel.", default=default_repo) }}</p>
+      {% if can_update %}
+      <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax class="repo-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="set-repo">
+        <input type="text" name="repo" value="{{ repo }}" placeholder="owner/repo  ·  https://gitlab.exemple/groupe/projet" pattern="[\w.-]+/[\w.-]+|https://[\w.-]+(:\d+)?/[\w./-]+/[\w.-]+" required aria-label="{{ _('Source des mises à jour') }}" class="mono" spellcheck="false">
+        <button class="btn" {{ 'disabled' if busy }}><span class="spin"></span>{{ _("Enregistrer et vérifier") }}</button>
+      </form>
+      {% else %}<p class="mono small">{{ repo }}</p>{% endif %}
+    </div>
+  </details>
 </div>
 {% endblock %}
