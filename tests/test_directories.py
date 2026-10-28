@@ -6,8 +6,10 @@ import socket
 import ssl
 import struct
 import tempfile
+import json
 import threading
 import unittest
+from unittest import mock
 
 import test_portal as fixture
 from test_fleet import FleetTest
@@ -279,6 +281,93 @@ class TestDirectoryLogin(FleetTest):
         with transaction() as conn:
             self.assertEqual(conn.execute("SELECT auth_source FROM users WHERE id=?", (legacy,)).fetchone()[0], "local")
 
+
+    def test_active_directory_needs_only_the_domain(self):
+        r = self.admin.post("/accounts/directories/add", {
+            "kind": "ldap", "preset": "ad", "label": "", "ad_domain": "Test.Local", "ad_server": f"127.0.0.1:{self.ldap.port}",
+            "bind_dn": "cn=svc,dc=test", "bind_password": "secret-service", "ca_pem": self.ldap.ca, "enabled": "1"},
+            page="/accounts/directories")
+        self.assertEqual(r.status_code, 302)
+        with transaction() as conn:
+            row = conn.execute("SELECT label, config FROM auth_directories").fetchone()
+        cfg = json.loads(row["config"])
+        self.assertEqual(row["label"], "Active Directory")                     # nom par défaut
+        self.assertEqual((cfg["preset"], cfg["domain"], cfg["base_dn"]), ("ad", "test.local", "DC=test,DC=local"))
+        self.assertEqual(cfg["url"], f"ldaps://127.0.0.1:{self.ldap.port}")
+        self.assertEqual(cfg["user_template"], "{username}@test.local")
+        self.assertIn("sAMAccountName={username}", cfg["user_filter"])
+        _b, r = self.login("alice", "Mot-de-passe-Alice")                    # déduit, et ça fonctionne
+        self.assertEqual(r.status_code, 202)
+        page = self.admin.c.get("/accounts/directories").get_data(as_text=True)
+        self.assertIn("SSO activé", page)
+        self.assertIn('name="ad_domain"', page)                                # modifié en mode Active Directory
+        self.assertIn("test.local", page)
+
+    def test_freeipa_needs_only_the_domain_and_the_server(self):
+        carol = "uid=carol,cn=users,cn=accounts,dc=test,dc=local"            # emplacement des comptes FreeIPA
+        with mock.patch.dict(FakeLdap.USERS, {carol: ("carol", "Mot-de-passe-Carol", "Carol Petit", "carol@test.local")}):
+            r = self.admin.post("/accounts/directories/add", {
+                "kind": "ldap", "preset": "freeipa", "label": "", "ad_domain": "test.local",
+                "ad_server": f"127.0.0.1:{self.ldap.port}", "ca_pem": self.ldap.ca, "enabled": "1"},
+                page="/accounts/directories")
+            self.assertEqual(r.status_code, 302)
+            with transaction() as conn:
+                row = conn.execute("SELECT label, config FROM auth_directories").fetchone()
+            cfg = json.loads(row["config"])
+            self.assertEqual(row["label"], "FreeIPA")
+            self.assertEqual(cfg["base_dn"], "cn=users,cn=accounts,dc=test,dc=local")
+            self.assertEqual(cfg["user_template"], "uid={username},cn=users,cn=accounts,dc=test,dc=local")
+            self.assertEqual(cfg["bind_dn"], "")                              # liaison directe, sans compte de service
+            _b, r = self.login("carol", "Mot-de-passe-Carol")
+            self.assertEqual(r.status_code, 202)                              # identité reconnue : demande créée
+            with transaction() as conn:
+                user = conn.execute("SELECT i.display_name, i.email FROM directory_identities i JOIN users u ON u.id=i.user_id "
+                                    "WHERE u.username='carol'").fetchone()
+            self.assertEqual((user["display_name"], user["email"]), ("Carol Petit", "carol@test.local"))
+            _b, r = self.login("carol", "mauvais")
+            self.assertEqual(r.status_code, 401)
+        page = self.admin.c.get("/accounts/directories").get_data(as_text=True)
+        self.assertIn("FreeIPA", page)
+        self.assertIn('name="ad_server" required', page)                       # le serveur FreeIPA est requis
+
+    def test_freeipa_requires_its_server(self):
+        self.admin.post("/accounts/directories/add", {"kind": "ldap", "preset": "freeipa", "ad_domain": "test.local",
+                                                      "enabled": "1"}, page="/accounts/directories")
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM auth_directories").fetchone()[0], 0)
+
+    def test_switch_closes_sessions_and_order_moves_both_ways(self):
+        self.add_directories()
+        _b, r = self.login("alice", "Mot-de-passe-Alice")
+        with transaction() as conn:
+            alice = conn.execute("SELECT id FROM users WHERE username='alice'").fetchone()[0]
+            ldap_id, radius_id = (conn.execute("SELECT id FROM auth_directories WHERE kind=?", (k,)).fetchone()[0]
+                                  for k in ("ldap", "radius"))
+        self.admin.post(f"/accounts/{alice}/approve", {"role": "viewer"}, page="/accounts")
+        browser, r = self.login("alice", "Mot-de-passe-Alice")
+        self.assertEqual(browser.c.get("/account").status_code, 200)
+        self.admin.post(f"/accounts/directories/{ldap_id}/toggle", {}, page="/accounts/directories")
+        self.assertEqual(browser.c.get("/account").status_code, 302)         # session fermée à la désactivation
+        _b, r = self.login("alice", "Mot-de-passe-Alice")
+        self.assertEqual(r.status_code, 401)                                   # annuaire désactivé
+        self.admin.post(f"/accounts/directories/{ldap_id}/toggle", {}, page="/accounts/directories")
+        browser, r = self.login("alice", "Mot-de-passe-Alice")
+        self.assertEqual(r.status_code, 302)                                   # réactivé
+        self.admin.post(f"/accounts/directories/{ldap_id}/move-down", {}, page="/accounts/directories")
+        with transaction() as conn:
+            order = [x[0] for x in conn.execute("SELECT id FROM auth_directories ORDER BY position")]
+        self.assertEqual(order, [radius_id, ldap_id])
+        self.admin.post(f"/accounts/directories/{ldap_id}/move-up", {}, page="/accounts/directories")
+        with transaction() as conn:
+            order = [x[0] for x in conn.execute("SELECT id FROM auth_directories ORDER BY position")]
+        self.assertEqual(order, [ldap_id, radius_id])
+
+    def test_bad_active_directory_domain_is_refused(self):
+        for domain, server in (("pas un domaine", ""), ("entreprise.local", "dc1:99999")):
+            self.admin.post("/accounts/directories/add", {"kind": "ldap", "preset": "ad", "ad_domain": domain,
+                                                          "ad_server": server, "enabled": "1"}, page="/accounts/directories")
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM auth_directories").fetchone()[0], 0)
 
 if __name__ == "__main__":
     unittest.main()

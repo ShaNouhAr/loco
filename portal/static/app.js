@@ -236,7 +236,12 @@
   document.addEventListener("change", function (e) {
     if (!e.target.matches("select[data-autosubmit], input[type=checkbox][data-autosubmit], input[type=file][data-autosubmit]")) return;
     if (e.target.type === "file" && !e.target.files.length) return;    // sélection annulée
-    if (e.target.form.hasAttribute("data-clean")) go(e.target.form); else e.target.form.submit();
+    var form = e.target.form;
+    if (form.dataset.confirm) {
+      // Confirmation d'abord : l'interrupteur reprend son état, la page affichera le nouveau après validation.
+      if (e.target.type === "checkbox") e.target.checked = !e.target.checked;
+      form.requestSubmit();
+    } else if (form.hasAttribute("data-clean")) go(form); else form.submit();
   });
 
   /* ---------------------------------------------------------------- menus « Plus » */

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.85.0 — 2026-10-28
+
+- **Annuaires et SSO, plus simples.** La page (renommée *Annuaires et SSO*) liste les annuaires dans un tableau : type, serveur, nombre de comptes, **interrupteur Actif / Inactif** (désactiver ferme les sessions de ses comptes), Tester et Modifier, ordre d'essai dans le menu. Les demandes d'accès en attente sont signalées avec un lien vers Comptes.
+  - Ajout guidé par type : **Active Directory** (le domaine suffit ; contrôleur et compte de service facultatifs), **FreeIPA** (domaine et serveur ; comptes sous `cn=users,cn=accounts`, autorité FreeIPA indiquée), autre annuaire LDAP ou RADIUS. Les réglages techniques passent dans « Options avancées ». Le serveur accepte un port (`dc1:3269`, catalogue global en SSL).
+  - L'écran de connexion parle de connexion SSO avec le compte d'entreprise.
+
 ## 2.84.0 — 2026-10-28
 
 - **Autorité de certification au choix.** Nouvel onglet *Système › Certificat* avec un interrupteur **Autorité loco / Autorité d'entreprise** : le certificat du portail peut être signé par l'autorité de votre entreprise (AD CS, PKI interne…), à laquelle les postes du domaine font déjà confiance, et revenir à l'autorité loco à tout moment.

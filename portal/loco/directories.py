@@ -143,26 +143,69 @@ def _login_directories():
 
 # --------------------------------------------------------------------------- administration
 
+DOMAIN_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
+HOST_RE = re.compile(r"[A-Za-z0-9.:-]{1,253}")
+
+
+def _server_url(server, starttls):
+    """« hôte » ou « hôte:port » -> URL LDAPS (636) ou LDAP + StartTLS (389)."""
+    host, port = server, ""
+    if server.count(":") == 1:                         # « dc1:3269 » (catalogue global en SSL, par exemple)
+        host, port = server.split(":")
+    if not HOST_RE.fullmatch(host) or (port and not (port.isdigit() and 1 <= int(port) <= 65535)):
+        raise ValueError(_("Serveur : nom ou adresse attendu, avec un port facultatif."))
+    host = f"[{host}]" if ":" in host else host        # adresse IPv6
+    return f"{'ldap' if starttls else 'ldaps'}://{host}:{port or ('389' if starttls else '636')}"
+
+
+def _ldap_form():
+    """Champs LDAP saisis. Active Directory et FreeIPA : tout se déduit du domaine (et du serveur) ; les autres
+    annuaires (OpenLDAP, 389 DS…) se décrivent champ par champ."""
+    f = request.form
+    starttls = f.get("starttls") == "1"
+    preset = f.get("preset", "")
+    if preset in ("ad", "freeipa"):
+        domain = f.get("ad_domain", "").strip().lower().rstrip(".")
+        if not DOMAIN_RE.fullmatch(domain):
+            raise ValueError(_("Domaine attendu, par exemple entreprise.local."))
+        server = f.get("ad_server", "").strip().lower()
+        if preset == "freeipa" and not server:
+            raise ValueError(_("Nom du serveur FreeIPA attendu, par exemple ipa.entreprise.local."))
+        server = server or domain
+        dc = ",".join(("DC=" if preset == "ad" else "dc=") + part for part in domain.split("."))
+        common = {"preset": preset, "domain": domain, "server": server, "url": _server_url(server, starttls),
+                  "starttls": starttls, "bind_dn": f.get("bind_dn", "").strip()[:500], "mail_attr": "mail",
+                  "name_attr": "displayName", "ca_pem": f.get("ca_pem", "").strip()[:20000]}
+        if preset == "ad":                             # liaison identifiant@domaine, recherche sAMAccountName
+            return {**common, "base_dn": dc, "user_filter": "(&(objectClass=user)(sAMAccountName={username}))",
+                    "user_template": "{username}@" + domain}
+        users = "cn=users,cn=accounts," + dc           # FreeIPA : comptes sous cn=users,cn=accounts
+        return {**common, "base_dn": users, "user_filter": "(&(objectClass=person)(uid={username}))",
+                "user_template": "uid={username}," + users}
+    return {"url": f.get("url", "").strip(), "starttls": starttls, "base_dn": f.get("base_dn", "").strip()[:500],
+            "user_filter": f.get("user_filter", "").strip()[:500] or "(uid={username})",
+            "bind_dn": f.get("bind_dn", "").strip()[:500],
+            "user_template": f.get("user_template", "").strip()[:500] or "{username}",
+            "name_attr": f.get("name_attr", "").strip()[:60] or "displayName",
+            "mail_attr": f.get("mail_attr", "").strip()[:60] or "mail", "ca_pem": f.get("ca_pem", "").strip()[:20000]}
+
+
 def _values(kind, existing=None):
     old = json.loads(existing["config"]) if existing else {}
     label = request.form.get("label", "").strip()
+    if not label and kind == "ldap" and request.form.get("preset") in ("ad", "freeipa"):
+        label = "Active Directory" if request.form.get("preset") == "ad" else "FreeIPA"   # nom par défaut, modifiable
     if not label or len(label) > 80 or any(ord(c) < 32 for c in label):
         raise ValueError(_('Nom de 1 à 80 caractères requis.'))
     if kind == "ldap":
-        url = request.form.get("url", "").strip()
+        cfg = _ldap_form()
+        url = cfg["url"]
         parts = urllib.parse.urlsplit(url)
-        starttls = request.form.get("starttls") == "1"
         if parts.scheme not in ("ldap", "ldaps") or not parts.hostname or parts.path not in ("", "/") or parts.query:
             raise ValueError(_('Adresse ldaps://hôte:636 ou ldap://hôte:389 attendue.'))
-        if parts.scheme == "ldap" and not starttls:
+        if parts.scheme == "ldap" and not cfg["starttls"]:
             raise ValueError(_('Sans ldaps://, activez StartTLS : le mot de passe ne doit jamais circuler en clair.'))
-        cfg = {"url": url, "starttls": starttls and parts.scheme == "ldap", "base_dn": request.form.get("base_dn", "").strip()[:500],
-               "user_filter": request.form.get("user_filter", "").strip()[:500] or "(uid={username})",
-               "bind_dn": request.form.get("bind_dn", "").strip()[:500],
-               "user_template": request.form.get("user_template", "").strip()[:500] or "{username}",
-               "name_attr": request.form.get("name_attr", "").strip()[:60] or "displayName",
-               "mail_attr": request.form.get("mail_attr", "").strip()[:60] or "mail",
-               "ca_pem": request.form.get("ca_pem", "").strip()[:20000]}
+        cfg["starttls"] = cfg["starttls"] and parts.scheme == "ldap"
         from .directory_protocols import encode_filter
         try:
             encode_filter(cfg["user_filter"].replace("{username}", "x"))
@@ -212,7 +255,11 @@ def sso_settings():
             cfg[field] = bool(cfg.get(field))                        # jamais renvoyé au navigateur
         directories.append({"row": r, "cfg": cfg})
     legacy = db().execute("SELECT COUNT(*) FROM users WHERE auth_source='sso'").fetchone()[0]
-    return render_template("directories.html", directories=directories, kinds=KINDS, presets=LDAP_PRESETS, legacy=legacy)
+    summary = {"active": sum(1 for d in directories if d["row"]["enabled"]),
+               "accounts": sum(d["row"]["accounts"] for d in directories),
+               "pending": db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0]}
+    return render_template("directories.html", directories=directories, kinds=KINDS, presets=LDAP_PRESETS, legacy=legacy,
+                           summary=summary)
 
 
 @app.route("/accounts/directories/add", methods=["POST"])
@@ -276,21 +323,50 @@ def directory_delete(directory_id):
     return redirect(url_for("sso_settings"))
 
 
-@app.route("/accounts/directories/<directory_id>/move-up", methods=["POST"])
+@app.route("/accounts/directories/<directory_id>/toggle", methods=["POST"])
 @login_required
-def directory_move(directory_id):
+def directory_toggle(directory_id):
+    """Active ou désactive un annuaire d'un clic ; désactivé, ses comptes perdent leurs sessions."""
+    conn = lock_access("sso.manage")
+    row = _directory(directory_id)
+    enabled = 0 if row["enabled"] else 1
+    if not enabled:
+        _revoke(directory_id)
+    conn.execute("UPDATE auth_directories SET enabled=?, revision=revision+1 WHERE id=?", (enabled, directory_id))
+    audit("sso.fournisseur.modification", f"{row['label']} : {'activé' if enabled else 'désactivé'}", commit=False)
+    conn.commit()
+    flash(_("%(label)s activé : ses utilisateurs peuvent se connecter.", label=row["label"]) if enabled
+          else _("%(label)s désactivé ; les sessions de ses comptes ont été fermées.", label=row["label"]), "ok")
+    return redirect(url_for("sso_settings"))
+
+
+def _move(directory_id, step):
+    """Ordre d'essai des annuaires : un rang plus tôt (-1) ou plus tard (+1)."""
     conn = lock_access("sso.manage")
     rows = conn.execute("SELECT id FROM auth_directories ORDER BY position, label").fetchall()
     order = [r[0] for r in rows]
     if directory_id not in order:
         abort(404)
     i = order.index(directory_id)
-    if i:
-        order[i - 1], order[i] = order[i], order[i - 1]
+    j = i + step
+    if 0 <= j < len(order):
+        order[j], order[i] = order[i], order[j]
     for position, ident in enumerate(order):
         conn.execute("UPDATE auth_directories SET position=? WHERE id=?", (position, ident))
     conn.commit()
     return redirect(url_for("sso_settings"))
+
+
+@app.route("/accounts/directories/<directory_id>/move-up", methods=["POST"])
+@login_required
+def directory_move(directory_id):
+    return _move(directory_id, -1)
+
+
+@app.route("/accounts/directories/<directory_id>/move-down", methods=["POST"])
+@login_required
+def directory_move_down(directory_id):
+    return _move(directory_id, 1)
 
 
 @app.route("/accounts/directories/<directory_id>/test", methods=["POST"])

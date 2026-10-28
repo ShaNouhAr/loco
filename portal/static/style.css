@@ -1791,3 +1791,31 @@ details[open] > summary .more-open { display: inline; }
   .ca-callout { flex-wrap: wrap; }
   .ca-sha { margin-left: 0; }
 }
+
+/* ------------------------------------------------------------------ annuaires et SSO */
+.dir-table tr.off td:not(:nth-last-child(-n+2)) { color: var(--text-3); }
+.dir-table .switch-row { gap: 8px; font-size: 13.5px; }
+.dir-acts { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Ajout : un sélecteur segmenté choisit le type ; le formulaire correspondant s'affiche (boutons radio, sans script). */
+dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
+.kind-radio { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.seg-wrap { flex: none; padding: 14px 20px 0; }
+.seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
+.seg label { padding: 6px 8px; border-radius: 6px; text-align: center; font-size: 13px; color: var(--text-2); white-space: nowrap; cursor: pointer; }
+.seg label:hover { color: var(--text); }
+#dk-ad:checked ~ .seg-wrap [for="dk-ad"], #dk-ipa:checked ~ .seg-wrap [for="dk-ipa"],
+#dk-ldap:checked ~ .seg-wrap [for="dk-ldap"], #dk-radius:checked ~ .seg-wrap [for="dk-radius"] {
+  background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 0 0 1px var(--line-2); }
+#dk-ad:focus-visible ~ .seg-wrap [for="dk-ad"], #dk-ipa:focus-visible ~ .seg-wrap [for="dk-ipa"],
+#dk-ldap:focus-visible ~ .seg-wrap [for="dk-ldap"], #dk-radius:focus-visible ~ .seg-wrap [for="dk-radius"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+#dir-add > form { display: none; }
+#dk-ad:checked ~ form[data-kind="ad"], #dk-ipa:checked ~ form[data-kind="freeipa"],
+#dk-ldap:checked ~ form[data-kind="ldap"], #dk-radius:checked ~ form[data-kind="radius"] { display: contents; }
+.f .opt { font-style: normal; font-weight: 400; color: var(--text-3); }
+.dir-adv > summary { font-size: 13.5px; }
+.dlg-f-note { margin-right: auto; }
+
+@media (max-width: 560px) {
+  .seg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

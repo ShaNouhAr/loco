@@ -18,7 +18,7 @@
           <input type="password" name="password" required autocomplete="current-password" {{ 'autofocus' if username }}>
         </label>
         <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
-        {% if login_directories %}<p class="hint">{{ _("Compte local ou compte de l'annuaire (%(login_directories)s). Première connexion avec un compte d'annuaire : l'accès doit être approuvé par un administrateur.", login_directories=login_directories|join(', ')) }}</p>{% endif %}
+        {% if login_directories %}<p class="hint">{{ _("Compte local, ou votre compte d'entreprise en SSO (%(login_directories)s). Première connexion avec un compte d'entreprise : l'accès doit être approuvé par un administrateur.", login_directories=login_directories|join(', ')) }}</p>{% endif %}
       </div>
     </form>
     <div class="foot">
