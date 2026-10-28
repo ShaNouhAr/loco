@@ -2,6 +2,7 @@
 sans jamais toucher au certificat que voient les agents (autorité loco épinglée)."""
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -163,9 +164,10 @@ class TestEnterpriseAuthority(CertTest):
         return self.text(out)
 
     def issuer(self):
+        """Émetteur du certificat servi, au format « CN=… » quelle que soit la version d'OpenSSL (3.0 : « CN = … »)."""
         out = subprocess.run(["openssl", "x509", "-in", os.path.join(self.tls, "server.crt"), "-noout", "-issuer"],
                              capture_output=True, text=True).stdout
-        return out.split("=", 1)[1].strip()
+        return re.sub(r"\s*=\s*", "=", out.split("=", 1)[1].strip())
 
     def test_full_switch_and_back(self):
         corp = self.authority()
@@ -187,10 +189,10 @@ class TestEnterpriseAuthority(CertTest):
         self.assertFalse(os.path.exists(csr))                                     # demande honorée : retirée
         self.assertIn("Corp Root CA", subprocess.run(["openssl", "x509", "-in", os.path.join(self.tls, "enterprise.crt"),
                                                       "-noout", "-issuer"], capture_output=True, text=True).stdout)
-        self.assertEqual(self.issuer(), "CN = old")                               # préparé, pas encore servi
+        self.assertEqual(self.issuer(), "CN=old")                               # préparé, pas encore servi
 
         locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
-        self.assertEqual(self.issuer(), "CN = Corp Root CA")
+        self.assertEqual(self.issuer(), "CN=Corp Root CA")
         self.assertEqual(locoadmin.tls_mode(), "enterprise")
         with self.assertRaises(ValueError):
             locoadmin.renew_cert(log=self.QUIET)                                  # le renouvellement passe par l'autorité
@@ -198,7 +200,7 @@ class TestEnterpriseAuthority(CertTest):
             locoadmin.remove_ca(log=self.QUIET)                                   # pas de retrait sous l'autorité en service
 
         locoadmin.set_tls_mode({"mode": "loco"}, log=self.QUIET)
-        self.assertEqual(self.issuer(), "CN = test CA")
+        self.assertEqual(self.issuer(), "CN=test CA")
         self.assertEqual(locoadmin.tls_mode(), "loco")
         subprocess.run(["openssl", "verify", "-CAfile", os.path.join(self.tls, "ca.crt"), os.path.join(self.tls, "server.crt")],
                        check=True, capture_output=True)
@@ -220,7 +222,7 @@ class TestEnterpriseAuthority(CertTest):
         self.assertEqual(os.listdir(locoadmin.TLS_SPOOL), [])                     # téléversements toujours effacés
         with self.assertRaises(ValueError):                                       # rien de prêt : pas de bascule
             locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
-        self.assertEqual(self.issuer(), "CN = old")
+        self.assertEqual(self.issuer(), "CN=old")
 
     def test_leaf_certificate_is_not_an_authority(self):
         key, csr = os.path.join(self.dir, "leaf.key"), os.path.join(self.dir, "leaf.csr")
@@ -245,7 +247,7 @@ class TestEnterpriseAuthority(CertTest):
                 locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
                 first = self.text(os.path.join(self.tls, "server.crt"))
         self.assertNotEqual(self.text(os.path.join(self.tls, "server.crt")), first)    # en service : remplacé aussitôt
-        self.assertEqual(self.issuer(), "CN = Corp Root CA")
+        self.assertEqual(self.issuer(), "CN=Corp Root CA")
 
     def test_switch_rolls_back_when_nginx_refuses(self):
         corp = self.authority()
@@ -256,8 +258,18 @@ class TestEnterpriseAuthority(CertTest):
         self.reload_mock.return_value = False
         with self.assertRaises(ValueError):
             locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
-        self.assertEqual(self.issuer(), "CN = old")
+        self.assertEqual(self.issuer(), "CN=old")
         self.assertEqual(locoadmin.tls_mode(), "loco")
+
+    def test_request_with_a_very_long_machine_name(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        long_name = "fv-az1234-567.abcdefghijklmnopqrstuvwxyz0123.cx.internal.cloudapp.example"   # plus de 64 caractères
+        with mock.patch.object(locoadmin.socket, "getfqdn", return_value=long_name):
+            locoadmin.ca_csr({"names": ""}, log=self.QUIET)
+        req = subprocess.run(["openssl", "req", "-in", os.path.join(self.tls, "enterprise.csr"), "-noout", "-text"],
+                             capture_output=True, text=True).stdout
+        self.assertIn("DNS:" + long_name, req)                                    # le nom long reste couvert
 
     def test_parameters_are_validated(self):
         with self.assertRaises(ValueError):

@@ -494,7 +494,7 @@ def agent_checkin():
     if "servers" in data:           # agents 2.9.0 et plus : adresses du serveur qu'ils connaissent
         conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
     reported_trust = data.get("trust") if isinstance(data.get("trust"), str) else None
-    if reported_trust is not None:  # agents 2.83.0 et plus : empreinte du faisceau d'autorités épinglé
+    if reported_trust is not None:  # agents 2.84.0 et plus : empreinte du faisceau d'autorités épinglé
         conn.execute("UPDATE devices SET trust_sha256=? WHERE id=?", (reported_trust[:64].lower(), dev["id"]))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])

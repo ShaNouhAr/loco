@@ -2,14 +2,11 @@
 
 ## 2.84.0 — 2026-10-28
 
-- **Mises à jour : listes plus courtes.** Le journal des versions et la liste des opérations n'affichent plus que les **5 plus récents** ; le reste se déplie (et se replie) d'un clic. Seule la version la plus récente est ouverte ; une opération choisie plus ancienne déplie sa liste d'elle-même.
-
-## 2.83.0 — 2026-10-28
-
 - **Autorité de certification au choix.** Nouvel onglet *Système › Certificat* avec un interrupteur **Autorité loco / Autorité d'entreprise** : le certificat du portail peut être signé par l'autorité de votre entreprise (AD CS, PKI interne…), à laquelle les postes du domaine font déjà confiance, et revenir à l'autorité loco à tout moment.
   - Mise en place guidée en quatre étapes : **importer l'autorité** (.cer, .crt, .pem ou chaîne .p7b) ; **obtenir le certificat** du serveur, soit par une **demande (CSR) générée par loco** — la clé privée ne quitte jamais le serveur, commande `certreq` pour AD CS fournie — soit avec un certificat et sa clé (PEM ou PFX) ; **diffuser la confiance** aux postes, avec le nombre de postes prêts ; **basculer**.
-  - **Sans coupure pour le parc** : les agents (2.83 et plus) reçoivent un faisceau « autorité loco + autorité d'entreprise » par leur canal déjà sécurisé et le confirment ; la bascule prévient si des postes ne l'ont pas encore. L'autorité loco reste reconnue : le retour est toujours sûr.
+  - **Sans coupure pour le parc** : les agents (2.84 et plus) reçoivent un faisceau « autorité loco + autorité d'entreprise » par leur canal déjà sécurisé et le confirment ; la bascule prévient si des postes ne l'ont pas encore. L'autorité loco reste reconnue : le retour est toujours sûr.
   - Chaque certificat est vérifié avant d'être servi (clé assortie, adresse des agents couverte, chaîne signée par votre autorité) ; nginx est rechargé, ou l'ancien certificat est rétabli. Une mise à jour de loco garde le certificat d'entreprise tant qu'il est valable.
+- **Mises à jour : listes plus courtes.** Le journal des versions et la liste des opérations n'affichent plus que les **5 plus récents** ; le reste se déplie (et se replie) d'un clic. Seule la version la plus récente est ouverte ; une opération choisie plus ancienne déplie sa liste d'elle-même.
 
 ## 2.82.0 — 2026-10-28
 

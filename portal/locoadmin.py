@@ -2221,7 +2221,7 @@ def ca_csr(params, log=print):
     """Demande de certificat (CSR) à faire signer par l'autorité d'entreprise ; la clé privée ne quitte pas le serveur."""
     names = tls_params("ca-csr", params)["names"].split()
     san = _agent_names(names)
-    cn = next((s.split(":", 1)[1] for s in san if s.startswith("DNS:")), socket.getfqdn())
+    cn = next((n for n in (s.split(":", 1)[1] for s in san if s.startswith("DNS:")) if len(n) <= 64), "") or _short_cn()
     with tempfile.TemporaryDirectory(dir=TLS, prefix=".csr-") as tmp:
         key, csr, cnf = (os.path.join(tmp, n) for n in ("request.key", "request.csr", "req.cnf"))
         with open(cnf, "w") as f:           # configuration minimale : OpenSSL 1.1 (Rocky 8) cumule sinon celle du système
@@ -2280,6 +2280,13 @@ def import_enterprise_cert(params, log=print):
     return True
 
 
+def _short_cn():
+    """Nom commun d'un certificat : 64 caractères au plus (au-delà, OpenSSL refuse la demande ; un nom complet de
+    machine dans un nuage les dépasse souvent). Les noms qui comptent sont dans subjectAltName."""
+    name = socket.gethostname() or "loco"
+    return name if len(name) <= 64 else name.split(".")[0][:63] or "loco"
+
+
 def _loco_cert(tmp, log):
     """Certificat serveur signé par l'autorité loco (adresse et noms actuels) : (clé, certificat) dans tmp."""
     ca_crt, ca_key = os.path.join(TLS, "ca.crt"), os.path.join(TLS, "ca.key")
@@ -2292,7 +2299,7 @@ def _loco_cert(tmp, log):
         f.write("subjectAltName=" + ",".join(san) + "\nbasicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\n"
                 "extendedKeyUsage=serverAuth\n")
     steps = (["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
-              "-subj", f"/O=loco/CN={socket.gethostname()}", "-keyout", key, "-out", csr],
+              "-subj", f"/O=loco/CN={_short_cn()}", "-keyout", key, "-out", csr],
              ["x509", "-req", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-set_serial", "0x" + secrets.token_hex(16),
               "-days", "825", "-out", crt, "-extfile", ext],
              ["verify", "-CAfile", ca_crt, crt])

@@ -1346,7 +1346,7 @@
  "Les %(limit)s dernières exécutions sur %(total_runs)s.": "The last %(limit)s runs out of %(total_runs)s.",
  "Les %(n)s postes lui font déjà confiance. Retour à l'autorité loco possible à tout moment.": "All %(n)s machines already trust it. You can switch back to the loco authority at any time.",
  "Les afficher": "Show them",
- "Les agents antérieurs à 2.83 se mettent d'abord à jour d'eux-mêmes ; un poste éteint la reçoit au prochain démarrage.": "Agents older than 2.83 first update themselves; a machine that is off receives it at its next start.",
+ "Les agents antérieurs à 2.84 se mettent d'abord à jour d'eux-mêmes ; un poste éteint la reçoit au prochain démarrage.": "Agents older than 2.84 first update themselves; a machine that is off receives it at its next start.",
  "Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés.": "Commands already copied will no longer work. Enrolled devices stay attached.",
  "Les comptes locaux restent toujours disponibles, et un compte local et un compte d’annuaire ne sont jamais rapprochés par leur nom. Un identifiant inconnu est essayé dans l’ordre des annuaires actifs ci-dessous.": "Local accounts always remain available, and a local account and a directory account are never matched by name. An unknown username is tried in the order of the active directories below.",
  "Les deux saisies du nouveau mot de passe diffèrent.": "The two new password entries do not match.",

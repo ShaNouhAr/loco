@@ -1346,7 +1346,7 @@
  "Les %(limit)s dernières exécutions sur %(total_runs)s.": "Las %(limit)s últimas ejecuciones de %(total_runs)s.",
  "Les %(n)s postes lui font déjà confiance. Retour à l'autorité loco possible à tout moment.": "Los %(n)s equipos ya confían en ella. Se puede volver a la autoridad loco en cualquier momento.",
  "Les afficher": "Mostrarlos",
- "Les agents antérieurs à 2.83 se mettent d'abord à jour d'eux-mêmes ; un poste éteint la reçoit au prochain démarrage.": "Los agentes anteriores a 2.83 se actualizan primero solos; un equipo apagado la recibe en su próximo arranque.",
+ "Les agents antérieurs à 2.84 se mettent d'abord à jour d'eux-mêmes ; un poste éteint la reçoit au prochain démarrage.": "Los agentes anteriores a 2.84 se actualizan primero solos; un equipo apagado la recibe en su próximo arranque.",
  "Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés.": "Los comandos ya copiados dejarán de funcionar. Los equipos inscritos siguen vinculados.",
  "Les comptes locaux restent toujours disponibles, et un compte local et un compte d’annuaire ne sont jamais rapprochés par leur nom. Un identifiant inconnu est essayé dans l’ordre des annuaires actifs ci-dessous.": "Las cuentas locales siguen siempre disponibles, y una cuenta local y una cuenta de directorio nunca se asocian por su nombre. Un identificador desconocido se prueba en el orden de los directorios activos a continuación.",
  "Les deux saisies du nouveau mot de passe diffèrent.": "Las dos entradas de la nueva contraseña difieren.",
