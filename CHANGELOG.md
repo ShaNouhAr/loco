@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.84.0 — 2026-10-28
+
+- **Mises à jour : listes plus courtes.** Le journal des versions et la liste des opérations n'affichent plus que les **5 plus récents** ; le reste se déplie (et se replie) d'un clic. Seule la version la plus récente est ouverte ; une opération choisie plus ancienne déplie sa liste d'elle-même.
+
 ## 2.83.0 — 2026-10-28
 
 - **Autorité de certification au choix.** Nouvel onglet *Système › Certificat* avec un interrupteur **Autorité loco / Autorité d'entreprise** : le certificat du portail peut être signé par l'autorité de votre entreprise (AD CS, PKI interne…), à laquelle les postes du domaine font déjà confiance, et revenir à l'autorité loco à tout moment.

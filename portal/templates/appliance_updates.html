@@ -20,6 +20,14 @@
 </li>
 {%- endmacro %}
 
+{% macro op_row(j) -%}
+{% set detail = job_detail(j) %}
+<li><a class="op-row{{ ' sel' if job and j.id == job.id }}" href="{{ url_for('appliance_updates', operation=j.id) }}#operations"{% if job and j.id == job.id %} aria-current="true"{% endif %}>
+  <span class="op-state {{ j.state }}">{{ ui_icon('check-circle' if j.state == 'success' else 'alert' if j.state == 'failed' else 'refresh') }}</span>
+  <span class="op-txt"><strong>{{ labels.get(j.action, j.action) }}</strong><span>{{ (j.started or j.queued)|date_fr }}{% if j.user %} · {{ j.user }}{% endif %}{% if detail %} · {{ detail }}{% endif %}</span></span>
+</a></li>
+{%- endmacro %}
+
 {% macro reboot_form(cls='btn', label=None, icon=True) -%}
 <form method="post" action="{{ url_for('appliance_updates_post') }}" data-ajax data-confirm="{{ _('Redémarrer le serveur ?') }}" data-confirm-text="{{ _('Les postes perdent l\'accès aux dépôts et aux caches pendant le redémarrage (environ une minute).') }}" data-confirm-ok="{{ _('Redémarrer') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
@@ -231,15 +239,14 @@
       <div class="aside">{% if news %}{{ _("%(n)s version%(v)s depuis la %(installed)s", n=news|length, v='s' if news|length > 1, installed=version) }}{% else %}{{ _("ce qui change à chaque version de loco") }}{% endif %}</div>
     </div>
     <div class="panel-b">
+      {% set versions = news + ([current_entry] if current_entry else []) + older %}
       <ol class="tl">
-        {% for e in news %}{{ tl_item(e, open=loop.first or news|length <= 3) }}{% endfor %}
-        {% if current_entry %}{{ tl_item(current_entry, open=not news) }}{% endif %}
-        {% for e in older[:3] %}{{ tl_item(e) }}{% endfor %}
+        {% for e in versions[:5] %}{{ tl_item(e, open=loop.first) }}{% endfor %}
       </ol>
-      {% if older|length > 3 %}
+      {% if versions|length > 5 %}
       <details class="tl-more">
-        <summary>{{ _("Afficher les %(n)s versions précédentes", n=older|length - 3) }}</summary>
-        <ol class="tl">{% for e in older[3:] %}{{ tl_item(e) }}{% endfor %}</ol>
+        <summary><span class="more-closed">{{ _("Afficher les %(n)s versions précédentes", n=versions|length - 5) }}</span><span class="more-open">{{ _("Masquer les versions précédentes") }}</span></summary>
+        <ol class="tl">{% for e in versions[5:] %}{{ tl_item(e) }}{% endfor %}</ol>
       </details>
       {% endif %}
     </div>
@@ -250,14 +257,16 @@
     <div class="panel-h"><h2>{{ _("Opérations") }}</h2><div class="aside">{{ _("journal de chaque vérification et mise à jour") }}</div></div>
     {% if jobs %}
     <div class="upd-ops">
-      <ul class="ops-list">
-        {% for j in jobs %}{% set detail = job_detail(j) %}
-        <li><a class="op-row{{ ' sel' if job and j.id == job.id }}" href="{{ url_for('appliance_updates', operation=j.id) }}#operations"{% if job and j.id == job.id %} aria-current="true"{% endif %}>
-          <span class="op-state {{ j.state }}">{{ ui_icon('check-circle' if j.state == 'success' else 'alert' if j.state == 'failed' else 'refresh') }}</span>
-          <span class="op-txt"><strong>{{ labels.get(j.action, j.action) }}</strong><span>{{ (j.started or j.queued)|date_fr }}{% if j.user %} · {{ j.user }}{% endif %}{% if detail %} · {{ detail }}{% endif %}</span></span>
-        </a></li>
-        {% endfor %}
-      </ul>
+      <div class="ops-col">
+        <ul class="ops-list">{% for j in jobs[:5] %}{{ op_row(j) }}{% endfor %}</ul>
+        {% if jobs|length > 5 %}
+        {% set ns = namespace(sel=false) %}{% for j in jobs[5:] %}{% if job and j.id == job.id %}{% set ns.sel = true %}{% endif %}{% endfor %}
+        <details class="ops-more"{{ ' open' if ns.sel }}>
+          <summary><span class="more-closed">{{ _("Afficher les %(n)s opérations précédentes", n=jobs|length - 5) }}</span><span class="more-open">{{ _("Masquer les opérations précédentes") }}</span></summary>
+          <ul class="ops-list">{% for j in jobs[5:] %}{{ op_row(j) }}{% endfor %}</ul>
+        </details>
+        {% endif %}
+      </div>
       {% if job %}
       <div class="ops-log">
         <div class="ops-log-h">

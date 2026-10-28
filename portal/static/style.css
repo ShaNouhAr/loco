@@ -1666,11 +1666,18 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
 .upd details.tl-more:not(.panel) > summary { position: relative; margin-top: 4px; padding: 6px 10px 6px 30px; border-radius: var(--r-sm); font-size: 13px; color: var(--text-2); }
 .upd details.tl-more:not(.panel) > summary::before { position: absolute; left: 3px; top: 50%; width: 8px; height: 8px; margin: -4px 0 0; border: 0; border-radius: 50%; background: var(--line-2); transform: none; opacity: 1; }
 .upd details.tl-more:not(.panel) > summary:hover { background: var(--bg-2); color: var(--text); }
-.upd details.tl-more[open]:not(.panel) > summary { display: none; }
+.upd details.tl-more[open]:not(.panel) > summary { margin-bottom: 4px; }
+/* Dépliants « afficher / masquer » : le libellé suit l'état ouvert ou fermé. */
+details > summary .more-open, details[open] > summary .more-closed { display: none; }
+details[open] > summary .more-open { display: inline; }
 
 /* Opérations : liste à gauche, journal de l'opération choisie à droite. */
 .upd-ops { display: grid; grid-template-columns: minmax(240px, 330px) minmax(0, 1fr); }
-.ops-list { display: flex; flex-direction: column; gap: 2px; max-height: 440px; margin: 0; padding: 8px; overflow: auto; border-right: 1px solid var(--line); list-style: none; }
+.ops-col { max-height: 440px; padding: 8px; overflow: auto; border-right: 1px solid var(--line); }
+.ops-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.upd details.ops-more:not(.panel) > summary { margin: 6px 0 2px; padding: 6px 10px; border-radius: var(--r-sm); font-size: 13px; color: var(--text-2); }
+.upd details.ops-more:not(.panel) > summary:hover { background: var(--bg-2); color: var(--text); }
+.ops-more .ops-list { margin-top: 2px; }
 .op-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm); color: var(--text); }
 .op-row:hover { background: var(--bg-2); text-decoration: none; }
 .op-row.sel { background: var(--sel); box-shadow: inset 2px 0 0 var(--accent); }
@@ -1699,7 +1706,7 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
 
 @media (max-width: 900px) {
   .upd-overview, .upd-ops { grid-template-columns: minmax(0, 1fr); }
-  .ops-list { max-height: 260px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .ops-col { max-height: 320px; border-right: 0; border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 560px) {
   .upd-banner { flex-wrap: wrap; }

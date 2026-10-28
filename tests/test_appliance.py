@@ -453,6 +453,30 @@ class TestPages(TempAgent):
         self.assertIn('class="tl-item is-current"', html)                     # la version installée, depuis le journal livré
         self.assertIn("Aucune mise à jour en attente.", html)                 # système à jour
 
+    def test_long_lists_show_five_and_fold_the_rest(self):
+        shipped = os.path.join(self.work.name, "CHANGELOG.md")
+        with open(shipped, "w", encoding="utf-8") as f:
+            f.write("# Journal\n\n" + "".join(f"## 1.{n}.0 — 2026-10-01\n\n- **Version {n}.** x\n\n" for n in range(9, 0, -1)))
+        patch = mock.patch.object(config, "CHANGELOG_PATH", shipped)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
+        appliance._CHANGELOG["mtime"] = None
+        jobs = [{"id": f"20261028-0{n}0000-abcdef", "action": "check", "state": "success", "started": f"2026-10-28 0{n}:00:00"}
+                for n in range(8)]
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-15 09:00:00", "packages": [], "errors": []}, f)
+        with mock.patch.object(config, "VERSION", "1.9.0"), mock.patch.object(locoadmin, "jobs", return_value=jobs), \
+             mock.patch.object(locoadmin, "job_log", return_value=""):
+            html = self.b.c.get("/system/updates").get_data(as_text=True)
+        first = html[html.index('<ol class="tl">'):html.index("</ol>")]
+        self.assertEqual(first.count('class="tl-item'), 5)                     # cinq versions visibles
+        self.assertEqual(first.count("<details open>"), 1)                     # seule la plus récente dépliée
+        self.assertIn("Afficher les 4 versions précédentes", html)
+        ops = html[html.index('class="ops-col"'):]
+        self.assertEqual(ops[:ops.index("ops-more")].count('class="op-row'), 5)
+        self.assertIn("Afficher les 3 opérations précédentes", html)
+
     def test_security_fixes_are_listed_by_severity(self):
         pkgs = [{"name": n, "current": "1", "new": "2", "origin": "main", "security": True, "severity": s, "tags": []}
                 for n, s in (("low-pkg", "Low"), ("crit-pkg", "Critical"), ("med-pkg", "Medium"), ("high-pkg", "High"))]
