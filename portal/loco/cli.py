@@ -3,6 +3,7 @@
   init                      migrations de la base, reprise de l'ancien mot de passe
   ensure-admin              crée le compte « admin » s'il n'existe aucun compte (mot de passe : $LOCO_PASSWORD)
   rebuild-apt               régénère et signe tous les dépôts APT
+  apt-init                  dépôts Debian/Ubuntu par défaut (Debian 12/13, Ubuntu 22.04/24.04 ; créés si besoin, resignés)
   apt-repo add DISTRIBUTION SUITE [VERSION]   crée un dépôt pour Debian / Ubuntu
   apt-repo list             liste les dépôts par distribution et version
   write-maps                régénère les listes de domaines Windows Update pour nginx
@@ -160,6 +161,15 @@ def main(argv):
             print(key)
         else:
             sys.exit(__doc__)
+    elif cmd == "apt-init":
+        from .linux import create_repository, rebuild_apt, repositories
+        existing = {r["key"] for r in repositories()}
+        for distribution, suite, version in config.APT_DEFAULT_REPOSITORIES:
+            if f"{distribution}/{suite}" not in existing:
+                create_repository(distribution, suite, version)
+        rebuild_apt()
+        for repo in repositories():
+            rebuild_apt(repo["key"])
     elif cmd == "write-maps":
         from .wupdate import write_wu_maps
         write_wu_maps()

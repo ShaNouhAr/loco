@@ -5,7 +5,7 @@
 {% macro step(ns, title, aside='') -%}
 {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ title }}</h2>{% if aside %}<div class="aside">{{ aside }}</div>{% endif %}</div>
 {%- endmacro %}
-{% macro download(icon, name, meta, href, label, cls='btn primary') -%}
+{% macro download(icon, name, meta, href, label, cls='btn') -%}
 <div class="download">
   <span class="download-icon">{{ nav_icon(icon) }}</span>
   <div class="download-text"><strong class="mono">{{ name }}</strong><span>{{ meta }}</span></div>
@@ -23,31 +23,28 @@
   </div>
 </section>
 {%- endmacro %}
-{% macro linux_agent(ns, kind, system, cache, tool) -%}
-{% set pkg = packages[kind] %}{% set full = '_full' if pkg.repos else '' %}
+{# Composeur : on coche ce que le poste reçoit, app.js génère la commande correspondante. #}
+{% macro composer(ns, os) -%}
 <section class="panel">
-  {{ step(ns, _("Installer loco sur le poste"), _("inscrit le poste dans Mon parc")) }}
+  {{ step(ns, _("Installer loco sur le poste"), _("cochez ce que ce poste reçoit")) }}
   <div class="panel-b">
-    {% if pkg.repos %}
-    {{ download('package', pkg.full, _('Agent et %(cache)s · recommandé · version %(version)s', cache=cache, version=version), commands[kind ~ '_full_path'], _('Télécharger')) }}
-    {{ download('package', pkg.name, _('Agent seul, sans toucher aux dépôts du poste'), commands[kind ~ '_path'], _('Télécharger'), 'btn') }}
-    {% else %}
-    {{ download('package', pkg.name, _('%(system)s · version %(version)s · Python 3 et systemd requis', system=system, version=version), commands[kind ~ '_path'], _('Télécharger')) }}
-    {% endif %}
-    <span class="cmd-label">{{ _("Copiez le fichier sur le poste, puis dans son dossier :") }}</span>
-    {{ cmd('enroll-' ~ kind, commands[kind ~ full ~ '_install']) }}
-    {% if pkg.repos %}<span class="hint">{{ _("Le paquet complet confie l'autorité de loco au système, branche le poste sur le cache et le dépôt local de sa version (le cache seul si ce dépôt n'existe pas encore), puis installe l'agent. Passer de l'agent seul au paquet complet est une mise à jour : l'inscription est conservée.") }}</span>{% endif %}
-    <details class="hint"><summary>{{ _("Autres méthodes") }}</summary>
-      <div class="stack-sm">
-        <span class="cmd-label">{{ _("Télécharger et installer directement depuis le poste :") }}</span>
-        {{ cmd('enroll-' ~ kind ~ '-fetch', commands[kind ~ full ~ '_fetch']) }}
-        {% if commands[kind ~ full ~ '_fetch_http'] %}<span class="hint">{{ _("Autorité loco pas encore importée sur le poste :") }} <code>{{ commands[kind ~ full ~ '_fetch_http'] }}</code></span>{% endif %}
-        <span class="cmd-label">{{ _("Agent seul, sans paquet, par le script d'installation :") }}</span>
-        {{ cmd('enroll-' ~ kind ~ '-script', commands.linux) }}
-        {% if commands.linux_http %}<span class="hint">{{ _("Autorité loco pas encore importée sur le poste :") }} <code>{{ commands.linux_http }}</code></span>{% endif %}
+    <div class="composer"
+      {%- if os == 'windows' %} data-composer="windows" data-agent="{{ commands.windows }}"{% if proxy_available %} data-wu='netsh winhttp set proxy proxy-server=&quot;{{ proxy_host }}:{{ proxy_port }}&quot; bypass-list=&quot;&lt;local&gt;&quot;'{% endif %}
+      {%- else %} data-composer="{{ os }}" data-base="{{ client_url }}" data-http="{{ http_url or '' }}" data-setup-path="/{{ 'linux' if os == 'deb' else 'rpm' }}/setup.sh" data-agent="{{ commands.linux }}" data-agent-http="{{ commands.linux_http or '' }}" data-full="{{ commands[os ~ '_full_fetch'] if packages[os].repos else '' }}" data-full-http="{{ commands[os ~ '_full_fetch_http'] if packages[os].repos else '' }}"{% endif %}>
+      <div class="cap-list">
+        <label class="choice cap-all"><input type="checkbox" data-cap-all checked><span><strong>{{ _("Tout") }}</strong><small>{{ _("La configuration complète, recommandée.") }}</small></span></label>
+        <label class="choice"><input type="checkbox" data-cap="manage" checked><span><strong>{{ _("Gestion (agent)") }}</strong><small>{{ _("Inventaire, mises à jour, scripts et terminal depuis Mon parc.") }}</small></span></label>
+        {% if os == 'windows' %}
+        {% if proxy_available %}<label class="choice"><input type="checkbox" data-cap="wu"><span><strong>{{ _("Rediriger Windows Update") }}</strong><small>{{ _("Ce poste télécharge ses mises à jour Windows via loco. Avec l'agent et le proxy activé au portail, c'est déjà automatique.") }}</small></span></label>{% endif %}
+        {% elif packages[os].repos %}
+        <label class="choice"><input type="checkbox" data-cap="repo" checked><span><strong>{{ _("Dépôt loco") }}</strong><small>{{ _("Installer vos paquets maison avec %(tool)s, comme ceux de la distribution.", tool=('apt' if os == 'deb' else 'dnf')) }}</small></span></label>
+        <label class="choice"><input type="checkbox" data-cap="cache" checked><span><strong>{{ _("Cache des mises à jour") }}</strong><small>{{ _("Les mises à jour officielles passent par le cache de loco (téléchargées une fois pour tout le réseau).") }}</small></span></label>
+        {% endif %}
       </div>
-    </details>
-    <span class="hint">{{ _("Le poste apparaît dans <a href=\"%(v)s\">Mon parc</a> dès l'installation ; l'agent se met ensuite à jour seul. <code>sudo %(tool)s remove loco-client</code> retire l'agent", v=url_for('fleet'), tool=tool) }}{% if pkg.repos %} {{ _("et, pour le paquet complet, la configuration des dépôts") }}{% endif %}.</span>
+      {% if os != 'windows' and http_url %}<label class="choice cap-opt"><input type="checkbox" data-cap="first"><span>{{ _("Première installation : le poste n'a pas encore l'autorité de loco (importe l'autorité, puis passe en HTTPS)") }}</span></label>{% endif %}
+      <div class="composer-out" data-composer-out aria-live="polite"></div>
+      <span class="hint">{{ _("Le poste apparaît dans <a href=\"%(v)s\">Mon parc</a> dès l'installation de l'agent ; il se met ensuite à jour seul.", v=url_for('fleet')) }}</span>
+    </div>
   </div>
 </section>
 {%- endmacro %}
@@ -63,7 +60,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Enrôlement") }}</h1>
-    <p>{{ _("Rattacher un poste à loco : l'agent l'inscrit dans Mon parc (inventaire, mises à jour, actions), les dépôts et caches lui servent ensuite paquets et mises à jour depuis le réseau local.") }}</p>
+    <p>{{ _("Rattacher un poste à loco : cochez ce qu'il reçoit (agent de gestion, vos dépôts, cache), copiez la commande générée et lancez-la sur le poste.") }}</p>
   </div>
 </div>
 
@@ -77,20 +74,18 @@
   {% set ns = namespace(n=0) %}
   <div class="tab-panel enroll-panel {{ 'on' if first == 'windows' }}" data-panel="windows">
     {% if key %}
+    {{ composer(ns, 'windows') }}
     <section class="panel">
-      {{ step(ns, _("Installer l'agent"), "Windows 10/11, Windows Server 2016 et plus") }}
+      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
       <div class="panel-b">
-        {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste · version %(version)s", version=version), url_for('agent_enroll_msi'), _('Télécharger le MSI')) }}
-        <span class="hint">{{ _("Un double-clic installe le service et inscrit le poste dans « Mon parc » : l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans le MSI. Rien d'autre à faire.") }}</span>
-        <details class="hint"><summary>{{ _("Autres méthodes") }}</summary>
+        {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste d'un double-clic · version %(version)s", version=version), url_for('agent_enroll_msi'), _('Télécharger le MSI'), 'btn primary') }}
+        <span class="hint">{{ _("L'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans le MSI.") }}</span>
+        <details class="hint"><summary>{{ _("MSI générique et déploiement en masse (GPO, Intune, SCCM)") }}</summary>
           <div class="stack-sm">
-            <span class="cmd-label">{{ _("En une commande PowerShell (administrateur), sans téléchargement préalable :") }}</span>
-            {{ cmd('enroll-ps', commands.windows, 'PS>') }}
-            {% if commands.windows_http %}<span class="hint">{{ _("Autorité loco pas encore importée sur le poste :") }} <code>{{ commands.windows_http }}</code></span>{% endif %}
             <span class="cmd-label">{{ _("MSI générique (sans inscription) puis installation avec les réglages, en administrateur :") }}</span>
             {{ cmd('enroll-msi', commands.msiexec, '>') }}
             <span class="hint">{{ _("MSI générique depuis le navigateur du poste :") }} {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}.</span>
-            <span class="cmd-label">{{ _("Déploiement en masse (GPO, Intune, SCCM) : distribuer le MSI et créer sous") }} <code>{{ _("HKLM\\SOFTWARE\\Policies\\loco\\Client") }}</code> {{ _("les valeurs chaîne") }} <code>{{ _("Server") }}</code> = <code>{{ https_url }}</code>, <code>{{ _("Key") }}</code> = <code>{{ key }}</code> {{ _("et") }} <code>{{ _("CaSha256") }}</code> = <code>{{ ca_sha256 or _('(vide : certificat public)') }}</code>{{ _(", ou en ligne de commande :") }}</span>
+            <span class="cmd-label">{{ _("Déploiement en masse : distribuer le MSI et créer sous") }} <code>{{ _("HKLM\\SOFTWARE\\Policies\\loco\\Client") }}</code> {{ _("les valeurs chaîne") }} <code>{{ _("Server") }}</code> = <code>{{ https_url }}</code>, <code>{{ _("Key") }}</code> = <code>{{ key }}</code> {{ _("et") }} <code>{{ _("CaSha256") }}</code> = <code>{{ ca_sha256 or _('(vide : certificat public)') }}</code>{{ _(", ou en ligne de commande :") }}</span>
             {{ cmd('enroll-msi-mass', 'msiexec /i loco-client.msi SERVER=' ~ https_url ~ ' KEY=' ~ key ~ (' CA_SHA256=' ~ ca_sha256 if ca_sha256 else '') ~ ' /qn', '>') }}
           </div>
         </details>
@@ -99,15 +94,10 @@
     {% endif %}
     {% if wu %}
     <section class="panel">
-      {{ step(ns, _("Windows Update"), _("deux méthodes au choix")) }}
+      {{ step(ns, _("Windows Update pour tout le réseau"), _("par DNS, sans rien sur les postes")) }}
       <div class="panel-b">
-        <p class="muted">{{ _("Diriger les téléchargements Windows Update du poste vers le cache de loco, de deux façons :") }}</p>
-        <p class="small"><strong>{{ _("Par DNS") }}</strong> {{ _("(tout le réseau, aucun réglage sur les postes) : le DNS répond") }} <span class="mono">{{ host }}</span> {{ _("pour les domaines redirigés. Script et domaines :") }} <a href="{{ url_for('windows_update') }}">{{ _("Windows › Windows Update") }}</a>.</p>
-        {% if proxy_available %}
-        <p class="small"><strong>{{ _("Par proxy, sans DNS") }}</strong> {{ _("(ce poste seulement). L'agent le fait automatiquement si vous l'activez au portail ; manuellement, en PowerShell administrateur :") }}</p>
-        {{ cmd('enroll-wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
-        <p class="hint">{{ _("Annuler : <span class=\"mono\">netsh winhttp reset proxy</span>.") }}</p>
-        {% endif %}
+        <p class="muted">{{ _("Pour couvrir d'un coup les postes non gérés, le DNS du réseau répond") }} <span class="mono">{{ host }}</span> {{ _("pour les domaines redirigés (plutôt que la case « Rediriger Windows Update », qui vaut pour un seul poste).") }}</p>
+        <a class="btn sm" href="{{ url_for('windows_update') }}">{{ _("Script DNS et domaines : Windows › Windows Update") }}</a>
       </div>
     </section>
     {% endif %}
@@ -125,15 +115,27 @@
 
   {% set ns = namespace(n=0) %}
   <div class="tab-panel enroll-panel {{ 'on' if first == 'debian' }}" data-panel="debian">
-    {% if key %}{{ linux_agent(ns, 'deb', 'Paquet Debian / Ubuntu', _('dépôts APT'), 'apt') }}{% endif %}
-    {% if apt %}
+    {% if key %}
+    {{ composer(ns, 'deb') }}
     <section class="panel">
-      {{ step(ns, _("Dépôts seuls, sans agent") if key and packages.deb.repos else _("Dépôts et cache APT"), _("inclus dans le paquet complet") if key and packages.deb.repos else _("recommandé")) }}
+      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
+      <div class="panel-b">
+        <p class="muted">{{ _("Pour un poste hors ligne : téléchargez le paquet ici, copiez-le sur le poste, puis installez-le.") }}</p>
+        {% if packages.deb.repos %}{{ download('package', packages.deb.full, _('Agent, dépôt et cache · version %(version)s', version=version), commands.deb_full_path, _('Télécharger')) }}{% endif %}
+        {{ download('package', packages.deb.name, _('Agent seul · Python 3 et systemd requis'), commands.deb_path, _('Télécharger')) }}
+        <span class="cmd-label">{{ _("Puis, dans le dossier du fichier sur le poste :") }}</span>
+        {{ cmd('enroll-deb', commands.deb_full_install if packages.deb.repos else commands.deb_install) }}
+        <span class="hint">{{ _("Cache seul, dépôt historique, distribution dérivée et retrait : <a href=\"%(v)s\">Linux › Paquets</a>.", v=url_for('linux')) }}</span>
+      </div>
+    </section>
+    {% endif %}
+    {% if not key and apt %}
+    <section class="panel">
+      {{ step(ns, _("Dépôts et cache APT"), _("recommandé")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Paquets Debian / Ubuntu via le cache de loco, et dépôt local de la version du poste (détectée automatiquement).") }}</p>
         {{ cmd('enroll-apt', 'curl -fsSL ' ~ client_url ~ '/linux/setup.sh | sudo sh') }}
         {% if http_url %}<span class="hint">{{ _("Premier branchement, autorité pas encore importée :") }} <code>{{ _("curl -fsSL %(http_url)s/linux/setup.sh | sudo sh -s -- --trust-ca", http_url=http_url) }}</code></span>{% endif %}
-        <span class="hint">{{ _("Cache seul, retrait et autres options : <a href=\"%(v)s\">Linux › Paquets</a>.", v=url_for('linux')) }}</span>
       </div>
     </section>
     {% endif %}
@@ -142,15 +144,27 @@
 
   {% set ns = namespace(n=0) %}
   <div class="tab-panel enroll-panel {{ 'on' if first == 'redhat' }}" data-panel="redhat">
-    {% if key %}{{ linux_agent(ns, 'rpm', 'Paquet Rocky Linux / AlmaLinux / RHEL 8 et plus', _('dépôts DNF'), 'dnf') }}{% endif %}
-    {% if rpm %}
+    {% if key %}
+    {{ composer(ns, 'rpm') }}
     <section class="panel">
-      {{ step(ns, _("Dépôts seuls, sans agent") if key and packages.rpm.repos else _("Dépôts et cache DNF"), _("inclus dans le paquet complet") if key and packages.rpm.repos else _("recommandé")) }}
+      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
+      <div class="panel-b">
+        <p class="muted">{{ _("Pour un poste hors ligne : téléchargez le paquet ici, copiez-le sur le poste, puis installez-le.") }}</p>
+        {% if packages.rpm.repos %}{{ download('package', packages.rpm.full, _('Agent, dépôt et cache · version %(version)s', version=version), commands.rpm_full_path, _('Télécharger')) }}{% endif %}
+        {{ download('package', packages.rpm.name, _('Agent seul · Python 3 et systemd requis'), commands.rpm_path, _('Télécharger')) }}
+        <span class="cmd-label">{{ _("Puis, dans le dossier du fichier sur le poste :") }}</span>
+        {{ cmd('enroll-rpm', commands.rpm_full_install if packages.rpm.repos else commands.rpm_install) }}
+        <span class="hint">{{ _("EPEL, cache seul et retrait : <a href=\"%(v)s\">Linux › Paquets</a>.", v=url_for('rpm')) }}</span>
+      </div>
+    </section>
+    {% endif %}
+    {% if not key and rpm %}
+    <section class="panel">
+      {{ step(ns, _("Dépôts et cache DNF"), _("recommandé")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Dépôts officiels via le cache de loco, et dépôt local <code>elN</code> de la version du poste.") }}</p>
-        {{ cmd('enroll-rpm', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
+        {{ cmd('enroll-rpm-setup', 'curl -fsSL ' ~ client_url ~ '/rpm/setup.sh | sudo sh') }}
         {% if http_url %}<span class="hint">{{ _("Premier branchement, autorité pas encore importée :") }} <code>{{ _("curl -fsSL %(http_url)s/rpm/setup.sh | sudo sh -s -- --trust-ca", http_url=http_url) }}</code></span>{% endif %}
-        <span class="hint">{{ _("EPEL, retrait et autres options : <a href=\"%(v)s\">Linux › Paquets</a>.", v=url_for('rpm')) }}</span>
       </div>
     </section>
     {% endif %}

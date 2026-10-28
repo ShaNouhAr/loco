@@ -575,6 +575,7 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .cache-ctx { font-size: 12.5px; overflow-wrap: anywhere; }
 .cache-state { text-align: center; padding: 16px 0 4px; margin: 0; font-size: 13.5px; }
 .cache-more { margin-top: 10px; }
+.cache-panel.expanded .table-wrap { max-height: 60vh; overflow: auto; }
 .pkg-sum { margin-bottom: 2px; }
 .wu-kv { margin-bottom: 18px; }
 .wu-kv .dd-lg { font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
@@ -948,6 +949,14 @@ details.hint[open] > summary { margin-bottom: 6px; }
 
 /* ------------------------------------------------------------------ enrôlement */
 
+/* Composeur d'enrôlement : on coche ce que le poste reçoit (cartes .choice), la commande se génère dessous. */
+.cap-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.cap-all > span { background: var(--bg-2); }
+.cap-opt { margin-bottom: 14px; }
+.cap-opt > span { padding-top: 9px; padding-bottom: 9px; }
+.composer-out { display: flex; flex-direction: column; gap: 4px; }
+.composer-out .cmd-label { margin-top: 6px; }
+.composer-out .cmd-label:first-child { margin-top: 0; }
 .enroll-tabs { margin-bottom: 20px; }
 .enroll-tabs button { display: inline-flex; align-items: center; gap: 8px; }
 .enroll-tabs .nav-icon { width: 16px; height: 16px; color: var(--text-3); }

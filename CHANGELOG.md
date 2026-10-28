@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.90.0 — 2026-10-29
+
+- **Composeur d'enrôlement.** La page *Enrôlement* devient un sélecteur : on **coche ce que le poste reçoit** — **Gestion (agent)**, **Dépôt loco**, **Cache des mises à jour** (et, côté Windows, **Rediriger Windows Update**), avec une case **Tout** — et la **commande à lancer se génère en direct**, par système (Windows, Debian/Ubuntu, Red Hat). Le téléchargement du paquet pour un poste hors ligne et le déploiement en masse (GPO, Intune) restent dans « Autres méthodes ».
+- **Dépôts Debian/Ubuntu par défaut.** loco crée désormais d'office les dépôts **Debian 12 et 13, Ubuntu 22.04 et 24.04** (comme el8/el9/el10 côté Red Hat) : plus besoin de les créer à la main avant de brancher un poste Debian. La section *Vos dépôts* est revue — le bouton « Ajouter des paquets » passe dans l'en-tête du dépôt choisi.
+- **Cache : noms plus parlants dès la mise à jour, repli plus pratique.** Les libellés « Mise à jour Windows », « Métadonnées du dépôt »… apparaissent maintenant tout de suite après une mise à jour de loco (l'agent reconstruit l'index du cache à son démarrage), sans attendre une analyse manuelle. Et quand la liste complète est dépliée, elle reste à hauteur limitée : plus besoin de descendre jusqu'en bas pour la replier.
+
 ## 2.89.0 — 2026-10-28
 
 - **Liste du cache plus lisible.** Dans les pages **Windows Update** et **Paquets Linux**, la liste des fichiers en cache n'affiche plus que les **5 plus récents** — le reste se déplie (et se replie) d'un clic — et chaque ligne indique **à quoi le fichier correspond** (« Mise à jour Windows », « Définitions Microsoft Defender », « Microsoft Edge », « Métadonnées du dépôt »…), avec le nom de fichier juste en dessous. Les paquets .deb et .rpm gardent leur nom tel quel, déjà parlant.

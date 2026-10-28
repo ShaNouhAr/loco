@@ -261,6 +261,7 @@
 
   // Commande composée à partir des choix (système, ce que loco fournit, EPEL, autorité à importer).
   $$("[data-setup]").forEach(function (box) {
+    if (!$("#cmd-setup")) return;      // composeur de la page Paquets uniquement (évite toute collision d'attribut)
     var FLAGS = { apt: { repos: "--no-proxy", cache: "--cache-only" }, rpm: { repos: "--no-cache", cache: "--no-local" } };
     var update = function () {
       var os = ($('input[name="setup_os"]:checked', box) || {}).value || "apt";
@@ -1236,6 +1237,8 @@
       var matches = current.filter(function (e) { return !q || (e.name + " " + e.context).toLowerCase().indexOf(q) >= 0; });
       rows.textContent = "";
       matches.slice(0, expanded ? matches.length : LIMIT).forEach(function (e) { rows.appendChild(row(e)); });
+      // Déplié : la liste devient une zone à hauteur bornée (défilement interne) pour garder « Réduire » à portée.
+      panel.classList.toggle("expanded", expanded && matches.length > LIMIT);
       if (more) {
         if (matches.length > LIMIT) { more.hidden = false; more.textContent = expanded ? t("Réduire la liste") : t("Afficher les %(n)s autres", { n: matches.length - LIMIT }); }
         else more.hidden = true;
@@ -1286,6 +1289,69 @@
     load(true);
     [1300, 2800, 5000].forEach(function (ms) { setTimeout(function () { load(false); }, ms); });
     poll("/cache/state?areas=" + area, 10000, apply);
+  });
+
+  /* ---------------------------------------------------------------- composeur d'enrôlement */
+  // On coche ce que le poste reçoit (gestion / dépôt / cache) ; la commande à lancer est générée en direct.
+  $$("[data-composer]").forEach(function (box) {
+    var os = box.dataset.composer;
+    var out = $("[data-composer-out]", box);
+    var all = $("[data-cap-all]", box);
+    var caps = $$("[data-cap]", box).filter(function (c) { return c.dataset.cap !== "first"; });
+    var first = $('[data-cap="first"]', box);
+    function on(id) { var c = $('[data-cap="' + id + '"]', box); return !!(c && c.checked); }
+
+    function steps() {
+      var s = [];
+      if (os === "windows") {
+        if (on("manage")) s.push({ label: t("Installer l'agent"), cmd: box.dataset.agent, prompt: "PS>" });
+        if (on("wu")) s.push({ label: t("Rediriger Windows Update"), cmd: box.dataset.wu, prompt: "PS>" });
+        return s;
+      }
+      var m = on("manage"), r = on("repo"), c = on("cache"), fst = first && first.checked && box.dataset.http;
+      if (m && r && c && box.dataset.full) {    // paquet complet : agent + dépôt + cache en une commande
+        s.push({ label: t("Agent, dépôt et cache"), cmd: fst && box.dataset.fullHttp ? box.dataset.fullHttp : box.dataset.full });
+        return s;
+      }
+      if (m) s.push({ label: t("Installer l'agent"), cmd: fst && box.dataset.agentHttp ? box.dataset.agentHttp : box.dataset.agent });
+      if (r || c) {
+        var fl = [];
+        if (r && !c) fl.push("--no-proxy");
+        if (c && !r) fl.push("--cache-only");
+        if (fst) fl.push("--trust-ca");
+        var host = fst ? box.dataset.http : box.dataset.base;
+        s.push({ label: r && c ? t("Dépôt et cache") : (r ? t("Dépôt loco") : t("Cache des mises à jour")),
+                 cmd: "curl -fsSL " + host + box.dataset.setupPath + " | sudo sh" + (fl.length ? " -s -- " + fl.join(" ") : "") });
+      }
+      return s;
+    }
+
+    function render() {
+      var s = steps();
+      out.textContent = "";
+      if (!s.length) {
+        var p = document.createElement("p"); p.className = "hint"; p.textContent = t("Cochez au moins une option.");
+        out.appendChild(p); return;
+      }
+      s.forEach(function (step, i) {
+        if (s.length > 1) {
+          var lab = document.createElement("span"); lab.className = "cmd-label";
+          lab.textContent = (i + 1) + ". " + step.label; out.appendChild(lab);
+        }
+        var div = document.createElement("div"); div.className = "cmd";
+        var code = document.createElement("code"); code.setAttribute("data-prompt", step.prompt || "#"); code.textContent = step.cmd;
+        var btn = document.createElement("button"); btn.type = "button"; btn.className = "copy"; btn.textContent = t("Copier");
+        div.appendChild(code); div.appendChild(btn); out.appendChild(div);
+      });
+    }
+
+    function syncAll() { if (all) all.checked = caps.every(function (c) { return c.checked; }); }
+    box.addEventListener("change", function (e) {
+      if (e.target === all) caps.forEach(function (c) { c.checked = all.checked; });
+      else if (e.target.dataset.cap && e.target.dataset.cap !== "first") syncAll();
+      render();
+    });
+    syncAll(); render();
   });
 
   var live = $("[data-poll]");

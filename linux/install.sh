@@ -403,7 +403,7 @@ if ! runuser -u loco -- env GNUPGHOME="$STATE/gnupg" gpg --list-secret-keys 2>/d
 fi
 runuser -u loco -- env GNUPGHOME="$STATE/gnupg" gpg --batch --yes --export -o "$DATA/apt/loco.gpg"
 chmod 644 "$DATA/apt/loco.gpg"
-cli rebuild-apt >/dev/null
+cli apt-init >/dev/null
 runuser -u loco -- gpgconf --homedir "$STATE/gnupg" --kill gpg-agent 2>/dev/null || true
 cli write-maps
 if [ "$FLATPAK_ENABLED" = 1 ]; then

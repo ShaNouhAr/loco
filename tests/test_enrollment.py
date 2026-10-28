@@ -115,8 +115,9 @@ class TestEnrollmentPage(FleetTest):
         self.assertIn(f'href="/agent/loco-client.rpm?key={key}&amp;depots=1" download', page)
         self.assertIn(f"sudo apt install ./loco-client_{config.VERSION}+depots_all.deb", page)
         self.assertIn(f"sudo dnf install ./loco-client-{config.VERSION}-1.depots.noarch.rpm", page)
-        self.assertIn("Dépôts seuls, sans agent", page)
-        self.assertIn("/linux/setup.sh | sudo sh", page)
+        for cap in ('data-composer="deb"', 'data-cap="manage"', 'data-cap="repo"', 'data-cap="cache"'):  # composeur
+            self.assertIn(cap, page)
+        self.assertIn('data-setup-path="/linux/setup.sh"', page)                   # le composeur génère la commande setup.sh
         self.assertIn('href="/enrollment" class="on">Enrôlement</a>', page)        # onglet de Mon parc
         self.assertIn('href="/fleet" class="on"', page)                           # Mon parc en surbrillance
         self.assertNotIn("Brancher un poste", self.admin.c.get("/").get_data(as_text=True))

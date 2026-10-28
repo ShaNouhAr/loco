@@ -65,6 +65,15 @@ class TestAptRepositories(unittest.TestCase):
         self.assertIn('Origin: local-repo\n', release.read_text())
         self.assertIn('Label: local-repo debian/migration-test\n', release.read_text())
 
+    def test_apt_init_seeds_default_repositories(self):
+        from loco import cli, config
+        cli.main(['apt-init'])
+        keys = {r['key'] for r in linux.repositories()}
+        for distribution, suite, _version in config.APT_DEFAULT_REPOSITORIES:
+            self.assertIn(f'{distribution}/{suite}', keys)
+        cli.main(['apt-init'])                        # idempotent : rien dupliqué au second passage
+        self.assertEqual({r['key'] for r in linux.repositories()}, keys)
+
     def test_same_package_versions_stay_separate(self):
         first = linux.create_repository('debian', 'test-one', '13')
         second = linux.create_repository('ubuntu', 'test-two', '24.04')

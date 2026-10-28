@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.89.0"
+VERSION = "2.90.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -43,6 +43,9 @@ POOL_DIR = os.path.join(APT_DIR, "pool")
 APT_REPOSITORIES_DIR = os.path.join(APT_DIR, "repositories")
 APT_SUITE_RE = re.compile(r"^[a-z][a-z0-9-]{0,39}$")
 APT_DISTRIBUTIONS = {"debian": "Debian", "ubuntu": "Ubuntu"}
+# Dépôts Debian/Ubuntu créés d'office (comme el8/el9/el10 côté Red Hat) : (distribution, nom de code, version affichée).
+APT_DEFAULT_REPOSITORIES = (("debian", "bookworm", "12"), ("debian", "trixie", "13"),
+                            ("ubuntu", "jammy", "22.04"), ("ubuntu", "noble", "24.04"))
 WIN_DIR = os.path.join(DATA, "win")
 TMP_DIR = os.path.join(DATA, ".tmp")
 # Journal des versions, livré à la racine de l'installation (/opt/loco) à côté de portal/, consultable depuis le portail.

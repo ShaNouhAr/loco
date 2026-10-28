@@ -2571,9 +2571,10 @@ def cache_worker():
     except OSError as e:
         print(f"gestion du cache indisponible : {e}", file=sys.stderr)
         return
-    if not os.path.exists(CACHE_INDEX):
-        with contextlib.suppress(OSError):
-            write_cache_index()
+    # Régénérer au démarrage (fil de fond) : après une mise à jour de loco, l'index reflète le nouveau format
+    # (nouveaux champs comme « kind » des libellés) sans attendre une demande d'analyse du portail.
+    with contextlib.suppress(OSError):
+        write_cache_index()
     while True:
         try:
             names = sorted(os.listdir(CACHE_REQUESTS))
