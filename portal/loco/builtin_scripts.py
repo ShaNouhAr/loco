@@ -67,6 +67,56 @@ if ($proc.ExitCode -le 1) { Write-Output "Pilote NVIDIA $latest installe (code $
 else { Write-Output "Installeur NVIDIA : echec, code $($proc.ExitCode)."; exit $proc.ExitCode }
 '''
 
+# Répare les fichiers système de Windows : DISM /RestoreHealth (répare l'image) puis SFC /scannow (fichiers système).
+REPAIR_WINDOWS = r'''# loco - Reparation de Windows : DISM /RestoreHealth puis SFC /scannow.
+$ErrorActionPreference = 'Continue'
+
+Write-Output '=== DISM /Online /Cleanup-Image /RestoreHealth ==='
+$dism = & DISM.exe /Online /Cleanup-Image /RestoreHealth 2>&1 | Out-String
+$dismCode = $LASTEXITCODE
+# On retire les lignes de progression (« [====   12.3% ] ») pour ne garder que l'essentiel.
+($dism -split "`r?`n" | Where-Object { $_.Trim() -and $_ -notmatch '^\[' } | Select-Object -Last 10) |
+    ForEach-Object { Write-Output $_.Trim() }
+Write-Output "DISM : code $dismCode"
+
+Write-Output ''
+Write-Output '=== SFC /scannow ==='
+# SFC ecrit en UTF-16 : on retire les octets nuls et les lignes de progression.
+$sfc = (& "$env:SystemRoot\System32\sfc.exe" /scannow 2>&1 | Out-String) -replace "`0", ''
+$sfcCode = $LASTEXITCODE
+($sfc -split "`r?`n" | Where-Object { $_.Trim() -and $_ -notmatch 'Verification \d+%' }) |
+    ForEach-Object { Write-Output $_.Trim() }
+Write-Output "SFC : code $sfcCode"
+
+if ($dismCode -ne 0 -or $sfcCode -ne 0) { exit 1 } else { exit 0 }
+'''
+
+# Nettoie les fichiers temporaires (dossiers Temp, cache de Windows Update) et vide la corbeille ; indique l'espace libéré.
+CLEAN_TEMP_WINDOWS = r'''# loco - Nettoyage des fichiers temporaires de Windows.
+$ErrorActionPreference = 'Continue'
+
+function FolderSize($p) {
+    if (Test-Path $p) { [long]((Get-ChildItem $p -Recurse -Force -ErrorAction SilentlyContinue |
+        Measure-Object -Property Length -Sum).Sum) } else { 0 }
+}
+
+$targets = @("$env:SystemRoot\Temp", "$env:TEMP", "$env:SystemRoot\SoftwareDistribution\Download")
+$before = 0; foreach ($t in $targets) { $before += FolderSize $t }
+
+foreach ($t in $targets) {
+    if (Test-Path $t) {
+        Get-ChildItem $t -Force -ErrorAction SilentlyContinue |
+            ForEach-Object { Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+        Write-Output "Nettoye : $t"
+    }
+}
+try { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Write-Output 'Corbeille videe.' } catch { }
+
+$after = 0; foreach ($t in $targets) { $after += FolderSize $t }
+$freed = [math]::Round(($before - $after) / 1MB, 1)
+Write-Output "Espace libere : $freed Mo."
+'''
+
 BUILTINS = [
     {
         "flag": "nvidia_driver",
@@ -74,6 +124,20 @@ BUILTINS = [
         "platform": "windows",
         "description": "Installe ou met à jour le dernier pilote NVIDIA Game Ready (DCH) du poste, directement depuis NVIDIA.",
         "content": NVIDIA_WINDOWS,
+    },
+    {
+        "flag": "repair_windows",
+        "name": "Réparer Windows (DISM + SFC)",
+        "platform": "windows",
+        "description": "Répare l'image Windows avec DISM /RestoreHealth puis vérifie les fichiers système avec SFC /scannow.",
+        "content": REPAIR_WINDOWS,
+    },
+    {
+        "flag": "clean_temp_windows",
+        "name": "Nettoyer les fichiers temporaires",
+        "platform": "windows",
+        "description": "Vide les dossiers Temp, le cache de Windows Update et la corbeille, puis indique l'espace libéré.",
+        "content": CLEAN_TEMP_WINDOWS,
     },
 ]
 

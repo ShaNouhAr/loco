@@ -232,16 +232,21 @@ class TestBuiltinScripts(unittest.TestCase):
     def rows(self):
         return self.conn.execute("SELECT name, platform, content FROM scripts").fetchall()
 
-    def test_seeds_the_nvidia_script_once(self):
+    def test_seeds_builtin_scripts_once(self):
         self.builtin.seed(self.conn, "2026-01-01 00:00:00")
         self.builtin.seed(self.conn, "2026-01-01 00:00:00")      # second passage : pas de doublon
         rows = self.rows()
-        self.assertEqual(len(rows), 1)
-        name, platform, content = rows[0]
-        self.assertIn("NVIDIA", name)
-        self.assertEqual(platform, "windows")
-        self.assertIn("AjaxDriverService", content)
-        self.assertIn("-s -noreboot", content)
+        self.assertEqual(len(rows), len(self.builtin.BUILTINS))
+        self.assertTrue(all(p == "windows" for _, p, _ in rows))
+        content = {name: c for name, _, c in rows}
+        nvidia = next(c for n, c in content.items() if "NVIDIA" in n)
+        self.assertIn("AjaxDriverService", nvidia)
+        self.assertIn("-s -noreboot", nvidia)
+        repair = next(c for n, c in content.items() if "DISM" in n)
+        self.assertIn("RestoreHealth", repair)
+        self.assertIn("sfc.exe", repair)
+        clean = next(c for n, c in content.items() if "temporaires" in n)
+        self.assertIn("Clear-RecycleBin", clean)
 
     def test_deletion_is_not_undone(self):
         self.builtin.seed(self.conn, "2026-01-01 00:00:00")
