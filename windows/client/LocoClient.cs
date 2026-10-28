@@ -123,7 +123,8 @@ namespace Loco
         // Premier contact depuis le démarrage du service (démarrage du poste, mise à jour de l'agent) :
         // inventaire refait, pour ne pas garder l'état d'avant un redémarrage (mises à jour installées depuis).
         static bool firstRun = true;
-        static X509Certificate2 ca;
+        static X509Certificate2 ca;                     // autorité loco (premier certificat du faisceau)
+        static X509Certificate2Collection trust;        // faisceau : autorité loco + autorité d'entreprise éventuelle
         static readonly object runLock = new object();
         static readonly ThreadLocal<JavaScriptSerializer> Serializers = new ThreadLocal<JavaScriptSerializer>(
             () => new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 });
@@ -181,16 +182,30 @@ namespace Loco
 
         static bool CheckCertificate(object sender, X509Certificate cert, X509Chain chain, SslPolicyErrors errors)
         {
-            if (ca == null) return errors == SslPolicyErrors.None;
+            if (trust == null) return errors == SslPolicyErrors.None;
             if ((errors & (SslPolicyErrors.RemoteCertificateNotAvailable | SslPolicyErrors.RemoteCertificateNameMismatch)) != 0) return false;
             using (var c = new X509Chain())
             {
                 c.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                 c.ChainPolicy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;
-                c.ChainPolicy.ExtraStore.Add(ca);
+                c.ChainPolicy.ExtraStore.AddRange(trust);
                 if (!c.Build(new X509Certificate2(cert))) return false;
-                return c.ChainElements[c.ChainElements.Count - 1].Certificate.Thumbprint == ca.Thumbprint;
+                // Ancre de la chaîne : l'une des autorités du faisceau épinglé (loco, ou l'autorité d'entreprise choisie).
+                string anchor = c.ChainElements[c.ChainElements.Count - 1].Certificate.Thumbprint;
+                foreach (X509Certificate2 t in trust) if (t.Thumbprint == anchor) return true;
+                return false;
             }
+        }
+
+        // Faisceau PEM (un ou plusieurs certificats) ; repli sur un certificat DER isolé.
+        static X509Certificate2Collection ReadCertificates(byte[] raw)
+        {
+            var col = new X509Certificate2Collection();
+            string text = Encoding.ASCII.GetString(raw);
+            foreach (Match m in Regex.Matches(text, "-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----", RegexOptions.Singleline))
+                col.Add(new X509Certificate2(Convert.FromBase64String(Regex.Replace(m.Groups[1].Value, "\\s", ""))));
+            if (col.Count == 0) col.Add(new X509Certificate2(raw));
+            return col;
         }
 
         static HttpWebRequest Request(string method, string url, string token, int timeout, RemoteCertificateValidationCallback check)
@@ -311,7 +326,43 @@ namespace Loco
 
         static void LoadCa()
         {
-            ca = File.Exists(CaPath) ? new X509Certificate2(File.ReadAllBytes(CaPath)) : null;
+            trust = null; ca = null;
+            if (!File.Exists(CaPath)) return;
+            try { trust = ReadCertificates(File.ReadAllBytes(CaPath)); }
+            catch (Exception e) { Log(Lang.T("autorités de confiance illisibles : ", "unreadable trusted authorities: ", "autoridades de confianza ilegibles: ") + e.Message); return; }
+            if (trust.Count > 0) ca = trust[0]; else trust = null;
+        }
+
+        // Faisceau d'autorités envoyé par le serveur (au fil du canal déjà épinglé) : remplace ca.crt s'il a changé.
+        // Agent installé sans autorité épinglée (magasin du système) : rien à faire.
+        static void ApplyTrust(Dictionary<string, object> answer)
+        {
+            object v;
+            if (!answer.TryGetValue("trust", out v) || !(v is Dictionary<string, object>) || !File.Exists(CaPath)) return;
+            var d = (Dictionary<string, object>)v;
+            string pem = Str(d, "pem"), sha = Str(d, "sha256").ToLowerInvariant();
+            if (pem == "" || sha == "" || sha == TrustSha()) return;
+            byte[] raw = Encoding.UTF8.GetBytes(pem);
+            string digest;
+            using (var h = SHA256.Create()) digest = BitConverter.ToString(h.ComputeHash(raw)).Replace("-", "").ToLowerInvariant();
+            if (digest != sha) return;
+            try
+            {
+                var col = ReadCertificates(raw);
+                if (col.Count == 0) return;
+                string tmp = CaPath + ".new";
+                File.WriteAllBytes(tmp, raw);
+                File.Copy(tmp, CaPath, true);
+                File.Delete(tmp);
+                LoadCa();
+                Log(Lang.T("autorités de confiance mises à jour (", "trusted authorities updated (", "autoridades de confianza actualizadas (") + col.Count + ")");
+            }
+            catch (Exception e) { Log(Lang.T("faisceau d'autorités refusé : ", "authority bundle refused: ", "conjunto de autoridades rechazado: ") + e.Message); }
+        }
+
+        static string TrustSha()
+        {
+            try { return File.Exists(CaPath) ? Sha256File(CaPath) : ""; } catch (Exception) { return ""; }
         }
 
         internal static Dictionary<string, object> RemoteExchange(object data)
@@ -344,7 +395,8 @@ namespace Loco
             pin = pin.Replace(":", "").Replace(" ", "").ToLowerInvariant();
             string tmp = CaPath + ".new";
             Download(server + "/ca.crt", tmp, (s, c, ch, e) => true);   // contenu vérifié ci-dessous par l'empreinte
-            var cert = new X509Certificate2(File.ReadAllBytes(tmp));
+            // Faisceau : l'autorité loco en tête (celle de l'empreinte), puis l'autorité d'entreprise éventuelle.
+            var cert = ReadCertificates(File.ReadAllBytes(tmp))[0];
             string digest;
             using (var sha = SHA256.Create()) digest = BitConverter.ToString(sha.ComputeHash(cert.RawData)).Replace("-", "").ToLowerInvariant();
             if (digest != pin) { File.Delete(tmp); throw new Exception(Lang.T("empreinte de l'autorité différente de celle attendue : inscription refusée", "authority fingerprint differs from the expected one: enrollment refused", "huella de la autoridad distinta de la esperada: inscripción rechazada")); }
@@ -523,7 +575,8 @@ namespace Loco
             }
             return new Dictionary<string, object> {
                 { "hostname", Environment.MachineName.ToLowerInvariant() }, { "agent_version", Version },
-                { "addresses", addresses }, { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } } };
+                { "addresses", addresses }, { "trust", TrustSha() },
+                { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } } };
         }
 
         static List<Dictionary<string, object>> InstalledApps()
@@ -1062,6 +1115,7 @@ namespace Loco
                     else Report(conf, id, "failed", Lang.T("Action non prise en charge : ", "Action not supported: ", "Acción no admitida: ") + action, 1, null);
                 }
                 SaveState(lastScan, scanHours, rescan);
+                ApplyTrust(answer);
                 ApplyWuProxy(answer);
                 ApplyWindowsUpdatePolicy(answer);
                 SelfUpdate(conf, answer);

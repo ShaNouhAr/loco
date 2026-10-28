@@ -131,5 +131,142 @@ class CertTest(unittest.TestCase):
         self.assertFalse(locoadmin._name_covers("*.example.org", "192.168.42.208"))
 
 
+class TestEnterpriseAuthority(CertTest):
+    """Autorité au choix : autorité d'entreprise importée, demande signée par elle, bascule et retour à loco."""
+
+    QUIET = staticmethod(lambda *_: None)
+
+    def setUp(self):
+        super().setUp()
+        lang = mock.patch.object(locoadmin, "LANG", "fr")        # messages de l'agent root en français : assertions stables
+        lang.start()
+        self.addCleanup(lang.stop)
+
+    def authority(self, name="Corp Root CA"):
+        d = os.path.join(self.dir, name.replace(" ", "-"))
+        os.makedirs(d)
+        key, crt = os.path.join(d, "ca.key"), os.path.join(d, "ca.crt")
+        ssl("req", "-x509", "-config", os.path.join(self.dir, "minimal.cnf"), "-newkey", "ec", "-pkeyopt",
+            "ec_paramgen_curve:P-256", "-nodes", "-days", "30", "-subj", f"/CN={name}", "-addext",
+            "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign", "-keyout", key, "-out", crt)
+        return key, crt
+
+    def spool(self, text, upload, ext):
+        pathlib.Path(locoadmin.TLS_SPOOL, upload + ext).write_text(text)
+        return upload
+
+    def sign(self, csr, ca, san="IP:192.168.42.208,DNS:loco.corp.example"):
+        out, ext = os.path.join(self.dir, "issued.crt"), os.path.join(self.dir, "issued.cnf")
+        pathlib.Path(ext).write_text(f"subjectAltName={san}\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n")
+        ssl("x509", "-req", "-in", csr, "-CA", ca[1], "-CAkey", ca[0], "-set_serial", "0x01", "-days", "30",
+            "-out", out, "-extfile", ext)
+        return self.text(out)
+
+    def issuer(self):
+        out = subprocess.run(["openssl", "x509", "-in", os.path.join(self.tls, "server.crt"), "-noout", "-issuer"],
+                             capture_output=True, text=True).stdout
+        return out.split("=", 1)[1].strip()
+
+    def test_full_switch_and_back(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        trust = self.text(os.path.join(self.tls, "trust.pem"))
+        loco = self.text(os.path.join(self.tls, "ca.crt")).strip()
+        self.assertTrue(trust.startswith(loco))                                   # autorité loco en tête : empreinte épinglée
+        self.assertIn(self.text(corp[1]).strip(), trust)
+
+        locoadmin.ca_csr({"names": "loco.corp.example"}, log=self.QUIET)
+        csr = os.path.join(self.tls, "enterprise.csr")
+        req = subprocess.run(["openssl", "req", "-in", csr, "-noout", "-text"], capture_output=True, text=True).stdout
+        self.assertIn("IP Address:192.168.42.208", req)                            # l'adresse des agents, toujours
+        self.assertIn("DNS:loco.corp.example", req)
+        self.assertEqual(oct(os.stat(os.path.join(self.tls, "enterprise-request.key")).st_mode & 0o777), "0o600")
+
+        issued = self.sign(csr, corp)
+        locoadmin.import_enterprise_cert({"upload": self.spool(issued, "2" * 32, ".crt")}, log=self.QUIET)
+        self.assertFalse(os.path.exists(csr))                                     # demande honorée : retirée
+        self.assertIn("Corp Root CA", subprocess.run(["openssl", "x509", "-in", os.path.join(self.tls, "enterprise.crt"),
+                                                      "-noout", "-issuer"], capture_output=True, text=True).stdout)
+        self.assertEqual(self.issuer(), "CN = old")                               # préparé, pas encore servi
+
+        locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
+        self.assertEqual(self.issuer(), "CN = Corp Root CA")
+        self.assertEqual(locoadmin.tls_mode(), "enterprise")
+        with self.assertRaises(ValueError):
+            locoadmin.renew_cert(log=self.QUIET)                                  # le renouvellement passe par l'autorité
+        with self.assertRaises(ValueError):
+            locoadmin.remove_ca(log=self.QUIET)                                   # pas de retrait sous l'autorité en service
+
+        locoadmin.set_tls_mode({"mode": "loco"}, log=self.QUIET)
+        self.assertEqual(self.issuer(), "CN = test CA")
+        self.assertEqual(locoadmin.tls_mode(), "loco")
+        subprocess.run(["openssl", "verify", "-CAfile", os.path.join(self.tls, "ca.crt"), os.path.join(self.tls, "server.crt")],
+                       check=True, capture_output=True)
+        locoadmin.remove_ca(log=self.QUIET)
+        self.assertEqual(self.text(os.path.join(self.tls, "trust.pem")).strip(), loco)
+        self.assertFalse(os.path.exists(os.path.join(self.tls, "enterprise.crt")))
+
+    def test_enterprise_certificate_refusals(self):
+        corp, other = self.authority(), self.authority("Other CA")
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        locoadmin.ca_csr({"names": ""}, log=self.QUIET)
+        csr = os.path.join(self.tls, "enterprise.csr")
+        for issued, reason in ((self.sign(csr, corp, san="DNS:loco.corp.example"), "ne couvre pas"),
+                               (self.sign(csr, other), "pas signé")):
+            with self.assertRaises(ValueError) as e:
+                locoadmin.import_enterprise_cert({"upload": self.spool(issued, "3" * 32, ".crt")}, log=self.QUIET)
+            self.assertIn(reason, str(e.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.tls, "enterprise.crt")))
+        self.assertEqual(os.listdir(locoadmin.TLS_SPOOL), [])                     # téléversements toujours effacés
+        with self.assertRaises(ValueError):                                       # rien de prêt : pas de bascule
+            locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
+        self.assertEqual(self.issuer(), "CN = old")
+
+    def test_leaf_certificate_is_not_an_authority(self):
+        key, csr = os.path.join(self.dir, "leaf.key"), os.path.join(self.dir, "leaf.csr")
+        ssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", "/CN=leaf",
+            "-keyout", key, "-out", csr)
+        leaf = self.sign(csr, self.authority())                                   # basicConstraints CA:FALSE
+        with self.assertRaises(ValueError):
+            locoadmin.import_ca({"upload": self.spool(leaf, "4" * 32, ".pem")}, log=self.QUIET)
+        self.assertFalse(os.path.exists(os.path.join(self.tls, "enterprise-ca.pem")))
+
+    def test_certificate_with_its_own_key_and_renewal_in_service(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        for n, upload in enumerate(("5" * 32, "6" * 32)):
+            key, csr = os.path.join(self.dir, f"k{n}.key"), os.path.join(self.dir, f"k{n}.csr")
+            ssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", "/CN=loco",
+                "-keyout", key, "-out", csr)
+            self.spool(self.sign(csr, corp), upload, ".crt")
+            self.spool(self.text(key), upload, ".key")
+            locoadmin.import_enterprise_cert({"upload": upload, "key": "1"}, log=self.QUIET)
+            if not n:
+                locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
+                first = self.text(os.path.join(self.tls, "server.crt"))
+        self.assertNotEqual(self.text(os.path.join(self.tls, "server.crt")), first)    # en service : remplacé aussitôt
+        self.assertEqual(self.issuer(), "CN = Corp Root CA")
+
+    def test_switch_rolls_back_when_nginx_refuses(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        locoadmin.ca_csr({"names": ""}, log=self.QUIET)
+        locoadmin.import_enterprise_cert({"upload": self.spool(self.sign(os.path.join(self.tls, "enterprise.csr"), corp),
+                                                               "7" * 32, ".crt")}, log=self.QUIET)
+        self.reload_mock.return_value = False
+        with self.assertRaises(ValueError):
+            locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
+        self.assertEqual(self.issuer(), "CN = old")
+        self.assertEqual(locoadmin.tls_mode(), "loco")
+
+    def test_parameters_are_validated(self):
+        with self.assertRaises(ValueError):
+            locoadmin.tls_params("set-tls-mode", {"mode": "autre"})
+        with self.assertRaises(ValueError):
+            locoadmin.tls_params("ca-csr", {"names": "a b;rm -rf /"})
+        self.assertEqual(locoadmin.tls_params("ca-csr", {"names": "Loco.Corp.example, loco.corp.example"}),
+                         {"names": "loco.corp.example"})
+
+
 if __name__ == "__main__":
     unittest.main()

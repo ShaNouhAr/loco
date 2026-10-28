@@ -58,7 +58,8 @@
   <div class="tabs page-tabs" role="tablist" data-hash aria-label="{{ _('Sections du système') }}">
     <button type="button" data-tab="etat" aria-selected="true">{{ _("État") }}</button>
     <button type="button" data-tab="sauvegardes" aria-selected="false">{{ _("Sauvegardes") }}{% if backups %} <span class="tab-count">{{ backups|length }}</span>{% endif %}{% if last_backup and last_backup.late %} <span class="st warn" aria-label="{{ _('en retard') }}"></span>{% endif %}</button>
-    <button type="button" data-tab="reseau" aria-selected="false">{{ _("Réseau et certificats") }}</button>
+    <button type="button" data-tab="reseau" aria-selected="false">{{ _("Réseau") }}</button>
+    <button type="button" data-tab="certificat" aria-selected="false">{{ _("Certificat") }}{% if tls and tls.mode == 'enterprise' %} <span class="tab-count">{{ _("entreprise") }}</span>{% endif %}{% if cert and cert.end.days is not none and cert.end.days < 30 %} <span class="st err" aria-label="{{ _('expire bientôt') }}"></span>{% endif %}</button>
     {% if time_info or (qemu and (qemu.qemu or qemu.installed)) %}<button type="button" data-tab="reglages" aria-selected="false">{{ _("Heure et matériel") }}</button>{% endif %}
   </div>
 
@@ -276,6 +277,249 @@
     </section>
     {% endif %}
 
+
+  </div></div>
+
+  <div class="tab-panel" data-panel="certificat"><div class="stack">
+  {% if tls %}
+  {% set corp = tls.mode == 'enterprise' %}
+  {% set authority_ok = tls.authority|length > 0 %}
+  {% set prepared_ok = tls.prepared is not none %}
+  {% set all_ready = readiness and readiness.total and readiness.ready == readiness.total %}
+  {% set pct = ((100 * readiness.ready / readiness.total)|round|int) if readiness and readiness.total else 0 %}
+  <section class="panel ca-panel">
+    <div class="panel-h">
+      <h2>{{ _("Certificat et autorité") }}</h2>
+      {% if cert and cert.end.days is not none %}<div class="aside"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ _('expire dans %(n)s j', n=cert.end.days) if cert.end.days < 60 else _('valide') }}</span></div>{% endif %}
+    </div>
+    {% if cert %}
+    <dl class="kv-grid ca-current">
+      <div><dt>{{ _("Adresse du portail") }}</dt><dd class="mono"><a href="{{ https_url }}">{{ https_url }}</a></dd></div>
+      <div><dt>{{ _("Émis par") }}</dt><dd>{{ cert.issuer }}</dd></div>
+      <div><dt>{{ _("Noms couverts") }}</dt><dd class="mono small">{{ cert.san|join(', ') }}</dd></div>
+      <div><dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=cert.start.text, text2=cert.end.text) }}</dd></div>
+    </dl>
+    {% endif %}
+    <div class="panel-b ca-body">
+      <div class="tabs ca-switch" role="tablist" aria-label="{{ _('Autorité qui signe le certificat du portail') }}">
+        <button type="button" data-tab="ca-loco" role="tab" aria-selected="{{ 'false' if corp else 'true' }}">
+          <span class="ca-ico">{{ ui_icon('shield') }}</span>
+          <span class="ca-opt"><strong>{{ _("Autorité loco") }}</strong><small>{{ _("intégrée, créée par ce serveur") }}</small></span>
+          {% if not corp %}<span class="pill ok">{{ _("en service") }}</span>{% endif %}
+        </button>
+        <button type="button" data-tab="ca-corp" role="tab" aria-selected="{{ 'true' if corp else 'false' }}">
+          <span class="ca-ico">{{ ui_icon('building') }}</span>
+          <span class="ca-opt"><strong>{{ _("Autorité d'entreprise") }}</strong><small>{{ _("AD CS, PKI interne…") }}</small></span>
+          {% if corp %}<span class="pill ok">{{ _("en service") }}</span>{% elif authority_ok %}<span class="pill">{{ _("prête") if prepared_ok else _("à finir") }}</span>{% endif %}
+        </button>
+      </div>
+
+      {# ------------------------------------------------------------ autorité loco #}
+      <div class="tab-panel{{ '' if corp else ' on' }}" data-panel="ca-loco">
+        <p class="muted ca-intro">{{ _("loco signe lui-même le certificat du portail. Les agents du parc épinglent son autorité ; importez-la une fois sur les postes pour que les navigateurs l'acceptent sans alerte.") }}</p>
+        {% if corp %}
+        <div class="ca-callout">
+          <span class="ca-ico">{{ ui_icon('building') }}</span>
+          <div><strong>{{ _("Le portail utilise l'autorité d'entreprise.") }}</strong><span>{{ _("Revenir à l'autorité loco est sans risque : tous les agents lui font toujours confiance.") }}</span></div>
+          {% if can('system.configure') %}
+          <form method="post" action="{{ url_for('system_tls_mode') }}" data-confirm="{{ _('Revenir à l\'autorité loco ?') }}" data-confirm-text="{{ _('Le portail présentera de nouveau un certificat signé par l\'autorité loco, à laquelle tous les agents font confiance. Les navigateurs qui ne l\'ont pas importée afficheront une alerte.') }}" data-confirm-ok="{{ _('Revenir à loco') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="mode" value="loco">
+            <button class="btn"><span class="spin"></span>{{ ui_icon('shield') }}<span>{{ _("Revenir à l'autorité loco") }}</span></button>
+          </form>
+          {% endif %}
+        </div>
+        {% elif can('system.configure') %}
+        <div class="ca-actions">
+          <form method="post" action="{{ url_for('system_cert_renew') }}" data-confirm="{{ _('Renouveler le certificat ?') }}" data-confirm-text="{{ _('Nouveau certificat signé par l\'autorité loco, valable 825 jours, pour l\'adresse et les noms actuels du serveur. Les postes qui font confiance à l\'autorité ne voient aucune différence.') }}" data-confirm-ok="{{ _('Renouveler') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn sm">{{ ui_icon('refresh') }}<span>{{ _("Renouveler le certificat") }}</span></button>
+          </form>
+          <span class="faint small">{{ _("825 jours, sans rien changer pour les postes.") }}</span>
+        </div>
+        {% endif %}
+        {% if ca %}
+        <div class="ca-card">
+          <div class="ca-card-h"><h3>{{ ca.subject }}</h3><a class="btn sm" href="{{ https_url }}/ca.crt" download="loco-ca.crt">{{ ui_icon('download') }}<span>{{ _("Télécharger") }}</span></a></div>
+          <p class="small"><span class="muted">{{ _("Empreinte SHA-256 à vérifier avant import") }}</span><br><span class="mono break">{{ ca.sha256 }}</span></p>
+          <div class="system-ca">
+            <div class="tabs" role="tablist">
+              <button type="button" data-tab="ca-win" aria-selected="true">Windows</button>
+              <button type="button" data-tab="ca-deb" aria-selected="false">{{ _("Debian, Ubuntu") }}</button>
+              <button type="button" data-tab="ca-rpm" aria-selected="false">{{ _("Rocky, AlmaLinux, RHEL") }}</button>
+            </div>
+            <div class="tab-panel on" data-panel="ca-win">
+              {{ cmd('ca-win', "Invoke-WebRequest -UseBasicParsing " ~ ca_url ~ " -OutFile $env:TEMP\\loco-ca.crt; Import-Certificate -FilePath $env:TEMP\\loco-ca.crt -CertStoreLocation Cert:\\LocalMachine\\Root", 'PS>') }}
+              <span class="hint">{{ _("PowerShell administrateur. Sur un domaine : déploiement par GPO.") }}</span>
+            </div>
+            <div class="tab-panel" data-panel="ca-deb">
+              {{ cmd('ca-deb', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /usr/local/share/ca-certificates/loco.crt >/dev/null && sudo update-ca-certificates') }}
+              <span class="hint">{{ _("Firefox sous Linux utilise son propre magasin (Paramètres › Certificats › Importer).") }}</span>
+            </div>
+            <div class="tab-panel" data-panel="ca-rpm">
+              {{ cmd('ca-rpm', 'curl -fsSL ' ~ ca_url ~ ' | sudo tee /etc/pki/ca-trust/source/anchors/loco.crt >/dev/null && sudo update-ca-trust') }}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <details class="ca-more">
+          <summary>{{ _("Certificat supplémentaire pour un nom DNS") }}{% if imported %} <span class="pill ok">{{ imported.san|join(', ') }}</span>{% endif %}</summary>
+          <div class="cert-import">
+            {% if imported %}
+            <dl class="kv">
+              <dt>{{ _("Noms") }}</dt><dd class="mono">{{ imported.san|join(', ') }}</dd>
+              <dt>{{ _("Émis par") }}</dt><dd>{{ imported.issuer }}</dd>
+              <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=imported.start.text, text2=imported.end.text) }}</dd>
+            </dl>
+            <form method="post" action="{{ url_for('system_cert_remove') }}" data-confirm="{{ _('Retirer le certificat importé ?') }}" data-confirm-text="{{ _('Le portail présentera de nouveau le certificat de l\'autorité loco pour ces noms.') }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm danger">{{ _("Retirer") }}</button>
+            </form>
+            {% else %}
+            <p class="muted small">{{ _("Servi seulement aux navigateurs qui ouvrent le portail par l'un des noms du certificat (Let's Encrypt, autre autorité…), sans toucher à celui des agents.") }}</p>
+            {% endif %}
+            <form method="post" action="{{ url_for('system_cert_import') }}" enctype="multipart/form-data" class="stack-sm">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <div class="grid2">
+                <label class="f"><span>{{ _("Certificat (PEM, chaîne complète)") }}</span><input type="file" name="certificate" accept=".crt,.pem,.cer" required></label>
+                <label class="f"><span>{{ _("Clé privée (PEM, non chiffrée)") }}</span><input type="file" name="key" accept=".key,.pem" required></label>
+              </div>
+              <div><button class="btn sm"><span class="spin"></span>{{ _("Remplacer") if imported else _("Importer") }}</button></div>
+            </form>
+          </div>
+        </details>
+      </div>
+
+      {# ------------------------------------------------------------ autorité d'entreprise #}
+      <div class="tab-panel{{ ' on' if corp else '' }}" data-panel="ca-corp">
+        <p class="muted ca-intro">{{ _("Faites signer le certificat du portail par l'autorité de votre entreprise : les postes du domaine lui font déjà confiance, sans alerte dans les navigateurs. Les agents la reçoivent avant la bascule et l'autorité loco reste reconnue : le retour est toujours possible.") }}</p>
+        <ol class="ca-steps">
+          <li class="ca-step{{ ' done' if authority_ok else ' current' }}">
+            <span class="ca-step-n" aria-hidden="true">{% if authority_ok %}{{ ui_icon('check-circle') }}{% else %}1{% endif %}</span>
+            <div class="ca-step-b">
+              <h3>{{ _("Importer l'autorité de l'entreprise") }}</h3>
+              {% if authority_ok %}
+              <ul class="ca-certs">
+                {% for a in tls.authority %}<li><span class="tag">{{ _("racine") if a.root else _("intermédiaire") }}</span><strong>{{ a.name }}</strong><span class="faint small">{{ _("jusqu'au %(d)s", d=a.end) }}</span><span class="mono small faint ca-sha" title="SHA-256 {{ a.sha256 }}">{{ a.sha256[:23] }}…</span></li>{% endfor %}
+              </ul>
+              {% else %}
+              <p class="muted small">{{ _("Le certificat de la racine (et des autorités intermédiaires) qui signe vos certificats : .cer exporté de l'AD CS, .crt, .pem ou chaîne .p7b.") }}</p>
+              {% endif %}
+              {% if can('system.configure') %}
+              <div class="ca-actions">
+                <form method="post" action="{{ url_for('system_ca_import') }}" enctype="multipart/form-data">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <label class="btn sm file-btn{{ '' if authority_ok else ' primary' }}">{{ ui_icon('upload') }}<span>{{ _("Remplacer l'autorité") if authority_ok else _("Choisir le fichier de l'autorité") }}</span><input type="file" name="authority" accept=".cer,.crt,.pem,.der,.p7b,.p7c" data-autosubmit></label>
+                </form>
+                {% if authority_ok and not corp %}
+                <form method="post" action="{{ url_for('system_ca_remove') }}" data-confirm="{{ _('Retirer l\'autorité d\'entreprise ?') }}" data-confirm-text="{{ _('Elle est retirée du faisceau des agents, avec le certificat et la demande préparés.') }}" data-confirm-ok="{{ _('Retirer') }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm ghost danger">{{ _("Retirer") }}</button>
+                </form>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </li>
+
+          <li class="ca-step{{ ' done' if prepared_ok else (' current' if authority_ok else '') }}">
+            <span class="ca-step-n" aria-hidden="true">{% if prepared_ok %}{{ ui_icon('check-circle') }}{% else %}2{% endif %}</span>
+            <div class="ca-step-b">
+              <h3>{{ _("Obtenir le certificat du serveur") }}</h3>
+              <p class="muted small">{{ _("Émis par votre autorité, il doit couvrir %(host)s : l'adresse qu'utilisent les agents.", host=tls.host) }}</p>
+              {% if prepared_ok %}
+              <dl class="kv ca-prepared">
+                <dt>{{ _("Noms couverts") }}</dt><dd class="mono small">{{ tls.prepared.san|join(', ') }}</dd>
+                <dt>{{ _("Émis par") }}</dt><dd>{{ tls.prepared.issuer }}</dd>
+                <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=tls.prepared.start.text, text2=tls.prepared.end.text) }}{% if tls.prepared.end.days is not none and tls.prepared.end.days < 60 %} <span class="st warn">{{ _('expire dans %(n)s j', n=tls.prepared.end.days) }}</span>{% endif %}</dd>
+              </dl>
+              {% endif %}
+              {% if tls.request %}
+              <div class="ca-request">
+                <div class="ca-request-h"><strong>{{ _("Demande en attente de signature") }}</strong><span class="faint small mono">{{ tls.request.names|join(', ') }}</span>
+                  <a class="btn sm" href="{{ url_for('system_csr_download') }}">{{ ui_icon('download') }}<span>{{ _("Télécharger .csr") }}</span></a></div>
+                <div class="cmd ca-csr"><code>{{ tls.request.pem }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+                <p class="hint">{{ _("Avec AD CS, sur un poste du domaine (modèle « Serveur Web »), ou par l'inscription web https://votre-autorité/certsrv › Demande avancée :") }}</p>
+                {{ cmd('csr-adcs', 'certreq -submit -attrib "CertificateTemplate:WebServer" loco.csr loco.cer', 'PS>') }}
+                {% if can('system.configure') %}
+                <form method="post" action="{{ url_for('system_enterprise_import') }}" enctype="multipart/form-data">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <label class="btn sm primary file-btn">{{ ui_icon('upload') }}<span>{{ _("Importer le certificat émis") }}</span><input type="file" name="certificate" accept=".cer,.crt,.pem,.der,.p7b" data-autosubmit></label>
+                </form>
+                {% endif %}
+              </div>
+              {% endif %}
+              {% if can('system.configure') %}
+              <form method="post" action="{{ url_for('system_csr') }}" class="ca-csr-form">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <input type="text" name="names" class="mono" placeholder="{{ _('noms DNS en plus (facultatif) : loco.entreprise.lan') }}" aria-label="{{ _('Noms DNS supplémentaires') }}" spellcheck="false" autocapitalize="none" {{ 'disabled' if not authority_ok }}>
+                <button class="btn sm{{ ' primary' if authority_ok and not prepared_ok and not tls.request }}" {{ 'disabled' if not authority_ok }}>{{ ui_icon('key') }}<span>{{ _("Nouvelle demande (CSR)") if tls.request or prepared_ok else _("Générer la demande (CSR)") }}</span></button>
+              </form>
+              <details class="ca-more">
+                <summary>{{ _("J'ai déjà un certificat et sa clé") }}</summary>
+                <form method="post" action="{{ url_for('system_enterprise_import') }}" enctype="multipart/form-data" class="stack-sm">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <div class="grid2">
+                    <label class="f"><span>{{ _("Certificat (.cer, .crt, .pem)") }}</span><input type="file" name="certificate" accept=".cer,.crt,.pem,.der,.p7b"></label>
+                    <label class="f"><span>{{ _("Clé privée (PEM, non chiffrée)") }}</span><input type="file" name="key" accept=".key,.pem"></label>
+                  </div>
+                  <p class="hint">{{ _("ou un fichier PFX (PKCS#12) exporté avec sa clé :") }}</p>
+                  <div class="grid2">
+                    <label class="f"><span>{{ _("Fichier .pfx ou .p12") }}</span><input type="file" name="pfx" accept=".pfx,.p12"></label>
+                    <label class="f"><span>{{ _("Mot de passe du fichier PFX") }}</span><input type="password" name="password" autocomplete="off"></label>
+                  </div>
+                  <div><button class="btn sm" {{ 'disabled' if not authority_ok }}><span class="spin"></span>{{ _("Importer") }}</button></div>
+                </form>
+              </details>
+              {% endif %}
+            </div>
+          </li>
+
+          <li class="ca-step{{ ' done' if authority_ok and all_ready else (' doing' if authority_ok else '') }}">
+            <span class="ca-step-n" aria-hidden="true">{% if authority_ok and all_ready %}{{ ui_icon('check-circle') }}{% else %}3{% endif %}</span>
+            <div class="ca-step-b">
+              <h3>{{ _("Diffuser la confiance aux postes") }}</h3>
+              {% if not authority_ok %}
+              <p class="muted small">{{ _("Automatique dès l'étape 1 : chaque agent reçoit l'autorité à son prochain contact.") }}</p>
+              {% elif readiness %}
+              <div class="ca-ready">
+                <p><strong class="ca-ready-n">{{ readiness.ready }} / {{ readiness.total }}</strong> <span class="muted">{{ _("postes font déjà confiance à votre autorité") }}</span></p>
+                <svg class="op-bar" viewBox="0 0 100 8" preserveAspectRatio="none" role="progressbar" aria-label="{{ _('Postes prêts') }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct }}"><rect class="track" width="100" height="8" rx="4"/><rect class="fill{{ ' ok' if all_ready }}" width="{{ pct }}" height="8" rx="4"/></svg>
+                {% if readiness.waiting %}
+                <details class="ca-more">
+                  <summary>{{ _("%(n)s poste%(v)s en attente", n=readiness.total - readiness.ready, v='s' if readiness.total - readiness.ready > 1) }}</summary>
+                  <ul class="ca-waiting">
+                    {% for d in readiness.waiting %}<li><a href="{{ url_for('fleet_device', dev_id=d.id) }}">{{ d.hostname or d.uid[:8] }}</a><span class="faint small">{{ _("agent %(v)s", v=d.agent_version or '?') }} · {{ _("vu %(s)s", s=d.last_seen|date_fr) if d.last_seen else _("jamais vu") }}</span></li>{% endfor %}
+                    {% if readiness.more %}<li class="faint small">{{ _("et %(n)s autres", n=readiness.more) }}</li>{% endif %}
+                  </ul>
+                </details>
+                <p class="hint">{{ _("Les agents antérieurs à 2.83 se mettent d'abord à jour d'eux-mêmes ; un poste éteint la reçoit au prochain démarrage.") }}</p>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </li>
+
+          <li class="ca-step{{ ' done' if corp else (' current' if authority_ok and prepared_ok else '') }}">
+            <span class="ca-step-n" aria-hidden="true">{% if corp %}{{ ui_icon('check-circle') }}{% else %}4{% endif %}</span>
+            <div class="ca-step-b">
+              <h3>{{ _("Basculer le portail") }}</h3>
+              {% if corp %}
+              <p class="ca-ok">{{ _("En service : le portail présente le certificat de votre autorité. Un nouveau certificat importé à l'étape 2 le remplace aussitôt.") }}</p>
+              {% else %}
+              <p class="muted small">{{ _("Votre navigateur doit aussi faire confiance à cette autorité (c'est le cas des postes du domaine).") }}</p>
+              {% if can('system.configure') %}
+              {% set waiting = (readiness.total - readiness.ready) if readiness else 0 %}
+              <form method="post" action="{{ url_for('system_tls_mode') }}" data-confirm="{{ _('Utiliser l\'autorité d\'entreprise ?') }}" data-confirm-text="{{ _('Les %(n)s postes lui font déjà confiance. Retour à l\'autorité loco possible à tout moment.', n=readiness.total if readiness else 0) if not waiting else _('%(n)s poste(s) ne lui font pas encore confiance : ils ne pourront plus joindre loco tant que le portail l\'utilise. Attendez qu\'ils se connectent, ou revenez à l\'autorité loco pour les rattraper.', n=waiting) }}" data-confirm-ok="{{ _('Basculer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="mode" value="enterprise">
+                <button class="btn primary" {{ 'disabled' if not (authority_ok and prepared_ok) }}><span class="spin"></span>{{ ui_icon('building') }}<span>{{ _("Utiliser l'autorité d'entreprise") }}</span></button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+  {% else %}
   <div class="cols even">
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Certificat HTTPS") }}</h2>
@@ -364,7 +608,7 @@
       {% endif %}
     </section>
   </div>
-
+  {% endif %}
   </div></div>
 
   {% if time_info or (qemu and (qemu.qemu or qemu.installed)) %}

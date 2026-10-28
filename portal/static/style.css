@@ -1707,3 +1707,80 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
   .upd-version { font-size: 26px; }
   .tl-date, .tl-sum { display: none; }
 }
+
+/* ------------------------------------------------------------------ certificat : autorité au choix */
+/* Interrupteur à deux options (onglets restylés), puis le réglage de l'option choisie ; l'autorité d'entreprise se
+   prépare en quatre étapes numérotées, chacune faite, en cours ou à venir. */
+.ca-current { padding: 16px 20px; border-bottom: 1px solid var(--line); background: var(--bg-2); }
+.ca-current dd { overflow-wrap: anywhere; }
+.ca-body > .tab-panel { padding-top: 18px; }
+.tabs.ca-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 5px; overflow: visible; border: 1px solid var(--line); border-radius: calc(var(--r) + 2px); background: var(--bg-2); }
+.tabs.ca-switch button { display: flex; align-items: center; gap: 12px; min-width: 0; height: auto; padding: 11px 14px; border: 1px solid transparent; border-radius: var(--r); white-space: normal; text-align: left; transition: background .15s, border-color .15s, box-shadow .15s; }
+.tabs.ca-switch button:hover { background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.tabs.ca-switch button[aria-selected="true"] { border-color: var(--line-2); background: var(--bg); box-shadow: var(--shadow-card); font-weight: 400; }
+.tabs.ca-switch button .pill { margin-left: auto; flex: none; }
+.ca-ico { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--bg-3); color: var(--text-2); }
+.ca-ico .ui-icon { width: 18px; height: 18px; }
+.tabs.ca-switch button[aria-selected="true"] .ca-ico { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); color: var(--accent); }
+.ca-opt { display: flex; flex-direction: column; min-width: 0; }
+.ca-opt strong { font-size: 14px; font-weight: 600; color: var(--text); }
+.ca-opt small { font-size: 12.5px; color: var(--text-3); }
+.ca-intro { max-width: 760px; font-size: 13.5px; }
+.ca-body .tab-panel > * + * { margin-top: 16px; }
+.ca-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ca-callout { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.ca-callout > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ca-callout > div span { font-size: 13px; color: var(--text-2); }
+.ca-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r); }
+.ca-card > * + * { margin-top: 10px; }
+.ca-card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ca-card-h h3 { min-width: 0; font-size: 13.5px; overflow-wrap: anywhere; }
+.ca-more > summary { font-size: 13.5px; color: var(--text-2); }
+.ca-more > summary:hover { color: var(--text); }
+.ca-more[open] > summary { margin-bottom: 12px; }
+.ca-more .cert-import > * + * { margin-top: 12px; }
+
+.ca-steps { position: relative; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.ca-step { position: relative; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 14px; padding-bottom: 22px; }
+.ca-step:last-child { padding-bottom: 0; }
+.ca-step:not(:last-child)::before { content: ""; position: absolute; left: 14px; top: 34px; bottom: 4px; width: 2px; border-radius: 1px; background: var(--line); }
+.ca-step.done:not(:last-child)::before { background: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.ca-step-n { display: grid; place-items: center; width: 30px; height: 30px; border: 1.5px solid var(--line-2); border-radius: 50%; background: var(--bg); font: 600 13px var(--sans); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.ca-step.current .ca-step-n { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); box-shadow: 0 0 0 4px var(--ring); }
+.ca-step.doing .ca-step-n { border-color: var(--accent); color: var(--accent); }
+.ca-step.done .ca-step-n { border-color: transparent; background: color-mix(in srgb, var(--ok) 14%, var(--bg)); color: var(--ok); }
+.ca-step.done .ca-step-n .ui-icon { width: 18px; height: 18px; }
+.ca-step-b { min-width: 0; padding-top: 4px; }
+.ca-step-b > * + * { margin-top: 10px; }
+.ca-step-b h3 { font-size: 14.5px; }
+.ca-step:not(.done):not(.current) .ca-step-b h3 { color: var(--text-2); }
+.ca-certs { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ca-certs li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); font-size: 13.5px; }
+.ca-sha { margin-left: auto; }
+.ca-prepared { max-width: 720px; }
+.ca-request { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line-2)); border-radius: var(--r); }
+.ca-request > .hint { margin: 0; }
+.ca-request-h { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.ca-request-h .btn { margin-left: auto; }
+.cmd.ca-csr code { max-height: 132px; overflow: auto; white-space: pre; font-size: 11.5px; line-height: 16px; }
+.cmd.ca-csr code::before { content: none; }
+.ca-csr-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.ca-csr-form input[type="text"] { flex: 1 1 280px; min-width: 0; }
+.ca-ready > * + * { margin-top: 8px; }
+.ca-ready-n { font-size: 18px; font-variant-numeric: tabular-nums; }
+.ca-ready .op-bar { max-width: 520px; }
+.op-bar .fill.ok { fill: var(--ok); }
+.ca-waiting { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.ca-waiting li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13.5px; }
+.ca-ok { color: var(--ok); font-size: 13.5px; }
+
+/* Bouton d'envoi de fichier : le champ reste atteignable au clavier, le bouton le montre au focus. */
+.file-btn { position: relative; cursor: pointer; }
+.file-btn input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+.file-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .tabs.ca-switch { grid-template-columns: minmax(0, 1fr); }
+  .ca-callout { flex-wrap: wrap; }
+  .ca-sha { margin-left: 0; }
+}

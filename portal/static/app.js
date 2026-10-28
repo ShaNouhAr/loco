@@ -234,7 +234,8 @@
   }
 
   document.addEventListener("change", function (e) {
-    if (!e.target.matches("select[data-autosubmit], input[type=checkbox][data-autosubmit]")) return;
+    if (!e.target.matches("select[data-autosubmit], input[type=checkbox][data-autosubmit], input[type=file][data-autosubmit]")) return;
+    if (e.target.type === "file" && !e.target.files.length) return;    // sélection annulée
     if (e.target.form.hasAttribute("data-clean")) go(e.target.form); else e.target.form.submit();
   });
 

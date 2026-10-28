@@ -493,6 +493,9 @@ def agent_checkin():
                   ident["addresses"], dev["id"]))
     if "servers" in data:           # agents 2.9.0 et plus : adresses du serveur qu'ils connaissent
         conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
+    reported_trust = data.get("trust") if isinstance(data.get("trust"), str) else None
+    if reported_trust is not None:  # agents 2.83.0 et plus : empreinte du faisceau d'autorités épinglé
+        conn.execute("UPDATE devices SET trust_sha256=? WHERE id=?", (reported_trust[:64].lower(), dev["id"]))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
@@ -532,6 +535,12 @@ def agent_checkin():
     conn.commit()
     answer = {"interval": CHECKIN, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": commands,
               "servers": addresses.servers(conn)}
+    bundle = trust_pem()
+    if bundle:
+        # Faisceau d'autorités (loco + autorité d'entreprise éventuelle) livré par ce canal déjà épinglé, seulement à
+        # l'agent qui ne l'a pas encore : il pourra suivre une bascule d'autorité sans perdre la connexion.
+        sha = hashlib.sha256(bundle.encode()).hexdigest()
+        answer["trust"] = {"sha256": sha, **({"pem": bundle} if reported_trust != sha else {})}
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
@@ -626,12 +635,26 @@ def agent_result():
     return {"ok": True, "indicator": {"color": color, "reason": reason}}
 
 
+PEM_CERT_RE = re.compile(r"-----BEGIN CERTIFICATE-----(.+?)-----END CERTIFICATE-----", re.S)
+
+
+def trust_pem():
+    """Faisceau d'autorités que les agents épinglent : l'autorité loco en tête, puis l'autorité d'entreprise choisie
+    (trust.pem, tenu à jour par l'agent root) ; sinon l'autorité loco seule. Vide : certificat fourni à l'installation
+    (--tls-cert), les agents s'en remettent au magasin du système."""
+    for name in ("trust.pem", "ca.crt"):
+        try:
+            with open(os.path.join(config.TLS_DIR, name)) as f:
+                text = f.read()
+        except OSError:
+            continue
+        if PEM_CERT_RE.search(text):
+            return text
+    return ""
+
+
 def _ca_pem():
-    try:
-        with open(os.path.join(config.TLS_DIR, "ca.crt")) as f:
-            return f.read().strip()
-    except OSError:
-        return ""   # certificat fourni (--tls-cert) : magasin du système
+    return trust_pem().strip()
 
 
 def _agent_source(name):
@@ -777,11 +800,9 @@ def _get_url(url, limit):
 
 
 def _ca_fingerprint():
-    pem = _ca_pem()
-    if not pem:
-        return ""
-    body = "".join(line for line in pem.splitlines() if line and not line.startswith("-----"))
-    return hashlib.sha256(base64.b64decode(body)).hexdigest()
+    """Empreinte épinglée à l'installation des agents : celle de l'autorité loco, en tête du faisceau."""
+    m = PEM_CERT_RE.search(_ca_pem())
+    return hashlib.sha256(base64.b64decode("".join(m.group(1).split()))).hexdigest() if m else ""
 
 
 def _check_key():

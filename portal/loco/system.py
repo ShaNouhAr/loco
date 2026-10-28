@@ -2,11 +2,14 @@
 
 import datetime
 import glob
+import hashlib
+import ipaddress
 import json
 import os
 import re
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -476,6 +479,8 @@ def system():
         ca=cert_info(os.path.join(config.TLS_DIR, "ca.crt")),
         imported=cert_info(os.path.join(config.TLS_DIR, "imported.crt")) if config.SERVER_UPDATES and not config.WINDOWS else None,
         tls_custom=tls_custom(), tls_manage=config.SERVER_UPDATES and not config.WINDOWS,
+        tls=tls_state() if config.SERVER_UPDATES and not config.WINDOWS and not tls_custom() else None,
+        readiness=trust_readiness() if config.SERVER_UPDATES and not config.WINDOWS and not tls_custom() else None,
         versions=({"loco": config.VERSION, "nginx": package_version("nginx"),
                    "waitress": package_version("waitress"), "cryptography (signatures, TLS)": package_version("cryptography"),
                    "Python": sys.version.split()[0],
@@ -669,7 +674,7 @@ def tls_custom():
 
 
 def _agent_action(action, params, audit_action, audit_detail, done):
-    """Transmet une action à l'agent root et retourne à l'onglet Réseau et certificats."""
+    """Transmet une action à l'agent root (le retour se fait sur l'onglet de la page Système concerné)."""
     if config.WINDOWS or not config.SERVER_UPDATES:
         abort(404)
     if locoadmin.running_job():
@@ -731,7 +736,7 @@ def system_cert_renew():
         abort(409)
     _agent_action("renew-cert", {}, "systeme.certificat.renouvellement", "",
                   _("Renouvellement du certificat lancé : rechargez la page dans quelques secondes."))
-    return back("system", _anchor="reseau")
+    return back("system", _anchor="certificat")
 
 
 @app.route("/system/certificate/import", methods=["POST"])
@@ -742,18 +747,18 @@ def system_cert_import():
     files = request.files.get("certificate"), request.files.get("key")
     if not all(f and f.filename for f in files):
         flash(_("Choisissez le certificat (.crt ou .pem) et sa clé privée (.key)."), "error")
-        return back("system", _anchor="reseau")
+        return back("system", _anchor="certificat")
     cert_pem, key_pem = (f.read(MAX_TLS_FILE + 1) for f in files)
     if max(len(cert_pem), len(key_pem)) > MAX_TLS_FILE:
         flash(_("Fichier trop volumineux pour un certificat."), "error")
-        return back("system", _anchor="reseau")
+        return back("system", _anchor="certificat")
     try:
         agents = {h for h in (config.HOST, urllib.parse.urlsplit(config.HTTPS_URL).hostname) if h}
         for host in sorted(agents):
             names, _end = check_import(cert_pem, key_pem, host)
     except ValueError as e:
         flash(_("Certificat refusé : %(reason)s.", reason=str(e)), "error")
-        return back("system", _anchor="reseau")
+        return back("system", _anchor="certificat")
     os.makedirs(TLS_SPOOL, mode=0o700, exist_ok=True)
     upload = secrets.token_hex(16)
     paths = [os.path.join(TLS_SPOOL, upload + ext) for ext in (".crt", ".key")]
@@ -765,7 +770,7 @@ def system_cert_import():
                            names=", ".join(names))):
         for path in paths:
             _discard(path)
-    return back("system", _anchor="reseau")
+    return back("system", _anchor="certificat")
 
 
 @app.route("/system/certificate/imported/remove", methods=["POST"])
@@ -773,7 +778,272 @@ def system_cert_import():
 def system_cert_remove():
     _agent_action("remove-imported-cert", {}, "systeme.certificat.retrait", "",
                   _("Retrait du certificat importé lancé."))
-    return back("system", _anchor="reseau")
+    return back("system", _anchor="certificat")
+
+
+# --------------------------------------------------------------------------- autorité de certification au choix
+# Le portail lit et vérifie les fichiers (PEM, DER, PKCS#7, PFX) pour des messages clairs, les dépose en PEM dans le
+# spool ; l'agent root refait les contrôles (chaîne vérifiée par OpenSSL) avant d'y toucher.
+PEM_CERT_RE = re.compile(rb"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", re.S)
+
+
+def _load_certs(data):
+    """Certificats d'un fichier PEM (un ou plusieurs), DER (.cer) ou PKCS#7 (.p7b) ; liste vide si illisible."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import pkcs7
+    certs = []
+    for block in PEM_CERT_RE.findall(data or b""):
+        try:
+            certs.append(x509.load_pem_x509_certificate(block))
+        except ValueError:
+            return []
+    if certs:
+        return certs
+    for loader in ((lambda d: [x509.load_der_x509_certificate(d)]), pkcs7.load_der_pkcs7_certificates,
+                   pkcs7.load_pem_pkcs7_certificates):
+        try:
+            return list(loader(data))
+        except (ValueError, TypeError):
+            continue
+    return []
+
+
+def _is_ca(cert):
+    from cryptography import x509
+    try:
+        return cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except x509.ExtensionNotFound:
+        return False
+
+
+def _cert_summary(cert):
+    """Résumé d'un certificat chargé : nom, émetteur, échéance, empreinte."""
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.x509.oid import NameOID
+    end = getattr(cert, "not_valid_after_utc", None) or cert.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+    cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    return {"name": cn[0].value if cn else cert.subject.rfc4514_string(), "subject": cert.subject.rfc4514_string(),
+            "root": cert.subject == cert.issuer, "end": end.strftime("%d/%m/%Y"),
+            "days": (end - datetime.datetime.now(datetime.timezone.utc)).days,
+            "sha256": ":".join(f"{b:02X}" for b in cert.fingerprint(hashes.SHA256()))}
+
+
+def _covers(cert, host):
+    """Le certificat couvre-t-il l'adresse des agents (IP ou nom DNS, joker compris) ?"""
+    from cryptography import x509
+    try:
+        san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    except x509.ExtensionNotFound:
+        return False
+    try:
+        return ipaddress.ip_address(host) in san.get_values_for_type(x509.IPAddress)
+    except ValueError:
+        host = host.lower()
+        return any(n.lower() == host or (n.startswith("*.") and host.endswith(n[1:].lower()) and host.count(".") == n.count("."))
+                   for n in san.get_values_for_type(x509.DNSName))
+
+
+def _tls_file(name):
+    try:
+        with open(os.path.join(config.TLS_DIR, name), "rb") as f:
+            return f.read()
+    except OSError:
+        return b""
+
+
+def tls_state():
+    """Autorité en service, autorité d'entreprise importée, certificat préparé et demande en attente."""
+    from cryptography import x509
+    state = {"mode": "enterprise" if _tls_file("mode").strip() == b"enterprise" else "loco",
+             "authority": [_cert_summary(c) for c in _load_certs(_tls_file("enterprise-ca.pem"))],
+             "prepared": cert_info(os.path.join(config.TLS_DIR, "enterprise.crt")) if _tls_file("enterprise.crt") else None,
+             "request": None, "host": config.HOST}
+    csr = _tls_file("enterprise.csr")
+    if csr:
+        try:
+            req = x509.load_pem_x509_csr(csr)
+            san = req.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            state["request"] = {"pem": csr.decode().strip(),
+                                "names": [str(n) for n in san.get_values_for_type(x509.IPAddress)] + san.get_values_for_type(x509.DNSName)}
+        except (ValueError, x509.ExtensionNotFound):
+            state["request"] = {"pem": csr.decode(errors="replace").strip(), "names": []}
+    return state
+
+
+def trust_readiness():
+    """Postes qui font déjà confiance au faisceau d'autorités en vigueur (reçu à leur dernier contact)."""
+    from . import fleet
+    pem = fleet.trust_pem()
+    if not pem:
+        return None
+    sha = hashlib.sha256(pem.encode()).hexdigest()
+    rows = db().execute("SELECT id, hostname, uid, agent_version, last_seen, os_family, trust_sha256 FROM devices "
+                        "WHERE state='active' ORDER BY hostname COLLATE NOCASE").fetchall()
+    waiting = [r for r in rows if r["trust_sha256"] != sha]
+    return {"ready": len(rows) - len(waiting), "total": len(rows), "waiting": waiting[:60], "more": max(0, len(waiting) - 60)}
+
+
+def _tls_upload(field):
+    f = request.files.get(field)
+    if not (f and f.filename):
+        return None
+    data = f.read(MAX_TLS_FILE + 1)
+    if len(data) > MAX_TLS_FILE:
+        raise ValueError(_("fichier trop volumineux pour un certificat"))
+    return data
+
+
+def _spool_tls(upload, ext, data):
+    os.makedirs(TLS_SPOOL, mode=0o700, exist_ok=True)
+    path = os.path.join(TLS_SPOOL, upload + ext)
+    with open(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+        f.write(data)
+    return path
+
+
+def _tls_routes_allowed():
+    if config.WINDOWS or not config.SERVER_UPDATES or tls_custom():
+        abort(404)
+
+
+@app.route("/system/certificate/authority", methods=["POST"])
+@login_required
+def system_ca_import():
+    """Chaîne de l'autorité d'entreprise (racine, intermédiaires) : ajoutée au faisceau que les agents épinglent."""
+    _tls_routes_allowed()
+    from cryptography.hazmat.primitives.serialization import Encoding
+    try:
+        data = _tls_upload("authority")
+        if not data:
+            raise ValueError(_("choisissez le certificat de l'autorité (.cer, .crt, .pem ou .p7b)"))
+        certs = _load_certs(data)
+        if not certs:
+            raise ValueError(_("fichier illisible : certificat PEM, DER (.cer) ou chaîne PKCS#7 (.p7b) attendu"))
+        if not all(_is_ca(c) for c in certs):
+            raise ValueError(_("le fichier contient un certificat qui n'est pas une autorité : importez la racine (et les "
+                               "autorités intermédiaires), pas le certificat d'un serveur"))
+    except ValueError as e:
+        flash(_("Autorité refusée : %(reason)s.", reason=str(e)), "error")
+        return back("system", _anchor="certificat")
+    names = ", ".join(_cert_summary(c)["name"] for c in certs)
+    upload = secrets.token_hex(16)
+    path = _spool_tls(upload, ".pem", b"".join(c.public_bytes(Encoding.PEM) for c in certs))
+    if not _agent_action("import-ca", {"upload": upload}, "systeme.autorite.import", names,
+                         _("Autorité %(names)s importée : elle est transmise à chaque poste à son prochain contact.",
+                           names=names)):
+        _discard(path)
+    return back("system", _anchor="certificat")
+
+
+@app.route("/system/certificate/authority/remove", methods=["POST"])
+@login_required
+def system_ca_remove():
+    _tls_routes_allowed()
+    _agent_action("remove-ca", {}, "systeme.autorite.retrait", "", _("Autorité d'entreprise retirée."))
+    return back("system", _anchor="certificat")
+
+
+@app.route("/system/certificate/request", methods=["POST"])
+@login_required
+def system_csr():
+    """Demande de certificat (CSR) préparée par le serveur : la clé privée ne le quitte jamais."""
+    _tls_routes_allowed()
+    try:
+        params = locoadmin.tls_params("ca-csr", {"names": request.form.get("names", "")})
+    except ValueError:
+        flash(_("Noms DNS invalides : séparez-les par des espaces, huit au plus."), "error")
+        return back("system", _anchor="certificat")
+    _agent_action("ca-csr", params, "systeme.autorite.demande", params["names"],
+                  _("Demande de certificat en préparation : rechargez la page dans quelques secondes pour la télécharger."))
+    return back("system", _anchor="certificat")
+
+
+@app.route("/system/certificate/request.csr")
+@login_required
+def system_csr_download():
+    _tls_routes_allowed()
+    path = os.path.join(config.TLS_DIR, "enterprise.csr")
+    if not os.path.isfile(path):
+        abort(404)
+    return send_file(path, mimetype="application/pkcs10", as_attachment=True,
+                     download_name=f"loco-{socket.gethostname()}.csr")
+
+
+@app.route("/system/certificate/enterprise", methods=["POST"])
+@login_required
+def system_enterprise_import():
+    """Certificat émis par l'autorité d'entreprise : pour la demande en attente, avec sa clé, ou en fichier PFX."""
+    _tls_routes_allowed()
+    from cryptography.hazmat.primitives import serialization
+    try:
+        pfx, crt, key = _tls_upload("pfx"), _tls_upload("certificate"), _tls_upload("key")
+        key_pem = None
+        if pfx:
+            from cryptography.hazmat.primitives.serialization import pkcs12
+            try:
+                k, leaf, extra = pkcs12.load_key_and_certificates(pfx, request.form.get("password", "").encode() or None)
+            except (ValueError, TypeError):
+                raise ValueError(_("fichier PFX illisible ou mot de passe incorrect")) from None
+            if not (k and leaf):
+                raise ValueError(_("le fichier PFX doit contenir le certificat et sa clé privée"))
+            certs = [leaf] + list(extra or [])
+            key_pem = k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                      serialization.NoEncryption())
+        elif crt:
+            certs = _load_certs(crt)
+            if not certs:
+                raise ValueError(_("certificat illisible : PEM, DER (.cer) ou PKCS#7 (.p7b) attendu"))
+            if key:
+                try:
+                    k = serialization.load_pem_private_key(key, password=None)
+                except (ValueError, TypeError):
+                    raise ValueError(_("clé privée illisible : fichier PEM non chiffré attendu (.key)")) from None
+                key_pem = key
+        else:
+            raise ValueError(_("choisissez le certificat émis (.cer, .crt, .pem, .p7b) ou un fichier PFX"))
+        leaf = next((c for c in certs if not _is_ca(c)), None)
+        if leaf is None:
+            raise ValueError(_("aucun certificat de serveur dans le fichier (uniquement des autorités)"))
+        if _cert_summary(leaf)["days"] < 0:
+            raise ValueError(_("certificat expiré"))
+        if config.HOST and not _covers(leaf, config.HOST):
+            raise ValueError(_("il ne couvre pas %(host)s, l'adresse utilisée par les agents du parc", host=config.HOST))
+        if key_pem is not None:
+            spki = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+            if leaf.public_key().public_bytes(*spki) != k.public_key().public_bytes(*spki):
+                raise ValueError(_("la clé ne correspond pas au certificat"))
+        elif not os.path.exists(os.path.join(config.TLS_DIR, "enterprise.csr")):
+            raise ValueError(_("aucune demande en attente : joignez la clé privée ou un fichier PFX"))
+    except ValueError as e:
+        flash(_("Certificat refusé : %(reason)s.", reason=str(e)), "error")
+        return back("system", _anchor="certificat")
+    upload = secrets.token_hex(16)
+    chain = [leaf] + [c for c in certs if c is not leaf]
+    paths = [_spool_tls(upload, ".crt", b"".join(c.public_bytes(serialization.Encoding.PEM) for c in chain))]
+    if key_pem is not None:
+        paths.append(_spool_tls(upload, ".key", key_pem))
+    name = _cert_summary(leaf)["name"]
+    if not _agent_action("import-enterprise-cert", {"upload": upload, "key": "1" if key_pem is not None else ""},
+                         "systeme.autorite.certificat", name,
+                         _("Certificat %(name)s importé : vérification de sa chaîne en cours, rechargez la page dans "
+                           "quelques secondes.", name=name)):
+        for path in paths:
+            _discard(path)
+    return back("system", _anchor="certificat")
+
+
+@app.route("/system/certificate/mode", methods=["POST"])
+@login_required
+def system_tls_mode():
+    """Bascule le certificat du portail sur l'autorité choisie (retour à loco toujours possible)."""
+    _tls_routes_allowed()
+    mode = request.form.get("mode", "")
+    if mode not in ("loco", "enterprise"):
+        abort(400)
+    _agent_action("set-tls-mode", {"mode": mode}, "systeme.autorite.bascule", mode,
+                  _("Bascule vers l'autorité d'entreprise lancée : rechargez la page dans quelques secondes.")
+                  if mode == "enterprise" else _("Retour à l'autorité loco lancé : rechargez la page dans quelques secondes."))
+    return back("system", _anchor="certificat")
 
 
 @app.route("/system/backup-retention", methods=["POST"])

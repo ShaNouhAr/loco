@@ -444,6 +444,10 @@ MIGRATIONS = [
         "CHECK (platform IN ('windows', 'linux', 'python'))") WHERE type='table' AND name='scripts';
     PRAGMA writable_schema=OFF;
     """,
+    # 25 : faisceau d'autorités épinglé par chaque agent (empreinte remontée au contact) : bascule d'autorité sans coupure.
+    """
+    ALTER TABLE devices ADD COLUMN trust_sha256 TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

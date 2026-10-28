@@ -135,3 +135,58 @@ class TestScanIncludesInventory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTrustBundle(unittest.TestCase):
+    """Faisceau d'autorités reçu au contact : remplace ca.crt s'il est intact, jamais sans autorité épinglée."""
+
+    def setUp(self):
+        import hashlib
+        import os
+        import subprocess
+        import tempfile
+        self.hashlib, self.os = hashlib, os
+        self.dir = tempfile.mkdtemp()
+        self.ca = os.path.join(self.dir, "ca.crt")
+        pems = []
+        for name in ("loco CA", "Corp CA"):
+            out = os.path.join(self.dir, name.replace(" ", "") + ".crt")
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
+                            "-days", "30", "-subj", f"/CN={name}", "-keyout", os.path.join(self.dir, "k.pem"), "-out", out],
+                           check=True, capture_output=True)
+            with open(out) as f:
+                pems.append(f.read())
+        self.loco, self.bundle = pems[0], pems[0] + pems[1]
+        with open(self.ca, "w") as f:
+            f.write(self.loco)
+        patch = mock.patch.object(agent, "CA", self.ca)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(__import__("shutil").rmtree, self.dir, True)
+        log = mock.patch.object(agent, "log")
+        log.start()
+        self.addCleanup(log.stop)
+
+    def answer(self, pem, sha=None):
+        return {"trust": {"pem": pem, "sha256": sha or self.hashlib.sha256(pem.encode()).hexdigest()}}
+
+    def content(self):
+        with open(self.ca) as f:
+            return f.read()
+
+    def test_bundle_replaces_the_pinned_authority_and_is_reported(self):
+        agent.apply_trust(self.answer(self.bundle))
+        self.assertEqual(self.content(), self.bundle)
+        self.assertEqual(agent.identity()["trust"], self.hashlib.sha256(self.bundle.encode()).hexdigest())
+
+    def test_damaged_or_foreign_bundles_are_ignored(self):
+        agent.apply_trust(self.answer(self.bundle, sha="0" * 64))                  # empreinte fausse
+        agent.apply_trust(self.answer("pas un certificat"))                        # pas de PEM
+        agent.apply_trust({"trust": "rien"})
+        self.assertEqual(self.content(), self.loco)
+
+    def test_agent_using_the_system_store_is_left_alone(self):
+        self.os.unlink(self.ca)
+        agent.apply_trust(self.answer(self.bundle))
+        self.assertFalse(self.os.path.exists(self.ca))
+        self.assertEqual(agent.trust_sha(), "")

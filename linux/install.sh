@@ -419,6 +419,7 @@ fi
 say "Certificat HTTPS" "HTTPS certificate" "Certificado HTTPS"
 TLS=$ETC/tls
 install -d -m 755 "$TLS"
+TLS_ENTERPRISE=""
 if [ -n "$TLS_CERT" ]; then
     install -m 644 "$TLS_CERT" "$TLS/server.crt"
     install -m 600 "$TLS_KEY" "$TLS/server.key"
@@ -434,8 +435,24 @@ elif [ ! -f "$TLS/custom" ]; then
             -addext "basicConstraints=critical,CA:TRUE,pathlen:0" -addext "keyUsage=critical,keyCertSign,cRLSign" \
             -keyout "$TLS/ca.key" -out "$TLS/ca.crt" 2>>"$LOG"
         chmod 600 "$TLS/ca.key"; chmod 644 "$TLS/ca.crt"
-        rm -f "$TLS/server.crt"
+        rm -f "$TLS/server.crt" "$TLS/mode"
     fi
+    # Autorité d'entreprise choisie dans le portail : son certificat est gardé tant qu'il est valable ; sinon retour à
+    # l'autorité loco, à laquelle les agents font toujours confiance (elle reste en tête de leur faisceau).
+    if [ "$(cat "$TLS/mode" 2>/dev/null)" = enterprise ]; then
+        if [ -s "$TLS/server.key" ] && openssl x509 -in "$TLS/server.crt" -noout -checkend 0 >/dev/null 2>&1 \
+           && case "$(openssl x509 -in "$TLS/server.crt" -noout -checkip "$HOST" -checkhost "$HOST" 2>/dev/null)" in
+                  *"does match"*) true ;; *) false ;; esac; then
+            TLS_ENTERPRISE=1
+        else
+            warn "certificat de l'autorité d'entreprise expiré, absent ou ne couvrant plus $HOST : retour à l'autorité loco." \
+                 "enterprise authority certificate expired, missing or no longer covering $HOST: back to the loco authority." \
+                 "certificado de la autoridad de empresa caducado, ausente o que ya no cubre $HOST: vuelta a la autoridad loco."
+            rm -f "$TLS/mode" "$TLS/server.crt"
+        fi
+    fi
+fi
+if [ ! -f "$TLS/custom" ] && [ -z "$TLS_ENTERPRISE" ]; then
     SAN="IP:$HOST,IP:127.0.0.1,DNS:$(hostname),DNS:localhost"
     FQDN=$(hostname -f 2>/dev/null || true)
     if [ -n "$FQDN" ] && [ "$FQDN" != "$(hostname)" ] && [ "$FQDN" != localhost ]; then SAN="$SAN,DNS:$FQDN"; fi
@@ -452,6 +469,11 @@ elif [ ! -f "$TLS/custom" ]; then
     fi
     openssl verify -CAfile "$TLS/ca.crt" "$TLS/server.crt" >> "$LOG" 2>&1 \
         || die "le certificat serveur n'est pas vérifiable avec l'autorité locale (journal : $LOG)." "the server certificate cannot be verified against the local authority (log: $LOG)." "el certificado del servidor no es verificable con la autoridad local (registro: $LOG)."
+fi
+# Faisceau épinglé par les agents et servi en /ca.crt : autorité loco en tête, puis l'autorité d'entreprise importée.
+if [ ! -f "$TLS/custom" ]; then
+    "$PYTHON" -I "$PREFIX/portal/locoadmin.py" tls-trust >> "$LOG" 2>&1 || cp -f "$TLS/ca.crt" "$TLS/trust.pem"
+    chmod 644 "$TLS/trust.pem"
 fi
 
 # ---------------------------------------------------------------- génération des configurations

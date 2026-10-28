@@ -220,8 +220,42 @@ def addresses():
 
 def identity():
     rel = os_release()
-    return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(),
+    return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(), "trust": trust_sha(),
             "os": {"family": family(), "name": rel.get("PRETTY_NAME") or platform.platform()}}
+
+
+def trust_sha():
+    """Empreinte du faisceau d'autorités épinglé (vide : magasin du système)."""
+    try:
+        with open(CA, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return ""
+
+
+def apply_trust(answer):
+    """Faisceau d'autorités envoyé par le serveur au fil du canal déjà épinglé (autorité loco + autorité d'entreprise
+    éventuelle) : remplace ca.crt s'il a changé. Agent installé sans autorité épinglée : rien à faire."""
+    bundle = answer.get("trust")
+    if not isinstance(bundle, dict) or not os.path.isfile(CA):
+        return
+    pem, sha = bundle.get("pem") or "", (bundle.get("sha256") or "").lower()
+    if not pem or "-----BEGIN CERTIFICATE-----" not in pem or sha == trust_sha():
+        return
+    raw = pem.encode()
+    if hashlib.sha256(raw).hexdigest() != sha:
+        return
+    try:
+        ssl.create_default_context(cadata=pem)          # faisceau lisible par OpenSSL avant de remplacer l'ancien
+    except (ssl.SSLError, ValueError) as e:
+        log(t(f"faisceau d'autorités refusé : {e}", f"authority bundle refused: {e}", f"conjunto de autoridades rechazado: {e}"))
+        return
+    tmp = CA + ".new"
+    with open(tmp, "wb") as f:
+        f.write(raw)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, CA)
+    log(t("autorités de confiance mises à jour", "trusted authorities updated", "autoridades de confianza actualizadas"))
 
 
 def run(cmd, timeout=7200):
@@ -681,6 +715,7 @@ def service():
         save(STATE, state)
         return 1
     state["scan_hours"] = answer.get("scan_hours", 6)
+    apply_trust(answer)
     for cmd in answer.get("commands", []):
         action = cmd.get("action")
         log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))

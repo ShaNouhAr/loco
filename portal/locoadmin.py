@@ -65,7 +65,8 @@ def valid_source(value):
     """Source de mise à jour acceptée : « owner/repo » GitHub, ou l'URL https d'un projet GitLab."""
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
-ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert")
+ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert",
+           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
@@ -1943,31 +1944,12 @@ def renew_cert(params=None, log=print):
         raise ValueError(t("certificat fourni à l'installation (--tls-cert) : relancez install.sh avec le nouveau",
                            "certificate supplied at installation (--tls-cert): rerun install.sh with the new one",
                            "certificado proporcionado en la instalación (--tls-cert): vuelva a ejecutar install.sh con el nuevo"))
-    ca_crt, ca_key = os.path.join(TLS, "ca.crt"), os.path.join(TLS, "ca.key")
-    if not (os.path.isfile(ca_crt) and os.path.isfile(ca_key)):
-        raise ValueError(t("autorité locale introuvable", "local authority not found", "autoridad local no encontrada"))
-    host, name = read_conf().get("HOST", "") or "127.0.0.1", socket.gethostname()
-    try:
-        ipaddress.ip_address(host)
-        san = [f"IP:{host}"]
-    except ValueError:
-        san = [f"DNS:{host}"]
-    fqdn = socket.getfqdn()
-    san += ["IP:127.0.0.1", f"DNS:{name}", "DNS:localhost"] + ([f"DNS:{fqdn}"] if fqdn not in (name, "localhost") else [])
-    san = list(dict.fromkeys(san))
+    if tls_mode() == "enterprise":
+        raise ValueError(t("certificat émis par votre autorité d'entreprise : importez le nouveau certificat",
+                           "certificate issued by your enterprise authority: import the new certificate",
+                           "certificado emitido por su autoridad de empresa: importe el nuevo certificado"))
     with tempfile.TemporaryDirectory(dir=TLS, prefix=".renew-") as tmp:
-        key, csr, crt, ext = (os.path.join(tmp, n) for n in ("server.key", "server.csr", "server.crt", "ext.cnf"))
-        with open(ext, "w") as f:
-            f.write("subjectAltName=" + ",".join(san) + "\nbasicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\n"
-                    "extendedKeyUsage=serverAuth\n")
-        steps = (["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", f"/O=loco/CN={name}",
-                  "-keyout", key, "-out", csr],
-                 ["x509", "-req", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-set_serial", "0x" + secrets.token_hex(16),
-                  "-days", "825", "-out", crt, "-extfile", ext],
-                 ["verify", "-CAfile", ca_crt, crt])
-        for step in steps:
-            if _ssl(step, log)[0] != 0:
-                raise ValueError(t("génération du certificat impossible", "certificate generation failed", "generación del certificado imposible"))
+        key, crt, san = _loco_cert(tmp, log)
         _swap_tls({"server.key": key, "server.crt": crt}, log)
     log(t(f"Certificat renouvelé pour {', '.join(s.split(':', 1)[1] for s in san)} (825 jours).",
           f"Certificate renewed for {', '.join(s.split(':', 1)[1] for s in san)} (825 days).",
@@ -2020,6 +2002,337 @@ def remove_imported_cert(params=None, log=print):
     return True
 
 
+# --------------------------------------------------------------------------- autorité de certification au choix
+# Deux autorités possibles pour le certificat du portail : celle de loco (par défaut) ou celle de l'entreprise (AD CS,
+# PKI interne…). Les agents épinglent un FAISCEAU (trust.pem : autorité loco en tête, puis l'autorité d'entreprise),
+# livré au fil de leur canal déjà épinglé : la bascule ne coupe que les postes qui ne l'ont pas encore reçu, et le
+# retour à l'autorité loco est toujours sûr (elle reste dans le faisceau).
+TLS_FILES = {"ENTERPRISE_CA": "enterprise-ca.pem", "ENTERPRISE_CRT": "enterprise.crt", "ENTERPRISE_KEY": "enterprise.key",
+             "REQUEST_KEY": "enterprise-request.key", "REQUEST_CSR": "enterprise.csr", "TRUST_PEM": "trust.pem",
+             "TLS_MODE": "mode"}
+
+
+def tls_path(what):
+    """Chemin d'un fichier de /etc/loco/tls, évalué à l'appel (TLS peut être déplacé par les tests)."""
+    return os.path.join(TLS, TLS_FILES[what])
+PEM_BLOCK_RE = re.compile(r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", re.S)
+
+
+def tls_mode():
+    try:
+        with open(tls_path("TLS_MODE")) as f:
+            return "enterprise" if f.read().strip() == "enterprise" else "loco"
+    except OSError:
+        return "loco"
+
+
+def tls_params(action, params):
+    """Paramètres des actions de certificat, validés par le portail puis revalidés par l'agent root."""
+    p = params or {}
+    if action == "import-ca":
+        upload = str(p.get("upload", ""))
+        if not TLS_UPLOAD_RE.fullmatch(upload):
+            raise ValueError("fichier téléversé invalide")
+        return {"upload": upload}
+    if action == "import-enterprise-cert":
+        upload = str(p.get("upload", ""))
+        if not TLS_UPLOAD_RE.fullmatch(upload):
+            raise ValueError("fichier téléversé invalide")
+        return {"upload": upload, "key": "1" if str(p.get("key", "")) == "1" else ""}
+    if action == "ca-csr":
+        names = [n.lower() for n in str(p.get("names", "")).replace(",", " ").split()]
+        if len(names) > 8 or any(not CERT_NAME_RE.fullmatch(n) for n in names):
+            raise ValueError("noms DNS invalides")
+        return {"names": " ".join(dict.fromkeys(names))}
+    if action == "set-tls-mode":
+        mode = str(p.get("mode", ""))
+        if mode not in ("loco", "enterprise"):
+            raise ValueError("autorité inconnue")
+        return {"mode": mode}
+    return {}
+
+
+def _pem_blocks(text):
+    return PEM_BLOCK_RE.findall(text or "")
+
+
+def _read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+def _x509(pem, *args):
+    """openssl x509 sur un certificat PEM en mémoire : (code, sortie)."""
+    return _ssl(["x509", "-noout", *args], data=pem)
+
+
+def _is_ca(pem):
+    return "CA:TRUE" in _x509(pem, "-ext", "basicConstraints")[1].replace(" ", "")
+
+
+def _self_signed(pem):
+    subject, issuer = _x509(pem, "-subject")[1].split("=", 1)[-1], _x509(pem, "-issuer")[1].split("=", 1)[-1]
+    return subject.strip() == issuer.strip()
+
+
+def _write_public(path, text, mode=0o644):
+    with open(path + ".tmp", "w") as f:
+        f.write(text)
+    os.chmod(path + ".tmp", mode)
+    os.replace(path + ".tmp", path)
+
+
+def write_trust(log=print):
+    """trust.pem = autorité loco + autorité d'entreprise importée : ce que les agents épinglent, ce que sert /ca.crt."""
+    if os.path.exists(os.path.join(TLS, "custom")):
+        return False
+    blocks = _pem_blocks(_read(os.path.join(TLS, "ca.crt")))[:1] + _pem_blocks(_read(tls_path("ENTERPRISE_CA")))
+    if not blocks:
+        return False
+    _write_public(tls_path("TRUST_PEM"), "\n".join(dict.fromkeys(blocks)) + "\n")
+    return True
+
+
+def _covers_host(pem, host):
+    """Le certificat couvre-t-il l'adresse des agents (IP ou nom DNS) ?"""
+    out = _x509(pem, "-ext", "subjectAltName")[1]
+    try:
+        ip = ipaddress.ip_address(host)
+        return any(ipaddress.ip_address(a) == ip for a in re.findall(r"IP Address:([0-9A-Fa-f:.]+)", out)
+                   if _valid_ip(a))
+    except ValueError:
+        return any(_name_covers(n, host) for n in re.findall(r"DNS:([^\s,]+)", out))
+
+
+def _valid_ip(text):
+    try:
+        ipaddress.ip_address(text)
+        return True
+    except ValueError:
+        return False
+
+
+def _check_enterprise_pair(crt_pem, key_path, log):
+    """Certificat d'entreprise utilisable par les agents : clé assortie, non expiré, adresse des agents couverte,
+    chaîné à l'autorité d'entreprise importée. Renvoie la chaîne à servir (certificat + intermédiaires)."""
+    blocks = _pem_blocks(crt_pem)
+    if not blocks:
+        raise ValueError(t("certificat illisible", "unreadable certificate", "certificado ilegible"))
+    leaf = blocks[0]
+    if _x509(leaf, "-checkend", "0")[0] != 0:
+        raise ValueError(t("certificat expiré", "certificate expired", "certificado caducado"))
+    if _x509(leaf, "-pubkey")[1] != _ssl(["pkey", "-in", key_path, "-pubout"])[1]:
+        raise ValueError(t("la clé ne correspond pas au certificat", "the key does not match the certificate",
+                           "la clave no corresponde al certificado"))
+    host = read_conf().get("HOST", "")
+    if host and not _covers_host(leaf, host):
+        raise ValueError(t(f"il ne couvre pas {host}, l'adresse utilisée par les agents du parc",
+                           f"it does not cover {host}, the address used by the agents",
+                           f"no cubre {host}, la dirección usada por los agentes"))
+    authority = _pem_blocks(_read(tls_path("ENTERPRISE_CA")))
+    if not authority:
+        raise ValueError(t("importez d'abord l'autorité d'entreprise", "import the enterprise authority first",
+                           "importe primero la autoridad de empresa"))
+    intermediates = [b for b in blocks[1:] + authority if not _self_signed(b)]
+    intermediates = [b for b in dict.fromkeys(intermediates) if b != leaf]
+    with tempfile.TemporaryDirectory(dir=TLS, prefix=".verify-") as tmp:
+        files = {}
+        for name, text in (("leaf.pem", leaf), ("ca.pem", "\n".join(authority)), ("chain.pem", "\n".join(intermediates))):
+            files[name] = os.path.join(tmp, name)
+            _write_public(files[name], text + "\n")
+        args = ["verify", "-CAfile", files["ca.pem"]] + (["-untrusted", files["chain.pem"]] if intermediates else [])
+        if _ssl(args + [files["leaf.pem"]], log)[0] != 0:
+            raise ValueError(t("il n'est pas signé par l'autorité d'entreprise importée",
+                               "it is not signed by the imported enterprise authority",
+                               "no está firmado por la autoridad de empresa importada"))
+    return "\n".join([leaf] + intermediates) + "\n"
+
+
+def import_ca(params, log=print):
+    """Installe la chaîne de l'autorité d'entreprise (racine, intermédiaires) et l'ajoute au faisceau des agents."""
+    path = os.path.join(TLS_SPOOL, tls_params("import-ca", params)["upload"] + ".pem")
+    try:
+        if not stat.S_ISREG(os.lstat(path).st_mode):
+            raise ValueError("fichier")
+        blocks = _pem_blocks(_read(path))
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+    if not blocks:
+        raise ValueError(t("aucun certificat dans le fichier", "no certificate in the file", "ningún certificado en el archivo"))
+    loco = _pem_blocks(_read(os.path.join(TLS, "ca.crt")))[:1]
+    blocks = [b for b in dict.fromkeys(blocks) if b not in loco]
+    if not blocks or not all(_is_ca(b) for b in blocks):
+        raise ValueError(t("ce ne sont pas des certificats d'autorité (CA:TRUE attendu)",
+                           "these are not authority certificates (CA:TRUE expected)",
+                           "no son certificados de autoridad (se espera CA:TRUE)"))
+    if not any(_self_signed(b) for b in blocks):
+        log(t("Aucune racine dans la chaîne : l'autorité intermédiaire fournie servira d'ancre de confiance.",
+              "No root in the chain: the supplied intermediate authority will be the trust anchor.",
+              "Ninguna raíz en la cadena: la autoridad intermedia proporcionada será el ancla de confianza."))
+    previous = _read(tls_path("ENTERPRISE_CA"))
+    _write_public(tls_path("ENTERPRISE_CA"), "\n".join(blocks) + "\n")
+    if tls_mode() == "enterprise":
+        try:                                  # en service : la nouvelle chaîne doit toujours valider le certificat présenté
+            _check_enterprise_pair(_read(os.path.join(TLS, "server.crt")), os.path.join(TLS, "server.key"), log)
+        except ValueError:
+            if previous:
+                _write_public(tls_path("ENTERPRISE_CA"), previous)
+            else:
+                os.unlink(tls_path("ENTERPRISE_CA"))
+            raise ValueError(t("cette autorité ne valide pas le certificat actuellement servi : les agents perdraient la "
+                               "connexion", "this authority does not validate the certificate being served: the agents "
+                               "would lose the connection", "esta autoridad no valida el certificado servido: los agentes "
+                               "perderían la conexión")) from None
+    write_trust(log)
+    for b in blocks:
+        log(t("Autorité importée : ", "Authority imported: ", "Autoridad importada: ") + _x509(b, "-subject")[1].strip())
+    log(t("Le faisceau d'autorités est livré à chaque agent à son prochain contact.",
+          "The authority bundle is delivered to each agent at its next check-in.",
+          "El conjunto de autoridades se entrega a cada agente en su próximo contacto."))
+    return True
+
+
+def remove_ca(params=None, log=print):
+    if tls_mode() == "enterprise":
+        raise ValueError(t("revenez d'abord à l'autorité loco", "switch back to the loco authority first",
+                           "vuelva primero a la autoridad loco"))
+    for path in (tls_path("ENTERPRISE_CA"), tls_path("ENTERPRISE_CRT"), tls_path("ENTERPRISE_KEY"), tls_path("REQUEST_KEY"), tls_path("REQUEST_CSR")):
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+    write_trust(log)
+    log(t("Autorité d'entreprise retirée du faisceau des agents.", "Enterprise authority removed from the agents' bundle.",
+          "Autoridad de empresa retirada del conjunto de los agentes."))
+    return True
+
+
+def _agent_names(extra=()):
+    """Noms à couvrir : adresse des agents (IP ou DNS), nom et nom complet du serveur, noms ajoutés."""
+    host, name, fqdn = read_conf().get("HOST", "") or "127.0.0.1", socket.gethostname(), socket.getfqdn()
+    san = [f"IP:{host}"] if _valid_ip(host) else [f"DNS:{host}"]
+    san += [f"DNS:{n}" for n in (fqdn, name, *extra) if n and n != "localhost" and CERT_NAME_RE.fullmatch(n)]
+    return list(dict.fromkeys(san))
+
+
+def ca_csr(params, log=print):
+    """Demande de certificat (CSR) à faire signer par l'autorité d'entreprise ; la clé privée ne quitte pas le serveur."""
+    names = tls_params("ca-csr", params)["names"].split()
+    san = _agent_names(names)
+    cn = next((s.split(":", 1)[1] for s in san if s.startswith("DNS:")), socket.getfqdn())
+    with tempfile.TemporaryDirectory(dir=TLS, prefix=".csr-") as tmp:
+        key, csr, cnf = (os.path.join(tmp, n) for n in ("request.key", "request.csr", "req.cnf"))
+        with open(cnf, "w") as f:           # configuration minimale : OpenSSL 1.1 (Rocky 8) cumule sinon celle du système
+            f.write(f"[req]\nprompt=no\ndistinguished_name=dn\nreq_extensions=ext\n[dn]\nCN={cn}\nO=loco\n"
+                    f"[ext]\nsubjectAltName={','.join(san)}\nkeyUsage=critical,digitalSignature,keyEncipherment\n"
+                    "extendedKeyUsage=serverAuth\n")
+        if _ssl(["req", "-new", "-newkey", "rsa:2048", "-nodes", "-config", cnf, "-keyout", key, "-out", csr], log)[0] != 0:
+            raise ValueError(t("génération de la demande impossible", "request generation failed", "generación de la solicitud imposible"))
+        os.chmod(key, 0o600)
+        os.replace(key, tls_path("REQUEST_KEY"))
+        os.chmod(csr, 0o644)
+        os.replace(csr, tls_path("REQUEST_CSR"))
+    log(t(f"Demande prête pour {', '.join(s.split(':', 1)[1] for s in san)} : téléchargez-la, faites-la signer par "
+          "votre autorité, puis importez le certificat émis.",
+          f"Request ready for {', '.join(s.split(':', 1)[1] for s in san)}: download it, have it signed by your "
+          "authority, then import the issued certificate.",
+          f"Solicitud lista para {', '.join(s.split(':', 1)[1] for s in san)}: descárguela, hágala firmar por su "
+          "autoridad e importe el certificado emitido."))
+    return True
+
+
+def import_enterprise_cert(params, log=print):
+    """Certificat émis par l'autorité d'entreprise (avec sa clé, ou pour la demande en attente). Préparé pour la
+    bascule ; déjà en service sous cette autorité, il remplace aussitôt l'ancien (renouvellement)."""
+    p = tls_params("import-enterprise-cert", params)
+    crt_path, key_upload = (os.path.join(TLS_SPOOL, p["upload"] + ext) for ext in (".crt", ".key"))
+    try:
+        for path in (crt_path, key_upload) if p["key"] else (crt_path,):
+            if not stat.S_ISREG(os.lstat(path).st_mode):
+                raise ValueError("fichier")
+        key_path = key_upload if p["key"] else tls_path("REQUEST_KEY")
+        if not os.path.isfile(key_path):
+            raise ValueError(t("aucune demande en attente : générez une demande ou joignez la clé privée",
+                               "no pending request: generate a request or attach the private key",
+                               "ninguna solicitud pendiente: genere una solicitud o adjunte la clave privada"))
+        chain = _check_enterprise_pair(_read(crt_path), key_path, log)
+        with tempfile.TemporaryDirectory(dir=TLS, prefix=".enterprise-") as tmp:
+            crt, key = os.path.join(tmp, "enterprise.crt"), os.path.join(tmp, "enterprise.key")
+            _write_public(crt, chain)
+            shutil.copyfile(key_path, key)
+            os.chmod(key, 0o600)
+            os.replace(crt, tls_path("ENTERPRISE_CRT"))
+            os.replace(key, tls_path("ENTERPRISE_KEY"))
+        if not p["key"]:
+            for path in (tls_path("REQUEST_KEY"), tls_path("REQUEST_CSR")):
+                with contextlib.suppress(OSError):
+                    os.unlink(path)
+    finally:
+        for path in (crt_path, key_upload):
+            with contextlib.suppress(OSError):
+                os.unlink(path)
+    log(t("Certificat d'entreprise importé : ", "Enterprise certificate imported: ", "Certificado de empresa importado: ")
+        + ", ".join(s.split(":", 1)[1] for s in _agent_names()) + ".")
+    if tls_mode() == "enterprise":
+        return set_tls_mode({"mode": "enterprise"}, log)
+    return True
+
+
+def _loco_cert(tmp, log):
+    """Certificat serveur signé par l'autorité loco (adresse et noms actuels) : (clé, certificat) dans tmp."""
+    ca_crt, ca_key = os.path.join(TLS, "ca.crt"), os.path.join(TLS, "ca.key")
+    if not (os.path.isfile(ca_crt) and os.path.isfile(ca_key)):
+        raise ValueError(t("autorité locale introuvable", "local authority not found", "autoridad local no encontrada"))
+    san = _agent_names()
+    san += [s for s in ("IP:127.0.0.1", "DNS:localhost") if s not in san]
+    key, csr, crt, ext = (os.path.join(tmp, n) for n in ("server.key", "server.csr", "server.crt", "ext.cnf"))
+    with open(ext, "w") as f:
+        f.write("subjectAltName=" + ",".join(san) + "\nbasicConstraints=CA:FALSE\nkeyUsage=critical,digitalSignature\n"
+                "extendedKeyUsage=serverAuth\n")
+    steps = (["req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
+              "-subj", f"/O=loco/CN={socket.gethostname()}", "-keyout", key, "-out", csr],
+             ["x509", "-req", "-in", csr, "-CA", ca_crt, "-CAkey", ca_key, "-set_serial", "0x" + secrets.token_hex(16),
+              "-days", "825", "-out", crt, "-extfile", ext],
+             ["verify", "-CAfile", ca_crt, crt])
+    for step in steps:
+        if _ssl(step, log)[0] != 0:
+            raise ValueError(t("génération du certificat impossible", "certificate generation failed", "generación del certificado imposible"))
+    return key, crt, san
+
+
+def set_tls_mode(params, log=print):
+    """Bascule le certificat du portail sur l'autorité choisie ; nginx rechargé, ou tout est rétabli."""
+    mode = tls_params("set-tls-mode", params)["mode"]
+    if os.path.exists(os.path.join(TLS, "custom")):
+        raise ValueError(t("certificat fourni à l'installation (--tls-cert)", "certificate supplied at installation (--tls-cert)",
+                           "certificado proporcionado en la instalación (--tls-cert)"))
+    with tempfile.TemporaryDirectory(dir=TLS, prefix=".mode-") as tmp:
+        if mode == "enterprise":
+            chain = _check_enterprise_pair(_read(tls_path("ENTERPRISE_CRT")), tls_path("ENTERPRISE_KEY"), log)
+            crt, key = os.path.join(tmp, "server.crt"), os.path.join(tmp, "server.key")
+            _write_public(crt, chain)
+            shutil.copyfile(tls_path("ENTERPRISE_KEY"), key)
+            names = [s.split(":", 1)[1] for s in _agent_names()]
+        else:
+            key, crt, san = _loco_cert(tmp, log)
+            names = [s.split(":", 1)[1] for s in san]
+        write_trust(log)
+        _swap_tls({"server.key": key, "server.crt": crt}, log)
+    if mode == "enterprise":
+        _write_public(tls_path("TLS_MODE"), "enterprise\n")
+        log(t("Le portail présente désormais le certificat de votre autorité d'entreprise (",
+              "The portal now presents your enterprise authority's certificate (",
+              "El portal presenta ahora el certificado de su autoridad de empresa (") + ", ".join(names) + ").")
+    else:
+        with contextlib.suppress(OSError):
+            os.unlink(tls_path("TLS_MODE"))
+        log(t("Retour à l'autorité loco : nouveau certificat pour ", "Back to the loco authority: new certificate for ",
+              "Vuelta a la autoridad loco: nuevo certificado para ") + ", ".join(names) + ".")
+    return True
+
+
 def delete_backup(params, log=print):
     """Supprime une sauvegarde nommée de BACKUP_DIR (fichier ordinaire, jamais un lien symbolique)."""
     name = str((params or {}).get("name", ""))
@@ -2069,6 +2382,16 @@ def _operation(action, params, log):
         return import_cert(params, log)
     if action == "remove-imported-cert":
         return remove_imported_cert(params, log)
+    if action == "import-ca":
+        return import_ca(params, log)
+    if action == "remove-ca":
+        return remove_ca(params, log)
+    if action == "ca-csr":
+        return ca_csr(params, log)
+    if action == "import-enterprise-cert":
+        return import_enterprise_cert(params, log)
+    if action == "set-tls-mode":
+        return set_tls_mode(params, log)
     raise ValueError(f"action inconnue : {action}")
 
 
@@ -2307,6 +2630,11 @@ def agent():
                     if not TLS_UPLOAD_RE.fullmatch(upload):
                         continue
                     params = {"upload": upload}
+                elif req["action"] in ("import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode"):
+                    try:
+                        params = tls_params(req["action"], req.get("params"))
+                    except ValueError:
+                        continue
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -2396,6 +2724,8 @@ def request(action, params=None, user=""):
         if not TLS_UPLOAD_RE.fullmatch(upload):
             raise ValueError("fichier téléversé invalide")
         params = {"upload": upload}
+    elif action in ("import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode"):
+        params = tls_params(action, params)
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
@@ -2488,6 +2818,9 @@ def main(argv):
         return 0
     if cmd == "tls-sni":                                   # install.sh : bloc nginx du certificat importé, à jour
         write_sni_site()
+        return 0
+    if cmd == "tls-trust":                                 # install.sh : faisceau des agents, même format que l'agent root
+        write_trust()
         return 0
     if cmd == "run-job" and len(args) == 1:
         run_job(args[0])

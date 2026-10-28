@@ -800,6 +800,30 @@ class TestLinuxInventory(FleetTest):
         self.assertEqual(data["system"]["kernel"], "6.2")
 
 
+class TestTrustBundle(FleetTest):
+    """Faisceau d'autorités livré au check-in, seulement à l'agent qui ne l'a pas encore ; empreinte gardée par poste."""
+
+    def setUp(self):
+        super().setUp()
+        os.makedirs(config.TLS_DIR, exist_ok=True)
+        self.path = os.path.join(config.TLS_DIR, "trust.pem")
+        with open(self.path, "w") as f:
+            f.write("-----BEGIN CERTIFICATE-----\nQUJD\n-----END CERTIFICATE-----\n")
+        self.addCleanup(os.unlink, self.path)
+
+    def test_bundle_is_sent_until_the_agent_reports_it(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        with open(self.path) as f:
+            bundle = f.read()
+        sha = hashlib.sha256(bundle.encode()).hexdigest()
+        first = a.checkin().get_json()["trust"]
+        self.assertEqual((first["sha256"], first["pem"]), (sha, bundle))
+        later = a.post("/agent/api/checkin", dict(a.ident, trust=sha), a.token).get_json()["trust"]
+        self.assertEqual(later, {"sha256": sha})                                  # déjà reçu : pas de nouvel envoi
+        self.assertEqual(device(a.uid)["trust_sha256"], sha)
+
+
 class TestWuProxy(FleetTest):
     def setUp(self):
         super().setUp()

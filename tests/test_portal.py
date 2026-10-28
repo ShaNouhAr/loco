@@ -1,6 +1,7 @@
 """Tests du portail (bibliothèque standard + Flask) : python3 -m unittest discover -s tests"""
 
 import atexit
+import hashlib
 import io
 import json
 import os
@@ -479,6 +480,131 @@ class TestCertificateRoutes(unittest.TestCase):
         self.assertIn("/system/certificate/import", page)
         self.admin.post("/system/certificate/renew", {}, page="/system")
         self.assertEqual(self.request.call_args[0][0], "renew-cert")
+
+
+class TestCertificateAuthority(unittest.TestCase):
+    """Système → Certificat : autorité d'entreprise (DER, PKCS#7), demande, certificat (PFX), bascule ; refus clairs."""
+
+    def setUp(self):
+        self.admin = Browser()
+        self.admin.login("admin", ADMIN_PW)
+        for name in ("running_job", "agent_running", "request"):
+            p = mock.patch.object(loco.system.locoadmin, name)
+            setattr(self, name, p.start())
+            self.addCleanup(p.stop)
+        self.running_job.return_value = None
+        self.agent_running.return_value = True
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.addCleanup(shutil.rmtree, config.TLS_DIR, True)
+        minimal = os.path.join(self.dir, "min.cnf")
+        with open(minimal, "w") as f:
+            f.write("[req]\ndistinguished_name=dn\n[dn]\n")
+        self.ca_key, self.ca_crt = os.path.join(self.dir, "ca.key"), os.path.join(self.dir, "ca.crt")
+        self.ssl("req", "-x509", "-config", minimal, "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes",
+                 "-days", "30", "-subj", "/CN=Corp Root CA", "-addext", "basicConstraints=critical,CA:TRUE",
+                 "-addext", "keyUsage=critical,keyCertSign", "-keyout", self.ca_key, "-out", self.ca_crt)
+
+    def ssl(self, *args):
+        subprocess.run(["openssl", *args], check=True, capture_output=True)
+
+    def read(self, path):
+        with open(path, "rb") as f:
+            return f.read()
+
+    def leaf(self, san):
+        key, csr, crt, ext = (os.path.join(self.dir, n) for n in ("l.key", "l.csr", "l.crt", "l.ext"))
+        self.ssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-subj", "/CN=loco",
+                 "-keyout", key, "-out", csr)
+        with open(ext, "w") as f:
+            f.write(f"subjectAltName={san}\nbasicConstraints=CA:FALSE\n")
+        self.ssl("x509", "-req", "-in", csr, "-CA", self.ca_crt, "-CAkey", self.ca_key, "-set_serial", "0x02",
+                 "-days", "30", "-out", crt, "-extfile", ext)
+        return key, crt
+
+    def post(self, path, **files):
+        data = {"csrf": self.admin.token("/system")}
+        for name, value in files.items():
+            data[name] = (io.BytesIO(value), name) if isinstance(value, bytes) else value
+        return self.admin.c.post(path, content_type="multipart/form-data", data=data)
+
+    def test_authority_in_der_or_pkcs7_is_accepted_and_a_server_certificate_refused(self):
+        der, p7b = os.path.join(self.dir, "ca.cer"), os.path.join(self.dir, "ca.p7b")
+        self.ssl("x509", "-in", self.ca_crt, "-outform", "DER", "-out", der)
+        self.ssl("crl2pkcs7", "-nocrl", "-certfile", self.ca_crt, "-outform", "DER", "-out", p7b)
+        for path in (der, p7b):
+            self.request.reset_mock()
+            self.assertEqual(self.post("/system/certificate/authority", authority=self.read(path)).status_code, 302)
+            action, params = self.request.call_args[0][:2]
+            self.assertEqual(action, "import-ca")
+            spooled = self.read(os.path.join(loco.system.TLS_SPOOL, params["upload"] + ".pem"))
+            self.assertIn(b"-----BEGIN CERTIFICATE-----", spooled)                 # remis en PEM pour l'agent root
+        self.request.reset_mock()
+        self.post("/system/certificate/authority", authority=self.read(self.leaf("DNS:repo.test")[1]))
+        self.request.assert_not_called()                                           # certificat de serveur : refusé
+
+    def test_request_and_its_download(self):
+        self.post("/system/certificate/request", names="loco.corp.example Loco.Corp.Example")
+        self.assertEqual(self.request.call_args[0][:2], ("ca-csr", {"names": "loco.corp.example"}))
+        self.request.reset_mock()
+        self.post("/system/certificate/request", names="pas bon;nom")
+        self.request.assert_not_called()
+        self.assertEqual(self.admin.c.get("/system/certificate/request.csr").status_code, 404)
+        os.makedirs(config.TLS_DIR, exist_ok=True)
+        with open(os.path.join(config.TLS_DIR, "enterprise.csr"), "w") as f:
+            f.write("-----BEGIN CERTIFICATE REQUEST-----\nX\n-----END CERTIFICATE REQUEST-----\n")
+        r = self.admin.c.get("/system/certificate/request.csr")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("attachment", r.headers["Content-Disposition"])
+
+    def test_pfx_is_converted_and_checked_before_reaching_the_agent(self):
+        key, crt = self.leaf(f"DNS:{config.HOST}")
+        pfx = os.path.join(self.dir, "loco.pfx")
+        self.ssl("pkcs12", "-export", "-inkey", key, "-in", crt, "-certfile", self.ca_crt, "-passout", "pass:s3cret", "-out", pfx)
+        self.post("/system/certificate/enterprise", pfx=self.read(pfx), password="faux")
+        self.request.assert_not_called()                                           # mot de passe incorrect
+        self.post("/system/certificate/enterprise", pfx=self.read(pfx), password="s3cret")
+        action, params = self.request.call_args[0][:2]
+        self.assertEqual((action, params["key"]), ("import-enterprise-cert", "1"))
+        spool = loco.system.TLS_SPOOL
+        self.assertEqual(oct(os.stat(os.path.join(spool, params["upload"] + ".key")).st_mode & 0o777), "0o600")
+        self.assertIn(b"PRIVATE KEY", self.read(os.path.join(spool, params["upload"] + ".key")))
+
+    def test_enterprise_certificate_refusals(self):
+        key, crt = self.leaf("DNS:autre.example")
+        self.post("/system/certificate/enterprise", certificate=self.read(crt), key=self.read(key))
+        self.request.assert_not_called()                                           # ne couvre pas l'adresse des agents
+        key, crt = self.leaf(f"DNS:{config.HOST}")
+        self.post("/system/certificate/enterprise", certificate=self.read(crt))
+        self.request.assert_not_called()                                           # sans clé ni demande en attente
+
+    @staticmethod
+    def _drop_devices():
+        with connect() as conn:
+            conn.execute("DELETE FROM devices WHERE uid LIKE 'trust-%'")
+
+    def test_switch_and_readiness(self):
+        self.post("/system/certificate/mode", mode="enterprise")
+        self.assertEqual(self.request.call_args[0][:2], ("set-tls-mode", {"mode": "enterprise"}))
+        self.assertEqual(self.admin.post("/system/certificate/mode", {"mode": "autre"}, page="/system").status_code, 400)
+        os.makedirs(config.TLS_DIR, exist_ok=True)
+        with open(self.ca_crt) as src, open(os.path.join(config.TLS_DIR, "trust.pem"), "w") as dst:
+            bundle = src.read()
+            dst.write(bundle)
+        sha = hashlib.sha256(bundle.encode()).hexdigest()
+        with connect() as conn:
+            conn.execute("DELETE FROM devices WHERE uid LIKE 'trust-%'")
+            for i, trust in enumerate((sha, "", sha)):
+                conn.execute("INSERT INTO devices (uid, token_hash, hostname, enrolled_at, trust_sha256) VALUES (?,?,?,?,?)",
+                             (f"trust-{i}", "x", f"poste-{i}", "2026-10-28 10:00:00", trust))
+        self.addCleanup(self._drop_devices)
+        with loco.app.test_request_context():
+            r = loco.system.trust_readiness()
+        mine = [d for d in r["waiting"] if d["uid"].startswith("trust-")]
+        self.assertEqual([d["hostname"] for d in mine], ["poste-1"])
+        page = self.admin.c.get("/system").get_data(as_text=True)
+        self.assertIn('data-tab="ca-corp"', page)
+        self.assertIn("/system/certificate/authority", page)
 
 
 class TestAccountCreation(unittest.TestCase):
