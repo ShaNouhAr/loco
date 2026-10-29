@@ -186,6 +186,20 @@
       </div>
       <p class="hint">{{ _("Astuce : baissez la transparence pour mieux voir le fond ; le texte reste lisible dans tous les thèmes.") }}</p>
     </section>
+    {% if can('system.configure') %}
+    <section class="ap-sec ap-logo-sec">
+      <h3 class="ap-label">{{ _("Logo") }} <span class="ap-global-tag">{{ _("global") }}</span></h3>
+      <div class="ap-logo-row">
+        <span class="ap-logo-prev"><img src="{{ custom_logo.url if custom_logo else url_for('static', filename='logo.svg') ~ '?v=' ~ asset_v }}" alt=""></span>
+        <div class="ap-bg-actions">
+          <label class="btn sm"><span>{{ _("Choisir un logo…") }}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" data-logo-upload hidden></label>
+          <button type="button" class="btn sm danger{{ '' if custom_logo else ' hidden' }}" data-logo-remove>{{ _("Logo loco par défaut") }}</button>
+          <span class="hint" data-logo-msg></span>
+        </div>
+      </div>
+      <p class="hint">{{ _("Remplace le logo loco pour tout le monde (en-tête, page de connexion, favicon). Image ou SVG, 2 Mo maximum.") }}</p>
+    </section>
+    {% endif %}
   </div>
   <div class="dlg-f row-between">
     <button type="button" class="linkbtn" data-reset>{{ _("Réinitialiser l'apparence") }}</button>

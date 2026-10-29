@@ -6,10 +6,11 @@ import unittest
 
 import test_portal  # noqa: F401  (initialise l'app, la base et le compte admin)
 from test_portal import Browser, ADMIN_PW
-from loco import appearance
+from loco import appearance, auth
 from loco.db import transaction as connect
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>'
 
 
 class AppearanceModelTest(unittest.TestCase):
@@ -116,3 +117,66 @@ class AppearanceRouteTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LogoTest(unittest.TestCase):
+    """Logo global de l'instance : admin seulement, servi publiquement, reflété partout."""
+
+    def setUp(self):
+        self.b = Browser()
+        self.b.login("admin", ADMIN_PW)
+
+    def tearDown(self):
+        for f in glob.glob(os.path.join(appearance.BG_DIR, "logo.*")):
+            os.unlink(f)
+
+    def _set_logo(self, blob, name):
+        return self.b.c.post("/appearance/logo",
+                             data={"csrf": self.b.token("/"), "logo": (io.BytesIO(blob), name)},
+                             content_type="multipart/form-data")
+
+    def test_admin_sets_and_serves_logo(self):
+        self.assertEqual(self._set_logo(PNG, "brand.png").status_code, 200)
+        anon = Browser()                                   # servi sans authentification (page de connexion)
+        img = anon.c.get("/appearance/logo.img")
+        self.assertEqual(img.status_code, 200)
+        self.assertEqual(img.get_data(), PNG)
+        self.assertIn("default-src 'none'", img.headers.get("Content-Security-Policy", ""))
+        img.close()
+        html = self.b.c.get("/").get_data(as_text=True)    # en-tête + favicon pointent sur le logo
+        self.assertIn("/appearance/logo.img", html)
+        self.assertIn('<img class="brand-logo"', html)
+
+    def test_svg_logo_accepted(self):
+        self.assertEqual(self._set_logo(SVG, "logo.svg").status_code, 200)
+        img = self.b.c.get("/appearance/logo.img")
+        self.assertTrue(img.headers["Content-Type"].startswith("image/svg+xml"), img.headers["Content-Type"])
+        img.close()
+
+    def test_remove_restores_default(self):
+        self._set_logo(PNG, "b.png")
+        self.assertTrue(self.b.post("/appearance/logo/remove", {}).get_json()["ok"])
+        gone = self.b.c.get("/appearance/logo.img")
+        self.assertEqual(gone.status_code, 404)
+        gone.close()
+        html = self.b.c.get("/").get_data(as_text=True)
+        self.assertNotIn("/appearance/logo.img", html)
+        self.assertIn('viewBox="0 0 1118 750"', html)      # silhouette loco par défaut revenue
+
+    def test_rejects_bad_format(self):
+        self.assertEqual(self._set_logo(b"not an image at all", "x.bin").status_code, 415)
+
+    def test_rejects_too_big(self):
+        self.assertEqual(self._set_logo(PNG + b"\x00" * (appearance.MAX_LOGO + 10), "big.png").status_code, 413)
+
+    def test_non_admin_cannot_set_logo(self):
+        with connect() as conn:
+            if not conn.execute("SELECT 1 FROM users WHERE username='viewer_logo'").fetchone():
+                auth.create_user(conn, "viewer_logo", "Viewer-Pass-123456", "viewer", must_change=False)
+        v = Browser()
+        v.login("viewer_logo", "Viewer-Pass-123456")
+        r = v.c.post("/appearance/logo",
+                     data={"csrf": v.token("/"), "logo": (io.BytesIO(PNG), "b.png")},
+                     content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(v.c.post("/appearance/logo/remove", data={"csrf": v.token("/")}).status_code, 403)

@@ -2044,3 +2044,14 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .wp-nuit { background-image: url("wallpapers/nuit-thumb.jpg"); }
 .wp-hiver { background-image: url("wallpapers/hiver-thumb.jpg"); }
 .ap-bg-mine.ap-photo { background-image: url("/appearance/background.img"); }
+
+/* Logo personnalisé (image) : contraint à la hauteur de marque, largeur bornée pour ne pas pousser l'en-tête. */
+img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
+.auth-brand img.brand-logo { max-width: 150px; }
+
+/* Section « Logo » (global, admin) de la fenêtre Apparence. */
+.ap-global-tag { margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--bg-3); color: var(--text-3); font: 600 10px var(--sans); letter-spacing: .05em; text-transform: uppercase; vertical-align: 2px; }
+.ap-logo-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.ap-logo-prev { flex: none; display: inline-grid; place-items: center; height: 48px; min-width: 76px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
+.ap-logo-prev img { height: 28px; width: auto; max-width: 150px; display: block; }
+.ap-logo-sec .ap-bg-actions { flex: 1 1 auto; row-gap: 8px; }

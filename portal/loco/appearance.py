@@ -38,6 +38,10 @@ MAX_BG = 8 * 1024 * 1024                 # 8 Mo
 # Signatures des formats d'image acceptés -> extension servie.
 _SIGS = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpg"), (b"GIF8", "gif"))
 
+# Logo global de l'instance (un seul fichier, partagé par tout le monde) : BG_DIR/logo.<ext>.
+MAX_LOGO = 2 * 1024 * 1024               # 2 Mo
+_LOGO_MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp": "image/webp", "svg": "image/svg+xml"}
+
 
 def default():
     return {"theme": "oled", "accent": "neutral", "alpha": 100, "bg": ""}
@@ -155,3 +159,73 @@ def appearance_background():
     resp = send_file(path, max_age=0)
     resp.headers["Cache-Control"] = "private, no-cache"
     return resp
+
+
+# --- logo global de l'instance (admin « system.configure »), visible par tout le monde ---
+
+def _detect_logo(blob):
+    """Extension d'un logo téléversé : images raster (comme un fond) ou SVG."""
+    ext = _detect(blob)
+    if ext:
+        return ext
+    head = blob[:1024].lstrip().lower()
+    if head.startswith(b"<?xml") or head.startswith(b"<svg") or b"<svg" in head:
+        return "svg"
+    return None
+
+
+def logo_file():
+    found = glob.glob(os.path.join(BG_DIR, "logo.*"))
+    return found[0] if found else None
+
+
+def logo_info():
+    """Logo personnalisé de l'instance : {'url': ..., 'ext': ...} (avec anti-cache) ou None si logo loco par défaut."""
+    path = logo_file()
+    if not path:
+        return None
+    ext = os.path.splitext(path)[1].lstrip(".")
+    return {"url": f"/appearance/logo.img?v={int(os.path.getmtime(path))}", "ext": ext}
+
+
+@app.route("/appearance/logo.img")
+def appearance_logo():
+    path = logo_file()
+    if not path:
+        abort(404)
+    ext = os.path.splitext(path)[1].lstrip(".")
+    resp = send_file(path, mimetype=_LOGO_MIME.get(ext, "application/octet-stream"), max_age=3600)
+    # Même ouvert directement, un SVG téléversé ne doit rien pouvoir exécuter.
+    resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+@app.route("/appearance/logo", methods=["POST"])
+def appearance_logo_set():
+    upload = request.files.get("logo")
+    if not upload:
+        abort(400)
+    blob = upload.read(MAX_LOGO + 1)
+    if len(blob) > MAX_LOGO:
+        return jsonify(error="trop-grand"), 413
+    ext = _detect_logo(blob)
+    if not ext:
+        return jsonify(error="format"), 415
+    os.makedirs(BG_DIR, exist_ok=True)
+    for old in glob.glob(os.path.join(BG_DIR, "logo.*")):
+        os.unlink(old)
+    path = os.path.join(BG_DIR, f"logo.{ext}")
+    with open(path, "wb") as f:
+        f.write(blob)
+    os.chmod(path, 0o644)
+    audit("apparence.logo", f"{ext}, {len(blob)} o")
+    return jsonify(ok=True)
+
+
+@app.route("/appearance/logo/remove", methods=["POST"])
+def appearance_logo_delete():
+    for old in glob.glob(os.path.join(BG_DIR, "logo.*")):
+        os.unlink(old)
+    audit("apparence.logo", "retiré")
+    return jsonify(ok=True)

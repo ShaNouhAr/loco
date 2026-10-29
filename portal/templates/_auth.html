@@ -2,11 +2,11 @@
 {% extends "base.html" %}
 {% block toasts %}{% endblock %}
 {% block body %}
-{% from "_logo.html" import logo %}
+{% from "_logo.html" import logo with context %}
 {% from '_nav_icons.html' import theme_toggle, language_menu with context %}
 <main class="auth">
   <div class="auth-top">
-    <span class="auth-brand">{{ logo() }}<b>loco</b><span class="mono">{{ host }}</span></span>
+    <span class="auth-brand">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span class="mono">{{ host }}</span></span>
     <div class="auth-prefs">{{ language_menu() }}{{ theme_toggle() }}</div>
   </div>
   <div class="auth-main">

@@ -233,6 +233,30 @@
           })
           .catch(function () { if (msg) { msg.classList.add("err"); msg.textContent = t("Échec de l'envoi."); } });
       });
+
+      // Logo global de l'instance (admin) : l'envoi change le logo pour tout le monde -> on recharge pour l'appliquer partout.
+      var logoUp = ap.querySelector("[data-logo-upload]"), logoMsg = ap.querySelector("[data-logo-msg]");
+      if (logoUp) logoUp.addEventListener("change", function () {
+        var file = this.files && this.files[0]; this.value = ""; if (!file) return;
+        if (logoMsg) { logoMsg.classList.remove("err"); logoMsg.textContent = t("Envoi…"); }
+        var fd = new FormData(); fd.append("csrf", ap.dataset.csrf); fd.append("logo", file);
+        fetch("/appearance/logo", { method: "POST", body: fd, credentials: "same-origin" })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              if (logoMsg) { logoMsg.classList.add("err"); logoMsg.textContent = res.j.error === "trop-grand" ? t("Logo trop lourd (2 Mo maximum).") : t("Format non reconnu (PNG, JPEG, GIF, WebP ou SVG)."); }
+              return;
+            }
+            location.reload();
+          })
+          .catch(function () { if (logoMsg) { logoMsg.classList.add("err"); logoMsg.textContent = t("Échec de l'envoi."); } });
+      });
+      var logoRm = ap.querySelector("[data-logo-remove]");
+      if (logoRm) logoRm.addEventListener("click", function () {
+        var fd = new FormData(); fd.append("csrf", ap.dataset.csrf);
+        fetch("/appearance/logo/remove", { method: "POST", body: fd, credentials: "same-origin" })
+          .then(function () { location.reload(); }).catch(function () {});
+      });
     }
   })();
 

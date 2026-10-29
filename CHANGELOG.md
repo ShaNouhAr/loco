@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.96.0 — 2026-10-29
+
+- **Logo personnalisable (global).** Dans *Apparence*, une section **Logo** réservée aux administrateurs permet de remplacer le logo loco par celui de son organisation — **pour tout le monde** : en-tête, page de connexion et favicon. Image (PNG, JPEG, GIF, WebP) ou **SVG**, 2 Mo maximum ; retour au logo loco d'un clic. Quand un logo est défini, le mot « loco » s'efface pour laisser la marque choisie.
+- Contrairement au thème, à la couleur et au fond (propres à chaque compte), le logo est **global** à l'instance. Le SVG est servi en image (aucun script ne peut s'exécuter) et son envoi est réservé au droit « Configurer le serveur ».
+
 ## 2.95.0 — 2026-10-29
 
 - **Fonds d'écran photo (nature) 4K.** La fenêtre *Apparence* propose huit vrais fonds photo haute définition — **Montagne, Forêt, Désert, Dunes, Océan, Aurore, Nuit étoilée, Hiver** — en plus des unis et dégradés, désormais rangés dans une section à part. Trois presets photo (Alpes, Boréale, Désert) les mettent en avant.

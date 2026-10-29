@@ -1,4 +1,4 @@
-{% from "_logo.html" import logo %}<!doctype html>
+{% from "_logo.html" import logo with context %}<!doctype html>
 <html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
 <head>
   <meta charset="utf-8">
@@ -6,7 +6,7 @@
   <title>{% block title %}{% endblock %} {{ _("· loco") }}</title>
   <script src="{{ url_for('static', filename='theme.js') }}?v={{ asset_v }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}">
+  <link rel="icon"{% if custom_logo %} href="{{ custom_logo.url }}"{% else %} type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}"{% endif %}>
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <div class="bg-layer" aria-hidden="true"></div>
@@ -15,7 +15,7 @@
 {% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu, language_choices, appearance_dialog with context %}
 <header class="top">
   <div class="top-in">
-    <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
+    <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
     <nav class="nav" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
       {% set fleet_on = ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment' %}

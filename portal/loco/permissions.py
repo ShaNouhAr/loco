@@ -164,6 +164,7 @@ ENDPOINTS = {
     "appliance_updates": "system.view", "appliance_job": "system.view",
     "appliance_operations_state": "system.view", "appliance_updates_post": "system.view",
     "appliance_settings": "system.configure", "appliance_settings_post": "system.configure",
+    "appearance_logo_set": "system.configure", "appearance_logo_delete": "system.configure",
     "users": "users.view", "users_add": "users.create", "users_update": "users.edit",
     "users_approve": "users.approve",
     "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage", "directory_toggle": "sso.manage",

@@ -56,7 +56,9 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     "healthz", "metrics", "static",
                     # Agent des postes (loco-client) : authentifié par sa clé d'inscription puis son jeton.
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                    "agent_file", "agent_deb", "agent_rpm", "remote_agent"}
+                    "agent_file", "agent_deb", "agent_rpm", "remote_agent",
+                    # Logo global de l'instance : affiché aussi sur la page de connexion (avant authentification).
+                    "appearance_logo"}
 
 
 @app.before_request
@@ -113,6 +115,7 @@ def inject_globals():
         "js_i18n": i18n.js_catalog(),
         "appearance": appearance.for_user(user),
         "has_bg": appearance.has_background(user),
+        "custom_logo": appearance.logo_info(),
         "appearance_catalog": {"themes": appearance.THEMES, "accents": appearance.ACCENTS,
                                "gradients": appearance.GRADIENTS, "wallpapers": appearance.WALLPAPERS,
                                "presets": appearance.PRESETS, "alpha_min": appearance.ALPHA_MIN},
