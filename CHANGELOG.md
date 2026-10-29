@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.104.0 — 2026-10-29
+
+- **Deux corrections de style.** Le sélecteur de système de la page *Paquets Linux* (Debian/Ubuntu ↔ Rocky/RHEL) ne s'étale plus en pleine largeur à moitié vide : il redevient un bouton à deux segments compact (une règle de la page *Annuaires* l'écrasait par erreur ; le sélecteur à quatre choix des annuaires est préservé). Et la flèche des listes déroulantes (`select`) devient un **chevron** net au lieu d'un petit triangle.
+
 ## 2.103.0 — 2026-10-29
 
 - **Application web installable (PWA).** loco peut maintenant s'**installer** comme une application (sur le bureau ou l'écran d'accueil mobile) : manifeste d'application, icônes (dont icône « maskable »), ouverture en fenêtre autonome. Un **service worker** met en cache la coque de l'interface (chargements plus rapides) et affiche une **page « hors ligne »** soignée si le serveur est injoignable. L'installation nécessite un accès HTTPS de confiance (certificat loco accepté).
