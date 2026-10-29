@@ -165,7 +165,7 @@
   --r: 14px;
   --r-sm: 9px;
   --h: 36px;               /* hauteur des boutons et des champs */
-  --w: 1600px;
+  --w: 1200px;
   --ring: color-mix(in srgb, var(--accent) 28%, transparent);
   --surface-alpha: 1;      /* transparence des panneaux : posée < 1 par theme.js, voile le fond */
   --grad: none;
