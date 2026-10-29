@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.101.0 — 2026-10-29
+
+- **Cartes et surfaces épurées (style plus « pro »).** Inspiré d'un design de tableau de bord soigné : ombres plus douces, coins un peu plus arrondis, plus d'air dans les cartes et entre elles, hiérarchie plus nette. Les ombres sont **harmonisées sur tous les thèmes** pour qu'un changement de thème reste agréable partout (clair, OLED, sombre doux, minuit, sépia). Le fond d'écran reste le défaut ; l'interface est juste plus calme et mieux posée.
+
 ## 2.100.0 — 2026-10-29
 
 - **Interface plus « posée » sur le fond d'écran.** Les panneaux sont rendus un peu plus opaques et la photo de fond est davantage estompée : l'interface ressort nettement au lieu de donner une impression de « verre qui flotte », tout en gardant l'ambiance du fond. La transparence par défaut passe de 80 à 90 % (toujours réglable dans *Apparence*).
