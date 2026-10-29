@@ -31,17 +31,37 @@
     <div class="composer"
       {%- if os == 'windows' %} data-composer="windows" data-agent="{{ commands.windows }}"{% if proxy_available %} data-wu='netsh winhttp set proxy proxy-server=&quot;{{ proxy_host }}:{{ proxy_port }}&quot; bypass-list=&quot;&lt;local&gt;&quot;'{% endif %}
       {%- else %} data-composer="{{ os }}" data-base="{{ client_url }}" data-http="{{ http_url or '' }}" data-setup-path="/{{ 'linux' if os == 'deb' else 'rpm' }}/setup.sh" data-agent="{{ commands.linux }}" data-agent-http="{{ commands.linux_http or '' }}" data-full="{{ commands[os ~ '_full_fetch'] if packages[os].repos else '' }}" data-full-http="{{ commands[os ~ '_full_fetch_http'] if packages[os].repos else '' }}"{% endif %}>
-      <div class="cap-list">
-        <label class="choice cap-all"><input type="checkbox" data-cap-all checked><span><strong>{{ _("Tout") }}</strong><small>{{ _("La configuration complète, recommandée.") }}</small></span></label>
-        <label class="choice"><input type="checkbox" data-cap="manage" checked><span><strong>{{ _("Gestion (agent)") }}</strong><small>{{ _("Inventaire, mises à jour, scripts et terminal depuis Mon parc.") }}</small></span></label>
+      <div class="feature-list cap-list">
+        <label class="feature-row cap-all">
+          <span class="feature-text"><strong>{{ _("Tout") }}</strong><small>{{ _("La configuration complète, recommandée.") }}</small></span>
+          <span class="switch"><input type="checkbox" data-cap-all checked role="switch"><i aria-hidden="true"></i></span>
+        </label>
+        <label class="feature-row">
+          <span class="feature-text"><strong>{{ _("Gestion (agent)") }}</strong><small>{{ _("Inventaire, mises à jour, scripts et terminal depuis Mon parc.") }}</small></span>
+          <span class="switch"><input type="checkbox" data-cap="manage" checked role="switch"><i aria-hidden="true"></i></span>
+        </label>
         {% if os == 'windows' %}
-        {% if proxy_available %}<label class="choice"><input type="checkbox" data-cap="wu"><span><strong>{{ _("Rediriger Windows Update") }}</strong><small>{{ _("Ce poste télécharge ses mises à jour Windows via loco. Avec l'agent et le proxy activé au portail, c'est déjà automatique.") }}</small></span></label>{% endif %}
+        {% if proxy_available %}<label class="feature-row">
+          <span class="feature-text"><strong>{{ _("Rediriger Windows Update") }}</strong><small>{{ _("Ce poste télécharge ses mises à jour Windows via loco. Avec l'agent et le proxy activé au portail, c'est déjà automatique.") }}</small></span>
+          <span class="switch"><input type="checkbox" data-cap="wu" role="switch"><i aria-hidden="true"></i></span>
+        </label>{% endif %}
         {% elif packages[os].repos %}
-        <label class="choice"><input type="checkbox" data-cap="repo" checked><span><strong>{{ _("Dépôt loco") }}</strong><small>{{ _("Installer vos paquets maison avec %(tool)s, comme ceux de la distribution.", tool=('apt' if os == 'deb' else 'dnf')) }}</small></span></label>
-        <label class="choice"><input type="checkbox" data-cap="cache" checked><span><strong>{{ _("Cache des mises à jour") }}</strong><small>{{ _("Les mises à jour officielles passent par le cache de loco (téléchargées une fois pour tout le réseau).") }}</small></span></label>
+        <label class="feature-row">
+          <span class="feature-text"><strong>{{ _("Dépôt loco") }}</strong><small>{{ _("Installer vos paquets maison avec %(tool)s, comme ceux de la distribution.", tool=('apt' if os == 'deb' else 'dnf')) }}</small></span>
+          <span class="switch"><input type="checkbox" data-cap="repo" checked role="switch"><i aria-hidden="true"></i></span>
+        </label>
+        <label class="feature-row">
+          <span class="feature-text"><strong>{{ _("Cache des mises à jour") }}</strong><small>{{ _("Les mises à jour officielles passent par le cache de loco (téléchargées une fois pour tout le réseau).") }}</small></span>
+          <span class="switch"><input type="checkbox" data-cap="cache" checked role="switch"><i aria-hidden="true"></i></span>
+        </label>
         {% endif %}
       </div>
-      {% if os != 'windows' and http_url %}<label class="choice cap-opt"><input type="checkbox" data-cap="first"><span>{{ _("Première installation : le poste n'a pas encore l'autorité de loco (importe l'autorité, puis passe en HTTPS)") }}</span></label>{% endif %}
+      {% if os != 'windows' and http_url %}
+      <label class="feature-row cap-opt">
+        <span class="feature-text"><small>{{ _("Première installation : le poste n'a pas encore l'autorité de loco (importe l'autorité, puis passe en HTTPS)") }}</small></span>
+        <span class="switch"><input type="checkbox" data-cap="first" role="switch"><i aria-hidden="true"></i></span>
+      </label>
+      {% endif %}
       <div class="composer-out" data-composer-out aria-live="polite"></div>
       <span class="hint">{{ _("Le poste apparaît dans <a href=\"%(v)s\">Mon parc</a> dès l'installation de l'agent ; il se met ensuite à jour seul.", v=url_for('fleet')) }}</span>
     </div>

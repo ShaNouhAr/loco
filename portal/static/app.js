@@ -1326,7 +1326,15 @@
       return s;
     }
 
+    function dim() {    // griser la ligne dont l'interrupteur est éteint (comme la page Fonctionnalités)
+      $$(".feature-row", box).forEach(function (row) {
+        var input = $("input[type=checkbox]", row);
+        if (input) row.classList.toggle("off", !input.checked);
+      });
+    }
+
     function render() {
+      dim();
       var s = steps();
       out.textContent = "";
       if (!s.length) {

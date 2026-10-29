@@ -949,11 +949,12 @@ details.hint[open] > summary { margin-bottom: 6px; }
 
 /* ------------------------------------------------------------------ enrôlement */
 
-/* Composeur d'enrôlement : on coche ce que le poste reçoit (cartes .choice), la commande se génère dessous. */
-.cap-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.cap-all > span { background: var(--bg-2); }
-.cap-opt { margin-bottom: 14px; }
-.cap-opt > span { padding-top: 9px; padding-bottom: 9px; }
+/* Composeur d'enrôlement : interrupteurs (comme Fonctionnalités) de ce que le poste reçoit ; la commande se génère dessous. */
+.cap-list { border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; margin-bottom: 14px; }
+.cap-list .feature-row { padding: 12px 14px; }
+.cap-all { background: var(--bg-2); }
+.cap-opt { margin: 0 0 14px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: var(--r-sm); }
+.cap-opt .feature-text small { color: var(--text-2); }
 .composer-out { display: flex; flex-direction: column; gap: 4px; }
 .composer-out .cmd-label { margin-top: 6px; }
 .composer-out .cmd-label:first-child { margin-top: 0; }

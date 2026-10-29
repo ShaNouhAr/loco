@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.91.0 — 2026-10-29
+
+- **Composeur d'enrôlement plus sobre.** Les cases du composeur passent en **interrupteurs** (comme la page Fonctionnalités) : une liste encadrée, un libellé et sa description à gauche, l'interrupteur à droite, la ligne grisée quand elle est éteinte. L'option « première installation » est mise à part. La commande générée est inchangée.
+
 ## 2.90.0 — 2026-10-29
 
 - **Composeur d'enrôlement.** La page *Enrôlement* devient un sélecteur : on **coche ce que le poste reçoit** — **Gestion (agent)**, **Dépôt loco**, **Cache des mises à jour** (et, côté Windows, **Rediriger Windows Update**), avec une case **Tout** — et la **commande à lancer se génère en direct**, par système (Windows, Debian/Ubuntu, Red Hat). Le téléchargement du paquet pour un poste hors ligne et le déploiement en masse (GPO, Intune) restent dans « Autres méthodes ».
