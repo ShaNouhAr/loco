@@ -2913,6 +2913,7 @@
  "v%(version)s": "v%(version)s",
  "valide": "valid",
  "validité inconnue": "validity unknown",
+ "version %(v)s": "version %(v)s",
  "version %(version)s": "version %(version)s",
  "version conservée": "kept version",
  "version non renseignée": "version not specified",

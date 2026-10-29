@@ -402,15 +402,32 @@ def package_icon(package_id):
             return cached
 
 
+# Préchauffage : à l'affichage d'une page du store, on remplit le cache des icônes en arrière-plan (concurrence bornée),
+# pour que le navigateur les trouve déjà prêtes au lieu de déclencher un téléchargement depuis le CDN Microsoft.
+_ICON_WARM_SEM = threading.Semaphore(8)
+
+
+def warm_icons(package_ids):
+    for package_id in package_ids:
+        def run(pid=package_id):
+            with _ICON_WARM_SEM:
+                try:
+                    package_icon(pid)
+                except Exception:
+                    pass
+        threading.Thread(target=run, daemon=True, name="icon-warm").start()
+
+
 @app.route("/windows-apps/icons/<package_id>")
 @login_required
 def software_icon(package_id):
     icon = package_icon(package_id)
     if icon is None:
-        return "", 204, {"Cache-Control": "private, max-age=900"}
+        return "", 204, {"Cache-Control": "private, max-age=3600"}
     response = send_file(icon[0], mimetype=icon[1], conditional=True, max_age=MAX_AGE)
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Cache-Control"] = "private, max-age=86400"
+    # Icônes vérifiées par contenu : cache navigateur long + revalidation en arrière-plan (chargements suivants instantanés).
+    response.headers["Cache-Control"] = "private, max-age=604800, stale-while-revalidate=86400"
     return response
 
 
@@ -493,6 +510,7 @@ def software_store():
     known = {r["winget_id"]: dict(r) for r in db().execute("SELECT slug, winget_id, status FROM win_apps WHERE winget_id != ''")}
     if not can("windows.view"):
         known = {}
+    warm_icons([r["id"] for r in results])   # remplit le cache des icônes en arrière-plan avant que le navigateur ne les demande
     updated = time.strftime("%Y-%m-%d %H:%M", time.localtime(os.path.getmtime(INDEX))) if os.path.isfile(INDEX) else ""
     return render_template("software_store.html", query=query, category=category, categories=CATEGORIES,
                            results=results, total=total, page=page, pages=pages, known=known, error=error, updated=updated)

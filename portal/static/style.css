@@ -1088,28 +1088,28 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .store-categories { display: flex; flex-wrap: wrap; gap: 8px; }
 .store-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .store-heading h2 { margin: 0; font-size: 16px; }
-.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
 .store-card { padding: 20px; display: flex; flex-direction: column; gap: 12px; margin: 0; }
 .store-card-top { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .store-card-top > div { min-width: 0; }
 .store-card h3 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
 .store-card .sub { overflow-wrap: anywhere; font-size: 12px; }
 .store-card-actions { margin-top: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
-.store-item { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); transition: border-color .12s, background .12s; }
-.store-item:hover { border-color: var(--line-2); background: var(--bg-2); }
+.store-item { position: relative; display: flex; align-items: center; gap: 14px; min-width: 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); box-shadow: var(--shadow-card); transition: border-color .14s, box-shadow .14s, transform .14s; }
+.store-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); box-shadow: var(--shadow-pop); transform: translateY(-1px); }
 .store-item-text { display: grid; min-width: 0; flex: 1; }
-.store-item-link { color: var(--text); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.store-item-link { color: var(--text); font-weight: 600; font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
 .store-item-link:hover { text-decoration: none; }
 .store-item-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }   /* toute la carte ouvre la fiche */
 .store-item-link:focus-visible { outline: none; }
 .store-item:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.store-item-text .sub { display: block; overflow: hidden; font: 12px var(--mono); color: var(--text-3); text-overflow: ellipsis; white-space: nowrap; }
-.store-item-version { font: 12px var(--mono); color: var(--text-2); }
+.store-item-version { margin-top: 3px; font: 12.5px var(--sans); color: var(--text-3); }
 .store-item-action { position: relative; z-index: 1; flex: none; }
 .store-item-action .st { font-size: 13px; }
 .store-description { white-space: pre-line; }
 .store-pagination { justify-content: center; }
 .app-logo-box { position: relative; display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 9px; font-weight: 600; font-size: 18px; color: var(--text-2); background: var(--bg-2); overflow: hidden; }
+.store-item .app-logo-box { flex-basis: 46px; width: 46px; height: 46px; border-radius: 11px; }
 .app-logo-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 6px; opacity: 0; }
 .app-logo-box.has-logo img { opacity: 1; }
 .app-logo-box.has-logo .app-logo-initial { visibility: hidden; }

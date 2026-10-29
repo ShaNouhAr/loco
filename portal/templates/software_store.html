@@ -45,8 +45,7 @@
       {{ software_logo(r.id, r.name) }}
       <div class="store-item-text">
         <a class="store-item-link" href="{{ url_for('software_store_detail', package_id=r.id) }}">{{ r.name }}</a>
-        <span class="sub">{{ r.id }}</span>
-        <span class="store-item-version">{{ r.version }}</span>
+        <span class="store-item-version">{{ _("version %(v)s", v=r.version) }}</span>
       </div>
       <div class="store-item-action">
         {% if k %}

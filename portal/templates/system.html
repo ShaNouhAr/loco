@@ -22,7 +22,7 @@
       <div class="v">{{ services|length - stopped|length }}<span class="v-unit">/ {{ services|length }}</span></div>
       <div class="s">{% if stopped %}<span class="st err">{{ _("%(stopped)s arrêté%(v)s", stopped=stopped|length, v='s' if stopped|length > 1) }}</span>{% else %}<span class="st ok">{{ _("tous actifs") }}</span>{% endif %}</div>
     </a>
-    <a class="metric metric-link" href="#reseau">
+    <a class="metric metric-link" href="#certificat">
       <div class="k">{{ _("Certificat HTTPS") }}</div>
       {% if cert and cert.end.days is not none %}
       <div class="v">{{ cert.end.days }}<span class="v-unit">{{ _("jours") }}</span></div>

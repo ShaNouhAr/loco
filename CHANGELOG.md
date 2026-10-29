@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.106.0 — 2026-10-29
+
+- **Centre de logiciels plus soigné.** Les cartes de logiciels sont refaites dans le style du reste de l'interface : icône plus grande, nom en évidence, version lisible, ombre douce et effet au survol — fini l'identifiant technique WinGet affiché à nu sur la carte (il reste sur la fiche du logiciel).
+- **Icônes plus rapides et plus malignes.** Le cache navigateur des icônes passe à une semaine (les visites et changements de page suivants sont instantanés), et à l'ouverture d'une page du centre, loco **précharge en arrière-plan** les icônes visibles pour qu'elles soient prêtes au lieu d'être téléchargées à la demande.
+- **Correction :** la carte « Certificat HTTPS » de la page Système ouvre bien l'onglet **Certificat** (elle ouvrait l'onglet Réseau).
+
 ## 2.105.0 — 2026-10-29
 
 - **Windows Update : inventaire plus robuste (agent).** Quand un poste refuse la recherche des pilotes via Windows Update — erreur `0x80240032` (critère invalide), vue sur certaines builds de Windows 11 ou quand les pilotes sont désactivés par stratégie — l'agent **retombe automatiquement sur les mises à jour logicielles seules** au lieu de signaler « inventaire incomplet ». Les logiciels sont inventoriés et installés normalement ; les pilotes restent détectés quand le poste l'autorise.
