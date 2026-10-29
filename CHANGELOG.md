@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.105.0 — 2026-10-29
+
+- **Windows Update : inventaire plus robuste (agent).** Quand un poste refuse la recherche des pilotes via Windows Update — erreur `0x80240032` (critère invalide), vue sur certaines builds de Windows 11 ou quand les pilotes sont désactivés par stratégie — l'agent **retombe automatiquement sur les mises à jour logicielles seules** au lieu de signaler « inventaire incomplet ». Les logiciels sont inventoriés et installés normalement ; les pilotes restent détectés quand le poste l'autorise.
+
 ## 2.104.0 — 2026-10-29
 
 - **Deux corrections de style.** Le sélecteur de système de la page *Paquets Linux* (Debian/Ubuntu ↔ Rocky/RHEL) ne s'étale plus en pleine largeur à moitié vide : il redevient un bouton à deux segments compact (une règle de la page *Annuaires* l'écrasait par erreur ; le sélecteur à quatre choix des annuaires est préservé). Et la flèche des listes déroulantes (`select`) devient un **chevron** net au lieu d'un petit triangle.

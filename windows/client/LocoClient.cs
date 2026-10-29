@@ -642,6 +642,20 @@ namespace Loco
         // Logiciels ET pilotes manquants : les pilotes (carte graphique NVIDIA/AMD, chipset…) distribués par Windows Update
         // sont de type « Driver », exclus d'une recherche « Type='Software' ». On les ajoute pour qu'ils soient vus et posés.
         const string UpdateCriteria = "IsInstalled=0 and IsHidden=0 and (Type='Software' or Type='Driver')";
+        // Certains postes (build récente, pilotes désactivés par stratégie, source WU redirigée…) refusent le critère
+        // « Driver » avec 0x80240032 (WU_E_INVALID_CRITERIA). On retombe alors sur les logiciels seuls, pour inventorier
+        // et poser quand même les mises à jour logicielles au lieu de ne rien remonter.
+        const string UpdateCriteriaSoftware = "IsInstalled=0 and IsHidden=0 and Type='Software'";
+
+        static dynamic SearchUpdates(dynamic searcher)
+        {
+            try { return searcher.Search(UpdateCriteria); }
+            catch (Exception e)
+            {
+                if (unchecked((uint)e.HResult) != 0x80240032) throw;   // seule l'erreur « critère invalide » déclenche le repli
+                return searcher.Search(UpdateCriteriaSoftware);
+            }
+        }
 
         static Dictionary<string, object> Inventory()
         {
@@ -649,7 +663,7 @@ namespace Loco
             string error = "";
             try
             {
-                dynamic result = NewSession().CreateUpdateSearcher().Search(UpdateCriteria);
+                dynamic result = SearchUpdates(NewSession().CreateUpdateSearcher());
                 foreach (dynamic u in result.Updates)
                 {
                     var kbs = new List<string>();
@@ -668,7 +682,7 @@ namespace Loco
         static bool InstallWindowsUpdates(List<string> lines)
         {
             dynamic session = NewSession();
-            dynamic found = session.CreateUpdateSearcher().Search(UpdateCriteria);
+            dynamic found = SearchUpdates(session.CreateUpdateSearcher());
             dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
             foreach (dynamic u in found.Updates)
             {
