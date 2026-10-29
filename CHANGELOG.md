@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.106.0 — 2026-10-29
+
+- **L'espace est mieux utilisé.** La zone de contenu passe de 1200 à **1600 px** de large : sur les grands écrans, les cartes, tableaux et panneaux s'étalent et occupent l'espace au lieu de rester dans une colonne étroite centrée. (Avec un fond d'écran, le fond garde un fin cadre autour.)
+
 ## 2.105.0 — 2026-10-29
 
 - **Windows Update : inventaire plus robuste (agent).** Quand un poste refuse la recherche des pilotes via Windows Update — erreur `0x80240032` (critère invalide), vue sur certaines builds de Windows 11 ou quand les pilotes sont désactivés par stratégie — l'agent **retombe automatiquement sur les mises à jour logicielles seules** au lieu de signaler « inventaire incomplet ». Les logiciels sont inventoriés et installés normalement ; les pilotes restent détectés quand le poste l'autorise.
