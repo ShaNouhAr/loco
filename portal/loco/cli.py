@@ -170,10 +170,10 @@ def main(argv):
         existing = {r["key"] for r in repositories()}
         for distribution, suite, version in config.APT_DEFAULT_REPOSITORIES:
             if f"{distribution}/{suite}" not in existing:
-                create_repository(distribution, suite, version)
-        rebuild_apt()
-        for repo in repositories():
-            rebuild_apt(repo["key"])
+                create_repository(distribution, suite, version)   # crée et signe le nouveau dépôt
+        rebuild_apt()                                             # dépôt historique
+        for key in existing:                                     # resigner seulement les dépôts déjà là (mise à jour)
+            rebuild_apt(key)
     elif cmd == "write-maps":
         from .wupdate import write_wu_maps
         write_wu_maps()
