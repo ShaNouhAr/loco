@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.93.0 — 2026-10-29
+
+- **Windows Update : section « Diriger les postes » désencombrée.** Les deux méthodes (DNS, proxy via l'agent) tiennent en deux colonnes courtes et équilibrées ; le détail des conditions et la commande manuelle PowerShell passent dans un dépliant « Réglage manuel et dépannage du proxy » — fini le pavé de texte et la commande qui débordait.
+
 ## 2.92.0 — 2026-10-29
 
 - **Réglages du parc et Configuration, plus aboutis.** *Réglages du parc* : l'adresse actuelle du serveur passe dans un encart avec son état juste à côté, et le champ de nouvelle adresse est clairement étiqueté. *Configuration* (appliance) : les menus « activé / désactivé » deviennent des **interrupteurs** (Accès HTTP, Cache Windows Update, Red Hat, Flatpak), chacun avec une courte description ; et chaque limite de cache affiche son **usage réel** en dessous.

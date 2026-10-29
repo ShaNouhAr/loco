@@ -53,18 +53,22 @@
           <a class="btn sm" href="{{ url_for('windows_update_dns') }}">{{ _("Script DNS Active Directory") }}</a>
         </div>
         <div>
-          <h3 class="pick-title">{{ _("Par proxy, sans DNS") }} <span class="badge-ro">{{ _("via l'agent") }}</span> <span class="st ok">{{ _("activé par défaut") }}</span></h3>
-          <p class="small muted">{{ _("L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span> : par poste, réversible, sans toucher au DNS. Le proxy met en cache les mêmes fichiers (HTTP immuable) et relaie le HTTPS.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
-          {% if not proxy_available %}<p class="small"><span class="st">{{ _("Non disponible sur ce serveur") }}</span></p>
-          <p class="hint">{{ _("Le proxy-cache (Squid) n'est installé qu'avec le cache Windows Update d'un serveur Linux ; ici, utilisez la redirection DNS. Aucun proxy n'est envoyé aux postes.") }}</p>
-          {% else %}
-          <p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ _('Actif : les postes gérés sont dirigés vers le proxy') if proxy_on else _('Désactivé dans Fonctionnalités') }}</span></p>
-          <p class="hint">{{ _("Activé par défaut ; se coupe") }} {% if is_super_admin() %}{{ _("dans") }} <a href="{{ url_for('features') }}">{{ _("Administration › Fonctionnalités") }}</a>{% else %}{{ _("dans Administration › Fonctionnalités") }}{% endif %} {{ _("(« Proxy Windows Update »).") }}{% if proxy_on and not proxy_active %} {{ _("Le service proxy (squid) n'est pas actif") }}{% if can('system.view') %} {{ _("— voir") }} <a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}.{% endif %} {{ _("Les postes doivent pouvoir joindre <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span>.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
-          <p class="small muted">{{ _("Manuellement sur un poste (PowerShell administrateur) :") }}</p>
-          {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
-          {% endif %}
+          <h3 class="pick-title">{{ _("Par proxy, sans DNS") }} <span class="badge-ro">{{ _("via l'agent") }}</span></h3>
+          <p class="small muted">{{ _("L'agent loco règle le proxy WinHTTP des postes Windows gérés vers <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span> : par poste, réversible, sans toucher au DNS.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
+          {% if proxy_available %}<p class="small"><span class="st {{ 'ok' if proxy_on else '' }}">{{ _('Actif : les postes gérés sont dirigés vers le proxy') if proxy_on else _('Désactivé dans Fonctionnalités') }}</span></p>
+          {% else %}<p class="small"><span class="st">{{ _("Non disponible sur ce serveur") }}</span></p>{% endif %}
         </div>
       </div>
+      {% if not proxy_available %}
+      <p class="hint">{{ _("Le proxy-cache (Squid) n'est installé qu'avec le cache Windows Update d'un serveur Linux ; ici, utilisez la redirection DNS. Aucun proxy n'est envoyé aux postes.") }}</p>
+      {% else %}
+      <details class="set-help wu-proxy-help">
+        <summary>{{ _("Réglage manuel et dépannage du proxy") }}</summary>
+        <p class="hint">{{ _("Activé par défaut ; se coupe") }} {% if is_super_admin() %}{{ _("dans") }} <a href="{{ url_for('features') }}">{{ _("Administration › Fonctionnalités") }}</a>{% else %}{{ _("dans Administration › Fonctionnalités") }}{% endif %} {{ _("(« Proxy Windows Update »).") }}{% if proxy_on and not proxy_active %} {{ _("Le service proxy (squid) n'est pas actif") }}{% if can('system.view') %} {{ _("— voir") }} <a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}.{% endif %} {{ _("Les postes doivent pouvoir joindre <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span>.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
+        <p class="small muted">{{ _("Manuellement sur un poste (PowerShell administrateur) :") }}</p>
+        {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
+      </details>
+      {% endif %}
     </div>
   </section>
 
