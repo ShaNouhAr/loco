@@ -134,13 +134,9 @@ def rebuild_apt(repository=LEGACY):
             if config.WINDOWS:
                 signing.sign_release(stage)
             else:
-                # Démarrer l'agent gpg à part (son démarrage à froid pendant la signature peut bloquer sur un vieux
-                # gpg, p. ex. Rocky 8), avec sa propre limite de temps, avant de signer les index.
-                subprocess.run(["gpgconf", "--launch", "gpg-agent"], env=env, check=False,
-                               capture_output=True, timeout=30)
                 for args in (["--clearsign", "-o", "InRelease"], ["-abs", "-o", "Release.gpg"]):
                     subprocess.run([config.GPG, "--batch", "--yes"] + args + ["Release"], cwd=stage,
-                                   env=env, check=True, capture_output=True, timeout=120)
+                                   env=env, check=True, capture_output=True, timeout=60)
             for name in ("Packages", "Packages.gz", "Release", "Release.gpg", "InRelease"):
                 os.chmod(os.path.join(stage, name), 0o644)
                 os.replace(os.path.join(stage, name), os.path.join(root, name))

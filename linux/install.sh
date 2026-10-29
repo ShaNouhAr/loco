@@ -414,6 +414,9 @@ if [ "$RPM_ENABLED" = 1 ]; then
     cli rpm-init
     runuser -u loco -- gpgconf --homedir "$STATE/gnupg" --kill gpg-agent 2>/dev/null || true
 fi
+# Laisser un agent gpg du compte loco en marche : le portail (service confiné) peut s'en servir pour signer les
+# dépôts mais ne peut pas en démarrer un dans son bac à sable (un vieux gpg, p. ex. Rocky 8, bloque alors).
+runuser -u loco -- env GNUPGHOME="$STATE/gnupg" gpg-connect-agent /bye >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------- certificats HTTPS
 say "Certificat HTTPS" "HTTPS certificate" "Certificado HTTPS"
