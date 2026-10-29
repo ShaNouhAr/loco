@@ -121,6 +121,8 @@
 {% macro appearance_dialog() -%}
 {% set theme_labels = {'oled': _('OLED'), 'dim': _('Sombre doux'), 'light': _('Clair'), 'midnight': _('Minuit'), 'sepia': _('Sépia')} %}
 {% set accent_labels = {'neutral': _('Neutre'), 'blue': _('Bleu'), 'green': _('Vert'), 'violet': _('Violet'), 'orange': _('Orange'), 'pink': _('Rose'), 'teal': _('Sarcelle'), 'amber': _('Ambre')} %}
+{% set gradient_labels = {'aurora': _('Aurore'), 'ocean': _('Océan'), 'forest': _('Forêt'), 'dusk': _('Crépuscule'), 'rose': _('Rose'), 'slate': _('Ardoise')} %}
+{% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver')} %}
 <dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}">
   <div class="dlg-h">
     <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") }}</p></div>
@@ -161,19 +163,28 @@
       <p class="hint">{{ _("Rend les panneaux translucides pour laisser voir le fond (opaque au maximum).") }}</p>
     </section>
     <section class="ap-sec">
-      <h3 class="ap-label">{{ _("Fond d'écran") }}</h3>
+      <h3 class="ap-label">{{ _("Fond — uni et dégradés") }}</h3>
       <div class="ap-bgs">
         <button type="button" class="ap-bg ap-bg-none" data-set-bg="" role="radio" aria-checked="false" aria-label="{{ _('Aucun fond') }}" title="{{ _('Aucun') }}">{{ nav_icon('close') }}</button>
         {% for g in appearance_catalog.gradients %}
-        <button type="button" class="ap-bg bg-g-{{ g }}" data-set-bg="g:{{ g }}" role="radio" aria-checked="false" aria-label="{{ g }}" title="{{ g }}"></button>
+        <button type="button" class="ap-bg bg-g-{{ g }}" data-set-bg="g:{{ g }}" role="radio" aria-checked="false" aria-label="{{ gradient_labels[g] }}" title="{{ gradient_labels[g] }}"></button>
         {% endfor %}
-        <button type="button" class="ap-bg ap-bg-mine{{ '' if has_bg else ' hidden' }}" data-set-bg="u" data-bg-mine role="radio" aria-checked="false" aria-label="{{ _('Mon image') }}" title="{{ _('Mon image') }}"></button>
+      </div>
+    </section>
+    <section class="ap-sec">
+      <h3 class="ap-label">{{ _("Fond — photos") }}</h3>
+      <div class="ap-bgs ap-photos">
+        {% for w in appearance_catalog.wallpapers %}
+        <button type="button" class="ap-bg ap-photo wp-{{ w }}" data-set-bg="w:{{ w }}" role="radio" aria-checked="false" aria-label="{{ wp_labels[w] }}" title="{{ wp_labels[w] }}"><span>{{ wp_labels[w] }}</span></button>
+        {% endfor %}
+        <button type="button" class="ap-bg ap-photo ap-bg-mine{{ '' if has_bg else ' hidden' }}" data-set-bg="u" data-bg-mine role="radio" aria-checked="false" aria-label="{{ _('Mon image') }}" title="{{ _('Mon image') }}"><span>{{ _("Mon image") }}</span></button>
       </div>
       <div class="ap-bg-actions">
         <label class="btn sm"><span>{{ _("Importer une image…") }}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp" data-bg-upload hidden></label>
         <button type="button" class="btn sm danger{{ '' if has_bg else ' hidden' }}" data-bg-remove>{{ _("Retirer mon image") }}</button>
         <span class="hint" data-bg-msg></span>
       </div>
+      <p class="hint">{{ _("Astuce : baissez la transparence pour mieux voir le fond ; le texte reste lisible dans tous les thèmes.") }}</p>
     </section>
   </div>
   <div class="dlg-f row-between">

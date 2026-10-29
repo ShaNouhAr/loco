@@ -5,7 +5,7 @@
   var root = document.documentElement;
   var THEMES = /^(oled|dim|light|midnight|sepia)$/;
   var ACCENTS = /^(neutral|blue|green|violet|orange|pink|teal|amber)$/;
-  var GRAD = /^g:(aurora|ocean|forest|dusk|rose|slate)$/;
+  var BG = /^(g:(aurora|ocean|forest|dusk|rose|slate)|w:(montagne|foret|desert|dunes|ocean|aurore|nuit|hiver))$/;
 
   function applyAlpha(a) {
     var n = parseInt(a, 10);
@@ -25,7 +25,7 @@
     if (THEMES.test(t || "")) theme = t;
     if (ACCENTS.test(a || "")) accent = a;
     if (al) alpha = al;
-    if (GRAD.test(b || "")) bg = b;                // « u » (image) indisponible hors session
+    if (BG.test(b || "")) bg = b;                  // « u » (image perso) indisponible hors session
   } catch (e) { /* stockage indisponible */ }
   root.setAttribute("data-theme", theme);
   root.setAttribute("data-accent", accent);

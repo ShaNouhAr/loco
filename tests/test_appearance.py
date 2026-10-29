@@ -39,6 +39,17 @@ class AppearanceModelTest(unittest.TestCase):
             self.assertTrue(appearance.ALPHA_MIN <= alpha <= appearance.ALPHA_MAX)
             self.assertTrue(bg == "" or appearance._valid_bg(bg))
 
+    def test_wallpaper_validation(self):
+        self.assertEqual(appearance.parse({"bg": "w:montagne"})["bg"], "w:montagne")
+        self.assertEqual(appearance.parse({"bg": "w:nope"})["bg"], "")
+        self.assertEqual(appearance.parse({"bg": "w:"})["bg"], "")
+
+    def test_wallpaper_files_present(self):
+        wp = os.path.join(os.path.dirname(os.path.dirname(appearance.__file__)), "static", "wallpapers")
+        for name in appearance.WALLPAPERS:
+            self.assertTrue(os.path.exists(os.path.join(wp, f"{name}.jpg")), f"{name}.jpg manquant")
+            self.assertTrue(os.path.exists(os.path.join(wp, f"{name}-thumb.jpg")), f"{name}-thumb.jpg manquant")
+
 
 class AppearanceRouteTest(unittest.TestCase):
     def setUp(self):

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.95.0 — 2026-10-29
+
+- **Fonds d'écran photo (nature) 4K.** La fenêtre *Apparence* propose huit vrais fonds photo haute définition — **Montagne, Forêt, Désert, Dunes, Océan, Aurore, Nuit étoilée, Hiver** — en plus des unis et dégradés, désormais rangés dans une section à part. Trois presets photo (Alpes, Boréale, Désert) les mettent en avant.
+- **Lisibilité garantie dans tous les thèmes.** Un voile adapté à la couleur du thème et des panneaux en verre dépoli font que n'importe quelle combinaison reste lisible : thème **clair** sur une montagne, thème sombre sur un ciel étoilé, sépia sur un paysage d'hiver — le texte ressort toujours. Choisir une photo abaisse automatiquement la transparence si les panneaux étaient opaques, pour qu'on voie le fond tout de suite.
+- Photos sous licence Unsplash (usage libre) — crédits dans `static/wallpapers/CREDITS.txt`.
+
 ## 2.94.0 — 2026-10-29
 
 - **Apparence personnalisable.** Nouvelle fenêtre *Apparence* (menu du compte → « Apparence… ») pour se composer un portail à son goût, **enregistré sur le compte** (on retrouve son réglage sur n'importe quel navigateur) :

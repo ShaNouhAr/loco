@@ -2008,3 +2008,39 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .ap-bg-actions label.btn input[type=file] { display: none; }
 [data-bg-msg] { color: var(--text-3); }
 [data-bg-msg].err { color: var(--err); }
+
+/* ------------------------------------------------------------------ fonds photo (nature) */
+[data-bg^="w:"] .bg-layer { background-size: cover; background-position: center; }
+[data-bg="w:montagne"] .bg-layer { background-image: url("wallpapers/montagne.jpg"); }
+[data-bg="w:foret"] .bg-layer { background-image: url("wallpapers/foret.jpg"); }
+[data-bg="w:desert"] .bg-layer { background-image: url("wallpapers/desert.jpg"); }
+[data-bg="w:dunes"] .bg-layer { background-image: url("wallpapers/dunes.jpg"); }
+[data-bg="w:ocean"] .bg-layer { background-image: url("wallpapers/ocean.jpg"); }
+[data-bg="w:aurore"] .bg-layer { background-image: url("wallpapers/aurore.jpg"); }
+[data-bg="w:nuit"] .bg-layer { background-image: url("wallpapers/nuit.jpg"); }
+[data-bg="w:hiver"] .bg-layer { background-image: url("wallpapers/hiver.jpg"); }
+/* Voile de lisibilité sur les fonds photo (image importée comprise) : teinte vers la couleur du thème
+   pour que les panneaux translucides et la barre du haut gardent assez de contraste, clair comme sombre. */
+[data-bg^="w:"] .bg-layer::after, [data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 40%, transparent); }
+
+/* Vignettes (aperçus de presets + choix de fond) : miniatures légères des photos. */
+.ap-preview[data-bg="w:montagne"] { background-image: url("wallpapers/montagne-thumb.jpg"); }
+.ap-preview[data-bg="w:foret"] { background-image: url("wallpapers/foret-thumb.jpg"); }
+.ap-preview[data-bg="w:desert"] { background-image: url("wallpapers/desert-thumb.jpg"); }
+.ap-preview[data-bg="w:dunes"] { background-image: url("wallpapers/dunes-thumb.jpg"); }
+.ap-preview[data-bg="w:ocean"] { background-image: url("wallpapers/ocean-thumb.jpg"); }
+.ap-preview[data-bg="w:aurore"] { background-image: url("wallpapers/aurore-thumb.jpg"); }
+.ap-preview[data-bg="w:nuit"] { background-image: url("wallpapers/nuit-thumb.jpg"); }
+.ap-preview[data-bg="w:hiver"] { background-image: url("wallpapers/hiver-thumb.jpg"); }
+.ap-photos { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.ap-photo { display: flex; align-items: flex-end; justify-content: flex-start; padding: 0; overflow: hidden; background-size: cover; background-position: center; }
+.ap-photo > span { width: 100%; padding: 16px 8px 5px; font: 600 11px var(--sans); color: #fff; text-align: left; line-height: 1.1; background: linear-gradient(transparent, rgb(0 0 0 / .7)); text-shadow: 0 1px 2px rgb(0 0 0 / .55); }
+.wp-montagne { background-image: url("wallpapers/montagne-thumb.jpg"); }
+.wp-foret { background-image: url("wallpapers/foret-thumb.jpg"); }
+.wp-desert { background-image: url("wallpapers/desert-thumb.jpg"); }
+.wp-dunes { background-image: url("wallpapers/dunes-thumb.jpg"); }
+.wp-ocean { background-image: url("wallpapers/ocean-thumb.jpg"); }
+.wp-aurore { background-image: url("wallpapers/aurore-thumb.jpg"); }
+.wp-nuit { background-image: url("wallpapers/nuit-thumb.jpg"); }
+.wp-hiver { background-image: url("wallpapers/hiver-thumb.jpg"); }
+.ap-bg-mine.ap-photo { background-image: url("/appearance/background.img"); }

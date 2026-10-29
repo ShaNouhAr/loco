@@ -1,0 +1,20 @@
+Fonds d'écran « nature » fournis avec loco
+==========================================
+
+Photos : Unsplash (https://unsplash.com) — Licence Unsplash
+(https://unsplash.com/license) : utilisation libre et gratuite, y compris
+commerciale, sans autorisation ni attribution obligatoire. L'attribution
+ci-dessous est fournie par courtoisie envers les photographes.
+
+Chaque image provient de https://images.unsplash.com/photo-<identifiant> et a
+été redimensionnée en 4K (largeur 3840) ; une vignette <nom>-thumb.jpg sert
+l'aperçu dans le portail.
+
+  montagne  photo-1506905925346-21bda4d32df4   (sommets au-dessus des nuages)
+  foret     photo-1542273917363-3b1817f69a2d   (forêt de conifères dans la brume)
+  desert    photo-1509316785289-025f5b846b35   (désert de roche, mesas)
+  dunes     photo-1473580044384-7ba9967e16a0   (dunes de sable)
+  ocean     photo-1507525428034-b723cf961d3e   (plage turquoise au couchant)
+  aurore    photo-1483347756197-71ef80e95f73   (aurore boréale)
+  nuit      photo-1519681393784-d120267933ba   (montagne enneigée, ciel étoilé)
+  hiver     photo-1491002052546-bf38f186af56   (forêt enneigée et lac gelé)

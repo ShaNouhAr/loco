@@ -19,6 +19,8 @@ THEMES = ("oled", "dim", "light", "midnight", "sepia")
 ACCENTS = ("neutral", "blue", "green", "violet", "orange", "pink", "teal", "amber")
 # Fonds dégradés fournis (rendus en CSS, aucun fichier) : clé « g:<nom> ».
 GRADIENTS = ("aurora", "ocean", "forest", "dusk", "rose", "slate")
+# Fonds photo fournis (fichiers portal/static/wallpapers/<nom>.jpg + <nom>-thumb.jpg) : clé « w:<nom> ».
+WALLPAPERS = ("montagne", "foret", "desert", "dunes", "ocean", "aurore", "nuit", "hiver")
 ALPHA_MIN, ALPHA_MAX = 55, 100          # opacité des panneaux, en %
 
 # Presets prêts à l'emploi : (clé, libellé, thème, accent, transparence, fond).
@@ -26,9 +28,9 @@ PRESETS = (
     ("oled", "OLED", "oled", "neutral", 100, ""),
     ("clair", "Clair", "light", "neutral", 100, ""),
     ("ocean", "Océan", "dim", "blue", 82, "g:ocean"),
-    ("forest", "Forêt", "oled", "green", 82, "g:forest"),
-    ("dusk", "Crépuscule", "midnight", "violet", 82, "g:dusk"),
-    ("rose", "Rose", "sepia", "pink", 85, "g:rose"),
+    ("alpes", "Alpes", "midnight", "blue", 80, "w:montagne"),
+    ("boreale", "Boréale", "oled", "teal", 80, "w:aurore"),
+    ("desert", "Désert", "sepia", "amber", 84, "w:dunes"),
 )
 
 BG_DIR = os.path.join(config.STATE, "appearance")
@@ -42,7 +44,11 @@ def default():
 
 
 def _valid_bg(bg):
-    return bg == "u" or (isinstance(bg, str) and bg.startswith("g:") and bg[2:] in GRADIENTS)
+    if not isinstance(bg, str):
+        return False
+    return (bg == "u"
+            or (bg.startswith("g:") and bg[2:] in GRADIENTS)
+            or (bg.startswith("w:") and bg[2:] in WALLPAPERS))
 
 
 def parse(raw):

@@ -196,7 +196,12 @@
       }
       if (el.dataset.setTheme) apply({ theme: el.dataset.setTheme });
       else if (el.dataset.setAccent) apply({ accent: el.dataset.setAccent });
-      else if (el.hasAttribute("data-set-bg")) apply({ bg: el.dataset.setBg });
+      else if (el.hasAttribute("data-set-bg")) {
+        var nb = el.dataset.setBg, patch = { bg: nb };
+        // Choisir une photo alors que les panneaux sont opaques : on rend le fond visible (transparence douce).
+        if ((nb.indexOf("w:") === 0 || nb === "u") && current().alpha === 100) patch.alpha = 85;
+        apply(patch);
+      }
       else if (el.hasAttribute("data-preset")) apply({ theme: el.dataset.theme, accent: el.dataset.accent, alpha: parseInt(el.dataset.alpha, 10) || 100, bg: el.dataset.bg || "" });
       else if (el.hasAttribute("data-reset")) apply({ theme: "oled", accent: "neutral", alpha: 100, bg: "" });
       else if (el.hasAttribute("data-bg-remove")) removeBg();
@@ -222,7 +227,9 @@
               if (msg) { msg.classList.add("err"); msg.textContent = res.j.error === "trop-grand" ? t("Image trop lourde (8 Mo maximum).") : t("Format d'image non reconnu (PNG, JPEG, GIF ou WebP)."); }
               return;
             }
-            bust(); mine(true); setBg("u"); applyAlpha(current().alpha); sync(); if (msg) msg.textContent = "";
+            bust(); mine(true);
+            apply({ bg: "u", alpha: current().alpha === 100 ? 85 : current().alpha });
+            if (msg) msg.textContent = "";
           })
           .catch(function () { if (msg) { msg.classList.add("err"); msg.textContent = t("Échec de l'envoi."); } });
       });
