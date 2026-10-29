@@ -155,10 +155,14 @@ def main(argv):
             for repo in repositories():
                 print(f"{repo['key']:<32} {repo['label']}")
         elif len(argv) in (4, 5) and argv[1] == "add":
-            key = create_repository(argv[2], argv[3], argv[4] if len(argv) == 5 else "")
-            with transaction() as conn:
-                _audit(conn, "linux.depot.ajout", key)
-            print(key)
+            key = f"{argv[2]}/{argv[3]}"
+            if any(r["key"] == key for r in repositories()):
+                print(key)                     # déjà présent (dépôt par défaut…) : « add » reste idempotent
+            else:
+                key = create_repository(argv[2], argv[3], argv[4] if len(argv) == 5 else "")
+                with transaction() as conn:
+                    _audit(conn, "linux.depot.ajout", key)
+                print(key)
         else:
             sys.exit(__doc__)
     elif cmd == "apt-init":

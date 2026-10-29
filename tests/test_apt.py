@@ -74,6 +74,12 @@ class TestAptRepositories(unittest.TestCase):
         cli.main(['apt-init'])                        # idempotent : rien dupliqué au second passage
         self.assertEqual({r['key'] for r in linux.repositories()}, keys)
 
+    def test_apt_repo_add_is_idempotent(self):
+        from loco import cli
+        cli.main(['apt-repo', 'add', 'debian', 'trixie', '13'])
+        cli.main(['apt-repo', 'add', 'debian', 'trixie', '13'])    # « add » d'un dépôt existant : ne lève pas
+        self.assertEqual([r['key'] for r in linux.repositories()].count('debian/trixie'), 1)
+
     def test_same_package_versions_stay_separate(self):
         first = linux.create_repository('debian', 'test-one', '13')
         second = linux.create_repository('ubuntu', 'test-two', '24.04')
