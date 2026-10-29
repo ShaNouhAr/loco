@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.99.0 — 2026-10-29
+
+- **Écran de connexion cohérent avec l'apparence par défaut.** La page de connexion (et les autres écrans hors session) reprennent désormais le **thème, la couleur, la transparence et le fond** par défaut de l'instance — carte en **verre dépoli** comprise. Avant, un ancien réglage mémorisé dans le navigateur pouvait les afficher dans un tout autre thème (p. ex. noir + accent vert, carte opaque) par-dessus le fond. Le petit sélecteur de thème hors session, devenu inutile (l'apparence se règle dans le compte), est retiré.
+
 ## 2.98.0 — 2026-10-29
 
 - **En-tête « flottant ».** La barre de navigation ne s'étale plus sur toute la largeur en haut : ses éléments sont réunis dans un bloc **arrondi**, détaché des bords, posé au-dessus du contenu (et du fond d'écran). Plus léger, plus moderne.

@@ -1954,7 +1954,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg="g:rose"] { --grad: var(--g-rose); } [data-bg="g:slate"] { --grad: var(--g-slate); }
 
 /* Transparence (data-alpha présent) : les grandes surfaces deviennent translucides et floutent le fond. */
-[data-alpha] .panel, [data-alpha] .metric {
+[data-alpha] .panel, [data-alpha] .metric, [data-alpha] .auth-card {
   background: color-mix(in srgb, var(--bg) calc(var(--surface-alpha, 1) * 100%), transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
 }
