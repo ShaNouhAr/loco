@@ -123,7 +123,7 @@
 {% set accent_labels = {'neutral': _('Neutre'), 'blue': _('Bleu'), 'green': _('Vert'), 'violet': _('Violet'), 'orange': _('Orange'), 'pink': _('Rose'), 'teal': _('Sarcelle'), 'amber': _('Ambre')} %}
 {% set gradient_labels = {'aurora': _('Aurore'), 'ocean': _('Océan'), 'forest': _('Forêt'), 'dusk': _('Crépuscule'), 'rose': _('Rose'), 'slate': _('Ardoise')} %}
 {% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver')} %}
-<dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}">
+<dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}" data-default='{{ appearance_default|tojson }}'>
   <div class="dlg-h">
     <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") }}</p></div>
     <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ nav_icon('close') }}</button>

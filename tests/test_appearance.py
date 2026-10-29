@@ -15,20 +15,26 @@ SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width=
 
 class AppearanceModelTest(unittest.TestCase):
     def test_default(self):
-        self.assertEqual(appearance.default(), {"theme": "oled", "accent": "neutral", "alpha": 100, "bg": ""})
+        d = appearance.default()
+        self.assertEqual(set(d), {"theme", "accent", "alpha", "bg"})
+        self.assertIn(d["theme"], appearance.THEMES)
+        self.assertIn(d["accent"], appearance.ACCENTS)
+        self.assertTrue(d["bg"] == "" or appearance._valid_bg(d["bg"]))
+        self.assertTrue(appearance.ALPHA_MIN <= d["alpha"] <= appearance.ALPHA_MAX)
 
     def test_parse_valid(self):
         a = appearance.parse({"theme": "midnight", "accent": "teal", "alpha": "80", "bg": "g:ocean"})
         self.assertEqual(a, {"theme": "midnight", "accent": "teal", "alpha": 80, "bg": "g:ocean"})
 
     def test_parse_rejects_unknown(self):
+        d = appearance.default()
         a = appearance.parse({"theme": "rainbow", "accent": "gold", "bg": "g:nope"})
-        self.assertEqual((a["theme"], a["accent"], a["bg"]), ("oled", "neutral", ""))
+        self.assertEqual((a["theme"], a["accent"], a["bg"]), (d["theme"], d["accent"], d["bg"]))
 
     def test_parse_clamps_alpha(self):
         self.assertEqual(appearance.parse({"alpha": "5"})["alpha"], appearance.ALPHA_MIN)
         self.assertEqual(appearance.parse({"alpha": "200"})["alpha"], appearance.ALPHA_MAX)
-        self.assertEqual(appearance.parse({"alpha": "abc"})["alpha"], 100)
+        self.assertEqual(appearance.parse({"alpha": "abc"})["alpha"], appearance.default()["alpha"])
 
     def test_parse_bad_json(self):
         self.assertEqual(appearance.parse("{nope"), appearance.default())
@@ -41,9 +47,10 @@ class AppearanceModelTest(unittest.TestCase):
             self.assertTrue(bg == "" or appearance._valid_bg(bg))
 
     def test_wallpaper_validation(self):
+        default_bg = appearance.default()["bg"]
         self.assertEqual(appearance.parse({"bg": "w:montagne"})["bg"], "w:montagne")
-        self.assertEqual(appearance.parse({"bg": "w:nope"})["bg"], "")
-        self.assertEqual(appearance.parse({"bg": "w:"})["bg"], "")
+        self.assertEqual(appearance.parse({"bg": "w:nope"})["bg"], default_bg)   # invalide -> défaut
+        self.assertEqual(appearance.parse({"bg": "w:"})["bg"], default_bg)
 
     def test_wallpaper_files_present(self):
         wp = os.path.join(os.path.dirname(os.path.dirname(appearance.__file__)), "static", "wallpapers")

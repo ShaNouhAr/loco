@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.97.0 — 2026-10-29
+
+- **Apparence par défaut plus accueillante.** À l'installation, loco adopte le preset **« Alpes »** (thème bleu nuit, accent bleu, photo de montagne en fond, panneaux en verre dépoli) au lieu du noir uni. Chaque utilisateur reste libre de changer thème, couleur, transparence et fond, ou de revenir à un thème sobre, depuis *Apparence*.
+- Captures d'écran du dépôt refaites dans ce nouveau style.
+
 ## 2.96.0 — 2026-10-29
 
 - **Logo personnalisable (global).** Dans *Apparence*, une section **Logo** réservée aux administrateurs permet de remplacer le logo loco par celui de son organisation — **pour tout le monde** : en-tête, page de connexion et favicon. Image (PNG, JPEG, GIF, WebP) ou **SVG**, 2 Mo maximum ; retour au logo loco d'un clic. Quand un logo est défini, le mot « loco » s'efface pour laisser la marque choisie.

@@ -18,14 +18,18 @@
     return;
   }
 
-  var theme = "oled", accent = "neutral", alpha = "100", bg = "";
+  // Base = ce que le serveur a rendu (appearance.default()), surchargée par le choix local éventuel.
+  var theme = root.getAttribute("data-theme") || "oled",
+      accent = root.getAttribute("data-accent") || "neutral",
+      alpha = root.getAttribute("data-alpha") || "100",
+      bg = root.getAttribute("data-bg") || "";
   try {
     var t = localStorage.getItem("lr-theme"), a = localStorage.getItem("lr-accent"),
         al = localStorage.getItem("lr-alpha"), b = localStorage.getItem("lr-bg");
     if (THEMES.test(t || "")) theme = t;
     if (ACCENTS.test(a || "")) accent = a;
     if (al) alpha = al;
-    if (BG.test(b || "")) bg = b;                  // « u » (image perso) indisponible hors session
+    if (b !== null) bg = BG.test(b) ? b : "";      // choix local : fond valide, ou « aucun » ; « u » indisponible hors session
   } catch (e) { /* stockage indisponible */ }
   root.setAttribute("data-theme", theme);
   root.setAttribute("data-accent", accent);

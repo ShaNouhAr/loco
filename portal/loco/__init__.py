@@ -116,6 +116,7 @@ def inject_globals():
         "appearance": appearance.for_user(user),
         "has_bg": appearance.has_background(user),
         "custom_logo": appearance.logo_info(),
+        "appearance_default": appearance.default(),
         "appearance_catalog": {"themes": appearance.THEMES, "accents": appearance.ACCENTS,
                                "gradients": appearance.GRADIENTS, "wallpapers": appearance.WALLPAPERS,
                                "presets": appearance.PRESETS, "alpha_min": appearance.ALPHA_MIN},

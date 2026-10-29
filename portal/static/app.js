@@ -203,7 +203,11 @@
         apply(patch);
       }
       else if (el.hasAttribute("data-preset")) apply({ theme: el.dataset.theme, accent: el.dataset.accent, alpha: parseInt(el.dataset.alpha, 10) || 100, bg: el.dataset.bg || "" });
-      else if (el.hasAttribute("data-reset")) apply({ theme: "oled", accent: "neutral", alpha: 100, bg: "" });
+      else if (el.hasAttribute("data-reset")) {
+        var def = { theme: "oled", accent: "neutral", alpha: 100, bg: "" };
+        try { if (ap && ap.dataset.default) def = JSON.parse(ap.dataset.default); } catch (e) { /* défaut de repli */ }
+        apply(def);
+      }
       else if (el.hasAttribute("data-bg-remove")) removeBg();
     });
 

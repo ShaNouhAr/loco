@@ -34,12 +34,13 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
   APT, DNF, Flatpak et logiciels du catalogue). Un poste reste rattaché quand il change d'adresse IP.
 - **Catalogue winget** : recherche dans le catalogue public de Microsoft et import en un clic (installeur officiel
   vérifié par SHA-256, options silencieuses et détection des versions installées sur le parc).
-- **Portail web** en HTTPS : comptes nommés, journal d'audit, supervision, sauvegardes ; thème OLED (par défaut) ou clair.
+- **Portail web** en HTTPS : comptes nommés, journal d'audit, supervision, sauvegardes ; **apparence personnalisable** par
+  utilisateur (thèmes clairs et sombres, couleur d'accent, transparence, fonds d'écran dont des photos) et logo d'instance.
 
 | | |
 |---|---|
-| ![Vue d'ensemble, thème OLED](docs/dashboard-oled.png) | ![Vue d'ensemble, thème clair](docs/dashboard-light.png) |
-| ![Catalogue de logiciels Windows](docs/apps.png) | ![Cache Windows Update](docs/windows-update.png) |
+| ![Vue d'ensemble — fond « Alpes » (apparence par défaut)](docs/dashboard.jpg) | ![Vue d'ensemble — thème sépia, fond « Désert »](docs/dashboard-sepia.jpg) |
+| ![Catalogue de logiciels Windows](docs/apps.jpg) | ![Cache Windows Update](docs/windows-update.jpg) |
 
 ## Sommaire
 

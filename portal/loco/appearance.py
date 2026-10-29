@@ -44,7 +44,8 @@ _LOGO_MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp
 
 
 def default():
-    return {"theme": "oled", "accent": "neutral", "alpha": 100, "bg": ""}
+    # Défaut « attirant » à l'installation = preset « Alpes » : bleu nuit, accent bleu, photo montagne en fond, verre dépoli.
+    return {"theme": "midnight", "accent": "blue", "alpha": 80, "bg": "w:montagne"}
 
 
 def _valid_bg(bg):
@@ -69,7 +70,7 @@ def parse(raw):
     if data.get("accent") in ACCENTS:
         out["accent"] = data["accent"]
     try:
-        out["alpha"] = max(ALPHA_MIN, min(ALPHA_MAX, int(data.get("alpha", 100))))
+        out["alpha"] = max(ALPHA_MIN, min(ALPHA_MAX, int(data.get("alpha", out["alpha"]))))
     except (ValueError, TypeError):
         pass
     if _valid_bg(data.get("bg")):
