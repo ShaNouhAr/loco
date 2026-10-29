@@ -128,8 +128,9 @@ if [ "$PURGE" = 1 ]; then
         rm -rf /var/cache/apt-cacher-ng /var/log/apt-cacher-ng
     fi
     if [ "$ACNG_USER_CREATED" = 1 ]; then userdel apt-cacher-ng; fi
+    pkill -u loco 2>/dev/null || true            # agent gpg laissé actif pour signer les dépôts : le couper, sinon le compte est occupé
     if [ "$ID" = alpine ]; then deluser loco 2>/dev/null || true; delgroup loco 2>/dev/null || true
-    else userdel loco 2>/dev/null || true; fi
+    else userdel -f loco 2>/dev/null || true; fi             # -f : retirer le compte même si un dernier processus s'arrête
     BACKUP_DIR=${BACKUP_DIR:-/var/backups/loco}
     if [ -d "$BACKUP_DIR" ]; then
         printf '    %s\n' "$(t "Sauvegardes conservées : $BACKUP_DIR (à supprimer à la main si inutiles)" "Backups kept: $BACKUP_DIR (remove by hand if not needed)" "Copias de seguridad conservadas: $BACKUP_DIR (eliminar a mano si no sirven)")"
