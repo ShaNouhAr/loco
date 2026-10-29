@@ -36,6 +36,10 @@ class AppearanceModelTest(unittest.TestCase):
         self.assertEqual(appearance.parse({"alpha": "200"})["alpha"], appearance.ALPHA_MAX)
         self.assertEqual(appearance.parse({"alpha": "abc"})["alpha"], appearance.default()["alpha"])
 
+    def test_parse_empty_bg_means_none(self):
+        self.assertEqual(appearance.parse({"bg": ""})["bg"], "")          # choix explicite « aucun fond »
+        self.assertEqual(appearance.parse({})["bg"], appearance.default()["bg"])   # absent -> défaut
+
     def test_parse_bad_json(self):
         self.assertEqual(appearance.parse("{nope"), appearance.default())
 

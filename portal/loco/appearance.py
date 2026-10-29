@@ -73,8 +73,9 @@ def parse(raw):
         out["alpha"] = max(ALPHA_MIN, min(ALPHA_MAX, int(data.get("alpha", out["alpha"]))))
     except (ValueError, TypeError):
         pass
-    if _valid_bg(data.get("bg")):
-        out["bg"] = data["bg"]
+    bg = data.get("bg")
+    if bg == "" or _valid_bg(bg):     # « » (chaîne vide) = aucun fond, choix explicite distinct de « absent »
+        out["bg"] = bg
     return out
 
 

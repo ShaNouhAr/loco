@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.98.0 — 2026-10-29
+
+- **En-tête « flottant ».** La barre de navigation ne s'étale plus sur toute la largeur en haut : ses éléments sont réunis dans un bloc **arrondi**, détaché des bords, posé au-dessus du contenu (et du fond d'écran). Plus léger, plus moderne.
+- **Lisibilité sur les fonds photo.** Le texte posé directement sur le fond (en-têtes de page, statistiques, pied de connexion) reçoit un léger halo de la couleur du thème pour rester net sur une photo — dans tous les thèmes, clairs comme sombres. La page de connexion affiche elle aussi le fond d'écran, avec sa carte centrale opaque.
+- **Correction :** choisir « Aucun fond » dans *Apparence* enlève bien le fond d'écran (il revenait par erreur au fond par défaut depuis 2.97.0).
+
 ## 2.97.0 — 2026-10-29
 
 - **Apparence par défaut plus accueillante.** À l'installation, loco adopte le preset **« Alpes »** (thème bleu nuit, accent bleu, photo de montagne en fond, panneaux en verre dépoli) au lieu du noir uni. Chaque utilisateur reste libre de changer thème, couleur, transparence et fond, ou de revenir à un thème sobre, depuis *Apparence*.
