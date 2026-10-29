@@ -1,5 +1,5 @@
 {% from "_logo.html" import logo %}<!doctype html>
-<html lang="{{ lang }}" data-theme="oled">
+<html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,9 +9,10 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
+<div class="bg-layer" aria-hidden="true"></div>
 {% block body %}
 {% set ep = request.endpoint or '' %}
-{% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu, language_choices, appearance_choices with context %}
+{% from '_nav_icons.html' import nav_icon, theme_toggle, language_menu, language_choices, appearance_dialog with context %}
 <header class="top">
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}<b>loco</b><span>{{ host }}</span></a>
@@ -92,7 +93,8 @@
             <hr>
             <div class="menu-label">{{ _("Langue") }}</div>
             <div class="lang-row">{{ language_choices() }}</div>
-            {{ appearance_choices() }}
+            <hr>
+            <button type="button" class="menu-item" role="menuitem" data-open-appearance>{{ nav_icon('palette') }}<span>{{ _("Apparence…") }}</span></button>
             <hr>
             <form method="post" action="{{ url_for('logout') }}">
               <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -147,6 +149,7 @@
   {% if can('store.view') %}<a href="{{ url_for('software_store') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Centre de logiciels") }}</a>{% endif %}
   {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Groupes de logiciels") }}</a>{% endif %}
 </template>
+{{ appearance_dialog() }}
 {% endif %}
 
 <dialog id="confirm">

@@ -111,6 +111,11 @@ def inject_globals():
         "lang": i18n.locale(),
         "langs": i18n.LANGS,
         "js_i18n": i18n.js_catalog(),
+        "appearance": appearance.for_user(user),
+        "has_bg": appearance.has_background(user),
+        "appearance_catalog": {"themes": appearance.THEMES, "accents": appearance.ACCENTS,
+                               "gradients": appearance.GRADIENTS, "presets": appearance.PRESETS,
+                               "alpha_min": appearance.ALPHA_MIN},
     }
 
 
@@ -131,10 +136,10 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches)
+                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance)
 
 
 def startup():

@@ -448,6 +448,10 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN trust_sha256 TEXT NOT NULL DEFAULT '';
     """,
+    # 26 : apparence du portail par utilisateur (thème, accent, transparence, fond) — JSON, suit le compte.
+    """
+    ALTER TABLE users ADD COLUMN appearance TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

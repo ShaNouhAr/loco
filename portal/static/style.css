@@ -96,13 +96,68 @@
   color-scheme: dark;
 }
 
-/* Couleur d'accent : boutons principaux, sélections, onglets et focus. Neutre = couleur du texte. */
-:root { --accent: var(--text); --accent-fg: var(--bg); }
+/* Minuit : bleu nuit profond (variante sombre plus colorée que l'OLED). */
+[data-theme="midnight"] {
+  --canvas: #070b14;
+  --bg: #0d1322;
+  --bg-2: #141c30;
+  --bg-3: #1e2740;
+  --field: #111828;
+  --line: #222c46;
+  --line-2: #334060;
+  --text: #e7ebf5;
+  --text-2: #a3abc4;
+  --text-3: #7c84a0;
+  --ok: #4cc27a;
+  --warn: #e0aa45;
+  --err: #f26b63;
+  --sel: #121a2c;
+  --viz-1: #5598e7;
+  --viz-2: #1c4b8f;
+  --series-1: #4c8df0;
+  --series-2: #e07a3c;
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / .02), 0 14px 36px rgb(0 0 0 / .66);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / .03);
+  --shadow-btn: none;
+  color-scheme: dark;
+}
+
+/* Sépia : fond papier chaud, encre brune (variante claire reposante). */
+[data-theme="sepia"] {
+  --canvas: #ece3d2;
+  --bg: #faf4e8;
+  --bg-2: #f3ead7;
+  --bg-3: #e8dcc3;
+  --field: #fdf8ee;
+  --line: #e0d3ba;
+  --line-2: #cdbd9c;
+  --text: #3b3126;
+  --text-2: #6b5d49;
+  --text-3: #87785f;
+  --ok: #4a7a2e;
+  --warn: #a15c07;
+  --err: #b43a2b;
+  --sel: #efe6d3;
+  --viz-1: #9a6a2c;
+  --viz-2: #c9a978;
+  --series-1: #9a6a2c;
+  --series-2: #2f6f6a;
+  --shadow-pop: 0 1px 2px rgb(60 40 10 / .08), 0 14px 34px rgb(60 40 10 / .16);
+  --shadow-card: 0 1px 2px rgb(60 40 10 / .05), 0 1px 3px rgb(60 40 10 / .04);
+  --shadow-btn: 0 1px 2px rgb(60 40 10 / .07);
+  color-scheme: light;
+}
+
+/* Couleur d'accent : boutons principaux, sélections, onglets et focus. Neutre = couleur du texte.
+   Le sélecteur explicite [data-accent="neutral"] permet de re-neutraliser une sous-arborescence (vignettes d'aperçu). */
+:root, [data-accent="neutral"] { --accent: var(--text); --accent-fg: var(--bg); }
 [data-accent="blue"] { --accent: #2563eb; --accent-fg: #ffffff; }
 [data-accent="green"] { --accent: #15803d; --accent-fg: #ffffff; }
 [data-accent="violet"] { --accent: #7c3aed; --accent-fg: #ffffff; }
 [data-accent="orange"] { --accent: #c2410c; --accent-fg: #ffffff; }
 [data-accent="pink"] { --accent: #be185d; --accent-fg: #ffffff; }
+[data-accent="teal"] { --accent: #0d9488; --accent-fg: #ffffff; }
+[data-accent="amber"] { --accent: #b45309; --accent-fg: #ffffff; }
 
 :root {
   --sans: "Bricolage Grotesque", -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -112,6 +167,15 @@
   --h: 36px;               /* hauteur des boutons et des champs */
   --w: 1200px;
   --ring: color-mix(in srgb, var(--accent) 28%, transparent);
+  --surface-alpha: 1;      /* transparence des panneaux : posée < 1 par theme.js, voile le fond */
+  --grad: none;
+  /* Fonds dégradés fournis (data-bg="g:<nom>") — teintes sombres, lisibles sous des panneaux translucides. */
+  --g-aurora: radial-gradient(1100px 760px at 12% 8%, #15455199, transparent 60%), radial-gradient(1000px 720px at 88% 14%, #3a1f5599, transparent 60%), radial-gradient(1000px 820px at 50% 110%, #10463199, transparent 58%), linear-gradient(160deg, #080d13, #0a0a12);
+  --g-ocean: radial-gradient(1200px 900px at 82% 6%, #11567acc, transparent 60%), radial-gradient(900px 800px at 10% 100%, #0b3a53aa, transparent 60%), linear-gradient(160deg, #06273b, #041a29 62%, #02121d);
+  --g-forest: radial-gradient(1000px 820px at 18% 12%, #1d5136cc, transparent 60%), radial-gradient(900px 760px at 90% 90%, #123a2baa, transparent 60%), linear-gradient(160deg, #0a1a12, #07130e);
+  --g-dusk: radial-gradient(1200px 760px at 72% 118%, #b4632e88, transparent 55%), radial-gradient(900px 700px at 15% 8%, #46204b99, transparent 60%), linear-gradient(160deg, #190f2c, #341636 55%, #512140);
+  --g-rose: radial-gradient(1050px 820px at 82% 8%, #7c2f55cc, transparent 60%), radial-gradient(900px 760px at 8% 100%, #4a1d3faa, transparent 60%), linear-gradient(160deg, #271120, #1c0d17);
+  --g-slate: radial-gradient(1200px 900px at 50% -12%, #2b3545cc, transparent 60%), radial-gradient(900px 800px at 90% 110%, #1a2130aa, transparent 60%), linear-gradient(160deg, #13151b, #0e1015);
 }
 
 /* ------------------------------------------------------------------ base */
@@ -1873,3 +1937,74 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 @media (max-width: 560px) {
   .seg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ------------------------------------------------------------------ apparence : fond, transparence, panneau */
+
+/* Calque de fond plein écran, derrière tout le contenu. Vide (aucun fond) = la page montre --canvas. */
+.bg-layer { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
+[data-bg^="g:"] .bg-layer { background-image: var(--grad); background-size: cover; background-position: center; }
+[data-bg="u"] .bg-layer { background-image: url("/appearance/background.img"); background-size: cover; background-position: center; }
+/* Voile le fond importé vers la couleur du thème pour garder le texte lisible. */
+[data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 42%, transparent); }
+[data-bg="g:aurora"] { --grad: var(--g-aurora); } [data-bg="g:ocean"] { --grad: var(--g-ocean); }
+[data-bg="g:forest"] { --grad: var(--g-forest); } [data-bg="g:dusk"] { --grad: var(--g-dusk); }
+[data-bg="g:rose"] { --grad: var(--g-rose); } [data-bg="g:slate"] { --grad: var(--g-slate); }
+
+/* Transparence (data-alpha présent) : les grandes surfaces deviennent translucides et floutent le fond. */
+[data-alpha] .panel, [data-alpha] .metric {
+  background: color-mix(in srgb, var(--bg) calc(var(--surface-alpha, 1) * 100%), transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
+}
+[data-alpha] .top { background: color-mix(in srgb, var(--bg) calc(var(--surface-alpha, 1) * 88%), transparent); }
+
+/* Pastilles de thème / accent (menu rapide hors session) pour les thèmes ajoutés. */
+.swatch-midnight { background: #0d1322; } .swatch-sepia { background: #faf4e8; }
+.accent-teal { background: #0d9488; } .accent-amber { background: #b45309; }
+.preview-midnight { background: #070b14; } .preview-midnight i { background: #1e2740; }
+.preview-sepia { background: #ece3d2; } .preview-sepia i { background: #e8dcc3; }
+
+/* --------- fenêtre « Apparence » --------- */
+.ap-dialog { width: min(680px, calc(100vw - 32px)); }
+.ap-body { display: grid; gap: 22px; }
+.ap-sec { display: grid; gap: 10px; }
+.ap-label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.ap-alpha-val { margin-left: auto; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+.ap-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+.ap-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; }
+.ap-preset, .ap-theme { display: grid; gap: 8px; justify-items: stretch; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: none; color: var(--text); font: 500 12.5px var(--sans); text-align: center; cursor: pointer; }
+.ap-preset > span:last-child, .ap-theme > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-preset:hover, .ap-theme:hover { background: var(--bg-2); }
+.ap-preset[aria-checked="true"], .ap-theme[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+/* Vignette : un mini-portail rendu avec les variables du thème/accent/fond cible (l'attribut data-* re-scope les variables). */
+.ap-preview { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); background: var(--canvas); background-size: cover; background-position: center; }
+.ap-preview[data-bg^="g:"] { background-image: var(--grad); }
+.ap-preview[data-bg="u"] { background-image: url("/appearance/background.img"); }
+.ap-preview::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 24%; background: var(--bg); border-bottom: 1px solid var(--line); }
+.ap-preview i { position: absolute; left: 10%; top: 38%; right: 10%; bottom: 14%; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); }
+.ap-preview::after { content: ""; position: absolute; right: 8%; top: 7%; width: 10%; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
+
+.ap-range { width: 100%; height: 24px; margin: 0; -webkit-appearance: none; appearance: none; background: none; cursor: pointer; }
+.ap-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--range-pct, 100%), var(--bg-3) var(--range-pct, 100%)); }
+.ap-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--bg-3); }
+.ap-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.ap-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; margin-top: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line-2); }
+.ap-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line-2); }
+.ap-range:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ap-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ap-bgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 10px; }
+.ap-bg { position: relative; aspect-ratio: 16 / 10; padding: 0; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--bg-3); background-size: cover; background-position: center; color: var(--text-3); display: grid; place-items: center; cursor: pointer; }
+.ap-bg:hover { border-color: var(--text-3); }
+.ap-bg[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ap-bg svg { width: 18px; height: 18px; }
+.ap-bg.bg-g-aurora { background-image: var(--g-aurora); } .ap-bg.bg-g-ocean { background-image: var(--g-ocean); }
+.ap-bg.bg-g-forest { background-image: var(--g-forest); } .ap-bg.bg-g-dusk { background-image: var(--g-dusk); }
+.ap-bg.bg-g-rose { background-image: var(--g-rose); } .ap-bg.bg-g-slate { background-image: var(--g-slate); }
+.ap-bg-mine { background-image: url("/appearance/background.img"); }
+.ap-bg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ap-bg-actions .btn { cursor: pointer; }
+.ap-bg-actions label.btn input[type=file] { display: none; }
+[data-bg-msg] { color: var(--text-3); }
+[data-bg-msg].err { color: var(--err); }

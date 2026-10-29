@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.94.0 — 2026-10-29
+
+- **Apparence personnalisable.** Nouvelle fenêtre *Apparence* (menu du compte → « Apparence… ») pour se composer un portail à son goût, **enregistré sur le compte** (on retrouve son réglage sur n'importe quel navigateur) :
+  - **5 thèmes** : OLED, Sombre doux, Clair, et deux nouveaux — **Minuit** (bleu nuit) et **Sépia** (papier chaud).
+  - **8 couleurs d'accent** (ajout de **sarcelle** et **ambre**).
+  - **Transparence des panneaux** réglable : les cartes deviennent translucides et laissent voir le fond.
+  - **Fonds d'écran** : six dégradés fournis (Aurore, Océan, Forêt, Crépuscule, Rose, Ardoise) ou **votre propre image** à importer (PNG, JPEG, GIF, WebP, 8 Mo max).
+  - **6 presets** prêts à l'emploi (OLED, Clair, Océan, Forêt, Crépuscule, Rose) qui règlent thème, accent, transparence et fond d'un clic.
+  - Tout s'applique **en direct** et **sans clignotement** au chargement (le thème est rendu côté serveur). Hors session, le choix reste mémorisé dans le navigateur.
+
 ## 2.93.0 — 2026-10-29
 
 - **Windows Update : section « Diriger les postes » désencombrée.** Les deux méthodes (DNS, proxy via l'agent) tiennent en deux colonnes courtes et équilibrées ; le détail des conditions et la commande manuelle PowerShell passent dans un dépliant « Réglage manuel et dépannage du proxy » — fini le pavé de texte et la commande qui débordait.

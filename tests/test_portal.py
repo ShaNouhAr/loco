@@ -899,7 +899,7 @@ class TestNavigation(unittest.TestCase):
         for title in ("Accès", "Serveur", "Suivi"):
             self.assertIn(f'<div class="nav-section-h">{title}</div>', html)
         menu = html.split('<details class="menu user-menu">', 1)[1].split("</details>", 1)[0]
-        for part in ('href="/account"', 'data-set-theme="light"', 'name="lang" value="en"', 'action="/logout"'):
+        for part in ('href="/account"', 'data-open-appearance', 'name="lang" value="en"', 'action="/logout"'):
             self.assertIn(part, menu)
 
     def test_system_page_is_split_in_tabs(self):

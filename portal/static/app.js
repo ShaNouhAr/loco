@@ -102,22 +102,132 @@
 
   /* ---------------------------------------------------------------- thème */
 
-  /* OLED par défaut ; la lune bascule vers le thème clair et inversement (choix mémorisé). */
-  // Apparence : thème (OLED, sombre doux, clair) et couleur d'accent, mémorisés dans le navigateur.
-  function applyAppearance() {
+  /* Apparence : thème, accent, transparence et fond. Connecté → enregistré sur le compte (POST, dé-rebondi) ;
+     déconnecté (page de connexion) → mémorisé dans le navigateur. Le menu rapide et la fenêtre « Apparence »
+     partagent ce contrôleur ; theme.js a déjà appliqué l'apparence avant l'affichage. */
+  (function () {
     var root = document.documentElement;
-    $$("[data-set-theme]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setTheme === root.dataset.theme); });
-    $$("[data-set-accent]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setAccent === (root.dataset.accent || "neutral")); });
-  }
-  applyAppearance();
-  document.addEventListener("click", function (e) {
-    var choice = e.target.closest("[data-set-theme], [data-set-accent]");
-    if (!choice) return;
-    var key = choice.dataset.setTheme ? "theme" : "accent", value = choice.dataset.setTheme || choice.dataset.setAccent;
-    document.documentElement.dataset[key] = value;
-    try { localStorage.setItem("lr-" + key, value); } catch (err) { /* navigation privée */ }
-    applyAppearance();
-  });
+    var ap = $("#appearance-dialog");
+    var isUser = function () { return root.dataset.appearance === "user"; };
+    var alphaPct = function (a) { return Math.max(0, Math.min(100, (a - 55) / 45 * 100)); };
+
+    function applyAlpha(a) {
+      a = parseInt(a, 10) || 100;
+      if (a >= 55 && a < 100) { root.dataset.alpha = a; root.style.setProperty("--surface-alpha", (a / 100).toFixed(2)); }
+      else { delete root.dataset.alpha; root.style.removeProperty("--surface-alpha"); }
+    }
+    function current() {
+      return { theme: root.dataset.theme || "oled", accent: root.dataset.accent || "neutral",
+               alpha: parseInt(root.dataset.alpha, 10) || 100, bg: root.dataset.bg || "" };
+    }
+    function setBg(v) { if (v) root.dataset.bg = v; else delete root.dataset.bg; }
+
+    function sync() {
+      var c = current();
+      $$("[data-set-theme]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setTheme === c.theme); });
+      $$("[data-set-accent]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setAccent === c.accent); });
+      $$("[data-set-bg]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setBg === c.bg); });
+      $$("[data-preset]").forEach(function (b) {
+        b.setAttribute("aria-checked", b.dataset.theme === c.theme && b.dataset.accent === c.accent &&
+          (parseInt(b.dataset.alpha, 10) || 100) === c.alpha && (b.dataset.bg || "") === c.bg);
+      });
+      if (ap) {
+        var range = ap.querySelector("[data-set-alpha]");
+        if (range) { range.value = c.alpha; range.style.setProperty("--range-pct", alphaPct(c.alpha).toFixed(0) + "%"); }
+        var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = c.alpha + " %";
+      }
+    }
+
+    var saveTimer = null;
+    function persist() {
+      var c = current();
+      if (isUser()) {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(function () {
+          var fd = new FormData();
+          fd.append("csrf", ap ? ap.dataset.csrf : "");
+          fd.append("theme", c.theme); fd.append("accent", c.accent);
+          fd.append("alpha", c.alpha); fd.append("bg", c.bg);
+          fetch("/account/appearance", { method: "POST", body: fd, credentials: "same-origin" }).catch(function () {});
+        }, 250);
+      } else {
+        try {
+          localStorage.setItem("lr-theme", c.theme); localStorage.setItem("lr-accent", c.accent);
+          localStorage.setItem("lr-alpha", String(c.alpha)); localStorage.setItem("lr-bg", c.bg);
+        } catch (err) { /* navigation privée */ }
+      }
+    }
+
+    function apply(c, save) {
+      if (c.theme) root.dataset.theme = c.theme;
+      if (c.accent) root.dataset.accent = c.accent;
+      if ("bg" in c) setBg(c.bg);
+      if ("alpha" in c) applyAlpha(c.alpha);
+      sync();
+      if (save !== false) persist();
+    }
+    sync();
+
+    function mine(show) {
+      $$("[data-bg-mine]").forEach(function (b) { b.classList.toggle("hidden", !show); });
+      $$("[data-bg-remove]").forEach(function (b) { b.classList.toggle("hidden", !show); });
+    }
+    function bust() {
+      var u = "url(\"/appearance/background.img?t=" + Date.now() + "\")";
+      $$(".bg-layer, .ap-bg-mine").forEach(function (el) { el.style.backgroundImage = u; });
+      var prev = ap && ap.querySelector('.ap-preview[data-bg="u"]'); if (prev) prev.style.backgroundImage = u;
+    }
+    function removeBg() {
+      var fd = new FormData(); fd.append("csrf", ap ? ap.dataset.csrf : "");
+      fetch("/account/appearance/background/remove", { method: "POST", body: fd, credentials: "same-origin" }).catch(function () {});
+      mine(false);
+      $$(".bg-layer, .ap-bg-mine").forEach(function (el) { el.style.backgroundImage = ""; });
+      if (current().bg === "u") apply({ bg: "" }); else sync();
+    }
+
+    document.addEventListener("click", function (e) {
+      var el = e.target.closest("[data-set-theme],[data-set-accent],[data-set-bg],[data-preset],[data-reset],[data-bg-remove],[data-open-appearance]");
+      if (!el) return;
+      if (el.hasAttribute("data-open-appearance")) {
+        e.preventDefault();
+        var menu = el.closest("details.menu"); if (menu) menu.removeAttribute("open");
+        if (ap) { ap.showModal(); sync(); }
+        return;
+      }
+      if (el.dataset.setTheme) apply({ theme: el.dataset.setTheme });
+      else if (el.dataset.setAccent) apply({ accent: el.dataset.setAccent });
+      else if (el.hasAttribute("data-set-bg")) apply({ bg: el.dataset.setBg });
+      else if (el.hasAttribute("data-preset")) apply({ theme: el.dataset.theme, accent: el.dataset.accent, alpha: parseInt(el.dataset.alpha, 10) || 100, bg: el.dataset.bg || "" });
+      else if (el.hasAttribute("data-reset")) apply({ theme: "oled", accent: "neutral", alpha: 100, bg: "" });
+      else if (el.hasAttribute("data-bg-remove")) removeBg();
+    });
+
+    if (ap) {
+      var range = ap.querySelector("[data-set-alpha]");
+      if (range) range.addEventListener("input", function () {
+        applyAlpha(this.value);
+        var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = this.value + " %";
+        this.style.setProperty("--range-pct", alphaPct(this.value).toFixed(0) + "%");
+        persist();
+      });
+      var upload = ap.querySelector("[data-bg-upload]"), msg = ap.querySelector("[data-bg-msg]");
+      if (upload) upload.addEventListener("change", function () {
+        var file = this.files && this.files[0]; this.value = ""; if (!file) return;
+        if (msg) { msg.classList.remove("err"); msg.textContent = t("Envoi…"); }
+        var fd = new FormData(); fd.append("csrf", ap.dataset.csrf); fd.append("background", file);
+        fetch("/account/appearance/background", { method: "POST", body: fd, credentials: "same-origin" })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              if (msg) { msg.classList.add("err"); msg.textContent = res.j.error === "trop-grand" ? t("Image trop lourde (8 Mo maximum).") : t("Format d'image non reconnu (PNG, JPEG, GIF ou WebP)."); }
+              return;
+            }
+            bust(); mine(true); setBg("u"); applyAlpha(current().alpha); sync(); if (msg) msg.textContent = "";
+          })
+          .catch(function () { if (msg) { msg.classList.add("err"); msg.textContent = t("Échec de l'envoi."); } });
+      });
+    }
+  })();
 
   /* ------------------------------------------------ avertissements qu'on peut fermer */
   // Reste masqué tant que le jeton ne change pas (ex. tant que le nombre d'échecs n'augmente pas).
