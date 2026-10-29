@@ -2027,9 +2027,18 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 /* Fond d'écran actif : tout texte posé DIRECTEMENT sur le fond (en-têtes de page, titres de section, statistiques…)
    reçoit un halo de la couleur du thème pour rester lisible sur une photo ; le texte DANS une surface opaque
    (panneau, carte, menu, bouton, champ…) remet le halo à zéro car il n'en a pas besoin. */
-[data-bg] main { text-shadow: 0 1px 2px var(--canvas), 0 0 8px var(--canvas), 0 0 16px var(--canvas); }
-[data-bg] main :is(.panel, .metric, .note, .subnav, .menu-list, .cmdk, dialog, .auth-card, .btn, .pill, .tag, .badge-ro,
-  .seg, .switch, .chip, code, kbd, pre, input, select, textarea, .meter, .bar-track) { text-shadow: none; }
+/* Avec un fond d'écran : le contenu de la page est posé sur une « feuille » (surface) au lieu de flotter à nu sur
+   la photo. Le fond devient un cadre (marges autour de la feuille + derrière la barre). Plus aucun texte à nu. */
+[data-bg] main:not(.auth) {
+  margin: 8px auto 32px; padding: 24px 26px 34px;
+  background: color-mix(in srgb, var(--canvas) calc(var(--surface-alpha, 1) * 100%), transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.35); backdrop-filter: blur(18px) saturate(1.35);
+  border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-pop);
+}
+/* Les cartes restent opaques et nettes sur la feuille (pas de double flou ni de texte à nu). */
+[data-bg] main .panel, [data-bg] main .metric { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Connexion (hors feuille) : la marque et le pied restent lisibles sur le fond. */
+[data-bg] main.auth .auth-brand, [data-bg] main.auth .auth-foot { text-shadow: 0 1px 8px var(--canvas), 0 0 2px var(--canvas); }
 
 /* Vignettes (aperçus de presets + choix de fond) : miniatures légères des photos. */
 .ap-preview[data-bg="w:montagne"] { background-image: url("wallpapers/montagne-thumb.jpg"); }

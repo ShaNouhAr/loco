@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.102.0 — 2026-10-29
+
+- **Fond d'écran : le contenu est posé sur une « feuille ».** Avec un fond d'écran, le contenu de la page (titres, descriptions, statistiques, cartes) ne flotte plus à nu sur la photo : il repose sur une surface, et le fond d'écran devient un **cadre** propre autour et derrière la barre de navigation. Beaucoup plus net et lisible. Les thèmes **sans fond** (clair, sombre uni…) gardent le contenu directement sur le fond uni, épuré. La page de connexion garde sa carte centrale.
+
 ## 2.101.0 — 2026-10-29
 
 - **Cartes et surfaces épurées (style plus « pro »).** Inspiré d'un design de tableau de bord soigné : ombres plus douces, coins un peu plus arrondis, plus d'air dans les cartes et entre elles, hiérarchie plus nette. Les ombres sont **harmonisées sur tous les thèmes** pour qu'un changement de thème reste agréable partout (clair, OLED, sombre doux, minuit, sépia). Le fond d'écran reste le défaut ; l'interface est juste plus calme et mieux posée.
