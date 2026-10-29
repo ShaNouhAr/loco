@@ -28,7 +28,7 @@ PRESETS = (
     ("oled", "OLED", "oled", "neutral", 100, ""),
     ("clair", "Clair", "light", "neutral", 100, ""),
     ("ocean", "Océan", "dim", "blue", 82, "g:ocean"),
-    ("alpes", "Alpes", "midnight", "blue", 80, "w:montagne"),
+    ("alpes", "Alpes", "midnight", "blue", 90, "w:montagne"),
     ("boreale", "Boréale", "oled", "teal", 80, "w:aurore"),
     ("desert", "Désert", "sepia", "amber", 84, "w:dunes"),
 )
@@ -45,7 +45,7 @@ _LOGO_MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp
 
 def default():
     # Défaut « attirant » à l'installation = preset « Alpes » : bleu nuit, accent bleu, photo montagne en fond, verre dépoli.
-    return {"theme": "midnight", "accent": "blue", "alpha": 80, "bg": "w:montagne"}
+    return {"theme": "midnight", "accent": "blue", "alpha": 90, "bg": "w:montagne"}
 
 
 def _valid_bg(bg):

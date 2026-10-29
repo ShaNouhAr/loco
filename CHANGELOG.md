@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.100.0 — 2026-10-29
+
+- **Interface plus « posée » sur le fond d'écran.** Les panneaux sont rendus un peu plus opaques et la photo de fond est davantage estompée : l'interface ressort nettement au lieu de donner une impression de « verre qui flotte », tout en gardant l'ambiance du fond. La transparence par défaut passe de 80 à 90 % (toujours réglable dans *Apparence*).
+
 ## 2.99.0 — 2026-10-29
 
 - **Écran de connexion cohérent avec l'apparence par défaut.** La page de connexion (et les autres écrans hors session) reprennent désormais le **thème, la couleur, la transparence et le fond** par défaut de l'instance — carte en **verre dépoli** comprise. Avant, un ancien réglage mémorisé dans le navigateur pouvait les afficher dans un tout autre thème (p. ex. noir + accent vert, carte opaque) par-dessus le fond. Le petit sélecteur de thème hors session, devenu inutile (l'apparence se règle dans le compte), est retiré.

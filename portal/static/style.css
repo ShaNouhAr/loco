@@ -216,7 +216,7 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 /* En-tête « flottant » : la barre ne prend pas tout le haut, ses éléments sont dans un bloc arrondi détaché des bords. */
 .top { position: sticky; top: 0; z-index: 20; padding: 12px 16px 0; }
 .top-in { max-width: var(--w); margin: 0 auto; padding: 0 14px 0 18px; height: 56px; display: flex; align-items: center; gap: 24px;
-  background: color-mix(in srgb, var(--bg) 84%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(14px); backdrop-filter: saturate(1.4) blur(14px);
+  background: color-mix(in srgb, var(--bg) 90%, transparent); -webkit-backdrop-filter: saturate(1.4) blur(14px); backdrop-filter: saturate(1.4) blur(14px);
   border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-pop); }
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
@@ -1948,7 +1948,6 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg^="g:"] .bg-layer { background-image: var(--grad); background-size: cover; background-position: center; }
 [data-bg="u"] .bg-layer { background-image: url("/appearance/background.img"); background-size: cover; background-position: center; }
 /* Voile le fond importé vers la couleur du thème pour garder le texte lisible. */
-[data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 42%, transparent); }
 [data-bg="g:aurora"] { --grad: var(--g-aurora); } [data-bg="g:ocean"] { --grad: var(--g-ocean); }
 [data-bg="g:forest"] { --grad: var(--g-forest); } [data-bg="g:dusk"] { --grad: var(--g-dusk); }
 [data-bg="g:rose"] { --grad: var(--g-rose); } [data-bg="g:slate"] { --grad: var(--g-slate); }
@@ -2023,7 +2022,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg="w:hiver"] .bg-layer { background-image: url("wallpapers/hiver.jpg"); }
 /* Voile de lisibilité sur les fonds photo (image importée comprise) : teinte vers la couleur du thème
    pour que les panneaux translucides et la barre du haut gardent assez de contraste, clair comme sombre. */
-[data-bg^="w:"] .bg-layer::after, [data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 40%, transparent); }
+[data-bg^="w:"] .bg-layer::after, [data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 60%, transparent); }
 
 /* Fond d'écran actif : tout texte posé DIRECTEMENT sur le fond (en-têtes de page, titres de section, statistiques…)
    reçoit un halo de la couleur du thème pour rester lisible sur une photo ; le texte DANS une surface opaque
