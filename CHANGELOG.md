@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.103.0 — 2026-10-29
+
+- **Application web installable (PWA).** loco peut maintenant s'**installer** comme une application (sur le bureau ou l'écran d'accueil mobile) : manifeste d'application, icônes (dont icône « maskable »), ouverture en fenêtre autonome. Un **service worker** met en cache la coque de l'interface (chargements plus rapides) et affiche une **page « hors ligne »** soignée si le serveur est injoignable. L'installation nécessite un accès HTTPS de confiance (certificat loco accepté).
+
 ## 2.102.0 — 2026-10-29
 
 - **Fond d'écran : le contenu est posé sur une « feuille ».** Avec un fond d'écran, le contenu de la page (titres, descriptions, statistiques, cartes) ne flotte plus à nu sur la photo : il repose sur une surface, et le fond d'écran devient un **cadre** propre autour et derrière la barre de navigation. Beaucoup plus net et lisible. Les thèmes **sans fond** (clair, sombre uni…) gardent le contenu directement sur le fond uni, épuré. La page de connexion garde sa carte centrale.

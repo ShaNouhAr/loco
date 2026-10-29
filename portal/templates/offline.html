@@ -1,0 +1,23 @@
+{# Page hors-ligne servie par le service worker quand le réseau est absent. Autonome (pas de JS, CSS en cache). #}
+<!doctype html>
+<html lang="{{ lang }}" data-theme="midnight" data-accent="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ _("Hors ligne") }} {{ _("· loco") }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}">
+</head>
+<body>
+<main class="auth">
+  <div class="auth-main">
+    <section class="auth-card offline-card">
+      <div class="offline-logo"><img src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="loco" width="56" height="56"></div>
+      <h1>{{ _("Hors ligne") }}</h1>
+      <p class="muted">{{ _("loco n'est pas joignable. Vérifiez votre connexion au réseau, puis réessayez.") }}</p>
+      <a class="btn primary" href="{{ url_for('index') }}">{{ _("Réessayer") }}</a>
+    </section>
+  </div>
+</main>
+</body>
+</html>

@@ -2743,6 +2743,7 @@
  "liaison directe %(template)s": "direct bind %(template)s",
  "libres sur %(total)s": "free of %(total)s",
  "loco est déjà à jour": "loco is already up to date",
+ "loco n'est pas joignable. Vérifiez votre connexion au réseau, puis réessayez.": "loco isn't reachable. Check your network connection, then try again.",
  "loco signe lui-même le certificat du portail. Les agents du parc épinglent son autorité ; importez-la une fois sur les postes pour que les navigateurs l'acceptent sans alerte.": "loco signs the portal certificate itself. The fleet agents pin its authority; import it once on the machines so browsers accept it without a warning.",
  "loco télécharge le fichier une fois ; « Actualiser » le reprend plus tard.": "loco downloads the file once; “Refresh” fetches it again later.",
  "loco, système et sécurité": "loco, system and security",

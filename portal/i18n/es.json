@@ -2743,6 +2743,7 @@
  "liaison directe %(template)s": "enlace directo %(template)s",
  "libres sur %(total)s": "libres de %(total)s",
  "loco est déjà à jour": "loco ya está actualizado",
+ "loco n'est pas joignable. Vérifiez votre connexion au réseau, puis réessayez.": "loco no está accesible. Comprueba tu conexión de red y vuelve a intentarlo.",
  "loco signe lui-même le certificat du portail. Les agents du parc épinglent son autorité ; importez-la une fois sur les postes pour que les navigateurs l'acceptent sans alerte.": "loco firma él mismo el certificado del portal. Los agentes del parque fijan su autoridad; impórtela una vez en los equipos para que los navegadores la acepten sin alerta.",
  "loco télécharge le fichier une fois ; « Actualiser » le reprend plus tard.": "loco descarga el archivo una vez; «Actualizar» lo reanuda más tarde.",
  "loco, système et sécurité": "loco, sistema y seguridad",

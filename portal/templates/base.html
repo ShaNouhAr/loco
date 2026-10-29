@@ -7,6 +7,13 @@
   <script src="{{ url_for('static', filename='theme.js') }}?v={{ asset_v }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
   <link rel="icon"{% if custom_logo %} href="{{ custom_logo.url }}"{% else %} type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}"{% endif %}>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0d1322">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="loco">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <div class="bg-layer" aria-hidden="true"></div>

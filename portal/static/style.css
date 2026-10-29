@@ -2072,3 +2072,10 @@ img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 .ap-logo-prev { flex: none; display: inline-grid; place-items: center; height: 48px; min-width: 76px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
 .ap-logo-prev img { height: 28px; width: auto; max-width: 150px; display: block; }
 .ap-logo-sec .ap-bg-actions { flex: 1 1 auto; row-gap: 8px; }
+
+/* Page hors-ligne (PWA) : carte centrée, logo, message, bouton Réessayer. */
+.offline-card { text-align: center; }
+.offline-card > * + * { margin-top: 14px; }
+.offline-logo { display: flex; justify-content: center; }
+.offline-logo img { border-radius: 14px; display: block; }
+.offline-card h1 { font-size: 20px; }

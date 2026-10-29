@@ -49,7 +49,7 @@ ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f
 
 # Politique de contenu stricte : aucun script ni style en ligne.
 CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; "
-       "connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+       "connect-src 'self'; manifest-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 
 # Points d'entrée publics (postes clients, supervision) : ni session, ni jeton CSRF.
 PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "windows_install_script", "flatpak_setup", "flatpak_repo_file", "rpm_setup",
@@ -58,7 +58,9 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                     "agent_file", "agent_deb", "agent_rpm", "remote_agent",
                     # Logo global de l'instance : affiché aussi sur la page de connexion (avant authentification).
-                    "appearance_logo"}
+                    "appearance_logo",
+                    # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).
+                    "web_manifest", "service_worker", "offline"}
 
 
 @app.before_request
@@ -140,10 +142,10 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance)
+                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa)
 
 
 def startup():

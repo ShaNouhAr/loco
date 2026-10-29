@@ -1520,4 +1520,11 @@
     if (kind === "apps" || kind === "job") tick();
     if (kind === "job") { var log = $("#job-log"); log.scrollTop = log.scrollHeight; }
   }
+
+  /* PWA : enregistre le service worker (installable + cache de la coque + repli hors-ligne). */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/sw.js").catch(function () { /* contexte non sécurisé ou indisponible */ });
+    });
+  }
 })();
