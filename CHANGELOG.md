@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.92.0 — 2026-10-29
+
+- **Réglages du parc et Configuration, plus aboutis.** *Réglages du parc* : l'adresse actuelle du serveur passe dans un encart avec son état juste à côté, et le champ de nouvelle adresse est clairement étiqueté. *Configuration* (appliance) : les menus « activé / désactivé » deviennent des **interrupteurs** (Accès HTTP, Cache Windows Update, Red Hat, Flatpak), chacun avec une courte description ; et chaque limite de cache affiche son **usage réel** en dessous.
+
 ## 2.91.0 — 2026-10-29
 
 - **Composeur d'enrôlement plus sobre.** Les cases du composeur passent en **interrupteurs** (comme la page Fonctionnalités) : une liste encadrée, un libellé et sa description à gauche, l'interrupteur à droite, la ligne grisée quand elle est éteinte. L'option « première installation » est mise à part. La commande générée est inchangée.

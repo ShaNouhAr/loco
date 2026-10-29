@@ -374,10 +374,11 @@ def appliance_updates_post():
 @login_required
 def appliance_settings():
     _require_appliance()
+    from .util import read_stats
     conf = locoadmin.read_conf()
     return render_template("appliance_settings.html", conf=conf, settings=locoadmin.SETTINGS, switches=SWITCHES,
                            network=_network(), running=locoadmin.running_job(), agent=locoadmin.agent_running(),
-                           client_ip=request.remote_addr or "")
+                           client_ip=request.remote_addr or "", stats=read_stats())
 
 
 @app.route("/system/configuration", methods=["POST"])

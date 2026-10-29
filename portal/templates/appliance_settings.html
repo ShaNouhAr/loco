@@ -18,31 +18,53 @@
   <div class="cols w21">
     <form class="panel appliance-form" method="post" action="{{ url_for('appliance_settings_post') }}" data-ajax data-confirm="{{ _('Appliquer les réglages ?') }}" data-confirm-text="{{ _('L\'installation est relancée avec les nouvelles valeurs : les services redémarrent quelques secondes.') }}" data-confirm-ok="{{ _('Appliquer') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
+
       <div class="panel-h"><h2>{{ _("Accès") }}</h2></div>
       <div class="panel-b grid2">
         <label class="f wide"><span>{{ settings.ALLOW[0] }}</span><input type="text" name="ALLOW" value="{{ conf.ALLOW }}" required spellcheck="false" class="mono">
           <span class="hint">{{ _("Postes autorisés à utiliser les dépôts et les caches, séparés par des espaces (ex. 192.168.10.0/24 10.0.0.0/8).") }}</span></label>
         <label class="f wide"><span>{{ settings.ADMIN_ALLOW[0] }}</span><input type="text" name="ADMIN_ALLOW" value="{{ conf.ADMIN_ALLOW }}" required spellcheck="false" class="mono">
           <span class="hint">{{ _("Accès au portail et aux métriques. Doit inclure votre adresse : <span class=\"mono\">%(client_ip)s</span>.", client_ip=client_ip) }}</span></label>
-        <label class="f"><span>{{ settings.HTTP_ENABLED[0] }}</span><select name="HTTP_ENABLED"><option value="1" {{ 'selected' if conf.HTTP_ENABLED == '1' }}>{{ _("activé") }}</option><option value="0" {{ 'selected' if conf.HTTP_ENABLED != '1' }}>{{ _("désactivé (HTTPS seul)") }}</option></select></label>
-        <label class="f"><span>{{ settings.UPSTREAM_PROXY[0] }}</span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="{{ _('accès direct') }}" spellcheck="false" class="mono"></label>
+        <label class="f wide"><span>{{ settings.UPSTREAM_PROXY[0] }}</span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="{{ _('accès direct') }}" spellcheck="false" class="mono">
+          <span class="hint">{{ _("Proxy HTTP d'entreprise pour sortir sur Internet (dépôts officiels, téléchargements). Vide : accès direct.") }}</span></label>
       </div>
-      <div class="panel-h"><h2>{{ _("Fonctions") }}</h2></div>
-      <div class="panel-b grid2">
-        {% for key in ('WU_ENABLED', 'RPM_ENABLED', 'FLATPAK_ENABLED') %}
-        <label class="f"><span>{{ settings[key][0] }}</span><select name="{{ key }}"><option value="1" {{ 'selected' if conf[key] == '1' }}>{{ _("activé") }}</option><option value="0" {{ 'selected' if conf[key] != '1' }}>{{ _("désactivé") }}</option></select></label>
-        {% endfor %}
-        <label class="f"><span>{{ settings.RESOLVERS[0] }}</span><input type="text" name="RESOLVERS" value="{{ conf.RESOLVERS }}" required spellcheck="false" class="mono"></label>
+      <div class="feature-list cfg-list">
+        <label class="feature-row {{ 'off' if conf.HTTP_ENABLED != '1' }}">
+          <span class="feature-text"><strong>{{ settings.HTTP_ENABLED[0] }}</strong><small>{{ _("En plus du HTTPS (port 80), pour importer l'autorité de loco la première fois sur un poste.") }}</small></span>
+          <span class="switch"><input type="checkbox" name="HTTP_ENABLED" value="1" role="switch" {{ 'checked' if conf.HTTP_ENABLED == '1' }}><i aria-hidden="true"></i></span>
+        </label>
       </div>
-      <div class="panel-h"><h2>{{ _("Stockage") }}</h2></div>
+
+      <div class="panel-h sub"><h2>{{ _("Fonctions") }}</h2></div>
+      <div class="feature-list cfg-list">
+        <label class="feature-row {{ 'off' if conf.WU_ENABLED != '1' }}">
+          <span class="feature-text"><strong>{{ settings.WU_ENABLED[0] }}</strong><small>{{ _("Mises à jour Windows téléchargées une fois puis servies en local.") }}</small></span>
+          <span class="switch"><input type="checkbox" name="WU_ENABLED" value="1" role="switch" {{ 'checked' if conf.WU_ENABLED == '1' }}><i aria-hidden="true"></i></span>
+        </label>
+        <label class="feature-row {{ 'off' if conf.RPM_ENABLED != '1' }}">
+          <span class="feature-text"><strong>{{ settings.RPM_ENABLED[0] }}</strong><small>{{ _("Cache et dépôts locaux RHEL, Rocky et AlmaLinux.") }}</small></span>
+          <span class="switch"><input type="checkbox" name="RPM_ENABLED" value="1" role="switch" {{ 'checked' if conf.RPM_ENABLED == '1' }}><i aria-hidden="true"></i></span>
+        </label>
+        <label class="feature-row {{ 'off' if conf.FLATPAK_ENABLED != '1' }}">
+          <span class="feature-text"><strong>{{ settings.FLATPAK_ENABLED[0] }}</strong><small>{{ _("Cache Flathub et applications Flatpak internes.") }}</small></span>
+          <span class="switch"><input type="checkbox" name="FLATPAK_ENABLED" value="1" role="switch" {{ 'checked' if conf.FLATPAK_ENABLED == '1' }}><i aria-hidden="true"></i></span>
+        </label>
+      </div>
+      <div class="panel-b">
+        <label class="f wide"><span>{{ settings.RESOLVERS[0] }}</span><input type="text" name="RESOLVERS" value="{{ conf.RESOLVERS }}" required spellcheck="false" class="mono">
+          <span class="hint">{{ _("Serveurs DNS que le cache Windows Update utilise pour joindre Microsoft.") }}</span></label>
+      </div>
+
+      <div class="panel-h sub"><h2>{{ _("Stockage") }}</h2></div>
       <div class="panel-b grid2">
-        {% for key in ('APT_CACHE_SIZE', 'WU_CACHE_SIZE', 'RPM_CACHE_SIZE', 'FLATPAK_CACHE_SIZE') %}
-        <label class="f"><span>{{ settings[key][0] }}</span><input type="text" name="{{ key }}" value="{{ conf[key] }}" placeholder="{{ _('automatique') }}" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono"></label>
+        {% for key, stat in (('APT_CACHE_SIZE', 'acng'), ('WU_CACHE_SIZE', 'wucache'), ('RPM_CACHE_SIZE', 'rpmcache'), ('FLATPAK_CACHE_SIZE', 'flatpakcache')) %}
+        <label class="f"><span>{{ settings[key][0] }}</span><input type="text" name="{{ key }}" value="{{ conf[key] }}" placeholder="{{ _('automatique') }}" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono">
+          {% if stats.get(stat) %}<span class="hint">{{ _("utilisé : %(used)s", used=stats[stat]|human) }}</span>{% endif %}</label>
         {% endfor %}
         <label class="f"><span>{{ settings.MAX_UPLOAD[0] }}</span><input type="text" name="MAX_UPLOAD" value="{{ conf.MAX_UPLOAD }}" required pattern="[0-9]+[kKmMgG]?" spellcheck="false" class="mono"></label>
         <label class="f"><span>{{ settings.BACKUP_KEEP[0] }}</span><input type="text" name="BACKUP_KEEP" value="{{ conf.BACKUP_KEEP }}" required pattern="[0-9]{1,3}" inputmode="numeric" class="mono"></label>
       </div>
-      <div class="panel-f row"><button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>{{ _("Appliquer") }}</button><span class="hint">{{ _("Tailles : 50g, 500m… Vide : automatique.") }}</span></div>
+      <div class="panel-f row-between"><span class="hint">{{ _("Tailles : 50g, 500m… Vide : automatique.") }}</span><button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>{{ _("Appliquer") }}</button></div>
     </form>
 
     <section class="panel">

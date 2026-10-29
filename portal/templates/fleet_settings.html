@@ -14,14 +14,12 @@
     <div class="panel-h"><h2>{{ _("Adresse du serveur pour les agents") }}</h2>{% if server_coverage|length > 1 %}<div class="aside"><span class="st warn">{{ _("changement en cours") }}</span></div>{% endif %}</div>
     <div class="panel-b">
       {% set current = server_coverage[0] %}
-      <div class="set-row">
-        <div class="set-main">
-          <div class="set-label">{{ _("Adresse actuelle") }}</div>
-          <div class="set-value mono">{{ current[0] }}</div>
-        </div>
-        <div class="set-aside">
+      <div class="set-current">
+        <span class="set-label">{{ _("Adresse actuelle") }}</span>
+        <div class="set-current-val">
+          <span class="set-value mono">{{ current[0] }}</span>
           {% if current[2] %}<span class="st {{ 'ok' if current[1] == current[2] else 'warn' }}">{{ _("%(known)s/%(total)s agent(s) l'ont confirmée", known=current[1], total=current[2]) }}</span>
-          {% else %}<span class="muted small">{{ _("aucun agent inscrit") }}</span>{% endif %}
+          {% else %}<span class="st">{{ _("aucun agent inscrit") }}</span>{% endif %}
         </div>
       </div>
 
@@ -43,11 +41,14 @@
       </div>
       {% endif %}
 
-      <form method="post" action="{{ url_for('fleet_server_address') }}" class="repo-form" data-ajax>
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <input type="text" name="url" required placeholder="{{ _('https://192.168.1.20:8443') }}" aria-label="{{ _('Nouvelle adresse du serveur') }}" spellcheck="false" class="mono">
-        <button class="btn"><span class="spin"></span>{{ _("Annoncer aux agents") }}</button>
-      </form>
+      <div class="set-change">
+        <span class="set-label">{{ _("Annoncer une nouvelle adresse") }}</span>
+        <form method="post" action="{{ url_for('fleet_server_address') }}" class="repo-form" data-ajax>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="text" name="url" required placeholder="{{ _('https://192.168.1.20:8443') }}" aria-label="{{ _('Nouvelle adresse du serveur') }}" spellcheck="false" class="mono">
+          <button class="btn"><span class="spin"></span>{{ _("Annoncer aux agents") }}</button>
+        </form>
+      </div>
 
       <details class="set-help">
         <summary>{{ _("Comment changer l'adresse sans perdre les postes ?") }}</summary>
