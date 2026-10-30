@@ -452,3 +452,26 @@ class TestWaylandInputAndMutter(unittest.TestCase):
             self.assertEqual(a.linux_desktop(terminal_fallback=True), "console")
             with self.assertRaisesRegex(RuntimeError, "Personne n'est connecté"):
                 a.linux_desktop()
+
+    def test_unlock_session_unlocks_only_the_locked_seat_session(self):
+        a = self.agent
+        calls, hints = [], iter(["yes", "no"])
+        def run(cmd, **kw):
+            calls.append(cmd[1:])
+            out = {"list-sessions": "5 1000 testeur -     -    active no -\n16 1000 testeur seat0 tty2 active no -\n",
+                   "show-session": None, "unlock-session": ""}[cmd[1]]
+            return types.SimpleNamespace(stdout=next(hints) if out is None else out)
+        with mock.patch.object(a.subprocess, "run", run), mock.patch.object(a.time, "sleep", lambda s: None):
+            self.assertTrue(a._unlock_session(1000))
+        self.assertIn(["unlock-session", "16"], calls)                  # session graphique (seat0), pas la session SSH
+        with mock.patch.object(a.subprocess, "run", lambda cmd, **kw: types.SimpleNamespace(
+                stdout="16 1000 testeur seat0 tty2 active no -\n" if cmd[1] == "list-sessions" else "no")):
+            self.assertFalse(a._unlock_session(1000))                    # déjà déverrouillée : rien à faire ni à rétablir
+
+    def test_close_relocks_once_when_the_agent_unlocked(self):
+        m = object.__new__(self.agent.MutterBackend)
+        sent = []
+        m._rd, m._pipe, m._bus, m._relock = None, None, object(), True
+        m._call = lambda *args: sent.append(args)
+        m.close(); m.close()
+        self.assertEqual(sent, [("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver", "Lock")])

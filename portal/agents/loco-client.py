@@ -1414,6 +1414,31 @@ def _login_screen(uid):
         return False
 
 
+def _unlock_session(uid):
+    """Déverrouille la session graphique de cet utilisateur si elle est verrouillée : GNOME refuse le bureau à
+    distance d'une session verrouillée. Renvoie True si un déverrouillage a eu lieu (re-verrouiller à la fin)."""
+    def loginctl(*args):
+        return subprocess.run(["loginctl"] + list(args), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              universal_newlines=True, env=ENV, timeout=10).stdout
+    try:
+        for line in loginctl("list-sessions", "--no-legend").splitlines():
+            fields = line.split()
+            if len(fields) < 4 or fields[1] != str(uid) or not fields[3].startswith("seat"):
+                continue
+            if loginctl("show-session", fields[0], "-p", "LockedHint", "--value").strip() != "yes":
+                return False
+            loginctl("unlock-session", fields[0])
+            for _ in range(30):
+                time.sleep(0.1)
+                if loginctl("show-session", fields[0], "-p", "LockedHint", "--value").strip() == "no":
+                    break
+            time.sleep(0.5)                                      # fin de l'animation de déverrouillage de GNOME Shell
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return False
+
+
 def _become_session_user(env):
     """Quitter root pour l'utilisateur de la session : son bus D-Bus et son PipeWire n'acceptent que lui."""
     import pwd
@@ -1600,23 +1625,40 @@ class MutterBackend:
     RD, SC = "org.gnome.Mutter.RemoteDesktop", "org.gnome.Mutter.ScreenCast"
     BUTTONS = {1: 0x110, 2: 0x112, 3: 0x111}                      # BTN_LEFT, BTN_MIDDLE, BTN_RIGHT (evdev)
 
+    MISSING = ("Composants manquants pour le bureau distant GNOME : installez python3-gi, gir1.2-gstreamer-1.0 et gstreamer1.0-pipewire.",
+               "Missing components for the GNOME remote desktop: install python3-gi, gir1.2-gstreamer-1.0 and gstreamer1.0-pipewire.",
+               "Faltan componentes para el escritorio remoto GNOME: instale python3-gi, gir1.2-gstreamer-1.0 y gstreamer1.0-pipewire.")
+
     def __init__(self, env):
-        self._rd, self._pipe, self._closed = None, None, False
+        self._rd, self._pipe, self._bus, self._closed, self._relock = None, None, None, False, False
+        import importlib.util
+        if importlib.util.find_spec("gi") is None:              # vérifier avant de toucher au verrouillage
+            raise RuntimeError(t(*self.MISSING))
+        # Session verrouillée : GNOME refuse le bureau à distance. Déverrouiller (root, logind), re-verrouiller à la fin.
+        self._relock = _unlock_session(env["uid"])
         _become_session_user(env)
-        try:
-            import gi
-            gi.require_version("Gst", "1.0")
-            from gi.repository import Gio, GLib, Gst
-        except (ImportError, ValueError):
-            raise RuntimeError(t("Composants manquants pour le bureau distant GNOME : installez python3-gi, gir1.2-gstreamer-1.0 et gstreamer1.0-pipewire.",
-                                 "Missing components for the GNOME remote desktop: install python3-gi, gir1.2-gstreamer-1.0 and gstreamer1.0-pipewire.",
-                                 "Faltan componentes para el escritorio remoto GNOME: instale python3-gi, gir1.2-gstreamer-1.0 y gstreamer1.0-pipewire."))
-        self._Gio, self._GLib, self._Gst = Gio, GLib, Gst
+        import gi
+        from gi.repository import Gio, GLib
+        self._Gio, self._GLib = Gio, GLib
         self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         self._ctx = GLib.MainContext.default()
+        try:
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gst
+        except (ImportError, ValueError):
+            self.close()
+            raise RuntimeError(t(*self.MISSING))
+        self._Gst = Gst
         rd, sc = self.RD, self.SC
         try:
-            self._rd = self._call(rd, "/org/gnome/Mutter/RemoteDesktop", rd, "CreateSession", None, "(o)")[0]
+            for attempt in range(30):                            # juste après un déverrouillage, Mutter refuse encore un instant
+                try:
+                    self._rd = self._call(rd, "/org/gnome/Mutter/RemoteDesktop", rd, "CreateSession", None, "(o)")[0]
+                    break
+                except GLib.Error as e:
+                    if "inhibited" not in (e.message or "") or attempt == 29:
+                        raise
+                    time.sleep(0.1)
             sid = self._call(rd, self._rd, "org.freedesktop.DBus.Properties", "Get",
                              GLib.Variant("(ss)", (rd + ".Session", "SessionId")), "(v)")[0]
             session = self._call(sc, "/org/gnome/Mutter/ScreenCast", sc, "CreateSession",
@@ -1633,6 +1675,10 @@ class MutterBackend:
             self._call(rd, self._rd, rd + ".Session", "Start")   # démarre aussi la capture liée
         except GLib.Error as e:
             self.close()
+            if "inhibited" in (e.message or ""):
+                raise RuntimeError(t("GNOME bloque le bureau à distance sur ce poste pour l'instant (session verrouillée ou écran de connexion) : réessayez dans un instant.",
+                                     "GNOME is blocking the remote desktop on this machine for now (locked session or login screen): try again in a moment.",
+                                     "GNOME bloquea el escritorio remoto en este equipo por ahora (sesión bloqueada o pantalla de inicio): inténtelo de nuevo en un momento."))
             raise RuntimeError(t("Bureau à distance GNOME indisponible : %s", "GNOME remote desktop unavailable: %s",
                                  "Escritorio remoto GNOME no disponible: %s") % e.message)
         deadline = time.monotonic() + 10
@@ -1684,6 +1730,10 @@ class MutterBackend:
     def grab(self):
         self._ctx.iteration(False)                               # traite le signal Closed
         if self._closed:
+            if self._screen_locked():
+                raise RuntimeError(t("L'écran du poste s'est verrouillé : GNOME a fermé la session distante. Rouvrez le bureau distant pour reprendre.",
+                                     "The machine's screen locked: GNOME closed the remote session. Reopen the remote desktop to continue.",
+                                     "La pantalla del equipo se bloqueó: GNOME cerró la sesión remota. Vuelva a abrir el escritorio remoto para continuar."))
             raise RuntimeError(t("Le partage d'écran a été arrêté depuis le poste.", "Screen sharing was stopped on the machine.",
                                  "El uso compartido de pantalla se detuvo desde el equipo."))
         frame = self._pull(0)
@@ -1717,6 +1767,14 @@ class MutterBackend:
     def flush(self):
         pass
 
+    SCREENSAVER = ("org.gnome.ScreenSaver", "/org/gnome/ScreenSaver", "org.gnome.ScreenSaver")
+
+    def _screen_locked(self):
+        try:
+            return bool(self._call(*self.SCREENSAVER, "GetActive", None, "(b)")[0])
+        except Exception:                                        # écran de veille indisponible : inconnu
+            return False
+
     def close(self):
         if self._rd:
             try:
@@ -1727,6 +1785,12 @@ class MutterBackend:
         if self._pipe is not None:
             self._pipe.set_state(self._Gst.State.NULL)
             self._pipe = None
+        if self._relock and self._bus is not None:              # ne jamais laisser déverrouillé un poste qui l'était
+            self._relock = False
+            try:
+                self._call(*self.SCREENSAVER, "Lock")
+            except Exception:
+                pass
 
 
 # Extension « QEMU Extended Key Event » (noVNC) : le navigateur joint au keysym le scancode XT de la touche physique ;

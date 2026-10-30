@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.111.1 — 2026-10-30
+
+- **Bureau distant GNOME Wayland sur un poste verrouillé.** GNOME refuse le bureau à distance tant que la session est verrouillée (« Session creation inhibited ») — or c'est le cas habituel quand personne n'est devant le poste. L'agent **déverrouille la session le temps de la prise en main, puis la re-verrouille automatiquement à la fin** (onglet fermé, session close) : un poste verrouillé n'est jamais laissé ouvert, et un poste non verrouillé n'est pas verrouillé. Pendant la session, l'écran local affiche le bureau avec l'indicateur de partage de GNOME. Si l'écran se verrouille en cours de route (inactivité, verrouillage local), la session distante se ferme avec un message clair ; il suffit de la rouvrir.
+
 ## 2.111.0 — 2026-10-30
 
 - **Bureau distant GNOME en Wayland, pour de bon (Zorin OS, Ubuntu…).** La capture par l'API « capture d'écran » de GNOME Shell (2.110) est refusée par GNOME 46 (« Screenshot is not allowed »). L'agent passe désormais par **l'API du bureau à distance intégré de GNOME** (sessions RemoteDesktop + ScreenCast de Mutter) : image en direct par PipeWire (~25 i/s), clavier et souris injectés par la même session — **aucune configuration, aucune fenêtre de consentement, aucun redémarrage**. Validé sur un **Zorin OS 18.1 fraîchement installé** (GNOME 46, Wayland) : tout le nécessaire y est présent d'origine. Pendant la session, GNOME affiche son indicateur de partage d'écran ; la personne devant le poste peut l'arrêter d'un clic, la session distante se ferme alors avec un message. Pour cette session, l'agent quitte root et agit en tant qu'utilisateur connecté. Écran principal seulement.
