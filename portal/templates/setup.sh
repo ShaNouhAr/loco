@@ -59,6 +59,13 @@ if [ "$CACHE_ONLY" = 0 ] && [ "$LEGACY" = 0 ]; then
         . /etc/os-release
         DIST=${ID:-}
         SUITE=${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}
+        # Dérivées (Zorin, Linux Mint, Pop!_OS, elementary… ; MX, Devuan…) : retrouver la distribution d'origine.
+        case "$DIST" in
+            debian|ubuntu) ;;
+            *) case " ${ID_LIKE:-} " in *" ubuntu "*) DIST=ubuntu ;; *" debian "*) DIST=debian ;; esac ;;
+        esac
+        # Dérivée d'Ubuntu : la suite APT est celle d'Ubuntu (ex. noble), pas le nom propre de la dérivée.
+        [ "$DIST" = ubuntu ] && [ -n "${UBUNTU_CODENAME:-}" ] && SUITE=$UBUNTU_CODENAME
     fi
     case "$DIST" in debian|ubuntu) ;; *) echo "{{ sh_t('Distribution non reconnue : précisez --distribution debian|ubuntu et --suite NOM.') }}" >&2; exit 1 ;; esac
     case "$SUITE" in ''|*[!a-z0-9-]*|[!a-z]* ) echo "{{ sh_t('Nom de version invalide ou absent.') }}" >&2; exit 1 ;; esac

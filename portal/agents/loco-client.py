@@ -506,13 +506,31 @@ class LiveSampler:
         return out
 
 
+def _apt_lock_busy(out):
+    """Sortie d'apt signalant qu'un autre processus tient le verrou (mises à jour automatiques, apt-daily, ou la fin
+    de l'installation de l'agent) : à réessayer, pas à signaler comme un échec d'inventaire."""
+    return any(s in out for s in ("Unable to lock", "Could not get lock", "held by process", "Could not open lock file"))
+
+
+def apt_update():
+    """apt-get update, en patientant jusqu'à ~1 min si un autre apt tient le verrou — évite l'« inventaire incomplet »
+    passager juste après l'installation de l'agent ou pendant les mises à jour automatiques du poste
+    (DPkg::Lock::Timeout ne couvre pas le verrou de /var/lib/apt/lists, d'où la reprise explicite)."""
+    deadline = time.monotonic() + 60
+    while True:
+        code, out = run(["apt-get", "update", "-q", "-o", "DPkg::Lock::Timeout=60"], timeout=1800)
+        if code == 0 or time.monotonic() >= deadline or not _apt_lock_busy(out):
+            return code, out
+        time.sleep(5)
+
+
 def scan():
     """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
     installés, caractéristiques du poste."""
     inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": ""}
     fam = family()
     if fam == "debian":
-        code, out = run(["apt-get", "update", "-q"], timeout=1800)
+        code, out = apt_update()
         if code != 0:
             inv["error"] = "apt-get update : " + out.strip().splitlines()[-1][:300] if out.strip() else "apt-get update"
         code, out = run(["apt-get", "-s", "-q", "-o", "Debug::NoLocking=1", "upgrade", "--with-new-pkgs"])
@@ -556,10 +574,10 @@ def update():
     fam = family()
     logs = []
     if fam == "debian":
-        code, out = run(["apt-get", "update", "-q"], timeout=1800)
+        code, out = apt_update()
         logs.append(out)
         if code == 0:
-            code, out = run(["apt-get", "-y", "-q", "-o", "Dpkg::Options::=--force-confdef",
+            code, out = run(["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef",
                              "-o", "Dpkg::Options::=--force-confold", "upgrade", "--with-new-pkgs"])
             logs.append(out)
     elif fam == "rhel":
@@ -582,10 +600,10 @@ def install_package(cmd):
     fam = family()
     logs = []
     if fam == "debian":
-        code, out = run(["apt-get", "update", "-q"], timeout=1800)
+        code, out = apt_update()
         logs.append(out)
         if code == 0:
-            code, out = run(["apt-get", "-y", "-q", "-o", "Dpkg::Options::=--force-confdef",
+            code, out = run(["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef",
                              "-o", "Dpkg::Options::=--force-confold", "install", *names])
             logs.append(out)
     elif fam == "rhel":
@@ -697,7 +715,7 @@ def service():
     if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
             or state.get("inventory_version") != VERSION):
         data["inventory"] = scan()
-        state.update(last_scan=time.time(), rescan=False, inventory_version=VERSION)
+        state.update(last_scan=time.time(), rescan=_apt_lock_busy(data["inventory"].get("error") or ""), inventory_version=VERSION)
     try:
         answer = checkin(conf, data)
     except urllib.error.HTTPError as e:

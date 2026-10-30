@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.108.0 — 2026-10-30
+
+- **Inventaire des postes Debian/Ubuntu plus robuste.** Quand un autre outil APT occupait le poste au moment de l'inventaire — mises à jour automatiques, tâche `apt-daily`, ou la toute fin de l'installation de l'agent —, `apt-get update` échouait avec « E: Unable to lock directory /var/lib/apt/lists/ » et le poste restait affiché **« inventaire incomplet »** pendant des heures. L'agent **patiente désormais que le verrou se libère** (et refait l'inventaire au prochain contact si nécessaire) au lieu de signaler un échec.
+- **Distributions dérivées d'Ubuntu/Debian reconnues automatiquement.** La configuration du dépôt loco détecte maintenant les dérivées (Zorin OS, Linux Mint, Pop!_OS, elementary…) via leur base (`ID_LIKE`) et retient le nom de version d'origine (p. ex. Zorin OS 18 → Ubuntu *noble*), au lieu d'afficher « Distribution non reconnue » et de se replier sur le cache APT seul.
+
 ## 2.107.0 — 2026-10-30
 
 - **Bureau distant : prise en charge de Wayland.** La prise de contrôle à distance d'un poste Linux ne fonctionnait que sur une session **X11** (message « Bureau Wayland non pris en charge ; une session X11 est nécessaire. »). Elle gère désormais aussi **Wayland** sur les compositeurs de type *wlroots* (Sway, Hyprland, Wayfire, river…) : l'écran est capturé avec **grim** et le clavier et la souris sont rejoués par un **périphérique d'entrée virtuel** (`/dev/uinput`), indépendant du compositeur. Sur Debian/Ubuntu, `grim` est proposé automatiquement à l'installation de l'agent (dépendance recommandée).

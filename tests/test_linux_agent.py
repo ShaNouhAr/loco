@@ -190,3 +190,33 @@ class TestTrustBundle(unittest.TestCase):
         agent.apply_trust(self.answer(self.bundle))
         self.assertFalse(self.os.path.exists(self.ca))
         self.assertEqual(agent.trust_sha(), "")
+
+
+class TestAptUpdateLockRetry(unittest.TestCase):
+    """apt-get update patiente quand un autre apt tient le verrou (installation en cours, mises à jour
+    automatiques), et ne réessaie pas une erreur sans rapport."""
+    LOCK = (100, "Reading package lists...\nE: Could not get lock /var/lib/dpkg/lock-frontend. It is held by "
+                 "process 1 (apt)\nE: Unable to lock directory /var/lib/apt/lists/\n")
+    DONE = (0, "Hit:1 https://loco ./ InRelease\n")
+
+    def test_lock_busy_detects_apt_contention_only(self):
+        self.assertTrue(agent._apt_lock_busy(self.LOCK[1]))
+        self.assertFalse(agent._apt_lock_busy("E: Failed to fetch https://loco/InRelease  Could not resolve host"))
+
+    def test_apt_update_retries_until_the_lock_is_released(self):
+        calls, seq = [], [self.LOCK, self.LOCK, self.DONE]
+        def run(cmd, timeout=7200):
+            calls.append(cmd); return seq[min(len(calls) - 1, len(seq) - 1)]
+        with mock.patch.object(agent, "run", run), mock.patch.object(agent.time, "sleep", lambda *_: None):
+            code, _ = agent.apt_update()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 3)                             # a patienté puis réussi
+        self.assertIn("DPkg::Lock::Timeout=60", calls[0])          # option de verrou transmise à apt
+
+    def test_apt_update_does_not_retry_a_network_error(self):
+        calls = []
+        def run(cmd, timeout=7200):
+            calls.append(cmd); return (100, "E: Failed to fetch https://loco/InRelease  Could not resolve host\n")
+        with mock.patch.object(agent, "run", run), mock.patch.object(agent.time, "sleep", lambda *_: None):
+            code, _ = agent.apt_update()
+        self.assertEqual((code, len(calls)), (100, 1))             # pas de reprise inutile
