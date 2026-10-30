@@ -1,12 +1,16 @@
 """Décode les vrais flux Tight Linux/.NET : pixels exacts, 4K, zones modifiées et rafraîchissement complet."""
 import importlib.util
+import io
 import os
 from pathlib import Path
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -320,81 +324,131 @@ class TestWaylandDesktop(unittest.TestCase):
             dev.close()
 
 
-def _make_png(width, height, rows, color_type=2, filter_type=0):
-    """Encode un PNG minimal (8 bits, non entrelacé) pour éprouver le décodeur de l'agent."""
-    def chunk(typ, data):
-        return struct.pack(">I", len(data)) + typ + data + struct.pack(">I", zlib.crc32(typ + data) & 0xffffffff)
-    chans = 4 if color_type == 6 else 3
-    raw, prev = bytearray(), bytes(width * chans)
-    for row in rows:
-        if filter_type == 0:
-            raw += b"\x00" + row
-        else:                                                    # filtre 2 (Up) : octet = row - ligne précédente
-            raw += b"\x02" + bytes((row[i] - prev[i]) & 255 for i in range(len(row)))
-        prev = row
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(raw))) + chunk(b"IEND", b"")
+class _Pipe:
+    """Flux binaire simulé pour sys.stdin / sys.stdout (attribut .buffer)."""
+    def __init__(self, data=b""):
+        self.buffer = io.BytesIO(data)
+
+
+class _FakeBackend:
+    width, height, interval = 2, 2, 0
+
+    def __init__(self):
+        self.keys, self.codes = [], []
+
+    def grab(self): return b"\0" * 16
+    def key(self, sym, down): self.keys.append((sym, bool(down))); return True
+    def motion(self, x, y): pass
+    def button(self, number, down): pass
+    def set_cursor(self, enabled): pass
+    def cursor(self): return None
+    def flush(self): pass
+    def close(self): pass
+
+
+class _FakeKeycodeBackend(_FakeBackend):
+    def keycode(self, code, down): self.codes.append((code, bool(down)))
 
 
 @unittest.skipUnless(os.name == 'posix', 'Agent Linux')
-class TestWaylandGnomeCapture(unittest.TestCase):
-    """Repli GNOME du bureau distant Wayland : décodage PNG (capture GNOME Shell) et appel gdbus."""
+class TestWaylandInputAndMutter(unittest.TestCase):
+    """Touches physiques (extension QEMU de noVNC), backend Mutter (GNOME Wayland) et aiguillage des sessions."""
     @classmethod
     def setUpClass(cls):
-        spec = importlib.util.spec_from_file_location('loco_gnome', ROOT / 'portal/agents/loco-client.py')
+        spec = importlib.util.spec_from_file_location('loco_mutter', ROOT / 'portal/agents/loco-client.py')
         cls.agent = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.agent)
         cls.agent.LANG = "fr"
 
-    def test_png_decoder_rgb_rgba_and_filters_to_bgrx(self):
-        a = self.agent
-        rows = [bytes([10, 20, 30, 40, 50, 60]), bytes([70, 80, 90, 100, 110, 120])]   # 2x2 RGB
-        for ft in (0, 2):                                        # filtre None puis Up
-            w, h, bgrx = a._decode_png(_make_png(2, 2, rows, 2, ft))
-            self.assertEqual((w, h), (2, 2))
-            self.assertEqual(bgrx[0:4], bytes([30, 20, 10, 0]))     # (0,0) RGB 10,20,30 -> BGRX
-            self.assertEqual(bgrx[4:8], bytes([60, 50, 40, 0]))     # (1,0)
-            self.assertEqual(bgrx[8:12], bytes([90, 80, 70, 0]))    # (0,1)
-        w, h, bgrx = a._decode_png(_make_png(2, 1, [bytes([10, 20, 30, 255, 40, 50, 60, 128])], 6, 0))
-        self.assertEqual(bgrx[0:8], bytes([30, 20, 10, 0, 60, 50, 40, 0]))   # alpha ignoré (X=0)
+    def serve(self, backend, client):
+        stdin, stdout = _Pipe(client), _Pipe()
+        with mock.patch.object(sys, "stdin", stdin), mock.patch.object(sys, "stdout", stdout):
+            self.agent._rfb_serve(backend)
+        return stdout.buffer.getvalue()
 
-    def test_packed_to_bgrx_handles_rowstride_padding(self):
-        a = self.agent
-        self.assertEqual(a._packed_to_bgrx(bytes([1, 2, 3, 4, 5, 6]), 2, 1, 3, 6), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
-        padded = bytes([1, 2, 3, 255, 4, 5, 6, 128]) + b"\x00\x00"           # RGBA, stride 10 > 2*4
-        self.assertEqual(a._packed_to_bgrx(padded, 2, 1, 4, 10), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
+    CLIENT = (b"RFB 003.008\n" + b"\x01" + b"\x01" + struct.pack(">BxH", 2, 2) + struct.pack(">ii", 7, -258)
+              + struct.pack(">BBHHHH", 3, 0, 0, 0, 2, 2)
+              + struct.pack(">BBHII", 255, 0, 1, 0x3c, 0x56) + struct.pack(">BBHII", 255, 0, 0, 0x3c, 0x56)
+              + struct.pack(">BBHII", 255, 0, 1, 0xe9, 0))         # é sans scancode, jamais relâché par le client
+    ACK = struct.pack(">HHHHi", 0, 0, 0, 0, -258)
 
-    def test_decode_png_file_round_trips(self):
-        a = self.agent
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-            f.write(_make_png(2, 1, [bytes([1, 2, 3, 4, 5, 6])], 2, 2)); path = f.name
-        try:
-            self.assertEqual(a._decode_png_file(path), (2, 1, bytes([3, 2, 1, 0, 6, 5, 4, 0])))
-        finally:
-            os.unlink(path)
+    def test_xt_scancodes_map_to_evdev(self):
+        x = self.agent._xt_to_evdev
+        self.assertEqual([x(0x1e), x(0x56), x(0x01), x(0x58)], [30, 86, 1, 88])   # A, touche < > ISO, Échap, F12
+        self.assertEqual([x(0xc8), x(0xb8), x(0x9c), x(0xd3)], [103, 100, 96, 111])  # Haut, AltGr, Entrée pavé, Suppr
+        self.assertEqual([x(0), x(0x7e)], [0, 0])
 
-    def test_wayland_backend_falls_back_to_gnome_shell_when_grim_fails(self):
-        a = self.agent
-        uid = os.getuid()
-        with tempfile.TemporaryDirectory() as base:
-            runtime = os.path.join(base, str(uid)); os.makedirs(runtime)   # basename = uid -> setuid(soi) sans root
-            ref = os.path.join(base, "ref.png")
-            with open(ref, "wb") as f:
-                f.write(_make_png(2, 1, [bytes([10, 20, 30, 40, 50, 60])], 2, 0))
-            gdbus = os.path.join(base, "gdbus")                  # faux gdbus : dépose le PNG et répond (true, ...)
-            with open(gdbus, "w") as f:
-                f.write("#!/bin/sh\nfor dest; do :; done\ncp %r \"$dest\"\necho \"(true, '$dest')\"\n" % ref)
-            os.chmod(gdbus, 0o755)
+    def test_rfb_server_acks_qemu_keys_and_injects_physical_keys(self):
+        backend = _FakeKeycodeBackend()
+        out = self.serve(backend, self.CLIENT)
+        self.assertIn(self.ACK, out)                                     # accusé de l'extension dans la mise à jour
+        self.assertEqual(backend.codes, [(86, True), (86, False)])       # « < » par sa touche physique
+        self.assertEqual(backend.keys, [(0xe9, True), (0xe9, False)])    # repli keysym, relâché à la fermeture
 
-            class FakeUInput:
-                def __init__(self, w, h): self.width, self.height = w, h
-                def close(self): pass
-            saved_uinput, saved_path = a.UInput, os.environ["PATH"]
-            a.UInput = FakeUInput
-            os.environ["PATH"] = base + os.pathsep + "/usr/bin:/bin"        # pas de grim ici -> repli GNOME
-            try:
-                b = a.WaylandBackend({"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": "wayland-9"})
-                self.assertEqual((b.width, b.height), (2, 1))
-                self.assertEqual(b.grab()[0:8], bytes([30, 20, 10, 0, 60, 50, 40, 0]))
-                self.assertFalse(os.path.exists(os.path.join(runtime, "loco-gnome-shot.png")))   # fichier nettoyé
-            finally:
-                a.UInput, os.environ["PATH"] = saved_uinput, saved_path
+    def test_backend_without_keycodes_keeps_keysyms(self):
+        backend = _FakeBackend()                                         # X11 : comportement inchangé
+        out = self.serve(backend, self.CLIENT)
+        self.assertNotIn(self.ACK, out)
+        self.assertEqual(backend.keys[:2], [(0x3c, True), (0x3c, False)])
+
+    def test_mutter_input_mapping(self):
+        m = object.__new__(self.agent.MutterBackend)
+        sent = []
+        m._send, m._stream = (lambda method, sig, *args: sent.append((method, sig) + args)), "/stream"
+        self.assertTrue(m.key(0x40, 1)); m.keycode(86, 0); m.motion(10, 20)
+        m.button(1, True); m.button(3, False); m.button(4, True); m.button(4, False); m.button(5, True)
+        self.assertEqual(sent, [
+            ("NotifyKeyboardKeysym", "(ub)", 0x40, True), ("NotifyKeyboardKeycode", "(ub)", 86, False),
+            ("NotifyPointerMotionAbsolute", "(sdd)", "/stream", 10.0, 20.0),
+            ("NotifyPointerButton", "(ib)", 0x110, True), ("NotifyPointerButton", "(ib)", 0x111, False),
+            ("NotifyPointerAxisDiscrete", "(ui)", 0, -1), ("NotifyPointerAxisDiscrete", "(ui)", 0, 1)])
+
+    def test_mutter_pull_repacks_padded_rows(self):
+        class Struct:
+            def get_value(self, k): return 2
+        class Caps:
+            def get_structure(self, i): return Struct()
+        class Buf:
+            data = b"\x01" * 8 + b"PADD" + b"\x02" * 8 + b"PADD"           # 2 lignes de 2 px, pas de 12 octets
+            def get_size(self): return len(self.data)
+            def extract_dup(self, offset, size): return self.data
+        class Sample:
+            def get_caps(self): return Caps()
+            def get_buffer(self): return Buf()
+        m = object.__new__(self.agent.MutterBackend)
+        m._Gst = types.SimpleNamespace(SECOND=1)
+        m._sink = types.SimpleNamespace(emit=lambda name, timeout: Sample())
+        self.assertEqual(m._pull(0), (2, 2, b"\x01" * 8 + b"\x02" * 8))
+
+    def test_fit_frame_keeps_negotiated_size(self):
+        fit = self.agent._fit_frame
+        frame = bytes(range(16))                                         # 2x2
+        self.assertIs(fit(frame, 2, 2, 2, 2), frame)
+        self.assertEqual(fit(frame, 2, 2, 1, 1), frame[:4])               # rognage
+        self.assertEqual(fit(frame[:4], 1, 1, 2, 1), frame[:4] + b"\0" * 4)   # complément noir
+
+    def test_wayland_sessions_route_gnome_to_mutter(self):
+        a = self.agent
+        env = {"uid": 1000, "XDG_RUNTIME_DIR": "/run/user/1000", "WAYLAND_DISPLAY": "wayland-0"}
+        served = []
+        for gnome, expected in ((True, "MutterBackend"), (False, "WaylandBackend")):
+            with mock.patch.object(a, "x11_environment", side_effect=RuntimeError("Bureau Wayland")), \
+                    mock.patch.object(a, "wayland_environment", return_value=env), \
+                    mock.patch.object(a, "_gnome_session", return_value=gnome), \
+                    mock.patch.object(a, "_login_screen", return_value=False), \
+                    mock.patch.object(a, "MutterBackend", lambda e: "MutterBackend"), \
+                    mock.patch.object(a, "WaylandBackend", lambda e: "WaylandBackend"), \
+                    mock.patch.object(a, "_rfb_serve", served.append):
+                a.linux_desktop()
+            self.assertEqual(served[-1], expected)
+
+    def test_login_screen_falls_back_to_text_console_or_explains(self):
+        a = self.agent
+        env = {"uid": 121, "XDG_RUNTIME_DIR": "/run/user/121", "WAYLAND_DISPLAY": "wayland-0"}
+        with mock.patch.object(a, "x11_environment", side_effect=RuntimeError("Bureau Wayland")), \
+                mock.patch.object(a, "wayland_environment", return_value=env), \
+                mock.patch.object(a, "_login_screen", return_value=True), \
+                mock.patch.object(a, "text_console", return_value="console"), \
+                mock.patch.object(a, "MutterBackend", side_effect=AssertionError("pas de Mutter sur l'écran de connexion")):
+            self.assertEqual(a.linux_desktop(terminal_fallback=True), "console")
+            with self.assertRaisesRegex(RuntimeError, "Personne n'est connecté"):
+                a.linux_desktop()

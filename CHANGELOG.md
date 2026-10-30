@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.111.0 — 2026-10-30
+
+- **Bureau distant GNOME en Wayland, pour de bon (Zorin OS, Ubuntu…).** La capture par l'API « capture d'écran » de GNOME Shell (2.110) est refusée par GNOME 46 (« Screenshot is not allowed »). L'agent passe désormais par **l'API du bureau à distance intégré de GNOME** (sessions RemoteDesktop + ScreenCast de Mutter) : image en direct par PipeWire (~25 i/s), clavier et souris injectés par la même session — **aucune configuration, aucune fenêtre de consentement, aucun redémarrage**. Validé sur un **Zorin OS 18.1 fraîchement installé** (GNOME 46, Wayland) : tout le nécessaire y est présent d'origine. Pendant la session, GNOME affiche son indicateur de partage d'écran ; la personne devant le poste peut l'arrêter d'un clic, la session distante se ferme alors avec un message. Pour cette session, l'agent quitte root et agit en tant qu'utilisateur connecté. Écran principal seulement.
+- **Clavier fidèle sur les bureaux Wayland (AZERTY, touches mortes, AltGr).** Le serveur de bureau distant gère l'extension « touches physiques » de noVNC, comme la console Proxmox : la disposition du poste s'applique telle quelle — `<` `>`, `ê` par la touche morte, `@` `€` par AltGr… Les sessions X11 gardent leur comportement.
+- Compositeurs *wlroots* (Sway, Hyprland…) : capture par grim inchangée, avec désormais les touches physiques. La voie « capture GNOME Shell » de la 2.110 est retirée.
+
 ## 2.110.0 — 2026-10-30
 
 - **Bureau distant sur GNOME Wayland (Zorin OS, Ubuntu…).** Un bureau GNOME en session Wayland n'expose pas la capture d'écran libre (*wlr-screencopy*) qu'utilise grim : le bureau distant échouait avec « le compositeur ne gère pas wlr-screencopy ». L'agent bascule désormais sur **l'API de capture d'écran de GNOME Shell** (via D-Bus, au nom de l'utilisateur de la session) — le bureau distant fonctionne donc sur GNOME Wayland **sans changer de session ni redémarrer le poste**. Le clavier et la souris passaient déjà par un périphérique d'entrée virtuel indépendant du compositeur. C'est plus lent qu'une session X11 ou qu'un compositeur *wlroots* (quelques images par seconde) et dépend d'une version de GNOME exposant encore cette API ; sinon, le message invite à ouvrir une session X11 (Xorg).

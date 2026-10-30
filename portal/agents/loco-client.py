@@ -1151,9 +1151,9 @@ def cursor_rect(xhot, yhot, width, height, argb):
     return struct.pack(">HHHHI", min(xhot, width - 1), min(yhot, height - 1), width, height, 0x574D5664) + b"\x01\x00" + bytes(rgba)
 
 
-def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, rgb_order=False, cursor=None):
+def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, rgb_order=False, cursor=None, pseudo=()):
     """Rectangles natifs modifiés, sans perte ; les buffers restent bornés à une capture.
-    cursor : pseudo-rectangle de forme du curseur, joint quand elle change."""
+    cursor : pseudo-rectangle de forme du curseur, joint quand elle change ; pseudo : autres pseudo-rectangles."""
     if not 1 <= width <= 65535 or not 1 <= height <= 65535 or width * height > 16777216 or len(data) != width * height * 4:
         raise ValueError("Capture RFB invalide")
     rectangles = []
@@ -1188,6 +1188,7 @@ def rfb_frame(data, width, height, previous=None, incremental=True, tight=True, 
             rectangles.append(header + payload)
     if cursor:
         rectangles.insert(0, cursor)
+    rectangles[0:0] = list(pseudo)
     return b"\0\0" + struct.pack(">H", len(rectangles)) + b"".join(rectangles)
 
 
@@ -1280,88 +1281,15 @@ def _rgb_to_bgrx(rgb):
     return bytes(out)
 
 
-def _packed_to_bgrx(pixels, width, height, channels, stride):
-    """Pixels RGB(A) empaquetés (GdkPixbuf ou PNG décodé) -> BGRX, ligne par ligne (copies à pas natif)."""
-    out = bytearray(width * height * 4)
-    for y in range(height):
-        row = pixels[y * stride:y * stride + width * channels]
-        o, end = y * width * 4, y * width * 4 + width * 4
-        out[o:end:4], out[o + 1:end:4], out[o + 2:end:4] = bytes(row[2::channels]), bytes(row[1::channels]), bytes(row[0::channels])
+def _fit_frame(bgrx, width, height, target_w, target_h):
+    """Capture ramenée à la taille négociée en RFB (résolution changée en cours de session : rognage/complément)."""
+    if (width, height) == (target_w, target_h):
+        return bgrx
+    out = bytearray(target_w * target_h * 4)
+    cols = min(width, target_w) * 4
+    for y in range(min(height, target_h)):
+        out[y * target_w * 4:y * target_w * 4 + cols] = bgrx[y * width * 4:y * width * 4 + cols]
     return bytes(out)
-
-
-def _png_unfilter(line, prev, ftype, bpp):
-    """Reconstruit une ligne PNG filtrée (types 0-4 : None/Sub/Up/Average/Paeth), en place."""
-    if ftype == 0:
-        return
-    for i in range(len(line)):
-        a = line[i - bpp] if i >= bpp else 0
-        b = prev[i]
-        c = prev[i - bpp] if i >= bpp else 0
-        if ftype == 1:
-            line[i] = (line[i] + a) & 255
-        elif ftype == 2:
-            line[i] = (line[i] + b) & 255
-        elif ftype == 3:
-            line[i] = (line[i] + ((a + b) >> 1)) & 255
-        elif ftype == 4:
-            p = a + b - c
-            pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
-            line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
-        else:
-            raise RuntimeError("filtre PNG inconnu")
-
-
-def _decode_png(data):
-    """Décodeur PNG minimal sans dépendance (8 bits RGB/RGBA, non entrelacé) -> (largeur, hauteur, BGRX)."""
-    if data[:8] != b"\x89PNG\r\n\x1a\n":
-        raise RuntimeError("PNG invalide")
-    width = height = bitdepth = colortype = 0
-    idat, pos = bytearray(), 8
-    while pos + 8 <= len(data):
-        length = int.from_bytes(data[pos:pos + 4], "big")
-        ctype, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + length]
-        pos += 12 + length                                       # longueur(4) + type(4) + données + CRC(4)
-        if ctype == b"IHDR":
-            width, height = int.from_bytes(body[0:4], "big"), int.from_bytes(body[4:8], "big")
-            bitdepth, colortype = body[8], body[9]
-            if body[12] != 0:
-                raise RuntimeError("PNG entrelacé non pris en charge")
-        elif ctype == b"IDAT":
-            idat += body
-        elif ctype == b"IEND":
-            break
-    if bitdepth != 8 or colortype not in (2, 6) or not 1 <= width * height <= 16777216:
-        raise RuntimeError("PNG non pris en charge (8 bits RGB/RGBA requis)")
-    channels = 4 if colortype == 6 else 3
-    raw, stride = zlib.decompress(bytes(idat)), width * channels
-    if len(raw) < (stride + 1) * height:
-        raise RuntimeError("PNG tronqué")
-    out, prev, p = bytearray(width * height * 4), bytearray(stride), 0
-    for y in range(height):
-        ftype, line = raw[p], bytearray(raw[p + 1:p + 1 + stride])
-        p += 1 + stride
-        _png_unfilter(line, prev, ftype, channels)
-        o, end = y * width * 4, y * width * 4 + width * 4
-        out[o:end:4], out[o + 1:end:4], out[o + 2:end:4] = bytes(line[2::channels]), bytes(line[1::channels]), bytes(line[0::channels])
-        prev = line
-    return width, height, bytes(out)
-
-
-def _decode_png_file(path):
-    """PNG -> (largeur, hauteur, BGRX) ; via GdkPixbuf si présent (rapide, cas d'un bureau GNOME), sinon décodeur interne."""
-    try:
-        import gi
-        gi.require_version("GdkPixbuf", "2.0")
-        from gi.repository import GdkPixbuf
-        pb = GdkPixbuf.Pixbuf.new_from_file(path)
-        if pb.get_bits_per_sample() == 8 and pb.get_n_channels() in (3, 4):
-            return (pb.get_width(), pb.get_height(),
-                    _packed_to_bgrx(pb.get_pixels(), pb.get_width(), pb.get_height(), pb.get_n_channels(), pb.get_rowstride()))
-    except Exception:                                            # gi absent / illisible : repli décodeur interne
-        pass
-    with open(path, "rb") as f:
-        return _decode_png(f.read())
 
 
 class UInput:
@@ -1387,7 +1315,7 @@ class UInput:
             fcntl.ioctl(self._fd, set_relbit, self.REL_WHEEL)
             for axis in (self.ABS_X, self.ABS_Y):
                 fcntl.ioctl(self._fd, set_absbit, axis)
-            for code in set(EVDEV_KEYS.values()) | set(self.BUTTONS.values()):
+            for code in set(range(1, 128)) | set(self.BUTTONS.values()):
                 fcntl.ioctl(self._fd, set_keybit, code)
             absmax, absmin, zeros = [0] * 64, [0] * 64, [0] * 64
             absmax[self.ABS_X] = absmax[self.ABS_Y] = self.ABS_RANGE
@@ -1435,7 +1363,9 @@ class UInput:
 
 
 def wayland_environment():
-    """Session Wayland locale : répertoire d'exécution + socket du compositeur, pour grim et le périphérique d'entrée."""
+    """Session Wayland locale : utilisateur, répertoire d'exécution, socket du compositeur et bus de session.
+    Une session ouverte (uid >= 1000) passe avant l'écran de connexion de GDM."""
+    found = {}
     for name in os.listdir("/proc"):
         if not name.isdigit():
             continue
@@ -1446,12 +1376,60 @@ def wayland_environment():
         except OSError:
             continue
         runtime, display = env.get("XDG_RUNTIME_DIR", ""), env.get("WAYLAND_DISPLAY", "")
-        if env.get("XDG_SESSION_TYPE") == "wayland" and re.fullmatch(r"/run/user/[0-9]+", runtime) and display:
+        match = re.fullmatch(r"/run/user/([0-9]+)", runtime)
+        if env.get("XDG_SESSION_TYPE") == "wayland" and match and display:
             socket_path = display if os.path.isabs(display) else runtime.rstrip("/") + "/" + display
             if (os.path.isabs(display) or re.fullmatch(r"wayland-[0-9]+", display)) and os.path.exists(socket_path):
-                return {"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": display,
-                        "DBUS_SESSION_BUS_ADDRESS": env.get("DBUS_SESSION_BUS_ADDRESS", "")}
+                uid = int(match.group(1))
+                entry = found.setdefault(uid, {"uid": uid, "XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": display,
+                                               "DBUS_SESSION_BUS_ADDRESS": ""})
+                entry["DBUS_SESSION_BUS_ADDRESS"] = entry["DBUS_SESSION_BUS_ADDRESS"] or env.get("DBUS_SESSION_BUS_ADDRESS", "")
+    if found:
+        return found[sorted(found, key=lambda uid: (uid < 1000, uid))[0]]
     raise RuntimeError(t("Aucune session Wayland active accessible à l'agent.", "No active Wayland session accessible to the agent.", "Ninguna sesión Wayland activa accesible para el agente."))
+
+
+def _gnome_session(uid):
+    """La session Wayland de cet utilisateur est-elle servie par GNOME Shell (Mutter) ?"""
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            if os.stat("/proc/" + name).st_uid != uid:
+                continue
+            with open("/proc/" + name + "/comm") as f:
+                if f.read().strip() == "gnome-shell":
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def _login_screen(uid):
+    """Session de l'écran de connexion de GDM (aucun utilisateur connecté) ?"""
+    import pwd
+    try:
+        return pwd.getpwuid(uid).pw_name in ("gdm", "gdm3", "Debian-gdm")
+    except KeyError:
+        return False
+
+
+def _become_session_user(env):
+    """Quitter root pour l'utilisateur de la session : son bus D-Bus et son PipeWire n'acceptent que lui."""
+    import pwd
+    uid = env["uid"]
+    pw = pwd.getpwuid(uid)
+    if os.getuid() != uid:
+        os.setgroups(os.getgrouplist(pw.pw_name, pw.pw_gid))
+        os.setgid(pw.pw_gid)
+        os.setuid(uid)
+    runtime = env["XDG_RUNTIME_DIR"].rstrip("/")
+    os.environ.update(HOME=pw.pw_dir, USER=pw.pw_name, LOGNAME=pw.pw_name, XDG_RUNTIME_DIR=runtime,
+                      WAYLAND_DISPLAY=env["WAYLAND_DISPLAY"],
+                      DBUS_SESSION_BUS_ADDRESS=env.get("DBUS_SESSION_BUS_ADDRESS") or "unix:path=" + runtime + "/bus",
+                      # registre GStreamer propre à loco, dans le tmpfs de la session : ni cache périmé, ni écriture dans $HOME
+                      GST_REGISTRY=runtime + "/loco-gstreamer-registry.bin")
+    os.chdir("/")
 
 
 class X11Backend:
@@ -1547,95 +1525,39 @@ class X11Backend:
 
 
 class WaylandBackend:
-    """Bureau Wayland : capture par grim (compositeurs wlroots) ou par l'API capture d'écran de GNOME Shell (GNOME),
-    saisie par périphérique d'entrée virtuel (indépendant du compositeur)."""
+    """Bureau Wayland d'un compositeur wlroots (Sway, Hyprland, Wayfire, river…) : capture par grim, saisie par
+    périphérique d'entrée virtuel (/dev/uinput). GNOME passe par MutterBackend."""
+    interval = 0.1                                               # grim est relancé par trame : ~10 i/s suffisent à l'administration
 
     def __init__(self, env):
         self._env = dict(os.environ)
-        self._runtime = env["XDG_RUNTIME_DIR"]
-        self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = self._runtime, env["WAYLAND_DISPLAY"]
-        self._dbus = env.get("DBUS_SESSION_BUS_ADDRESS") or ("unix:path=" + self._runtime.rstrip("/") + "/bus")
-        # Choisir une méthode de capture qui fonctionne sur ce compositeur : grim (wlroots), sinon GNOME Shell.
-        attempts, chosen, size, interval = [], None, None, 0.1
-        for name, method, rate in (("grim", self._grab_grim, 0.1), ("gnome", self._grab_gnome, 0.18)):
-            try:
-                w, h, _bgrx = method()
-                chosen, size, interval = method, (w, h), rate
-                break
-            except Exception as e:                               # noqa: BLE001 — on tente la méthode suivante
-                attempts.append("%s — %s" % (name, str(e)[-150:]))
-        if chosen is None:
-            raise RuntimeError(t(
-                "Capture Wayland impossible sur ce bureau. Ouvrez une session X11 (Xorg) sur ce poste pour le bureau distant. Détails : %s",
-                "Wayland capture failed on this desktop. Open an X11 (Xorg) session on this machine for the remote desktop. Details: %s",
-                "Captura Wayland imposible en este escritorio. Abra una sesión X11 (Xorg) en este equipo para el escritorio remoto. Detalles: %s") % " | ".join(attempts))
-        w, h = size
-        if not 1 <= w <= 4096 or not 1 <= h <= 2160:
+        self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = env["XDG_RUNTIME_DIR"], env["WAYLAND_DISPLAY"]
+        width, height, _ = self._grab_grim()
+        if not 1 <= width <= 4096 or not 1 <= height <= 2160:
             raise RuntimeError(t("Résolution Wayland supérieure à 4096 × 2160.", "Wayland resolution larger than 4096 × 2160.", "Resolución Wayland superior a 4096 × 2160."))
-        self.width, self.height, self._grab_raw, self.interval = w, h, chosen, interval
-        self._uinput = UInput(w, h)
+        self.width, self.height = width, height
+        self._uinput = UInput(width, height)
 
     def _grab_grim(self):
         try:
             proc = subprocess.run(["grim", "-t", "ppm", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env, timeout=10)
         except FileNotFoundError:
-            raise RuntimeError(t("grim non installé", "grim not installed", "grim no instalado"))
+            raise RuntimeError(t("grim est requis pour le bureau distant de ce compositeur Wayland (installez le paquet « grim » sur ce poste).",
+                                 "grim is required for the remote desktop of this Wayland compositor (install the \"grim\" package on this machine).",
+                                 "grim es necesario para el escritorio remoto de este compositor Wayland (instale el paquete «grim» en este equipo)."))
         except (OSError, subprocess.SubprocessError) as e:
-            raise RuntimeError(str(e))
+            raise RuntimeError(t("Capture Wayland impossible : %s", "Wayland capture failed: %s", "Captura Wayland imposible: %s") % e)
         if proc.returncode != 0 or not proc.stdout:
-            raise RuntimeError("grim: " + (proc.stderr.decode("utf-8", "replace").strip()[-150:] or "code %d" % proc.returncode))
+            detail = proc.stderr.decode("utf-8", "replace").strip()[-200:]
+            raise RuntimeError(t("Capture Wayland impossible : ce compositeur ne permet pas la capture d'écran (KDE Plasma : ouvrez une session X11). %s",
+                                 "Wayland capture failed: this compositor does not allow screen capture (KDE Plasma: open an X11 session). %s",
+                                 "Captura Wayland imposible: este compositor no permite la captura de pantalla (KDE Plasma: abra una sesión X11). %s") % detail)
         w, h, rgb = _parse_ppm(proc.stdout)
         return w, h, _rgb_to_bgrx(rgb)
 
-    def _grab_gnome(self):
-        """Capture via org.gnome.Shell.Screenshot (bus de session, en tant qu'utilisateur) : PNG lu puis décodé en BGRX."""
-        import pwd
-        uid = int(os.path.basename(self._runtime.rstrip("/")))
-        pw = pwd.getpwuid(uid)
-        def demote():                                            # exécuter gdbus avec l'identité de l'utilisateur de la session
-            os.setgid(pw.pw_gid)
-            try:
-                os.setgroups([pw.pw_gid])
-            except OSError:
-                pass
-            os.setuid(uid)
-        path = os.path.join(self._runtime, "loco-gnome-shot.png")
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-        gdbus = shutil.which("gdbus")
-        if not gdbus:
-            raise RuntimeError(t("gdbus absent", "gdbus missing", "gdbus ausente"))
-        user_env = {"XDG_RUNTIME_DIR": self._runtime, "DBUS_SESSION_BUS_ADDRESS": self._dbus,
-                    "HOME": pw.pw_dir, "USER": pw.pw_name, "LOGNAME": pw.pw_name, "PATH": "/usr/bin:/bin"}
-        try:
-            proc = subprocess.run([gdbus, "call", "--session", "--dest", "org.gnome.Shell.Screenshot",
-                                   "--object-path", "/org/gnome/Shell/Screenshot",
-                                   "--method", "org.gnome.Shell.Screenshot.Screenshot", "true", "false", path],
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=user_env, preexec_fn=demote, timeout=15)
-        except (OSError, subprocess.SubprocessError) as e:
-            raise RuntimeError(str(e))
-        out = proc.stdout.decode("utf-8", "replace").strip()
-        if proc.returncode != 0 or not out.startswith("(true") or not os.path.exists(path):
-            raise RuntimeError("GNOME Shell: " + (out[-150:] or "code %d" % proc.returncode))
-        try:
-            return _decode_png_file(path)
-        finally:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
-
     def grab(self):
-        width, height, bgrx = self._grab_raw()
-        if (width, height) == (self.width, self.height):
-            return bgrx
-        out = bytearray(self.width * self.height * 4)            # résolution changée en session : rognage/complément vers la taille négociée
-        cols = min(width, self.width) * 4
-        for y in range(min(height, self.height)):
-            out[y * self.width * 4:y * self.width * 4 + cols] = bgrx[y * width * 4:y * width * 4 + cols]
-        return bytes(out)
+        width, height, bgrx = self._grab_grim()
+        return _fit_frame(bgrx, width, height, self.width, self.height)
 
     def key(self, sym, down):
         code = EVDEV_KEYS.get(sym)
@@ -1643,6 +1565,9 @@ class WaylandBackend:
             return False
         self._uinput.key(code, down)
         return True
+
+    def keycode(self, code, down):
+        self._uinput.key(code, down)
 
     def motion(self, x, y):
         self._uinput.motion(x, y)
@@ -1667,6 +1592,158 @@ class WaylandBackend:
         self._uinput.close()
 
 
+class MutterBackend:
+    """Bureau GNOME en Wayland : session RemoteDesktop + ScreenCast de Mutter (l'API du bureau à distance intégré de
+    GNOME), images par PipeWire (GStreamer), clavier en keysyms X et pointeur absolu. Pas de fenêtre de consentement :
+    GNOME affiche son indicateur de partage d'écran, que la personne devant le poste peut arrêter, pendant la session."""
+    interval = 0.04
+    RD, SC = "org.gnome.Mutter.RemoteDesktop", "org.gnome.Mutter.ScreenCast"
+    BUTTONS = {1: 0x110, 2: 0x112, 3: 0x111}                      # BTN_LEFT, BTN_MIDDLE, BTN_RIGHT (evdev)
+
+    def __init__(self, env):
+        self._rd, self._pipe, self._closed = None, None, False
+        _become_session_user(env)
+        try:
+            import gi
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gio, GLib, Gst
+        except (ImportError, ValueError):
+            raise RuntimeError(t("Composants manquants pour le bureau distant GNOME : installez python3-gi, gir1.2-gstreamer-1.0 et gstreamer1.0-pipewire.",
+                                 "Missing components for the GNOME remote desktop: install python3-gi, gir1.2-gstreamer-1.0 and gstreamer1.0-pipewire.",
+                                 "Faltan componentes para el escritorio remoto GNOME: instale python3-gi, gir1.2-gstreamer-1.0 y gstreamer1.0-pipewire."))
+        self._Gio, self._GLib, self._Gst = Gio, GLib, Gst
+        self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self._ctx = GLib.MainContext.default()
+        rd, sc = self.RD, self.SC
+        try:
+            self._rd = self._call(rd, "/org/gnome/Mutter/RemoteDesktop", rd, "CreateSession", None, "(o)")[0]
+            sid = self._call(rd, self._rd, "org.freedesktop.DBus.Properties", "Get",
+                             GLib.Variant("(ss)", (rd + ".Session", "SessionId")), "(v)")[0]
+            session = self._call(sc, "/org/gnome/Mutter/ScreenCast", sc, "CreateSession",
+                                 GLib.Variant("(a{sv})", ({"remote-desktop-session-id": GLib.Variant("s", sid)},)), "(o)")[0]
+            # Curseur incrusté dans l'image (mode 1) : la position réelle du pointeur reste visible à distance.
+            self._stream = self._call(sc, session, sc + ".Session", "RecordMonitor",
+                                      GLib.Variant("(sa{sv})", ("", {"cursor-mode": GLib.Variant("u", 1)})), "(o)")[0]
+            node = []
+            # S'abonner AVANT le démarrage : Mutter émet le signal pendant Start.
+            self._bus.signal_subscribe(sc, sc + ".Stream", "PipeWireStreamAdded", self._stream, None,
+                                       Gio.DBusSignalFlags.NONE, lambda *a: node.append(a[-1].unpack()[0]))
+            self._bus.signal_subscribe(rd, rd + ".Session", "Closed", self._rd, None, Gio.DBusSignalFlags.NONE,
+                                       lambda *a: setattr(self, "_closed", True))
+            self._call(rd, self._rd, rd + ".Session", "Start")   # démarre aussi la capture liée
+        except GLib.Error as e:
+            self.close()
+            raise RuntimeError(t("Bureau à distance GNOME indisponible : %s", "GNOME remote desktop unavailable: %s",
+                                 "Escritorio remoto GNOME no disponible: %s") % e.message)
+        deadline = time.monotonic() + 10
+        while not node and time.monotonic() < deadline:
+            self._ctx.iteration(False)
+            time.sleep(0.005)
+        Gst.init(None)
+        if not node or Gst.ElementFactory.find("pipewiresrc") is None:
+            self.close()
+            raise RuntimeError(t("Flux d'écran GNOME indisponible (PipeWire) : vérifiez que gstreamer1.0-pipewire est installé.",
+                                 "GNOME screen stream unavailable (PipeWire): check that gstreamer1.0-pipewire is installed.",
+                                 "Flujo de pantalla GNOME no disponible (PipeWire): compruebe que gstreamer1.0-pipewire está instalado."))
+        self._pipe = Gst.parse_launch(
+            "pipewiresrc path=%d do-timestamp=true keepalive-time=1000 always-copy=true ! videoconvert ! "
+            "video/x-raw,format=BGRx ! appsink name=sink max-buffers=1 drop=true sync=false" % node[0])
+        self._sink = self._pipe.get_by_name("sink")
+        self._pipe.set_state(Gst.State.PLAYING)
+        first = self._pull(10)
+        if first is None or not 1 <= first[0] <= 4096 or not 1 <= first[1] <= 2160:
+            self.close()
+            raise RuntimeError(t("Aucune image exploitable reçue de GNOME (écran absent ou supérieur à 4096 × 2160).",
+                                 "No usable image received from GNOME (no screen, or larger than 4096 × 2160).",
+                                 "Ninguna imagen utilizable recibida de GNOME (sin pantalla o superior a 4096 × 2160)."))
+        self.width, self.height, self._last = first
+
+    def _call(self, name, path, iface, method, params=None, reply=None):
+        result = self._bus.call_sync(name, path, iface, method, params, self._GLib.VariantType(reply) if reply else None,
+                                     self._Gio.DBusCallFlags.NONE, 10000, None)
+        return result.unpack() if result is not None else None
+
+    def _send(self, method, signature, *args):
+        """Événement d'entrée sans réponse attendue : ordre conservé, aucun aller-retour par touche."""
+        self._bus.call(self.RD, self._rd, self.RD + ".Session", method, self._GLib.Variant(signature, args),
+                       None, self._Gio.DBusCallFlags.NONE, -1, None, None)
+
+    def _pull(self, timeout):
+        sample = self._sink.emit("try-pull-sample", int(timeout * self._Gst.SECOND))
+        if sample is None:
+            return None
+        caps = sample.get_caps().get_structure(0)
+        width, height = caps.get_value("width"), caps.get_value("height")
+        buffer = sample.get_buffer()
+        data = buffer.extract_dup(0, buffer.get_size())
+        stride = len(data) // height if height else 0
+        if stride != width * 4:                                  # lignes rembourrées : BGRX contigu pour rfb_frame
+            data = b"".join(data[y * stride:y * stride + width * 4] for y in range(height))
+        return width, height, data
+
+    def grab(self):
+        self._ctx.iteration(False)                               # traite le signal Closed
+        if self._closed:
+            raise RuntimeError(t("Le partage d'écran a été arrêté depuis le poste.", "Screen sharing was stopped on the machine.",
+                                 "El uso compartido de pantalla se detuvo desde el equipo."))
+        frame = self._pull(0)
+        if frame is not None:                                    # sinon écran inchangé : Mutter n'envoie qu'au changement
+            self._last = _fit_frame(frame[2], frame[0], frame[1], self.width, self.height)
+        return self._last
+
+    def key(self, sym, down):
+        self._send("NotifyKeyboardKeysym", "(ub)", sym, bool(down))
+        return True
+
+    def keycode(self, code, down):
+        self._send("NotifyKeyboardKeycode", "(ub)", code, bool(down))
+
+    def motion(self, x, y):
+        self._send("NotifyPointerMotionAbsolute", "(sdd)", self._stream, float(x), float(y))
+
+    def button(self, number, down):
+        if number in (4, 5):                                     # molette : une encoche ; positif = vers le bas
+            if down:
+                self._send("NotifyPointerAxisDiscrete", "(ui)", 0, -1 if number == 4 else 1)
+        elif number in self.BUTTONS:
+            self._send("NotifyPointerButton", "(ib)", self.BUTTONS[number], bool(down))
+
+    def set_cursor(self, enabled):
+        pass                                                     # curseur incrusté dans l'image
+
+    def cursor(self):
+        return None
+
+    def flush(self):
+        pass
+
+    def close(self):
+        if self._rd:
+            try:
+                self._call(self.RD, self._rd, self.RD + ".Session", "Stop")
+            except Exception:                                    # session déjà fermée par GNOME
+                pass
+            self._rd = None
+        if self._pipe is not None:
+            self._pipe.set_state(self._Gst.State.NULL)
+            self._pipe = None
+
+
+# Extension « QEMU Extended Key Event » (noVNC) : le navigateur joint au keysym le scancode XT de la touche physique ;
+# les touches étendues (préfixe 0xE0) arrivent avec le bit 7 levé. La disposition du poste distant s'applique alors
+# telle quelle (touches mortes, AltGr, touche < > des claviers ISO…).
+QEMU_EXT_KEYS = -258
+_XT_EXTENDED = {0x9c: 96, 0x9d: 97, 0xb5: 98, 0xb7: 99, 0xb8: 100, 0xc7: 102, 0xc8: 103, 0xc9: 104, 0xcb: 105,
+                0xcd: 106, 0xcf: 107, 0xd0: 108, 0xd1: 109, 0xd2: 110, 0xd3: 111, 0xdb: 125, 0xdc: 126, 0xdd: 127}
+
+
+def _xt_to_evdev(code):
+    """Scancode XT (convention QEMU) -> code de touche evdev ; 0 si inconnu (repli sur le keysym)."""
+    if 1 <= code <= 0x58:                                        # touches de base : evdev = scancode XT
+        return code
+    return _XT_EXTENDED.get(code, 0)
+
+
 def _rfb_serve(backend):
     """Serveur RFB 3.8 : relais stdin/stdout branché sur noVNC par le portail ; capture et saisie déléguées au backend."""
     inp, out = sys.stdin.buffer, sys.stdout.buffer
@@ -1682,6 +1759,8 @@ def _rfb_serve(backend):
         out.write(data)
         out.flush()
     pressed, mask, tight, last_frame, rgb_order, previous = set(), 0, False, 0, False, None
+    # Codes de touches physiques : seulement si le client les propose ET si le backend sait les injecter.
+    codes, keycodes, ack_keys = set(), False, False
     def interrupted(_signum, _frame):
         raise EOFError()
     # SIGTERM doit aussi relâcher les modificateurs si la console est fermée pendant une frappe.
@@ -1712,11 +1791,15 @@ def _rfb_serve(backend):
                 encodings = struct.unpack(">" + "i" * count, read(count * 4))
                 tight = 7 in encodings
                 backend.set_cursor(0x574D5664 in encodings)
+                wanted = QEMU_EXT_KEYS in encodings and hasattr(backend, "keycode")
+                ack_keys, keycodes = wanted and not keycodes, wanted
             elif kind == 3:
                 incremental = read(9)[0] != 0
                 time.sleep(max(0, backend.interval - (time.monotonic() - last_frame)))
                 data = backend.grab()
-                write(rfb_frame(data, backend.width, backend.height, previous, incremental, tight, rgb_order, backend.cursor()))
+                ack = (struct.pack(">HHHHi", 0, 0, 0, 0, QEMU_EXT_KEYS),) if ack_keys else ()
+                write(rfb_frame(data, backend.width, backend.height, previous, incremental, tight, rgb_order, backend.cursor(), ack))
+                ack_keys = False
                 previous = data
                 last_frame = time.monotonic()
             elif kind == 4:
@@ -1734,6 +1817,16 @@ def _rfb_serve(backend):
                         backend.button(number, True)
                         backend.button(number, False)
                 mask = next_mask
+            elif kind == 255:                                    # message client QEMU
+                if read(1)[0] != 0:
+                    raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message", "Mensaje RFB no admitido"))
+                down, sym, code = struct.unpack(">HII", read(10))
+                evdev = _xt_to_evdev(code) if keycodes else 0
+                if evdev:
+                    backend.keycode(evdev, bool(down))
+                    (codes.add if down else codes.discard)(evdev)
+                elif backend.key(sym, down):
+                    (pressed.add if down else pressed.discard)(sym)
             elif kind == 6:
                 length = struct.unpack(">xxxI", read(7))[0]
                 if length > 1024 * 1024:
@@ -1747,6 +1840,8 @@ def _rfb_serve(backend):
     finally:
         for sym in pressed:
             backend.key(sym, False)
+        for code in codes:
+            backend.keycode(code, False)
         for bit, number in ((1, 1), (2, 2), (4, 3)):
             if mask & bit:
                 backend.button(number, False)
@@ -1756,13 +1851,22 @@ def _rfb_serve(backend):
 
 
 def linux_desktop(terminal_fallback=False):
-    """Serveur RFB 3.8 intégré, Tight/RGB compressé, sans port VNC : X11/XTest, ou Wayland via grim + périphérique d'entrée virtuel."""
+    """Serveur RFB 3.8 intégré, Tight/RGB compressé, sans port VNC : X11/XTest, GNOME Wayland via Mutter, autres Wayland via grim."""
     try:
         env = x11_environment()
     except RuntimeError as e:
         # Wayland est un bureau existant, pas une machine sans interface graphique.
         if "Wayland" in str(e):
-            return _rfb_serve(WaylandBackend(wayland_environment()))
+            env = wayland_environment()
+            if _login_screen(env["uid"]):
+                # Écran de connexion seul : GNOME y refuse le bureau à distance (« Session creation inhibited »).
+                if terminal_fallback:
+                    return text_console()
+                raise RuntimeError(t("Personne n'est connecté sur ce poste (écran de connexion) : le bureau distant s'ouvre sur une session ouverte. Le droit Terminal distant permet d'ouvrir la console texte.",
+                                     "Nobody is logged in on this machine (login screen): the remote desktop opens on a logged-in session. The Remote terminal permission allows opening the text console.",
+                                     "Nadie ha iniciado sesión en este equipo (pantalla de inicio de sesión): el escritorio remoto se abre en una sesión iniciada. El permiso Terminal remoto permite abrir la consola de texto."))
+            # GNOME : API du bureau à distance de Mutter ; compositeurs wlroots : grim + périphérique d'entrée virtuel.
+            return _rfb_serve(MutterBackend(env) if _gnome_session(env["uid"]) else WaylandBackend(env))
         if not terminal_fallback:
             raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console.", "Ningún escritorio X11. Se requiere el permiso Terminal remoto para abrir la consola de texto noVNC."))
         return text_console()
