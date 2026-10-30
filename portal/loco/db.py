@@ -464,6 +464,24 @@ MIGRATIONS = [
         "CHECK (kind IN ('ldap', 'radius', 'oidc'))") WHERE type='table' AND name='auth_directories';
     PRAGMA writable_schema=OFF;
     """,
+    # 29 : accès des assistants IA (MCP) : jeton haché, outils accordés un à un, rattaché au compte qui le crée
+    # (supprimé avec lui ; inutilisable tant qu'il est désactivé).
+    """
+    CREATE TABLE mcp_tokens (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        hint TEXT NOT NULL DEFAULT '',
+        tools TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL DEFAULT '',
+        last_used_at TEXT NOT NULL DEFAULT '',
+        last_ip TEXT NOT NULL DEFAULT '',
+        last_client TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX mcp_tokens_user ON mcp_tokens(user_id);
+    """,
 ]
 
 

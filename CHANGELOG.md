@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.113.0 — 2026-10-30
+
+- **Assistants IA (MCP) : connectez Claude Code, Cursor, VS Code… à loco.** Nouvelle page **Administration → Assistants IA** : créez un **accès** dont les autorisations se cochent **une à une** — lister et consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour un ou plusieurs postes, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, faire exécuter des commandes écrites par l'assistant, état du serveur, journal. L'assistant pilote alors loco en langage naturel (« quels postes ont des mises à jour de sécurité ? », « lance uptime sur ce serveur »).
+- **Jamais plus que son créateur.** Un accès est rattaché au compte qui le crée : à chaque appel, il ne peut que ce qui est coché **et** encore permis par le profil de ce compte. Compte désactivé, supprimé ou à finaliser, accès expiré ou révoqué : refus immédiat. Les actions suivent le même chemin que l'interface et entrent au journal avec le nom de l'accès ; une commande écrite par l'assistant est conservée telle quelle dans l'historique des scripts.
+- **Simple à brancher.** Le jeton n'est montré qu'une fois (loco n'en garde qu'une empreinte), avec la commande `claude mcp add` et la configuration JSON prêtes à copier ; expiration au choix ; dernière utilisation visible (date, adresse, client). Serveur MCP sur `https://<serveur>:8443/mcp` (HTTP « Streamable HTTP »), compatible avec les deux générations du protocole : poignée de main `initialize` (2025-03-26 à 2025-11-25) et 2026-07-28. Validé avec les SDK officiels Python 1.x et 2.x et avec Claude Code sur la démo.
+- Nouveau droit **Connecter des assistants IA** (administrateurs par défaut) ; fonction désactivable dans **Fonctionnalités**.
+
 ## 2.112.0 — 2026-10-30
 
 - **Connexion avec Authentik (et tout fournisseur OpenID Connect).** Dans **Annuaires et SSO**, deux nouveaux types : **Authentik** et **Autre OpenID Connect** (Keycloak, Zitadel, Authelia, Microsoft Entra ID…). La page de connexion affiche alors un bouton **« Se connecter avec Authentik »** : mot de passe, double authentification et règles d'accès restent gérés par Authentik. Comme pour LDAP et RADIUS, la première connexion d'une personne crée une **demande d'accès** à approuver dans **Comptes** ; aucun compte local n'est rapproché par son nom ou son courriel, et désactiver le fournisseur ferme aussitôt les sessions de ses comptes.

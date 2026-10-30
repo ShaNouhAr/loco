@@ -60,7 +60,9 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     # Logo global de l'instance : affiché aussi sur la page de connexion (avant authentification).
                     "appearance_logo",
                     # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).
-                    "web_manifest", "service_worker", "offline"}
+                    "web_manifest", "service_worker", "offline",
+                    # Serveur MCP des assistants IA : authentifié par son propre jeton (en-tête Authorization).
+                    "mcp_endpoint"}
 
 
 @app.before_request
@@ -142,10 +144,10 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc)
+                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp)
 
 
 def startup():

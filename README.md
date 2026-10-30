@@ -46,7 +46,7 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 
 - **Installer** — [Choisir son installation](#choisir-son-installation) · [Serveur Linux](#serveur-linux) · [Serveur Windows](#serveur-windows)
 - **Déployer** — [Brancher les postes](#brancher-les-postes) · [Mon parc : agent des postes](#mon-parc--agent-des-postes) · [Centre de logiciels Windows](#centre-de-logiciels-windows) · [Scripts](#scripts)
-- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
+- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Assistants IA (MCP)](#assistants-ia-mcp) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
 - **Références** — [Sécurité](SECURITY.md) · [Développement](#développement) · [Changelog](CHANGELOG.md) · [Licence](#licence)
 
 ## Choisir son installation
@@ -430,9 +430,21 @@ Les secrets (mot de passe du compte de service, secret partagé, secret client) 
 
 Les connexions OpenID Connect d’avant la 2.14 (retirées alors, revenues en 2.112 sous cette forme) ne sont pas reprises : leurs comptes restent sans accès. Dans **Comptes**, **Mot de passe local** leur donne un mot de passe temporaire ; ou supprimez-les et laissez la personne refaire une demande avec le bouton du fournisseur.
 
+## Assistants IA (MCP)
+
+Dans **Administration → Assistants IA**, créez un **accès** pour connecter un assistant IA à loco par le protocole **MCP** (Claude Code, Cursor, VS Code ou tout client MCP qui accepte un en-tête d’authentification). L’assistant consulte le parc, les mises à jour, les scripts, le catalogue et le journal, et lance les actions autorisées, en langage naturel. Les assistants qui se connectent depuis le cloud de leur éditeur (claude.ai, ChatGPT) ne joignent pas un loco installé sur un réseau local.
+
+- **Autorisation par autorisation** : chaque accès n’ouvre que les outils cochés un à un (lister ou consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, faire exécuter des commandes écrites par l’assistant, état du serveur, journal…). Préréglages **Lecture seule**, **Tout ce que je peux** ou **Rien**.
+- **Jamais plus que son créateur** : un accès est rattaché au compte qui le crée ; ses droits effectifs sont, à chaque appel, les outils cochés **et** permis par le profil actuel de ce compte. Compte désactivé, supprimé ou à finaliser, annuaire coupé, accès expiré ou révoqué : refus immédiat. L’agent du poste revérifie aussi les droits du compte avant d’exécuter.
+- **Jeton montré une seule fois** (loco n’en garde qu’une empreinte), avec la commande `claude mcp add` et la configuration JSON prêtes à copier. Expiration au choix (30 jours, 90 jours, 1 an, jamais).
+- **Traçabilité** : chaque action passe par les mêmes fonctions que l’interface et entre au journal avec le nom de l’accès (« · MCP « Claude Code » ») ; une commande écrite par l’assistant est gardée telle quelle dans l’historique des scripts. La page montre la dernière utilisation de chaque accès (date, adresse, client).
+- **Protocole** : `https://<serveur>:8443/mcp`, transport HTTP « Streamable HTTP » sans session, en-tête `Authorization: Bearer <jeton>`. loco répond aux deux générations de MCP : la poignée de main `initialize` (2025-03-26 à 2025-11-25) et la génération 2026-07-28 (`server/discover`, métadonnées par requête). Servi uniquement en HTTPS, derrière les mêmes réseaux autorisés que l’interface ; une page web d’une autre origine est refusée. Les clients Node.js qui ne connaissent pas le certificat de loco l’acceptent avec `NODE_EXTRA_CA_CERTS=ca.crt` (autorité téléchargeable sur `/ca.crt`).
+
+Le droit **Connecter des assistants IA** (administrateurs par défaut) permet de créer ses propres accès et de révoquer ceux des comptes que l’on gère. Fonction désactivable dans **Fonctionnalités**.
+
 ## Fonctionnalités
 
-**Administration → Fonctionnalités**, réservé au compte local **admin** créé à l’installation (même les autres administrateurs n’y ont pas accès), active ou désactive des pans entiers de loco : paquets APT, RPM et Flatpak, cache Windows Update, Mon parc et agents, logiciels Windows, accès distant, scripts et annuaires. Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d’ensemble ; ses pages et API sont refusées avec un message explicite et ses droits deviennent inopérants. Les agents reçoivent « réessayer plus tard » quand le parc est coupé ; installations et scripts attendent la réactivation. Les dépendances sont appliquées (accès distant et scripts suivent le parc). Sur l’appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés. Les données sont conservées et chaque changement est journalisé.
+**Administration → Fonctionnalités**, réservé au compte local **admin** créé à l’installation (même les autres administrateurs n’y ont pas accès), active ou désactive des pans entiers de loco : paquets APT, RPM et Flatpak, cache Windows Update, Mon parc et agents, logiciels Windows, accès distant, scripts, annuaires, alertes et assistants IA (MCP). Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d’ensemble ; ses pages et API sont refusées avec un message explicite et ses droits deviennent inopérants. Les agents reçoivent « réessayer plus tard » quand le parc est coupé ; installations et scripts attendent la réactivation. Les dépendances sont appliquées (accès distant et scripts suivent le parc). Sur l’appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés. Les données sont conservées et chaque changement est journalisé.
 
 ## Mon compte et apparence
 

@@ -24,13 +24,14 @@ FEATURES = {
     "scripts": (L_("Scripts"), L_("Bibliothèque de scripts PowerShell et shell exécutés sur les postes par l'agent."), ("fleet",), ""),
     "directories": (L_("Annuaires LDAP et RADIUS"), L_("Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles."), (), ""),
     "alerts": (L_("Alertes et notifications"), L_("Notifications par e-mail et webhook sur l'état du serveur et du parc."), (), ""),
+    "mcp": (L_("Assistants IA (MCP)"), L_("Connexion d'assistants IA (Claude Code, Cursor, VS Code…) à loco par le protocole MCP, avec des autorisations choisies une à une."), (), ""),
 }
 
 # Module de la page -> fonctionnalités nécessaires ; quelques pages partagées sont précisées par leur nom.
 MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("flatpak",), "loco.wupdate": ("wu",),
            "loco.winapps": ("windows_apps",), "loco.winget": ("windows_apps",), "loco.deployments": ("windows_apps", "fleet"),
            "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"), "loco.schedules": ("fleet",),
-           "loco.directories": ("directories",), "loco.alerts": ("alerts",)}
+           "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -41,7 +42,8 @@ ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_reposito
 # Droits rattachés à une fonctionnalité : coupée, elle rend ces droits inopérants (navigation, boutons, pages).
 PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu": ("wu",), "windows": ("windows_apps",),
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
-               "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",)}
+               "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",),
+               "mcp": ("mcp",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                    "agent_file", "agent_deb", "agent_rpm", "remote_agent"}

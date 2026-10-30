@@ -17,6 +17,7 @@ CATEGORIES = {
     "serveur": (L_("Serveur"), ("systeme.", "alertes.")),
     "journal": (L_("Journal"), ("journal.",)),
     "scripts": (L_("Scripts"), ("scripts.",)),
+    "mcp": (L_("Assistants IA (MCP)"), ("mcp.",)),
 }
 
 LABELS = {
@@ -73,6 +74,8 @@ LABELS = {
     "systeme.shell.ouverture": L_("Shell root ouvert"), "systeme.shell.fermeture": L_("Shell root fermé"),
     "systeme.shell.refus": L_("Activation du shell root refusée"),
     "alertes.configuration": L_("Alertes configurées"),
+    "mcp.acces.ajout": L_("Accès MCP créé"), "mcp.acces.modification": L_("Autorisations d'un accès MCP modifiées"),
+    "mcp.acces.revocation": L_("Accès MCP révoqué"),
 }
 FAILURES = ("echec", "bloquee", "refus")
 PERIODS = {"jour": (L_("Aujourd'hui"), 0), "7j": (L_("7 jours"), 6), "30j": (L_("30 jours"), 29), "tout": (L_("Tout"), None)}

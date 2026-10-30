@@ -598,7 +598,7 @@
       $(".dlg-b p", dlg).textContent = text || "";
       $("[data-ok]", dlg).textContent = okLabel || t("Confirmer");
       // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
-      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Vaciar|Eliminar|Quitar)/.test(okLabel || "");
+      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Révoquer|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Revoke|Vaciar|Eliminar|Quitar|Revocar)/.test(okLabel || "");
       $("[data-ok]", dlg).classList.toggle("danger", danger);
       $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;
@@ -1532,6 +1532,18 @@
   (function () {
     var next = document.querySelector("[data-continue]");
     if (next) location.replace(next.getAttribute("data-continue"));
+  })();
+
+  // Accès MCP : préréglages des autorisations du formulaire (lecture seule, tout ce qui est permis, rien).
+  (function () {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-mcp-preset]");
+      if (!btn) return;
+      var mode = btn.getAttribute("data-mcp-preset");
+      btn.closest("form").querySelectorAll("input[name=tools]:not(:disabled)").forEach(function (box) {
+        box.checked = mode === "all" || (mode === "read" && box.hasAttribute("data-read"));
+      });
+    });
   })();
 
   // Bouton « Copier » à côté d'un champ (URL de redirection SSO…).

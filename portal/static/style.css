@@ -2098,3 +2098,21 @@ img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 .offline-logo { display: flex; justify-content: center; }
 .offline-logo img { border-radius: 14px; display: block; }
 .offline-card h1 { font-size: 20px; }
+
+/* Assistants IA (MCP) : connexion, autorisations une à une, jeton affiché une fois. */
+.mcp-conn .wide { grid-column: 1 / -1; }
+.mcp-conn + .hint { margin-top: 16px; }
+.mcp-created .panel-b > .cmd-label { margin-top: 18px; }
+.cmd.snippet code { white-space: pre; max-height: 220px; overflow: auto; font-size: 12.5px; }
+.mcp-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+.mcp-presets .chip { height: 28px; }
+.mcp-group { min-width: 0; margin-inline: 0; margin-bottom: 0; padding: 0; border: 0; }
+.dlg-stack > .mcp-group { margin-top: 22px; }
+.mcp-group legend { padding: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.mcp-group .feature-list { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.mcp-group .feature-row { padding: 11px 14px; }
+.mcp-group .feature-row.off { cursor: not-allowed; }
+.mcp-group .feature-row.off:hover { background: none; }
+.mcp-group .feature-row.off .feature-text > small:not(.warn-text) { color: var(--text-3); opacity: .8; }
+.tag.warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--text); }
+.mcp-table tr.off td { color: var(--text-2); }

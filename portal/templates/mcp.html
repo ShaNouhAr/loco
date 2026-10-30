@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from '_nav_icons.html' import ui_icon %}
+{% block title %}{{ _("Assistants IA (MCP)") }}{% endblock %}
+
+{% macro dlg_head(title, sub='') -%}
+<div class="dlg-h"><div><h2>{{ title }}</h2>{% if sub %}<p>{{ sub }}</p>{% endif %}</div><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button></div>
+{%- endmacro %}
+
+{# Autorisations une à une, par domaine ; celles que le compte n'a pas restent visibles, grisées, avec la raison. #}
+{% macro tool_grid(checked=()) -%}
+<div class="mcp-presets" role="group" aria-label="{{ _('Préréglages') }}">
+  <span>{{ _("Cocher :") }}</span>
+  <button type="button" class="chip" data-mcp-preset="read">{{ _("Lecture seule") }}</button>
+  <button type="button" class="chip" data-mcp-preset="all">{{ _("Tout ce que je peux") }}</button>
+  <button type="button" class="chip" data-mcp-preset="none">{{ _("Rien") }}</button>
+</div>
+{% for grp in tools %}
+<fieldset class="mcp-group">
+  <legend>{{ grp.label }}</legend>
+  <div class="feature-list">
+    {% for t in grp.tools %}
+    <label class="feature-row{{ ' off' if not t.available }}">
+      <span class="feature-text">
+        <strong>{{ t.label }}{% if t.destructive %} <span class="tag warn">{{ _("Sensible") }}</span>{% elif not t.read_only %} <span class="tag">{{ _("Action") }}</span>{% endif %}</strong>
+        <small>{{ t.hint }}</small>
+        {% if t.off %}<small class="warn-text">{{ _("Fonctionnalité désactivée : %(f)s.", f=t.off|join(', ')) }}</small>
+        {% elif t.missing %}<small class="warn-text">{{ _("Votre profil n’a pas le droit : %(p)s.", p=t.missing|join(', ')) }}</small>{% endif %}
+      </span>
+      <span class="switch"><input type="checkbox" name="tools" value="{{ t.name }}" role="switch"{{ ' data-read' if t.read_only }}{{ ' checked' if t.name in checked and t.available }}{{ ' disabled' if not t.available }}><i aria-hidden="true"></i></span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+{% endfor %}
+{%- endmacro %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Assistants IA (MCP)") }}</h1>
+    <p>{{ _("Connectez un assistant IA (Claude Code, Cursor, VS Code…) à loco par le protocole MCP. Chaque accès n’ouvre que les autorisations cochées, une à une, et jamais plus que les droits du compte qui le crée.") }}</p>
+  </div>
+  <div class="actions"><button type="button" class="btn primary" data-open="#mcp-add">{{ ui_icon('plus') }}<span>{{ _("Nouvel accès") }}</span></button></div>
+</div>
+
+<div class="stack">
+  {% if created %}
+  <section class="panel mcp-created">
+    <div class="panel-h"><h2>{{ _("Accès « %(name)s » créé", name=created.name) }}</h2><div class="aside">{{ _("jeton affiché une seule fois") }}</div></div>
+    <div class="panel-b">
+      <p class="muted">{{ _("Copiez-le maintenant dans votre assistant : loco n’en garde qu’une empreinte et ne pourra plus l’afficher.") }}</p>
+      <div class="cmd"><code>{{ created.token }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+      <span class="cmd-label">{{ _("Claude Code (commande à lancer dans un terminal)") }}</span>
+      <div class="cmd"><code>claude mcp add --transport http loco {{ endpoint }} --header "Authorization: Bearer {{ created.token }}"</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+      <span class="cmd-label">{{ _("Fichier de configuration MCP (Cursor, Claude Code… ; pour VS Code, clé « servers »)") }}</span>
+      <div class="cmd snippet"><code>{
+  "mcpServers": {
+    "loco": {
+      "type": "http",
+      "url": "{{ endpoint }}",
+      "headers": { "Authorization": "Bearer {{ created.token }}" }
+    }
+  }
+}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Connexion") }}</h2><div class="aside">{{ _("à renseigner dans l’assistant") }}</div></div>
+    <div class="panel-b">
+      <dl class="kv-grid mcp-conn">
+        <div class="wide"><dt>{{ _("Adresse du serveur MCP") }}</dt><dd><div class="cmd"><code>{{ endpoint }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div></dd></div>
+        <div><dt>{{ _("Transport") }}</dt><dd>{{ _("HTTP (« Streamable HTTP »)") }}</dd></div>
+        <div><dt>{{ _("Authentification") }}</dt><dd><span class="mono small">Authorization: Bearer …</span></dd></div>
+      </dl>
+      <p class="hint">{{ _("Le poste où tourne l’assistant doit reconnaître le certificat de loco : sinon, installez l’autorité de loco (%(ca)s). Pour les clients Node.js (Claude Code, Cursor…), indiquez-la avec la variable NODE_EXTRA_CA_CERTS.", ca=https_url ~ '/ca.crt') }}</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Accès") }}{% if tokens %} <span class="h-count">{{ tokens|length }}</span>{% endif %}</h2><div class="aside">{{ _("chaque appel d’une action est inscrit au journal") }}</div></div>
+    {% if tokens %}
+    <div class="table-wrap">
+      <table class="mcp-table">
+        <thead><tr><th>{{ _("Nom") }}</th><th>{{ _("Autorisations") }}</th><th class="hide-sm">{{ _("Dernière utilisation") }}</th><th class="hide-sm">{{ _("Expiration") }}</th><th></th></tr></thead>
+        <tbody>
+        {% for t in tokens %}
+          <tr{% if t.expired or t.owner_disabled %} class="off"{% endif %}>
+            <td><strong>{{ t.name }}</strong><span class="sub mono">{{ t.hint }}…</span><span class="sub">{{ _("compte %(owner)s", owner=t.owner) }}{% if t.mine %} · {{ _("vous") }}{% endif %}</span></td>
+            <td><span title="{{ t.labels|join(' · ') }}">{{ _("%(n)s autorisation(s)", n=t.tools|length) }}</span>
+              <span class="sub">{% if t.actions %}{{ _("dont %(n)s action(s)", n=t.actions) }}{% else %}{{ _("lecture seule") }}{% endif %}</span></td>
+            <td class="hide-sm">{% if t.used %}{{ t.used }}<span class="sub">{{ t.client or _("client inconnu") }}{% if t.ip %} · <span class="mono">{{ t.ip }}</span>{% endif %}</span>{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
+            <td class="hide-sm nowrap">{% if t.expired %}<span class="st err">{{ _("expiré") }}</span>{% elif t.owner_disabled %}<span class="st warn">{{ _("compte désactivé") }}</span>{% elif t.expires %}{{ t.expires|date_fr }}{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
+            <td class="right nowrap">
+              <div class="dir-acts">
+                {% if t.mine %}<button type="button" class="btn sm" data-open="#mcp-edit-{{ t.id }}">{{ _("Autorisations") }}</button>{% endif %}
+                <form method="post" action="{{ url_for('mcp_token_revoke', token_id=t.id) }}" data-confirm="{{ _('Révoquer l’accès « %(name)s » ?', name=t.name) }}" data-confirm-text="{{ _('L’assistant qui l’utilise est refusé immédiatement. Pour le reconnecter, il faudra créer un nouvel accès.') }}" data-confirm-ok="{{ _('Révoquer') }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Révoquer") }}</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">{{ _("Aucun accès pour l’instant. Créez-en un, puis collez son jeton dans votre assistant IA.") }}</div>
+    {% endif %}
+  </section>
+</div>
+
+<dialog id="mcp-add" class="dir-dialog">
+  <form method="post" action="{{ url_for('mcp_token_add') }}">
+    {{ dlg_head(_("Nouvel accès MCP"), _("L’assistant ne pourra faire que ce que vous cochez, dans la limite de vos propres droits.")) }}
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="grid2">
+        <label class="f"><span>{{ _("Nom de l’accès") }}</span><input type="text" name="name" required maxlength="80" placeholder="{{ _('Claude Code de Marie') }}"></label>
+        <label class="f"><span>{{ _("Expiration") }}</span><select name="expiry">
+          <option value="30">{{ _("30 jours") }}</option><option value="90" selected>{{ _("90 jours") }}</option>
+          <option value="365">{{ _("1 an") }}</option><option value="0">{{ _("Jamais") }}</option></select></label>
+      </div>
+      {{ tool_grid() }}
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Créer l’accès") }}</button></div>
+  </form>
+</dialog>
+
+{% for t in tokens if t.mine %}
+<dialog id="mcp-edit-{{ t.id }}" class="dir-dialog">
+  <form method="post" action="{{ url_for('mcp_token_update', token_id=t.id) }}">
+    {{ dlg_head(_("Autorisations de « %(name)s »", name=t.name), _("Le jeton reste le même : les changements s’appliquent dès le prochain appel de l’assistant.")) }}
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>{{ _("Nom de l’accès") }}</span><input type="text" name="name" required maxlength="80" value="{{ t.name }}"></label>
+      {{ tool_grid(t.tools) }}
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>
+  </form>
+</dialog>
+{% endfor %}
+{% endblock %}
