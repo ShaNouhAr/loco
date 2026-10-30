@@ -184,7 +184,7 @@ ENDPOINTS = {
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery",
                      "account_appearance", "account_appearance_background", "account_appearance_background_delete",
-                     "appearance_background"}
+                     "appearance_background", "sso_start", "sso_callback"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
 

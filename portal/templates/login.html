@@ -1,7 +1,7 @@
 {% extends "_auth.html" %}
 {% block title %}{{ _("Connexion") }}{% endblock %}
 {% block auth_title %}{{ _("Connexion") }}{% endblock %}
-{% block auth_sub %}{{ _("Avec votre compte loco ou votre compte d’entreprise.") if login_directories else _("Avec votre compte loco.") }}{% endblock %}
+{% block auth_sub %}{{ _("Avec votre compte loco ou votre compte d’entreprise.") if login_directories or login_sso else _("Avec votre compte loco.") }}{% endblock %}
 {% block auth_body %}
 <form method="post" class="auth-form">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -13,9 +13,15 @@
   </label>
   <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
 </form>
-{% if login_directories %}
+{% if login_sso %}
+<div class="auth-or" role="separator"><span>{{ _("ou") }}</span></div>
+<div class="auth-sso-btns">
+  {% for d in login_sso %}<a class="btn sso-btn" href="{{ url_for('sso_start', directory_id=d.id, next=request.args.get('next') or None) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg><span>{{ _("Se connecter avec %(label)s", label=d.label) }}</span></a>{% endfor %}
+</div>
+{% endif %}
+{% if login_directories or login_sso %}
 <div class="auth-sso">
-  <p><span class="auth-sso-k">SSO</span>{{ login_directories|join(', ') }}</p>
+  {% if login_directories %}<p><span class="auth-sso-k">SSO</span>{{ login_directories|join(', ') }}</p>{% endif %}
   <p class="faint">{{ _("Première connexion avec un compte d’entreprise : l’accès est ouvert après l’approbation d’un administrateur.") }}</p>
 </div>
 {% endif %}

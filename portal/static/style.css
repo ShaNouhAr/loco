@@ -794,6 +794,14 @@ details.menu[open] > .menu-list { animation: nav-reveal .12s ease-out; }
 .auth-form .code-input { max-width: none; height: 48px; }
 .auth-form .btn.primary { width: 100%; height: 40px; margin-top: 22px; }
 .auth-form .hint { text-align: center; }
+/* Connexion par un fournisseur OpenID Connect (Authentik…) : séparateur « ou » et un bouton par fournisseur. */
+.auth-or { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; font-size: 12px; color: var(--text-3); }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-sso-btns { display: grid; gap: 8px; margin-bottom: 18px; }
+.sso-btn { width: 100%; justify-content: center; gap: 8px; }
+.sso-btn svg { width: 16px; height: 16px; flex: none; }
+.sso-claims { margin: 16px 0 18px; grid-template-columns: max-content minmax(0, 1fr); }
+.auth-card > .sso-hint { margin-top: 10px; }
 .auth-sso { padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
 .auth-sso p + p { margin-top: 6px; font-size: 12.5px; }
 .auth-sso-k { display: inline-block; margin-right: 8px; padding: 0 6px; border: 1px solid var(--line-2); border-radius: 5px; font: 600 11px/18px var(--sans); letter-spacing: .03em; color: var(--text-2); vertical-align: 1px; }
@@ -1936,9 +1944,20 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .f .opt { font-style: normal; font-weight: 400; color: var(--text-3); }
 .dir-adv > summary { font-size: 13.5px; }
 .dlg-f-note { margin-right: auto; }
+/* Six types (annuaires et fournisseurs SSO) : deux rangées de trois. */
+.seg-wrap .seg.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#dk-authentik:checked ~ .seg-wrap [for="dk-authentik"], #dk-oidc:checked ~ .seg-wrap [for="dk-oidc"] {
+  background: var(--bg); color: var(--text); font-weight: 500; box-shadow: 0 0 0 1px var(--line-2); }
+#dk-authentik:focus-visible ~ .seg-wrap [for="dk-authentik"], #dk-oidc:focus-visible ~ .seg-wrap [for="dk-oidc"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+#dk-authentik:checked ~ form[data-kind="authentik"], #dk-oidc:checked ~ form[data-kind="oidc"] { display: contents; }
+/* URL de redirection à déclarer chez le fournisseur, prête à copier. */
+.sso-redirect { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
+.sso-redirect-k { font-size: 12.5px; font-weight: 500; color: var(--text-2); }
+.copy-field { display: flex; gap: 6px; }
+.copy-field input { flex: 1; min-width: 0; font-size: 12.5px; }
 
 @media (max-width: 560px) {
-  .seg-wrap .seg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seg-wrap .seg, .seg-wrap .seg.six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ------------------------------------------------------------------ apparence : fond, transparence, panneau */

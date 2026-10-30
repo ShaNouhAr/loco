@@ -1527,4 +1527,31 @@
       navigator.serviceWorker.register("/sw.js").catch(function () { /* contexte non sécurisé ou indisponible */ });
     });
   }
+  // Retour d'un fournisseur SSO : la page intermédiaire enchaîne vers loco. Navigation partie de loco : le cookie de
+  // session (SameSite=Strict) est envoyé, ce qu'une redirection depuis le fournisseur ne permettrait pas.
+  (function () {
+    var next = document.querySelector("[data-continue]");
+    if (next) location.replace(next.getAttribute("data-continue"));
+  })();
+
+  // Bouton « Copier » à côté d'un champ (URL de redirection SSO…).
+  (function () {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-copy]");
+      if (!btn) return;
+      var field = btn.parentNode.querySelector("input, textarea");
+      if (!field) return;
+      var label = btn.textContent;
+      var done = function () {
+        btn.textContent = btn.getAttribute("data-copied") || label;
+        setTimeout(function () { btn.textContent = label; }, 1500);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(field.value).then(done, function () { field.select(); });
+      } else {
+        field.select();
+        try { if (document.execCommand("copy")) done(); } catch (err) { /* sélection laissée à l'utilisateur */ }
+      }
+    });
+  })();
 })();

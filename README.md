@@ -46,7 +46,7 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 
 - **Installer** — [Choisir son installation](#choisir-son-installation) · [Serveur Linux](#serveur-linux) · [Serveur Windows](#serveur-windows)
 - **Déployer** — [Brancher les postes](#brancher-les-postes) · [Mon parc : agent des postes](#mon-parc--agent-des-postes) · [Centre de logiciels Windows](#centre-de-logiciels-windows) · [Scripts](#scripts)
-- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires LDAP et RADIUS](#annuaires-ldap-et-radius) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
+- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
 - **Références** — [Sécurité](SECURITY.md) · [Développement](#développement) · [Changelog](CHANGELOG.md) · [Licence](#licence)
 
 ## Choisir son installation
@@ -415,19 +415,20 @@ Le contenu envoyé est figé à l’exécution avec son empreinte SHA-256, véri
 
 Les droits **Consulter les scripts**, **Gérer les scripts** et **Exécuter des scripts** sont distincts ; les deux derniers sont sensibles et réservés par défaut aux administrateurs. Le droit d’exécution est revérifié avant la transmission à l’agent. Agents Windows et Linux 2.14 ou plus récents.
 
-## Annuaires LDAP et RADIUS
+## Annuaires et SSO
 
-Dans **Administration → Annuaires**, ajoutez un annuaire **LDAP** (Active Directory, OpenLDAP, 389 DS, FreeIPA…) ou un serveur **RADIUS** (NPS, FreeRADIUS…). Les utilisateurs se connectent ensuite avec leur identifiant et leur mot de passe habituels, **depuis le formulaire de connexion de loco**. Un identifiant inconnu de loco est essayé dans l’ordre des annuaires actifs (boutons **Monter**).
+Dans **Administration → Annuaires et SSO**, ajoutez un annuaire **LDAP** (Active Directory, OpenLDAP, 389 DS, FreeIPA…) ou un serveur **RADIUS** (NPS, FreeRADIUS…) : les utilisateurs se connectent avec leur identifiant et leur mot de passe habituels, **depuis le formulaire de connexion de loco** ; un identifiant inconnu de loco est essayé dans l’ordre des annuaires actifs (boutons **Monter**). Ajoutez aussi un fournisseur **OpenID Connect** (**Authentik**, Keycloak, Zitadel, Authelia, Microsoft Entra ID…) : un bouton **Se connecter avec …** apparaît sur la page de connexion.
 
 - **LDAP** : adresse `ldaps://` (recommandé) ou `ldap://` avec **StartTLS** obligatoire, le mot de passe ne circule jamais en clair ; certificat vérifié avec les autorités du système ou l’autorité PEM fournie. Avec un **compte de service**, loco recherche l’utilisateur (base et filtre, modèles Active Directory et OpenLDAP) puis vérifie son mot de passe par une liaison ; sans compte de service, il se lie directement avec un modèle (`{username}@entreprise.local` ou `uid={username},ou=people,dc=exemple,dc=org`). Le nom affiché et le courriel sont relus à chaque connexion. Les identifiants sont échappés dans le filtre (RFC 4515) et un mot de passe vide est refusé.
 - **RADIUS** : authentification PAP (RFC 2865) avec le secret partagé ; loco envoie et **exige l’attribut Message-Authenticator** dans les réponses (protection BlastRADIUS, RFC 3579). Sur NPS ou FreeRADIUS, déclarez loco comme client RADIUS et activez cet attribut dans les réponses.
-- **Tester** vérifie la connexion à l’annuaire et un compte, sans créer de demande ; le résultat est journalisé sans le mot de passe.
+- **Authentik / OpenID Connect** : dans Authentik, créez une application avec un fournisseur **OAuth2/OpenID** de type **Confidentiel**, l’URL de redirection affichée par loco (mode strict) et le type d’autorisation **Authorization Code** ; recopiez dans loco l’émetteur (`https://authentik.exemple.fr/application/o/<slug>/`), l’identifiant et le secret client. Flux « code » avec **PKCE** (S256), `state` et `nonce` liés au navigateur ; jeton d’identité vérifié (signature RSA, ECDSA ou EdDSA par les clés publiées, ou HS256 avec le secret client quand le fournisseur Authentik n’a pas de clé de signature ; émetteur, audience, expiration). Le certificat auto-signé d’Authentik se colle tel quel (il est alors **épinglé**), comme l’autorité de votre réseau. Aucun jeton n’est conservé ; mot de passe, double authentification et règles d’accès restent gérés par le fournisseur.
+- **Tester** vérifie la connexion à l’annuaire et un compte, sans créer de demande ; le résultat est journalisé sans le mot de passe. Pour OpenID Connect, c’est une vraie connexion chez le fournisseur, qui affiche l’identité reçue (identifiant proposé, nom, courriel, groupes) ; elle fonctionne aussi avant l’activation.
 
 La première connexion d’une identité crée un compte **sans accès**, en tête de **Comptes**. Une personne disposant du droit **Approuver les comptes d’annuaire** choisit son profil puis l’approuve. Aucune correspondance de nom ou de courriel ne fusionne un compte local avec une identité d’annuaire, et les groupes de l’annuaire n’attribuent aucun droit loco. Un compte d’annuaire change son mot de passe dans l’annuaire. **Les comptes locaux restent toujours disponibles** pour administrer loco.
 
-Les secrets (mot de passe du compte de service, secret partagé) sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes, et ne sont jamais réaffichés. Modifier ou désactiver un annuaire ferme les sessions de ses comptes ; le supprimer les désactive. Les droits **Gérer les annuaires** et **Approuver les comptes d’annuaire** sont distincts et attribués aux administrateurs par défaut.
+Les secrets (mot de passe du compte de service, secret partagé, secret client) sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes, et ne sont jamais réaffichés. Modifier ou désactiver un annuaire ferme les sessions de ses comptes ; le supprimer les désactive. Les droits **Gérer les annuaires** et **Approuver les comptes d’annuaire** sont distincts et attribués aux administrateurs par défaut.
 
-**Depuis la 2.14, les connexions OpenID Connect sont retirées** : les fournisseurs existants sont désactivés et les comptes concernés conservés, sans accès. Dans **Comptes**, **Mot de passe local** leur donne un mot de passe temporaire ; ils deviennent des comptes locaux.
+Les connexions OpenID Connect d’avant la 2.14 (retirées alors, revenues en 2.112 sous cette forme) ne sont pas reprises : leurs comptes restent sans accès. Dans **Comptes**, **Mot de passe local** leur donne un mot de passe temporaire ; ou supprimez-les et laissez la personne refaire une demande avec le bouton du fournisseur.
 
 ## Fonctionnalités
 

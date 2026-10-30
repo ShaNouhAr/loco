@@ -456,6 +456,14 @@ MIGRATIONS = [
     """
     ALTER TABLE win_apps ADD COLUMN allow_insecure INTEGER NOT NULL DEFAULT 0;
     """,
+    # 28 : fournisseurs OpenID Connect (Authentik…) parmi les annuaires. Contrainte CHECK élargie sans reconstruire la
+    # table, comme la migration 24 : identités liées et clé étrangère préservées.
+    """
+    PRAGMA writable_schema=ON;
+    UPDATE sqlite_master SET sql=replace(sql, "CHECK (kind IN ('ldap', 'radius'))",
+        "CHECK (kind IN ('ldap', 'radius', 'oidc'))") WHERE type='table' AND name='auth_directories';
+    PRAGMA writable_schema=OFF;
+    """,
 ]
 
 

@@ -1,0 +1,25 @@
+{# Retour d'un fournisseur OpenID Connect : message, enchaînement vers loco après connexion, ou résultat d'un test. #}
+{% extends "_auth.html" %}
+{% block title %}{{ heading or (_("Test de connexion") if test or testing else _("Connexion")) }}{% endblock %}
+{% block auth_title %}{{ heading or (_("Test de connexion") if test or testing else _("Connexion")) }}{% endblock %}
+{% block auth_sub %}{% endblock %}
+{% block auth_body %}
+<p class="note {{ kind }}" role="{{ 'alert' if kind == 'err' else 'status' }}">{{ message }}</p>
+{% if hint %}<p class="muted small sso-hint">{{ hint }}</p>{% endif %}
+{% if test %}
+<dl class="kv sso-claims">
+  <dt>{{ _("Identifiant loco proposé") }}</dt><dd class="mono">{{ test.username }}</dd>
+  <dt>{{ _("Nom") }}</dt><dd>{{ test.name or '—' }}</dd>
+  <dt>{{ _("Courriel") }}</dt><dd>{{ test.email or '—' }}</dd>
+  <dt>{{ _("Groupes") }}</dt><dd>{{ test.groups or '—' }}</dd>
+  <dt>{{ _("Identité (sub)") }}</dt><dd class="mono break">{{ test.sub }}</dd>
+</dl>
+<a class="btn" href="{{ url_for('sso_settings') }}">{{ _("Retour à Annuaires et SSO") }}</a>
+{% elif next_url %}
+<a class="btn primary" href="{{ next_url }}" data-continue="{{ next_url }}">{{ _("Continuer") }}</a>
+{% elif testing %}
+<a class="btn" href="{{ url_for('sso_settings') }}">{{ _("Retour à Annuaires et SSO") }}</a>
+{% else %}
+<a class="btn" href="{{ url_for('login') }}">{{ _("Retour à la connexion") }}</a>
+{% endif %}
+{% endblock %}

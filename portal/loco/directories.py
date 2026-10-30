@@ -1,4 +1,5 @@
-"""Annuaires LDAP et RADIUS : connexion avec le formulaire de loco, nouvelles identités en attente d'approbation."""
+"""Annuaires LDAP et RADIUS (formulaire de loco) et fournisseurs OpenID Connect comme Authentik (bouton de connexion) :
+nouvelles identités en attente d'approbation."""
 import base64
 import datetime
 import hashlib
@@ -17,13 +18,15 @@ from .auth import audit, can_assign, lock_access, login_required, require
 from .db import db
 from .directory_protocols import DirectoryError, USERNAME_RE, ldap_authenticate, radius_authenticate
 
-KINDS = {"ldap": L_("LDAP / Active Directory"), "radius": "RADIUS"}
+KINDS = {"ldap": L_("LDAP / Active Directory"), "radius": "RADIUS", "oidc": L_("OpenID Connect")}
+# OpenID Connect : Authentik (émetteur par application) ou tout autre fournisseur (Keycloak, Zitadel, Authelia…).
+OIDC_PRESETS = {"authentik": "Authentik", "oidc": L_("OpenID Connect")}
 # Modèles LDAP : filtre de recherche et attributs habituels.
 LDAP_PRESETS = {
     "ad": ("Active Directory", "(&(objectClass=user)(sAMAccountName={username}))", "displayName", "mail"),
     "openldap": ("OpenLDAP / 389 DS / FreeIPA", "(&(objectClass=person)(uid={username}))", "cn", "mail"),
 }
-SECRET_FIELDS = ("bind_password", "secret")
+SECRET_FIELDS = ("bind_password", "secret", "client_secret")
 
 
 def _cipher():
@@ -60,6 +63,8 @@ def _directory(directory_id):
 def authenticate(row, username, password):
     """(accepté, {display_name, email}) ; DirectoryError si l'annuaire est injoignable ou mal configuré."""
     cfg = config_of(row)
+    if row["kind"] == "oidc":
+        return False, {}                                        # connexion par le bouton du fournisseur, jamais par mot de passe
     if row["kind"] == "ldap":
         return ldap_authenticate(cfg, username, password)
     return radius_authenticate(cfg, username, password)
@@ -93,9 +98,13 @@ def directory_login(username, password):
     row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     if row is not None and row["auth_source"] != "directory":
         return None, None                                       # compte local ou ancien SSO : pas d'annuaire
-    active = {d["id"]: d for d in enabled_directories(conn)}
+    enabled = enabled_directories(conn)
+    active = {d["id"]: d for d in enabled if d["kind"] != "oidc"}
     if row is not None:
         link = conn.execute("SELECT * FROM directory_identities WHERE user_id=?", (row["id"],)).fetchone()
+        sso = next((d for d in enabled if link is not None and d["id"] == link["directory_id"] and d["kind"] == "oidc"), None)
+        if sso is not None:
+            return None, _("Ce compte se connecte avec le bouton « Se connecter avec %(label)s ».", label=sso["label"])
         if link is None or link["directory_id"] not in active:
             return None, None
         candidates = [(active[link["directory_id"]], link["subject"])]
@@ -137,7 +146,9 @@ def directory_login(username, password):
 @app.context_processor
 def _login_directories():
     if request.endpoint == "login":
-        return {"login_directories": [d["label"] for d in enabled_directories()]}
+        enabled = enabled_directories()
+        return {"login_directories": [d["label"] for d in enabled if d["kind"] != "oidc"],
+                "login_sso": [{"id": d["id"], "label": d["label"]} for d in enabled if d["kind"] == "oidc"]}
     return {}
 
 
@@ -190,13 +201,66 @@ def _ldap_form():
             "mail_attr": f.get("mail_attr", "").strip()[:60] or "mail", "ca_pem": f.get("ca_pem", "").strip()[:20000]}
 
 
+OIDC_SUFFIX = "/.well-known/openid-configuration"
+
+
+def _oidc_form(old):
+    """Émetteur, client et options d'un fournisseur OpenID Connect. Authentik : l'émetteur d'une application est
+    https://authentik…/application/o/<slug>/ (affiché dans Authentik sur la page du fournisseur)."""
+    from .oidc import OIDCError, https_url
+    f = request.form
+    preset = f.get("preset", "oidc")
+    if preset not in OIDC_PRESETS:
+        raise ValueError(_("Fournisseur inconnu."))
+    issuer = f.get("issuer", "").strip()
+    if issuer.endswith(OIDC_SUFFIX):                            # URL de configuration collée au lieu de l'émetteur
+        issuer = issuer[:-len(OIDC_SUFFIX)]
+    try:
+        https_url(issuer)
+    except OIDCError:
+        raise ValueError(_("Émetteur : adresse https://… attendue."))
+    parts = urllib.parse.urlsplit(issuer)
+    if parts.query or len(issuer) > 500:
+        raise ValueError(_("Émetteur : adresse https://… attendue."))
+    if preset == "authentik" and not re.fullmatch(r"/application/o/[A-Za-z0-9_-]+/?", parts.path):
+        raise ValueError(_("Pour Authentik, indiquez l’émetteur de l’application, par exemple "
+                           "https://authentik.entreprise.fr/application/o/loco/ (page du fournisseur dans Authentik)."))
+    if old and old.get("issuer", "").rstrip("/") != issuer.rstrip("/"):
+        raise ValueError(_("L’émetteur ne se change pas : les comptes liés appartiennent à ce fournisseur. "
+                           "Ajoutez un nouveau fournisseur à la place."))
+    client_id = f.get("client_id", "").strip()
+    if not client_id or len(client_id) > 255 or any(ord(c) < 33 for c in client_id):
+        raise ValueError(_("Identifiant client (Client ID) requis."))
+    scopes = " ".join(f.get("scopes", "").split()) or "openid profile email"
+    if "openid" not in scopes.split() or not re.fullmatch(r"[A-Za-z0-9_:./ -]{1,200}", scopes):
+        raise ValueError(_("Portées : liste séparée par des espaces, avec openid."))
+    claim = f.get("username_claim", "").strip() or "preferred_username"
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,60}", claim):
+        raise ValueError(_("Revendication du nom d’utilisateur invalide."))
+    ca_pem = f.get("ca_pem", "").strip()[:20000]
+    if ca_pem and "BEGIN CERTIFICATE" not in ca_pem:
+        raise ValueError(_('Autorité : certificat PEM attendu.'))
+    secret = f.get("client_secret", "")
+    if len(secret) > 1024:
+        raise ValueError(_("Secret client trop long."))
+    cfg = {"preset": preset, "issuer": issuer, "client_id": client_id, "scopes": scopes, "username_claim": claim,
+           "ca_pem": ca_pem, "client_secret": _seal(secret) if secret else (old or {}).get("client_secret", "")}
+    if not cfg["client_secret"]:
+        raise ValueError(_("Secret client (Client Secret) requis."))
+    return cfg
+
+
 def _values(kind, existing=None):
     old = json.loads(existing["config"]) if existing else {}
     label = request.form.get("label", "").strip()
     if not label and kind == "ldap" and request.form.get("preset") in ("ad", "freeipa"):
         label = "Active Directory" if request.form.get("preset") == "ad" else "FreeIPA"   # nom par défaut, modifiable
+    if not label and kind == "oidc" and request.form.get("preset") == "authentik":
+        label = "Authentik"
     if not label or len(label) > 80 or any(ord(c) < 32 for c in label):
         raise ValueError(_('Nom de 1 à 80 caractères requis.'))
+    if kind == "oidc":
+        return label, _oidc_form(old)
     if kind == "ldap":
         cfg = _ldap_form()
         url = cfg["url"]
@@ -258,8 +322,10 @@ def sso_settings():
     summary = {"active": sum(1 for d in directories if d["row"]["enabled"]),
                "accounts": sum(d["row"]["accounts"] for d in directories),
                "pending": db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0]}
+    from .oidc import callback_url
+    new_id = secrets.token_hex(8)                               # connu d'avance : URL de redirection à déclarer
     return render_template("directories.html", directories=directories, kinds=KINDS, presets=LDAP_PRESETS, legacy=legacy,
-                           summary=summary)
+                           summary=summary, new_id=new_id, callback_url=callback_url)
 
 
 @app.route("/accounts/directories/add", methods=["POST"])
@@ -275,12 +341,16 @@ def directory_add():
         flash(str(e), "error")
         return redirect(url_for("sso_settings"))
     position = conn.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM auth_directories").fetchone()[0]
+    ident = request.form.get("new_id", "")
+    if not re.fullmatch(r"[0-9a-f]{16}", ident) or conn.execute("SELECT 1 FROM auth_directories WHERE id=?", (ident,)).fetchone():
+        ident = secrets.token_hex(8)
     conn.execute("INSERT INTO auth_directories (id, kind, label, config, enabled, position, created_at) VALUES (?,?,?,?,?,?,?)",
-                 (secrets.token_hex(8), kind, label, json.dumps(cfg), int(request.form.get("enabled") == "1"), position,
+                 (ident, kind, label, json.dumps(cfg), int(request.form.get("enabled") == "1"), position,
                   datetime.datetime.now().strftime("%Y-%m-%d %H:%M")))
     audit("sso.fournisseur.ajout", f"{label} ({KINDS[kind]})", commit=False)
     conn.commit()
-    flash(_("Annuaire ajouté. Testez-le avec un compte de l'annuaire avant de l'annoncer aux utilisateurs."), "ok")
+    flash(_("Fournisseur ajouté. Testez une connexion avant de l’annoncer aux utilisateurs.") if kind == "oidc"
+          else _("Annuaire ajouté. Testez-le avec un compte de l'annuaire avant de l'annoncer aux utilisateurs."), "ok")
     return redirect(url_for("sso_settings"))
 
 
@@ -374,6 +444,16 @@ def directory_move_down(directory_id):
 def directory_test(directory_id):
     require("sso.manage")                   # pas de verrou de la base pendant l'échange réseau avec l'annuaire
     row = _directory(directory_id)
+    if row["kind"] == "oidc":
+        # Vraie connexion chez le fournisseur ; au retour, l'identité reçue est affichée, aucun compte n'est créé.
+        from .oidc import OIDCError, start_test
+        try:
+            return start_test(row)
+        except OIDCError as e:
+            audit("sso.test", f"{row['label']} : {e}", commit=False)
+            db().commit()
+            flash(_("Fournisseur injoignable ou mal configuré : %(e)s", e=e), "error")
+            return redirect(url_for("sso_settings"))
     username, password = request.form.get("username", "").strip().lower(), request.form.get("password", "")
     try:
         accepted, info = authenticate(row, username, password)
@@ -402,13 +482,18 @@ def users_approve(user_id):
         abort(400)
     if not can_assign(role):
         abort(403)
-    if not conn.execute("SELECT 1 FROM directory_identities i JOIN auth_directories d ON d.id=i.directory_id "
-                        "WHERE i.user_id=? AND d.enabled=1", (user_id,)).fetchone():
+    directory = conn.execute("SELECT d.kind, d.label FROM directory_identities i JOIN auth_directories d "
+                             "ON d.id=i.directory_id WHERE i.user_id=? AND d.enabled=1", (user_id,)).fetchone()
+    if directory is None:
         abort(400, _("L'annuaire doit être actif avant l'approbation."))
     conn.execute("UPDATE users SET role=?,disabled=0,pending=0 WHERE id=?", (role, user_id))
     permissions.revoke(conn, user_id)
     audit("sso.approbation", f"{row['username']} : {permissions.role_labels(conn)[role]}", commit=False)
     conn.commit()
-    flash(_("Compte approuvé. L'utilisateur peut maintenant se connecter avec son identifiant d'annuaire."), "ok")
+    if directory["kind"] == "oidc":
+        flash(_("Compte approuvé. L’utilisateur peut maintenant se connecter avec le bouton « Se connecter avec %(label)s ».",
+                label=directory["label"]), "ok")
+    else:
+        flash(_("Compte approuvé. L'utilisateur peut maintenant se connecter avec son identifiant d'annuaire."), "ok")
     return redirect(url_for("users"))
 

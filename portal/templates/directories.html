@@ -7,11 +7,11 @@
 {%- endmacro %}
 
 {% macro kind_name(kind, cfg) -%}
-{%- if cfg and cfg.preset == 'ad' %}Active Directory{% elif cfg and cfg.preset == 'freeipa' %}FreeIPA{% elif kind == 'ldap' %}LDAP{% else %}RADIUS{% endif -%}
+{%- if cfg and cfg.preset == 'ad' %}Active Directory{% elif cfg and cfg.preset == 'freeipa' %}FreeIPA{% elif kind == 'oidc' %}{{ 'Authentik' if cfg and cfg.preset == 'authentik' else 'OpenID Connect' }}{% elif kind == 'ldap' %}LDAP{% else %}RADIUS{% endif -%}
 {%- endmacro %}
 
 {% macro server_of(kind, cfg) -%}
-{%- if kind == 'radius' %}{{ cfg.host }}:{{ cfg.port }}{% elif cfg.preset in ('ad', 'freeipa') %}{{ cfg.server }}{% else %}{{ cfg.url }}{% endif -%}
+{%- if kind == 'radius' %}{{ cfg.host }}:{{ cfg.port }}{% elif kind == 'oidc' %}{{ cfg.issuer|replace('https://', '') }}{% elif cfg.preset in ('ad', 'freeipa') %}{{ cfg.server }}{% else %}{{ cfg.url }}{% endif -%}
 {%- endmacro %}
 
 {% macro advanced() -%}
@@ -22,8 +22,8 @@
 <label class="switch-row"><span class="switch"><input type="checkbox" name="{{ name }}" value="1" role="switch"{{ ' checked' if on }}><i aria-hidden="true"></i></span><span>{{ label }}</span></label>
 {%- endmacro %}
 
-{% macro ca_field(cfg, hint) -%}
-<label class="f"><span>{{ _("Autorité de l’annuaire (PEM)") }} <em class="opt">{{ _("facultatif") }}</em></span><textarea name="ca_pem" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----">{{ cfg.ca_pem if cfg else '' }}</textarea>
+{% macro ca_field(cfg, hint, label=None) -%}
+<label class="f"><span>{{ label or _("Autorité de l’annuaire (PEM)") }} <em class="opt">{{ _("facultatif") }}</em></span><textarea name="ca_pem" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----">{{ cfg.ca_pem if cfg else '' }}</textarea>
   <small class="hint">{{ hint }}</small></label>
 {%- endmacro %}
 
@@ -87,12 +87,36 @@
 {% endcall %}
 {% endmacro %}
 
+{# OpenID Connect : Authentik (émetteur par application) ou un autre fournisseur ; l'URL de redirection est connue d'avance. #}
+{% macro oidc_fields(preset, ident, cfg=None) %}
+{% set ak = preset == 'authentik' %}
+<input type="hidden" name="preset" value="{{ preset }}">
+<div class="sso-redirect">
+  <span class="sso-redirect-k">{{ _("URL de redirection à déclarer dans Authentik") if ak else _("URL de redirection à déclarer chez le fournisseur") }}</span>
+  <div class="copy-field"><input type="text" readonly class="mono" value="{{ callback_url(ident) }}" aria-label="{{ _('URL de redirection') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copiée') }}">{{ _("Copier") }}</button></div>
+</div>
+{% if ak and not cfg %}<p class="hint">{{ _("Dans Authentik : Applications → « Créer avec le fournisseur » → fournisseur « OAuth2/OpenID », type de client « Confidentiel », cette URL de redirection (mode strict). Recopiez ensuite l’identifiant client, le secret et l’émetteur.") }}</p>{% endif %}
+<label class="f"><span>{{ _("Émetteur (issuer)") }}</span><input type="url" name="issuer" required maxlength="500" class="mono" spellcheck="false" autocapitalize="none" value="{{ cfg.issuer if cfg else '' }}" placeholder="{{ 'https://authentik.entreprise.fr/application/o/loco/' if ak else 'https://sso.entreprise.fr/realms/entreprise' }}"{{ ' readonly' if cfg }}>
+  <small class="hint">{{ _("Ne se change pas après l’ajout : les comptes liés appartiennent à ce fournisseur.") if cfg else (_("Dans Authentik, sur la page du fournisseur : « OpenID Configuration Issuer ».") if ak else _("L’adresse dont /.well-known/openid-configuration décrit le fournisseur.")) }}</small></label>
+<div class="grid2">
+  <label class="f"><span>{{ _("Identifiant client (Client ID)") }}</span><input type="text" name="client_id" required maxlength="255" class="mono" spellcheck="false" autocapitalize="none" autocomplete="off" value="{{ cfg.client_id if cfg else '' }}"></label>
+  <label class="f"><span>{{ _("Secret client (Client Secret)") }}</span><input type="password" name="client_secret" maxlength="1024" autocomplete="new-password" {{ '' if cfg else 'required' }} placeholder="{{ _('inchangé si vide') if cfg else '' }}"></label>
+</div>
+{% call advanced() %}
+  <div class="grid2">
+    <label class="f"><span>{{ _("Portées (scopes)") }}</span><input type="text" name="scopes" maxlength="200" class="mono" spellcheck="false" value="{{ cfg.scopes if cfg else 'openid profile email' }}"></label>
+    <label class="f"><span>{{ _("Revendication du nom d’utilisateur") }}</span><input type="text" name="username_claim" maxlength="60" class="mono" spellcheck="false" value="{{ cfg.username_claim if cfg else 'preferred_username' }}"></label>
+  </div>
+  {{ ca_field(cfg, _("Vide : les autorités de confiance du système. Collez l’autorité de votre réseau, ou le certificat auto-signé d’Authentik (épinglé tel quel)."), _("Certificat ou autorité du fournisseur (PEM)")) }}
+{% endcall %}
+{% endmacro %}
+
 {% block content %}
 {% set manage = can('sso.manage') %}
 <div class="head">
   <div>
     <h1>{{ _("Annuaires et SSO") }}</h1>
-    <p>{{ _("Connexion à loco avec les comptes de l’entreprise : Active Directory, FreeIPA, un autre annuaire LDAP ou un serveur RADIUS. Les comptes locaux restent toujours disponibles.") }}</p>
+    <p>{{ _("Connexion à loco avec les comptes de l’entreprise : Active Directory, FreeIPA, un autre annuaire LDAP, un serveur RADIUS, ou le SSO d’Authentik et d’autres fournisseurs OpenID Connect. Les comptes locaux restent toujours disponibles.") }}</p>
   </div>
   {% if manage %}<div class="actions"><button type="button" class="btn primary" data-open="#dir-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un annuaire") }}</span></button></div>{% endif %}
 </div>
@@ -161,20 +185,26 @@
   <input type="radio" name="dirkind" id="dk-ad" class="kind-radio" checked>
   <input type="radio" name="dirkind" id="dk-ipa" class="kind-radio">
   <input type="radio" name="dirkind" id="dk-ldap" class="kind-radio">
+  <input type="radio" name="dirkind" id="dk-authentik" class="kind-radio">
+  <input type="radio" name="dirkind" id="dk-oidc" class="kind-radio">
   <input type="radio" name="dirkind" id="dk-radius" class="kind-radio">
-  <div class="seg-wrap"><div class="seg">
-    <label for="dk-ad">Active Directory</label><label for="dk-ipa">FreeIPA</label><label for="dk-ldap">{{ _("Autre LDAP") }}</label><label for="dk-radius">RADIUS</label>
+  <div class="seg-wrap"><div class="seg six">
+    <label for="dk-ad">Active Directory</label><label for="dk-ipa">FreeIPA</label><label for="dk-ldap">{{ _("Autre LDAP") }}</label>
+    <label for="dk-authentik">Authentik</label><label for="dk-oidc">{{ _("Autre OpenID Connect") }}</label><label for="dk-radius">RADIUS</label>
   </div></div>
   {% for kind, intro in (('ad', _("Contrôleurs de domaine Windows Server ou Samba. Les utilisateurs se connectent avec leur identifiant habituel, sans le domaine.")),
                          ('freeipa', _("FreeIPA ou Red Hat Identity Management. Les utilisateurs se connectent avec leur identifiant FreeIPA.")),
                          ('ldap', _("OpenLDAP, 389 Directory Server ou tout annuaire LDAP v3.")),
+                         ('authentik', _("Connexion par le bouton « Se connecter avec Authentik » de la page de connexion : mot de passe, double authentification et règles d’accès restent gérés par Authentik.")),
+                         ('oidc', _("Keycloak, Zitadel, Authelia, Microsoft Entra ID… tout fournisseur OpenID Connect, avec un bouton sur la page de connexion.")),
                          ('radius', _("NPS, FreeRADIUS… Déclarez loco comme client RADIUS (son adresse et le secret) ; authentification PAP, sans défi OTP."))) %}
   <form method="post" action="{{ url_for('directory_add') }}" data-kind="{{ kind }}">
     <div class="dlg-b dlg-stack">
       <p class="muted small">{{ intro }}</p>
-      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ 'radius' if kind == 'radius' else 'ldap' }}">
-      <label class="f"><span>{{ _("Nom affiché") }}{% if kind in ('ad', 'freeipa') %} <em class="opt">{{ _("facultatif") }}</em>{% endif %}</span><input type="text" name="label" {{ '' if kind in ('ad', 'freeipa') else 'required' }} maxlength="80" placeholder="{{ 'Active Directory' if kind == 'ad' else 'FreeIPA' if kind == 'freeipa' else _('Annuaire de l’entreprise') if kind == 'ldap' else _('NPS de l’entreprise') }}"></label>
-      {% if kind in ('ad', 'freeipa') %}{{ preset_fields(kind) }}{% elif kind == 'ldap' %}{{ ldap_fields() }}{% else %}{{ radius_fields() }}{% endif %}
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ 'radius' if kind == 'radius' else 'oidc' if kind in ('authentik', 'oidc') else 'ldap' }}">
+      {% if kind in ('authentik', 'oidc') %}<input type="hidden" name="new_id" value="{{ new_id }}">{% endif %}
+      <label class="f"><span>{{ _("Nom affiché") }}{% if kind in ('ad', 'freeipa', 'authentik') %} <em class="opt">{{ _("facultatif") }}</em>{% endif %}</span><input type="text" name="label" {{ '' if kind in ('ad', 'freeipa', 'authentik') else 'required' }} maxlength="80" placeholder="{{ 'Active Directory' if kind == 'ad' else 'FreeIPA' if kind == 'freeipa' else 'Authentik' if kind == 'authentik' else _('SSO de l’entreprise') if kind == 'oidc' else _('Annuaire de l’entreprise') if kind == 'ldap' else _('NPS de l’entreprise') }}"></label>
+      {% if kind in ('ad', 'freeipa') %}{{ preset_fields(kind) }}{% elif kind in ('authentik', 'oidc') %}{{ oidc_fields(kind, new_id) }}{% elif kind == 'ldap' %}{{ ldap_fields() }}{% else %}{{ radius_fields() }}{% endif %}
       {{ switch('enabled', _("Actif dès l’ajout"), true) }}
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Ajouter") }}</button></div>
@@ -186,12 +216,20 @@
 {% for item in directories %}{% set d = item.row %}{% set cfg = item.cfg %}
 <dialog id="dir-test-{{ d.id }}">
   <form method="post" action="{{ url_for('directory_test', directory_id=d.id) }}">
+    {% if d.kind == 'oidc' %}
+    {{ dlg_head(_("Tester %(label)s", label=d.label), _("Une vraie connexion chez le fournisseur, sans rien créer dans loco.")) }}
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p>{{ _("loco vous envoie sur %(label)s : connectez-vous avec le compte à essayer. Si vous y êtes déjà connecté, c’est ce compte-là qui est essayé (pour un autre, passez par une fenêtre de navigation privée). Au retour, loco affiche l’identité reçue, sans rien créer. Le test fonctionne aussi avant l’activation.", label=d.label) }}</p>
+    </div>
+    {% else %}
     {{ dlg_head(_("Tester %(label)s", label=d.label), _("Vérifie la connexion à l’annuaire et ce compte, sans rien créer.")) }}
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="f"><span>{{ _("Identifiant") }}</span><input type="text" name="username" required autocomplete="off" autocapitalize="none" spellcheck="false"></label>
       <label class="f"><span>{{ _("Mot de passe") }}</span><span class="password-field"><input type="password" name="password" required autocomplete="new-password"></span></label>
     </div>
+    {% endif %}
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Tester") }}</button></div>
   </form>
 </dialog>
@@ -201,7 +239,7 @@
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="label" required maxlength="80" value="{{ d.label }}"></label>
-      {% if d.kind == 'radius' %}{{ radius_fields(cfg) }}{% elif cfg.preset in ('ad', 'freeipa') %}{{ preset_fields(cfg.preset, cfg) }}{% else %}{{ ldap_fields(cfg) }}{% endif %}
+      {% if d.kind == 'radius' %}{{ radius_fields(cfg) }}{% elif d.kind == 'oidc' %}{{ oidc_fields(cfg.preset, d.id, cfg) }}{% elif cfg.preset in ('ad', 'freeipa') %}{{ preset_fields(cfg.preset, cfg) }}{% else %}{{ ldap_fields(cfg) }}{% endif %}
       {{ switch('enabled', _("Actif"), d.enabled) }}
     </div>
     <div class="dlg-f"><span class="hint dlg-f-note">{{ _("Enregistrer ferme les sessions de ses comptes.") }}</span><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>
