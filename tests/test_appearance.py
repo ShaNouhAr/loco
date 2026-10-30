@@ -14,6 +14,11 @@ SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width=
 
 
 class AppearanceModelTest(unittest.TestCase):
+    def setUp(self):
+        ctx = test_portal.loco.app.app_context()          # le cadre de l'instance est lu en base
+        ctx.push()
+        self.addCleanup(ctx.pop)
+
     def test_default(self):
         d = appearance.default()
         self.assertEqual(set(d), {"theme", "accent", "alpha", "bg"})
@@ -191,3 +196,101 @@ class LogoTest(unittest.TestCase):
                      content_type="multipart/form-data")
         self.assertEqual(r.status_code, 403)
         self.assertEqual(v.c.post("/appearance/logo/remove", data={"csrf": v.token("/")}).status_code, 403)
+
+
+class InstancePolicyTest(unittest.TestCase):
+    """Apparence de l'instance : identité (couleur, fond), défaut, thèmes proposés, couleur et fond imposés."""
+
+    def setUp(self):
+        self.b = Browser()
+        self.b.login("admin", ADMIN_PW)
+
+    def tearDown(self):
+        with connect() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (appearance.POLICY_KEY,))
+            conn.execute("UPDATE users SET appearance='' WHERE username IN ('admin', 'viewer_ia')")
+        for f in glob.glob(os.path.join(appearance.BG_DIR, "*")):
+            os.unlink(f)
+
+    def save(self, **form):
+        values = {"themes": list(appearance.THEMES), "accent_free": "1", "background_free": "1", "default_theme": "midnight",
+                  "default_accent": "blue", "default_bg": "w:montagne", "default_alpha": "90"}
+        values.update(form)
+        return self.b.post("/system/appearance", values, page="/system/appearance")
+
+    def viewer(self):
+        with connect() as conn:
+            if not conn.execute("SELECT 1 FROM users WHERE username='viewer_ia'").fetchone():
+                auth.create_user(conn, "viewer_ia", "Viewer-Pass-123456", "viewer", must_change=False)
+        v = Browser()
+        v.login("viewer_ia", "Viewer-Pass-123456")
+        return v
+
+    def test_origin_is_the_factory_look_with_every_choice(self):
+        with test_portal.loco.app.test_request_context():
+            pol = appearance.policy()
+        self.assertEqual(pol["default"], appearance.FACTORY)
+        self.assertEqual((pol["themes"], pol["accent_free"], pol["background_free"], pol["brand"]),
+                         (list(appearance.THEMES), True, True, ""))
+
+    def test_company_look_with_a_light_and_a_dark_theme(self):
+        r = self.save(brand_on="1", brand="#E30613", themes=["light", "oled"], default_theme="light",
+                      default_accent="brand", default_bg="", default_alpha="100", accent_free="", background_free="")
+        self.assertEqual(r.status_code, 302)
+        v = self.viewer()
+        with connect() as conn:                                         # réglage d'avant, hors du cadre
+            conn.execute("UPDATE users SET appearance=? WHERE username='viewer_ia'",
+                         ('{"theme": "midnight", "accent": "teal", "alpha": 70, "bg": "w:foret"}',))
+        html = v.c.get("/fleet").get_data(as_text=True)
+        self.assertIn('data-theme="light" data-accent="brand"', html)   # thème remplacé, couleur et fond imposés
+        self.assertIn('data-brand="#e30613" data-brand-fg="#ffffff"', html)
+        self.assertNotIn("data-bg=", html.split(">", 2)[1])
+        self.assertIn('data-set-theme="oled"', html)
+        self.assertNotIn('data-set-theme="midnight"', html)              # seuls les thèmes proposés
+        self.assertNotIn("data-set-accent=", html)                       # couleur imposée : pas de choix
+        self.assertNotIn("data-bg-upload", html)                         # fond imposé : pas d'image personnelle
+        # L'enregistrement d'un compte reste dans le cadre.
+        saved = v.post("/account/appearance", {"theme": "oled", "accent": "pink", "alpha": "60", "bg": "g:rose"}).get_json()
+        self.assertEqual(saved, {"theme": "oled", "accent": "brand", "alpha": 100, "bg": ""})
+        anon = Browser().c.get("/login").get_data(as_text=True)          # écran de connexion : le défaut de l'instance
+        self.assertIn('data-theme="light" data-accent="brand"', anon)
+
+    def test_invalid_settings_are_refused(self):
+        self.save(brand_on="1", brand="rouge")
+        self.save(themes=[])
+        self.save(themes=["light"], default_theme="oled")
+        with test_portal.loco.app.test_request_context():
+            self.assertEqual(appearance.policy()["themes"], list(appearance.THEMES))     # rien d'enregistré
+        self.save(default_accent="brand")                               # couleur d'entreprise absente : défaut d'usine
+        with test_portal.loco.app.test_request_context():
+            self.assertEqual(appearance.policy()["default"]["accent"], appearance.FACTORY["accent"])
+
+    def test_company_background_is_public_and_can_be_the_default(self):
+        r = self.b.c.post("/appearance/company", data={"csrf": self.b.token("/system/appearance"), "next": "instance",
+                                                         "background": (io.BytesIO(PNG), "fond.png")},
+                          content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 302)
+        anon = Browser()
+        img = anon.c.get("/appearance/company.img")
+        self.assertEqual((img.status_code, img.get_data()), (200, PNG))
+        img.close()
+        self.save(default_bg="c")
+        self.assertIn('data-bg="c"', anon.c.get("/login").get_data(as_text=True))
+        self.assertIn('data-set-bg="c"', self.b.c.get("/fleet").get_data(as_text=True))
+        self.b.post("/appearance/company/remove", {"next": "instance"}, page="/system/appearance")
+        self.assertNotIn('data-bg="c"', anon.c.get("/login").get_data(as_text=True))     # retiré : fond d'usine
+        gone = anon.c.get("/appearance/company.img")
+        self.assertEqual(gone.status_code, 404)
+        gone.close()
+
+    def test_only_server_configuration_may_change_it_and_reset_restores(self):
+        v = self.viewer()
+        self.assertEqual(v.c.get("/system/appearance").status_code, 403)
+        self.assertEqual(v.post("/system/appearance", {"themes": ["light"]}, page="/").status_code, 403)
+        self.assertNotIn("/system/appearance", v.c.get("/fleet").get_data(as_text=True))
+        self.save(themes=["light"], default_theme="light")
+        self.assertEqual(self.b.post("/system/appearance/reset", {}, page="/system/appearance").status_code, 302)
+        with test_portal.loco.app.test_request_context():
+            self.assertEqual(appearance.policy()["themes"], list(appearance.THEMES))
+        with connect() as conn:
+            self.assertTrue(conn.execute("SELECT 1 FROM audit WHERE action='apparence.instance'").fetchone())

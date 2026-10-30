@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Apparence de l'instance") }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Apparence de l'instance") }}</h1>
+    <p>{{ _("Identité de l’entreprise, apparence par défaut et choix laissés à chacun. Chaque compte règle ensuite son apparence dans ce cadre (menu du compte › Apparence).") }}</p>
+  </div>
+</div>
+
+<div class="stack">
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Identité de l’entreprise") }}</h2><div class="aside">{{ _("visible par tous, y compris sur l’écran de connexion") }}</div></div>
+    <div class="panel-b ia-identity">
+      <div class="ia-row">
+        <div class="ia-what"><strong>{{ _("Logo") }}</strong><small>{{ _("En-tête, écran de connexion et icône de l’onglet. Image ou SVG, 2 Mo maximum.") }}</small></div>
+        <span class="ia-logo"><img src="{{ instance_logo.url if instance_logo else url_for('static', filename='logo.svg') ~ '?v=' ~ asset_v }}" alt=""></span>
+        <div class="ia-acts">
+          <form method="post" action="{{ url_for('appearance_logo_set') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="instance">
+            <label class="btn sm"><span>{{ _("Choisir un logo…") }}</span><input type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" data-autosubmit hidden></label>
+          </form>
+          {% if instance_logo %}<form method="post" action="{{ url_for('appearance_logo_delete') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="instance"><button class="btn sm">{{ _("Logo loco") }}</button></form>{% endif %}
+        </div>
+      </div>
+      <div class="ia-row">
+        <div class="ia-what"><strong>{{ _("Couleur de l’entreprise") }}</strong><small>{{ _("Proposée comme couleur d’accent (boutons, liens, sélection) et utilisable par défaut ; le texte posé dessus passe en noir ou en blanc selon sa clarté.") }}</small></div>
+        <input type="color" class="ia-color" name="brand" value="{{ brand.color if brand else '#2563eb' }}" form="instance-form" aria-label="{{ _('Couleur de l’entreprise') }}">
+        <div class="ia-acts">
+          <label class="switch-row"><span class="switch"><input type="checkbox" name="brand_on" value="1" form="instance-form" role="switch"{{ ' checked' if brand }}><i aria-hidden="true"></i></span><span>{{ _("Utiliser cette couleur") }}</span></label>
+        </div>
+      </div>
+      <div class="ia-row">
+        <div class="ia-what"><strong>{{ _("Fond de l’entreprise") }}</strong><small>{{ _("Une image aux couleurs de l’entreprise, proposée dans les fonds et utilisable par défaut (y compris à l’écran de connexion). 8 Mo maximum.") }}</small></div>
+        <span class="ia-bg{{ ' ap-bg-company' if company else ' off' }}"></span>
+        <div class="ia-acts">
+          <form method="post" action="{{ url_for('appearance_company_set') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="instance">
+            <label class="btn sm"><span>{{ _("Choisir une image…") }}</span><input type="file" name="background" accept="image/png,image/jpeg,image/gif,image/webp" data-autosubmit hidden></label>
+          </form>
+          {% if company %}<form method="post" action="{{ url_for('appearance_company_delete') }}" data-confirm="{{ _('Retirer le fond de l’entreprise ?') }}" data-confirm-text="{{ _('Les comptes qui l’utilisent reprennent le fond par défaut.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="instance"><button class="btn sm">{{ _("Retirer") }}</button></form>{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <form method="post" action="{{ url_for('instance_appearance_save') }}" id="instance-form" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Apparence par défaut") }}</h2><div class="aside">{{ _("nouveaux comptes, écran de connexion et « Réinitialiser »") }}</div></div>
+      <div class="panel-b ia-default">
+        <label class="f"><span>{{ _("Thème") }}</span><select name="default_theme">
+          {% for key, label in theme_labels.items() %}<option value="{{ key }}"{{ ' selected' if pol.default.theme == key }}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="f"><span>{{ _("Couleur d’accent") }}</span><select name="default_accent">
+          <option value="brand"{{ ' selected' if pol.default.accent == 'brand' }}>{{ _("Couleur de l’entreprise") }}</option>
+          {% for key, label in accent_labels.items() %}<option value="{{ key }}"{{ ' selected' if pol.default.accent == key }}>{{ label }}</option>{% endfor %}</select></label>
+        <label class="f"><span>{{ _("Fond") }}</span><select name="default_bg">
+          <option value=""{{ ' selected' if not pol.default.bg }}>{{ _("Aucun") }}</option>
+          {% if company %}<option value="c"{{ ' selected' if pol.default.bg == 'c' }}>{{ _("Fond de l’entreprise") }}</option>{% endif %}
+          <optgroup label="{{ _('Photos') }}">{% for key, label in wallpaper_labels.items() %}<option value="w:{{ key }}"{{ ' selected' if pol.default.bg == 'w:' ~ key }}>{{ label }}</option>{% endfor %}</optgroup>
+          <optgroup label="{{ _('Dégradés') }}">{% for key, label in gradient_labels.items() %}<option value="g:{{ key }}"{{ ' selected' if pol.default.bg == 'g:' ~ key }}>{{ label }}</option>{% endfor %}</optgroup>
+        </select></label>
+        <label class="f"><span>{{ _("Opacité des panneaux (%%)") }}</span><input type="number" name="default_alpha" min="55" max="100" step="1" value="{{ pol.default.alpha }}"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Choix laissés à chacun") }}</h2></div>
+      <div class="panel-b stack-sm">
+        <div>
+          <h3 class="pick-title">{{ _("Thèmes proposés") }}</h3>
+          <div class="ia-themes">
+            {% for key, label in theme_labels.items() %}
+            <label class="ia-theme"><input type="checkbox" name="themes" value="{{ key }}"{{ ' checked' if key in pol.themes }}><span class="ap-preview" data-theme="{{ key }}"><i></i></span><span>{{ label }}<small>{{ _("clair") if key in light_themes else _("sombre") }}</small></span></label>
+            {% endfor %}
+          </div>
+          <p class="hint">{{ _("Gardez au moins un thème clair et un thème sombre : chacun choisit le sien selon sa vue et son écran.") }}</p>
+        </div>
+        <div class="feature-list cap-list">
+          <label class="feature-row">
+            <span class="feature-text"><strong>{{ _("Chacun choisit sa couleur d’accent") }}</strong><small>{{ _("Désactivé : la couleur par défaut pour tous.") }}</small></span>
+            <span class="switch"><input type="checkbox" name="accent_free" value="1" role="switch"{{ ' checked' if pol.accent_free }}><i aria-hidden="true"></i></span>
+          </label>
+          <label class="feature-row">
+            <span class="feature-text"><strong>{{ _("Chacun choisit son fond et la transparence") }}</strong><small>{{ _("Désactivé : le fond et l’opacité par défaut pour tous ; les images personnelles ne sont plus proposées.") }}</small></span>
+            <span class="switch"><input type="checkbox" name="background_free" value="1" role="switch"{{ ' checked' if pol.background_free }}><i aria-hidden="true"></i></span>
+          </label>
+        </div>
+        <p class="hint">{{ _("Les comptes gardent leurs réglages ; ce qui n’est plus proposé est remplacé par l’apparence par défaut.") }}</p>
+      </div>
+    </section>
+  </form>
+  <div class="row-between ia-save">
+    <form method="post" action="{{ url_for('instance_appearance_reset') }}" data-confirm="{{ _('Revenir aux réglages d’origine ?') }}" data-confirm-text="{{ _('Tous les thèmes, couleurs et fonds redeviennent au choix ; l’apparence par défaut redevient celle de l’installation. Le logo et le fond de l’entreprise sont conservés.') }}" data-confirm-ok="{{ _('Rétablir') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Réglages d’origine") }}</button>
+    </form>
+    <button class="btn primary" form="instance-form">{{ _("Enregistrer") }}</button>
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.119.0 — 2026-10-30
+
+- **Apparence de l'instance** (*Administration → Apparence*, droit *Configurer le serveur*) : une entreprise adapte loco à sa charte sans retirer les thèmes livrés. À l'installation, tout reste proposé comme avant.
+  - **Identité** : logo (déplacé ici depuis la fenêtre Apparence personnelle), **couleur de l'entreprise** — proposée comme couleur d'accent, texte posé dessus en noir ou en blanc selon sa clarté — et **fond de l'entreprise**, image proposée dans les fonds et servie aussi à l'écran de connexion.
+  - **Apparence par défaut** : thème, couleur, fond et opacité des nouveaux comptes, de l'écran de connexion et de *Réinitialiser* (jusqu'ici fixée sur « Alpes »).
+  - **Choix laissés à chacun** : thèmes proposés (par exemple un clair et un sombre), couleur d'accent et fond **au choix ou imposés**. La fenêtre Apparence de chaque compte ne montre plus que ce qui est autorisé ; un réglage hors du cadre est remplacé à l'affichage par l'apparence par défaut, sans être effacé. *Réglages d'origine* rétablit tous les choix. Journal : catégorie Serveur.
+
 ## 2.118.0 — 2026-10-30
 
 - **Enrôler un poste directement dans un groupe.** En haut de **Enrôlement**, *Inscrire les postes dans le groupe* bascule le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du groupe** : le poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans quitter les siens). Aucun agent à mettre à jour — la clé de groupe (`g<id>-…`) prend la place de celle du serveur.

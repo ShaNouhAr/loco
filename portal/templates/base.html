@@ -1,5 +1,5 @@
 {% from "_logo.html" import logo with context %}<!doctype html>
-<html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
+<html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if brand %} data-brand="{{ brand.color }}" data-brand-fg="{{ brand.fg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -59,6 +59,7 @@
         ('server', server_updates and can('system.view'), 'appliance_updates', ep.startswith('appliance_updates') or ep == 'appliance_job', 'update', _('Mises à jour'), _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité')),
         ('server', appliance and can('system.configure'), 'appliance_settings', ep.startswith('appliance_settings'), 'settings', _('Configuration'), _('Accès, fonctions et stockage')),
         ('server', is_super_admin(), 'features', ep.startswith('features'), 'layers', _('Fonctionnalités'), _('Activer ou désactiver les fonctions')),
+        ('server', can('system.configure'), 'instance_appearance', ep.startswith('instance_appearance'), 'palette', _('Apparence'), _('Logo, couleurs et thèmes proposés')),
         ('server', server_shell, 'system_shell_home', ep.startswith('system_shell'), 'terminal', _('Shell root'), {'off': _('Désactivé · terminal root du serveur'), 'pending': _('Redémarrage requis pour l\'activer'), 'active': _('Terminal root du serveur')}.get(server_shell, '')),
         ('watch', can('audit.view'), 'journal', ep == 'journal', 'journal', _('Journal'), _('Historique des actions')),
         ('watch', can('alerts.view'), 'alerts', ep.startswith('alerts'), 'bell', _('Alertes'), _('Notifications e-mail et webhook')),

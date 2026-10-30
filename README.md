@@ -35,7 +35,8 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 - **Catalogue winget** : recherche dans le catalogue public de Microsoft et import en un clic (installeur officiel
   vérifié par SHA-256, options silencieuses et détection des versions installées sur le parc).
 - **Portail web** en HTTPS : comptes nommés, journal d'audit, supervision, sauvegardes ; **apparence personnalisable** par
-  utilisateur (thèmes clairs et sombres, couleur d'accent, transparence, fonds d'écran dont des photos) et logo d'instance.
+  utilisateur (thèmes clairs et sombres, couleur d'accent, transparence, fonds d'écran dont des photos), dans le cadre
+  fixé pour l'instance (logo, couleur et fond de l'entreprise, thèmes proposés, couleur ou fond imposés).
 
 | | |
 |---|---|
@@ -464,7 +465,12 @@ Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de crée
 
 ## Mon compte et apparence
 
-**Mon compte** présente le profil, le type de compte et ses dates, avec quatre onglets : **Sécurité** (changement du mot de passe avec ses règles vérifiées en direct), **Apparence**, **Mes droits** (regroupés par domaine) et **Activité récente** (dix dernières actions du compte). Le menu **Apparence** de l’en-tête et l’onglet du même nom proposent les thèmes **OLED**, **Sombre doux** (anthracite) et **Clair**, ainsi qu’une **couleur d’accent** (neutre, bleu, vert, violet, orange, rose). Le choix est conservé par le navigateur.
+**Mon compte** présente le profil, le type de compte et ses dates, avec quatre onglets : **Sécurité** (changement du mot de passe avec ses règles vérifiées en direct), **Apparence**, **Mes droits** (regroupés par domaine) et **Activité récente** (dix dernières actions du compte). La fenêtre **Apparence** (menu du compte) propose cinq thèmes — **OLED**, **Sombre doux**, **Minuit**, **Clair** et **Sépia** —, huit **couleurs d’accent**, la **transparence** des panneaux, des **fonds** (dégradés, photos, image personnelle) et des presets ; le choix est enregistré sur le compte et le suit d’un navigateur à l’autre.
+
+**Apparence de l’instance** (*Administration → Apparence*, droit *Configurer le serveur*) : l’identité de l’entreprise et le cadre des choix de chacun. À l’installation, tout est proposé, comme ci-dessus.
+- **Identité** : **logo** (en-tête, écran de connexion, icône de l’onglet), **couleur de l’entreprise** (proposée comme couleur d’accent ; le texte posé dessus passe en noir ou en blanc selon sa clarté) et **fond de l’entreprise** (image proposée dans les fonds, servie aussi à l’écran de connexion).
+- **Apparence par défaut** : thème, couleur, fond et opacité des nouveaux comptes, de l’écran de connexion et du bouton *Réinitialiser*.
+- **Choix laissés à chacun** : les **thèmes proposés** (par exemple un clair et un sombre seulement), la couleur d’accent et le fond **au choix ou imposés**. Rien n’est supprimé : un thème décoché est seulement masqué, et ce qui n’est plus proposé est remplacé à l’affichage par l’apparence par défaut, sans toucher aux réglages enregistrés des comptes. *Réglages d’origine* rétablit tous les choix.
 
 ## Utilisateurs et profils d’accès
 

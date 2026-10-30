@@ -121,44 +121,51 @@
 
 {# Panneau Apparence complet : presets, thème, accent, transparence, fond. Enregistré par utilisateur (serveur). #}
 {% macro appearance_dialog() -%}
+{% set pol = appearance_policy %}{% set pol_free = pol.accent_free and pol.background_free %}
 {% set theme_labels = {'oled': _('OLED'), 'dim': _('Sombre doux'), 'light': _('Clair'), 'midnight': _('Minuit'), 'sepia': _('Sépia')} %}
 {% set accent_labels = {'neutral': _('Neutre'), 'blue': _('Bleu'), 'green': _('Vert'), 'violet': _('Violet'), 'orange': _('Orange'), 'pink': _('Rose'), 'teal': _('Sarcelle'), 'amber': _('Ambre')} %}
 {% set gradient_labels = {'aurora': _('Aurore'), 'ocean': _('Océan'), 'forest': _('Forêt'), 'dusk': _('Crépuscule'), 'rose': _('Rose'), 'slate': _('Ardoise')} %}
 {% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver')} %}
 <dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}" data-default='{{ appearance_default|tojson }}'>
   <div class="dlg-h">
-    <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") }}</p></div>
+    <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") if pol_free else _("Enregistrée sur votre compte, dans le cadre fixé pour toute l’organisation.") }}</p></div>
     <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ nav_icon('close') }}</button>
   </div>
   <div class="dlg-b ap-body">
+    {% if pol_free %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Presets") }}</h3>
       <div class="ap-presets">
-        {% for key, label, theme, accent, alpha, bg in appearance_catalog.presets %}
+        {% for key, label, theme, accent, alpha, bg in appearance_catalog.presets if theme in pol.themes %}
         <button type="button" class="ap-preset" data-preset data-theme="{{ theme }}" data-accent="{{ accent }}" data-alpha="{{ alpha }}" data-bg="{{ bg }}">
           <span class="ap-preview" data-theme="{{ theme }}" data-accent="{{ accent }}"{% if bg %} data-bg="{{ bg }}"{% endif %}><i></i></span><span>{{ _(label) }}</span>
         </button>
         {% endfor %}
       </div>
     </section>
+    {% endif %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Thème") }}</h3>
       <div class="ap-themes">
-        {% for key in appearance_catalog.themes %}
+        {% for key in appearance_catalog.themes if key in pol.themes %}
         <button type="button" class="ap-theme" data-set-theme="{{ key }}" aria-checked="false" role="radio">
           <span class="ap-preview" data-theme="{{ key }}"><i></i></span><span>{{ theme_labels[key] }}</span>
         </button>
         {% endfor %}
       </div>
     </section>
+    {% if pol.accent_free %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Couleur d'accent") }}</h3>
       <div class="accent-row">
+        {% if brand %}<button type="button" class="accent-choice accent-brand" data-set-accent="brand" role="radio" aria-checked="false" aria-label="{{ _('Couleur de l’entreprise') }}" title="{{ _('Couleur de l’entreprise') }}"></button>{% endif %}
         {% for key in appearance_catalog.accents %}
         <button type="button" class="accent-choice accent-{{ key }}" data-set-accent="{{ key }}" role="radio" aria-checked="false" aria-label="{{ accent_labels[key] }}" title="{{ accent_labels[key] }}"></button>
         {% endfor %}
       </div>
     </section>
+    {% endif %}
+    {% if pol.background_free %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Transparence des panneaux") }} <span class="ap-alpha-val" data-alpha-val></span></h3>
       <input type="range" class="ap-range" min="{{ appearance_catalog.alpha_min }}" max="100" step="1" value="{{ appearance.alpha }}" data-set-alpha aria-label="{{ _('Transparence des panneaux') }}">
@@ -176,6 +183,7 @@
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Fond — photos") }}</h3>
       <div class="ap-bgs ap-photos">
+        {% if company_bg %}<button type="button" class="ap-bg ap-photo ap-bg-company" data-set-bg="c" role="radio" aria-checked="false" aria-label="{{ _('Fond de l’entreprise') }}" title="{{ _('Fond de l’entreprise') }}"><span>{{ _("Entreprise") }}</span></button>{% endif %}
         {% for w in appearance_catalog.wallpapers %}
         <button type="button" class="ap-bg ap-photo wp-{{ w }}" data-set-bg="w:{{ w }}" role="radio" aria-checked="false" aria-label="{{ wp_labels[w] }}" title="{{ wp_labels[w] }}"><span>{{ wp_labels[w] }}</span></button>
         {% endfor %}
@@ -188,20 +196,8 @@
       </div>
       <p class="hint">{{ _("Astuce : baissez la transparence pour mieux voir le fond ; le texte reste lisible dans tous les thèmes.") }}</p>
     </section>
-    {% if can('system.configure') %}
-    <section class="ap-sec ap-logo-sec">
-      <h3 class="ap-label">{{ _("Logo") }} <span class="ap-global-tag">{{ _("global") }}</span></h3>
-      <div class="ap-logo-row">
-        <span class="ap-logo-prev"><img src="{{ custom_logo.url if custom_logo else url_for('static', filename='logo.svg') ~ '?v=' ~ asset_v }}" alt=""></span>
-        <div class="ap-bg-actions">
-          <label class="btn sm"><span>{{ _("Choisir un logo…") }}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" data-logo-upload hidden></label>
-          <button type="button" class="btn sm danger{{ '' if custom_logo else ' hidden' }}" data-logo-remove>{{ _("Logo loco par défaut") }}</button>
-          <span class="hint" data-logo-msg></span>
-        </div>
-      </div>
-      <p class="hint">{{ _("Remplace le logo loco pour tout le monde (en-tête, page de connexion, favicon). Image ou SVG, 2 Mo maximum.") }}</p>
-    </section>
     {% endif %}
+    {% if can('system.configure') %}<p class="hint ap-instance-link"><a href="{{ url_for('instance_appearance') }}">{{ _("Apparence de l’instance : logo, couleur et fond de l’entreprise, thèmes proposés…") }}</a></p>{% endif %}
   </div>
   <div class="dlg-f row-between">
     <button type="button" class="linkbtn" data-reset>{{ _("Réinitialiser l'apparence") }}</button>

@@ -157,6 +157,7 @@
 [data-accent="orange"] { --accent: #c2410c; --accent-fg: #ffffff; }
 [data-accent="pink"] { --accent: #be185d; --accent-fg: #ffffff; }
 [data-accent="teal"] { --accent: #0d9488; --accent-fg: #ffffff; }
+[data-accent="brand"] { --accent: var(--brand, #2563eb); --accent-fg: var(--brand-fg, #ffffff); }  /* couleur de l'entreprise */
 [data-accent="amber"] { --accent: #b45309; --accent-fg: #ffffff; }
 
 :root {
@@ -1241,6 +1242,7 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .accent-choice { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line-2); cursor: pointer; padding: 0; }
 .accent-choice[aria-checked="true"] { box-shadow: 0 0 0 2px var(--text); }
 .accent-neutral { background: linear-gradient(135deg, var(--text) 50%, var(--bg-3) 50%); }
+.accent-brand { background: var(--brand, #2563eb); }
 .accent-blue { background: #2563eb; } .accent-green { background: #15803d; } .accent-violet { background: #7c3aed; }
 .accent-orange { background: #c2410c; } .accent-pink { background: #be185d; }
 
@@ -1966,6 +1968,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .bg-layer { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
 [data-bg^="g:"] .bg-layer { background-image: var(--grad); background-size: cover; background-position: center; }
 [data-bg="u"] .bg-layer { background-image: url("/appearance/background.img"); background-size: cover; background-position: center; }
+[data-bg="c"] .bg-layer { background-image: url("/appearance/company.img"); background-size: cover; background-position: center; }
 /* Voile le fond importé vers la couleur du thème pour garder le texte lisible. */
 [data-bg="g:aurora"] { --grad: var(--g-aurora); } [data-bg="g:ocean"] { --grad: var(--g-ocean); }
 [data-bg="g:forest"] { --grad: var(--g-forest); } [data-bg="g:dusk"] { --grad: var(--g-dusk); }
@@ -2001,6 +2004,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .ap-preview { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); background: var(--canvas); background-size: cover; background-position: center; }
 .ap-preview[data-bg^="g:"] { background-image: var(--grad); }
 .ap-preview[data-bg="u"] { background-image: url("/appearance/background.img"); }
+.ap-preview[data-bg="c"], .ap-bg-company { background-image: url("/appearance/company.img"); background-size: cover; background-position: center; }
 .ap-preview::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 24%; background: var(--bg); border-bottom: 1px solid var(--line); }
 .ap-preview i { position: absolute; left: 10%; top: 38%; right: 10%; bottom: 14%; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); }
 .ap-preview::after { content: ""; position: absolute; right: 8%; top: 7%; width: 10%; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
@@ -2041,7 +2045,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg="w:hiver"] .bg-layer { background-image: url("wallpapers/hiver.jpg"); }
 /* Voile de lisibilité sur les fonds photo (image importée comprise) : teinte vers la couleur du thème
    pour que les panneaux translucides et la barre du haut gardent assez de contraste, clair comme sombre. */
-[data-bg^="w:"] .bg-layer::after, [data-bg="u"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 60%, transparent); }
+[data-bg^="w:"] .bg-layer::after, [data-bg="u"] .bg-layer::after, [data-bg="c"] .bg-layer::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--canvas) 60%, transparent); }
 
 /* Fond d'écran actif : tout texte posé DIRECTEMENT sur le fond (en-têtes de page, titres de section, statistiques…)
    reçoit un halo de la couleur du thème pour rester lisible sur une photo ; le texte DANS une surface opaque
@@ -2149,3 +2153,29 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .enroll-group-pick select { width: auto; min-width: 220px; }
 .enroll-group .hint { margin: 0; }
 .enroll-foot .inline-form { display: inline-flex; margin-left: 4px; }
+
+/* Apparence de l'instance : identité (logo, couleur, fond), défaut et choix laissés à chacun. */
+.ia-identity { padding-top: 4px; padding-bottom: 4px; }
+.ia-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px 230px; align-items: center; gap: 12px 24px; padding: 14px 0; }
+.ia-row + .ia-row { border-top: 1px solid var(--line); }
+.ia-what { display: grid; gap: 3px; }
+.ia-what strong { font-weight: 500; }
+.ia-what small { font-size: 13px; color: var(--text-3); }
+.ia-logo, .ia-bg { display: grid; place-items: center; width: 132px; height: 64px; border: 1px solid var(--line); border-radius: var(--r-sm); background-color: var(--bg-2); }
+.ia-logo img { max-width: 108px; max-height: 40px; }
+.ia-bg.off { background-image: none; }
+.ia-color { width: 132px; height: 40px; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); cursor: pointer; }
+.ia-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ia-acts form { display: inline-flex; }
+.ia-default { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.ia-themes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.ia-theme { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; font-size: 13.5px; }
+.ia-theme:hover { background: var(--bg-2); }
+.ia-theme:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ia-theme input { position: absolute; top: 16px; left: 16px; z-index: 1; margin: 0; }
+.ia-theme small { display: block; font-size: 12px; color: var(--text-3); }
+.ia-save { padding: 0 2px; }
+@media (max-width: 900px) {
+  .ia-row { grid-template-columns: minmax(0, 1fr); }
+  .ia-default, .ia-themes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

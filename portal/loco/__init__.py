@@ -57,11 +57,11 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     # Agent des postes (loco-client) : authentifié par sa clé d'inscription puis son jeton.
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                     "agent_file", "agent_deb", "agent_rpm", "remote_agent",
-                    # Logo global de l'instance : affiché aussi sur la page de connexion (avant authentification).
-                    "appearance_logo",
+                    # Logo et fond de l'entreprise : affichés aussi sur la page de connexion (avant authentification).
+                    "appearance_logo", "appearance_company",
                     # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).
                     "web_manifest", "service_worker", "offline",
-                    # Serveur MCP des assistants IA : authentifié par son propre jeton (en-tête Authorization).
+                    # Serveur MCP : authentifié par son propre jeton (en-tête Authorization).
                     "mcp_endpoint"}
 
 
@@ -121,6 +121,9 @@ def inject_globals():
         "has_bg": appearance.has_background(user),
         "custom_logo": appearance.logo_info(),
         "appearance_default": appearance.default(),
+        "appearance_policy": appearance.policy(),
+        "brand": appearance.brand_info(),
+        "company_bg": appearance.company_file() is not None,
         "appearance_catalog": {"themes": appearance.THEMES, "accents": appearance.ACCENTS,
                                "gradients": appearance.GRADIENTS, "wallpapers": appearance.WALLPAPERS,
                                "presets": appearance.PRESETS, "alpha_min": appearance.ALPHA_MIN},
@@ -147,7 +150,8 @@ app.teardown_appcontext(_db.close_db)
 from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
-                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp)
+                 directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
+                 mcp_remote)
 
 
 def startup():
