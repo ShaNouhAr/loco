@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.118.0 — 2026-10-30
+
+- **Enrôler un poste directement dans un groupe.** En haut de **Enrôlement**, *Inscrire les postes dans le groupe* bascule le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du groupe** : le poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans quitter les siens). Aucun agent à mettre à jour — la clé de groupe (`g<id>-…`) prend la place de celle du serveur.
+  - Par défaut, aucun groupe ; *Enrôler des postes dans ce groupe* dans le menu ⋯ de chaque groupe ouvre la page sur lui.
+  - Un compte limité à une partie du parc n'inscrit que dans les groupes attribués à son profil, jamais sans groupe (le poste sortirait de son parc) : son premier groupe est présélectionné, et un profil limité sans groupe ne reçoit plus la clé du serveur.
+  - *Changer la clé de ce groupe* (droit *Configurer le parc*) rend caducs ses fichiers et commandes déjà distribués ; supprimer le groupe aussi. Journal : inscription avec son groupe, « Nouvelle clé d'inscription d'un groupe ».
+
 ## 2.117.0 — 2026-10-30
 
 - **Profils limités à une partie du parc.** Dans **Profils d'accès**, un profil couvre **tout le parc** (par défaut, et toujours pour les profils intégrés) ou des **groupes de machines et postes choisis** — par exemple « Techniciens bâtiment B ». Les postes ajoutés plus tard à ces groupes y entrent d'eux-mêmes ; la liste des profils montre le parc de chacun.

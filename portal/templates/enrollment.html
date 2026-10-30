@@ -84,6 +84,20 @@
   </div>
 </div>
 
+{% if key and device_groups %}
+<form method="get" action="{{ url_for('enrollment') }}" class="enroll-group" data-keep-hash>
+  <label class="enroll-group-pick"><span>{{ _("Inscrire les postes dans le groupe") }}</span>
+    <select name="groupe" data-autosubmit>
+      {% if whole_fleet %}<option value="">{{ _("Aucun groupe") }}</option>{% endif %}
+      {% for grp in device_groups %}<option value="{{ grp.id }}"{{ ' selected' if group and grp.id == group.id }}>{{ grp.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <p class="hint">{% if group %}{{ _("Le MSI, les paquets et les commandes de cette page portent la clé du groupe « %(name)s » : chaque poste inscrit avec eux le rejoint.", name=group.name) }}{% if not whole_fleet %} {{ _("Votre profil n’inscrit que dans ses groupes : les postes entrent aussitôt dans votre parc.") }}{% endif %}{% else %}{{ _("Sans groupe, le poste arrive dans Mon parc ; vous pourrez le ranger ensuite.") }}{% endif %}</p>
+</form>
+{% elif no_group %}
+<p class="note">{{ _("Votre profil ne couvre aucun groupe de machines : un poste inscrit resterait hors de votre parc. L’inscription de postes passe par un compte qui couvre tout le parc, ou par un groupe ajouté à votre profil.") }}</p>
+{% endif %}
+
 {% if tabs %}
 <div class="enroll">
   <div class="tabs enroll-tabs" role="tablist" data-hash>
@@ -98,7 +112,7 @@
     <section class="panel">
       {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
       <div class="panel-b">
-        {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste d'un double-clic · version %(version)s", version=version), url_for('agent_enroll_msi'), _('Télécharger le MSI'), 'btn primary') }}
+        {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste d'un double-clic · version %(version)s", version=version), url_for('agent_enroll_msi', groupe=group.id if group else None), _('Télécharger le MSI'), 'btn primary') }}
         <span class="hint">{{ _("L'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans le MSI.") }}</span>
         <details class="hint"><summary>{{ _("MSI générique et déploiement en masse (GPO, Intune, SCCM)") }}</summary>
           <div class="stack-sm">
@@ -191,7 +205,9 @@
     {% if flat %}{{ flatpak_step(ns) }}{% endif %}
   </div>
 </div>
-{% if key %}<p class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription de ce serveur : ne les partagez qu'avec les personnes qui installent les postes.") }}{% if can('fleet.settings') %} {{ _("Changer de clé : <a href=\"%(v)s\">Mon parc › Réglages</a>.", v=url_for('fleet_settings')) }}{% endif %}</p>{% endif %}
+{% if key and group %}<div class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription du groupe « %(name)s » : ne les partagez qu'avec les personnes qui installent ses postes.", name=group.name) }}{% if can('fleet.settings') %}
+  <form method="post" action="{{ url_for('fleet_group_rotate_key', group_id=group.id) }}" class="inline-form" data-confirm="{{ _('Changer la clé du groupe %(name)s ?', name=group.name) }}" data-confirm-text="{{ _('Les MSI, paquets et commandes déjà distribués pour ce groupe n’inscriront plus de poste. Les postes déjà inscrits ne sont pas touchés.') }}" data-confirm-ok="{{ _('Changer la clé') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Changer la clé de ce groupe") }}</button></form>{% endif %}</div>
+{% elif key %}<p class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription de ce serveur : ne les partagez qu'avec les personnes qui installent les postes.") }}{% if can('fleet.settings') %} {{ _("Changer de clé : <a href=\"%(v)s\">Mon parc › Réglages</a>.", v=url_for('fleet_settings')) }}{% endif %}</p>{% endif %}
 {% else %}
 <div class="panel"><div class="empty">{{ _("Aucune méthode d'enrôlement disponible avec vos droits ou les fonctionnalités activées.") }}</div></div>
 {% endif %}

@@ -103,6 +103,35 @@ def enroll_key():
     return key
 
 
+GROUP_KEY_RE = re.compile(r"g([1-9][0-9]{0,8})-([A-Za-z0-9_-]{16,64})")
+
+
+def group_key(group_id):
+    """Clé d'inscription d'un groupe de machines, « g<id>-<secret> » : un poste inscrit avec elle rejoint le groupe.
+    Acceptée partout où la clé du serveur l'est (MSI, paquets .deb/.rpm, scripts) ; aucun agent à mettre à jour."""
+    conn = db()
+    if conn.execute("SELECT 1 FROM device_groups WHERE id=? AND enroll_key=''", (group_id,)).fetchone():
+        conn.execute("UPDATE device_groups SET enroll_key=? WHERE id=? AND enroll_key=''", (secrets.token_urlsafe(18), group_id))
+        conn.commit()
+    row = conn.execute("SELECT enroll_key FROM device_groups WHERE id=?", (group_id,)).fetchone()
+    if row is None:
+        abort(404)
+    return f"g{group_id}-{row['enroll_key']}"
+
+
+def key_group(key):
+    """Groupe désigné par une clé d'inscription : None pour la clé du serveur, l'identifiant du groupe pour la clé
+    d'un groupe ; 403 pour toute autre clé (groupe supprimé ou clé renouvelée)."""
+    key = str(key or "")
+    if hmac.compare_digest(key.encode(), enroll_key().encode()):
+        return None
+    m = GROUP_KEY_RE.fullmatch(key)
+    row = db().execute("SELECT id, enroll_key FROM device_groups WHERE id=?", (int(m.group(1)),)).fetchone() if m else None
+    if row is None or not row["enroll_key"] or not hmac.compare_digest(row["enroll_key"].encode(), m.group(2).encode()):
+        abort(403)
+    return row["id"]
+
+
 # --------------------------------------------------------------------------- versions et logiciels
 
 def version_key(v):
@@ -356,8 +385,7 @@ def _identity(data):
 @app.route("/agent/api/enroll", methods=["POST"])
 def agent_enroll():
     data = _json()
-    if not hmac.compare_digest(str(data.get("key", "")), enroll_key()):
-        abort(403)
+    group = key_group(data.get("key", ""))
     uid = str(data.get("uid", ""))
     if not UID_RE.match(uid):
         abort(400)
@@ -375,13 +403,18 @@ def agent_enroll():
                       ident["agent_version"], ident["addresses"], row["id"]))
         conn.execute("UPDATE device_commands SET state='cancelled', finished_at=? WHERE device_id=? AND "
                      "action='uninstall' AND state IN ('queued', 'sent', 'running')", (_now(), row["id"]))
+        dev_id = row["id"]
     else:
-        conn.execute("INSERT INTO devices (uid, token_hash, enrolled_at, last_seen, ip, hostname, os_family, os_name, "
-                     "agent_version, addresses) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                     (uid, _hash(token), _now(), _now(), _client_ip(), ident["hostname"], ident["os_family"],
-                      ident["os_name"], ident["agent_version"], ident["addresses"]))
+        dev_id = conn.execute("INSERT INTO devices (uid, token_hash, enrolled_at, last_seen, ip, hostname, os_family, os_name, "
+                              "agent_version, addresses) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                              (uid, _hash(token), _now(), _now(), _client_ip(), ident["hostname"], ident["os_family"],
+                               ident["os_name"], ident["agent_version"], ident["addresses"])).lastrowid
+    joined = ""
+    if group:                                   # clé d'un groupe : le poste le rejoint (ses autres groupes restent)
+        conn.execute("INSERT OR IGNORE INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, dev_id))
+        joined = ", groupe " + conn.execute("SELECT name FROM device_groups WHERE id=?", (group,)).fetchone()[0]
     conn.commit()
-    audit("parc.inscription", f"{ident['hostname']} ({FAMILIES[ident['os_family']]}, {_client_ip()})", username="")
+    audit("parc.inscription", f"{ident['hostname']} ({FAMILIES[ident['os_family']]}, {_client_ip()}{joined})", username="")
     return {"token": f"{uid}.{token}", "interval": CHECKIN}
 
 
@@ -806,8 +839,8 @@ def _ca_fingerprint():
 
 
 def _check_key():
-    if not hmac.compare_digest(request.args.get("key", ""), enroll_key()):
-        abort(403)
+    """Clé du serveur ou d'un groupe (403 sinon), reprise telle quelle dans le script ou le paquet servi."""
+    key_group(request.args.get("key", ""))
     return request.args["key"]
 
 
@@ -896,16 +929,62 @@ def agent_file(name):
 @login_required
 def agent_enroll_msi():
     """MSI prêt pour ce serveur : un double-clic installe le service ET inscrit le poste (adresse, clé et empreinte
-    de l'autorité gravées dans le MSI). Réservé aux comptes autorisés à enrôler (voir permissions.ENDPOINTS)."""
+    de l'autorité gravées dans le MSI). Réservé aux comptes autorisés à enrôler (voir permissions.ENDPOINTS).
+    Avec « groupe », la clé de ce groupe : le poste le rejoint à l'inscription."""
+    group = enrollment_group(request.args.get("groupe", ""))
     path, reason = agent_msi(fetch=True)
     if path is None:
         current_app.logger.warning("MSI de l'agent %s indisponible : %s", config.VERSION, reason)
         return Response(f"loco-client.msi {config.VERSION} indisponible : {reason}. Réessayez dans un instant.\n",
                         status=503, mimetype="text/plain", headers={"Retry-After": "30"})
     with open(path, "rb") as f:
-        data = _stamp_msi(f.read(), server=config.HTTPS_URL, key=enroll_key(), ca=_ca_fingerprint())
+        data = _stamp_msi(f.read(), server=config.HTTPS_URL, key=group_key(group["id"]) if group else enroll_key(),
+                          ca=_ca_fingerprint())
     return Response(data, mimetype="application/x-msi",
                     headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
+
+
+def enrollment_groups():
+    """Groupes où le compte peut inscrire des postes : tous pour tout le parc ; sinon ceux attribués à son profil
+    (un poste inscrit ailleurs, ou sans groupe, sortirait de son parc)."""
+    from . import groups
+    rows = groups.listing("device")
+    if scope.whole():
+        return rows
+    _whole, declared, _devices = scope.declared(db(), g.user["role"])
+    return [r for r in rows if r["id"] in declared]
+
+
+def enrollment_group(value):
+    """Groupe d'inscription (paramètre « groupe ») : sans choix, aucun pour tout le parc et le premier de ses groupes
+    pour un profil limité ; 404 pour un groupe hors de sa portée, 403 si un profil limité n'a aucun groupe."""
+    choices = enrollment_groups()
+    if value:
+        group = next((c for c in choices if str(c["id"]) == str(value)), None)
+        if group is None:
+            abort(404)
+        return group
+    if scope.whole():
+        return None
+    if not choices:
+        abort(403)
+    return choices[0]
+
+
+@app.route("/fleet/groups/<int:group_id>/enroll-key", methods=["POST"])
+@login_required
+def fleet_group_rotate_key(group_id):
+    """Nouvelle clé pour un groupe : MSI, paquets et commandes déjà distribués pour ce groupe cessent d'inscrire."""
+    conn = db()
+    row = conn.execute("SELECT name FROM device_groups WHERE id=?", (group_id,)).fetchone()
+    if row is None:
+        abort(404)
+    conn.execute("UPDATE device_groups SET enroll_key=? WHERE id=?", (secrets.token_urlsafe(18), group_id))
+    audit("parc.cle-groupe", row["name"], commit=False)
+    conn.commit()
+    flash(_("Nouvelle clé d'inscription pour le groupe %(name)s : les fichiers et commandes précédents de ce groupe "
+            "n'inscrivent plus de poste.", name=row["name"]), "ok")
+    return redirect(url_for("enrollment", groupe=group_id))
 
 
 # --------------------------------------------------------------------------- portail

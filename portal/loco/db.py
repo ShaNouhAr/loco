@@ -497,6 +497,11 @@ MIGRATIONS = [
         PRIMARY KEY (role_id, device_id)
     );
     """,
+    # 31 : clé d'inscription propre à un groupe de machines (créée à la première demande) : un poste inscrit avec elle
+    # rejoint le groupe. Clé envoyée aux agents sous la forme « g<id>-<secret> » (même place que la clé du serveur).
+    """
+    ALTER TABLE device_groups ADD COLUMN enroll_key TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

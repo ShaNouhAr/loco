@@ -315,6 +315,15 @@ irm 'https://<ip>:8443/agent/windows.ps1?key=<clé>' | iex
 curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 ```
 
+**Inscrire directement dans un groupe** : en haut de la page Enrôlement, *Inscrire les postes dans le groupe* bascule
+le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du
+groupe** (`g<id>-…`) : un poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans
+quitter les siens). Aucun agent à mettre à jour : la clé de groupe prend la place de la clé du serveur. Par défaut,
+aucun groupe ; *Enrôler des postes dans ce groupe* (menu ⋯ d'un groupe) ouvre la page sur lui. Un compte limité à
+une partie du parc n'inscrit que dans les groupes attribués à son profil (jamais sans groupe : le poste sortirait de
+son parc). *Changer la clé de ce groupe* (droit *Configurer le parc*) rend caducs ses fichiers et commandes déjà
+distribués ; supprimer le groupe aussi.
+
 - L'agent contacte loco toutes les deux minutes et envoie l'inventaire des mises à jour (Windows Update avec les
   correctifs de sécurité, APT, DNF, Flatpak). L'inventaire des logiciels installés est aussi remonté, sous Windows
   (logiciels installés) comme sous Linux (paquets APT/RPM avec version, architecture et taille, applications Flatpak,

@@ -382,6 +382,8 @@
     if (!e.target.matches("select[data-autosubmit], input[type=checkbox][data-autosubmit], input[type=file][data-autosubmit]")) return;
     if (e.target.type === "file" && !e.target.files.length) return;    // sélection annulée
     var form = e.target.form;
+    // Formulaire GET d'une page à onglets : rester sur l'onglet ouvert (#windows, #debian…).
+    if (form.hasAttribute("data-keep-hash")) form.action = form.action.split("#")[0] + location.hash;
     if (form.dataset.confirm) {
       // Confirmation d'abord : l'interrupteur reprend son état, la page affichera le nouveau après validation.
       if (e.target.type === "checkbox") e.target.checked = !e.target.checked;

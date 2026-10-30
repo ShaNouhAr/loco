@@ -149,7 +149,7 @@ ENDPOINTS = {
     "schedule_save": ("fleet.update", "scripts.run"), "schedule_toggle": ("fleet.update", "scripts.run"),
     "schedule_delete": ("fleet.update", "scripts.run"),
     "fleet_update_all": "fleet.bulk_update", "fleet_update_selected": "fleet.update",
-    "fleet_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",
+    "fleet_rotate_key": "fleet.settings", "fleet_group_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",
     "fleet_server_address": "fleet.settings", "fleet_settings": "fleet.settings",
     "remote_open": ("remote.terminal", "remote.desktop", "remote.files"),
     "remote_session": ("remote.terminal", "remote.desktop", "remote.files"),

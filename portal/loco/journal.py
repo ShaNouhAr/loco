@@ -32,6 +32,7 @@ LABELS = {
     "profils.droits": L_("Droits d'un profil modifiés"), "profils.suppression": L_("Profil supprimé"),
     "profils.parc": L_("Parc d'un profil modifié"),
     "parc.inscription": L_("Poste inscrit"), "parc.oubli": L_("Poste oublié"), "parc.cle": L_("Nouvelle clé d'inscription"),
+    "parc.cle-groupe": L_("Nouvelle clé d'inscription d'un groupe"),
     "parc.seuil": L_("Seuil des pastilles"), "parc.adresse-annoncee": L_("Adresse du serveur annoncée aux agents"),
     "parc.adresse-retiree": L_("Adresse annoncée retirée"), "parc.tout-mettre-a-jour": L_("Mise à jour de tout le parc"),
     "parc.update": L_("Mise à jour demandée"), "parc.scan": L_("Inventaire demandé"), "parc.reboot": L_("Redémarrage demandé"),

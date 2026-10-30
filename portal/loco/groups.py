@@ -214,7 +214,11 @@ def software_group_delete(group_id):
 @app.route("/fleet/groups")
 @login_required
 def fleet_groups():
-    return render_template("groups.html", kind="device", groups=listing("device"), overview=_overview("device"))
+    from . import auth, features
+    enrollable = ({r["id"] for r in fleet.enrollment_groups()} if auth.can("fleet.enroll") and features.enabled("fleet")
+                  else set())
+    return render_template("groups.html", kind="device", groups=listing("device"), overview=_overview("device"),
+                           enrollable=enrollable)
 
 
 @app.route("/fleet/groups/new", defaults={"group_id": 0})

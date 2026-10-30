@@ -3283,5 +3283,17 @@
  "%(num)s poste": "%(num)s device",
  "%(num)s postes": "%(num)s devices",
  "Parc de votre profil : %(scope)s.": "Your profile’s fleet: %(scope)s.",
- "Parc d'un profil modifié": "Profile fleet changed"
+ "Parc d'un profil modifié": "Profile fleet changed",
+ "Inscrire les postes dans le groupe": "Enroll devices into the group",
+ "Le MSI, les paquets et les commandes de cette page portent la clé du groupe « %(name)s » : chaque poste inscrit avec eux le rejoint.": "The MSI, packages and commands on this page carry the key of the “%(name)s” group: every device enrolled with them joins it.",
+ "Sans groupe, le poste arrive dans Mon parc ; vous pourrez le ranger ensuite.": "Without a group, the device lands in My fleet; you can file it later.",
+ "Les fichiers et commandes de l'agent contiennent la clé d'inscription du groupe « %(name)s » : ne les partagez qu'avec les personnes qui installent ses postes.": "The agent files and commands contain the enrollment key of the “%(name)s” group: only share them with the people who install its devices.",
+ "Changer la clé du groupe %(name)s ?": "Change the key of the %(name)s group?",
+ "Les MSI, paquets et commandes déjà distribués pour ce groupe n’inscriront plus de poste. Les postes déjà inscrits ne sont pas touchés.": "MSIs, packages and commands already handed out for this group will no longer enroll devices. Devices already enrolled are not affected.",
+ "Changer la clé de ce groupe": "Change this group’s key",
+ "Enrôler des postes dans ce groupe": "Enroll devices into this group",
+ "Nouvelle clé d'inscription pour le groupe %(name)s : les fichiers et commandes précédents de ce groupe n'inscrivent plus de poste.": "New enrollment key for the %(name)s group: this group’s previous files and commands no longer enroll devices.",
+ "Nouvelle clé d'inscription d'un groupe": "New group enrollment key",
+ "Votre profil n’inscrit que dans ses groupes : les postes entrent aussitôt dans votre parc.": "Your profile only enrolls into its groups: the devices join your fleet right away.",
+ "Votre profil ne couvre aucun groupe de machines : un poste inscrit resterait hors de votre parc. L’inscription de postes passe par un compte qui couvre tout le parc, ou par un groupe ajouté à votre profil.": "Your profile covers no device group: an enrolled device would stay outside your fleet. Enroll devices with an account that covers the whole fleet, or once a group is added to your profile."
 }

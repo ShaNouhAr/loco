@@ -3283,5 +3283,17 @@
  "%(num)s poste": "%(num)s equipo",
  "%(num)s postes": "%(num)s equipos",
  "Parc de votre profil : %(scope)s.": "Parque de su perfil: %(scope)s.",
- "Parc d'un profil modifié": "Parque de un perfil modificado"
+ "Parc d'un profil modifié": "Parque de un perfil modificado",
+ "Inscrire les postes dans le groupe": "Inscribir los equipos en el grupo",
+ "Le MSI, les paquets et les commandes de cette page portent la clé du groupe « %(name)s » : chaque poste inscrit avec eux le rejoint.": "El MSI, los paquetes y los comandos de esta página llevan la clave del grupo «%(name)s»: cada equipo inscrito con ellos se une a él.",
+ "Sans groupe, le poste arrive dans Mon parc ; vous pourrez le ranger ensuite.": "Sin grupo, el equipo llega a Mi parque; podrá clasificarlo después.",
+ "Les fichiers et commandes de l'agent contiennent la clé d'inscription du groupe « %(name)s » : ne les partagez qu'avec les personnes qui installent ses postes.": "Los archivos y comandos del agente contienen la clave de inscripción del grupo «%(name)s»: compártalos solo con quienes instalan sus equipos.",
+ "Changer la clé du groupe %(name)s ?": "¿Cambiar la clave del grupo %(name)s?",
+ "Les MSI, paquets et commandes déjà distribués pour ce groupe n’inscriront plus de poste. Les postes déjà inscrits ne sont pas touchés.": "Los MSI, paquetes y comandos ya distribuidos para este grupo dejarán de inscribir equipos. Los equipos ya inscritos no se ven afectados.",
+ "Changer la clé de ce groupe": "Cambiar la clave de este grupo",
+ "Enrôler des postes dans ce groupe": "Inscribir equipos en este grupo",
+ "Nouvelle clé d'inscription pour le groupe %(name)s : les fichiers et commandes précédents de ce groupe n'inscrivent plus de poste.": "Nueva clave de inscripción para el grupo %(name)s: los archivos y comandos anteriores de este grupo ya no inscriben equipos.",
+ "Nouvelle clé d'inscription d'un groupe": "Nueva clave de inscripción de un grupo",
+ "Votre profil n’inscrit que dans ses groupes : les postes entrent aussitôt dans votre parc.": "Su perfil solo inscribe en sus grupos: los equipos entran de inmediato en su parque.",
+ "Votre profil ne couvre aucun groupe de machines : un poste inscrit resterait hors de votre parc. L’inscription de postes passe par un compte qui couvre tout le parc, ou par un groupe ajouté à votre profil.": "Su perfil no cubre ningún grupo de equipos: un equipo inscrito quedaría fuera de su parque. Inscriba equipos con una cuenta que cubra todo el parque, o cuando se añada un grupo a su perfil."
 }

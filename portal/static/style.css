@@ -2142,3 +2142,10 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
   .mcp-tool:last-child:nth-child(odd) { grid-column: auto; }
   .mcp-connect .kv-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Enrôlement : groupe rejoint par les postes inscrits avec les fichiers et commandes de la page. */
+.enroll-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 18px; }
+.enroll-group-pick { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); }
+.enroll-group-pick select { width: auto; min-width: 220px; }
+.enroll-group .hint { margin: 0; }
+.enroll-foot .inline-form { display: inline-flex; margin-left: 4px; }
