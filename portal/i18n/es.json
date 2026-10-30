@@ -3123,5 +3123,6 @@
  "%(label)s a refusé la connexion (%(error)s) : %(detail)s": "%(label)s rechazó el inicio de sesión (%(error)s): %(detail)s",
  "Vérifiez chez le fournisseur : client « Confidentiel », URL de redirection identique à celle affichée par loco, et type d’autorisation « Authorization Code » permis.": "Compruebe en el proveedor: cliente «Confidencial», URL de redirección idéntica a la que muestra loco y tipo de concesión «Authorization Code» permitido.",
  "Compte approuvé. L’utilisateur peut maintenant se connecter avec le bouton « Se connecter avec %(label)s ».": "Cuenta aprobada. El usuario ya puede iniciar sesión con el botón «Iniciar sesión con %(label)s».",
- "Identité chez le fournisseur (sub) : %(subject)s": "Identidad en el proveedor (sub): %(subject)s"
+ "Identité chez le fournisseur (sub) : %(subject)s": "Identidad en el proveedor (sub): %(subject)s",
+ "Système et autres": "Sistema y otros"
 }

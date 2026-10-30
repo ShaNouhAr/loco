@@ -63,7 +63,7 @@ def chart_data(d):
     other = max(0, disk["used"] - sum(p[1] for p in parts))
     total = max(disk["total"], sum(p[1] for p in parts) + other + disk["free"]) or 1
     segments, x = [], 0.0
-    for label, size, cls in parts + [("Système et autres", other, "c6")] * bool(other) + [("Libre", disk["free"], "free")]:
+    for label, size, cls in parts + [(_("Système et autres"), other, "c6")] * bool(other) + [(_("Libre"), disk["free"], "free")]:
         width = 1000 * size / total
         segments.append({"label": label, "size": size, "cls": cls, "x": round(x, 2), "w": round(width, 2),
                          "pct": round(100 * size / total, 1)})
