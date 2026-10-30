@@ -1280,6 +1280,90 @@ def _rgb_to_bgrx(rgb):
     return bytes(out)
 
 
+def _packed_to_bgrx(pixels, width, height, channels, stride):
+    """Pixels RGB(A) empaquetés (GdkPixbuf ou PNG décodé) -> BGRX, ligne par ligne (copies à pas natif)."""
+    out = bytearray(width * height * 4)
+    for y in range(height):
+        row = pixels[y * stride:y * stride + width * channels]
+        o, end = y * width * 4, y * width * 4 + width * 4
+        out[o:end:4], out[o + 1:end:4], out[o + 2:end:4] = bytes(row[2::channels]), bytes(row[1::channels]), bytes(row[0::channels])
+    return bytes(out)
+
+
+def _png_unfilter(line, prev, ftype, bpp):
+    """Reconstruit une ligne PNG filtrée (types 0-4 : None/Sub/Up/Average/Paeth), en place."""
+    if ftype == 0:
+        return
+    for i in range(len(line)):
+        a = line[i - bpp] if i >= bpp else 0
+        b = prev[i]
+        c = prev[i - bpp] if i >= bpp else 0
+        if ftype == 1:
+            line[i] = (line[i] + a) & 255
+        elif ftype == 2:
+            line[i] = (line[i] + b) & 255
+        elif ftype == 3:
+            line[i] = (line[i] + ((a + b) >> 1)) & 255
+        elif ftype == 4:
+            p = a + b - c
+            pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
+            line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        else:
+            raise RuntimeError("filtre PNG inconnu")
+
+
+def _decode_png(data):
+    """Décodeur PNG minimal sans dépendance (8 bits RGB/RGBA, non entrelacé) -> (largeur, hauteur, BGRX)."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise RuntimeError("PNG invalide")
+    width = height = bitdepth = colortype = 0
+    idat, pos = bytearray(), 8
+    while pos + 8 <= len(data):
+        length = int.from_bytes(data[pos:pos + 4], "big")
+        ctype, body = data[pos + 4:pos + 8], data[pos + 8:pos + 8 + length]
+        pos += 12 + length                                       # longueur(4) + type(4) + données + CRC(4)
+        if ctype == b"IHDR":
+            width, height = int.from_bytes(body[0:4], "big"), int.from_bytes(body[4:8], "big")
+            bitdepth, colortype = body[8], body[9]
+            if body[12] != 0:
+                raise RuntimeError("PNG entrelacé non pris en charge")
+        elif ctype == b"IDAT":
+            idat += body
+        elif ctype == b"IEND":
+            break
+    if bitdepth != 8 or colortype not in (2, 6) or not 1 <= width * height <= 16777216:
+        raise RuntimeError("PNG non pris en charge (8 bits RGB/RGBA requis)")
+    channels = 4 if colortype == 6 else 3
+    raw, stride = zlib.decompress(bytes(idat)), width * channels
+    if len(raw) < (stride + 1) * height:
+        raise RuntimeError("PNG tronqué")
+    out, prev, p = bytearray(width * height * 4), bytearray(stride), 0
+    for y in range(height):
+        ftype, line = raw[p], bytearray(raw[p + 1:p + 1 + stride])
+        p += 1 + stride
+        _png_unfilter(line, prev, ftype, channels)
+        o, end = y * width * 4, y * width * 4 + width * 4
+        out[o:end:4], out[o + 1:end:4], out[o + 2:end:4] = bytes(line[2::channels]), bytes(line[1::channels]), bytes(line[0::channels])
+        prev = line
+    return width, height, bytes(out)
+
+
+def _decode_png_file(path):
+    """PNG -> (largeur, hauteur, BGRX) ; via GdkPixbuf si présent (rapide, cas d'un bureau GNOME), sinon décodeur interne."""
+    try:
+        import gi
+        gi.require_version("GdkPixbuf", "2.0")
+        from gi.repository import GdkPixbuf
+        pb = GdkPixbuf.Pixbuf.new_from_file(path)
+        if pb.get_bits_per_sample() == 8 and pb.get_n_channels() in (3, 4):
+            return (pb.get_width(), pb.get_height(),
+                    _packed_to_bgrx(pb.get_pixels(), pb.get_width(), pb.get_height(), pb.get_n_channels(), pb.get_rowstride()))
+    except Exception:                                            # gi absent / illisible : repli décodeur interne
+        pass
+    with open(path, "rb") as f:
+        return _decode_png(f.read())
+
+
 class UInput:
     """Périphérique d'entrée virtuel (/dev/uinput) : pointeur absolu type tablette + clavier, indépendant du compositeur."""
     EV_SYN, EV_KEY, EV_REL, EV_ABS = 0, 1, 2, 3
@@ -1365,7 +1449,8 @@ def wayland_environment():
         if env.get("XDG_SESSION_TYPE") == "wayland" and re.fullmatch(r"/run/user/[0-9]+", runtime) and display:
             socket_path = display if os.path.isabs(display) else runtime.rstrip("/") + "/" + display
             if (os.path.isabs(display) or re.fullmatch(r"wayland-[0-9]+", display)) and os.path.exists(socket_path):
-                return {"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": display}
+                return {"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": display,
+                        "DBUS_SESSION_BUS_ADDRESS": env.get("DBUS_SESSION_BUS_ADDRESS", "")}
     raise RuntimeError(t("Aucune session Wayland active accessible à l'agent.", "No active Wayland session accessible to the agent.", "Ninguna sesión Wayland activa accesible para el agente."))
 
 
@@ -1462,37 +1547,88 @@ class X11Backend:
 
 
 class WaylandBackend:
-    """Capture via grim (compositeurs wlroots) + saisie par périphérique d'entrée virtuel, pour une session Wayland."""
-    interval = 0.1                                               # grim est relancé par trame : ~10 i/s suffisent à l'administration
+    """Bureau Wayland : capture par grim (compositeurs wlroots) ou par l'API capture d'écran de GNOME Shell (GNOME),
+    saisie par périphérique d'entrée virtuel (indépendant du compositeur)."""
 
     def __init__(self, env):
         self._env = dict(os.environ)
-        self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = env["XDG_RUNTIME_DIR"], env["WAYLAND_DISPLAY"]
-        width, height, _ = self._capture()
-        if not 1 <= width <= 4096 or not 1 <= height <= 2160:
+        self._runtime = env["XDG_RUNTIME_DIR"]
+        self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = self._runtime, env["WAYLAND_DISPLAY"]
+        self._dbus = env.get("DBUS_SESSION_BUS_ADDRESS") or ("unix:path=" + self._runtime.rstrip("/") + "/bus")
+        # Choisir une méthode de capture qui fonctionne sur ce compositeur : grim (wlroots), sinon GNOME Shell.
+        attempts, chosen, size, interval = [], None, None, 0.1
+        for name, method, rate in (("grim", self._grab_grim, 0.1), ("gnome", self._grab_gnome, 0.18)):
+            try:
+                w, h, _bgrx = method()
+                chosen, size, interval = method, (w, h), rate
+                break
+            except Exception as e:                               # noqa: BLE001 — on tente la méthode suivante
+                attempts.append("%s — %s" % (name, str(e)[-150:]))
+        if chosen is None:
+            raise RuntimeError(t(
+                "Capture Wayland impossible sur ce bureau. Ouvrez une session X11 (Xorg) sur ce poste pour le bureau distant. Détails : %s",
+                "Wayland capture failed on this desktop. Open an X11 (Xorg) session on this machine for the remote desktop. Details: %s",
+                "Captura Wayland imposible en este escritorio. Abra una sesión X11 (Xorg) en este equipo para el escritorio remoto. Detalles: %s") % " | ".join(attempts))
+        w, h = size
+        if not 1 <= w <= 4096 or not 1 <= h <= 2160:
             raise RuntimeError(t("Résolution Wayland supérieure à 4096 × 2160.", "Wayland resolution larger than 4096 × 2160.", "Resolución Wayland superior a 4096 × 2160."))
-        self.width, self.height = width, height
-        self._uinput = UInput(width, height)
+        self.width, self.height, self._grab_raw, self.interval = w, h, chosen, interval
+        self._uinput = UInput(w, h)
 
-    def _capture(self):
+    def _grab_grim(self):
         try:
             proc = subprocess.run(["grim", "-t", "ppm", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env, timeout=10)
         except FileNotFoundError:
-            raise RuntimeError(t("grim est requis pour le bureau distant Wayland (installez le paquet « grim » sur ce poste).",
-                                 "grim is required for the Wayland remote desktop (install the \"grim\" package on this machine).",
-                                 "grim es necesario para el escritorio remoto Wayland (instale el paquete «grim» en este equipo)."))
+            raise RuntimeError(t("grim non installé", "grim not installed", "grim no instalado"))
         except (OSError, subprocess.SubprocessError) as e:
-            raise RuntimeError(t("Capture Wayland impossible : %s", "Wayland capture failed: %s", "Captura Wayland imposible: %s") % e)
+            raise RuntimeError(str(e))
         if proc.returncode != 0 or not proc.stdout:
-            detail = proc.stderr.decode("utf-8", "replace").strip()[-200:]
-            raise RuntimeError(t("Capture Wayland impossible : le compositeur ne gère peut-être pas wlr-screencopy (GNOME/KDE exigent une session X11). %s",
-                                 "Wayland capture failed: the compositor may not support wlr-screencopy (GNOME/KDE require an X11 session). %s",
-                                 "Captura Wayland imposible: el compositor quizá no admite wlr-screencopy (GNOME/KDE requieren una sesión X11). %s") % detail)
-        return _parse_ppm(proc.stdout)
+            raise RuntimeError("grim: " + (proc.stderr.decode("utf-8", "replace").strip()[-150:] or "code %d" % proc.returncode))
+        w, h, rgb = _parse_ppm(proc.stdout)
+        return w, h, _rgb_to_bgrx(rgb)
+
+    def _grab_gnome(self):
+        """Capture via org.gnome.Shell.Screenshot (bus de session, en tant qu'utilisateur) : PNG lu puis décodé en BGRX."""
+        import pwd
+        uid = int(os.path.basename(self._runtime.rstrip("/")))
+        pw = pwd.getpwuid(uid)
+        def demote():                                            # exécuter gdbus avec l'identité de l'utilisateur de la session
+            os.setgid(pw.pw_gid)
+            try:
+                os.setgroups([pw.pw_gid])
+            except OSError:
+                pass
+            os.setuid(uid)
+        path = os.path.join(self._runtime, "loco-gnome-shot.png")
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        gdbus = shutil.which("gdbus")
+        if not gdbus:
+            raise RuntimeError(t("gdbus absent", "gdbus missing", "gdbus ausente"))
+        user_env = {"XDG_RUNTIME_DIR": self._runtime, "DBUS_SESSION_BUS_ADDRESS": self._dbus,
+                    "HOME": pw.pw_dir, "USER": pw.pw_name, "LOGNAME": pw.pw_name, "PATH": "/usr/bin:/bin"}
+        try:
+            proc = subprocess.run([gdbus, "call", "--session", "--dest", "org.gnome.Shell.Screenshot",
+                                   "--object-path", "/org/gnome/Shell/Screenshot",
+                                   "--method", "org.gnome.Shell.Screenshot.Screenshot", "true", "false", path],
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=user_env, preexec_fn=demote, timeout=15)
+        except (OSError, subprocess.SubprocessError) as e:
+            raise RuntimeError(str(e))
+        out = proc.stdout.decode("utf-8", "replace").strip()
+        if proc.returncode != 0 or not out.startswith("(true") or not os.path.exists(path):
+            raise RuntimeError("GNOME Shell: " + (out[-150:] or "code %d" % proc.returncode))
+        try:
+            return _decode_png_file(path)
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
     def grab(self):
-        width, height, rgb = self._capture()
-        bgrx = _rgb_to_bgrx(rgb)
+        width, height, bgrx = self._grab_raw()
         if (width, height) == (self.width, self.height):
             return bgrx
         out = bytearray(self.width * self.height * 4)            # résolution changée en session : rognage/complément vers la taille négociée

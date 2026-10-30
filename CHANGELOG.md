@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.110.0 — 2026-10-30
+
+- **Bureau distant sur GNOME Wayland (Zorin OS, Ubuntu…).** Un bureau GNOME en session Wayland n'expose pas la capture d'écran libre (*wlr-screencopy*) qu'utilise grim : le bureau distant échouait avec « le compositeur ne gère pas wlr-screencopy ». L'agent bascule désormais sur **l'API de capture d'écran de GNOME Shell** (via D-Bus, au nom de l'utilisateur de la session) — le bureau distant fonctionne donc sur GNOME Wayland **sans changer de session ni redémarrer le poste**. Le clavier et la souris passaient déjà par un périphérique d'entrée virtuel indépendant du compositeur. C'est plus lent qu'une session X11 ou qu'un compositeur *wlroots* (quelques images par seconde) et dépend d'une version de GNOME exposant encore cette API ; sinon, le message invite à ouvrir une session X11 (Xorg).
+
 ## 2.109.0 — 2026-10-30
 
 - **Ignorer un certificat HTTPS refusé sur le site source d'un logiciel.** Quand le téléchargement d'un installeur échoue avec « Certificat HTTPS invalide sur le site source » (certificat expiré ou mal configuré côté éditeur), la fiche du logiciel propose maintenant de **l'ignorer et réessayer**, et le panneau *Installeur* garde un réglage « Certificat du site source : vérifié / ignoré » que l'on peut rétablir à tout moment. L'option n'apparaît que lorsque loco connaît l'**empreinte SHA-256** du fichier (catalogue WinGet) : l'intégrité reste vérifiée — tout fichier altéré est refusé —, seule la validation du certificat de transport est levée.

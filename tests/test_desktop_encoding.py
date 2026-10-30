@@ -318,3 +318,83 @@ class TestWaylandDesktop(unittest.TestCase):
             dev.wheel(1); dev.wheel(-1)
         finally:
             dev.close()
+
+
+def _make_png(width, height, rows, color_type=2, filter_type=0):
+    """Encode un PNG minimal (8 bits, non entrelacé) pour éprouver le décodeur de l'agent."""
+    def chunk(typ, data):
+        return struct.pack(">I", len(data)) + typ + data + struct.pack(">I", zlib.crc32(typ + data) & 0xffffffff)
+    chans = 4 if color_type == 6 else 3
+    raw, prev = bytearray(), bytes(width * chans)
+    for row in rows:
+        if filter_type == 0:
+            raw += b"\x00" + row
+        else:                                                    # filtre 2 (Up) : octet = row - ligne précédente
+            raw += b"\x02" + bytes((row[i] - prev[i]) & 255 for i in range(len(row)))
+        prev = row
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(bytes(raw))) + chunk(b"IEND", b"")
+
+
+@unittest.skipUnless(os.name == 'posix', 'Agent Linux')
+class TestWaylandGnomeCapture(unittest.TestCase):
+    """Repli GNOME du bureau distant Wayland : décodage PNG (capture GNOME Shell) et appel gdbus."""
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('loco_gnome', ROOT / 'portal/agents/loco-client.py')
+        cls.agent = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.agent)
+        cls.agent.LANG = "fr"
+
+    def test_png_decoder_rgb_rgba_and_filters_to_bgrx(self):
+        a = self.agent
+        rows = [bytes([10, 20, 30, 40, 50, 60]), bytes([70, 80, 90, 100, 110, 120])]   # 2x2 RGB
+        for ft in (0, 2):                                        # filtre None puis Up
+            w, h, bgrx = a._decode_png(_make_png(2, 2, rows, 2, ft))
+            self.assertEqual((w, h), (2, 2))
+            self.assertEqual(bgrx[0:4], bytes([30, 20, 10, 0]))     # (0,0) RGB 10,20,30 -> BGRX
+            self.assertEqual(bgrx[4:8], bytes([60, 50, 40, 0]))     # (1,0)
+            self.assertEqual(bgrx[8:12], bytes([90, 80, 70, 0]))    # (0,1)
+        w, h, bgrx = a._decode_png(_make_png(2, 1, [bytes([10, 20, 30, 255, 40, 50, 60, 128])], 6, 0))
+        self.assertEqual(bgrx[0:8], bytes([30, 20, 10, 0, 60, 50, 40, 0]))   # alpha ignoré (X=0)
+
+    def test_packed_to_bgrx_handles_rowstride_padding(self):
+        a = self.agent
+        self.assertEqual(a._packed_to_bgrx(bytes([1, 2, 3, 4, 5, 6]), 2, 1, 3, 6), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
+        padded = bytes([1, 2, 3, 255, 4, 5, 6, 128]) + b"\x00\x00"           # RGBA, stride 10 > 2*4
+        self.assertEqual(a._packed_to_bgrx(padded, 2, 1, 4, 10), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
+
+    def test_decode_png_file_round_trips(self):
+        a = self.agent
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(_make_png(2, 1, [bytes([1, 2, 3, 4, 5, 6])], 2, 2)); path = f.name
+        try:
+            self.assertEqual(a._decode_png_file(path), (2, 1, bytes([3, 2, 1, 0, 6, 5, 4, 0])))
+        finally:
+            os.unlink(path)
+
+    def test_wayland_backend_falls_back_to_gnome_shell_when_grim_fails(self):
+        a = self.agent
+        uid = os.getuid()
+        with tempfile.TemporaryDirectory() as base:
+            runtime = os.path.join(base, str(uid)); os.makedirs(runtime)   # basename = uid -> setuid(soi) sans root
+            ref = os.path.join(base, "ref.png")
+            with open(ref, "wb") as f:
+                f.write(_make_png(2, 1, [bytes([10, 20, 30, 40, 50, 60])], 2, 0))
+            gdbus = os.path.join(base, "gdbus")                  # faux gdbus : dépose le PNG et répond (true, ...)
+            with open(gdbus, "w") as f:
+                f.write("#!/bin/sh\nfor dest; do :; done\ncp %r \"$dest\"\necho \"(true, '$dest')\"\n" % ref)
+            os.chmod(gdbus, 0o755)
+
+            class FakeUInput:
+                def __init__(self, w, h): self.width, self.height = w, h
+                def close(self): pass
+            saved_uinput, saved_path = a.UInput, os.environ["PATH"]
+            a.UInput = FakeUInput
+            os.environ["PATH"] = base + os.pathsep + "/usr/bin:/bin"        # pas de grim ici -> repli GNOME
+            try:
+                b = a.WaylandBackend({"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": "wayland-9"})
+                self.assertEqual((b.width, b.height), (2, 1))
+                self.assertEqual(b.grab()[0:8], bytes([30, 20, 10, 0, 60, 50, 40, 0]))
+                self.assertFalse(os.path.exists(os.path.join(runtime, "loco-gnome-shot.png")))   # fichier nettoyé
+            finally:
+                a.UInput, os.environ["PATH"] = saved_uinput, saved_path
