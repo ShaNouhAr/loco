@@ -244,3 +244,77 @@ class Pick {
                                  check=True, capture_output=True, text=True).stdout.split()
         self.assertEqual(out, ['1868x772=2560x1080',     # fenêtre très large : 21:9 plutôt que 16:9 avec des bandes
                                '1280x800=1280x800', '1920x1080=1920x1080', '1400x800=1280x720'])
+
+
+@unittest.skipUnless(os.name == 'posix', 'Agent Linux')
+class TestWaylandDesktop(unittest.TestCase):
+    """Chemin Wayland de l'agent Linux : lecture PPM de grim, conversion BGRX, table clavier, périphérique d'entrée."""
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location('loco_wayland', ROOT / 'portal/agents/loco-client.py')
+        cls.agent = importlib.util.module_from_spec(spec); spec.loader.exec_module(cls.agent)
+        cls.agent.LANG = "fr"
+
+    def test_ppm_parse_handles_comments_whitespace_and_rejects_bad_input(self):
+        a = self.agent
+        px = bytes([10, 20, 30, 40, 50, 60])                               # 2x1 RGB
+        self.assertEqual(a._parse_ppm(b"P6\n2 1\n255\n" + px), (2, 1, px))
+        self.assertEqual(a._parse_ppm(b"P6\n# grim\n2  1\n255 " + px), (2, 1, px))   # commentaire + espaces multiples
+        for bad in (b"P5\n2 1\n255\n" + px, b"P6\n2 1\n255\n" + px[:-1], b"P6\n2 1\n100\n" + px):
+            with self.assertRaises(RuntimeError):
+                a._parse_ppm(bad)
+
+    def test_rgb_to_bgrx_feeds_rfb_frame_with_the_original_pixels(self):
+        a = self.agent
+        self.assertEqual(a._rgb_to_bgrx(bytes([1, 2, 3, 4, 5, 6])), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
+        bgrx = a._rgb_to_bgrx(bytes([1, 2, 3, 4, 5, 6]))
+        decoded, _ = decode(a.rfb_frame(bgrx, 2, 1), 2, 1)                 # décode -> BGRX : R,G,B retrouvés
+        self.assertEqual((decoded[2], decoded[1], decoded[0]), (1, 2, 3))
+        self.assertEqual((decoded[6], decoded[5], decoded[4]), (4, 5, 6))
+
+    def test_keymap_covers_ascii_shares_physical_keys_and_stays_in_evdev_range(self):
+        keys = self.agent.EVDEV_KEYS
+        for ch in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 !@#$%^&*()-_=+[]{};:'\",.<>/?\\|`~":
+            self.assertIn(ord(ch), keys, ch)
+        self.assertEqual(keys[ord('a')], keys[ord('A')])                   # casse : même touche physique
+        self.assertEqual(keys[ord('1')], keys[ord('!')])                   # symbole Maj : touche de base
+        self.assertEqual(keys[ord('2')], keys[ord('@')])
+        for sym in (0xff0d, 0xff08, 0xff1b, 0xff09, 0xffff, 0xffe1, 0xffe3, 0xff51, 0xffbe, 0xffc9):
+            self.assertIn(sym, keys, hex(sym))                             # Entrée, Retour, Échap, Tab, Suppr, Maj, Ctrl, flèches, F1, F12
+        self.assertTrue(all(1 <= c <= 255 for c in keys.values()))
+
+    def test_input_event_and_setup_struct_sizes_match_the_kernel_abi(self):
+        self.assertEqual(struct.Struct("@llHHi").size, 24 if struct.calcsize("@l") == 8 else 16)
+        setup = (struct.pack("@80sHHHHI", b"loco remote desktop", 0x06, 0x1234, 0x5678, 1, 0)
+                 + struct.pack("@64i", *([0] * 64)) * 4)
+        self.assertEqual(len(setup), 80 + 8 + 4 + 4 * 64 * 4)             # struct uinput_user_dev (ABS_CNT = 64)
+
+    def test_wayland_backend_grab_runs_grim_and_returns_bgrx(self):
+        a = self.agent
+        with tempfile.TemporaryDirectory() as d:
+            grim = Path(d) / "grim"                                        # faux grim : aucune session Wayland requise
+            grim.write_text("#!/bin/sh\nprintf 'P6\\n2 1\\n255\\n'; printf '\\001\\002\\003\\004\\005\\006'\n")
+            grim.chmod(0o755)
+
+            class FakeUInput:                                             # pas de /dev/uinput ni de root en CI
+                def __init__(self, w, h): self.width, self.height = w, h
+                def close(self): pass
+            saved_uinput, saved_path = a.UInput, os.environ["PATH"]
+            a.UInput = FakeUInput
+            os.environ["PATH"] = str(d) + os.pathsep + saved_path
+            try:
+                backend = a.WaylandBackend({"XDG_RUNTIME_DIR": "/run/user/0", "WAYLAND_DISPLAY": "wayland-0"})
+                self.assertEqual((backend.width, backend.height), (2, 1))
+                self.assertEqual(backend.grab(), bytes([3, 2, 1, 0, 6, 5, 4, 0]))
+            finally:
+                a.UInput, os.environ["PATH"] = saved_uinput, saved_path
+
+    @unittest.skipUnless(os.path.exists('/dev/uinput') and os.access('/dev/uinput', os.W_OK), '/dev/uinput accessible (root)')
+    def test_uinput_device_creates_and_emits_against_the_real_kernel(self):
+        dev = self.agent.UInput(1920, 1080)
+        try:
+            dev.motion(960, 540); dev.button(1, True); dev.button(1, False)
+            dev.key(self.agent.EVDEV_KEYS[ord('a')], True); dev.key(self.agent.EVDEV_KEYS[ord('a')], False)
+            dev.wheel(1); dev.wheel(-1)
+        finally:
+            dev.close()

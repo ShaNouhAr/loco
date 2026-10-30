@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.107.0 — 2026-10-30
+
+- **Bureau distant : prise en charge de Wayland.** La prise de contrôle à distance d'un poste Linux ne fonctionnait que sur une session **X11** (message « Bureau Wayland non pris en charge ; une session X11 est nécessaire. »). Elle gère désormais aussi **Wayland** sur les compositeurs de type *wlroots* (Sway, Hyprland, Wayfire, river…) : l'écran est capturé avec **grim** et le clavier et la souris sont rejoués par un **périphérique d'entrée virtuel** (`/dev/uinput`), indépendant du compositeur. Sur Debian/Ubuntu, `grim` est proposé automatiquement à l'installation de l'agent (dépendance recommandée).
+- **Message clair sur GNOME/KDE.** Ces bureaux Wayland n'autorisent pas la capture d'écran sans portail de consentement : l'agent l'indique désormais explicitement et invite à ouvrir une session X11, au lieu d'un refus générique.
+
 ## 2.106.0 — 2026-10-29
 
 - **Centre de logiciels plus soigné.** Les cartes de logiciels sont refaites dans le style du reste de l'interface : icône plus grande, nom en évidence, version lisible, ombre douce et effet au survol — fini l'identifiant technique WinGet affiché à nu sur la carte (il reste sur la fiche du logiciel).

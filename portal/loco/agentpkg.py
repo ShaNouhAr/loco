@@ -116,7 +116,7 @@ def build_deb(script, version, server, mtime=None, repos=None, ca=""):
     depends = "python3, systemd" + (", ca-certificates, curl | wget" if repos else "")
     control = (f"Package: loco-client\nVersion: {version}{'+' + FLAVOR if repos else ''}\nArchitecture: all\n"
                f"Maintainer: loco <loco@{_host(server)}>\nInstalled-Size: {max(1, -(-size // 1024))}\n"
-               f"Depends: {depends}\nSection: admin\nPriority: optional\n"
+               f"Depends: {depends}\nRecommends: grim\nSection: admin\nPriority: optional\n"
                "Homepage: https://github.com/ShaNouhAr/loco\n"
                f"Description: {SUMMARY} ({server})\n"
                + "".join(f" {line}\n" for line in textwrap.wrap(description.format(server=server), 76)))

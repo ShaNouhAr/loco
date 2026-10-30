@@ -1197,49 +1197,324 @@ def text_console():
     return serve(rfb_frame)
 
 
-def linux_desktop(terminal_fallback=False):
-    """Serveur RFB 3.8 intégré, Tight/RGB compressé, directement sur X11/XTest (aucun port VNC)."""
-    try:
-        env = x11_environment()
-    except RuntimeError as e:
-        # Wayland est un bureau existant, pas une machine sans interface graphique.
-        if "Wayland" in str(e):
+# Table X keysym -> code touche evdev (disposition US), pour la saisie Wayland via /dev/uinput.
+def _build_evdev_keys():
+    k = {}
+    letters = {30: "aA", 48: "bB", 46: "cC", 32: "dD", 18: "eE", 33: "fF", 34: "gG", 35: "hH",
+               23: "iI", 36: "jJ", 37: "kK", 38: "lL", 50: "mM", 49: "nN", 24: "oO", 25: "pP",
+               16: "qQ", 19: "rR", 31: "sS", 20: "tT", 22: "uU", 47: "vV", 17: "wW", 45: "xX",
+               21: "yY", 44: "zZ"}
+    # chiffres et symboles (base + Maj, disposition US), ponctuation : chaque caractère vise sa touche physique.
+    digits = {2: "1!", 3: "2@", 4: "3#", 5: "4$", 6: "5%", 7: "6^", 8: "7&", 9: "8*", 10: "9(", 11: "0)"}
+    punct = {12: "-_", 13: "=+", 26: "[{", 27: "]}", 43: "\\|", 39: ";:", 40: "'\"",
+             41: "`~", 51: ",<", 52: ".>", 53: "/?", 57: " "}
+    for table in (letters, digits, punct):
+        for code, chars in table.items():
+            for ch in chars:
+                k[ord(ch)] = code
+    specials = {0xff08: 14, 0xff09: 15, 0xff0d: 28, 0xff1b: 1, 0xffff: 111, 0xff8d: 96,
+                0xff50: 102, 0xff51: 105, 0xff52: 103, 0xff53: 106, 0xff54: 108,
+                0xff55: 104, 0xff56: 109, 0xff57: 107, 0xff63: 110,
+                0xffe1: 42, 0xffe2: 54, 0xffe3: 29, 0xffe4: 97, 0xffe5: 58,
+                0xffe7: 125, 0xffe8: 126, 0xffe9: 56, 0xffea: 100, 0xffeb: 125, 0xffec: 126,
+                0xff7f: 69, 0xff14: 70, 0xff67: 127, 0xfe03: 100,
+                0xffaa: 55, 0xffab: 78, 0xffad: 74, 0xffae: 83, 0xffaf: 98,
+                0xffb0: 82, 0xffb1: 79, 0xffb2: 80, 0xffb3: 81, 0xffb4: 75, 0xffb5: 76,
+                0xffb6: 77, 0xffb7: 71, 0xffb8: 72, 0xffb9: 73}
+    for n in range(12):     # F1..F12
+        specials[0xffbe + n] = (59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88)[n]
+    k.update(specials)
+    return k
+
+
+EVDEV_KEYS = _build_evdev_keys()
+
+
+def _parse_ppm(buf):
+    """En-tête PPM binaire (P6) de grim : largeur, hauteur, puis pixels RGB 8 bits."""
+    if buf[:2] != b"P6":
+        raise RuntimeError(t("Capture Wayland illisible (format inattendu).", "Unreadable Wayland capture (unexpected format).", "Captura Wayland ilegible (formato inesperado)."))
+    values, idx = [], 2
+    while len(values) < 3:
+        while idx < len(buf) and buf[idx:idx + 1].isspace():
+            idx += 1
+        if idx < len(buf) and buf[idx:idx + 1] == b"#":           # commentaire PPM : jusqu'à la fin de ligne
+            while idx < len(buf) and buf[idx:idx + 1] != b"\n":
+                idx += 1
+            continue
+        start = idx
+        while idx < len(buf) and not buf[idx:idx + 1].isspace():
+            idx += 1
+        if start == idx:
+            raise RuntimeError(t("Capture Wayland illisible (en-tête tronqué).", "Unreadable Wayland capture (truncated header).", "Captura Wayland ilegible (encabezado truncado)."))
+        values.append(int(buf[start:idx]))
+    width, height, maxval = values
+    data = buf[idx + 1:idx + 1 + width * height * 3]              # un seul espace sépare l'en-tête des pixels
+    if maxval != 255 or len(data) != width * height * 3:
+        raise RuntimeError(t("Capture Wayland illisible (pixels incomplets).", "Unreadable Wayland capture (incomplete pixels).", "Captura Wayland ilegible (píxeles incompletos)."))
+    return width, height, data
+
+
+def _rgb_to_bgrx(rgb):
+    """RGB (grim) -> BGRX attendu par rfb_frame ; copies à pas natif, bornées à une capture."""
+    out = bytearray(len(rgb) // 3 * 4)
+    out[0::4], out[1::4], out[2::4] = rgb[2::3], rgb[1::3], rgb[0::3]
+    return bytes(out)
+
+
+class UInput:
+    """Périphérique d'entrée virtuel (/dev/uinput) : pointeur absolu type tablette + clavier, indépendant du compositeur."""
+    EV_SYN, EV_KEY, EV_REL, EV_ABS = 0, 1, 2, 3
+    SYN_REPORT, REL_WHEEL, ABS_X, ABS_Y = 0, 8, 0, 1
+    ABS_RANGE = 32767                                             # plage d'une tablette absolue (convention machine virtuelle)
+    BUTTONS = {1: 0x110, 2: 0x112, 3: 0x111}                      # BTN_LEFT, BTN_MIDDLE, BTN_RIGHT
+
+    def __init__(self, width, height):
+        import fcntl
+        self._fcntl = fcntl
+        self._event = struct.Struct("@llHHi")                    # struct input_event : timeval, type, code, value
+        self.width, self.height = width, height
+        base = ord("U")
+        iow = lambda nr, size: (1 << 30) | (size << 16) | (base << 8) | nr
+        self._create, self._destroy = (base << 8) | 1, (base << 8) | 2
+        set_evbit, set_keybit, set_relbit, set_absbit = iow(100, 4), iow(101, 4), iow(102, 4), iow(103, 4)
+        self._fd = os.open("/dev/uinput", os.O_WRONLY)
+        try:
+            for ev in (self.EV_SYN, self.EV_KEY, self.EV_REL, self.EV_ABS):
+                fcntl.ioctl(self._fd, set_evbit, ev)
+            fcntl.ioctl(self._fd, set_relbit, self.REL_WHEEL)
+            for axis in (self.ABS_X, self.ABS_Y):
+                fcntl.ioctl(self._fd, set_absbit, axis)
+            for code in set(EVDEV_KEYS.values()) | set(self.BUTTONS.values()):
+                fcntl.ioctl(self._fd, set_keybit, code)
+            absmax, absmin, zeros = [0] * 64, [0] * 64, [0] * 64
+            absmax[self.ABS_X] = absmax[self.ABS_Y] = self.ABS_RANGE
+            setup = (struct.pack("@80sHHHHI", b"loco remote desktop", 0x06, 0x1234, 0x5678, 1, 0)
+                     + struct.pack("@64i", *absmax) + struct.pack("@64i", *absmin)
+                     + struct.pack("@64i", *zeros) + struct.pack("@64i", *zeros))
+            os.write(self._fd, setup)
+            fcntl.ioctl(self._fd, self._create)
+        except OSError:
+            os.close(self._fd)
             raise
-        if not terminal_fallback:
-            raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console.", "Ningún escritorio X11. Se requiere el permiso Terminal remoto para abrir la consola de texto noVNC."))
-        return text_console()
-    os.environ["DISPLAY"] = env["DISPLAY"]
-    if env.get("XAUTHORITY"):
-        os.environ["XAUTHORITY"] = env["XAUTHORITY"]
-    x, xt = ctypes.CDLL("libX11.so.6"), ctypes.CDLL("libXtst.so.6")
-    def bind(lib, name, result, args):
-        fn = getattr(lib, name)
-        fn.restype, fn.argtypes = result, args
-        return fn
-    ptr, integer, ulong = ctypes.c_void_p, ctypes.c_int, ctypes.c_ulong
-    display = bind(x, "XOpenDisplay", ptr, [ctypes.c_char_p])(env["DISPLAY"].encode())
-    if not display:
-        raise RuntimeError(t("La session X11 n'est pas accessible à l'agent.", "The X11 session is not accessible to the agent.", "La sesión X11 no es accesible para el agente."))
-    root = bind(x, "XDefaultRootWindow", ulong, [ptr])(display)
-    screen = bind(x, "XDefaultScreen", integer, [ptr])(display)
-    width = bind(x, "XDisplayWidth", integer, [ptr, integer])(display, screen)
-    height = bind(x, "XDisplayHeight", integer, [ptr, integer])(display, screen)
-    if not 1 <= width <= 4096 or not 1 <= height <= 2160:
-        raise RuntimeError(t("Résolution X11 supérieure à 4096 × 2160.", "X11 resolution larger than 4096 × 2160.", "Resolución X11 superior a 4096 × 2160."))
-    get_image = bind(x, "XGetImage", ctypes.POINTER(XImage), [ptr, ulong, integer, integer, ctypes.c_uint, ctypes.c_uint, ulong, integer])
-    destroy = bind(x, "XDestroyImage", integer, [ctypes.POINTER(XImage)])
-    keycode = bind(x, "XKeysymToKeycode", ctypes.c_ubyte, [ptr, ulong])
-    key = bind(xt, "XTestFakeKeyEvent", integer, [ptr, ctypes.c_uint, integer, ulong])
-    button = bind(xt, "XTestFakeButtonEvent", integer, [ptr, ctypes.c_uint, integer, ulong])
-    motion = bind(xt, "XTestFakeMotionEvent", integer, [ptr, integer, integer, integer, ulong])
-    flush = bind(x, "XFlush", integer, [ptr])
-    xfree = bind(x, "XFree", integer, [ptr])
-    try:
-        # Forme du curseur (XFixes) : facultative, le bureau reste utilisable sans elle.
-        get_cursor = bind(ctypes.CDLL("libXfixes.so.3"), "XFixesGetCursorImage", ctypes.POINTER(XFixesCursorImage), [ptr])
-    except OSError:
-        get_cursor = None
-    close = bind(x, "XCloseDisplay", integer, [ptr])
+        time.sleep(0.4)                                          # laisse le compositeur (libinput) adopter le périphérique
+
+    def _emit(self, etype, code, value):
+        os.write(self._fd, self._event.pack(0, 0, etype, code, value))
+
+    def _syn(self):
+        self._emit(self.EV_SYN, self.SYN_REPORT, 0)
+
+    def motion(self, x, y):
+        self._emit(self.EV_ABS, self.ABS_X, min(self.ABS_RANGE, max(0, round(x * self.ABS_RANGE / max(1, self.width - 1)))))
+        self._emit(self.EV_ABS, self.ABS_Y, min(self.ABS_RANGE, max(0, round(y * self.ABS_RANGE / max(1, self.height - 1)))))
+        self._syn()
+
+    def button(self, number, down):
+        code = self.BUTTONS.get(number)
+        if code is not None:
+            self._emit(self.EV_KEY, code, 1 if down else 0)
+            self._syn()
+
+    def wheel(self, amount):
+        self._emit(self.EV_REL, self.REL_WHEEL, amount)
+        self._syn()
+
+    def key(self, code, down):
+        self._emit(self.EV_KEY, code, 1 if down else 0)
+        self._syn()
+
+    def close(self):
+        try:
+            self._fcntl.ioctl(self._fd, self._destroy)
+        except OSError:
+            pass
+        os.close(self._fd)
+
+
+def wayland_environment():
+    """Session Wayland locale : répertoire d'exécution + socket du compositeur, pour grim et le périphérique d'entrée."""
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            with open("/proc/" + name + "/environ", "rb") as f:
+                values = f.read(65536).split(b"\0")
+            env = dict(v.decode("utf-8", "replace").split("=", 1) for v in values if b"=" in v)
+        except OSError:
+            continue
+        runtime, display = env.get("XDG_RUNTIME_DIR", ""), env.get("WAYLAND_DISPLAY", "")
+        if env.get("XDG_SESSION_TYPE") == "wayland" and re.fullmatch(r"/run/user/[0-9]+", runtime) and display:
+            socket_path = display if os.path.isabs(display) else runtime.rstrip("/") + "/" + display
+            if (os.path.isabs(display) or re.fullmatch(r"wayland-[0-9]+", display)) and os.path.exists(socket_path):
+                return {"XDG_RUNTIME_DIR": runtime, "WAYLAND_DISPLAY": display}
+    raise RuntimeError(t("Aucune session Wayland active accessible à l'agent.", "No active Wayland session accessible to the agent.", "Ninguna sesión Wayland activa accesible para el agente."))
+
+
+class X11Backend:
+    """Capture XGetImage + saisie XTest sur une session X11 locale."""
+    interval = 0.04
+
+    def __init__(self, env):
+        os.environ["DISPLAY"] = env["DISPLAY"]
+        if env.get("XAUTHORITY"):
+            os.environ["XAUTHORITY"] = env["XAUTHORITY"]
+        x, xt = ctypes.CDLL("libX11.so.6"), ctypes.CDLL("libXtst.so.6")
+        def bind(lib, name, result, args):
+            fn = getattr(lib, name)
+            fn.restype, fn.argtypes = result, args
+            return fn
+        ptr, integer, ulong = ctypes.c_void_p, ctypes.c_int, ctypes.c_ulong
+        self._d = bind(x, "XOpenDisplay", ptr, [ctypes.c_char_p])(env["DISPLAY"].encode())
+        if not self._d:
+            raise RuntimeError(t("La session X11 n'est pas accessible à l'agent.", "The X11 session is not accessible to the agent.", "La sesión X11 no es accesible para el agente."))
+        self._root = bind(x, "XDefaultRootWindow", ulong, [ptr])(self._d)
+        self._screen = bind(x, "XDefaultScreen", integer, [ptr])(self._d)
+        self.width = bind(x, "XDisplayWidth", integer, [ptr, integer])(self._d, self._screen)
+        self.height = bind(x, "XDisplayHeight", integer, [ptr, integer])(self._d, self._screen)
+        if not 1 <= self.width <= 4096 or not 1 <= self.height <= 2160:
+            raise RuntimeError(t("Résolution X11 supérieure à 4096 × 2160.", "X11 resolution larger than 4096 × 2160.", "Resolución X11 superior a 4096 × 2160."))
+        self._get_image = bind(x, "XGetImage", ctypes.POINTER(XImage), [ptr, ulong, integer, integer, ctypes.c_uint, ctypes.c_uint, ulong, integer])
+        self._destroy = bind(x, "XDestroyImage", integer, [ctypes.POINTER(XImage)])
+        self._keycode = bind(x, "XKeysymToKeycode", ctypes.c_ubyte, [ptr, ulong])
+        self._fkey = bind(xt, "XTestFakeKeyEvent", integer, [ptr, ctypes.c_uint, integer, ulong])
+        self._fbutton = bind(xt, "XTestFakeButtonEvent", integer, [ptr, ctypes.c_uint, integer, ulong])
+        self._fmotion = bind(xt, "XTestFakeMotionEvent", integer, [ptr, integer, integer, integer, ulong])
+        self._flush = bind(x, "XFlush", integer, [ptr])
+        self._xfree = bind(x, "XFree", integer, [ptr])
+        try:
+            # Forme du curseur (XFixes) : facultative, le bureau reste utilisable sans elle.
+            self._get_cursor = bind(ctypes.CDLL("libXfixes.so.3"), "XFixesGetCursorImage", ctypes.POINTER(XFixesCursorImage), [ptr])
+        except OSError:
+            self._get_cursor = None
+        self._close = bind(x, "XCloseDisplay", integer, [ptr])
+        self._cursor_shape, self._cursor_serial = False, None
+
+    def grab(self):
+        image = self._get_image(self._d, self._root, 0, 0, self.width, self.height, ctypes.c_ulong(-1).value, 2)
+        if not image:
+            raise RuntimeError(t("Capture de la session X11 impossible", "Cannot capture the X11 session", "No se puede capturar la sesión X11"))
+        try:
+            im = image.contents
+            if im.bits_per_pixel != 32 or im.byte_order != 0 or (im.red_mask, im.green_mask, im.blue_mask) != (0xff0000, 0xff00, 0xff):
+                raise RuntimeError(t("Format X11 non pris en charge (RGB 24/32 bits requis)", "Unsupported X11 format (RGB 24/32-bit required)", "Formato X11 no admitido (se requiere RGB 24/32 bits)"))
+            data = ctypes.string_at(im.data, im.bytes_per_line * self.height)
+            if im.bytes_per_line != self.width * 4:
+                data = b"".join(data[y * im.bytes_per_line:y * im.bytes_per_line + self.width * 4] for y in range(self.height))
+        finally:
+            self._destroy(image)
+        return data
+
+    def key(self, sym, down):
+        code = self._keycode(self._d, sym)
+        if code:
+            self._fkey(self._d, code, bool(down), 0)
+            return True
+        return False
+
+    def motion(self, x, y):
+        self._fmotion(self._d, self._screen, x, y, 0)
+
+    def button(self, number, down):
+        self._fbutton(self._d, number, bool(down), 0)
+
+    def set_cursor(self, enabled):
+        self._cursor_shape, self._cursor_serial = enabled, None
+
+    def cursor(self):
+        if not (self._cursor_shape and self._get_cursor):
+            return None
+        image = self._get_cursor(self._d)
+        if not image:
+            return None
+        try:
+            im = image.contents
+            if im.cursor_serial == self._cursor_serial or not 1 <= im.width <= 256 or not 1 <= im.height <= 256:
+                return None
+            self._cursor_serial = im.cursor_serial
+            return cursor_rect(im.xhot, im.yhot, im.width, im.height, im.pixels[:im.width * im.height])
+        finally:
+            self._xfree(image)
+
+    def flush(self):
+        self._flush(self._d)
+
+    def close(self):
+        self._close(self._d)
+
+
+class WaylandBackend:
+    """Capture via grim (compositeurs wlroots) + saisie par périphérique d'entrée virtuel, pour une session Wayland."""
+    interval = 0.1                                               # grim est relancé par trame : ~10 i/s suffisent à l'administration
+
+    def __init__(self, env):
+        self._env = dict(os.environ)
+        self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = env["XDG_RUNTIME_DIR"], env["WAYLAND_DISPLAY"]
+        width, height, _ = self._capture()
+        if not 1 <= width <= 4096 or not 1 <= height <= 2160:
+            raise RuntimeError(t("Résolution Wayland supérieure à 4096 × 2160.", "Wayland resolution larger than 4096 × 2160.", "Resolución Wayland superior a 4096 × 2160."))
+        self.width, self.height = width, height
+        self._uinput = UInput(width, height)
+
+    def _capture(self):
+        try:
+            proc = subprocess.run(["grim", "-t", "ppm", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env, timeout=10)
+        except FileNotFoundError:
+            raise RuntimeError(t("grim est requis pour le bureau distant Wayland (installez le paquet « grim » sur ce poste).",
+                                 "grim is required for the Wayland remote desktop (install the \"grim\" package on this machine).",
+                                 "grim es necesario para el escritorio remoto Wayland (instale el paquete «grim» en este equipo)."))
+        except (OSError, subprocess.SubprocessError) as e:
+            raise RuntimeError(t("Capture Wayland impossible : %s", "Wayland capture failed: %s", "Captura Wayland imposible: %s") % e)
+        if proc.returncode != 0 or not proc.stdout:
+            detail = proc.stderr.decode("utf-8", "replace").strip()[-200:]
+            raise RuntimeError(t("Capture Wayland impossible : le compositeur ne gère peut-être pas wlr-screencopy (GNOME/KDE exigent une session X11). %s",
+                                 "Wayland capture failed: the compositor may not support wlr-screencopy (GNOME/KDE require an X11 session). %s",
+                                 "Captura Wayland imposible: el compositor quizá no admite wlr-screencopy (GNOME/KDE requieren una sesión X11). %s") % detail)
+        return _parse_ppm(proc.stdout)
+
+    def grab(self):
+        width, height, rgb = self._capture()
+        bgrx = _rgb_to_bgrx(rgb)
+        if (width, height) == (self.width, self.height):
+            return bgrx
+        out = bytearray(self.width * self.height * 4)            # résolution changée en session : rognage/complément vers la taille négociée
+        cols = min(width, self.width) * 4
+        for y in range(min(height, self.height)):
+            out[y * self.width * 4:y * self.width * 4 + cols] = bgrx[y * width * 4:y * width * 4 + cols]
+        return bytes(out)
+
+    def key(self, sym, down):
+        code = EVDEV_KEYS.get(sym)
+        if code is None:
+            return False
+        self._uinput.key(code, down)
+        return True
+
+    def motion(self, x, y):
+        self._uinput.motion(x, y)
+
+    def button(self, number, down):
+        if number in (4, 5):                                     # molette : une encoche par clic signalé
+            if down:
+                self._uinput.wheel(1 if number == 4 else -1)
+        else:
+            self._uinput.button(number, down)
+
+    def set_cursor(self, enabled):
+        pass                                                     # curseur local du navigateur conservé (aucune forme renvoyée)
+
+    def cursor(self):
+        return None
+
+    def flush(self):
+        pass
+
+    def close(self):
+        self._uinput.close()
+
+
+def _rfb_serve(backend):
+    """Serveur RFB 3.8 : relais stdin/stdout branché sur noVNC par le portail ; capture et saisie déléguées au backend."""
     inp, out = sys.stdin.buffer, sys.stdout.buffer
     def read(n):
         data = b""
@@ -1252,25 +1527,7 @@ def linux_desktop(terminal_fallback=False):
     def write(data):
         out.write(data)
         out.flush()
-    pressed, mask, tight, last_frame, rgb_order = set(), 0, False, 0, False
-    cursor_shape, cursor_serial = False, None
-
-    def cursor_change():
-        nonlocal cursor_serial
-        if not (cursor_shape and get_cursor):
-            return None
-        image = get_cursor(display)
-        if not image:
-            return None
-        try:
-            im = image.contents
-            if im.cursor_serial == cursor_serial or not 1 <= im.width <= 256 or not 1 <= im.height <= 256:
-                return None
-            cursor_serial = im.cursor_serial
-            return cursor_rect(im.xhot, im.yhot, im.width, im.height, im.pixels[:im.width * im.height])
-        finally:
-            xfree(image)
-    previous = None
+    pressed, mask, tight, last_frame, rgb_order, previous = set(), 0, False, 0, False, None
     def interrupted(_signum, _frame):
         raise EOFError()
     # SIGTERM doit aussi relâcher les modificateurs si la console est fermée pendant une frappe.
@@ -1286,7 +1543,7 @@ def linux_desktop(terminal_fallback=False):
         read(1)
         name = socket.gethostname().encode()
         pixel = struct.pack(">BBBBHHHBBBxxx", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
-        write(struct.pack(">HH", width, height) + pixel + struct.pack(">I", len(name)) + name)
+        write(struct.pack(">HH", backend.width, backend.height) + pixel + struct.pack(">I", len(name)) + name)
         while True:
             kind = read(1)[0]
             if kind == 0:
@@ -1299,41 +1556,29 @@ def linux_desktop(terminal_fallback=False):
                 if count > 128:
                     raise ValueError("Trop d'encodages RFB")
                 encodings = struct.unpack(">" + "i" * count, read(count * 4))
-                tight, cursor_shape, cursor_serial = 7 in encodings, 0x574D5664 in encodings, None
+                tight = 7 in encodings
+                backend.set_cursor(0x574D5664 in encodings)
             elif kind == 3:
                 incremental = read(9)[0] != 0
-                time.sleep(max(0, 0.04 - (time.monotonic() - last_frame)))
-                image = get_image(display, root, 0, 0, width, height, ctypes.c_ulong(-1).value, 2)
-                if not image:
-                    raise RuntimeError(t("Capture de la session X11 impossible", "Cannot capture the X11 session", "No se puede capturar la sesión X11"))
-                try:
-                    im = image.contents
-                    if im.bits_per_pixel != 32 or im.byte_order != 0 or (im.red_mask, im.green_mask, im.blue_mask) != (0xff0000, 0xff00, 0xff):
-                        raise RuntimeError(t("Format X11 non pris en charge (RGB 24/32 bits requis)", "Unsupported X11 format (RGB 24/32-bit required)", "Formato X11 no admitido (se requiere RGB 24/32 bits)"))
-                    data = ctypes.string_at(im.data, im.bytes_per_line * height)
-                    if im.bytes_per_line != width * 4:
-                        data = b"".join(data[y * im.bytes_per_line:y * im.bytes_per_line + width * 4] for y in range(height))
-                finally:
-                    destroy(image)
-                write(rfb_frame(data, width, height, previous, incremental, tight, rgb_order, cursor_change()))
+                time.sleep(max(0, backend.interval - (time.monotonic() - last_frame)))
+                data = backend.grab()
+                write(rfb_frame(data, backend.width, backend.height, previous, incremental, tight, rgb_order, backend.cursor()))
                 previous = data
                 last_frame = time.monotonic()
             elif kind == 4:
                 down, sym = struct.unpack(">BxxI", read(7))
-                code = keycode(display, sym)
-                if code:
-                    key(display, code, bool(down), 0)
-                    (pressed.add if down else pressed.discard)(code)
+                if backend.key(sym, down):
+                    (pressed.add if down else pressed.discard)(sym)
             elif kind == 5:
                 next_mask, pos_x, pos_y = struct.unpack(">BHH", read(5))
-                motion(display, screen, min(width - 1, pos_x), min(height - 1, pos_y), 0)
+                backend.motion(min(backend.width - 1, pos_x), min(backend.height - 1, pos_y))
                 for bit, number in ((1, 1), (2, 2), (4, 3)):
                     if (mask ^ next_mask) & bit:
-                        button(display, number, bool(next_mask & bit), 0)
+                        backend.button(number, bool(next_mask & bit))
                 for bit, number in ((8, 4), (16, 5)):
                     if next_mask & bit and not mask & bit:
-                        button(display, number, 1, 0)
-                        button(display, number, 0, 0)
+                        backend.button(number, True)
+                        backend.button(number, False)
                 mask = next_mask
             elif kind == 6:
                 length = struct.unpack(">xxxI", read(7))[0]
@@ -1342,18 +1587,32 @@ def linux_desktop(terminal_fallback=False):
                 read(length)
             else:
                 raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message", "Mensaje RFB no admitido"))
-            flush(display)
+            backend.flush()
     except EOFError:
         pass
     finally:
-        for code in pressed:
-            key(display, code, 0, 0)
+        for sym in pressed:
+            backend.key(sym, False)
         for bit, number in ((1, 1), (2, 2), (4, 3)):
             if mask & bit:
-                button(display, number, 0, 0)
-        flush(display)
-        close(display)
+                backend.button(number, False)
+        backend.flush()
+        backend.close()
         signal.signal(signal.SIGTERM, previous_term)
+
+
+def linux_desktop(terminal_fallback=False):
+    """Serveur RFB 3.8 intégré, Tight/RGB compressé, sans port VNC : X11/XTest, ou Wayland via grim + périphérique d'entrée virtuel."""
+    try:
+        env = x11_environment()
+    except RuntimeError as e:
+        # Wayland est un bureau existant, pas une machine sans interface graphique.
+        if "Wayland" in str(e):
+            return _rfb_serve(WaylandBackend(wayland_environment()))
+        if not terminal_fallback:
+            raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console.", "Ningún escritorio X11. Se requiere el permiso Terminal remoto para abrir la consola de texto noVNC."))
+        return text_console()
+    return _rfb_serve(X11Backend(env))
 
 
 # --------------------------------------------------------------------------- gestionnaire de fichiers
