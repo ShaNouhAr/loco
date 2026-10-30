@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.117.0 — 2026-10-30
+
+- **Profils limités à une partie du parc.** Dans **Profils d'accès**, un profil couvre **tout le parc** (par défaut, et toujours pour les profils intégrés) ou des **groupes de machines et postes choisis** — par exemple « Techniciens bâtiment B ». Les postes ajoutés plus tard à ces groupes y entrent d'eux-mêmes ; la liste des profils montre le parc de chacun.
+  - Les comptes du profil ne voient et ne visent que ces postes : Mon parc, fiche (introuvable sinon), recherche, vue d'ensemble, groupes réduits à leurs postes, mises à jour groupées, déploiements, scripts et historique, planifications, sessions distantes — et les **jetons MCP**, qui suivent le parc du compte créateur.
+  - Une planification applique à chaque occurrence le parc de son auteur ; un profil limité ne peut pas viser « Tout le parc ».
+  - Gérer les groupes de machines et configurer le parc restent réservés aux profils qui couvrent tout le parc (les groupes définissent le parc des autres) ; un gérant limité ne crée ou n'attribue que des profils inclus dans son propre parc.
+  - Changer le parc d'un profil reconnecte ses comptes ; une session distante dont le poste sort du parc se ferme. Journal : « profils.parc ».
+
 ## 2.116.0 — 2026-10-30
 
 - **Serveur MCP : page refaite et vocabulaire précis.** « Assistants IA » devient **Serveur MCP** (onglet, fonctionnalité, droit **Créer des jetons MCP**, journal), et un « accès » devient un **jeton** : la page dit ce que c'est — un LLM pilote loco par MCP depuis son client (Claude Code, Cursor, VS Code…), avec un jeton qui n'ouvre que les outils activés.

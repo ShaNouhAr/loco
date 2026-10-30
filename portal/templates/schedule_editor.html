@@ -46,8 +46,8 @@
       <div class="panel-h"><h2>{{ _("Sur quels postes") }}</h2><div class="aside" data-show-for="target:selection"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
       <div class="panel-b stack-sm">
         <div class="seg" role="radiogroup" aria-label="{{ _('Postes visés') }}">
-          <label><input type="radio" name="target" value="all" {{ 'checked' if targets.all or not selection }}><span>{{ _("Tout le parc") }}</span></label>
-          <label><input type="radio" name="target" value="selection" {{ 'checked' if selection and not targets.all }}><span>{{ _("Groupes et appareils") }}</span></label>
+          {% if whole_fleet %}<label><input type="radio" name="target" value="all" {{ 'checked' if targets.all or not selection }}><span>{{ _("Tout le parc") }}</span></label>{% endif %}
+          <label><input type="radio" name="target" value="selection" {{ 'checked' if (selection and not targets.all) or not whole_fleet }}><span>{{ _("Groupes et appareils") }}</span></label>
         </div>
         <p class="small muted" data-show-for="target:all">{{ _("Tous les postes actifs au moment de chaque exécution, y compris ceux inscrits entre-temps.") }}</p>
         <div data-show-for="target:selection" class="stack-sm">

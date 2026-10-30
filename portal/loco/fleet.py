@@ -27,7 +27,7 @@ import zipfile
 
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import addresses, agentpkg, app, config, features, permissions
+from . import addresses, agentpkg, app, config, features, permissions, scope
 from .i18n import L_, _
 from .auth import audit, can, login_required, require
 from .db import db
@@ -150,7 +150,7 @@ def catalog_state(inventory, apps=None):
 def fleet_usage(apps):
     """Par logiciel du catalogue : {slug: (postes où il est installé, postes à mettre à jour)}."""
     usage = {a["slug"]: [0, 0] for a in apps}
-    for dev in db().execute("SELECT inventory FROM devices WHERE state='active' AND os_family='windows'"):
+    for dev in db().execute("SELECT inventory FROM devices WHERE state='active' AND os_family='windows'" + scope.sql()):
         try:
             inv = json.loads(dev["inventory"] or "{}")
         except ValueError:
@@ -913,7 +913,7 @@ def agent_enroll_msi():
 def _rows(apps=None):
     apps = catalog() if apps is None else apps
     out = []
-    for d in db().execute("SELECT * FROM devices WHERE state != 'removed' ORDER BY hostname COLLATE NOCASE"):
+    for d in db().execute("SELECT * FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         color, reason = status(d, apps)
         out.append({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
                     "pending": pending(d["id"]), "needs_update": needs_update(d, apps)})
@@ -997,7 +997,10 @@ def fleet():
                                             r["presence"]["online"], len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
+    from .auth import scope_summary
+    limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
+                           fleet_limit=limit,
                            counts=counts, systems=systems, total=total, state=state, system=system,
                            signature=signature, families=FAMILIES, actions=ACTIONS,
                            to_update=sum(1 for r in rows if r["needs_update"]),
@@ -1010,7 +1013,7 @@ def fleet_search():
     """Postes du parc pour la palette de recherche (Ctrl+K) : nom, système et adresse, lien vers la fiche."""
     devices = []
     for d in db().execute("SELECT id, hostname, os_name, os_family, ip, addresses FROM devices "
-                          "WHERE state != 'removed' ORDER BY hostname COLLATE NOCASE"):
+                          "WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         own = (d["addresses"] or "").split()
         address = own[0] if own else (d["ip"] or "")
         sub = " · ".join(p for p in (d["os_name"] or d["os_family"], address) if p)
@@ -1079,8 +1082,9 @@ def ago_text(stamp):
 
 
 def _get(dev_id):
+    """Poste du parc du compte courant (404 sinon : un poste hors parc n'existe pas pour lui)."""
     dev = db().execute("SELECT * FROM devices WHERE id=? AND state != 'removed'", (dev_id,)).fetchone()
-    if dev is None:
+    if dev is None or not scope.allows(dev["id"]):
         abort(404)
     return dev
 
@@ -1250,7 +1254,7 @@ def fleet_group_windows_update(group_id):
     group = groups._group("device", group_id)
     blocked = request.form.get("block") == "1"
     cur = db().execute("UPDATE devices SET block_windows_update=? WHERE os_family='windows' AND state!='removed' "
-                       "AND id IN (SELECT device_id FROM device_group_members WHERE group_id=?)",
+                       "AND id IN (SELECT device_id FROM device_group_members WHERE group_id=?)" + scope.sql(),
                        (1 if blocked else 0, group_id))
     db().commit()
     n = cur.rowcount

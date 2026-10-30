@@ -482,6 +482,21 @@ MIGRATIONS = [
     );
     CREATE INDEX mcp_tokens_user ON mcp_tokens(user_id);
     """,
+    # 30 : parc accessible d'un profil — tout le parc (par défaut, et toujours pour les profils intégrés) ou les postes
+    # de groupes choisis et des postes choisis un à un ; un groupe ou un poste supprimé sort du parc du profil.
+    """
+    ALTER TABLE access_roles ADD COLUMN whole_fleet INTEGER NOT NULL DEFAULT 1;
+    CREATE TABLE access_role_groups (
+        role_id TEXT NOT NULL REFERENCES access_roles(id) ON DELETE CASCADE,
+        group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+        PRIMARY KEY (role_id, group_id)
+    );
+    CREATE TABLE access_role_devices (
+        role_id TEXT NOT NULL REFERENCES access_roles(id) ON DELETE CASCADE,
+        device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        PRIMARY KEY (role_id, device_id)
+    );
+    """,
 ]
 
 

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Profils d'accès") }}{% endblock %}
 {% block content %}
-<div class="head"><div><h1>{{ _("Profils d'accès") }}</h1><p>{{ _("Un profil regroupe des droits réutilisables. Sa modification s'applique à tous les comptes qui l'utilisent.") }}</p></div>
+<div class="head"><div><h1>{{ _("Profils d'accès") }}</h1><p>{{ _("Un profil regroupe des droits réutilisables et le parc sur lequel ils s’exercent. Sa modification s'applique à tous les comptes qui l'utilisent.") }}</p></div>
   {% if can('roles.manage') %}<a class="btn primary" href="{{ url_for('roles_editor', role_id='new') }}">{{ _("Nouveau profil") }}</a>{% endif %}
 </div>
 <div class="stack">
   <section class="panel"><div class="panel-h"><h2>{{ _("Profils") }} <span class="h-count">{{ profiles|length }}</span></h2></div>
-    <div class="table-wrap"><table><thead><tr><th>{{ _("Profil") }}</th><th class="num">{{ _("Droits") }}</th><th class="num">{{ _("Comptes") }}</th><th></th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>{{ _("Profil") }}</th><th class="num">{{ _("Droits") }}</th><th>{{ _("Parc") }}</th><th class="num">{{ _("Comptes") }}</th><th></th></tr></thead><tbody>
       {% for profile in profiles %}<tr>
         <td><a href="{{ url_for('roles_editor', role_id=profile.id) }}"><strong>{{ profile.label|tr if profile.builtin else profile.label }}</strong></a>{% if profile.builtin %} <span class="tag">{{ _("intégré") }}</span>{% endif %}<span class="sub">{{ profile.description|tr if profile.builtin else profile.description }}</span></td>
-        <td class="num">{{ role_permissions(profile.id)|length }}</td><td class="num">{{ profile.accounts }}</td>
+        <td class="num">{{ role_permissions(profile.id)|length }}</td><td class="nowrap">{{ role_fleet(profile.id) }}</td><td class="num">{{ profile.accounts }}</td>
         <td class="right"><div class="acts"><a class="linkbtn" href="{{ url_for('roles_editor', role_id=profile.id) }}">{{ _("Consulter") }}{% if can('roles.manage') and editable_role(profile) %} {{ _("/ modifier") }}{% endif %}</a>
           {% if can('roles.manage') and editable_role(profile) %}<form method="post" action="{{ url_for('roles_delete', role_id=profile.id) }}" data-confirm="{{ _('Supprimer le profil %(label)s ?', label=profile.label|tr if profile.builtin else profile.label) }}" data-confirm-text="{{ _('Le profil doit être inutilisé. Les profils intégrés ne peuvent pas être supprimés.') }}" data-confirm-ok="{{ _('Supprimer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn del" {{ 'disabled' if profile.accounts }} title="{{ _('Réaffectez les comptes avant de supprimer ce profil') if profile.accounts else _('Supprimer ce profil inutilisé') }}">{{ _("Supprimer") }}</button></form>{% endif %}
         </div></td>

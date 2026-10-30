@@ -71,9 +71,10 @@ def chart_data(d):
     charts["disk"] = segments
     if can("fleet.view"):
         from .fleet import catalog, status
+        from . import scope
         apps = catalog()
         counts = {"green": 0, "orange": 0, "red": 0, "grey": 0}
-        for dev in db().execute("SELECT * FROM devices WHERE state != 'removed'"):
+        for dev in db().execute("SELECT * FROM devices WHERE state != 'removed'" + scope.sql()):
             counts[status(dev, apps)[0]] += 1
         n = sum(counts.values())
         ring, offset = [], 0.0

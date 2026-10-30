@@ -2,9 +2,9 @@
 import sqlite3
 import zipfile
 
-from flask import abort, flash, render_template, request
+from flask import abort, flash, g, render_template, request
 
-from . import app, fleet
+from . import app, fleet, scope
 from .i18n import _
 from .auth import audit, lock_access, login_required, require
 from .db import db
@@ -24,11 +24,17 @@ def identifiers(values, limit=500):
 
 
 def listing(kind):
+    """Groupes et nombre de membres ; pour un profil limité à une partie du parc, les groupes qu'il a reçus ou qui
+    contiennent de ses postes, comptés sur ses seuls postes."""
     table, members, column, entities = (("software_groups", "software_group_members", "app_id", "win_apps") if kind == "software"
                                        else ("device_groups", "device_group_members", "device_id", "devices"))
-    where = "" if kind == "software" else " AND e.state!='removed'"
-    return db().execute(f"SELECT g.*,(SELECT COUNT(*) FROM {members} m JOIN {entities} e ON e.id=m.{column} "
+    where = "" if kind == "software" else " AND e.state!='removed'" + scope.sql("e.id")
+    rows = db().execute(f"SELECT g.*,(SELECT COUNT(*) FROM {members} m JOIN {entities} e ON e.id=m.{column} "
                         f"WHERE m.group_id=g.id{where}) AS members FROM {table} g ORDER BY g.name COLLATE NOCASE").fetchall()
+    if kind == "software" or scope.whole():
+        return rows
+    _whole, declared, _devices = scope.declared(db(), g.user["role"])
+    return [r for r in rows if r["members"] or r["id"] in declared]
 
 
 def memberships(kind, entity_id):
@@ -64,7 +70,7 @@ def _overview(kind):
     else:
         apps = fleet.catalog()
         rows = db().execute("SELECT m.group_id, d.* FROM device_group_members m JOIN devices d ON d.id=m.device_id "
-                            "WHERE d.state!='removed' ORDER BY m.group_id, d.hostname COLLATE NOCASE")
+                            "WHERE d.state!='removed'" + scope.sql("d.id") + " ORDER BY m.group_id, d.hostname COLLATE NOCASE")
         for r in rows:
             g = out.setdefault(r["group_id"], {"members": [], "states": {}, "windows": 0, "wu_blocked": 0})
             color = fleet.status(r, apps)[0]
@@ -87,7 +93,8 @@ def _editor(kind, group_id):
             selected = {r["id"] for r in rows if r["slug"] in wanted}
         items = [{"row": r} for r in rows]
     else:
-        rows = db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall()
+        rows = db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
+                            + " ORDER BY hostname COLLATE NOCASE").fetchall()           # consultation limitée au parc
         selected = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         apps = fleet.catalog()
         items = [{"row": r, **_device_state(r, apps)} for r in rows]

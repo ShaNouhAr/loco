@@ -298,11 +298,12 @@ def windows_apps_delete(slug):
 @app.route("/windows-apps/software/<slug>")
 @login_required
 def software_detail(slug):
-    from . import fleet, groups
+    from . import fleet, groups, scope
     row = get_app(slug)
     installed = []
     if can("fleet.view"):
-        for device in db().execute("SELECT * FROM devices WHERE os_family='windows' AND state!='removed' ORDER BY hostname COLLATE NOCASE"):
+        for device in db().execute("SELECT * FROM devices WHERE os_family='windows' AND state!='removed'" + scope.sql()
+                                   + " ORDER BY hostname COLLATE NOCASE"):
             _, version, outdated = fleet.catalog_state(fleet.inventory(device), [row])[0]
             if version:
                 installed.append({"device": device, "version": version, "outdated": outdated})

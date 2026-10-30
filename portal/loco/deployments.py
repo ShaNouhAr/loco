@@ -14,7 +14,7 @@ import zipfile
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from . import app, config, fleet, groups, winget
+from . import app, config, fleet, groups, scope, winget
 from .i18n import L_, _
 from .auth import audit, can, lock_access, login_required, require
 from .db import db
@@ -32,9 +32,14 @@ def _owner():
     return hashlib.sha256(session['csrf'].encode()).hexdigest()
 
 
+def _in_scope(row):
+    """Déploiement dont toutes les cibles sont dans le parc du compte courant (sinon il ne le voit pas)."""
+    return scope.whole() or all(scope.allows(t['id']) for t in json.loads(row['plan'])['devices'] if t.get('id') is not None)
+
+
 def _get(deployment_id):
     row = db().execute('SELECT * FROM deployments WHERE id=?', (deployment_id,)).fetchone()
-    if row is None or row['state'] == 'draft' and row['user_id'] != g.user['id']:
+    if row is None or row['state'] == 'draft' and row['user_id'] != g.user['id'] or not _in_scope(row):
         abort(404)
     return row
 
@@ -71,7 +76,8 @@ def _resolve(selection):
         group = groups._group('device', gid)
         origins['devices'].append(group['name'])
         members = db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
-                               "WHERE m.group_id=? AND d.state!='removed' ORDER BY d.hostname", (gid,)).fetchall()
+                               "WHERE m.group_id=? AND d.state!='removed'" + scope.sql("d.id") + " ORDER BY d.hostname",
+                               (gid,)).fetchall()
         if not members:
             abort(400, _('Le groupe de machines « %(group)s » est vide.', group=group['name']))
         selected_devices.update((row['id'], row) for row in members)
@@ -153,7 +159,8 @@ def _resolve_pkg(selection):
         group = groups._group('device', gid)
         origins['devices'].append(group['name'])
         members = db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
-                               "WHERE m.group_id=? AND d.state!='removed' ORDER BY d.hostname", (gid,)).fetchall()
+                               "WHERE m.group_id=? AND d.state!='removed'" + scope.sql("d.id") + " ORDER BY d.hostname",
+                               (gid,)).fetchall()
         if not members:
             abort(400, _('Le groupe de machines « %(group)s » est vide.', group=group['name']))
         devices.update((row['id'], row) for row in members)
@@ -182,7 +189,8 @@ def deployment_compose_linux():
         item['archs'] = sorted(item['archs'])
     return render_template('deployment_compose_linux.html', selected=selected, packages=catalog,
                            device_groups=groups.listing('device'), families=fleet.FAMILIES,
-                           devices=db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall())
+                           devices=db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
+                                                + " ORDER BY hostname COLLATE NOCASE").fetchall())
 
 
 @app.route('/fleet/deployments/prepare-linux', methods=['POST'])
@@ -233,7 +241,7 @@ def _confirm_linux(conn, deployment_id, plan):
                          target['os_family'], None, '[]', '[]', target['reason']))
             continue
         dev = conn.execute('SELECT * FROM devices WHERE id=?', (target['id'],)).fetchone()
-        if dev is None or dev['uid'] != target['uid'] or _target_reason_pkg(dev, families):
+        if dev is None or dev['uid'] != target['uid'] or _target_reason_pkg(dev, families) or not scope.allows(dev['id']):
             abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
         installed = [p for p in ready if p['family'] == dev['os_family']]
         command_id = None
@@ -272,7 +280,8 @@ def deployment_compose():
     return render_template('deployment_compose.html', selected=selected, store_id=store_id, store_info=store_info,
                            error=error, apps=db().execute('SELECT * FROM win_apps ORDER BY name COLLATE NOCASE').fetchall(),
                            software_groups=groups.listing('software'), device_groups=groups.listing('device'),
-                           devices=db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall())
+                           devices=db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
+                                                + " ORDER BY hostname COLLATE NOCASE").fetchall())
 
 
 @app.route('/fleet/deployments/prepare', methods=['POST'])
@@ -385,8 +394,8 @@ def deployments():
     wanted = request.args.get('etat', '')
     if wanted not in FILTERS:
         wanted = ''
-    rows = db().execute("SELECT * FROM deployments WHERE state!='draft' OR user_id=? ORDER BY created_at DESC,id DESC",
-                        (g.user['id'],)).fetchall()
+    rows = [r for r in db().execute("SELECT * FROM deployments WHERE state!='draft' OR user_id=? ORDER BY created_at DESC,id DESC",
+                                    (g.user['id'],)).fetchall() if _in_scope(r)]
     campaigns, counts = [], dict.fromkeys(FILTERS, 0)
     for row in rows:
         targets = _targets(row['id'])
@@ -572,7 +581,7 @@ def deployment_confirm(deployment_id):
             devices.append((target, None))
             continue
         dev = conn.execute('SELECT * FROM devices WHERE id=?', (target['id'],)).fetchone()
-        if dev is None or dev['uid'] != target['uid'] or _target_reason(dev):
+        if dev is None or dev['uid'] != target['uid'] or _target_reason(dev) or not scope.allows(dev['id']):
             abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
         devices.append((target, dev))
     pinned = {}

@@ -10,8 +10,8 @@ from flask import Response, abort, current_app, flash, g, redirect, render_templ
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
-from . import app, config, permissions, PUBLIC_ENDPOINTS
-from .i18n import _, gettext
+from . import app, config, permissions, scope, PUBLIC_ENDPOINTS
+from .i18n import _, gettext, n_
 from . import journal as journal_view
 from .db import db
 from .util import back, safe_next
@@ -129,6 +129,8 @@ def can(permission):
         g.permissions = permissions.role_permissions(db(), g.user["role"])
     if permission not in g.permissions:
         return False
+    if permission in scope.WHOLE_FLEET and not scope.whole():
+        return False
     from . import features            # import tardif : features dépend de ce module
     return features.allows(permission)
 
@@ -177,16 +179,18 @@ def lock_access(permission):
     g.user = row
     g.pop("permissions", None)
     g.pop("assignable_roles", None)
+    g.pop("fleet_scope", None)
     require(permission)
     return conn
 
 
 def can_assign(role):
+    """Profil que le compte courant peut attribuer (et donc gérer ses comptes) : tous ses droits et tout son parc."""
     if "assignable_roles" not in g:
         own = permissions.role_permissions(db(), g.user["role"])
         g.assignable_roles = {key for key in permissions.role_labels(db())
                               if (key != "admin" or g.user["role"] == "admin")
-                              and permissions.role_permissions(db(), key) <= own}
+                              and permissions.role_permissions(db(), key) <= own and scope.within(db(), key)}
     return role in g.assignable_roles
 
 
@@ -622,7 +626,8 @@ def roles():
     rows = db().execute("SELECT r.*,COUNT(u.id) AS accounts FROM access_roles r LEFT JOIN users u ON u.role=r.id "
                         "GROUP BY r.id ORDER BY r.builtin DESC,r.label COLLATE NOCASE").fetchall()
     return render_template("roles.html", profiles=rows, role_permissions=lambda key: permissions.role_permissions(db(), key),
-                           editable_role=_editable_role)
+                           editable_role=_editable_role,
+                           role_fleet=lambda key: scope_summary(db(), *scope.declared(db(), key)))
 
 
 @app.route("/accounts/profiles/<role_id>")
@@ -637,6 +642,8 @@ def roles_editor(role_id):
             if not can_assign(model["id"]):
                 abort(403)
     grants = permissions.role_permissions(db(), row["id"] if row else model["id"]) if row or model else frozenset()
+    source = row or model
+    whole, scope_groups, scope_devices = scope.declared(db(), source["id"]) if source else (scope.whole(), frozenset(), frozenset())
     editable = bool(can("roles.manage") and (row is None or _editable_role(row)))
     duplicable = bool(row and can("roles.manage") and can_assign(row["id"]))
     return render_template("role_editor.html", profile=row, selected=grants, editable=editable, duplicable=duplicable,
@@ -644,7 +651,80 @@ def roles_editor(role_id):
                            if model else "",
                            initial_description=(gettext(model["description"]) if model["builtin"] else model["description"])
                            if model else "",
-                           permission_groups=permissions.GROUPS, permission_catalog=permissions.PERMISSIONS)
+                           permission_groups=permissions.GROUPS, permission_catalog=permissions.PERMISSIONS,
+                           fleet=_scope_choices(whole, scope_groups, scope_devices))
+
+
+def _scope_choices(whole, groups, devices):
+    """Groupes et postes proposés dans « Parc accessible » : ceux du parc du compte qui édite (plus ce que le profil
+    contient déjà, affiché pour un profil en lecture seule)."""
+    conn, mine = db(), scope.visible()
+    _whole, mine_groups, _devices = scope.declared(conn, g.user["role"])
+    group_rows = [dict(r) for r in conn.execute(
+        "SELECT g.id, g.name, (SELECT COUNT(*) FROM device_group_members m JOIN devices d ON d.id=m.device_id "
+        "WHERE m.group_id=g.id AND d.state!='removed') AS members FROM device_groups g ORDER BY g.name COLLATE NOCASE")]
+    device_rows = [dict(r) for r in conn.execute(
+        "SELECT id, hostname, uid, os_name, os_family FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE")]
+    return {"whole": whole, "groups": groups, "devices": devices, "can_whole": mine is None,
+            "group_rows": [r for r in group_rows if mine is None or r["id"] in mine_groups or r["id"] in groups],
+            "device_rows": sorted((r for r in device_rows if mine is None or r["id"] in mine or r["id"] in devices),
+                                  key=lambda r: r["id"] not in devices),          # postes déjà choisis en tête
+            "summary": scope_summary(conn, whole, groups, devices)}
+
+
+def scope_summary(conn, whole, groups, devices):
+    """« Tout le parc » ou « 2 groupes · 3 postes (17 postes au total) » pour les listes de profils."""
+    if whole:
+        return _("Tout le parc")
+    parts = []
+    if groups:
+        parts.append(n_("%(num)s groupe", "%(num)s groupes", len(groups)))
+    if devices:
+        parts.append(n_("%(num)s poste", "%(num)s postes", len(devices)))
+    return " · ".join(parts) if parts else _("Aucun poste")
+
+
+def _scope_values(conn):
+    """(tout le parc, groupes, postes) du formulaire, dans la limite du parc du compte qui enregistre."""
+    whole = request.form.get("fleet_scope", "all") != "some"
+    try:
+        groups = frozenset(int(v) for v in request.form.getlist("scope_group")) if not whole else frozenset()
+        devices = frozenset(int(v) for v in request.form.getlist("scope_device")) if not whole else frozenset()
+    except ValueError:
+        abort(400)
+    if len(groups) > 1000 or len(devices) > 20000:
+        abort(400)
+    known_groups = {r[0] for r in conn.execute("SELECT id FROM device_groups")}
+    known_devices = {r[0] for r in conn.execute("SELECT id FROM devices WHERE state!='removed'")}
+    groups, devices = groups & known_groups, devices & known_devices
+    mine_whole, mine_groups, _devices = scope.declared(conn, g.user["role"])
+    if not mine_whole and (whole or not groups <= mine_groups or not devices <= (scope.visible() or frozenset())):
+        abort(403)
+    return whole, groups, devices
+
+
+def _save_scope(conn, role_id, values):
+    """Enregistre le parc d'un profil ; renvoie True s'il a changé (journalisé)."""
+    before = scope.declared(conn, role_id)
+    whole, groups, devices = values
+    if before == (whole, groups, devices):
+        return False
+    conn.execute("UPDATE access_roles SET whole_fleet=? WHERE id=?", (1 if whole else 0, role_id))
+    conn.execute("DELETE FROM access_role_groups WHERE role_id=?", (role_id,))
+    conn.execute("DELETE FROM access_role_devices WHERE role_id=?", (role_id,))
+    conn.executemany("INSERT INTO access_role_groups (role_id, group_id) VALUES (?,?)", [(role_id, i) for i in sorted(groups)])
+    conn.executemany("INSERT INTO access_role_devices (role_id, device_id) VALUES (?,?)", [(role_id, i) for i in sorted(devices)])
+    if whole:
+        detail = "tout le parc"
+    else:
+        names = [r[0] for r in conn.execute(f"SELECT name FROM device_groups WHERE id IN ({','.join(map(str, sorted(groups))) or 'NULL'}) "
+                                            "ORDER BY name COLLATE NOCASE")]
+        hosts = [r[0] for r in conn.execute(f"SELECT hostname FROM devices WHERE id IN ({','.join(map(str, sorted(devices))) or 'NULL'}) "
+                                            "ORDER BY hostname COLLATE NOCASE")]
+        detail = "; ".join(p for p in (("groupes " + ", ".join(names)) if names else "",
+                                       ("postes " + ", ".join(hosts)) if hosts else "") if p) or "aucun poste"
+    audit("profils.parc", f"{role_id} : {detail}"[:400], commit=False)
+    return True
 
 
 def _role_values():
@@ -681,11 +761,13 @@ def roles_add():
     if conn.execute("SELECT 1 FROM access_roles WHERE label_key=?", (permissions.role_key(label),)).fetchone():
         flash(_('Un profil porte déjà ce nom.'), "error")
         return back("roles")
+    fleet = _scope_values(conn)
     role_id = "r_" + secrets.token_hex(8)
     conn.execute("INSERT INTO access_roles (id,label,label_key,description,permissions) VALUES (?,?,?,?,?)",
                  (role_id, label, permissions.role_key(label), description, json.dumps(sorted(grants))))
     audit("profils.ajout", f"{role_id} : {label}", commit=False)
     _audit_grants(role_id, frozenset(), grants)
+    _save_scope(conn, role_id, fleet)
     conn.commit()
     flash(_('Profil « %(label)s » créé.', label=label), "ok")
     return redirect(url_for("roles_editor", role_id=role_id))
@@ -699,19 +781,20 @@ def roles_update(role_id):
     if not _editable_role(row):
         abort(403)
     label, description, grants = _role_values()
+    fleet = _scope_values(conn)
     before = permissions.role_permissions(conn, role_id)
     if conn.execute("SELECT 1 FROM access_roles WHERE label_key=? AND id!=?", (permissions.role_key(label), role_id)).fetchone():
         flash(_('Un profil porte déjà ce nom.'), "error")
         return back("roles_editor", role_id=role_id)
     conn.execute("UPDATE access_roles SET label=?,label_key=?,description=?,permissions=? WHERE id=?",
                  (label, permissions.role_key(label), description, json.dumps(sorted(grants)), role_id))
-    if before != grants:
+    if _save_scope(conn, role_id, fleet) or before != grants:
         for user in conn.execute("SELECT id FROM users WHERE role=?", (role_id,)).fetchall():
             permissions.revoke(conn, user["id"])
     audit("profils.modification", f"{role_id} : {row['label']} → {label}", commit=False)
     _audit_grants(role_id, before, grants)
     conn.commit()
-    flash(_('Profil enregistré. Les comptes concernés doivent se reconnecter si leurs droits ont changé.'), "ok")
+    flash(_('Profil enregistré. Les comptes concernés doivent se reconnecter si leurs droits ou leur parc ont changé.'), "ok")
     return back("roles_editor", role_id=role_id)
 
 

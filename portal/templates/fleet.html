@@ -13,7 +13,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
-    <p>{{ _("Postes équipés de l'agent loco, du plus urgent au plus à jour.") }}</p>
+    <p>{{ _("Postes équipés de l'agent loco, du plus urgent au plus à jour.") }}{% if fleet_limit %} <span class="muted">{{ _("Parc de votre profil : %(scope)s.", scope=fleet_limit) }}</span>{% endif %}</p>
   </div>
   <div class="actions">
     {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">{{ _("Ajouter un poste") }}</a>{% endif %}

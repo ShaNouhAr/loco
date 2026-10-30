@@ -460,7 +460,8 @@ Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de crée
 ## Utilisateurs et profils d’accès
 
 Six profils intégrés (Administrateur, Lecture seule, Opérateur, Gestionnaire des dépôts, Auditeur, Sans accès)
-et **57 permissions** granulaires ; profils personnalisables et délégation qui respecte les droits de chacun.
+et **57 permissions** granulaires ; profils personnalisables, **limités à une partie du parc** si besoin (groupes de
+machines et postes choisis), et délégation qui respecte les droits et le parc de chacun.
 
 <details>
 <summary><b>Lire le détail</b></summary>
@@ -484,7 +485,9 @@ La délégation respecte les droits de la personne qui administre : elle peut at
 
 Changer les droits d’un profil ferme les connexions de tous ses membres et leurs sessions distantes. Changer le profil d’un compte, le désactiver ou réinitialiser/changer son mot de passe révoque aussi ses accès. Ses commandes encore en attente sur le serveur sont annulées avant transmission aux agents ; les opérations déjà transmises peuvent se terminer. Les connexions et les droits sont contrôlés à nouveau à chaque requête, et avant l’envoi d’une commande à un agent. Le journal conserve les changements de comptes, de profils et de permissions.
 
-Ces permissions portent sur le portail et l’ensemble du parc. Les dépôts et caches destinés aux postes conservent leur contrôle d’accès par réseau.
+**Parc accessible.** Chaque profil personnalisé couvre **tout le parc** (par défaut) ou des **groupes et postes choisis** : les postes ajoutés plus tard à un groupe choisi y entrent d’eux-mêmes. Ses comptes ne voient et ne visent que ces postes, partout — Mon parc, fiche, recherche, vue d’ensemble, groupes (réduits à leurs postes), déploiements, scripts et leur historique, planifications, sessions distantes et jetons MCP, dont les outils suivent le parc du compte qui les a créés. Un poste hors parc répond « introuvable » ; un déploiement, une exécution de script ou une planification qui en vise un reste invisible. Une planification applique à chaque occurrence le parc de son auteur, et un profil limité ne peut pas viser « Tout le parc ». Gérer les groupes de machines et configurer le parc (clé d’inscription, adresses, seuils) sont réservés aux profils qui couvrent tout le parc, puisque les groupes définissent le parc des autres. Un gérant limité ne crée ou n’attribue que des profils dont les groupes et postes sont dans les siens. Changer le parc d’un profil reconnecte ses comptes ; une session distante dont le poste sort du parc se ferme. Les profils intégrés couvrent tout le parc ; le journal reste global.
+
+Ces permissions portent sur le portail. Les dépôts et caches destinés aux postes conservent leur contrôle d’accès par réseau.
 
 Depuis la console d’administration :
 

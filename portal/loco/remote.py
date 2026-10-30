@@ -12,7 +12,7 @@ import time
 
 from flask import abort, g, redirect, render_template, request, session, url_for
 
-from . import app, fleet, permissions
+from . import app, fleet, permissions, scope
 from .i18n import _
 from .auth import audit, can, login_required, require
 from .db import db
@@ -53,12 +53,18 @@ def _prune():
         (now, now - 60, now - MCP_DESKTOP_IDLE, now - MCP_IDLE, now - 30, now - 30)).fetchall()
     for row in expired:
         _close(row["id"], "Session expirée ou accès révoqué.")
-    for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,u.role FROM remote_sessions s JOIN users u ON u.id=s.user_id "
-                            "WHERE s.state IN ('waiting','active')").fetchall():
+    fleets = {}
+    for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,s.device_id,u.role FROM remote_sessions s "
+                            "JOIN users u ON u.id=s.user_id WHERE s.state IN ('waiting','active')").fetchall():
         grants = permissions.role_permissions(conn, row["role"])
         if ("fleet.view" not in grants or "remote." + row["kind"] not in grants
                 or row["terminal_fallback"] and "remote.terminal" not in grants):
             _close(row["id"], "Droit d'accès distant révoqué.")
+            continue
+        if row["role"] not in fleets:
+            fleets[row["role"]] = scope.resolve(conn, row["role"])
+        if fleets[row["role"]] is not None and row["device_id"] not in fleets[row["role"]]:
+            _close(row["id"], "Poste sorti du parc du profil.")
     conn.execute("DELETE FROM remote_sessions WHERE state='closed' AND browser_seen<?", (now - 120,))
 
 

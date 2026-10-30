@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ (profile.label|tr if profile.builtin else profile.label) if profile else _('Nouveau profil') }}{% endblock %}
 {% block content %}
-<div class="head"><div><p class="small"><a href="{{ url_for('roles') }}">{{ _("← Profils d’accès") }}</a></p><h1>{{ (profile.label|tr if profile.builtin else profile.label) if profile else _('Nouveau profil') }}</h1><p>{{ _("Définissez les pages visibles et les actions autorisées pour les utilisateurs de ce profil.") }}</p></div>
+<div class="head"><div><p class="small"><a href="{{ url_for('roles') }}">{{ _("← Profils d’accès") }}</a></p><h1>{{ (profile.label|tr if profile.builtin else profile.label) if profile else _('Nouveau profil') }}</h1><p>{{ _("Définissez les pages visibles, les actions autorisées et le parc sur lequel elles s’exercent pour les comptes de ce profil.") }}</p></div>
   {% if duplicable %}<a class="btn" href="{{ url_for('roles_editor', role_id='new', copy=profile.id) }}">{{ _("Dupliquer ce profil") }}</a>{% endif %}
 </div>
 {% if profile and not editable %}<p class="note">{% if profile.builtin %}{{ _("Profil intégré protégé. Dupliquez-le pour créer votre propre configuration.") }}{% elif profile.id == current_user.role %}{{ _("Vous ne pouvez pas modifier le profil qui protège votre propre accès.") }}{% else %}{{ _("Consultation des droits de ce profil.") }}{% endif %}</p>{% endif %}
@@ -11,6 +11,32 @@
     <div class="panel-b grid2">
       <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="label" value="{{ (profile.label|tr if profile.builtin else profile.label) if profile else initial_label }}" required minlength="2" maxlength="64" {{ 'disabled' if not editable }} placeholder="{{ _('Ex. Support informatique') }}"></label>
       <label class="f"><span>{{ _("Description") }}</span><input type="text" name="description" value="{{ (profile.description|tr if profile.builtin else profile.description) if profile else initial_description }}" maxlength="300" {{ 'disabled' if not editable }} placeholder="{{ _('À qui s’adresse ce profil ?') }}"></label>
+    </div>
+  </section>
+  <section class="panel fleet-scope" id="parc">
+    <div class="panel-h"><h2>{{ _("Parc accessible") }}</h2><div class="aside">{{ fleet.summary }}</div></div>
+    <div class="panel-b stack-sm">
+      <p class="muted">{{ _("Postes que les comptes de ce profil voient et sur lesquels ils agissent : Mon parc, fiches, déploiements, scripts, planifications, sessions distantes et jetons MCP.") }}</p>
+      <div class="seg" role="radiogroup" aria-label="{{ _('Parc accessible') }}">
+        <label><input type="radio" name="fleet_scope" value="all"{{ ' checked' if fleet.whole }}{{ ' disabled' if not editable or not fleet.can_whole }}><span>{{ _("Tout le parc") }}</span></label>
+        <label><input type="radio" name="fleet_scope" value="some"{{ ' checked' if not fleet.whole }}{{ ' disabled' if not editable }}><span>{{ _("Groupes et postes choisis") }}</span></label>
+      </div>
+      {% if editable and not fleet.can_whole %}<p class="hint">{{ _("Votre propre profil ne couvre pas tout le parc : vous ne pouvez choisir que parmi vos groupes et vos postes.") }}</p>{% endif %}
+      <div class="cols"{% if editable %} data-show-for="fleet_scope:some"{% elif fleet.whole %} hidden{% endif %}>
+        <div>
+          <h3 class="pick-title">{{ _("Groupes de machines") }}</h3>
+          {% if fleet.group_rows %}
+          <div class="selection-list short">{% for grp in fleet.group_rows %}<label class="selection-item"><input type="checkbox" name="scope_group" value="{{ grp.id }}"{{ ' checked' if grp.id in fleet.groups }}{{ ' disabled' if not editable }}><span><strong>{{ grp.name }}</strong><small>{{ ngettext("%(num)s poste aujourd’hui", "%(num)s postes aujourd’hui", grp.members) }}</small></span></label>{% endfor %}</div>
+          <p class="hint">{{ _("Les postes ajoutés plus tard à ces groupes entrent dans le parc du profil.") }}</p>
+          {% else %}<p class="hint">{{ _("Aucun groupe de machines : créez-en dans Mon parc › Groupes.") }}</p>{% endif %}
+        </div>
+        <div>
+          <div class="row-between"><h3 class="pick-title">{{ _("Postes choisis un à un") }}</h3>{% if fleet.device_rows|length > 8 %}<input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#scope-devices .selection-item" aria-label="{{ _('Filtrer les postes') }}">{% endif %}</div>
+          {% if fleet.device_rows %}
+          <div class="selection-list short" id="scope-devices">{% for d in fleet.device_rows %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="scope_device" value="{{ d.id }}"{{ ' checked' if d.id in fleet.devices }}{{ ' disabled' if not editable }}><span><strong>{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name or d.os_family }}</small></span></label>{% endfor %}</div>
+          {% else %}<p class="hint">{{ _("Aucun poste inscrit.") }}</p>{% endif %}
+        </div>
+      </div>
     </div>
   </section>
   <div class="permission-toolbar" data-permission-tools hidden>

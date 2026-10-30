@@ -12,7 +12,7 @@ import time
 
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
-from . import app, fleet, groups
+from . import app, fleet, groups, scope
 from .i18n import L_, N_, _, locale
 from .auth import audit, login_required, require
 from .db import db
@@ -197,16 +197,37 @@ def _params(s):
         return {}
 
 
+def _author_scope(conn, s):
+    """Parc de l'auteur, relu à chaque occurrence (None = tout le parc) : profil actuel du compte, sinon celui noté à
+    l'enregistrement ; une planification d'avant les parcs, d'un compte supprimé depuis, garde tout le parc."""
+    user = conn.execute("SELECT role FROM users WHERE username=?", (s["created_by"],)).fetchone()
+    role = user["role"] if user else _targets(s).get("role")
+    return None if role is None else scope.resolve(conn, role)
+
+
 def resolve(conn, s):
-    """Postes actifs visés par la planification, résolus maintenant (membres actuels des groupes)."""
+    """Postes actifs visés par la planification, résolus maintenant (membres actuels des groupes), dans le parc de
+    son auteur."""
     t = _targets(s)
     if t.get("all"):
-        return conn.execute("SELECT * FROM devices WHERE state='active' ORDER BY id LIMIT ?", (MAX_TARGETS,)).fetchall()
-    ids = {int(i) for i in t.get("devices", [])}
-    for gid in t.get("groups", []):
-        ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (int(gid),))}
-    rows = (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids))
-    return [r for r in rows if r is not None and r["state"] == "active"][:MAX_TARGETS]
+        rows = conn.execute("SELECT * FROM devices WHERE state='active' ORDER BY id").fetchall()
+    else:
+        ids = {int(i) for i in t.get("devices", [])}
+        for gid in t.get("groups", []):
+            ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (int(gid),))}
+        rows = [r for r in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids))
+                if r is not None and r["state"] == "active"]
+    allowed = _author_scope(conn, s)
+    return [r for r in rows if allowed is None or r["id"] in allowed][:MAX_TARGETS]
+
+
+def visible(conn, s):
+    """Planification que le compte courant voit : la sienne, ou dont les postes réellement visés (dans le parc de son
+    auteur) sont tous dans son propre parc ; tout le parc voit tout."""
+    if scope.whole() or s["created_by"] == g.user["username"]:
+        return True
+    targets = resolve(conn, s)
+    return bool(targets) and all(scope.allows(r["id"]) for r in targets)
 
 
 def targets_text(conn, targets):
@@ -263,6 +284,10 @@ def view(conn, s):
 # --------------------------------------------------------------------------- droits, création, exécution
 
 def _require(action, params, targets):
+    if targets.get("all") and not scope.whole():
+        abort(403)                                  # « Tout le parc » : réservé aux profils qui le couvrent
+    if not all(scope.allows(int(i)) for i in targets.get("devices", [])):
+        abort(404)
     if action == "update":
         require("fleet.update")
         if params.get("reboot"):
@@ -280,6 +305,7 @@ def _check_targets(targets):
 
 def create(conn, action, params, targets, form):
     """Nouvelle planification depuis un formulaire (champs « Quand ») ; renvoie son identifiant."""
+    targets = dict(targets, role=targets.get("role", g.user["role"]))
     _require(action, params, targets)
     _check_targets(targets)
     fields = parse(form)
@@ -336,7 +362,7 @@ def materialize(conn):
 
 def _row(sched_id):
     row = db().execute("SELECT * FROM schedules WHERE id=?", (sched_id,)).fetchone()
-    if row is None:
+    if row is None or not visible(db(), row):
         abort(404)
     return row
 
@@ -353,7 +379,7 @@ def schedules():
     materialize(conn)
     conn.commit()
     rows = conn.execute("SELECT * FROM schedules ORDER BY enabled DESC, next_run='' , next_run, id DESC").fetchall()
-    return render_template("schedules.html", items=[view(conn, s) for s in rows], tz=timezone())
+    return render_template("schedules.html", items=[view(conn, s) for s in rows if visible(conn, s)], tz=timezone())
 
 
 @app.route("/fleet/schedules/new", defaults={"sched_id": 0})
@@ -375,19 +401,20 @@ def schedule_editor(sched_id):
                 "monthday": 1}
     targets = {"all": bool(targets.get("all")), "devices": [int(i) for i in targets.get("devices", [])],
                "groups": [int(i) for i in targets.get("groups", [])]}
-    devices = conn.execute("SELECT * FROM devices WHERE state='active' ORDER BY hostname COLLATE NOCASE").fetchall()
+    devices = conn.execute("SELECT * FROM devices WHERE state='active'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE").fetchall()
     return render_template("schedule_editor.html", s=s, action=action, params=params, targets=targets, plan=plan,
-                           devices=devices, device_groups=groups.listing("device"), tz=timezone(),
+                           devices=devices, device_groups=groups.listing("device"), tz=timezone(), whole_fleet=scope.whole(),
                            scripts=conn.execute("SELECT id, name, platform, version FROM scripts "
                                                 "ORDER BY name COLLATE NOCASE").fetchall(),
                            actions=ACTIONS, recurrences=RECURRENCES)
 
 
 def _form_targets(form):
+    """Cibles du formulaire, avec le profil de l'auteur (son parc s'appliquera même s'il est supprimé ensuite)."""
     if form.get("target") == "all":
-        return {"all": True}
+        return {"all": True, "role": g.user["role"]}
     return {"devices": groups.identifiers(form.getlist("device"), MAX_TARGETS),
-            "groups": groups.identifiers(form.getlist("device_group"))}
+            "groups": groups.identifiers(form.getlist("device_group")), "role": g.user["role"]}
 
 
 def _form_params(conn, action, form):

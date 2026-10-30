@@ -22,7 +22,7 @@ import time
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
 
-from . import app, config, features, fleet, groups, journal, permissions, scripts
+from . import app, config, features, fleet, groups, journal, permissions, scope, scripts
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
@@ -50,7 +50,8 @@ INSTRUCTIONS = (
     "of assuming the result. Remote tools (terminal_run, files, desktop_*) act live through the agent's remote "
     "channel: the first call on a device can take about ten seconds while the session opens. Take a desktop_screenshot "
     "before clicking. Wherever a device is expected, pass its numeric id or its exact hostname. Only the tools "
-    "granted to this access are available, within the rights of the loco account that created it.")
+    "granted to this access are available, within the rights and the fleet (devices and device groups) of the loco "
+    "account that created it: devices outside that fleet do not exist for this access.")
 
 
 class ToolError(Exception):
@@ -168,9 +169,9 @@ def _device(value):
     conn = db()
     row = None
     if str(value).isdigit():
-        row = conn.execute("SELECT * FROM devices WHERE id=? AND state!='removed'", (int(value),)).fetchone()
-    if row is None:
-        rows = conn.execute("SELECT * FROM devices WHERE state!='removed' AND hostname=? COLLATE NOCASE",
+        row = conn.execute("SELECT * FROM devices WHERE id=? AND state!='removed'" + scope.sql(), (int(value),)).fetchone()
+    if row is None:                                     # hors du parc du compte créateur : comme absent
+        rows = conn.execute("SELECT * FROM devices WHERE state!='removed' AND hostname=? COLLATE NOCASE" + scope.sql(),
                             (str(value),)).fetchall()
         if len(rows) > 1:
             raise ToolError(f"Several devices are named {value!r} (ids {', '.join(str(r['id']) for r in rows)}): "
@@ -199,6 +200,8 @@ def _group(value):
         row = conn.execute("SELECT * FROM device_groups WHERE id=?", (int(value),)).fetchone()
     if row is None:
         row = conn.execute("SELECT * FROM device_groups WHERE name=? COLLATE NOCASE", (str(value),)).fetchone()
+    if row is not None and not scope.whole() and row["id"] not in {r["id"] for r in groups.listing("device")}:
+        row = None                                      # groupe sans aucun poste du parc du compte créateur
     if row is None:
         raise ToolError(f"No device group {value!r}: use list_device_groups.")
     return row
@@ -213,7 +216,7 @@ def _targets(args):
     for value in args.get("groups", []):
         group = _group(value)
         for dev in db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
-                                "WHERE m.group_id=? AND d.state!='removed'", (group["id"],)):
+                                "WHERE m.group_id=? AND d.state!='removed'" + scope.sql("d.id"), (group["id"],)):
             found[dev["id"]] = dev
     if not found:
         raise ToolError("Give at least one device or one device group.")
@@ -338,7 +341,7 @@ def _get_device(args):
       ("name",))
 def _find_software(args):
     needle, out = args["name"].casefold(), []
-    for dev in db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE"):
+    for dev in db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         windows = dev["os_family"] == "windows"
         if "os" in args and windows != (args["os"] == "windows"):
             continue
@@ -357,8 +360,8 @@ def _list_groups(args):
     out = []
     for row in groups.listing("device"):
         members = db().execute("SELECT d.id, d.hostname FROM device_group_members m JOIN devices d ON d.id=m.device_id "
-                               "WHERE m.group_id=? AND d.state!='removed' ORDER BY d.hostname COLLATE NOCASE LIMIT 500",
-                               (row["id"],)).fetchall()
+                               "WHERE m.group_id=? AND d.state!='removed'" + scope.sql("d.id")
+                               + " ORDER BY d.hostname COLLATE NOCASE LIMIT 500", (row["id"],)).fetchall()
         out.append({"id": row["id"], "name": row["name"], "devices": [{"id": m["id"], "hostname": m["hostname"]} for m in members]})
     return {"groups": out}
 
@@ -539,7 +542,8 @@ def _run_view(run, targets, output):
       "List the most recent script runs with their per-device summary (success, failed, in progress).",
       {"limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Number of runs (default 20)."}})
 def _list_runs(args):
-    runs = db().execute("SELECT * FROM script_runs ORDER BY id DESC LIMIT ?", (args.get("limit", 20),)).fetchall()
+    runs = [r for r in db().execute("SELECT * FROM script_runs ORDER BY id DESC LIMIT 500").fetchall()
+            if scripts._run_in_scope(db(), r["id"])][:args.get("limit", 20)]
     return {"runs": [_run_view(r, scripts._targets(r["id"]), 0) for r in runs]}
 
 
@@ -549,7 +553,7 @@ def _list_runs(args):
       {"run_id": {"type": "integer", "minimum": 1}}, ("run_id",))
 def _get_run(args):
     run = db().execute("SELECT * FROM script_runs WHERE id=?", (args["run_id"],)).fetchone()
-    if run is None:
+    if run is None or not scripts._run_in_scope(db(), run["id"]):
         raise ToolError(f"No script run {args['run_id']}.")
     return _run_view(run, scripts._targets(run["id"]), 4000)
 

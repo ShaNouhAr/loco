@@ -4,7 +4,7 @@ import json
 
 from flask import abort, flash, g, render_template, request
 
-from . import app, fleet, groups
+from . import app, fleet, groups, scope
 from .i18n import L_, _
 from .auth import audit, lock_access, login_required
 from .db import db
@@ -41,6 +41,12 @@ def _targets(run_id):
     return [{**dict(r), "state": r["command_state"] or r["last_state"] or "cancelled"} for r in rows]
 
 
+def _run_in_scope(conn, run_id):
+    """Exécution dont tous les postes sont dans le parc du compte courant (sinon il ne la voit pas)."""
+    return scope.whole() or all(scope.allows(r[0]) for r in conn.execute(
+        "SELECT device_id FROM script_run_targets WHERE run_id=? AND device_id IS NOT NULL", (run_id,)))
+
+
 def _summary(targets):
     counts = {"success": 0, "active": 0, "failed": 0, "other": 0}
     for t in targets:
@@ -65,10 +71,12 @@ def scripts():
                         "(SELECT COUNT(*) FROM script_runs r WHERE r.script_id=s.id) AS runs FROM scripts s "
                         "ORDER BY s.name COLLATE NOCASE").fetchall()
     history = []
-    for r in db().execute("SELECT * FROM script_runs ORDER BY id DESC LIMIT ?", (HISTORY_LIMIT,)).fetchall():
+    visible = "" if scope.whole() else (" WHERE NOT EXISTS (SELECT 1 FROM script_run_targets t WHERE t.run_id=script_runs.id "
+                                        "AND t.device_id IS NOT NULL AND NOT (1" + scope.sql("t.device_id") + "))")
+    for r in db().execute("SELECT * FROM script_runs" + visible + " ORDER BY id DESC LIMIT ?", (HISTORY_LIMIT,)).fetchall():
         summary = _summary(_targets(r["id"]))
         history.append({"run": r, "summary": summary, "state": _run_state(summary)})
-    total_runs = db().execute("SELECT COUNT(*) FROM script_runs").fetchone()[0]
+    total_runs = db().execute("SELECT COUNT(*) FROM script_runs" + visible).fetchone()[0]
     counts = {"": len(history), "en-cours": sum(h["state"] == "active" for h in history),
               "echecs": sum(h["summary"]["failed"] > 0 for h in history), "reussies": sum(h["state"] == "success" for h in history)}
     wanted = request.args.get("historique", "")
@@ -78,7 +86,7 @@ def scripts():
             "reussies": lambda h: h["state"] == "success"}[wanted]
     shown = [h for h in history if keep(h)]
     waiting = db().execute("SELECT COUNT(*) FROM device_commands WHERE state='queued' AND id IN "
-                           "(SELECT command_id FROM script_run_targets)").fetchone()[0]
+                           "(SELECT command_id FROM script_run_targets)" + scope.sql("device_id")).fetchone()[0]
     return render_template("scripts.html", scripts=rows, platforms=PLATFORMS, history=shown, counts=counts,
                            filters=HISTORY_FILTERS, wanted=wanted, total_runs=total_runs, waiting=waiting,
                            running=sum(h["summary"]["active"] for h in history), limit=HISTORY_LIMIT)
@@ -90,7 +98,8 @@ def script_runs_cancel_all():
     """Vider la file : aucun poste ne recevra plus les scripts encore en attente (déjà transmis : ils se terminent)."""
     conn = lock_access("scripts.run")
     cur = conn.execute("UPDATE device_commands SET state='cancelled', finished_at=?, output='Annulé avant transmission à l’agent.' "
-                       "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets)", (fleet._now(),))
+                       "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets)" + scope.sql("device_id"),
+                       (fleet._now(),))
     audit("scripts.execution", f"file vidée : {cur.rowcount} poste(s) en attente annulé(s)", commit=False)
     conn.commit()
     flash((_('File vidée : %(rowcount)s envoi%(v)s en attente annulé%(v)s.', rowcount=cur.rowcount, v='s' if cur.rowcount != 1 else '') if cur.rowcount else _('Aucun envoi en attente.')), "ok")
@@ -100,7 +109,7 @@ def script_runs_cancel_all():
 def _finished_runs(conn, run_ids=None):
     """Exécutions sans poste en attente ni en cours (les autres restent dans l'historique)."""
     rows = conn.execute("SELECT id FROM script_runs").fetchall() if run_ids is None else [{"id": i} for i in run_ids]
-    return [r["id"] for r in rows if not _summary(_targets(r["id"]))["active"]]
+    return [r["id"] for r in rows if _run_in_scope(conn, r["id"]) and not _summary(_targets(r["id"]))["active"]]
 
 
 def _delete_runs(conn, run_ids):
@@ -116,7 +125,7 @@ def script_history_clear():
     conn = lock_access("scripts.edit")
     done = _finished_runs(conn)
     _delete_runs(conn, done)
-    kept = conn.execute("SELECT COUNT(*) FROM script_runs").fetchone()[0]
+    kept = sum(1 for r in conn.execute("SELECT id FROM script_runs").fetchall() if _run_in_scope(conn, r["id"]))
     audit("scripts.historique", f"historique vidé : {len(done)} exécution(s) supprimée(s)", commit=False)
     conn.commit()
     flash(_('Historique vidé : %(len)s exécution%(v)s supprimée%(v)s', len=len(done), v='s' if len(done) != 1 else '') + (_(' ; %(kept)s encore en cours conservée%(v)s.', kept=kept, v='s' if kept != 1 else '') if kept else "."), "ok")
@@ -128,7 +137,7 @@ def script_history_clear():
 def script_run_delete(run_id):
     conn = lock_access("scripts.edit")
     run = conn.execute("SELECT * FROM script_runs WHERE id=?", (run_id,)).fetchone()
-    if run is None:
+    if run is None or not _run_in_scope(conn, run_id):
         abort(404)
     if not _finished_runs(conn, [run_id]):
         flash(_("Exécution en cours : annulez d'abord les postes en attente."), "error")
@@ -199,7 +208,7 @@ def script_delete(script_id):
 @login_required
 def script_compose(script_id):
     script = _script(script_id)
-    devices = db().execute("SELECT * FROM devices WHERE state!='removed' ORDER BY hostname COLLATE NOCASE").fetchall()
+    devices = db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE").fetchall()
     return render_template("script_compose.html", script=script, platforms=PLATFORMS,
                            devices=[d for d in devices if _compatible(d, script["platform"])],
                            incompatible=sum(1 for d in devices if not _compatible(d, script["platform"])),
@@ -237,7 +246,10 @@ def script_run_start(script_id):
     ids = set(device_ids)
     for gid in group_ids:
         ids |= {r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (gid,))}
-    devices = [d for d in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids)) if d]
+    if not all(scope.allows(i) for i in device_ids):
+        abort(404)
+    devices = [d for d in (conn.execute("SELECT * FROM devices WHERE id=?", (i,)).fetchone() for i in sorted(ids))
+               if d and scope.allows(d["id"])]                # membres des groupes : seulement ceux du parc
     targets = [d for d in devices if _compatible(d, script["platform"])]
     if not targets or len(targets) > MAX_TARGETS:
         abort(400, _('Choisissez au moins un poste compatible avec ce script.'))
@@ -263,7 +275,7 @@ def script_run_start(script_id):
 @login_required
 def script_run(run_id):
     run = db().execute("SELECT * FROM script_runs WHERE id=?", (run_id,)).fetchone()
-    if run is None:
+    if run is None or not _run_in_scope(db(), run_id):
         abort(404)
     targets = _targets(run_id)
     signature = hashlib.sha256(json.dumps([(t["id"], t["state"], t["output"]) for t in targets]).encode()).hexdigest()[:16]
@@ -278,6 +290,8 @@ def script_run(run_id):
 @login_required
 def script_run_cancel(run_id):
     conn = lock_access("scripts.run")
+    if not _run_in_scope(conn, run_id):
+        abort(404)
     conn.execute("UPDATE device_commands SET state='cancelled', finished_at=?, output='Annulé avant transmission à l’agent.' "
                  "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets WHERE run_id=?)", (fleet._now(), run_id))
     audit("scripts.execution", f"annulation des postes en attente de l'exécution {run_id}", commit=False)
