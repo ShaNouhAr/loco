@@ -160,7 +160,9 @@ class TestInteractive(RemoteTest):
         result = client.data("terminal_interact", device=host, input="6*7{enter}")
         self.assertIn("42", result["screen"])
         self.assertEqual(result["size"], [120, 40])
-        client.data("terminal_interact", device=host, input="{ctrl+d}cd /tmp\n")
+        # Quitter d'abord : l'interpréteur de Python 3.13 lit d'avance la saisie en attente et l'emporte en sortant.
+        client.data("terminal_interact", device=host, input="{ctrl+d}")
+        client.data("terminal_interact", device=host, input="cd /tmp\n")
         self.assertIn("/tmp", client.data("terminal_interact", device=host, input="pwd\n")["screen"].split("\n")[-2])
         self.assertIn("/tmp", client.data("terminal_interact", device=host)["screen"])      # relire sans rien taper
         fresh = client.data("terminal_interact", device=host, reset=True, input="pwd\n")["screen"]
