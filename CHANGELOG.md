@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.114.0 — 2026-10-30
+
+- **Assistants IA : terminal, fichiers et bureau des postes, en direct.** Onze nouvelles autorisations dans **Assistants IA**, groupe « Accès distant », chacune à cocher séparément :
+  - **Commandes dans le terminal** : l'assistant lance une commande dans le bash root (Linux) ou le PowerShell SYSTEM (Windows) du poste et lit sa sortie et son code de sortie en quelques secondes, sans attendre le prochain contact de l'agent ; au-delà du délai choisi, la commande est interrompue.
+  - **Fichiers** : parcourir, lire (texte ou base64), écrire (remplacement atomique), organiser (dossier, copie, déplacement, renommage, droits) et supprimer, avec une autorisation distincte pour la lecture, l'écriture, l'organisation et la suppression.
+  - **Bureau** : capture d'écran renvoyée en image à l'assistant, qui voit l'écran (bureau Windows, GNOME en Wayland, écran de verrouillage, console texte d'un poste sans affichage, zoom sur une zone), puis clic, saisie, touches et raccourcis (Ctrl+Alt+Suppr compris) et molette, chaque action renvoyant une nouvelle capture.
+- Mêmes sessions que l'interface (relais de l'agent, droits « Ouvrir un terminal distant », « Gérer les fichiers du poste », « Ouvrir le bureau noVNC » du compte créateur) : une session par accès et par poste, réutilisée d'un appel à l'autre et fermée après une minute sans appel, ou dès que l'accès est révoqué ou modifié. Commandes, écritures, suppressions et actions sur le bureau entrent au journal (sans le texte saisi).
+- Validé sur le labo avec Claude Code : capture et description du bureau GNOME Wayland de Zorin OS, PowerShell sur Windows Server 2025 et Windows 11, fichiers sur Windows et Linux, Ctrl+Alt+Suppr sur l'écran de verrouillage Windows.
+
 ## 2.113.0 — 2026-10-30
 
 - **Assistants IA (MCP) : connectez Claude Code, Cursor, VS Code… à loco.** Nouvelle page **Administration → Assistants IA** : créez un **accès** dont les autorisations se cochent **une à une** — lister et consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour un ou plusieurs postes, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, faire exécuter des commandes écrites par l'assistant, état du serveur, journal. L'assistant pilote alors loco en langage naturel (« quels postes ont des mises à jour de sécurité ? », « lance uptime sur ce serveur »).

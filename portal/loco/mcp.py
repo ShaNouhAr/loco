@@ -46,7 +46,9 @@ INSTRUCTIONS = (
     "loco serves local package caches and repositories, and manages a fleet of Windows and Linux computers through "
     "its agent. Device actions (inventory, updates, reboots, software installs, scripts) are queued: the device agent "
     "runs them at its next contact, usually within 2 minutes. Follow them with get_device or get_script_run instead "
-    "of assuming the result. Wherever a device is expected, pass its numeric id or its exact hostname. Only the tools "
+    "of assuming the result. Remote tools (terminal_run, files, desktop_*) act live through the agent's remote "
+    "channel: the first call on a device can take about ten seconds while the session opens. Take a desktop_screenshot "
+    "before clicking. Wherever a device is expected, pass its numeric id or its exact hostname. Only the tools "
     "granted to this access are available, within the rights of the loco account that created it.")
 
 
@@ -62,8 +64,8 @@ class ProtocolError(Exception):
 
 # --------------------------------------------------------------------------- catalogue des outils
 
-GROUPS = (("fleet", L_("Parc")), ("software", L_("Logiciels Windows")), ("scripts", L_("Scripts")),
-          ("server", L_("Serveur et journal")))
+GROUPS = (("fleet", L_("Parc")), ("remote", L_("Accès distant")), ("software", L_("Logiciels Windows")),
+          ("scripts", L_("Scripts")), ("server", L_("Serveur et journal")))
 TOOLS = {}
 
 
@@ -97,7 +99,7 @@ DEVICES = {"type": "array", "maxItems": 500, "items": {"type": "string", "maxLen
 DEVICE_GROUPS = {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 255},
                  "description": "Device group ids or exact names: all their current members are targeted."}
 STATUS = {"green": "up_to_date", "orange": "updates_pending", "red": "needs_attention", "grey": "unknown"}
-VERBATIM = {"content"}                                     # contenu d'un script : transmis tel quel, sans rognage
+VERBATIM = {"content", "text"}                             # contenu d'un script, texte à taper : transmis tels quels
 
 
 def _coerce(key, spec, value):
@@ -769,9 +771,13 @@ def _call(params, structured):
         db().rollback()
         current_app.logger.exception("mcp: échec de l'outil %s", name)
         return failure("Internal error in loco while running this tool (see the server log).")
-    result = {"content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False, indent=1, default=str)}], "isError": False}
+    content = [{"type": "text", "text": json.dumps(data, ensure_ascii=False, indent=1, default=str)}]
+    image = getattr(data, "image", None)                    # capture d'écran : bloc image en plus du texte
+    if image:
+        content.append({"type": "image", "data": base64.b64encode(image).decode(), "mimeType": data.mime})
+    result = {"content": content, "isError": False}
     if structured:
-        result["structuredContent"] = data
+        result["structuredContent"] = dict(data)
     return result
 
 
@@ -979,6 +985,8 @@ def mcp_token_update(token_id):
         flash(str(e), "error")
         return back("mcp_settings")
     conn.execute("UPDATE mcp_tokens SET name=?, tools=? WHERE id=?", (name, json.dumps(chosen), token_id))
+    from .mcp_remote import close_sessions
+    close_sessions(token_id, "Autorisations de l'accès MCP modifiées.")
     audit("mcp.acces.modification", f"{name} : {len(chosen)} autorisation(s)", commit=False)
     conn.commit()
     flash(_("Autorisations de « %(name)s » enregistrées : elles s’appliquent dès le prochain appel de l’assistant.", name=name), "ok")
@@ -993,6 +1001,8 @@ def mcp_token_revoke(token_id):
     if row is None:
         abort(404)
     conn = db()
+    from .mcp_remote import close_sessions
+    close_sessions(token_id, "Accès MCP révoqué.")
     conn.execute("DELETE FROM mcp_tokens WHERE id=?", (token_id,))
     audit("mcp.acces.revocation", f"{row['name']} ({row['username']})", commit=False)
     conn.commit()

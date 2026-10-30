@@ -8,7 +8,7 @@ from .i18n import L_, _
 # avant les comptes.
 CATEGORIES = {
     "connexions": (L_("Connexions"), ("connexion", "deconnexion", "sso.connexion", "sso.echec")),
-    "distant": (L_("Accès distant"), ("parc.session.",)),
+    "distant": (L_("Accès distant"), ("parc.session.", "parc.fichiers.", "parc.bureau.")),
     "parc": (L_("Parc"), ("parc.", "groupes.machines", "groupes.appartenance", "deploiement.", "planifications.")),
     "logiciels": (L_("Logiciels Windows"), ("windows.", "groupes.")),
     "linux": (L_("Dépôts Linux"), ("linux.", "rpm.", "flatpak.")),
@@ -76,6 +76,9 @@ LABELS = {
     "alertes.configuration": L_("Alertes configurées"),
     "mcp.acces.ajout": L_("Accès MCP créé"), "mcp.acces.modification": L_("Autorisations d'un accès MCP modifiées"),
     "mcp.acces.revocation": L_("Accès MCP révoqué"),
+    "parc.session.commande": L_("Commande lancée par un assistant IA"),
+    "parc.fichiers.ecriture": L_("Fichier écrit par un assistant IA"), "parc.fichiers.modification": L_("Fichiers organisés par un assistant IA"),
+    "parc.fichiers.suppression": L_("Fichier supprimé par un assistant IA"), "parc.bureau.action": L_("Action d'un assistant IA sur le bureau"),
 }
 FAILURES = ("echec", "bloquee", "refus")
 PERIODS = {"jour": (L_("Aujourd'hui"), 0), "7j": (L_("7 jours"), 6), "30j": (L_("30 jours"), 29), "tout": (L_("Tout"), None)}
