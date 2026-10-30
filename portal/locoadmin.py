@@ -1631,10 +1631,12 @@ def shell_broker(path=None):
         pass
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(path)
+    # À l'écoute dès que le fichier existe (sinon un client arrivé entre les deux est refusé) ; jusqu'aux droits
+    # ci-dessous, le socket appartient à root et lui seul peut s'y connecter.
+    server.listen(8)
     if path == SHELL_SOCK:
         shutil.chown(path, "root", "loco")
     os.chmod(path, 0o660)
-    server.listen(8)
     checked, active = 0, False
     while True:
         if time.time() - checked > 0.5:
