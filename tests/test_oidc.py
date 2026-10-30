@@ -385,6 +385,19 @@ class TestProviderTls(unittest.TestCase):
         with self.assertRaisesRegex(oidc.OIDCError, "pas celui collé"):         # autre certificat épinglé
             oidc._json({"issuer": ISSUER, "ca_pem": other}, url)
 
+    def test_old_cryptography_without_the_plural_pem_loader(self):
+        """Debian 12 (cryptography 38) et Ubuntu 22.04 (3.4) n'ont pas x509.load_pem_x509_certificates (39+)."""
+        from cryptography import x509
+        cert, key = self_signed()
+        url = self.serve(cert, key)
+        with mock.patch.dict(vars(x509)):
+            vars(x509).pop("load_pem_x509_certificates", None)
+            self.assertEqual(oidc._json({"issuer": ISSUER, "ca_pem": cert}, url), {"ok": True})
+            ca, server_cert, server_key = certificate()
+            self.assertEqual(oidc._json({"issuer": ISSUER, "ca_pem": ca}, self.serve(server_cert, server_key)), {"ok": True})
+            with self.assertRaisesRegex(oidc.OIDCError, "illisible"):
+                oidc._json({"issuer": ISSUER, "ca_pem": "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----"}, url)
+
     def test_provider_errors_are_read_safely(self):
         cert, key = self_signed()
         base, cfg = self.serve(cert, key).rsplit("/", 1)[0], {"issuer": ISSUER, "ca_pem": cert}

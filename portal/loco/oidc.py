@@ -62,9 +62,9 @@ def _tls(cfg):
         return ssl.create_default_context(), None
     from cryptography import x509
     from cryptography.hazmat.primitives import serialization
-    try:
-        certs = x509.load_pem_x509_certificates(pem.encode())
-    except ValueError:
+    from .system import _load_certs          # bloc par bloc : x509.load_pem_x509_certificates exige cryptography 39+
+    certs = _load_certs(pem.encode())        # (Debian 12 : 38, Ubuntu 22.04 : 3.4)
+    if not certs:
         raise OIDCError(_("Autorité (PEM) illisible."))
     if len(certs) == 1 and certs[0].issuer == certs[0].subject:
         try:
