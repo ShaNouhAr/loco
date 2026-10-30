@@ -24,7 +24,7 @@ FEATURES = {
     "scripts": (L_("Scripts"), L_("Bibliothèque de scripts PowerShell et shell exécutés sur les postes par l'agent."), ("fleet",), ""),
     "directories": (L_("Annuaires LDAP et RADIUS"), L_("Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles."), (), ""),
     "alerts": (L_("Alertes et notifications"), L_("Notifications par e-mail et webhook sur l'état du serveur et du parc."), (), ""),
-    "mcp": (L_("Assistants IA (MCP)"), L_("Connexion d'assistants IA (Claude Code, Cursor, VS Code…) à loco par le protocole MCP, avec des autorisations choisies une à une."), (), ""),
+    "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
 }
 
 # Module de la page -> fonctionnalités nécessaires ; quelques pages partagées sont précisées par leur nom.

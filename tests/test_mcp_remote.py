@@ -1,4 +1,4 @@
-"""Assistants IA (MCP) : terminal, fichiers et bureau par le relais des sessions distantes, face au vrai code de
+"""Serveur MCP : terminal, fichiers et bureau par le relais des sessions distantes, face au vrai code de
 l'agent (PTY bash, service de fichiers, serveur RFB) qui tourne dans un fil comme l'agent du poste."""
 
 import base64

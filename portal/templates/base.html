@@ -54,7 +54,7 @@
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
         ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),
         ('access', can('sso.manage'), 'sso_settings', ep.startswith(('sso', 'directory')), 'user', _('Annuaires et SSO'), _('Connexion avec les comptes de l’entreprise')),
-        ('access', can('mcp.manage'), 'mcp_settings', ep.startswith('mcp'), 'plug', _('Assistants IA'), _('Connecter un assistant IA par MCP')),
+        ('access', can('mcp.manage'), 'mcp_settings', ep.startswith('mcp'), 'plug', _('Serveur MCP'), _('Connecter un LLM à loco par MCP')),
         ('server', can('system.view'), 'system', ep == 'system', 'server', _('Système'), _('État, sauvegardes, réseau, heure')),
         ('server', server_updates and can('system.view'), 'appliance_updates', ep.startswith('appliance_updates') or ep == 'appliance_job', 'update', _('Mises à jour'), _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité')),
         ('server', appliance and can('system.configure'), 'appliance_settings', ep.startswith('appliance_settings'), 'settings', _('Configuration'), _('Accès, fonctions et stockage')),

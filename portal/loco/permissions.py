@@ -90,9 +90,9 @@ GROUPS = [
         ("audit.export", L_("Exporter le journal"), L_("Télécharger le journal en JSON, sur une période ou en entier."), ("audit.view",), True),
         ("audit.configure", L_("Configurer la conservation du journal"), L_("Durée de conservation des événements."), ("audit.view",), True),
     ]),
-    (L_("Assistants IA (MCP)"), [
-        ("mcp.manage", L_("Connecter des assistants IA"),
-         L_("Créer des accès MCP limités à ses propres droits, et révoquer ceux des comptes que l'on peut gérer."), (), True),
+    (L_("Serveur MCP"), [
+        ("mcp.manage", L_("Créer des jetons MCP"),
+         L_("Créer des jetons MCP limités à ses propres droits, et révoquer ceux des comptes que l'on peut gérer."), (), True),
     ]),
 ]
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],

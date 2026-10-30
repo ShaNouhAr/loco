@@ -1,4 +1,4 @@
-"""Assistants IA (MCP) : terminal, fichiers et bureau des postes, par les sessions distantes de l'agent.
+"""Serveur MCP : terminal, fichiers et bureau des postes, par les sessions distantes de l'agent.
 
 Le portail tient ici le rôle du navigateur sur le relais de remote.py (mêmes tables, mêmes limites, même agent) :
 une session par accès MCP, poste et type, réutilisée d'un appel à l'autre et fermée par le relais après quelques
@@ -88,7 +88,7 @@ class Channel:
     def __exit__(self, kind, error, trace):
         try:
             if isinstance(error, ChannelError) or (error is not None and not isinstance(error, ToolError)):
-                self.close(str(error)[:200] or "Erreur de l'assistant IA")
+                self.close(str(error)[:200] or "Erreur de la session MCP")
             elif self.sid:
                 self._finish()
         finally:
@@ -110,7 +110,7 @@ class Channel:
             row = conn.execute("SELECT * FROM remote_sessions WHERE owner=? AND device_id=? AND kind=? AND state IN "
                                "('waiting','active') ORDER BY created DESC LIMIT 1", (owner(self.role), dev["id"], self.kind)).fetchone()
             if row is not None and self.persistent and row["id"] not in _STATE:
-                remote._close(row["id"], "Session de l'assistant IA rouverte.", g.user["username"])
+                remote._close(row["id"], "Session MCP rouverte.", g.user["username"])
                 self.reopened, row = True, None
             if row is None:
                 remote.make_room(dev, self.kind, owner())
@@ -436,7 +436,7 @@ def close_role(token_id, dev_id, kind, role, reason):
 
 
 @tool("terminal_interact", "remote", "Use the interactive terminal", L_("Terminal interactif"),
-      L_("Programmes interactifs (vim, top, invites oui/non, PowerShell) : l'assistant tape, appuie sur des touches et lit l'écran du terminal."),
+      L_("Programmes interactifs (vim, top, invites oui/non, PowerShell) : le LLM tape, appuie sur des touches et lit l'écran du terminal."),
       ("fleet.view", "remote.terminal"),
       "Drive the device's interactive terminal like a person (root bash on Linux, PowerShell as SYSTEM on Windows): "
       "type input, with keys in braces such as {enter}, {tab}, {escape}, {up}, {f2}, {ctrl+c}, {ctrl+d}, {alt+x} "
@@ -453,7 +453,7 @@ def _terminal_interact(args):
     _active(dev)
     keys = tty_input(args["input"]) if args.get("input") else ""
     if args.get("reset"):
-        close_role(g.mcp["token"]["id"], dev["id"], "terminal", "tty", "Terminal interactif réinitialisé par l'assistant IA.")
+        close_role(g.mcp["token"]["id"], dev["id"], "terminal", "tty", "Terminal interactif réinitialisé par le client MCP.")
     with Channel(dev, "terminal", "tty") as chan:
         state = chan.state
         if "screen" not in state:

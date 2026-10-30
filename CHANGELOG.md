@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.116.0 — 2026-10-30
+
+- **Serveur MCP : page refaite et vocabulaire précis.** « Assistants IA » devient **Serveur MCP** (onglet, fonctionnalité, droit **Créer des jetons MCP**, journal), et un « accès » devient un **jeton** : la page dit ce que c'est — un LLM pilote loco par MCP depuis son client (Claude Code, Cursor, VS Code…), avec un jeton qui n'ouvre que les outils activés.
+  - **Jetons** en premier : nombre d'outils et d'actions, répartition par domaine (« Parc 5 · Accès distant 3 »), dernier appel avec le client et l'adresse, expiration avec l'année.
+  - **Connecter un client MCP** : adresse, en-tête d'authentification et commande Claude Code, avec un emplacement `<jeton>` — ou le vrai jeton juste après sa création ; le fichier JSON (Cursor, VS Code) est replié.
+  - **Fenêtre du jeton** sur deux colonnes, moitié moins haute : chaque outil montre son nom MCP (`list_devices`, `terminal_run`…), le repère **action** ou **sensible**, et la raison s'il est grisé.
+
 ## 2.115.0 — 2026-10-30
 
 - **Assistants IA : accès distant plus rapide et plus complet.**

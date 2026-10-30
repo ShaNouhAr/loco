@@ -387,7 +387,7 @@ class TestTools(McpTest):
         self.assertEqual((started["targets"], started["skipped"]), (["srv-web"], ["pc-compta"]))
         command = client.data("run_command", platform="linux", content="uptime\r\n", title="Charge", devices=["srv-web"])
         run = client.data("get_script_run", run_id=command["run_id"])
-        self.assertEqual(run["name"], "Assistant IA : Charge")
+        self.assertEqual(run["name"], "MCP : Charge")
         self.assertEqual([t["hostname"] for t in run["targets"]], ["srv-web"])
         with transaction() as conn:
             row = conn.execute("SELECT * FROM script_runs WHERE id=?", (command["run_id"],)).fetchone()
@@ -400,7 +400,7 @@ class TestTools(McpTest):
         client = Client(token)
         events = client.data("search_journal", text="Audit")["events"]
         self.assertEqual(events[0]["action"], "mcp.acces.ajout")
-        self.assertEqual(events[0]["label"], "Accès MCP créé")
+        self.assertEqual(events[0]["label"], "Jeton MCP créé")
         self.assertTrue(client.call("search_journal", since="hier")["isError"])
         status = client.data("get_server_status")
         self.assertNotIn("fleet", status)                 # le parc n'est pas accordé à cet accès
@@ -431,7 +431,7 @@ class TestAdministration(McpTest):
         self.assertIn(token[:13], later)
         with transaction() as conn:
             event = conn.execute("SELECT * FROM audit WHERE action='mcp.acces.ajout' ORDER BY id DESC").fetchone()
-        self.assertIn("2 autorisation(s)", event["detail"])
+        self.assertIn("2 outil(s)", event["detail"])
 
     def test_form_validation(self):
         self.assertIsNone(create(self.admin, "", ["list_devices"])[0])

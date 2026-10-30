@@ -17,7 +17,7 @@ CATEGORIES = {
     "serveur": (L_("Serveur"), ("systeme.", "alertes.")),
     "journal": (L_("Journal"), ("journal.",)),
     "scripts": (L_("Scripts"), ("scripts.",)),
-    "mcp": (L_("Assistants IA (MCP)"), ("mcp.",)),
+    "mcp": (L_("Serveur MCP"), ("mcp.",)),
 }
 
 LABELS = {
@@ -74,11 +74,11 @@ LABELS = {
     "systeme.shell.ouverture": L_("Shell root ouvert"), "systeme.shell.fermeture": L_("Shell root fermé"),
     "systeme.shell.refus": L_("Activation du shell root refusée"),
     "alertes.configuration": L_("Alertes configurées"),
-    "mcp.acces.ajout": L_("Accès MCP créé"), "mcp.acces.modification": L_("Autorisations d'un accès MCP modifiées"),
-    "mcp.acces.revocation": L_("Accès MCP révoqué"),
-    "parc.session.commande": L_("Commande lancée par un assistant IA"),
-    "parc.fichiers.ecriture": L_("Fichier écrit par un assistant IA"), "parc.fichiers.modification": L_("Fichiers organisés par un assistant IA"),
-    "parc.fichiers.suppression": L_("Fichier supprimé par un assistant IA"), "parc.bureau.action": L_("Action d'un assistant IA sur le bureau"),
+    "mcp.acces.ajout": L_("Jeton MCP créé"), "mcp.acces.modification": L_("Outils d'un jeton MCP modifiés"),
+    "mcp.acces.revocation": L_("Jeton MCP révoqué"),
+    "parc.session.commande": L_("Commande lancée via MCP"),
+    "parc.fichiers.ecriture": L_("Fichier écrit via MCP"), "parc.fichiers.modification": L_("Fichiers organisés via MCP"),
+    "parc.fichiers.suppression": L_("Fichier supprimé via MCP"), "parc.bureau.action": L_("Action sur le bureau via MCP"),
 }
 FAILURES = ("echec", "bloquee", "refus")
 PERIODS = {"jour": (L_("Aujourd'hui"), 0), "7j": (L_("7 jours"), 6), "30j": (L_("30 jours"), 29), "tout": (L_("Tout"), None)}

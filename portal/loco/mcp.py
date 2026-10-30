@@ -1,4 +1,4 @@
-"""Assistants IA (MCP) : un client MCP (Claude Code, Cursor, VS Code…) consulte et pilote loco par des outils.
+"""Serveur MCP : un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco par des outils.
 
 Chaque accès est un jeton (haché en base, montré une seule fois) rattaché au compte qui l'a créé. Il n'ouvre que les
 outils cochés un à un, et jamais plus que les droits actuels de ce compte : droits effectifs = besoins des outils
@@ -25,8 +25,8 @@ from werkzeug.exceptions import HTTPException
 from . import app, config, features, fleet, groups, journal, permissions, scripts
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
-from .i18n import L_, _
-from .util import back
+from .i18n import L_, _, locale
+from .util import MONTHS_EN, back
 
 LEGACY = ("2025-11-25", "2025-06-18", "2025-03-26")
 MODERN = ("2026-07-28",)
@@ -429,7 +429,7 @@ def _reboot(args):
 
 
 @tool("cancel_device_action", "fleet", "Cancel a queued action", L_("Annuler une action en attente"),
-      L_("Annuler une action pas encore transmise à l'agent (seulement celles que cet accès peut lancer)."),
+      L_("Annuler une action pas encore transmise à l'agent (seulement celles que ce jeton peut lancer)."),
       ("fleet.view",),
       "Cancel an action that is still queued (not yet sent to the agent). The action id comes from get_device "
       "(pending_actions). Only kinds of actions this access may start can be cancelled.",
@@ -586,8 +586,8 @@ def _run_script(args):
     return _launch(script, args)
 
 
-@tool("run_command", "scripts", "Run a command written by the assistant", L_("Exécuter des commandes écrites par l'assistant"),
-      L_("L'assistant écrit lui-même un script et le lance en SYSTEM ou root : le plus puissant, à réserver aux accès de confiance."),
+@tool("run_command", "scripts", "Run a command written by the assistant", L_("Exécuter des commandes écrites par le LLM"),
+      L_("Le LLM écrit lui-même un script et le lance en SYSTEM ou root : le plus puissant, à réserver aux jetons de confiance."),
       ("scripts.run", "scripts.edit"),
       "Run a script you write (PowerShell on Windows, shell on Linux, or Python on both) on devices and / or device "
       "groups, as SYSTEM (Windows) or root (Linux). It is recorded with its exact content in the script runs history. "
@@ -603,7 +603,7 @@ def _run_command(args):
     if "\x00" in content or len(content.encode()) > scripts.MAX_CONTENT:
         raise ToolError(f"The script must be text of at most {scripts.MAX_CONTENT // 1024} KiB.")
     title = CONTROL_RE.sub(" ", args.get("title") or "commande").strip()[:80]
-    script = {"id": None, "name": _("Assistant IA : %(title)s", title=title), "version": 1,
+    script = {"id": None, "name": _("MCP : %(title)s", title=title), "version": 1,
               "platform": args["platform"], "content": content}
     return _launch(script, args)
 
@@ -765,7 +765,7 @@ def _call(params, structured):
         return {"content": [{"type": "text", "text": message}], "isError": True}
     if t not in g.mcp["tools"]:
         return failure(f"The tool {name} is not allowed for this access (or no longer allowed by the rights of its "
-                       "loco account). In loco: Administration > AI assistants (MCP).")
+                       "loco account). In loco: Administration > MCP server.")
     try:
         data = t["handler"](arguments(t, params.get("arguments")))
     except ToolError as e:
@@ -916,14 +916,22 @@ def _visible():
     return [r for r in rows if r["user_id"] == g.user["id"] or can_manage_user(r)]
 
 
+def _day(value):
+    """« 2026-11-29 14:03:00 » -> « 29/11/2026 » (en anglais : « Nov 29, 2026 ») : l'année compte pour une expiration."""
+    year, month, day = value[:10].split("-")
+    return f"{MONTHS_EN[int(month) - 1]} {int(day)}, {year}" if locale() == "en" else f"{day}/{month}/{year}"
+
+
 def _token_view(row):
     names = _parse_tools(row["tools"])
     now = _now()
     return {"id": row["id"], "name": row["name"], "hint": row["hint"], "owner": row["username"],
             "mine": row["user_id"] == g.user["id"], "tools": names,
             "labels": [str(TOOLS[n]["label"]) for n in names], "actions": sum(1 for n in names if not TOOLS[n]["read_only"]),
+            "groups": [(label, count) for key, label in GROUPS
+                       for count in [sum(1 for n in names if TOOLS[n]["group"] == key)] if count],
             "created": fleet.ago_text(row["created_at"]),
-            "expires": row["expires_at"][:10] if row["expires_at"] else "", "expired": bool(row["expires_at"]) and row["expires_at"] <= now,
+            "expires": _day(row["expires_at"]) if row["expires_at"] else "", "expired": bool(row["expires_at"]) and row["expires_at"] <= now,
             "owner_disabled": bool(row["owner_disabled"]), "used": fleet.ago_text(row["last_used_at"]) if row["last_used_at"] else "",
             "ip": row["last_ip"], "client": row["last_client"]}
 
@@ -942,9 +950,9 @@ def _form_values():
         abort(400)                                          # cases désactivées dans le formulaire : requête forgée
     name = CONTROL_RE.sub(" ", request.form.get("name", "")).strip()
     if not name or len(name) > NAME_MAX:
-        raise ValueError(_("Donnez un nom à l’accès (%(n)s caractères au plus).", n=NAME_MAX))
+        raise ValueError(_("Donnez un nom au jeton (%(n)s caractères au plus).", n=NAME_MAX))
     if not chosen:
-        raise ValueError(_("Cochez au moins une autorisation."))
+        raise ValueError(_("Activez au moins un outil."))
     return name, [n for n in TOOLS if n in chosen]
 
 
@@ -972,7 +980,7 @@ def mcp_token_add():
     conn.execute("INSERT INTO mcp_tokens (user_id, name, token_hash, hint, tools, created_at, expires_at) VALUES (?,?,?,?,?,?,?)",
                  (g.user["id"], name, hashlib.sha256(secret.encode()).hexdigest(), secret[:len(PREFIX) + 4],
                   json.dumps(chosen), _now(), expires))
-    audit("mcp.acces.ajout", f"{name} : {len(chosen)} autorisation(s)" + (f", expire le {expires[:10]}" if expires else ""), commit=False)
+    audit("mcp.acces.ajout", f"{name} : {len(chosen)} outil(s)" + (f", expire le {expires[:10]}" if expires else ""), commit=False)
     conn.commit()
     # Affiché une seule fois, dans la réponse même (jamais dans un cookie ni une redirection).
     return _page(created={"name": name, "token": secret})
@@ -994,9 +1002,9 @@ def mcp_token_update(token_id):
     conn.execute("UPDATE mcp_tokens SET name=?, tools=? WHERE id=?", (name, json.dumps(chosen), token_id))
     from .mcp_remote import close_sessions
     close_sessions(token_id, "Autorisations de l'accès MCP modifiées.")
-    audit("mcp.acces.modification", f"{name} : {len(chosen)} autorisation(s)", commit=False)
+    audit("mcp.acces.modification", f"{name} : {len(chosen)} outil(s)", commit=False)
     conn.commit()
-    flash(_("Autorisations de « %(name)s » enregistrées : elles s’appliquent dès le prochain appel de l’assistant.", name=name), "ok")
+    flash(_("Outils de « %(name)s » enregistrés : ils s’appliquent dès le prochain appel du client.", name=name), "ok")
     return back("mcp_settings")
 
 
@@ -1013,5 +1021,5 @@ def mcp_token_revoke(token_id):
     conn.execute("DELETE FROM mcp_tokens WHERE id=?", (token_id,))
     audit("mcp.acces.revocation", f"{row['name']} ({row['username']})", commit=False)
     conn.commit()
-    flash(_("Accès « %(name)s » révoqué : l’assistant qui l’utilisait est refusé dès maintenant.", name=row["name"]), "ok")
+    flash(_("Jeton « %(name)s » révoqué : le client qui l’utilisait est refusé dès maintenant.", name=row["name"]), "ok")
     return back("mcp_settings")

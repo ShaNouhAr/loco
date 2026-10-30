@@ -78,7 +78,7 @@ def make_room(dev, kind, mine=None):
             for row in conn.execute(f"SELECT id FROM remote_sessions WHERE state IN ('waiting','active') AND {where} AND "
                                     f"{owners[0]} AND browser_seen<? ORDER BY browser_seen LIMIT ?",
                                     (*args, *owners[1], now - 3, excess)).fetchall():
-                _close(row["id"], "Session de l'assistant IA fermée pour laisser la place à une autre session.")
+                _close(row["id"], "Session MCP inactive fermée pour laisser la place à une autre session.")
 
 
 def _relay_transaction():
