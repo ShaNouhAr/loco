@@ -3021,5 +3021,16 @@
  "← Shell root": "← Root shell",
  "−1 min": "−1 min",
  "−2 min": "−2 min",
- "−3 min": "−3 min"
+ "−3 min": "−3 min",
+ "Certificat du site source refusé. Vous pouvez l'ignorer : l'intégrité du fichier reste garantie par son empreinte SHA-256 (catalogue winget).": "The source site's certificate was rejected. You can ignore it: the file's integrity is still guaranteed by its SHA-256 hash (winget catalogue).",
+ "Ignorer le certificat et réessayer": "Ignore the certificate and retry",
+ "Certificat du site source": "Source site certificate",
+ "ignoré — intégrité vérifiée par l'empreinte SHA-256": "ignored — integrity verified by the SHA-256 hash",
+ "vérifié": "verified",
+ "Rétablir la vérification": "Restore verification",
+ "Ignorer le certificat": "Ignore the certificate",
+ "Sans empreinte SHA-256 de référence, le certificat du site source ne peut pas être ignoré : réimportez le logiciel depuis le centre de logiciels ou renvoyez le fichier.": "Without a reference SHA-256 hash, the source site's certificate cannot be ignored: re-import the software from the software centre or upload the file again.",
+ "Certificat du site source ignoré ; nouveau téléchargement lancé (intégrité vérifiée par l'empreinte SHA-256).": "Source site certificate ignored; a new download has started (integrity verified by the SHA-256 hash).",
+ "Certificat du site source ignoré pour ce logiciel.": "Source site certificate ignored for this software.",
+ "Vérification du certificat du site source rétablie.": "Source site certificate verification restored."
 }

@@ -452,6 +452,10 @@ MIGRATIONS = [
     """
     ALTER TABLE users ADD COLUMN appearance TEXT NOT NULL DEFAULT '';
     """,
+    # 27 : logiciel Windows — ignorer le certificat HTTPS du site source (intégrité garantie par l'empreinte SHA-256).
+    """
+    ALTER TABLE win_apps ADD COLUMN allow_insecure INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

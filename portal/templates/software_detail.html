@@ -42,6 +42,13 @@
   <div class="note warn row-between"><span>{{ _("Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).") }}</span>
     {% if can('windows.edit') %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(software) }}'>{{ _("Renseigner") }}</button>{% endif %}</div>
   {% endif %}
+  {% if software.status == 'error' and 'HTTPS' in (software.error or '') and software.expected_sha256 and not software.allow_insecure and can('windows.refresh') %}
+  <div class="note row-between"><span>{{ _("Certificat du site source refusé. Vous pouvez l'ignorer : l'intégrité du fichier reste garantie par son empreinte SHA-256 (catalogue winget).") }}</span>
+    <form method="post" action="{{ url_for('windows_apps_trust_source', slug=software.slug) }}" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche"><input type="hidden" name="allow" value="1">
+      <button class="btn sm"><span class="spin"></span>{{ _("Ignorer le certificat et réessayer") }}</button>
+    </form></div>
+  {% endif %}
 
   <div class="metrics">
     <div class="metric" data-slug="{{ software.slug }}" data-status="{{ software.status }}"><div class="k">{{ _("Installeur") }}</div>
@@ -80,6 +87,12 @@
           <dt>{{ _("Nom dans Windows") }}</dt><dd>{{ software.detect or software.name }}</dd>
           {% if software.source_url %}<dt>{{ _("Lien source") }}</dt><dd class="mono break">{{ software.source_url }}</dd>{% endif %}
           <dt>{{ _("Empreinte SHA-256") }}</dt><dd class="mono break">{{ software.sha256 or software.expected_sha256 or 'en attente du fichier' }}</dd>
+          {% if software.expected_sha256 %}<dt>{{ _("Certificat du site source") }}</dt>
+          <dd class="row-between"><span>{{ _("ignoré — intégrité vérifiée par l'empreinte SHA-256") if software.allow_insecure else _("vérifié") }}</span>
+            {% if can('windows.refresh') %}<form method="post" action="{{ url_for('windows_apps_trust_source', slug=software.slug) }}" data-ajax>
+              <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche"><input type="hidden" name="allow" value="{{ 0 if software.allow_insecure else 1 }}">
+              <button class="btn sm">{{ _("Rétablir la vérification") if software.allow_insecure else _("Ignorer le certificat") }}</button>
+            </form>{% endif %}</dd>{% endif %}
         </dl></div>
       </section>
 

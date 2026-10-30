@@ -1,5 +1,6 @@
 """Catalogue local Windows et groupes : points à traiter, actions de la fiche d'un logiciel, aperçu des groupes, droits."""
 import unittest
+from unittest import mock
 
 import test_permissions
 from test_fleet import FleetTest, Agent, WINDOWS
@@ -117,3 +118,85 @@ class TestSoftwareCatalog(FleetTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInsecureSource(FleetTest):
+    """Ignorer le certificat du site source : seulement avec une empreinte de référence, et l'intégrité reste vérifiée."""
+    def setUp(self):
+        super().setUp()
+        with transaction() as conn:
+            conn.execute("INSERT INTO win_apps (slug,name,version,kind,args,filename,sha256,status,error,detect,"
+                         "winget_id,expected_sha256,source_url,source_filename) VALUES "
+                         "('gimp','GIMP','3',' exe','/S','','','error',?,'','GIMP.GIMP',?,?,?)",
+                         ("Certificat HTTPS invalide sur le site source.", "a" * 64,
+                          "https://src.invalid/gimp.exe", "gimp.exe"))
+            conn.execute("INSERT INTO win_apps (slug,name,version,kind,args,filename,sha256,status,error,detect,"
+                         "winget_id,expected_sha256,source_url,source_filename) VALUES "
+                         "('tool','Tool','1','exe','/S','','','error','HTTP 404','','', '', ?, 'tool.exe')",
+                         ("https://src.invalid/tool.exe",))
+
+    def _flag(self, slug):
+        with transaction() as conn:
+            return conn.execute("SELECT allow_insecure FROM win_apps WHERE slug=?", (slug,)).fetchone()[0]
+
+    def test_route_sets_flag_and_retries_only_with_a_reference_hash(self):
+        import loco.winapps as wa
+        calls = []
+        with mock.patch.object(wa, "start_fetch", lambda row: calls.append(row["slug"])):
+            self.admin.post("/windows-apps/gimp/trust-source", {"allow": "1", "retour": "fiche"},
+                            page="/windows-apps/software/gimp")
+            self.admin.post("/windows-apps/tool/trust-source", {"allow": "1", "retour": "fiche"},
+                            page="/windows-apps/software/tool")
+        self.assertEqual(self._flag("gimp"), 1)                        # empreinte présente : autorisé + re-téléchargement
+        self.assertEqual(calls, ["gimp"])
+        self.assertEqual(self._flag("tool"), 0)                        # pas d'empreinte : refusé
+
+    def test_restore_verification_clears_the_flag(self):
+        import loco.winapps as wa
+        with transaction() as conn:
+            conn.execute("UPDATE win_apps SET allow_insecure=1 WHERE slug='gimp'")
+        with mock.patch.object(wa, "start_fetch", lambda row: None):
+            self.admin.post("/windows-apps/gimp/trust-source", {"allow": "0", "retour": "fiche"},
+                            page="/windows-apps/software/gimp")
+        self.assertEqual(self._flag("gimp"), 0)
+
+    def test_start_fetch_asks_for_insecure_only_when_a_hash_is_present(self):
+        import loco.winapps as wa
+        from loco import app
+        from loco.db import db
+        captured = {}
+
+        class _Thread:
+            def __init__(self, target=None, args=(), daemon=None):
+                captured["insecure"] = args[-1]
+            def start(self):
+                pass
+        with transaction() as conn:
+            conn.execute("UPDATE win_apps SET allow_insecure=1 WHERE slug IN ('gimp','tool')")
+        with app.app_context(), mock.patch.object(wa.threading, "Thread", _Thread):
+            wa.start_fetch(db().execute("SELECT * FROM win_apps WHERE slug='gimp'").fetchone())
+            self.assertTrue(captured["insecure"])                      # empreinte présente -> capture sans vérif cert
+            wa.start_fetch(db().execute("SELECT * FROM win_apps WHERE slug='tool'").fetchone())
+            self.assertFalse(captured["insecure"])                     # sans empreinte -> on garde la vérification
+
+    def test_download_skips_cert_check_only_when_insecure(self):
+        import loco.util as util
+        import ssl, tempfile
+        seen = {}
+
+        class _Resp:
+            headers = {}
+            def geturl(self): return "https://src.invalid/f.exe"
+            def read(self, n=-1): return b""
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+
+        def fake_urlopen(req, timeout=0, context=None):
+            seen["context"] = context
+            return _Resp()
+        with mock.patch.object(util.urllib.request, "urlopen", fake_urlopen), tempfile.TemporaryDirectory() as d:
+            util.download("https://src.invalid/f.exe", d, insecure=True)
+            self.assertEqual(seen["context"].verify_mode, ssl.CERT_NONE)
+            self.assertFalse(seen["context"].check_hostname)
+            util.download("https://src.invalid/f.exe", d, insecure=False)
+            self.assertIsNone(seen["context"])                         # vérification par défaut

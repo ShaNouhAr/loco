@@ -42,13 +42,13 @@ def store_file(row_id, slug, tmp, filename):
                          (kind, row["args"] or config.DEFAULT_ARGS[kind], row_id))
 
 
-def fetch_app(row_id, slug, url, expected_sha256="", filename=""):
+def fetch_app(row_id, slug, url, expected_sha256="", filename="", insecure=False):
     """Téléchargement en arrière-plan d'un logiciel depuis son lien (empreinte imposée : catalogue winget)."""
     tmp = None
     try:
         os.makedirs(app_dir(slug), exist_ok=True)
         try:
-            tmp, name = download(url, app_dir(slug), progress_key=slug)
+            tmp, name = download(url, app_dir(slug), progress_key=slug, insecure=insecure)
         except Cancelled:
             shutil.rmtree(app_dir(slug), ignore_errors=True)
             return
@@ -78,9 +78,12 @@ def fetch_app(row_id, slug, url, expected_sha256="", filename=""):
 def start_fetch(row, expected_sha256="", filename=""):
     expected_sha256 = expected_sha256 or row["expected_sha256"]
     filename = filename or row["source_filename"]
+    # Certificat du site source ignoré uniquement si une empreinte SHA-256 de référence garantit l'intégrité.
+    insecure = bool(row["allow_insecure"] and expected_sha256)
     db().execute("UPDATE win_apps SET status='downloading', error='' WHERE id=?", (row["id"],))
     db().commit()
-    threading.Thread(target=fetch_app, args=(row["id"], row["slug"], row["source_url"], expected_sha256, filename),
+    threading.Thread(target=fetch_app,
+                     args=(row["id"], row["slug"], row["source_url"], expected_sha256, filename, insecure),
                      daemon=True).start()
 
 
@@ -250,6 +253,31 @@ def windows_apps_refresh(slug):
         start_fetch(row)
         audit("windows.actualisation", slug)
         flash(_('Nouveau téléchargement de %(row)s lancé.', row=row['name']), "ok")
+    return _back_to(slug)
+
+
+@app.route("/windows-apps/<slug>/trust-source", methods=["POST"])
+@login_required
+def windows_apps_trust_source(slug):
+    """Ignorer (ou rétablir) la vérification du certificat HTTPS du site source pour ce logiciel. L'option n'est
+    proposée que si une empreinte SHA-256 de référence (catalogue winget) garantit l'intégrité du fichier téléchargé."""
+    row = get_app(slug)
+    allow = request.form.get("allow") == "1"
+    if allow and not row["expected_sha256"]:
+        flash(_("Sans empreinte SHA-256 de référence, le certificat du site source ne peut pas être ignoré : "
+                "réimportez le logiciel depuis le centre de logiciels ou renvoyez le fichier."), "error")
+        return _back_to(slug)
+    db().execute("UPDATE win_apps SET allow_insecure=? WHERE id=?", (1 if allow else 0, row["id"]))
+    db().commit()
+    audit("windows.modification", f"{slug} : certificat du site source {'ignoré' if allow else 'vérifié'}")
+    if allow and row["source_url"] and row["status"] != "downloading":
+        start_fetch(get_app(slug))                           # relire avec le drapeau, puis relancer le téléchargement
+        flash(_("Certificat du site source ignoré ; nouveau téléchargement lancé (intégrité vérifiée par "
+                "l'empreinte SHA-256)."), "ok")
+    elif allow:
+        flash(_("Certificat du site source ignoré pour ce logiciel."), "ok")
+    else:
+        flash(_("Vérification du certificat du site source rétablie."), "ok")
     return _back_to(slug)
 
 

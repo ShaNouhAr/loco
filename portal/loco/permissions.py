@@ -119,6 +119,7 @@ ENDPOINTS = {
     "flatpak": "flatpak.view", "flatpak_upload": "flatpak.upload", "flatpak_delete": "flatpak.delete",
     "windows_apps": "windows.view", "api_apps": "windows.view", "windows_apps_add": "windows.add",
     "windows_apps_edit": "windows.edit", "windows_apps_refresh": "windows.refresh", "windows_apps_delete": "windows.delete",
+    "windows_apps_trust_source": "windows.refresh",
     "software_store": "store.view", "software_store_detail": "store.view", "software_store_refresh": "store.refresh",
     "winget_search": "store.view", "winget_add": "store.import", "winget_update": "windows.refresh",
     "software_detail": "windows.view",

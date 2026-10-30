@@ -6,9 +6,9 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import tempfile
-import time
 import time
 import urllib.error
 import urllib.parse
@@ -289,12 +289,15 @@ PROGRESS = {}      # clé -> [octets reçus, taille totale]
 CANCELLED = set()  # clés dont le téléchargement doit s'arrêter
 
 
-def download(url, dest_dir, progress_key=None):
-    """Télécharge url dans dest_dir. Retourne (chemin temporaire, nom de fichier)."""
+def download(url, dest_dir, progress_key=None, insecure=False):
+    """Télécharge url dans dest_dir. Retourne (chemin temporaire, nom de fichier).
+    insecure : ne pas vérifier le certificat HTTPS du site source (à n'utiliser que si l'intégrité du
+    fichier est garantie par ailleurs, par exemple l'empreinte SHA-256 du catalogue winget)."""
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError(_('Le lien doit commencer par http:// ou https://.'))
     req = urllib.request.Request(url, headers={"User-Agent": config.USER_AGENT})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    context = ssl._create_unverified_context() if insecure and url.lower().startswith("https://") else None
+    with urllib.request.urlopen(req, timeout=60, context=context) as resp:
         name = ""
         m = re.search(r"filename\*?=(?:UTF-8'')?\"?([^\";]+)", resp.headers.get("Content-Disposition", ""))
         if m:

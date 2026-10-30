@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.109.0 — 2026-10-30
+
+- **Ignorer un certificat HTTPS refusé sur le site source d'un logiciel.** Quand le téléchargement d'un installeur échoue avec « Certificat HTTPS invalide sur le site source » (certificat expiré ou mal configuré côté éditeur), la fiche du logiciel propose maintenant de **l'ignorer et réessayer**, et le panneau *Installeur* garde un réglage « Certificat du site source : vérifié / ignoré » que l'on peut rétablir à tout moment. L'option n'apparaît que lorsque loco connaît l'**empreinte SHA-256** du fichier (catalogue WinGet) : l'intégrité reste vérifiée — tout fichier altéré est refusé —, seule la validation du certificat de transport est levée.
+
 ## 2.108.0 — 2026-10-30
 
 - **Inventaire des postes Debian/Ubuntu plus robuste.** Quand un autre outil APT occupait le poste au moment de l'inventaire — mises à jour automatiques, tâche `apt-daily`, ou la toute fin de l'installation de l'agent —, `apt-get update` échouait avec « E: Unable to lock directory /var/lib/apt/lists/ » et le poste restait affiché **« inventaire incomplet »** pendant des heures. L'agent **patiente désormais que le verrou se libère** (et refait l'inventaire au prochain contact si nécessaire) au lieu de signaler un échec.
