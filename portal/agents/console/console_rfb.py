@@ -4,6 +4,7 @@ Le serveur doit avoir autorisé remote.terminal avant de permettre ce repli root
 pyte gère VT/ANSI ; les glyphes font8x8 sont dans le domaine public.
 """
 import fcntl
+import inspect
 import json
 import os
 import pkgutil
@@ -33,6 +34,22 @@ KEYS = {0xff08: b"\x7f", 0xff09: b"\t", 0xfe20: b"\x1b[Z", 0xff0d: b"\r", 0xff1b
         0xffc7: b"\x1b[21~", 0xffc8: b"\x1b[23~", 0xffc9: b"\x1b[24~"}
 
 
+def tolerant(screen):
+    """pyte passe private=True (ESC [ ? …) à des gestionnaires qui ne l'acceptent pas : vim envoie ESC [ ? 4 m
+    et l'analyseur mourait d'un TypeError. Ces séquences privées-là n'ont pas d'effet à l'écran."""
+    def ignore_private(method):
+        def handler(self, *params, private=False):
+            if not private:
+                method(self, *params)
+        return handler
+    names = set(pyte.Stream.csi.values())
+    return type(screen.__name__, (screen,), {
+        name: ignore_private(getattr(screen, name)) for name in names
+        if not any(p.name == "private" or p.kind == p.VAR_KEYWORD
+                   for p in inspect.signature(getattr(screen, name)).parameters.values())})
+
+
+@tolerant
 class TextScreen(pyte.Screen):
     def __init__(self, columns=128, lines=40):
         super().__init__(columns, lines)

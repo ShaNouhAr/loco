@@ -34,6 +34,7 @@ import sys
 import tempfile
 import termios
 import time
+import unicodedata
 import zlib
 import urllib.error
 import urllib.request
@@ -1028,6 +1029,12 @@ class RemoteTransport:
             raise
 
 
+def remote_idle_delay(idle):
+    """Session ouverte mais silencieuse : relevé rapide juste après une activité, plus espacé ensuite (bien moins de
+    requêtes pour une session laissée ouverte ; le premier caractère après une longue pause arrive en ≤ 0,25 s)."""
+    return 0.025 if idle < 3 else 0.1 if idle < 30 else 0.25
+
+
 def remote_service():
     stopping = [False]
     signal.signal(signal.SIGTERM, lambda *_: stopping.__setitem__(0, True))
@@ -1037,7 +1044,7 @@ def remote_service():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return 0
-        sessions, last_ok = {}, time.monotonic()
+        sessions, last_ok, last_activity = {}, time.monotonic(), time.monotonic()
         transport = RemoteTransport()
         live, sampler = False, LiveSampler()
         loaded = os.stat(PROGRAM)
@@ -1070,13 +1077,16 @@ def remote_service():
                             continue
                         if sid not in sessions:
                             sessions[sid] = RemoteProcess(descriptor)
+                            last_activity = time.monotonic()
                         try:
                             sessions[sid].update(descriptor)
                         except (OSError, ValueError) as e:
                             sessions[sid].error = str(e)[:300]
                             sessions[sid].close()
                     busy = any(item.pending for item in sessions.values()) or any(d.get("packets") for d in descriptors.values())
-                    delay = (0 if busy else 0.025) if sessions else 5
+                    if busy:
+                        last_activity = time.monotonic()
+                    delay = (0 if busy else remote_idle_delay(time.monotonic() - last_activity)) if sessions else 5
                     if live:                                   # fiche regardée : un relevé toutes les 2 s
                         delay = min(delay, max(1.0, float(answer.get("live") or 2)))
                 except (OSError, ValueError, KeyError) as e:
@@ -1457,6 +1467,244 @@ def _become_session_user(env):
     os.chdir("/")
 
 
+# --------------------------------------------------------------------------- saisie : keysym -> touches de la disposition
+# Un keysym (« A », « @ », « ê ») se tape avec une touche physique ET un niveau (Maj, AltGr) qui dépendent de la
+# disposition du poste : la correspondance est lue dans le clavier réel de la session plutôt que figée en QWERTY.
+SHIFT_KEY, LEVEL3_KEY = 42, 100                                  # Maj gauche, AltGr (evdev)
+DEAD_KEYS = {0x0300: 0xfe50, 0x0301: 0xfe51, 0x0302: 0xfe52, 0x0303: 0xfe53, 0x0308: 0xfe57, 0x030a: 0xfe58, 0x0327: 0xfe5b}
+
+
+def _keysym_char(sym):
+    if 0x20 <= sym <= 0x7e or 0xa0 <= sym <= 0xff:
+        return chr(sym)
+    if sym & 0xff000000 == 0x01000000:
+        return chr(sym & 0xffffff)
+    return None
+
+
+def _char_keysym(char):
+    code = ord(char)
+    return code if 0x20 <= code <= 0x7e or 0xa0 <= code <= 0xff else 0x01000000 | code
+
+
+class KeyPlanner:
+    """Keysym -> frappes [(touche, [modificateurs])] : « A » demande Maj, « @ » AltGr en AZERTY, « ê » la touche
+    morte ^ puis e. None si la disposition ne sait pas produire ce keysym (l'appelant garde son ancien chemin)."""
+    def __init__(self, table):
+        self.table = table                                       # keysym -> (touche, (modificateurs…))
+
+    def plan(self, sym):
+        found = self.table.get(sym)
+        if found:
+            return [found]
+        char = _keysym_char(sym)
+        parts = unicodedata.normalize("NFD", char) if char else ""
+        if len(parts) == 2 and ord(parts[1]) in DEAD_KEYS:
+            dead, base = self.table.get(DEAD_KEYS[ord(parts[1])]), self.table.get(_char_keysym(parts[0]))
+            if dead and base:
+                return [dead, base]
+        return None
+
+
+class KeyInjector:
+    """Appuis et relâchements planifiés, avec un compteur par touche : un modificateur que le client tient déjà
+    (Maj enfoncée dans noVNC) n'est ni rappuyé ni relâché à sa place."""
+    def __init__(self, planner, press):
+        self.planner, self.press = planner, press
+        self.down, self.held = {}, {}
+
+    def _set(self, code, down):
+        count = self.down.get(code, 0)
+        if down:
+            self.down[code] = count + 1
+            if not count:
+                self.press(code, True)
+        elif count:
+            if count == 1:
+                del self.down[code]
+                self.press(code, False)
+            else:
+                self.down[code] = count - 1
+
+    def key(self, sym, down):
+        """False si ce keysym n'est pas pris en charge ici (l'appelant utilise alors son chemin habituel)."""
+        if not down:
+            held = self.held.pop(sym, None)
+            if held is None:
+                return False
+            code, mods = held
+            self._set(code, False)
+            for mod in reversed(mods):
+                self._set(mod, False)
+            return True
+        steps = self.planner.plan(sym)
+        if not steps:
+            return False
+        if len(steps) == 1:
+            code, mods = steps[0]
+            for mod in mods:
+                self._set(mod, True)
+            self._set(code, True)
+            self.held[sym] = (code, mods)
+            return True
+        for code, mods in steps:                                 # touche morte puis lettre : frappes complètes
+            for mod in mods:
+                self._set(mod, True)
+            self._set(code, True)
+            self._set(code, False)
+            for mod in reversed(mods):
+                self._set(mod, False)
+        return True
+
+
+def _better(table, sym, code, mods, standard):
+    """Préférer une touche du bloc de frappe usuel, puis le moins de modificateurs : « € » se tape AltGr+E, pas avec
+    une touche multimédia que le clavier n'a pas."""
+    old = table.get(sym)
+    rank = (code > standard, len(mods), code)
+    return old is None or rank < (old[0] > standard, len(old[1]), old[0])
+
+
+def _level_mods(level, shift, level3):
+    """Niveaux usuels d'une touche à quatre niveaux : 1 = Maj, 2 = AltGr, 3 = Maj+AltGr."""
+    mods = ((shift,) if level in (1, 3) else ()) + ((level3,) if level in (2, 3) else ())
+    return None if None in mods else mods
+
+
+def xkb_table(layout, variant="", options=""):
+    """Table keysym -> (code evdev, modificateurs) d'une disposition XKB, avec libxkbcommon ; None sans la bibliothèque."""
+    import ctypes.util
+    name = ctypes.util.find_library("xkbcommon") or "libxkbcommon.so.0"
+    try:
+        lib = ctypes.CDLL(name)
+    except OSError:
+        return None
+    ptr, u32 = ctypes.c_void_p, ctypes.c_uint32
+
+    class Names(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_char_p) for n in ("rules", "model", "layout", "variant", "options")]
+
+    def bind(fn, result, args):
+        f = getattr(lib, fn)
+        f.restype, f.argtypes = result, args
+        return f
+    context_new = bind("xkb_context_new", ptr, [ctypes.c_int])
+    keymap_new = bind("xkb_keymap_new_from_names", ptr, [ptr, ctypes.POINTER(Names), ctypes.c_int])
+    low, high = bind("xkb_keymap_min_keycode", u32, [ptr]), bind("xkb_keymap_max_keycode", u32, [ptr])
+    layouts = bind("xkb_keymap_num_layouts_for_key", u32, [ptr, u32])
+    levels = bind("xkb_keymap_num_levels_for_key", u32, [ptr, u32, u32])
+    syms_by_level = bind("xkb_keymap_key_get_syms_by_level", ctypes.c_int, [ptr, u32, u32, u32, ctypes.POINTER(ctypes.POINTER(u32))])
+    mod_index = bind("xkb_keymap_mod_get_index", u32, [ptr, ctypes.c_char_p])
+    mods_for_level = getattr(lib, "xkb_keymap_key_get_mods_for_level", None)   # libxkbcommon 1.0 et plus
+    if mods_for_level is not None:
+        mods_for_level.restype, mods_for_level.argtypes = ctypes.c_size_t, [ptr, u32, u32, u32, ctypes.POINTER(u32), ctypes.c_size_t]
+    context = context_new(0)
+    if not context:
+        return None
+    names = Names(b"evdev", b"pc105", layout.encode(), variant.encode(), options.encode() or None)
+    keymap = keymap_new(context, ctypes.byref(names), 0)
+    if not keymap:
+        bind("xkb_context_unref", None, [ptr])(context)
+        return None
+    bits = {}
+    for mod, code in ((b"Shift", SHIFT_KEY), (b"Mod5", LEVEL3_KEY), (b"LevelThree", LEVEL3_KEY)):
+        index = mod_index(keymap, mod)
+        if index < 32:
+            bits[1 << index] = code
+    table = {}
+    try:
+        for key in range(low(keymap), high(keymap) + 1):
+            if not layouts(keymap, key):
+                continue
+            for level in range(levels(keymap, key, 0)):
+                syms = ctypes.POINTER(u32)()
+                if syms_by_level(keymap, key, 0, level, ctypes.byref(syms)) != 1:
+                    continue
+                mods = None
+                if mods_for_level is not None:
+                    masks = (u32 * 8)()
+                    for i in range(min(8, mods_for_level(keymap, key, 0, level, masks, 8))):
+                        mask, chosen = masks[i], []
+                        for bit, code in bits.items():
+                            if mask & bit:
+                                mask &= ~bit
+                                chosen.append(code)
+                        if not mask and (mods is None or len(chosen) < len(mods)):
+                            mods = tuple(sorted(set(chosen)))
+                else:
+                    mods = _level_mods(level, SHIFT_KEY, LEVEL3_KEY)
+                sym = syms[0]
+                if mods is not None and _better(table, sym, key - 8, mods, 127):
+                    table[sym] = (key - 8, mods)
+    finally:
+        bind("xkb_keymap_unref", None, [ptr])(keymap)
+        bind("xkb_context_unref", None, [ptr])(context)
+    return unicode_aliases(table)
+
+
+def unicode_aliases(table):
+    """Les clients envoient 0x01000000 + point de code pour un caractère hors Latin-1 (€ : 0x10020ac) ; la disposition
+    le nomme par son keysym historique (EuroSign : 0x20ac). Ajoute la forme Unicode de chaque keysym de la table."""
+    import ctypes.util
+    try:
+        to_utf32 = ctypes.CDLL(ctypes.util.find_library("xkbcommon") or "libxkbcommon.so.0").xkb_keysym_to_utf32
+    except (OSError, AttributeError):
+        return table
+    to_utf32.restype, to_utf32.argtypes = ctypes.c_uint32, [ctypes.c_uint32]
+    for sym, value in list(table.items()):
+        point = to_utf32(sym) if sym < 0x01000000 else 0
+        if point > 0xff:
+            table.setdefault(0x01000000 | point, value)
+    return table
+
+
+def system_layout():
+    """Disposition du système (/etc/default/keyboard, sinon localectl) : (disposition, variante, options)."""
+    values = {}
+    try:
+        with open("/etc/default/keyboard") as f:
+            for line in f:
+                m = re.match(r'\s*(XKBLAYOUT|XKBVARIANT|XKBOPTIONS)\s*=\s*"?([^"\n]*)"?', line)
+                if m:
+                    values[m.group(1)] = m.group(2).strip()
+    except OSError:
+        try:
+            out = subprocess.run(["localectl", "status"], capture_output=True, text=True, timeout=5).stdout
+            for key, label in (("XKBLAYOUT", "X11 Layout"), ("XKBVARIANT", "X11 Variant"), ("XKBOPTIONS", "X11 Options")):
+                m = re.search(label + r":\s*(\S+)", out)
+                if m:
+                    values[key] = m.group(1)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    layout = values.get("XKBLAYOUT", "").split(",")[0] or "us"
+    return layout, values.get("XKBVARIANT", "").split(",")[0], values.get("XKBOPTIONS", "")
+
+
+def gnome_layout():
+    """Source de saisie active de la session GNOME (gsettings, en tant qu'utilisateur de la session), sinon système."""
+    def get(key):
+        try:
+            out = subprocess.run(["gsettings", "get", "org.gnome.desktop.input-sources", key], capture_output=True,
+                                 text=True, timeout=5)
+            return out.stdout if out.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            return ""
+    sources = re.findall(r"\('xkb', '([^']+)'\)", get("mru-sources")) or re.findall(r"\('xkb', '([^']+)'\)", get("sources"))
+    if not sources:
+        return system_layout()
+    layout, _, variant = sources[0].partition("+")
+    return layout, variant, ",".join(re.findall(r"'([^']+)'", get("xkb-options")))
+
+
+def keyboard_for(layout, press):
+    """Injecteur de frappes pour cette disposition, ou None (bibliothèque absente, disposition inconnue)."""
+    try:
+        table = xkb_table(*layout)
+    except (OSError, ValueError, AttributeError):
+        table = None
+    return KeyInjector(KeyPlanner(table), press) if table else None
+
+
 class X11Backend:
     """Capture XGetImage + saisie XTest sur une session X11 locale."""
     interval = 0.04
@@ -1495,6 +1743,23 @@ class X11Backend:
             self._get_cursor = None
         self._close = bind(x, "XCloseDisplay", integer, [ptr])
         self._cursor_shape, self._cursor_serial = False, None
+        self._keys = None
+        try:
+            # Disposition réelle du serveur X : touche ET niveau (Maj, AltGr) de chaque keysym.
+            to_sym = bind(x, "XkbKeycodeToKeysym", ulong, [ptr, ctypes.c_ubyte, integer, integer])
+            shift, level3 = self._keycode(self._d, 0xffe1) or None, self._keycode(self._d, 0xfe03) or None
+            table = {}
+            for code in range(8, 256):
+                for level in range(4):
+                    sym = to_sym(self._d, code, 0, level)
+                    mods = _level_mods(level, shift, level3)
+                    if sym and mods is not None and _better(table, sym, code, mods, 135):
+                        table[sym] = (code, mods)
+            if table:
+                self._keys = KeyInjector(KeyPlanner(unicode_aliases(table)),
+                                         lambda code, down: (self._fkey(self._d, code, down, 0), self._flush(self._d)))
+        except (AttributeError, OSError):
+            self._keys = None
 
     def grab(self):
         image = self._get_image(self._d, self._root, 0, 0, self.width, self.height, ctypes.c_ulong(-1).value, 2)
@@ -1512,6 +1777,9 @@ class X11Backend:
         return data
 
     def key(self, sym, down):
+        keys = getattr(self, "_keys", None)
+        if keys and keys.key(sym, down):
+            return True
         code = self._keycode(self._d, sym)
         if code:
             self._fkey(self._d, code, bool(down), 0)
@@ -1562,6 +1830,7 @@ class WaylandBackend:
             raise RuntimeError(t("Résolution Wayland supérieure à 4096 × 2160.", "Wayland resolution larger than 4096 × 2160.", "Resolución Wayland superior a 4096 × 2160."))
         self.width, self.height = width, height
         self._uinput = UInput(width, height)
+        self._keys = keyboard_for(system_layout(), lambda code, down: self._uinput.key(code, down))
 
     def _grab_grim(self):
         try:
@@ -1585,6 +1854,9 @@ class WaylandBackend:
         return _fit_frame(bgrx, width, height, self.width, self.height)
 
     def key(self, sym, down):
+        keys = getattr(self, "_keys", None)
+        if keys and keys.key(sym, down):
+            return True
         code = EVDEV_KEYS.get(sym)
         if code is None:
             return False
@@ -1637,6 +1909,9 @@ class MutterBackend:
         # Session verrouillée : GNOME refuse le bureau à distance. Déverrouiller (root, logind), re-verrouiller à la fin.
         self._relock = _unlock_session(env["uid"])
         _become_session_user(env)
+        # Touches physiques selon la disposition de la session : contourne le bug de NotifyKeyboardKeysym de Mutter
+        # (niveau 4 et touches mortes ignorés : « < » donnait « z » en AZERTY).
+        self._keys = keyboard_for(gnome_layout(), lambda code, down: self._send("NotifyKeyboardKeycode", "(ub)", code, bool(down)))
         import gi
         from gi.repository import Gio, GLib
         self._Gio, self._GLib = Gio, GLib
@@ -1742,6 +2017,9 @@ class MutterBackend:
         return self._last
 
     def key(self, sym, down):
+        keys = getattr(self, "_keys", None)
+        if keys and keys.key(sym, down):
+            return True
         self._send("NotifyKeyboardKeysym", "(ub)", sym, bool(down))
         return True
 

@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 import secrets
+import time
 
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
@@ -99,7 +100,7 @@ DEVICES = {"type": "array", "maxItems": 500, "items": {"type": "string", "maxLen
 DEVICE_GROUPS = {"type": "array", "maxItems": 50, "items": {"type": "string", "maxLength": 255},
                  "description": "Device group ids or exact names: all their current members are targeted."}
 STATUS = {"green": "up_to_date", "orange": "updates_pending", "red": "needs_attention", "grey": "unknown"}
-VERBATIM = {"content", "text"}                             # contenu d'un script, texte à taper : transmis tels quels
+VERBATIM = {"content", "text", "input"}                    # script, texte à taper, saisie du terminal : tels quels
 
 
 def _coerce(key, spec, value):
@@ -177,6 +178,12 @@ def _device(value):
         row = rows[0] if rows else None
     if row is None:
         raise ToolError(f"No device {value!r}: use list_devices to find its id or hostname.")
+    # Préchauffage : l'agent relève son canal distant toutes les 2 s pendant une minute (direct de la supervision), une
+    # session de terminal, de fichiers ou de bureau ouverte ensuite démarre donc en moins de 2 s au lieu de 5.
+    now = time.time()
+    if (row["live_until"] or 0) < now + 30:
+        conn.execute("UPDATE devices SET live_until=? WHERE id=?", (now + 60, row["id"]))
+        conn.commit()
     return row
 
 

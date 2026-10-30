@@ -21,6 +21,10 @@ PACKET = 256 * 1024
 BUFFER = 2 * 1024 * 1024
 BATCH = 1024 * 1024
 OPEN = ("waiting", "active")
+# Sessions d'un assistant IA (MCP) : gardées entre deux appels, sans navigateur pour signaler sa présence. Le bureau
+# (écran déverrouillé sous GNOME) se ferme plus tôt que le terminal et les fichiers.
+MCP_IDLE, MCP_DESKTOP_IDLE = 300, 120
+SERVER_SESSIONS, KIND_SESSIONS, DEVICE_SESSIONS = 8, 2, 4    # serveur, poste et type, poste (l'agent Windows n'en sert pas plus)
 
 
 def _owner():
@@ -43,9 +47,10 @@ def _prune():
     conn = db()
     expired = conn.execute(
         "SELECT s.id FROM remote_sessions s JOIN users u ON u.id=s.user_id JOIN devices d ON d.id=s.device_id "
-        "WHERE s.state IN ('waiting','active') AND (s.expires<? OR s.browser_seen<? OR "
-        "(s.agent_seen>0 AND s.agent_seen<?) OR (s.agent_seen=0 AND s.created<?) OR u.disabled=1 OR "
-        "u.pw_version!=s.pw_version OR d.state!='active')", (now, now - 60, now - 30, now - 30)).fetchall()
+        "WHERE s.state IN ('waiting','active') AND (s.expires<? OR s.browser_seen<(CASE WHEN s.owner NOT LIKE 'mcp:%' THEN ? "
+        "WHEN s.kind='desktop' THEN ? ELSE ? END) OR (s.agent_seen>0 AND s.agent_seen<?) OR (s.agent_seen=0 AND s.created<?) OR "
+        "u.disabled=1 OR u.pw_version!=s.pw_version OR d.state!='active')",
+        (now, now - 60, now - MCP_DESKTOP_IDLE, now - MCP_IDLE, now - 30, now - 30)).fetchall()
     for row in expired:
         _close(row["id"], "Session expirée ou accès révoqué.")
     for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,u.role FROM remote_sessions s JOIN users u ON u.id=s.user_id "
@@ -55,6 +60,25 @@ def _prune():
                 or row["terminal_fallback"] and "remote.terminal" not in grants):
             _close(row["id"], "Droit d'accès distant révoqué.")
     conn.execute("DELETE FROM remote_sessions WHERE state='closed' AND browser_seen<?", (now - 120,))
+
+
+def make_room(dev, kind, mine=None):
+    """Libère la place d'une nouvelle session en fermant d'abord les sessions d'assistant IA inactives (aucun appel en
+    cours : un appel relit la session toutes les 50 ms) : une personne passe avant l'assistant, qui rouvrira la sienne
+    au besoin. mine (propriétaire « mcp:<accès> ») : l'assistant ne ferme que les siennes."""
+    conn, now = db(), time.time()
+    owners = ("(owner=? OR owner LIKE ?)", (mine, mine + ":%")) if mine else ("owner LIKE 'mcp:%'", ())
+    limits = [("device_id=? AND kind=?", (dev["id"], kind), KIND_SESSIONS), ("1", (), SERVER_SESSIONS)]
+    if dev["os_family"] == "windows":
+        limits.append(("device_id=?", (dev["id"],), DEVICE_SESSIONS))
+    for where, args, limit in limits:
+        excess = conn.execute(f"SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active') AND {where}",
+                              args).fetchone()[0] - limit + 1
+        if excess > 0:
+            for row in conn.execute(f"SELECT id FROM remote_sessions WHERE state IN ('waiting','active') AND {where} AND "
+                                    f"{owners[0]} AND browser_seen<? ORDER BY browser_seen LIMIT ?",
+                                    (*args, *owners[1], now - 3, excess)).fetchall():
+                _close(row["id"], "Session de l'assistant IA fermée pour laisser la place à une autre session.")
 
 
 def _relay_transaction():
@@ -142,10 +166,11 @@ def remote_open(dev_id):
     conn = db()
     conn.execute("BEGIN IMMEDIATE")
     _prune()
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= 8:
+    make_room(dev, kind)
+    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= SERVER_SESSIONS:
         abort(409, _('Huit sessions sont déjà ouvertes.'))
     if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE device_id=? AND kind=? AND state IN ('waiting','active')",
-                    (dev_id, kind)).fetchone()[0] >= 2:
+                    (dev_id, kind)).fetchone()[0] >= KIND_SESSIONS:
         abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
     sid, now = secrets.token_hex(16), time.time()
     conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,expires,terminal_fallback) "

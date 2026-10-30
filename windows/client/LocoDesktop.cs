@@ -58,7 +58,7 @@ namespace Loco
         string desktopName = "";
         bool extendedSize, desktopNameEncoding;
         Rectangle captureArea;
-        bool tight, rgbOrder, cursorShape;
+        bool tight, jpeg, answerAlways, rgbOrder, cursorShape;
         IntPtr lastCursor = new IntPtr(-1);
         byte mouseMask;
         uint clipboardSeq;
@@ -108,7 +108,7 @@ namespace Loco
                     // Demande d'image en attente : y répondre dès que l'écran change, sans retarder la saisie qui arrive entre-temps.
                     if (pending && (!pipe || !InputPending()))
                     {
-                        if (Update(full, !pipe)) { pending = false; full = false; }
+                        if (Update(full, !pipe || answerAlways)) { pending = false; full = false; }
                         continue;
                     }
                     int kind = Read(1)[0];
@@ -122,11 +122,17 @@ namespace Loco
                     else if (kind == 2)
                     {
                         int count = I16(Read(3), 1); if (count > 128) throw new InvalidDataException();
-                        var encodings = Read(count * 4); tight = false; cursorShape = false; extendedSize = false; desktopNameEncoding = false;
+                        var encodings = Read(count * 4); tight = false; jpeg = false; answerAlways = false; cursorShape = false; extendedSize = false; desktopNameEncoding = false;
                         for (int i = 0; i < count; i++)
                         {
                             uint encoding = I32(encodings, i * 4);
                             if (encoding == 7) tight = true;
+                            // JPEG seulement pour un client qui annonce un niveau de qualité (noVNC) : un client sans
+                            // décodeur JPEG (l'assistant IA de loco) reçoit du Tight sans perte (zlib).
+                            if (encoding >= 0xffffffe0 && encoding <= 0xffffffe9) jpeg = true;
+                            // Pseudo-encodage loco « LOC\x01 » : répondre à chaque demande, même vide, au lieu d'attendre un
+                            // changement ; l'assistant IA sait alors tout de suite que l'image gardée est à jour.
+                            if (encoding == 0x4c4f4301) answerAlways = true;
                             if (encoding == 0xfffffecc) extendedSize = true;
                             if (encoding == 0xfffffecd) desktopNameEncoding = true;
                             if (encoding == 0x574d5664) cursorShape = true;
@@ -201,7 +207,7 @@ namespace Loco
             if (baked != sentBaked) { sentBaked = baked; lastCursor = new IntPtr(-1); }
             byte[] cursor = cursorShape ? CursorChange() : null;
             if (!fresh && !force && !changed && cursor == null) return false;
-            byte[] update = framebuffer.Update(pixels, !fresh, tight, rgbOrder, cursor, fresh ? null : dirty);
+            byte[] update = framebuffer.Update(pixels, !fresh, tight, rgbOrder, cursor, fresh ? null : dirty, jpeg);
             Array.Clear(dirty, 0, dirty.Length);
             gdiInterval = update.Length > 4 ? 0 : Math.Min(400, gdiInterval + 50);
             if (!fresh && !force && update.Length == 4) return false;   // aucune tuile réellement modifiée

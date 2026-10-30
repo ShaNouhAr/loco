@@ -16,14 +16,21 @@ def load_agent():
 
 
 class Screen:
-    """Dégradé connu : pixel (x, y) = rouge 200, vert 3*y, bleu 2*x (octets BGRX)."""
-    width, height, interval = int(os.environ.get("LOCO_TEST_WIDTH", "64")), 40, 0
+    """Dégradé connu : pixel (x, y) = rouge 200, vert 3*y, bleu 2*x (octets BGRX), sauf un carré (40..47, 20..27) dont le
+    vert change à chaque capture : seule sa tuile doit transiter dans une mise à jour incrémentale."""
+    width, height, interval = int(os.environ.get("LOCO_TEST_WIDTH", "64")), int(os.environ.get("LOCO_TEST_HEIGHT", "40")), 0
 
     def __init__(self):
         self.events = open(os.environ["LOCO_TEST_EVENTS"], "a")
+        self.grabs = 0
 
     def grab(self):
-        return b"".join(bytes(((2 * x) % 256, (3 * y) % 256, 200, 0)) for y in range(self.height) for x in range(self.width))
+        self.grabs += 1
+        frame = bytearray(b"".join(bytes(((2 * x) % 256, (3 * y) % 256, 200, 0)) for y in range(self.height) for x in range(self.width)))
+        for y in range(20, 28):
+            for x in range(40, 48):
+                frame[(y * self.width + x) * 4:(y * self.width + x) * 4 + 4] = bytes((0, (self.grabs * 37) % 256, 0, 0))
+        return bytes(frame)
 
     def log(self, *event):
         self.events.write(json.dumps(event) + "\n")

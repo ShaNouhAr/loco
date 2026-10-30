@@ -3246,5 +3246,7 @@
  "Appuyer sur des touches": "Pulsar teclas",
  "Touche ou raccourci clavier (Entrée, Échap, Ctrl+C, Alt+F4, Ctrl+Alt+Suppr…).": "Tecla o atajo de teclado (Intro, Esc, Ctrl+C, Alt+F4, Ctrl+Alt+Supr…).",
  "Faire défiler": "Desplazar",
- "Molette de la souris à un point de l'écran.": "Rueda del ratón en un punto de la pantalla."
+ "Molette de la souris à un point de l'écran.": "Rueda del ratón en un punto de la pantalla.",
+ "Terminal interactif": "Terminal interactivo",
+ "Programmes interactifs (vim, top, invites oui/non, PowerShell) : l'assistant tape, appuie sur des touches et lit l'écran du terminal.": "Programas interactivos (vim, top, preguntas sí/no, PowerShell): el asistente escribe, pulsa teclas y lee la pantalla del terminal."
 }

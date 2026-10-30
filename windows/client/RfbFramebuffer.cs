@@ -125,7 +125,7 @@ namespace Loco
             }
         }
         /// <param name="mask">Tuiles à comparer (zones signalées par la capture) ; null : toutes.</param>
-        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null, bool[] mask = null)
+        public byte[] Update(byte[] pixels, bool incremental, bool tight, bool rgbOrder, byte[] cursor = null, bool[] mask = null, bool allowJpeg = true)
         {
             if (pixels.Length != width * height * 4) throw new ArgumentException(Lang.T("Taille de capture invalide", "Invalid capture size", "Tamaño de captura no válido"));
             var tiles = new List<int[]>();
@@ -146,7 +146,7 @@ namespace Loco
                     int x = tile[0], y = tile[1], w = tile[2], h = tile[3];
                     U16(frame, x); U16(frame, y); U16(frame, w); U16(frame, h); U32(frame, tight ? 7u : 0u);
                     // Sous-encodage JPEG (0x90) de Tight pour les tuiles complexes : bien moins de données qu'en zlib sans perte.
-                    if (tight && Complex(pixels, x, y, w, h))
+                    if (tight && allowJpeg && Complex(pixels, x, y, w, h))
                     {
                         byte[] jpeg = TryJpeg(pixels, x, y, w, h);
                         if (jpeg != null) { frame.WriteByte(0x90); Compact(frame, jpeg.Length); frame.Write(jpeg, 0, jpeg.Length); continue; }

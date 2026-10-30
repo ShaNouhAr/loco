@@ -3246,5 +3246,7 @@
  "Appuyer sur des touches": "Press keys",
  "Touche ou raccourci clavier (Entrée, Échap, Ctrl+C, Alt+F4, Ctrl+Alt+Suppr…).": "Key or keyboard shortcut (Enter, Esc, Ctrl+C, Alt+F4, Ctrl+Alt+Del…).",
  "Faire défiler": "Scroll",
- "Molette de la souris à un point de l'écran.": "Mouse wheel at a point of the screen."
+ "Molette de la souris à un point de l'écran.": "Mouse wheel at a point of the screen.",
+ "Terminal interactif": "Interactive terminal",
+ "Programmes interactifs (vim, top, invites oui/non, PowerShell) : l'assistant tape, appuie sur des touches et lit l'écran du terminal.": "Interactive programs (vim, top, yes/no prompts, PowerShell): the assistant types, presses keys and reads the terminal screen."
 }

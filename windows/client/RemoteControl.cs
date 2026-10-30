@@ -43,6 +43,7 @@ namespace Loco
         {
             var sessions = new Dictionary<string, RemoteSession>();
             var lastOk = Stopwatch.StartNew(); int delay = 2000;
+            var idle = Stopwatch.StartNew();                         // depuis la dernière activité d'une session
             bool live = false;                                       // fiche du poste regardée : relevé toutes les 2 s
             var sampler = new Agent.UsageSampler();
             try
@@ -74,11 +75,16 @@ namespace Loco
                             if (state != "waiting" && state != "active") continue;
                             if (sessions.Count >= 4 && !sessions.ContainsKey(pair.Key)) continue;
                             RemoteSession item;
-                            if (!sessions.TryGetValue(pair.Key, out item)) { item = new RemoteSession(pair.Value, stopping); sessions[pair.Key] = item; }
+                            if (!sessions.TryGetValue(pair.Key, out item)) { item = new RemoteSession(pair.Value, stopping); sessions[pair.Key] = item; idle.Restart(); }
                             item.Update(pair.Value);
                         }
-                        // Session ouverte : relancer vite (saisie reçue en ~6 ms en moyenne) ; aucune session : contact espacé.
-                        delay = sessions.Count > 0 ? (sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any()) ? 0 : 12) : 5000;
+                        // Session ouverte : relancer vite (saisie reçue en ~6 ms en moyenne), puis espacer si elle reste
+                        // silencieuse (moins de requêtes ; ≤ 0,25 s pour la première saisie après une longue pause).
+                        // Aucune session : contact espacé.
+                        bool busy = sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any());
+                        if (busy || signaled == 1) idle.Restart();
+                        double quiet = idle.Elapsed.TotalSeconds;
+                        delay = sessions.Count > 0 ? (busy ? 0 : quiet < 3 ? 12 : quiet < 30 ? 100 : 250) : 5000;
                         if (live) delay = Math.Min(delay, Math.Max(1000, (int)(Convert.ToDouble(wanted) * 1000)));
                     }
                     catch (Exception e)

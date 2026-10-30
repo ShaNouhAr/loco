@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 2.115.0 — 2026-10-30
+
+- **Assistants IA : accès distant plus rapide et plus complet.**
+  - **Ouverture des sessions plus rapide** : un poste visé par l'assistant (fiche, action…) est préchauffé une minute et ouvre ensuite sa session en moins de 2 s au lieu de 5 ; une session PowerShell neuve est prête en ~2 s (sonde envoyée à intervalle court) ; les sessions de l'assistant restent ouvertes 5 minutes entre deux appels (2 pour le bureau), donc les appels suivants partent aussitôt.
+  - **Captures d'écran légères** : l'image est gardée en mémoire et, après la première capture, seules les zones modifiées transitent — une action qui ouvre un menu ne renvoie que ce menu (Zorin GNOME : 0,2 à 0,5 s par capture suivante). Les postes Windows envoient désormais leur écran compressé sans perte (au lieu de pixels bruts) et répondent aussitôt quand rien n'a bougé, au lieu de laisser le serveur attendre près d'une seconde, une fois leur agent à jour.
+  - **Saisie fidèle sous Linux** : l'agent tape chaque caractère avec la touche et le niveau de la disposition réelle du poste (lue dans la session GNOME, le serveur X ou le système) : `<`, `>`, `@`, `€`, les majuscules et les lettres accentuées par touche morte (`ê`) passent en AZERTY sous GNOME Wayland, X11 et wlroots. Sous Windows, la saisie de texte part d'un bloc.
+  - **Terminal interactif** (nouvelle autorisation) : l'assistant tape, appuie sur des touches (`{enter}`, `{ctrl+c}`, `{esc}`, flèches…) et lit l'écran du terminal (120 × 40) — vim, top, invites oui/non, PowerShell ; la session garde son état d'un appel à l'autre.
+  - **Scripts plus longs** dans le terminal : jusqu'à 64 Ko, délai jusqu'à 5 minutes.
+  - **Une personne passe avant l'assistant** : quand la limite de sessions d'un poste est atteinte (deux par type, quatre pour un poste Windows), ouvrir une session depuis l'interface ferme d'abord les sessions inactives de l'assistant. Si son terminal interactif a été fermé entre deux appels, sa saisie suivante n'est pas tapée dans le shell neuf : il en est prévenu.
+- **Console texte des postes Linux sans affichage** : ouvrir vim ne la ferme plus (une séquence de terminal privée, `ESC [ ? 4 m`, faisait planter l'émulateur d'écran).
+- **Agents** : une session distante restée silencieuse espace ses relevés (25 ms → 0,1 s → 0,25 s), au lieu d'interroger le serveur des dizaines de fois par seconde ; l'agent Windows réserve le JPEG aux navigateurs (noVNC) et envoie du Tight sans perte aux autres clients.
+
 ## 2.114.0 — 2026-10-30
 
 - **Assistants IA : terminal, fichiers et bureau des postes, en direct.** Onze nouvelles autorisations dans **Assistants IA**, groupe « Accès distant », chacune à cocher séparément :
