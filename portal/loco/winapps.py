@@ -83,8 +83,8 @@ def start_fetch(row, expected_sha256="", filename=""):
     db().execute("UPDATE win_apps SET status='downloading', error='' WHERE id=?", (row["id"],))
     db().commit()
     threading.Thread(target=fetch_app,
-                     args=(row["id"], row["slug"], row["source_url"], expected_sha256, filename, insecure),
-                     daemon=True).start()
+                     args=(row["id"], row["slug"], row["source_url"], expected_sha256, filename),
+                     kwargs={"insecure": insecure}, daemon=True).start()
 
 
 def save_upload(row, upload, filename):

@@ -167,8 +167,8 @@ class TestInsecureSource(FleetTest):
         captured = {}
 
         class _Thread:
-            def __init__(self, target=None, args=(), daemon=None):
-                captured["insecure"] = args[-1]
+            def __init__(self, target=None, args=(), kwargs=None, daemon=None):
+                captured["insecure"] = (kwargs or {}).get("insecure")
             def start(self):
                 pass
         with transaction() as conn:
