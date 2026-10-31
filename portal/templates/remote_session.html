@@ -2,6 +2,7 @@
 {% block title %}{{ 'Terminal' if remote.kind == 'terminal' else _('Console noVNC') }} · {{ remote.hostname }}{% endblock %}
 {% block content %}
 {% from '_nav_icons.html' import ui_icon %}
+{% from '_macros.html' import term_help %}
 <div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}">
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
@@ -107,9 +108,10 @@
     {% endif %}
   </div>
   {% if remote.kind == 'terminal' %}
-  <p class="small muted term-keys"><span>{{ _("Sélection = copie") }}</span><span>{{ _("Clic droit : copier ou coller") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>C</kbd> / <kbd>V</kbd> {{ _("copier / coller") }}</span><span><kbd>Ctrl</kbd>+{{ _("clic") }} {{ _("ouvre un lien") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>F</kbd> {{ _("rechercher") }}</span><span><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> {{ _("taille du texte") }}</span></p>
-  {% endif %}
+  {{ term_help(_("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.")) }}
+  {% else %}
   <p class="small muted remote-footnote">{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+  {% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

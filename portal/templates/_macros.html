@@ -35,3 +35,21 @@
   </div>
 </section>
 {%- endmacro %}
+
+{# Aide des terminaux (shell root, terminal d'un poste) : repliée par défaut, sous le terminal. #}
+{% macro term_help(note='') -%}
+<details class="term-help">
+  <summary>{{ _("Raccourcis et aide") }}</summary>
+  <div class="term-help-body">
+    <ul class="term-keys">
+      <li>{{ _("Sélection = copie") }}</li>
+      <li>{{ _("Clic droit : copier ou coller") }}</li>
+      <li><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>C</kbd> / <kbd>V</kbd></span>{{ _("copier / coller") }}</li>
+      <li><span><kbd>Ctrl</kbd>+{{ _("clic") }}</span>{{ _("ouvre un lien") }}</li>
+      <li><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>F</kbd></span>{{ _("rechercher") }}</li>
+      <li><span><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd></span>{{ _("taille du texte") }}</li>
+    </ul>
+    {% if note %}<p class="term-help-note">{{ note }}</p>{% endif %}
+  </div>
+</details>
+{%- endmacro %}

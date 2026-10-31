@@ -1340,8 +1340,17 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .term-search-count { min-width: 44px; font-size: 12px; color: var(--text-3); text-align: right; font-variant-numeric: tabular-nums; }
 .term-search button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--text-2); cursor: pointer; font-size: 13px; }
 .term-search button:hover { background: var(--bg-3); color: var(--text); }
-.term-keys { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+/* Aide des terminaux : une ligne discrète, dépliée à la demande. */
+.term-help { margin-top: 8px; font-size: 12.5px; color: var(--text-3); }
+.term-help > summary { color: var(--text-3); }
+.term-help > summary:hover, .term-help[open] > summary { color: var(--text-2); }
+.term-help-body { padding: 10px 0 2px 15px; }
+.term-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px 20px; margin: 0; padding: 0; list-style: none; }
+.term-keys li { display: flex; align-items: center; gap: 8px; }
+.term-keys li > span { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 .term-keys kbd { padding: 1px 5px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; font: 11px var(--mono); color: var(--text-2); background: var(--bg-2); }
+.term-help-note { margin: 10px 0 0; }
+.remote-session.is-fullscreen > .term-help { margin: 0; }
 .remote-fontsize { display: inline-flex; gap: 4px; }
 .remote-fontsize .btn { min-width: 36px; justify-content: center; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
 .remote-viewport { position: absolute; inset: 0; display: flex; overflow: auto; scrollbar-width: thin; scrollbar-color: #4c4c4c transparent; }

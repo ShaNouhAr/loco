@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.119.1 — 2026-10-31
+
+- **Terminaux plus sobres** : sous le shell root et les terminaux des postes, les raccourcis (copier, coller, rechercher, taille du texte…) et la remarque sur la fermeture de la session tiennent dans un bloc « Raccourcis et aide » replié par défaut.
+- **Shell root** : le service écoute son socket dès sa création ; une connexion arrivée juste au démarrage n'est plus refusée.
+
 ## 2.119.0 — 2026-10-30
 
 - **Apparence de l'instance** (*Administration → Apparence*, droit *Configurer le serveur*) : une entreprise adapte loco à sa charte sans retirer les thèmes livrés. À l'installation, tout reste proposé comme avant.

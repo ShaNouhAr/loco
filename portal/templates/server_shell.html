@@ -2,6 +2,7 @@
 {% block title %}{{ _("Shell root") }} · {{ host }}{% endblock %}
 {% block content %}
 {% from '_nav_icons.html' import ui_icon %}
+{% from '_macros.html' import term_help %}
 <div id="remote-session" class="remote-session" data-kind="terminal" data-label="{{ _('shell root du serveur') }}" data-io="{{ url_for('system_shell_io', sid=sid) }}" data-csrf="{{ csrf }}">
   <div class="head">
     <div>
@@ -36,8 +37,7 @@
       </div>
     </div>
   </div>
-  <p class="small muted term-keys"><span>{{ _("Sélection = copie") }}</span><span>{{ _("Clic droit : copier ou coller") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>C</kbd> / <kbd>V</kbd> {{ _("copier / coller") }}</span><span><kbd>Ctrl</kbd>+{{ _("clic") }} {{ _("ouvre un lien") }}</span><span><kbd>Ctrl</kbd>+<kbd>{{ _('Maj') }}</kbd>+<kbd>F</kbd> {{ _("rechercher") }}</span><span><kbd>Ctrl</kbd> <kbd>+</kbd> / <kbd>−</kbd> {{ _("taille du texte") }}</span></p>
-  <p class="small muted remote-footnote">{{ _("Fermer cet onglet ferme ce shell. « Désactiver le shell root » ferme tous les shells et coupe l'accès jusqu'à une nouvelle activation suivie d'un redémarrage.") }}</p>
+  {{ term_help(_("Fermer cet onglet ferme ce shell. « Désactiver le shell root » ferme tous les shells et coupe l'accès jusqu'à une nouvelle activation suivie d'un redémarrage.")) }}
 </div>
 {% endblock %}
 {% block scripts %}
