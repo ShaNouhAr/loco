@@ -373,7 +373,7 @@ class TestDeployments(FleetTest):
         self.assertIn('Installation de Outil Éditeur · logiciel 2/2', html)
         self.assertNotIn('pirater', html)
         device_page = self.admin.c.get(f"/fleet/{device(self.agent.uid)['id']}").get_data(as_text=True)
-        self.assertIn('installation de outil éditeur · logiciel 2/2', device_page)
+        self.assertIn('installation de Outil Éditeur · logiciel 2/2', device_page)
         self.agent.result(cmd['id'], 'success', 'OK : Outil Éditeur 1.0')
         self.assertNotIn('class="live-step"', self.admin.c.get(path).get_data(as_text=True))   # terminé : plus de barre
 

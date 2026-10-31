@@ -3344,5 +3344,17 @@
  "Apparence de l'instance modifiée": "Instance appearance changed",
  "Logo de l'instance": "Instance logo",
  "Fond de l'entreprise": "Company background",
- "Raccourcis et aide": "Shortcuts and help"
+ "Raccourcis et aide": "Shortcuts and help",
+ "Tout cocher": "Select all",
+ "%(num)s mise à jour": "%(num)s update",
+ "%(num)s mises à jour": "%(num)s updates",
+ "sélectionnée(s)": "selected",
+ "redémarrer ensuite si nécessaire": "restart afterwards if needed",
+ "Mettre à jour la sélection": "Update the selection",
+ "Pour choisir les mises à jour une par une, l'agent du poste doit être en version %(v)s.0 ou plus (il se met à jour seul).": "To pick updates one by one, the device agent must be version %(v)s.0 or later (it updates itself).",
+ "Mises à jour du système": "System updates",
+ "Préparation": "Preparing",
+ "%(action)s : %(n)s sélectionnée(s)": "%(action)s: %(n)s selected",
+ "Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.": "Picking updates one by one requires agent %(v)s.0 or later on this device.",
+ "Aucune mise à jour en attente ne correspond à la sélection.": "No pending update matches the selection."
 }

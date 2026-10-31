@@ -23,6 +23,7 @@ import platform
 import pty
 import pwd
 import re
+import select
 import shutil
 import socket
 import signal
@@ -269,6 +270,121 @@ def run(cmd, timeout=7200):
         return 127, f"{cmd[0]} introuvable\n"
     except subprocess.TimeoutExpired as e:
         return 124, (e.stdout or "") if isinstance(e.stdout, str) else t("délai dépassé\n", "timed out\n", "tiempo agotado\n")
+
+
+def run_stream(cmd, on_line, timeout=7200):
+    """Comme run(), en passant chaque ligne à on_line au fil de l'exécution (avancement en direct). on_line renvoie
+    True pour une ligne d'état à ne pas garder dans le journal."""
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=ENV, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return 127, f"{cmd[0]} introuvable\n"
+    kept, rest, deadline = [], b"", time.monotonic() + timeout
+
+    def handle(raw):
+        line = raw.decode("utf-8", "replace").rstrip("\r")
+        try:
+            hidden = on_line(line)
+        except Exception:                               # l'avancement ne doit jamais faire échouer la mise à jour
+            hidden = False
+        if not hidden:
+            kept.append(line + "\n")
+    try:
+        fd = p.stdout.fileno()
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                p.kill()
+                p.wait()
+                return 124, "".join(kept) + t("délai dépassé\n", "timed out\n", "tiempo agotado\n")
+            ready, _, _ = select.select([fd], [], [], min(left, 5))
+            if not ready:
+                continue
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            *lines, rest = (rest + chunk).split(b"\n")
+            for raw in lines:
+                handle(raw)
+        if rest:
+            handle(rest)
+        p.wait()
+    finally:
+        p.stdout.close()
+    return p.returncode, "".join(kept)
+
+
+class Progress:
+    """Avancement d'une action remonté au serveur : tout de suite à chaque changement d'étape ou de phase, sinon au
+    plus une fois par seconde (paquet en cours, pourcentage)."""
+
+    def __init__(self, send):
+        self.send, self.last, self.stage = send, 0.0, None
+
+    def __call__(self, step, phase="", app="", index=0, total=0, percent=None):
+        now = time.monotonic()
+        if (step, phase) == self.stage and now - self.last < 1:
+            return
+        self.stage, self.last = (step, phase), now
+        data = {"step": step, "app": str(app)[:100]}
+        if phase:
+            data["phase"] = phase
+        if index and total:
+            data.update(index=min(index, total), total=total)
+        if percent is not None:
+            data["percent"] = max(0, min(100, int(percent)))
+        try:
+            self.send(data)
+        except Exception:
+            pass
+
+
+def _rpm_name(text):
+    """« openssl-libs-1:3.2.2-6.el9.x86_64(.rpm) » -> « openssl-libs »."""
+    return text.rsplit("-", 2)[0] if text.count("-") >= 2 else text
+
+
+def apt_progress(send):
+    """Lignes d'état d'apt (APT::Status-Fd=1) : téléchargement 0-30 %, installation 30-100 % ; masquées du journal."""
+    def on_line(line):
+        kind, _, rest = line.partition(":")
+        if kind not in ("dlstatus", "pmstatus"):
+            return False
+        fields = rest.split(":")
+        number = next((i for i, f in enumerate(fields) if i and re.fullmatch(r"\d+(\.\d+)?", f)), None)
+        if number is None:
+            return True
+        percent = float(fields[number])
+        if kind == "dlstatus":
+            send("updates", "download", percent=30 * percent / 100)
+        else:
+            send("updates", "install", app=":".join(fields[:number]).split(":")[0], percent=30 + 70 * percent / 100)
+        return True
+    return on_line
+
+
+DNF_DOWNLOAD_RE = re.compile(r"^\((\d+)/(\d+)\): (\S+)")
+DNF_STEP_RE = re.compile(r"^\s+(?:Upgrading|Installing|Updating|Reinstalling|Downgrading|Cleanup|Verifying|Obsoleting|"
+                         r"Running scriptlet)\s*:\s+(\S+)\s+(\d+)/(\d+)\s*$")
+
+
+def dnf_progress(send):
+    """Compteurs de dnf/yum : « (3/10): paquet.rpm » au téléchargement, « Upgrading : paquet 3/20 » à l'installation."""
+    def on_line(line):
+        m = DNF_DOWNLOAD_RE.match(line)
+        if m:
+            i, n = int(m.group(1)), int(m.group(2))
+            send("updates", "download", app=_rpm_name(m.group(3)), index=i, total=n, percent=30 * i / max(n, 1))
+            return False
+        m = DNF_STEP_RE.match(line)
+        if m:
+            i, n = int(m.group(2)), int(m.group(3))
+            send("updates", "install", app=_rpm_name(m.group(1)), index=i, total=n, percent=30 + 70 * i / max(n, 1))
+        return False
+    return on_line
+
+
+PACKAGE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9+._-]{0,199}")
 
 
 def booted_since(timestamp):
@@ -571,22 +687,39 @@ def scan():
     return inv
 
 
-def update():
+def update(cmd=None, progress=None):
+    """Mises à jour du système (et Flatpak) : toutes, ou seulement celles choisies dans loco (« only » : paquets et
+    Flatpak). progress(step, phase, app, index, total, percent) reçoit l'avancement au fil de l'eau."""
+    cmd = cmd or {}
+    send = progress or (lambda *a, **k: None)
+    only = cmd.get("only") if isinstance(cmd.get("only"), dict) else None
+    names = [] if only is None else [n for n in only.get("packages") or [] if isinstance(n, str) and PACKAGE_RE.fullmatch(n)][:2000]
     fam = family()
-    logs = []
-    if fam == "debian":
-        code, out = apt_update()
-        logs.append(out)
-        if code == 0:
-            code, out = run(["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef",
-                             "-o", "Dpkg::Options::=--force-confold", "upgrade", "--with-new-pkgs"])
+    logs, code = [], 0
+    if only is None or names:
+        if fam == "debian":
+            send("updates", "prepare")
+            code, out = apt_update()
             logs.append(out)
-    elif fam == "rhel":
-        code, out = run(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade"])
-        logs.append(out)
-    else:
-        code, logs = 1, ["gestionnaire de paquets non reconnu"]
-    if shutil.which("flatpak"):
+            if code == 0:
+                # Sélection : « install » prend aussi les nouveaux paquets d'une mise à jour (nouveau noyau…), puis les
+                # paquets installés automatiquement le redeviennent (sinon apt les marquerait « manuels »).
+                auto = run(["apt-mark", "showauto", *names])[1].split() if names else []
+                target = ["install", *names] if only is not None else ["upgrade", "--with-new-pkgs"]
+                code, out = run_stream(["apt-get", "-y", "-q", "-o", "APT::Status-Fd=1", "-o", "DPkg::Lock::Timeout=300",
+                                        "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold",
+                                        *target], apt_progress(send))
+                logs.append(out)
+                if auto:
+                    run(["apt-mark", "auto", *auto])
+        elif fam == "rhel":
+            send("updates", "prepare")
+            code, out = run_stream(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade", *names], dnf_progress(send))
+            logs.append(out)
+        else:
+            code, logs = 1, ["gestionnaire de paquets non reconnu"]
+    if (only is None or only.get("flatpak")) and shutil.which("flatpak"):
+        send("flatpak")
         fcode, out = run(["flatpak", "update", "-y", "--noninteractive", "--system"], timeout=3600)
         logs.append(out)
         code = code or fcode
@@ -617,10 +750,12 @@ def install_package(cmd):
 
 # --------------------------------------------------------------------------- service
 
-def report(conf, cmd_id, state, output="", code=None, inventory=None):
+def report(conf, cmd_id, state, output="", code=None, inventory=None, progress=None):
     data = {"id": cmd_id, "state": state, "output": output[-OUTPUT_LIMIT:], "exit_code": code}
     if inventory is not None:
         data["inventory"] = inventory
+    if progress is not None:
+        data["progress"] = progress
     try:
         call(conf["server"], "/agent/api/result", data, conf["token"])
     except (OSError, ValueError) as e:
@@ -745,7 +880,7 @@ def service():
             report(conf, cmd["id"], "success" if not inv["error"] else "failed", inv["error"] or t("Inventaire transmis.", "Inventory sent.", "Inventario transmitido."),
                    0, inv)
         elif action == "update":
-            code, out = update()
+            code, out = update(cmd, Progress(lambda data, i=cmd["id"]: report(conf, i, "running", progress=data)))
             inv = scan()
             state["last_scan"] = time.time()
             reboot = cmd.get("reboot") and inv["reboot_required"] and code == 0

@@ -3344,5 +3344,17 @@
  "Apparence de l'instance modifiée": "Apariencia de la instancia modificada",
  "Logo de l'instance": "Logotipo de la instancia",
  "Fond de l'entreprise": "Fondo de la empresa",
- "Raccourcis et aide": "Atajos y ayuda"
+ "Raccourcis et aide": "Atajos y ayuda",
+ "Tout cocher": "Marcar todo",
+ "%(num)s mise à jour": "%(num)s actualización",
+ "%(num)s mises à jour": "%(num)s actualizaciones",
+ "sélectionnée(s)": "seleccionada(s)",
+ "redémarrer ensuite si nécessaire": "reiniciar después si es necesario",
+ "Mettre à jour la sélection": "Actualizar la selección",
+ "Pour choisir les mises à jour une par une, l'agent du poste doit être en version %(v)s.0 ou plus (il se met à jour seul).": "Para elegir las actualizaciones una a una, el agente del equipo debe estar en la versión %(v)s.0 o posterior (se actualiza solo).",
+ "Mises à jour du système": "Actualizaciones del sistema",
+ "Préparation": "Preparación",
+ "%(action)s : %(n)s sélectionnée(s)": "%(action)s: %(n)s seleccionada(s)",
+ "Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.": "Elegir las actualizaciones una a una requiere el agente %(v)s.0 o posterior en este equipo.",
+ "Aucune mise à jour en attente ne correspond à la sélection.": "Ninguna actualización pendiente corresponde a la selección."
 }

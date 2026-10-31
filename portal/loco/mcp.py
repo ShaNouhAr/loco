@@ -225,9 +225,13 @@ def _targets(args):
 
 def _command(c, output=1500):
     text = c["output"] or ""
-    return {"id": c["id"], "action": c["action"], "label": str(fleet.action_label(c)), "state": c["state"],
-            "created_at": c["created_at"], "created_by": c["created_by"], "finished_at": c["finished_at"] or None,
-            "exit_code": c["exit_code"], "output": ("…" + text[-output:]) if len(text) > output else text}
+    out = {"id": c["id"], "action": c["action"], "label": str(fleet.action_label(c)), "state": c["state"],
+           "created_at": c["created_at"], "created_by": c["created_by"], "finished_at": c["finished_at"] or None,
+           "exit_code": c["exit_code"], "output": ("…" + text[-output:]) if len(text) > output else text}
+    live = fleet.progress_view(c["progress"]) if c["state"] == "running" else None
+    if live:                                            # avancement remonté par l'agent (étape, élément, pourcentage)
+        out["progress"] = {"step": live["label"], "percent": live["percent"]}
+    return out
 
 
 def _queued(dev, action, added, detail=""):
@@ -302,8 +306,9 @@ def _get_device(args):
            "last_inventory": dev["last_scan"] or None, "enrolled_at": dev["enrolled_at"], "status": STATUS[color],
            "status_detail": reason, "agent_state": dev["state"], "reboot_required": bool(dev["reboot_required"]),
            "inventory_error": inv.get("error") or None, "pending_updates_total": len(updates),
-           "pending_updates": [{"name": u.get("name"), "version": u.get("version"), "security": bool(u.get("security"))}
-                               for u in updates[:200] if isinstance(u, dict)],
+           "pending_updates": [{"name": u.get("name"), "version": u.get("version"), "security": bool(u.get("security")),
+                                **({"id": u["id"]} if u.get("id") else {})} for u in updates[:200] if isinstance(u, dict)],
+           "updates_selectable": fleet.selectable(dev),
            "flatpak_updates": int(inv.get("flatpak") or 0),
            "groups": [x["name"] for x in groups.memberships("device", dev["id"])],
            "pending_actions": [_command(c) for c in fleet.pending(dev["id"])],
@@ -379,8 +384,13 @@ def _scan(args):
 @tool("update_device", "fleet", "Update a device", L_("Mettre à jour un poste"),
       L_("Système, Flatpak et logiciels du catalogue déjà installés, sur un poste."), ("fleet.update",),
       "Install the pending updates of one device: operating system, Flatpak and, on Windows, the catalog software "
-      "already installed. reboot=true also restarts it afterwards (only if this access may reboot devices).",
-      {"device": DEVICE, "reboot": {"type": "boolean", "description": "Restart the device after updating (default false)."}},
+      "already installed — or only some of them with `updates` (Linux package names; Windows update titles, KB numbers "
+      "or ids, as listed by get_device) and `flatpak`. reboot=true also restarts it afterwards (only if this access may "
+      "reboot devices). Follow the progress with get_device.",
+      {"device": DEVICE, "reboot": {"type": "boolean", "description": "Restart the device after updating (default false)."},
+       "updates": {"type": "array", "maxItems": 2000, "items": {"type": "string", "maxLength": 300},
+                   "description": "Only these pending updates (default: all of them)."},
+       "flatpak": {"type": "boolean", "description": "With `updates`: also update the Flatpak applications (Linux)."}},
       ("device",), read_only=False)
 def _update(args):
     dev = _device(args["device"])
@@ -388,7 +398,13 @@ def _update(args):
     reboot = args.get("reboot", False)
     if reboot and not can("fleet.reboot"):
         raise ToolError("This access may not reboot devices: call again without reboot.")
-    result = _queued(dev, "update", fleet.queue(dev, "update", {"reboot": reboot}), " (avec redémarrage)" if reboot else "")
+    params = {"reboot": reboot}
+    if args.get("updates") or args.get("flatpak"):
+        try:
+            params["only"] = fleet.select_updates(dev, args.get("updates") or [], args.get("flatpak", False))
+        except ValueError as e:
+            raise ToolError(str(e))
+    result = _queued(dev, "update", fleet.queue(dev, "update", params), " (avec redémarrage)" if reboot else "")
     result["had_pending_updates"] = fleet.needs_update(dev)
     return result
 

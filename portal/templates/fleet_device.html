@@ -60,12 +60,15 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
-  {% if pending %}<div class="pending-list">{% for c in pending %}
-    <div class="pending-item"><span class="st {{ 'ok' if c.state == 'running' else 'warn' }}"></span><span><strong>{{ action_label(c) }}</strong> ·
-      {% if c.state == 'running' %}{% set live = progress_view(c.progress) %}{{ live.label|lower }}
+  {% if pending %}<div class="pending-list" data-progress="{{ url_for('fleet_device_progress', dev_id=dev.id) }}">{% for c in pending %}
+    {% set live = progress_view(c.progress) if c.state == 'running' else none %}
+    <div class="pending-item" data-cmd="{{ c.id }}"><span class="st {{ 'ok' if c.state == 'running' else 'warn' }}"></span><span><strong>{{ action_label(c) }}</strong> ·
+      <span data-cmd-label>{% if live %}{{ live.label[:1]|lower }}{{ live.label[1:] }}
+      {% elif c.state == 'running' %}{{ _("en cours") }}
       {% elif c.state == 'sent' %}{{ _("transmise à l'agent") }}
       {% elif c.run_after %}{{ _("au prochain contact · planification de %(v)s", v=c.run_after[11:16]) }}
-      {% else %}{{ _("au prochain contact") }}{% endif %}</span>
+      {% else %}{{ _("au prochain contact") }}{% endif %}</span></span>
+      {% if c.state in ('sent', 'running') %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ live.percent if live else 0 }}" height="6" data-cmd-bar/></svg>{% endif %}
       {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}
     </div>{% endfor %}</div>{% endif %}
   {% if planned %}<div class="planned">
@@ -114,20 +117,37 @@
     </div>
 
     <div class="tab-panel on" data-panel="maj">
+      {% set sel = selectable and (inv.updates or (inv.flatpak and not windows)) %}
+      {% if sel %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-update-select>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update"><input type="hidden" name="scope" value="selection">{% endif %}
       <div class="panel-h sub"><h2>{{ _("Système") }}</h2>{% if inv.flatpak %}<div class="aside">{{ _("+ %(flatpak)s Flatpak", flatpak=inv.flatpak) }}</div>{% endif %}</div>
-      {% if inv.updates %}
+      {% if inv.updates or (sel and inv.flatpak) %}
       <div class="table-wrap">
-        <table>
+        <table class="update-table">
+          {% if sel %}<thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="{{ _('Tout cocher') }}"></th><th>{{ _("Mise à jour") }}</th><th class="right">{{ _("Version") }}</th></tr></thead>{% endif %}
           <tbody>
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
-            <tr><td>{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
+            <tr data-update-row="{{ u.name }}">{% if sel %}<td class="check"><input type="checkbox" name="only" value="{{ u.id if windows else u.name }}" aria-label="{{ u.name }}"></td>{% endif %}<td class="upd-name">{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
           {% endfor %}
+          {% if sel and inv.flatpak and not windows %}
+            <tr data-update-row=""><td class="check"><input type="checkbox" name="only_flatpak" value="1" aria-label="{{ _('Applications Flatpak') }}"></td><td class="upd-name">{{ _("Applications Flatpak") }}</td><td class="muted right">{{ ngettext("%(num)s mise à jour", "%(num)s mises à jour", inv.flatpak) }}</td></tr>
+          {% endif %}
           </tbody>
         </table>
       </div>
+      {% if sel %}
+      <div class="update-select-bar">
+        <span class="muted"><span data-select-count>0</span> {{ _("sélectionnée(s)") }}</span>
+        {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1"> {{ _("redémarrer ensuite si nécessaire") }}</label>{% endif %}
+        <button class="btn sm primary" data-select-submit disabled>{{ _("Mettre à jour la sélection") }}</button>
+      </div>
+      {% elif can('fleet.update') and active and inv.updates and not selectable %}
+      <p class="hint update-select-hint">{{ _("Pour choisir les mises à jour une par une, l'agent du poste doit être en version %(v)s.0 ou plus (il se met à jour seul).", v=select_version) }}</p>
+      {% endif %}
       {% else %}
       <div class="empty">{{ _('Aucune mise à jour du système en attente.') if dev.last_scan else _('Inventaire en cours.') }}</div>
       {% endif %}
+      {% if sel %}</form>{% endif %}
 
       {% if windows and can('windows.view') %}
       <div class="panel-h sub"><h2>{{ _("Logiciels du catalogue") }}</h2><div class="aside"><a href="{{ url_for('windows_apps') }}">{{ _("Catalogue") }}</a></div></div>

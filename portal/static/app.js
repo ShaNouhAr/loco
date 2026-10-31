@@ -1486,6 +1486,60 @@
     syncAll(); render();
   });
 
+  /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
+  (function () {
+    var form = $("[data-update-select]");
+    if (form) {
+      var boxes = function () { return $$("input[name=only], input[name=only_flatpak]", form); };
+      var all = $("[data-check-all]", form), btn = $("[data-select-submit]", form), count = $("[data-select-count]", form);
+      var sync = function () {
+        var list = boxes(), n = list.filter(function (b) { return b.checked; }).length;
+        if (count) count.textContent = n;
+        if (btn) btn.disabled = !n;
+        if (all) { all.checked = n > 0 && n === list.length; all.indeterminate = n > 0 && n < list.length; }
+        // Choix en cours : pas de rechargement automatique de la fiche (il effacerait les cases cochées).
+        if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;
+      };
+      form.addEventListener("change", function (e) {
+        if (e.target === all) boxes().forEach(function (b) { b.checked = all.checked; });
+        sync();
+      });
+      sync();
+    }
+    var pendingList = $("[data-progress]");
+    if (!pendingList || !$("[data-cmd]", pendingList)) return;
+    var rows = {}, seen = [];
+    $$("[data-update-row]").forEach(function (tr) { if (tr.dataset.updateRow) rows[tr.dataset.updateRow] = tr; });
+    var step = function () {
+      fetch(pendingList.dataset.progress, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return setTimeout(step, 5000);
+          // Plus rien en cours, ou une action nouvelle : la fiche se recharge (inventaire et historique à jour).
+          if (!d.commands.length || d.commands.some(function (c) { return !$('[data-cmd="' + c.id + '"]', pendingList); })) {
+            if (!document.body.dataset.noReload) return location.reload();
+          }
+          d.commands.forEach(function (c) {
+            var item = $('[data-cmd="' + c.id + '"]', pendingList);
+            if (!item) return;
+            var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
+            if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
+            if (bar && c.state === "running") bar.setAttribute("width", Math.max(1, c.percent || 0));
+            if (c.app && rows[c.app]) {
+              if (seen.indexOf(c.app) < 0) seen.push(c.app);
+              seen.forEach(function (name) {
+                rows[name].classList.toggle("upd-now", name === c.app);
+                rows[name].classList.toggle("upd-done", name !== c.app);
+              });
+            }
+          });
+          setTimeout(step, 2000);
+        })
+        .catch(function () { setTimeout(step, 5000); });
+    };
+    setTimeout(step, 1000);
+  })();
+
   var live = $("[data-poll]");
   if (live) {
     var kind = live.dataset.pollKind;

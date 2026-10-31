@@ -301,9 +301,56 @@ def action_label(cmd):
     if params.get("app_snapshots"):
         names = [a.get("name", a.get("slug", "")) for a in params["app_snapshots"]]
         label = _("%(action)s : %(name)s", action=label, name=", ".join(names[:3]) + ("…" if len(names) > 3 else ""))
+    only = params.get("only") if isinstance(params.get("only"), dict) else None
+    if only:
+        count = len(only.get("packages") or only.get("updates") or []) + (1 if only.get("flatpak") else 0)
+        label = _("%(action)s : %(n)s sélectionnée(s)", action=label, n=count)
     if params.get("reboot"):
         label = _("%(action)s (avec redémarrage)", action=label)
     return label
+
+
+UPDATE_ID_RE = re.compile(r"[0-9A-Za-z-]{8,64}")       # identifiant Windows Update (GUID)
+SELECT_UPDATES = (2, 120)                                # agents qui appliquent une sélection (les autres feraient tout)
+
+
+def selectable(dev):
+    """Mises à jour du système choisissables une par une sur ce poste : agent assez récent et, sous Windows,
+    inventaire avec les identifiants Windows Update."""
+    if version_key(dev["agent_version"]) < SELECT_UPDATES:
+        return False
+    updates = inventory(dev).get("updates") or []
+    return dev["os_family"] != "windows" or all(u.get("id") for u in updates)
+
+
+def select_updates(dev, wanted, flatpak=False):
+    """Mises à jour choisies une par une, limitées à celles que l'inventaire du poste annonce : paquets (Linux) ou
+    identifiants Windows Update, désignés par identifiant, nom, ou numéro KB. ValueError si rien ne correspond."""
+    if not selectable(dev):
+        raise ValueError(_("Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.",
+                           v=".".join(map(str, SELECT_UPDATES))))
+    updates = inventory(dev).get("updates") or []
+    wanted = [str(w).strip() for w in wanted if str(w).strip()]
+    if dev["os_family"] == "windows":
+        def matches(u, w):
+            return w.lower() in (u.get("id", "").lower(), u.get("name", "").lower()) or w.upper() in u.get("version", "").split()
+        chosen = [u["id"] for u in updates if u.get("id") and any(matches(u, w) for w in wanted)]
+        only = {"updates": chosen}
+    else:
+        names = set(wanted)
+        chosen = [u["name"] for u in updates if u.get("name") in names]
+        only = {"packages": chosen, "flatpak": bool(flatpak) and bool(inventory(dev).get("flatpak"))}
+    if not chosen and not only.get("flatpak"):
+        raise ValueError(_("Aucune mise à jour en attente ne correspond à la sélection."))
+    return only
+
+
+def update_selection(dev, form):
+    """Mises à jour cochées sur la fiche du poste (400 si aucune ne correspond à l'inventaire)."""
+    try:
+        return select_updates(dev, form.getlist("only"), form.get("only_flatpak") == "1")
+    except ValueError as e:
+        abort(400, str(e))
 
 
 def needs_update(dev, apps=None):
@@ -423,7 +470,9 @@ def _store_inventory(dev, inv):
     apps = [a for a in (inv.get("apps") or []) if isinstance(a, dict)][:2000]
     clean = {
         "updates": [{"name": _text(u.get("name")), "version": _text(u.get("version"), 80),
-                     "security": bool(u.get("security")), "driver": bool(u.get("driver"))} for u in updates],
+                     "security": bool(u.get("security")), "driver": bool(u.get("driver")),
+                     **({"id": _text(u.get("id"), 64)} if UPDATE_ID_RE.fullmatch(str(u.get("id") or "")) else {})}
+                    for u in updates],
         "apps": [{"name": _text(a.get("name")), "version": _text(a.get("version"), 80),
                   "publisher": _text(a.get("publisher"), 120)} for a in apps],
         "flatpak": int(inv.get("flatpak") or 0) if str(inv.get("flatpak") or 0).isdigit() else 0,
@@ -483,7 +532,9 @@ def _payload(dev, cmd):
     """Action transmise à l'agent, avec ce qu'il lui faut (fichiers du catalogue vérifiés par SHA-256)."""
     params = json.loads(cmd["params"] or "{}")
     out = {"id": cmd["id"], "action": cmd["action"], "reboot": bool(params.get("reboot"))}
-    if cmd["action"] == "update" and dev["os_family"] == "windows":
+    if cmd["action"] == "update" and isinstance(params.get("only"), dict):
+        out["only"] = params["only"]                # mises à jour choisies une par une (agents 2.120.0 et plus)
+    elif cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
     if cmd["action"] == "run-script":
         from . import scripts
@@ -591,15 +642,20 @@ def agent_checkin():
 
 
 PROGRESS_STEPS = {"download": L_("Téléchargement"), "verify": L_("Vérification de l'empreinte"), "install": L_("Installation"),
-                  "windows_update": L_("Mises à jour Windows")}
+                  "windows_update": L_("Mises à jour Windows"), "updates": L_("Mises à jour du système"),
+                  "flatpak": L_("Applications Flatpak")}
+# Phases d'une mise à jour du système (étape « updates ») : préparation, téléchargement puis installation.
+UPDATE_PHASES = {"prepare": L_("Préparation"), "download": L_("Téléchargement"), "install": L_("Installation")}
 
 
 def _progress(value):
-    """Étape remontée par l'agent, bornée : {step, app, index, total, percent}."""
+    """Étape remontée par l'agent, bornée : {step, phase, app, index, total, percent}."""
     if not isinstance(value, dict) or value.get("step") not in PROGRESS_STEPS:
         return None
     out = {"step": value["step"], "app": _text(value.get("app"), 100)}
-    for key, low, high in (("index", 1, 1000), ("total", 1, 1000), ("percent", 0, 100)):
+    if value.get("phase") in UPDATE_PHASES:
+        out["phase"] = value["phase"]
+    for key, low, high in (("index", 1, 5000), ("total", 1, 5000), ("percent", 0, 100)):
         number = value.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and low <= number <= high:
             out[key] = number
@@ -615,6 +671,17 @@ def progress_view(raw):
     if not isinstance(p, dict) or p.get("step") not in PROGRESS_STEPS:
         return None
     total, index = p.get("total") or 1, min(p.get("index") or 1, p.get("total") or 1)
+    if p["step"] in ("updates", "flatpak"):
+        # Mises à jour du système : pourcentage de l'agent s'il le connaît, sinon la part des éléments traités.
+        phase = p.get("phase", "install")
+        percent = p["percent"] if "percent" in p else round(100 * (index - 1) / total)
+        label = str(UPDATE_PHASES[phase]) if p["step"] == "updates" else str(PROGRESS_STEPS["flatpak"])
+        if p.get("app"):
+            label += f" · {p['app']}"
+        if total > 1:
+            label += f" · {index}/{total}"
+        return {"label": label, "percent": max(1, min(99, percent)), "step": p["step"], "app": p.get("app", ""),
+                "phase": phase}
     # Part de chaque logiciel : téléchargement 0-60 %, vérification 60-70 %, installation 70-100 %.
     within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "windows_update": 0.0}[p["step"]]
     overall = round(100 * ((index - 1) + within) / total)
@@ -1196,7 +1263,7 @@ def fleet_device(dev_id):
     history = db().execute("SELECT * FROM device_commands WHERE device_id=? ORDER BY id DESC LIMIT 30",
                            (dev_id,)).fetchall()
     signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"], availability["online"],
-                                           [(c["id"], c["state"], c["progress"]) for c in history]]).encode()).hexdigest()[:16]
+                                           [(c["id"], c["state"]) for c in history]]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
@@ -1224,8 +1291,23 @@ def fleet_device(dev_id):
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
+                           selectable=selectable(dev) and can("fleet.update") and dev["state"] == "active",
+                           select_version=".".join(map(str, SELECT_UPDATES)),
                            label=status_label(dev, color), presence=availability,
                            planned=schedules.covering(db(), dev_id))
+
+
+@app.route("/fleet/<int:dev_id>/progress")
+@login_required
+def fleet_device_progress(dev_id):
+    """Actions en attente ou en cours d'un poste et leur avancement, relus toutes les 2 s par sa fiche."""
+    _get(dev_id)
+    out = []
+    for c in pending(dev_id):
+        live = progress_view(c["progress"]) if c["state"] == "running" else None
+        out.append({"id": c["id"], "state": c["state"], "label": live["label"] if live else "",
+                    "percent": live["percent"] if live else 0, "app": live.get("app", "") if live else ""})
+    return {"commands": out}, 200, {"Cache-Control": "no-store"}
 
 
 @app.route("/fleet/<int:dev_id>/action", methods=["POST"])
@@ -1249,6 +1331,8 @@ def fleet_action(dev_id):
     params = {}
     if action == "update":
         params["reboot"] = request.form.get("reboot") == "1"
+        if request.form.get("scope") == "selection":
+            params["only"] = update_selection(dev, request.form)
     if action == "install-app":
         slug = request.form.get("slug", "")
         if not config.SLUG_RE.match(slug) or dev["os_family"] != "windows" or not db().execute(

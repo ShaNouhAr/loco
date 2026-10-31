@@ -669,7 +669,8 @@ namespace Loco
                     var kbs = new List<string>();
                     foreach (object kb in u.KBArticleIDs) kbs.Add("KB" + kb);
                     updates.Add(new Dictionary<string, object> { { "name", Convert.ToString(u.Title) },
-                        { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) }, { "driver", IsDriver(u) } });
+                        { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) }, { "driver", IsDriver(u) },
+                        { "id", Convert.ToString(u.Identity.UpdateID) } });
                 }
             }
             catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
@@ -679,36 +680,62 @@ namespace Loco
 
         // ------------------------------------------------------------ actions
 
-        static bool InstallWindowsUpdates(List<string> lines)
+        // Pile de maintenance (servicing stack) d'abord, comme le fait Windows Update : une mise à jour cumulative peut l'exiger.
+        static readonly Regex ServicingStack = new Regex("servicing stack|pile de maintenance|pila de servicio", RegexOptions.IgnoreCase);
+
+        // Mises à jour Windows une par une (téléchargement puis installation), toutes ou seulement celles choisies dans
+        // loco (identifiants Windows Update) ; l'avancement part au serveur à chaque étape.
+        static bool InstallWindowsUpdates(List<string> lines, HashSet<string> only = null, Progress progress = null)
         {
             dynamic session = NewSession();
+            if (progress != null) progress("updates", "", 0, 0, -1, "prepare");
             dynamic found = SearchUpdates(session.CreateUpdateSearcher());
-            dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
+            var chosen = new List<object>();
             foreach (dynamic u in found.Updates)
             {
+                if (only != null && !only.Contains(Convert.ToString(u.Identity.UpdateID))) continue;
                 if ((bool)u.InstallationBehavior.CanRequestUserInput) { lines.Add(Lang.T("Ignorée (interactive) : ", "Skipped (interactive): ", "Omitida (interactiva): ") + u.Title); continue; }
                 if (!(bool)u.EulaAccepted) u.AcceptEula();
-                coll.Add(u);
+                chosen.Add(u);
             }
-            if ((int)coll.Count == 0) { lines.Add(Lang.T("Windows Update : aucune mise à jour.", "Windows Update: no updates.", "Windows Update: sin actualizaciones.")); return true; }
-            lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + coll.Count + Lang.T(" mise(s) à jour à installer.", " update(s) to install.", " actualización(es) por instalar."));
-            dynamic downloader = session.CreateUpdateDownloader();
-            downloader.Updates = coll;
-            downloader.Download();
-            dynamic installer = session.CreateUpdateInstaller();
-            installer.Updates = coll;
-            dynamic result = installer.Install();
-            bool ok = true;
-            for (int i = 0; i < (int)coll.Count; i++)
+            chosen = chosen.OrderBy(u => ServicingStack.IsMatch(Convert.ToString(((dynamic)u).Title)) ? 0 : 1).ToList();
+            if (chosen.Count == 0) { lines.Add(Lang.T("Windows Update : aucune mise à jour.", "Windows Update: no updates.", "Windows Update: sin actualizaciones.")); return true; }
+            lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + chosen.Count + Lang.T(" mise(s) à jour à installer.", " update(s) to install.", " actualización(es) por instalar."));
+            bool ok = true, reboot = false;
+            for (int i = 0; i < chosen.Count; i++)
             {
-                dynamic r = result.GetUpdateResult(i);
-                int code = (int)r.ResultCode;
-                string state = code == 2 ? "OK" : code == 3 ? Lang.T("OK avec erreurs", "OK with errors", "OK con errores") : code == 4 ? Lang.T("ÉCHEC", "FAILED", "FALLO") : code == 5 ? Lang.T("ANNULÉE", "CANCELLED", "CANCELADA") : "code " + code;
-                if (code >= 4) ok = false;
-                int hr = (int)r.HResult;
-                lines.Add("  " + state + (hr != 0 ? string.Format(" (0x{0:X8})", hr) : "") + " : " + coll.Item(i).Title);
+                dynamic u = chosen[i];
+                string title = Convert.ToString(u.Title);
+                try
+                {
+                    dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
+                    coll.Add(u);
+                    if (!(bool)u.IsDownloaded)
+                    {
+                        if (progress != null) progress("updates", title, i + 1, chosen.Count, 100 * i / chosen.Count, "download");
+                        dynamic downloader = session.CreateUpdateDownloader();
+                        downloader.Updates = coll;
+                        downloader.Download();
+                    }
+                    if (progress != null) progress("updates", title, i + 1, chosen.Count, (100 * i + 40) / chosen.Count, "install");
+                    dynamic installer = session.CreateUpdateInstaller();
+                    installer.Updates = coll;
+                    dynamic result = installer.Install();
+                    dynamic r = result.GetUpdateResult(0);
+                    int code = (int)r.ResultCode;
+                    string state = code == 2 ? "OK" : code == 3 ? Lang.T("OK avec erreurs", "OK with errors", "OK con errores") : code == 4 ? Lang.T("ÉCHEC", "FAILED", "FALLO") : code == 5 ? Lang.T("ANNULÉE", "CANCELLED", "CANCELADA") : "code " + code;
+                    if (code >= 4) ok = false;
+                    int hr = (int)r.HResult;
+                    lines.Add("  " + state + (hr != 0 ? string.Format(" (0x{0:X8})", hr) : "") + " : " + title);
+                    if ((bool)result.RebootRequired) reboot = true;
+                }
+                catch (Exception e)
+                {
+                    ok = false;                          // une mise à jour en échec n'empêche pas les suivantes
+                    lines.Add("  " + Lang.T("ÉCHEC", "FAILED", "FALLO") + " (" + e.Message.Trim() + ") : " + title);
+                }
             }
-            if ((bool)result.RebootRequired) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish.", "Reinicio necesario para terminar."));
+            if (reboot) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish.", "Reinicio necesario para terminar."));
             return ok;
         }
 
@@ -800,8 +827,9 @@ namespace Loco
             }
         }
 
-        // Étape d'installation remontée au serveur (page du déploiement) : étape, logiciel, rang, nombre, pourcentage.
-        internal delegate void Progress(string step, string app, int index, int total, int percent);
+        // Étape remontée au serveur (fiche du poste, page du déploiement) : étape, élément, rang, nombre, pourcentage et,
+        // pour les mises à jour du système, la phase (préparation, téléchargement, installation).
+        internal delegate void Progress(string step, string app, int index, int total, int percent, string phase = "");
 
         static bool InstallCatalogApps(string server, object appsValue, List<string> lines, Progress progress = null)
         {
@@ -1080,21 +1108,32 @@ namespace Loco
                         bool ok = true;
                         // Avancement : au plus une remontée par seconde pour une même étape, immédiate à chaque changement.
                         string lastStep = ""; var lastSent = DateTime.MinValue;
-                        Progress progress = (step, app, index, total, percent) =>
+                        Progress progress = (step, app, index, total, percent, phase) =>
                         {
-                            string key = step + "|" + app + "|" + index;
+                            string key = step + "|" + phase + "|" + app + "|" + index;
                             if (key == lastStep && (DateTime.UtcNow - lastSent).TotalSeconds < 1) return;
                             lastStep = key; lastSent = DateTime.UtcNow;
-                            var detail = new Dictionary<string, object> { { "step", step }, { "app", app }, { "index", index }, { "total", total } };
+                            var detail = new Dictionary<string, object> { { "step", step }, { "app", app } };
+                            if (index > 0 && total > 0) { detail["index"] = index; detail["total"] = total; }
                             if (percent >= 0) detail["percent"] = percent;
+                            if (!string.IsNullOrEmpty(phase)) detail["phase"] = phase;
                             var report = new Dictionary<string, object> { { "id", id }, { "state", "running" }, { "output", "" }, { "exit_code", null }, { "progress", detail } };
                             try { Post(Str(conf, "server"), "/agent/api/result", report, Str(conf, "token")); }
                             catch (Exception) { }
                         };
                         if (action == "update")
                         {
-                            progress("windows_update", "", 1, 1, -1);
-                            try { ok = InstallWindowsUpdates(lines); }
+                            // Sélection faite dans loco (« only ») : seulement ces mises à jour Windows, sans les logiciels du catalogue.
+                            HashSet<string> only = null;
+                            object onlyValue;
+                            if (cmd.TryGetValue("only", out onlyValue) && onlyValue is Dictionary<string, object>)
+                            {
+                                only = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                object ids;
+                                if (((Dictionary<string, object>)onlyValue).TryGetValue("updates", out ids) && ids is System.Collections.IEnumerable)
+                                    foreach (object one in (System.Collections.IEnumerable)ids) only.Add(Convert.ToString(one));
+                            }
+                            try { ok = InstallWindowsUpdates(lines, only, progress); }
                             catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
                         }
                         object apps;

@@ -142,7 +142,7 @@ ENDPOINTS = {
     "windows_update_domains": "wu.configure",
     "cache_state": ("wu.view", "linux.view", "rpm.view", "flatpak.view"),
     "cache_purge": ("wu.configure", "linux.delete", "rpm.delete", "flatpak.delete"),
-    "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_device_live": "fleet.view", "fleet_action": "fleet.view",
+    "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_device_live": "fleet.view", "fleet_device_progress": "fleet.view", "fleet_action": "fleet.view",
     "fleet_cancel_command": "fleet.view", "fleet_search": "fleet.view", "fleet_windows_update": "fleet.update",
     "fleet_group_windows_update": "fleet.update",
     "schedules": "fleet.view", "schedule_editor": ("fleet.update", "scripts.run"),

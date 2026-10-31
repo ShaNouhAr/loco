@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.120.0 — 2026-10-31
+
+- **Mises à jour d'un poste une par une, avec avancement en direct.** Sur la fiche d'un poste, l'onglet *Mises à jour* propose une case par mise à jour du système (paquet APT ou RPM, mise à jour Windows) et une ligne *Applications Flatpak* ; *Mettre à jour la sélection* n'applique que celles-ci, avec redémarrage facultatif. *Mettre à jour* fait toujours tout.
+  - **En direct** : la ligne de l'action montre l'étape (préparation, téléchargement, installation), le paquet ou la mise à jour en cours et une barre de progression, relues toutes les 2 s sans recharger la page ; dans le tableau, les éléments terminés sont cochés et celui en cours tourne. La fiche se recharge à la fin avec l'inventaire à jour, et pas pendant qu'on coche.
+  - **Agent Linux** : sortie d'apt (lignes d'état `APT::Status-Fd`) et de dnf lue au fil de l'eau ; une sélection passe par `apt-get install` (nouveaux paquets d'une mise à jour compris) en gardant leur marque « installé automatiquement », ou `dnf upgrade <paquets>`.
+  - **Agent Windows** : chaque mise à jour remonte son identifiant Windows Update ; installation une par une (pile de maintenance d'abord), avec l'étape remontée, et une mise à jour en échec n'empêche plus les suivantes.
+  - Choix une par une réservé aux agents 2.120.0 et plus (un ancien agent ferait tout) ; sélection limitée aux mises à jour annoncées par l'inventaire.
+  - **MCP** : `update_device` accepte `updates` (noms de paquets, titres, numéros KB ou identifiants) et `flatpak` ; `get_device` donne les identifiants et l'avancement des actions en cours.
+
 ## 2.119.2 — 2026-10-31
 
 - **Fiche d'un poste** : une action en attente (mise à jour, inventaire, redémarrage…) s'affiche sur une ligne discrète — point de couleur, action, « au prochain contact », lien *Annuler* — au lieu d'un grand encadré d'alerte.
