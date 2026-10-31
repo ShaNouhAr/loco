@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Mon parc") }}{% endblock %}
+{% from "_nav_icons.html" import ui_icon %}
 {% macro filter_url(statut=None, os=None) -%}
 {{ url_for('fleet', group=selected_group.id if selected_group else None,
            statut=(statut or None) if statut is not none else (state or None),
@@ -66,15 +67,16 @@
     {% if rows %}
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
-        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th class="hide-sm">{{ _("Groupes") }}</th><th class="hide-sm">{{ _("Contact") }}</th><th></th></tr></thead>
+        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
           <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
             {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=d.hostname or d.uid[:8]) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
               <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
-              <span class="sub">{{ d.os_name or families.get(d.os_family, '') }}</span></td>
-            <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="{{ _('Adresse par laquelle loco voit le poste (routeur ou NAT)') }}">{{ _("via %(via)s", via=r.via) }}</span>{% endif %}</td>
+              <span class="sub" title="{{ d.os_name }}">{{ r.os_short }}</span>
+              {% if r.groups %}<span class="fleet-groups">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a>{% endfor %}</span>{% endif %}</td>
+            <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="{{ _('Adresse par laquelle loco voit le poste (routeur ou NAT)') }}">{{ _("via %(via)s", via=r.via) }}</span>{% endif %}<span class="sub" title="{{ d.last_seen }}">{{ _("vu %(seen)s", seen=r.seen) }}</span></td>
             <td data-label="{{ _('Mises à jour') }}">
               <span class="fleet-update-state">
               <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" role="img" aria-label="{{ _('Mises à jour : %(label)s', label=r.label) }}" title="{{ r.label }} : {{ r.reason }}"></span>
@@ -91,8 +93,6 @@
               </span>
             </td>
             <td class="hide-sm" data-label="{{ _('Ressources') }}">{{ resources(r.mon) }}</td>
-            <td class="hide-sm" data-label="{{ _('Groupes') }}">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a> {% endfor %}</td>
-            <td class="muted nowrap hide-sm" data-label="{{ _('Contact') }}" title="{{ d.last_seen }}">{{ r.seen }}</td>
             <td class="right nowrap card-action">
               {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ _("%(v)s en attente", v=actions[r.pending[0].action]|lower) }}</span>
               {% else %}
@@ -109,7 +109,7 @@
                 {% if row_reboot %}
                 <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax data-confirm="{{ _('Redémarrer %(name)s ?', name=d.hostname) }}" data-confirm-text="{{ _('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
                   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
-                  <button class="btn sm"><span class="spin"></span>{{ _("Redémarrer") }}</button>
+                  <button class="btn sm icon-only" title="{{ _('Redémarrer') }}" aria-label="{{ _('Redémarrer %(name)s', name=d.hostname) }}"><span class="spin"></span>{{ ui_icon('power') }}</button>
                 </form>
                 {% endif %}
               </div>

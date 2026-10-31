@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.120.1 — 2026-10-31
+
+- **Mon parc sans ascenseur horizontal** : le tableau tient dans la largeur de la page, même avec de longs noms de système. Système affiché en version courte (« Windows Server 2025 Standard », « Debian 13 (trixie) », nom complet en infobulle), groupes sous le nom du poste, dernier contact sous l'adresse, bouton *Redémarrer* en icône ; sur un écran étroit, les barres de ressources se resserrent et les boutons passent l'un sous l'autre.
+
 ## 2.120.0 — 2026-10-31
 
 - **Mises à jour d'un poste une par une, avec avancement en direct.** Sur la fiche d'un poste, l'onglet *Mises à jour* propose une case par mise à jour du système (paquet APT ou RPM, mise à jour Windows) et une ligne *Applications Flatpak* ; *Mettre à jour la sélection* n'applique que celles-ci, avec redémarrage facultatif. *Mettre à jour* fait toujours tout.

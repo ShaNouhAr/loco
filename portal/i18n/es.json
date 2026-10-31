@@ -3356,5 +3356,6 @@
  "Préparation": "Preparación",
  "%(action)s : %(n)s sélectionnée(s)": "%(action)s: %(n)s seleccionada(s)",
  "Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.": "Elegir las actualizaciones una a una requiere el agente %(v)s.0 o posterior en este equipo.",
- "Aucune mise à jour en attente ne correspond à la sélection.": "Ninguna actualización pendiente corresponde a la selección."
+ "Aucune mise à jour en attente ne correspond à la sélection.": "Ninguna actualización pendiente corresponde a la selección.",
+ "Redémarrer %(name)s": "Reiniciar %(name)s"
 }

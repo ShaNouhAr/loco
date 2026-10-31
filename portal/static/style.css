@@ -2204,3 +2204,9 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .update-table tr.upd-now .upd-name::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px; border: 1.5px solid var(--accent); border-right-color: transparent; border-radius: 50%; animation: rot .7s linear infinite; }
 .pending-bar.progress-bar { flex: none; width: 160px; }
 .pending-bar .prog-active { fill: var(--accent); transition: width .4s ease; }
+.fleet-groups { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+@media (max-width: 1180px) {
+  .fleet-table .res { min-width: 120px; }
+  .fleet-table .res-row { grid-template-columns: 34px 1fr 34px; gap: 6px; }
+  .fleet-table .row-acts { flex-direction: column; align-items: flex-end; }
+}

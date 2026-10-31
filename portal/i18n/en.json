@@ -3356,5 +3356,6 @@
  "Préparation": "Preparing",
  "%(action)s : %(n)s sélectionnée(s)": "%(action)s: %(n)s selected",
  "Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.": "Picking updates one by one requires agent %(v)s.0 or later on this device.",
- "Aucune mise à jour en attente ne correspond à la sélection.": "No pending update matches the selection."
+ "Aucune mise à jour en attente ne correspond à la sélection.": "No pending update matches the selection.",
+ "Redémarrer %(name)s": "Restart %(name)s"
 }

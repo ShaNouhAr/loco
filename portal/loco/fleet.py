@@ -1095,6 +1095,14 @@ def _commands(key):
 SEVERITY = {"red": 0, "orange": 1, "grey": 2, "green": 3}
 
 
+def short_os(name):
+    """Système sans l'éditeur ni le numéro de build, pour la liste du parc : « Windows Server 2025 Standard »,
+    « Debian 13 (trixie) » (le nom complet reste en infobulle)."""
+    name = re.sub(r"^Microsoft\s+", "", name or "")
+    name = re.sub(r"\s*\(\d+(\.\d+){1,3}\)$", "", name)
+    return name.replace(" GNU/Linux", "").strip()
+
+
 def _enrich(rows):
     """Colonnes de la liste : adresse du poste, compteurs, groupes, contact en clair ; postes à traiter d'abord."""
     names = {}
@@ -1106,6 +1114,7 @@ def _enrich(rows):
         own = (d["addresses"] or "").split()
         updates = inventory(d).get("updates") or []
         r.update(label=status_label(d, r["color"]), presence=presence(d), address=own[0] if own else (d["ip"] or ""),
+                 os_short=short_os(d["os_name"]) or FAMILIES.get(d["os_family"], ""),
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
                  system=d["updates"], security=sum(1 for u in updates if u.get("security")),
                  linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
