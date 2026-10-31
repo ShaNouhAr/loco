@@ -1518,10 +1518,14 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 @media (max-width: 720px) { .planned-item { flex-wrap: wrap; } .planned-item .muted { margin-left: 25px; } .planner-fields input, .planner-fields select { width: 150px; } }
 
 /* ------------------------------------------------------------------ actions planifiées (en attente) */
-.pending-list { display: flex; flex-direction: column; gap: 6px; }
-.pending-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.pending-item > span { min-width: 0; }
-.pending-cancel { flex: none; }
+/* Actions en attente sur la fiche d'un poste : une ligne discrète chacune, pas un encadré d'alerte. */
+.pending-list { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.pending-item { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-2); }
+.pending-item > span:nth-child(2) { min-width: 0; }
+.pending-item strong { font-weight: 500; color: var(--text); }
+.pending-cancel { flex: none; display: inline-flex; margin-left: 4px; }
+.pending-cancel .linkbtn { font-size: 13px; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
+.pending-cancel .linkbtn:hover { color: var(--text); }
 .compose-bar-in .row { align-items: center; gap: 12px; }
 
 /* ------------------------------------------------------------------ gestionnaire de fichiers */

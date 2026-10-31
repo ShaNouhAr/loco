@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.119.2 — 2026-10-31
+
+- **Fiche d'un poste** : une action en attente (mise à jour, inventaire, redémarrage…) s'affiche sur une ligne discrète — point de couleur, action, « au prochain contact », lien *Annuler* — au lieu d'un grand encadré d'alerte.
+
 ## 2.119.1 — 2026-10-31
 
 - **Terminaux plus sobres** : sous le shell root et les terminaux des postes, les raccourcis (copier, coller, rechercher, taille du texte…) et la remarque sur la fermeture de la session tiennent dans un bloc « Raccourcis et aide » replié par défaut.

@@ -60,13 +60,13 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
-  {% if pending %}<div class="note warn pending-list">{% for c in pending %}
-    <div class="pending-item"><span>{{ action_label(c) }} —
+  {% if pending %}<div class="pending-list">{% for c in pending %}
+    <div class="pending-item"><span class="st {{ 'ok' if c.state == 'running' else 'warn' }}"></span><span><strong>{{ action_label(c) }}</strong> ·
       {% if c.state == 'running' %}{% set live = progress_view(c.progress) %}{{ live.label|lower }}
       {% elif c.state == 'sent' %}{{ _("transmise à l'agent") }}
       {% elif c.run_after %}{{ _("au prochain contact · planification de %(v)s", v=c.run_after[11:16]) }}
       {% else %}{{ _("au prochain contact") }}{% endif %}</span>
-      {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Annuler") }}</button></form>{% endif %}
+      {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}
     </div>{% endfor %}</div>{% endif %}
   {% if planned %}<div class="planned">
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
