@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.120.2 — 2026-11-01
+
+- **Icône de redémarrage** : flèche circulaire (celle de « redémarrage nécessaire ») au lieu du symbole d'alimentation, qui évoquait un arrêt — bouton *Redémarrer* de Mon parc, bouton et bandeau de redémarrage du serveur.
+
 ## 2.120.1 — 2026-10-31
 
 - **Mon parc sans ascenseur horizontal** : le tableau tient dans la largeur de la page, même avec de longs noms de système. Système affiché en version courte (« Windows Server 2025 Standard », « Debian 13 (trixie) », nom complet en infobulle), groupes sous le nom du poste, dernier contact sous l'adresse, bouton *Redémarrer* en icône ; sur un écran étroit, les barres de ressources se resserrent et les boutons passent l'un sous l'autre.
