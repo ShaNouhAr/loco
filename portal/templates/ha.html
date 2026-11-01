@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Haute disponibilité") }} · {{ host }}{% endblock %}
+{% block content %}
+{% from '_nav_icons.html' import ui_icon %}
+{% set is_primary = node.role == 'primary' %}
+{% set is_standby = node.role == 'standby' %}
+{% set has_peer = node.peer and node.peer.address %}
+<div class="head">
+  <div>
+    <h1>{{ _("Haute disponibilité") }}</h1>
+    <p>{{ _("Deux serveurs loco, une seule IP virtuelle : le principal sert le portail, les dépôts et les agents ; le secours réplique tout et prend l’IP si le principal tombe.") }}</p>
+  </div>
+</div>
+
+{% if not available %}
+<div class="panel"><div class="panel-b">
+  <p class="empty">{{ _("La haute disponibilité demande un serveur loco complet (appliance ou installation native). Elle n’est pas disponible dans un conteneur Docker.") }}</p>
+</div></div>
+
+{% elif not agent %}
+<div class="panel"><div class="panel-b">
+  <p class="empty">{{ _("L’agent d’administration ne répond pas : impossible de gérer la haute disponibilité pour l’instant.") }}</p>
+</div></div>
+
+{% elif not node.vip %}
+{# --- Non configuré : activer (principal) ou rejoindre (secours) --- #}
+{% if lxc %}<div class="note warn"><p>{{ _("Ce serveur est un conteneur LXC : l’IP virtuelle (VRRP) peut demander d’autoriser le trafic multicast/VRRP et les adresses supplémentaires côté hôte.") }}</p></div>{% endif %}
+<div class="ha-setup">
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Activer sur ce serveur") }}</h2><div class="aside">{{ _("devient le principal") }}</div></div>
+    <div class="panel-b stack-sm">
+      <p class="small muted">{{ _("Ce serveur prend une IP virtuelle, libre sur le réseau, que porteront le portail, les dépôts et les agents. Vous obtiendrez ensuite un code pour appairer le second serveur.") }}</p>
+      <form method="post" action="{{ url_for('ha_enable') }}" class="stack-sm" data-confirm="{{ _('Activer la haute disponibilité ?') }}" data-confirm-text="{{ _('loco va basculer son adresse sur l’IP virtuelle et redémarrer brièvement. Mettez ensuite à jour les sources des agents si elles pointaient sur l’adresse de ce serveur.') }}" data-confirm-ok="{{ _('Activer') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="f"><span>{{ _("IP virtuelle") }}</span><input type="text" name="vip" placeholder="192.168.1.20/24" inputmode="text" autocomplete="off" required></label>
+        <p class="hint">{{ _("Adresse libre du même réseau que ce serveur, avec le masque (ex. /24). C’est elle que verront les postes et le portail.") }}</p>
+        <div><button class="btn primary">{{ ui_icon('ha') }}<span>{{ _("Activer et devenir le principal") }}</span></button></div>
+      </form>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Rejoindre un principal") }}</h2><div class="aside">{{ _("devient le secours") }}</div></div>
+    <div class="panel-b stack-sm">
+      <p class="small muted">{{ _("Sur le second serveur (neuf, à la même version de loco) : indiquez l’adresse du principal et le code affiché par celui-ci. Ce serveur copiera toute la configuration et les dépôts du principal.") }}</p>
+      <form method="post" action="{{ url_for('ha_join') }}" class="stack-sm" data-confirm="{{ _('Rejoindre ce principal ?') }}" data-confirm-text="{{ _('Toute la configuration et les dépôts de ce serveur seront remplacés par ceux du principal.') }}" data-confirm-ok="{{ _('Rejoindre') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="f"><span>{{ _("Adresse du principal") }}</span><input type="text" name="primary" placeholder="192.168.1.11" inputmode="text" autocomplete="off" required></label>
+        <label class="f"><span>{{ _("Code d’appairage") }}</span><input type="text" name="code" placeholder="LHA-…" autocomplete="off" required></label>
+        <div><button class="btn primary">{{ ui_icon('ha') }}<span>{{ _("Rejoindre comme secours") }}</span></button></div>
+      </form>
+    </div>
+  </section>
+</div>
+
+{% elif code %}
+{# --- Principal en attente d'un secours : code d'appairage --- #}
+<section class="panel">
+  <div class="panel-h"><h2>{{ _("En attente du serveur de secours") }}</h2><span class="pill warn">{{ _("non protégé") }}</span></div>
+  <div class="panel-b stack-sm">
+    <p>{{ _("Ce serveur est le principal et porte l’IP virtuelle %(vip)s. Pour le protéger, ajoutez un second serveur : sur une installation neuve de loco (même version), ouvrez cette même page, choisissez « Rejoindre un principal » et saisissez :", vip=node.vip) }}</p>
+    <div class="kv-grid">
+      <div><dt>{{ _("Adresse du principal") }}</dt><dd class="mono">{{ node.self.address }}</dd></div>
+      <div><dt>{{ _("Code d’appairage (valable une fois)") }}</dt><dd><div class="cmd"><code>{{ code }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div></dd></div>
+    </div>
+    <p class="hint">{{ _("Le code ne sert qu’une fois et n’expose jamais le secret de la grappe. Tant qu’aucun secours n’a rejoint, il n’y a pas de bascule automatique.") }}</p>
+  </div>
+  <div class="panel-f row-between">
+    <span class="small muted">{{ _("Version de ce serveur : %(v)s", v=version) }}</span>
+    <form method="post" action="{{ url_for('ha_disable') }}" data-confirm="{{ _('Annuler la haute disponibilité ?') }}" data-confirm-text="{{ _('L’IP virtuelle est libérée et ce serveur reprend son adresse normale.') }}" data-confirm-ok="{{ _('Annuler') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button>
+    </form>
+  </div>
+</section>
+
+{% else %}
+{# --- Grappe active --- #}
+<section class="panel">
+  <div class="panel-h">
+    <h2>{{ _("État de la grappe") }}</h2>
+    <div class="aside">
+      {% if is_primary %}<span class="pill ok">{{ _("ce serveur : principal") }}</span>{% else %}<span class="pill">{{ _("ce serveur : secours") }}</span>{% endif %}
+      {% if status.keepalived %}<span class="pill ok">keepalived</span>{% else %}<span class="pill err">{{ _("keepalived arrêté") }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="panel-b stack-sm">
+    {% if status.error %}<div class="note warn"><p>{{ status.error }}</p></div>{% endif %}
+    <dl class="kv-grid">
+      <div><dt>{{ _("IP virtuelle") }}</dt><dd class="mono">{{ node.vip }}{% if status.vip_held %} · <span class="ok">{{ _("portée par ce serveur") }}</span>{% endif %}</dd></div>
+      {% if is_primary %}
+      <div><dt>{{ _("Base répliquée") }}</dt><dd>{{ rel.db_at or "—" }}</dd></div>
+      {% if repl.files_count is not none %}<div><dt>{{ _("Dépôts") }}</dt><dd>{{ _("%(n)s fichiers", n=repl.files_count) }} · {{ repl.files_bytes|human }}</dd></div>{% endif %}
+      {% else %}
+      <div><dt>{{ _("Dernière copie du principal") }}</dt><dd>{{ rel.pulled_at or _("jamais") }}{% if repl.paused %} · <span class="warn">{{ repl.paused }}</span>{% endif %}</dd></div>
+      <div><dt>{{ _("Données appliquées") }}</dt><dd>{{ rel.db_at or "—" }}</dd></div>
+      {% endif %}
+      <div><dt>{{ _("Mise à jour de l’état") }}</dt><dd>{{ rel.updated or "—" }}</dd></div>
+    </dl>
+
+    <div class="table-wrap">
+      <table class="ha-nodes">
+        <thead><tr><th>{{ _("Serveur") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Rôle") }}</th><th>{{ _("Version") }}</th><th>{{ _("Vu") }}</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>{{ node.self.name or node.self.address }}</strong> <span class="badge-ro">{{ _("ce serveur") }}</span></td>
+            <td class="mono">{{ node.self.address }}</td>
+            <td>{% if is_primary %}<span class="pill ok">{{ _("principal") }}</span>{% else %}<span class="pill">{{ _("secours") }}</span>{% endif %}</td>
+            <td class="mono">{{ version }}</td>
+            <td>{{ _("à l'instant") }}</td>
+          </tr>
+          {% if has_peer %}
+          <tr>
+            <td><strong>{{ peer.name or node.peer.name or node.peer.address }}</strong></td>
+            <td class="mono">{{ node.peer.address }}</td>
+            <td>{% if peer.role == 'primary' %}<span class="pill ok">{{ _("principal") }}</span>{% elif peer.role == 'standby' %}<span class="pill">{{ _("secours") }}</span>{% else %}<span class="pill">{{ _("inconnu") }}</span>{% endif %}</td>
+            <td class="mono">{{ peer.version or '—' }}{% if peer.version and peer.version != version %} <span class="warn">⚠</span>{% endif %}</td>
+            <td>{% if peer.reachable %}{{ rel.peer_seen or _("à l'instant") }}{% else %}<span class="err">{{ _("injoignable") }}</span>{% endif %}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+    {% if has_peer and peer.version and peer.version != version %}<p class="hint">{{ _("Les deux serveurs ont des versions de loco différentes : la réplication est en pause jusqu’à la mise à niveau des deux.") }}</p>{% endif %}
+    {% if not has_peer and is_standby %}<p class="hint">{{ _("Ce serveur est devenu principal après une bascule ; le pair n’est pas encore enregistré.") }}</p>{% endif %}
+  </div>
+</section>
+
+{% if status.events %}
+<section class="panel">
+  <div class="panel-h"><h2>{{ _("Événements") }}</h2></div>
+  <div class="panel-b">
+    <ul class="ha-events">
+      {% for e in status.events|reverse %}<li><span class="mono muted">{{ e.at|date_fr }}</span> {{ e.text }}</li>{% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
+
+<div class="row-between ha-save">
+  <form method="post" action="{{ url_for('ha_disable') }}" data-confirm="{{ _('Quitter la haute disponibilité ?') }}" data-confirm-text="{{ is_primary and _('L’IP virtuelle est libérée, le secours quitte la grappe et ce serveur reprend son adresse normale.') or _('Ce serveur cesse d’être le secours : il garde la dernière copie du principal, mais n’est plus synchronisé.') }}" data-confirm-ok="{{ _('Quitter') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Quitter la haute disponibilité") }}</button>
+  </form>
+  {% if is_primary and has_peer %}
+  <form method="post" action="{{ url_for('ha_failover') }}" data-confirm="{{ _('Basculer vers le secours ?') }}" data-confirm-text="{{ _('Ce serveur cède l’IP virtuelle au secours, qui devient le principal. Utile pour une maintenance planifiée.') }}" data-confirm-ok="{{ _('Basculer') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ ui_icon('ha') }}<span>{{ _("Basculer vers le secours") }}</span></button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.121.0 — 2026-11-01
+
+- **Haute disponibilité intégrée.** Deux serveurs loco, une seule *IP virtuelle* : le principal sert le portail, les dépôts et les agents ; le secours réplique tout en continu et prend l'IP automatiquement si le principal tombe (keepalived / VRRP). *Administration › Serveur › Haute disponibilité*.
+  - **Mise en place guidée** : sur le premier serveur, « Activer » demande une IP virtuelle libre et affiche un **code d'appairage** à usage unique ; sur un second serveur neuf (même version), « Rejoindre » avec l'adresse du principal et ce code copie toute la configuration et les dépôts, puis arme la bascule. loco règle lui-même son adresse sur l'IP virtuelle et étend son certificat à l'IP virtuelle et aux deux serveurs.
+  - **Réplication sûre** : configuration, base et dépôts sont transférés chiffrés (AES-256-GCM) entre les serveurs, authentifiés par un secret de grappe que le portail ne voit jamais (il n'en garde que l'empreinte). Les caches ne sont pas répliqués (ils se reconstruisent). Pendant une mise à jour, le contrôle de santé ne déclenche pas de bascule.
+  - **Supervision et bascule** : la page montre le rôle de chaque serveur, qui porte l'IP virtuelle, la fraîcheur de la réplication, l'état de keepalived et les derniers événements. *Basculer vers le secours* permet une bascule volontaire (maintenance planifiée) ; le secours est passif (en lecture) tant qu'il ne porte pas l'IP.
+  - Indisponible dans un conteneur Docker ; `keepalived` est inclus dans l'appliance et installé à la demande sur Debian/Ubuntu et Red Hat.
+
 ## 2.120.2 — 2026-11-01
 
 - **Icône de redémarrage** : flèche circulaire (celle de « redémarrage nécessaire ») au lieu du symbole d'alimentation, qui évoquait un arrêt — bouton *Redémarrer* de Mon parc, bouton et bandeau de redémarrage du serveur.

@@ -165,6 +165,8 @@ ENDPOINTS = {
     "system_offsite": "system.configure", "system_offsite_test": "system.configure",
     "system_shell_enable": "system.configure", "system_shell_disable": "system.configure", "system_shell_open": "system.configure",
     "system_shell_io": "system.configure", "system_shell_home": "system.configure",
+    "ha_page": "system.view", "ha_enable": "system.configure", "ha_join": "system.configure",
+    "ha_failover": "system.configure", "ha_disable": "system.configure",
     "alerts": "alerts.view", "alerts_save": "alerts.configure", "alerts_test": "alerts.configure",
     "appliance_updates": "system.view", "appliance_job": "system.view",
     "appliance_operations_state": "system.view", "appliance_updates_post": "system.view",

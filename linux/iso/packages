@@ -34,5 +34,6 @@ e2fsprogs
 dosfstools
 dialog
 chrony
+keepalived
 acpid
 qemu-guest-agent

@@ -62,7 +62,9 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).
                     "web_manifest", "service_worker", "offline",
                     # Serveur MCP : authentifié par son propre jeton (en-tête Authorization).
-                    "mcp_endpoint"}
+                    "mcp_endpoint",
+                    # Haute disponibilité : le serveur pair s'authentifie par l'en-tête X-Loco-HA.
+                    "ha_join_api", "ha_state_api", "ha_bundle_api", "ha_db_api", "ha_manifest_api", "ha_file_api", "ha_leave_api"}
 
 
 @app.before_request
@@ -114,6 +116,7 @@ def inject_globals():
         "apt_nginx": config.APT_NGINX,
         "appliance": config.APPLIANCE,
         "server_updates": config.SERVER_UPDATES,
+        "ha_available": ha.available(),
         "lang": i18n.locale(),
         "langs": i18n.LANGS,
         "js_i18n": i18n.js_catalog(),
@@ -147,11 +150,11 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, ha  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
-                 mcp_remote)
+                 mcp_remote, ha)
 
 
 def startup():

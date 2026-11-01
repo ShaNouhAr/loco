@@ -347,9 +347,10 @@ def start_dispatcher():
 
     def loop():
         time.sleep(15)                          # laisser le serveur finir de démarrer
+        from . import ha
         while True:
             try:
-                if lease():                      # un seul processus agit (multi-workers)
+                if not ha.skip_background() and lease():   # un seul processus agit ; jamais le serveur de secours
                     with transaction() as conn:
                         dispatch(conn)
             except Exception:                    # un fil de fond ne doit jamais faire tomber le serveur

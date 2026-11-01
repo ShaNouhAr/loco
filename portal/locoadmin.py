@@ -66,7 +66,11 @@ def valid_source(value):
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert",
-           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode")
+           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode",
+           "ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
+HA_ACTIONS = ("ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
+# Opérations qui redémarrent le portail : en haute disponibilité, le contrôle de santé ne doit pas y voir une panne.
+HA_MAINTENANCE = ("update-loco", "update-system", "update-security", "configure", "restore", "ha-reconfigure")
 TZ_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*")
 # Réservées à l'appliance Alpine (réglages gérés par loco via install.sh) ; ailleurs, install.sh s'en charge.
 # La mise à jour de loco et le choix du dépôt GitHub valent pour tout serveur Linux.
@@ -200,6 +204,36 @@ def validate(changes, current=None):
         if value != current.get(key, ""):
             clean[key] = value
     return clean
+
+
+def _ha():
+    """Haute disponibilité (portal/locoha.py), importée à la demande : locoadmin tourne en mode isolé (python -I)."""
+    here = os.path.dirname(HERE)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import locoha
+    return locoha
+
+
+def ha_params(action, params):
+    """Paramètres d'une opération de haute disponibilité, revalidés par l'agent (ValueError sinon)."""
+    p = params or {}
+    if action == "ha-enable":
+        vip = str(p.get("vip", "")).strip()
+        if not re.fullmatch(r"[0-9a-fA-F:.]{3,45}(/[0-9]{1,3})?", vip):
+            raise ValueError("IP virtuelle invalide")
+        return {"vip": vip}
+    if action == "ha-join":
+        primary, code = str(p.get("primary", "")).strip()[:200], str(p.get("code", "")).strip()
+        if not re.fullmatch(r"(https?://)?[0-9a-fA-F:.\[\]]{3,60}(:[0-9]{1,5})?/?", primary) or not re.fullmatch(r"LHA-[A-Za-z0-9_-]{20,64}", code):
+            raise ValueError("adresse du principal ou code d'appairage invalide")
+        return {"primary": primary, "code": code}
+    if action == "ha-peer":
+        address, name = str(p.get("address", "")).strip(), str(p.get("name", ""))[:63]
+        if not re.fullmatch(r"[0-9a-fA-F:.]{3,45}", address):
+            raise ValueError("adresse du secours invalide")
+        return {"address": address, "name": name if re.fullmatch(r"[A-Za-z0-9.-]{0,63}", name) else ""}
+    return {}
 
 
 def current_version():
@@ -2212,10 +2246,12 @@ def remove_ca(params=None, log=print):
 
 
 def _agent_names(extra=()):
-    """Noms à couvrir : adresse des agents (IP ou DNS), nom et nom complet du serveur, noms ajoutés."""
+    """Noms à couvrir : adresse des agents (IP ou DNS), nom et nom complet du serveur, noms et adresses ajoutés (les
+    deux serveurs d'une grappe de haute disponibilité, en plus de son IP virtuelle)."""
     host, name, fqdn = read_conf().get("HOST", "") or "127.0.0.1", socket.gethostname(), socket.getfqdn()
     san = [f"IP:{host}"] if _valid_ip(host) else [f"DNS:{host}"]
-    san += [f"DNS:{n}" for n in (fqdn, name, *extra) if n and n != "localhost" and CERT_NAME_RE.fullmatch(n)]
+    san += [f"IP:{n}" for n in extra if _valid_ip(n)]
+    san += [f"DNS:{n}" for n in (fqdn, name, *extra) if n and n != "localhost" and not _valid_ip(n) and CERT_NAME_RE.fullmatch(n)]
     return list(dict.fromkeys(san))
 
 
@@ -2289,12 +2325,12 @@ def _short_cn():
     return name if len(name) <= 64 else name.split(".")[0][:63] or "loco"
 
 
-def _loco_cert(tmp, log):
+def _loco_cert(tmp, log, extra=()):
     """Certificat serveur signé par l'autorité loco (adresse et noms actuels) : (clé, certificat) dans tmp."""
     ca_crt, ca_key = os.path.join(TLS, "ca.crt"), os.path.join(TLS, "ca.key")
     if not (os.path.isfile(ca_crt) and os.path.isfile(ca_key)):
         raise ValueError(t("autorité locale introuvable", "local authority not found", "autoridad local no encontrada"))
-    san = _agent_names()
+    san = _agent_names(extra)
     san += [s for s in ("IP:127.0.0.1", "DNS:localhost") if s not in san]
     key, csr, crt, ext = (os.path.join(tmp, n) for n in ("server.key", "server.csr", "server.crt", "ext.cnf"))
     with open(ext, "w") as f:
@@ -2681,11 +2717,40 @@ def _operation(action, params, log):
         return import_enterprise_cert(params, log)
     if action == "set-tls-mode":
         return set_tls_mode(params, log)
+    if action == "ha-enable":
+        return _ha().enable(params, log, sys.modules[__name__])
+    if action == "ha-join":
+        return _ha().join(params, log, sys.modules[__name__])
+    if action == "ha-peer":
+        return _ha().add_peer(params, log, sys.modules[__name__])
+    if action == "ha-failover":
+        return _ha().failover(log)
+    if action == "ha-disable":
+        return _ha().disable(log, sys.modules[__name__])
+    if action == "ha-reconfigure":
+        return _install(read_conf().get("SOURCE_DIR", ""), [], log) == 0
     raise ValueError(f"action inconnue : {action}")
 
 
 class Busy(Exception):
     pass
+
+
+def ha_worker():
+    """Haute disponibilité : réplication (principal → secours) et état publié, toutes les ~10 s."""
+    ha, cache = _ha(), {}
+
+    def reconfigure():
+        if running_job() is None:
+            _submit("ha-reconfigure", user="loco-ha")
+    hooks = {"reconfigure": reconfigure, "reload_nginx": lambda: _reload_nginx(lambda _text: None),
+             "restart_portal": lambda: ha.service("loco" if ALPINE else "loco-portal", "restart")}
+    while True:
+        try:
+            ha.cycle(current_version(), hooks, cache, log=ha.event)
+        except Exception as e:  # noqa: BLE001 - le fil ne doit jamais s'arrêter
+            print(f"haute disponibilité : {e}", file=sys.stderr)
+        time.sleep(ha.CYCLE)
 
 
 def _lock(wait):
@@ -2722,7 +2787,10 @@ def run_job(job_id):
         _write_json(meta_path, job)
         ok = False
         try:
-            ok = _operation(job["action"], job.get("params") or {}, log)
+            with contextlib.ExitStack() as stack:
+                if job["action"] in HA_MAINTENANCE and os.path.exists(os.path.join(ETC, "ha", "node.json")):
+                    stack.enter_context(_ha().maintenance())
+                ok = _operation(job["action"], job.get("params") or {}, log)
         except Exception as e:  # noqa: BLE001 - tout échec est rapporté dans le journal de l'opération
             log(f"Erreur : {e}")
         job.update(state="success" if ok else "failed", finished=_now())
@@ -2833,6 +2901,7 @@ def agent():
     except OSError as e:
         print(f"shell root indisponible : {e}", file=sys.stderr)
     threading.Thread(target=cache_worker, name="loco-cache", daemon=True).start()
+    threading.Thread(target=ha_worker, name="loco-ha", daemon=True).start()
     code = os.stat(HERE).st_mtime_ns
     beat = timecheck = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.
@@ -2927,6 +2996,11 @@ def agent():
                         params = tls_params(req["action"], req.get("params"))
                     except ValueError:
                         continue
+                elif req["action"] in HA_ACTIONS:
+                    try:
+                        params = ha_params(req["action"], req.get("params"))
+                    except ValueError:
+                        continue
                 _submit(req["action"], params, str(req.get("user", "")))
                 busy = True
                 break
@@ -3018,6 +3092,8 @@ def request(action, params=None, user=""):
         params = {"upload": upload}
     elif action in ("import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode"):
         params = tls_params(action, params)
+    elif action in HA_ACTIONS:
+        params = ha_params(action, params)
     else:
         params = {}
     path = os.path.join(REQUESTS, f"{time.time():.6f}-{uuid.uuid4().hex[:6]}")
@@ -3116,6 +3192,11 @@ def main(argv):
         return 0
     if cmd == "run-job" and len(args) == 1:
         run_job(args[0])
+        return 0
+    if cmd == "ha-check":                                  # keepalived : ce serveur peut-il porter l'IP virtuelle ?
+        return _ha().check()
+    if cmd == "ha-notify":                                 # keepalived : « INSTANCE loco MASTER 150 »
+        _ha().notify(args)
         return 0
     if cmd == "update":
         sub = args[0] if args else "status"

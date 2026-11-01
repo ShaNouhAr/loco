@@ -359,9 +359,10 @@ def start():
 
     def loop():
         time.sleep(30)
+        from . import ha
         while True:
             try:
-                if lease():                      # un seul processus agit (multi-workers)
+                if not ha.skip_background() and lease():   # un seul processus agit ; jamais le serveur de secours
                     with transaction() as conn:
                         sync(conn)
             except Exception:

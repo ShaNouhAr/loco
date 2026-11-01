@@ -658,6 +658,18 @@ label.f > small { display: block; margin-top: 6px; font-size: 12px; line-height:
 .time-sources th, .time-sources td { padding: 8px 12px; font-size: 13px; }
 .time-sources th { background: var(--bg-2); }
 .time-sources td.mono { font-size: 12.5px; }
+/* Haute disponibilité : deux cartes de mise en place, table des serveurs, journal des événements */
+.ha-setup { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 760px) { .ha-setup { grid-template-columns: 1fr; } }
+.ha-nodes { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.ha-nodes th, .ha-nodes td { padding: 9px 12px; font-size: 13px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ha-nodes th { background: var(--bg-2); color: var(--text-2); font-weight: 600; }
+.ha-nodes tr:last-child td { border-bottom: 0; }
+.ha-nodes td.mono { font-size: 12.5px; }
+.ha-events { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ha-events li { font-size: 13px; color: var(--text-2); display: flex; gap: 10px; }
+.ha-events .mono { flex: none; font-size: 12px; }
+.ha-save { margin-top: 4px; }
 .cert-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .cert-import { border-top: 1px solid var(--line); display: grid; gap: 12px; }
 .cert-import h3 { margin: 0; font-size: 13.5px; font-weight: 600; }
