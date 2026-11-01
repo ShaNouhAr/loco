@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.122.0 — 2026-11-01
+
+- **Déroulé global des mises à jour du parc.** Nouvelle page *Mon parc › Mises à jour* : le suivi, en un seul endroit, de toutes les mises à jour du parc — **en cours** (avancement en direct, barre par poste, rafraîchie toutes les 2 s sans recharger), **en attente** du prochain contact, et **terminées récemment** (succès ou échec avec le motif). Chaque ligne mène à la fiche du poste.
+  - **Adapté aux droits** : chacun n'y voit que les postes de son parc (même périmètre que Mon parc) ; un onglet avec une **pastille** indique le nombre de mises à jour en cours ou en attente.
+  - *Mettre à jour tout le parc* amène directement sur ce déroulé pour suivre la vague lancée.
+
 ## 2.121.1 — 2026-11-01
 
 - **Redémarrer depuis Mon parc reste sur la liste.** Le bouton *Redémarrer* d'un poste ne renvoie plus vers sa fiche : un message confirme que le redémarrage est demandé et la liste reste affichée. Tant que le redémarrage est en attente, la pastille passe de « redémarrage nécessaire » à « redémarrage en cours ».

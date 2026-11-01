@@ -695,6 +695,54 @@ def progress_view(raw):
 
 app.jinja_env.globals["progress_view"] = progress_view
 
+# Déroulé global des mises à jour du parc : les mises à jour et les redémarrages qui les accompagnent.
+UPDATE_ACTIVITY = ("update", "reboot")
+ACTIVITY_RECENT_MINUTES = 30
+
+
+def _activity_rows():
+    cutoff = (datetime.datetime.now() - datetime.timedelta(minutes=ACTIVITY_RECENT_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+    return db().execute(
+        "SELECT c.id, c.device_id, c.action, c.params, c.state, c.created_at, c.created_by, c.finished_at, "
+        "c.exit_code, c.output, c.progress, d.hostname, d.os_family, d.os_name "
+        "FROM device_commands c JOIN devices d ON d.id = c.device_id "
+        "WHERE c.action IN ('update', 'reboot') AND d.state != 'removed'" + scope.sql("d.id") + " "
+        "AND (c.state IN ('queued', 'sent', 'running') OR (c.state IN ('success', 'error') AND c.finished_at >= ?)) "
+        "ORDER BY c.id DESC", (cutoff,)).fetchall()
+
+
+def update_activity():
+    """Mises à jour du parc (dans le périmètre du compte) : en cours, en attente, terminées récemment, + signature."""
+    rows = _activity_rows()
+    running, pending, recent = [], [], []
+    for c in rows:
+        item = {"id": c["id"], "dev_id": c["device_id"], "hostname": c["hostname"] or c["device_id"],
+                "os_short": short_os(c["os_name"]), "action": c["action"], "label": action_label(c),
+                "state": c["state"], "created_at": c["created_at"], "finished_at": c["finished_at"], "by": c["created_by"]}
+        if c["state"] == "running":
+            item["progress"] = progress_view(c["progress"]) if c["action"] == "update" else None
+            running.append(item)
+        elif c["state"] in ("queued", "sent"):
+            pending.append(item)
+        else:
+            item["ok"] = c["state"] == "success"
+            item["summary"] = (c["output"] or "").strip().splitlines()[-1][:160] if c["output"] else ""
+            recent.append(item)
+    signature = hashlib.sha256(json.dumps([[c["id"], c["state"], c["finished_at"]] for c in rows]).encode()).hexdigest()[:16]
+    return {"running": running, "pending": pending, "recent": recent, "signature": signature,
+            "active": len(running) + len(pending)}
+
+
+def updating_count():
+    """Nombre de mises à jour (ou redémarrages) en cours ou en attente dans le périmètre du compte (pastille de navigation)."""
+    try:
+        row = db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
+                           "WHERE c.action IN ('update', 'reboot') AND c.state IN ('queued', 'sent', 'running') "
+                           "AND d.state != 'removed'" + scope.sql("d.id")).fetchone()
+        return row[0]
+    except Exception:  # noqa: BLE001 - une pastille de navigation ne doit jamais faire tomber une page
+        return 0
+
 
 @app.route("/agent/api/result", methods=["POST"])
 def agent_result():
@@ -1322,6 +1370,20 @@ def fleet_device_progress(dev_id):
     return {"commands": out}, 200, {"Cache-Control": "no-store"}
 
 
+@app.route("/fleet/updates")
+@login_required
+def fleet_updates():
+    """Déroulé global des mises à jour du parc : en cours (avancement en direct), en attente, terminées récemment."""
+    require("fleet.view")
+    data = update_activity()
+    if request.headers.get("X-Requested-With") == "fetch":
+        # Barres rafraîchies en place ; la page ne se recharge que si l'ensemble change (signature).
+        live = [{"id": r["id"], "percent": r["progress"]["percent"] if r.get("progress") else 0,
+                 "label": r["progress"]["label"] if r.get("progress") else ""} for r in data["running"]]
+        return {"signature": data["signature"], "running": live}, 200, {"Cache-Control": "no-store"}
+    return render_template("fleet_updates.html", **data, checkin=CHECKIN)
+
+
 @app.route("/fleet/<int:dev_id>/action", methods=["POST"])
 @login_required
 def fleet_action(dev_id):
@@ -1422,7 +1484,8 @@ def fleet_update_all():
     db().commit()
     audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
     flash((_('Mise à jour demandée sur %(count)s poste(s).', count=count) if count else _('Aucun poste à mettre à jour.')), "ok")
-    return back("fleet", **({"group": group_id} if group_id else {}))
+    # S'il y a quelque chose à suivre, aller au déroulé des mises à jour ; sinon rester sur la liste.
+    return back("fleet_updates") if count else back("fleet", **({"group": group_id} if group_id else {}))
 
 
 @app.route("/fleet/groups/<int:group_id>/windows-update", methods=["POST"])

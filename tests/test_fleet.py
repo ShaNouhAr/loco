@@ -306,6 +306,31 @@ class TestActions(FleetTest):
                               headers={"X-Requested-With": "fetch"})
         self.assertEqual(r.get_json()["redirect"], "/")
 
+    def test_global_update_activity_page_lists_running_pending_recent(self):
+        import datetime
+        a = Agent(LINUX, "192.168.44.10"); a.enroll(); a.checkin({"updates": [{"name": "openssl", "version": "3.5"}]})
+        b = Agent(LINUX, "192.168.44.11"); b.enroll(); b.checkin({"updates": [{"name": "curl", "version": "8"}]})
+        da, db_id = device(a.uid)["id"], device(b.uid)["id"]
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with transaction() as conn:
+            conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at,progress) VALUES (?,?,?,?,?,?)",
+                         (da, "update", "{}", "running", now,
+                          json.dumps({"step": "updates", "phase": "install", "app": "openssl", "percent": 42})))
+            conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at) VALUES (?,?,?,?,?)",
+                         (db_id, "update", "{}", "queued", now))
+            conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at,finished_at,output) "
+                         "VALUES (?,?,?,?,?,?,?)", (db_id, "update", "{}", "success", now, now, "OK : 3 paquets"))
+        page = self.admin.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn("En cours", page)
+        self.assertIn("En attente", page)
+        self.assertIn("Terminées récemment", page)
+        self.assertIn('width="42"', page)              # barre d'avancement du poste en cours
+        # Flux en direct : barres sans recharger, rechargement quand la signature change.
+        live = self.admin.c.get("/fleet/updates", headers={"X-Requested-With": "fetch"}).get_json()
+        self.assertEqual(len(live["running"]), 1)
+        self.assertEqual(live["running"][0]["percent"], 42)
+        self.assertTrue(live["signature"])
+
     def add_app(self):
         with transaction() as conn:
             conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect) "

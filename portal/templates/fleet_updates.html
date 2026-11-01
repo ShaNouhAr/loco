@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{{ _("Mises à jour") }} · {{ host }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<div class="head">
+  <div>
+    <h1>{{ _("Mises à jour du parc") }}</h1>
+    <p>{{ _("Le déroulé des mises à jour en cours sur les postes que vous gérez : avancement en direct, celles qui attendent le prochain contact, et celles qui viennent de se terminer.") }}</p>
+  </div>
+</div>
+
+<div class="stack" data-updates-feed data-updates="{{ url_for('fleet_updates') }}" data-signature="{{ signature }}">
+  {% if not running and not pending and not recent %}
+  <div class="panel"><div class="panel-b">
+    <p class="empty">{{ _("Aucune mise à jour en cours sur les postes que vous gérez.") }} <a href="{{ url_for('fleet') }}">{{ _("Aller à Mon parc") }}</a></p>
+  </div></div>
+  {% endif %}
+
+  {% if running %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("En cours") }}</h2><div class="aside">{{ running|length }}</div></div>
+    <div class="panel-b pending-list">
+      {% for r in running %}
+      <div class="pending-item" data-cmd="{{ r.id }}">
+        <span class="st ok"></span>
+        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
+          <span data-cmd-label>{% set lbl = r.progress.label if r.progress else r.label %}{{ lbl[:1]|lower }}{{ lbl[1:] }}</span></span>
+        {% if r.progress %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent }}" height="6" data-cmd-bar/></svg>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if pending %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("En attente") }}</h2><div class="aside">{{ pending|length }}</div></div>
+    <div class="panel-b pending-list">
+      {% for r in pending %}
+      <div class="pending-item">
+        <span class="st warn"></span>
+        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
+          {{ r.label[:1]|lower }}{{ r.label[1:] }} — <span class="muted">{{ _("au prochain contact (moins de %(v)s min)", v=checkin // 60) }}</span></span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if recent %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Terminées récemment") }}</h2></div>
+    <div class="panel-b pending-list">
+      {% for r in recent %}
+      <div class="pending-item">
+        <span class="st {{ 'ok' if r.ok else 'err' }}"></span>
+        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
+          {{ r.label[:1]|lower }}{{ r.label[1:] }} — {{ _("terminé") if r.ok else _("échec") }}{% if r.summary %} <span class="muted" title="{{ r.summary }}">· {{ r.summary }}</span>{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

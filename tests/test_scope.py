@@ -117,6 +117,18 @@ class TestRestrictedAccount(ScopeTest):
             conn.execute("INSERT INTO device_group_members VALUES (?,?)", (self.batb, self.ids["compta"]))
         self.assertEqual(tech.c.get(f"/fleet/{self.ids['compta']}").status_code, 200)
 
+    def test_update_activity_only_shows_the_profile_fleet(self):
+        _role, tech = self.technician()
+        with transaction() as conn:
+            for name in ("b1", "compta"):      # b1 est dans le parc du tech, compta non
+                conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at) VALUES (?,?,?,?,?)",
+                             (self.ids[name], "update", "{}", "running", "2026-11-01 10:00:00"))
+        page = tech.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn("pc-bat-b-01", page)
+        self.assertNotIn("pc-compta", page)
+        live = tech.c.get("/fleet/updates", headers={"X-Requested-With": "fetch"}).get_json()
+        self.assertEqual(len(live["running"]), 1)       # seulement le poste de son parc
+
     def test_bulk_updates_stay_in_the_fleet(self):
         _role, tech = self.technician()
         for agent in self.agents.values():

@@ -117,6 +117,7 @@ def inject_globals():
         "appliance": config.APPLIANCE,
         "server_updates": config.SERVER_UPDATES,
         "ha_available": ha.available(),
+        "fleet_updating": fleet.updating_count() if user and auth.can("fleet.view") else 0,
         "lang": i18n.locale(),
         "langs": i18n.LANGS,
         "js_i18n": i18n.js_catalog(),

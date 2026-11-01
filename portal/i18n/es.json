@@ -3420,5 +3420,12 @@
  "secours": "reserva",
  "État de la grappe": "Estado del clúster",
  "Événements": "Eventos",
- "redémarrage en cours": "reiniciando"
+ "redémarrage en cours": "reiniciando",
+ "Aucune mise à jour en cours. Lancez-en depuis %(link)s, sur un poste ou tout le parc.": "No hay actualizaciones en curso. Inícielas desde %(link)s, en un equipo o en todo el parque.",
+ "Le déroulé des mises à jour en cours sur les postes que vous gérez : avancement en direct, celles qui attendent le prochain contact, et celles qui viennent de se terminer.": "El desarrollo de las actualizaciones en curso en los equipos que gestiona: progreso en directo, las que esperan el próximo contacto y las que acaban de terminar.",
+ "Mises à jour du parc": "Actualizaciones del parque",
+ "Terminées récemment": "Terminadas recientemente",
+ "au prochain contact (moins de %(v)s min)": "en el próximo contacto (menos de %(v)s min)",
+ "Aucune mise à jour en cours sur les postes que vous gérez.": "No hay actualizaciones en curso en los equipos que gestiona.",
+ "Aller à Mon parc": "Ir a Mi parque"
 }

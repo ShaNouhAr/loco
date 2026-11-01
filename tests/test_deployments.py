@@ -459,7 +459,7 @@ class TestDeployments(FleetTest):
         group = self.group('device', 'Équipe', [device(self.agent.uid)['id']])
         response = self.post('/fleet/update-all', {'group': str(group)})
         self.assertEqual(response.status_code, 302)
-        self.assertIn('group=', response.location)
+        self.assertIn('/fleet/updates', response.location)       # on suit la vague sur le déroulé des mises à jour
         self.assertEqual([c['device_id'] for c in self.commands()], [device(self.agent.uid)['id']])
 
 

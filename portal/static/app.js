@@ -1540,6 +1540,29 @@
     setTimeout(step, 1000);
   })();
 
+  /* Déroulé global des mises à jour du parc : barres en direct ; rechargement quand l'ensemble change (signature). */
+  (function (feed) {
+    if (!feed) return;
+    var step = function () {
+      fetch(feed.dataset.updates, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return setTimeout(step, 5000);
+          if (d.signature !== feed.dataset.signature) return location.reload();   // un poste a changé d'état
+          d.running.forEach(function (c) {
+            var item = $('[data-cmd="' + c.id + '"]', feed);
+            if (!item) return;
+            var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
+            if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
+            if (bar) bar.setAttribute("width", Math.max(1, c.percent || 0));
+          });
+          setTimeout(step, 2000);
+        })
+        .catch(function () { setTimeout(step, 5000); });
+    };
+    setTimeout(step, 2000);
+  })($("[data-updates-feed]"));
+
   var live = $("[data-poll]");
   if (live) {
     var kind = live.dataset.pollKind;

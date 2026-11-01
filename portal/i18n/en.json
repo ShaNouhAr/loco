@@ -3420,5 +3420,12 @@
  "secours": "standby",
  "État de la grappe": "Cluster status",
  "Événements": "Events",
- "redémarrage en cours": "restarting"
+ "redémarrage en cours": "restarting",
+ "Aucune mise à jour en cours. Lancez-en depuis %(link)s, sur un poste ou tout le parc.": "No updates in progress. Start some from %(link)s, on one device or the whole fleet.",
+ "Le déroulé des mises à jour en cours sur les postes que vous gérez : avancement en direct, celles qui attendent le prochain contact, et celles qui viennent de se terminer.": "The updates currently running on the devices you manage: live progress, those waiting for the next check-in, and those that just finished.",
+ "Mises à jour du parc": "Fleet updates",
+ "Terminées récemment": "Finished recently",
+ "au prochain contact (moins de %(v)s min)": "at the next check-in (under %(v)s min)",
+ "Aucune mise à jour en cours sur les postes que vous gérez.": "No updates in progress on the devices you manage.",
+ "Aller à Mon parc": "Go to Devices"
 }

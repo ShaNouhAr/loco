@@ -544,6 +544,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .subnav a { display: inline-flex; align-items: center; flex-shrink: 0; height: 32px; padding: 0 12px; white-space: nowrap; border-radius: var(--r-sm); color: var(--text-2); font-size: 14px; transition: background .12s, color .12s; }
 .subnav a:hover { color: var(--text); background: var(--bg-3); text-decoration: none; }
 .subnav a.on { color: var(--text); background: var(--bg); box-shadow: 0 0 0 1px var(--line), var(--shadow-btn); font-weight: 500; }
+.tab-badge { margin-left: 7px; display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.upd-dev .sub { margin: 0 2px; }
 
 /* Filtres : boutons discrets, la sélection est marquée sans aplat d'accent. */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
