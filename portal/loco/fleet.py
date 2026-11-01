@@ -31,7 +31,7 @@ from . import addresses, agentpkg, app, config, features, permissions, scope
 from .i18n import L_, _
 from .auth import audit, can, login_required, require
 from .db import db
-from .util import back, date_fr
+from .util import back, date_fr, safe_next
 
 CHECKIN = 120                   # secondes entre deux contacts de l'agent
 ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles avant de déclarer le poste hors ligne
@@ -1061,8 +1061,11 @@ def _rows(apps=None):
     out = []
     for d in db().execute("SELECT * FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         color, reason = status(d, apps)
+        cmds = pending(d["id"])
         out.append({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
-                    "pending": pending(d["id"]), "needs_update": needs_update(d, apps)})
+                    "pending": cmds, "needs_update": needs_update(d, apps),
+                    # Redémarrage demandé (bouton ou mise à jour avec redémarrage) et pas encore effectué.
+                    "rebooting": any(c["action"] == "reboot" or (c["action"] == "update" and '"reboot": true' in (c["params"] or "")) for c in cmds)})
     return out
 
 
@@ -1354,6 +1357,11 @@ def fleet_action(dev_id):
         flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
+    # Depuis la liste du parc (bouton Redémarrer), rester sur la liste avec un message ; sinon aller à la fiche.
+    dest = request.form.get("return", "")
+    if dest:
+        target = safe_next(dest)
+        return {"redirect": target} if request.headers.get("X-Requested-With") == "fetch" else redirect(target)
     return back("fleet_device", dev_id=dev_id)
 
 

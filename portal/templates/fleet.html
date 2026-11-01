@@ -88,7 +88,7 @@
                 {% if r.apps %}<span class="count">{{ _("%(apps)s logiciel%(v)s", apps=r.apps, v='s' if r.apps > 1) }}</span>{% endif %}
                 {% if r.security %}<span class="sec-pill" title="{{ _('dont %(security)s de sécurité', security=r.security) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s sécurité", security=r.security) }}</span>{% endif %}
               {% endif %}
-              {% if d.reboot_required %}<span class="reboot-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>{{ _("redémarrage nécessaire") }}</span>{% endif %}
+              {% if d.reboot_required %}<span class="reboot-note{{ ' pending' if r.rebooting }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>{{ _("redémarrage en cours") if r.rebooting else _("redémarrage nécessaire") }}</span>{% endif %}
               </span>
               </span>
             </td>
@@ -108,7 +108,7 @@
                 {% endif %}
                 {% if row_reboot %}
                 <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax data-confirm="{{ _('Redémarrer %(name)s ?', name=d.hostname) }}" data-confirm-text="{{ _('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
-                  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot">
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="reboot"><input type="hidden" name="return" value="{{ request.full_path }}">
                   <button class="btn sm icon-only" title="{{ _('Redémarrer') }}" aria-label="{{ _('Redémarrer %(name)s', name=d.hostname) }}"><span class="spin"></span>{{ ui_icon('restart') }}</button>
                 </form>
                 {% endif %}

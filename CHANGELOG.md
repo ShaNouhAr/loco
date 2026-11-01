@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.121.1 — 2026-11-01
+
+- **Redémarrer depuis Mon parc reste sur la liste.** Le bouton *Redémarrer* d'un poste ne renvoie plus vers sa fiche : un message confirme que le redémarrage est demandé et la liste reste affichée. Tant que le redémarrage est en attente, la pastille passe de « redémarrage nécessaire » à « redémarrage en cours ».
+
 ## 2.121.0 — 2026-11-01
 
 - **Haute disponibilité intégrée.** Deux serveurs loco, une seule *IP virtuelle* : le principal sert le portail, les dépôts et les agents ; le secours réplique tout en continu et prend l'IP automatiquement si le principal tombe (keepalived / VRRP). *Administration › Serveur › Haute disponibilité*.

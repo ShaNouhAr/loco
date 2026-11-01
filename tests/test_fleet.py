@@ -284,6 +284,28 @@ class TestActions(FleetTest):
         self.assertEqual(actions(page, device(restart_only.uid)["id"]), ["reboot"])
         self.assertIn("Le poste redémarre une minute après le prochain contact", page)       # confirmation
 
+    def test_restart_from_the_list_stays_on_the_list_and_shows_in_progress(self):
+        a = Agent(LINUX, "192.168.43.63")
+        a.enroll()
+        a.checkin({"updates": [], "reboot_required": True})
+        dev_id = device(a.uid)["id"]
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("redémarrage nécessaire", page)
+        self.assertNotIn("redémarrage en cours", page)
+        # Le bouton Redémarrer renvoie sur la liste (pas la fiche) : redirection vers /fleet.
+        r = self.admin.c.post(f"/fleet/{dev_id}/action", data={"csrf": self.admin.token("/fleet"), "action": "reboot",
+                              "return": "/fleet?group=x"}, headers={"X-Requested-With": "fetch"})
+        self.assertEqual(r.get_json()["redirect"], "/fleet?group=x")
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("redémarrage en cours", page)                  # la pastille passe « en cours »
+        self.assertNotIn('name="action" value="reboot"', page)       # plus de bouton pendant la demande
+        # Une cible hors chemin local est ignorée (retour à la racine, jamais vers un autre site).
+        a2 = Agent(LINUX, "192.168.43.64"); a2.enroll(); a2.checkin({"updates": [], "reboot_required": True})
+        r = self.admin.c.post(f"/fleet/{device(a2.uid)['id']}/action",
+                              data={"csrf": self.admin.token("/fleet"), "action": "reboot", "return": "https://evil.example/"},
+                              headers={"X-Requested-With": "fetch"})
+        self.assertEqual(r.get_json()["redirect"], "/")
+
     def add_app(self):
         with transaction() as conn:
             conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect) "

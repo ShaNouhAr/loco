@@ -3419,5 +3419,6 @@
  "principal": "primary",
  "secours": "standby",
  "État de la grappe": "Cluster status",
- "Événements": "Events"
+ "Événements": "Events",
+ "redémarrage en cours": "restarting"
 }
