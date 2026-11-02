@@ -40,6 +40,8 @@ RULES = {
                          "server", "warning", None, 86400, False),
     "offsite_failed":   (lambda: _("Copie hors-site en échec"),  lambda: _("La dernière copie de sauvegarde vers le stockage externe a échoué."),
                          "server", "warning", None, 21600, False),
+    "syslog_failed":    (lambda: _("Envoi syslog en échec"),     lambda: _("Les journaux n'arrivent plus au serveur syslog depuis plus de 5 minutes."),
+                         "server", "warning", None, 21600, False),
     "disk_high":        (lambda: _("Disque presque plein"),      lambda: _("L'espace de stockage des données dépasse le seuil."),
                          "server", "warning", ("percent", 90, 50, 99, lambda: "%"), 21600, False),
     "login_failures":   (lambda: _("Échecs de connexion"),       lambda: _("Beaucoup d'échecs de connexion au portail en 24 h."),
@@ -176,6 +178,12 @@ def evaluate(conn, cfg=None):
         st = offsite.state(conn)
         if offsite.configured(offsite.load(conn)) and st.get("last_error") and st.get("last_failed", "") > st.get("last_ok", ""):
             add("offsite_failed", _("La dernière copie hors-site a échoué : %(error)s", error=st["last_error"][:200]))
+
+    if _rule_on(cfg, "syslog_failed"):
+        from . import logforward
+        reason = logforward.failure(conn)
+        if reason:
+            add("syslog_failed", _("Les journaux n'arrivent plus au serveur syslog : %(error)s", error=reason[:200]))
 
     if _rule_on(cfg, "disk_high"):
         pct = disk_usage()["pct"]

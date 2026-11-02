@@ -892,7 +892,7 @@ class TestNavigation(unittest.TestCase):
         self.assertEqual(self.subnav("/accounts"), ["Comptes", "Profils d'accès", "Annuaires et SSO", "Serveur MCP"])
         self.assertIn("Système", self.subnav("/system"))
         self.assertNotIn("Comptes", self.subnav("/system"))
-        self.assertEqual(self.subnav("/log"), ["Journal", "Alertes"])
+        self.assertEqual(self.subnav("/log"), ["Journal", "Alertes", "Envoi syslog"])
 
     def test_admin_menu_has_sections_and_account_menu_groups_settings(self):
         html = self.admin.c.get("/").get_data(as_text=True)

@@ -10,7 +10,7 @@ from .db import db
 
 # Droits qui agissent sur tout le parc quel que soit le profil (groupes dont dépendent les parcs des profils, clé
 # d'inscription, adresses et seuils) : sans effet pour un profil limité à une partie du parc.
-WHOLE_FLEET = frozenset({"fleet.groups", "fleet.settings"})
+WHOLE_FLEET = frozenset({"fleet.groups", "fleet.settings", "syslog.configure"})
 
 
 def declared(conn, role_id):

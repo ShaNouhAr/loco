@@ -37,6 +37,9 @@ loco est conçu pour un **réseau d'entreprise interne**. Il n'est pas prévu po
 - `setup.sh --trust-ca` fait confiance à l'autorité reçue au premier contact (comparer l'empreinte affichée).
 - Pas d'authentification annuaire (LDAP/AD) ni de double authentification à ce jour.
 - Les postes accèdent aux dépôts sans authentification ; la restriction se fait par réseau (`--allow`).
+- Envoi syslog : en TCP et en UDP, les journaux circulent en clair ; préférez TLS. Le contenu des journaux des postes reste déclaratif
+  (un poste compromis peut écrire ce qu'il veut dans ses propres lignes) : loco impose le nom d'hôte et retire les retours à la ligne et
+  les caractères de contrôle, pour qu'un poste ne puisse ni se faire passer pour un autre ni forger une ligne. Pas de certificat client (mTLS).
 - L'isolation APT évite de mélanger les dépôts ; elle ne prouve pas qu'un `.deb` est compatible avec
   sa destination. L'administrateur doit valider les dépendances et l'origine des paquets avant l'import
   ou la copie. Le dépôt historique et `setup.sh --legacy` restent partagés pour la transition.

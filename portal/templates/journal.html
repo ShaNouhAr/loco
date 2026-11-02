@@ -11,6 +11,7 @@
   </div>
   <div class="actions">
     {% if can('audit.configure') %}<button type="button" class="btn" data-open="#retention">{{ _("Conservation : %(v)s", v=retention_text(retention)) }}</button>{% endif %}
+    {% if can('syslog.configure') %}<a class="btn" href="{{ url_for('syslog_settings') }}">{{ _("Envoi syslog") }}</a>{% endif %}
     {% if can('audit.export') %}<button type="button" class="btn primary" data-open="#export">{{ _("Exporter en JSON") }}</button>{% endif %}
   </div>
 </div>

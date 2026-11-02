@@ -262,12 +262,21 @@
       data.set("channel", btn.dataset.testChannel);
       btn.disabled = true;
       if (out) { out.textContent = ""; out.className = "test-result"; }
-      fetch("/alerts/test", { method: "POST", body: data }).then(function (r) { return r.json(); })
+      fetch(btn.dataset.testUrl || "/alerts/test", { method: "POST", body: data }).then(function (r) { return r.json(); })
         .then(function (j) { if (out) { out.textContent = j.message; out.className = "test-result " + (j.ok ? "ok" : "err"); } })
         .catch(function () { if (out) { out.textContent = t("Envoi impossible."); out.className = "test-result err"; } })
         .finally(function () { btn.disabled = false; });
     });
   });
+
+  /* Envoi syslog : les réglages des postes n'apparaissent que si leurs journaux sont envoyés. */
+  (function (devices) {
+    if (!devices) return;
+    var options = $("[data-syslog-options]");
+    var sync = function () { options.hidden = !devices.checked; };
+    devices.addEventListener("change", sync);
+    sync();
+  })($("[data-syslog-devices]"));
 
   /* ------------------------------------------------ test de la destination hors-site (page Système) */
   $$("[data-test-offsite]").forEach(function (btn) {

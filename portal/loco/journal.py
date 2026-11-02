@@ -15,12 +15,13 @@ CATEGORIES = {
     "wu": (L_("Windows Update"), ("windows_update.",)),
     "comptes": (L_("Comptes et profils"), ("comptes.", "compte.", "profils.", "sso.")),
     "serveur": (L_("Serveur"), ("systeme.", "alertes.", "apparence.")),
-    "journal": (L_("Journal"), ("journal.",)),
+    "journal": (L_("Journal"), ("journal.", "syslog.")),
     "scripts": (L_("Scripts"), ("scripts.",)),
     "mcp": (L_("Serveur MCP"), ("mcp.",)),
 }
 
 LABELS = {
+    "syslog.configuration": L_("Envoi syslog modifié"),
     "connexion": L_("Connexion"), "deconnexion": L_("Déconnexion"), "connexion.echec": L_("Échec de connexion"),
     "connexion.bloquee": L_("Connexion bloquée (trop d'échecs)"), "sso.connexion": L_("Connexion par annuaire"), "sso.echec": L_("Annuaire injoignable ou en erreur"),
     "sso.demande": L_("Demande d'accès (annuaire)"), "sso.approbation": L_("Accès approuvé (annuaire)"), "sso.test": L_("Test d'un annuaire"),

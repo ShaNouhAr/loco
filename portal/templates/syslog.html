@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Envoi syslog") }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Envoi syslog") }}</h1>
+    <p>{{ _("Envoyez les journaux de loco, ceux des postes, ou les deux, vers votre serveur syslog ou votre SIEM.") }}</p>
+  </div>
+</div>
+
+{% if cfg.enabled and failing %}<div class="note err syslog-note">{{ _("Le serveur syslog ne reçoit plus rien. L'envoi reprendra là où il s'est arrêté dès son retour.") }} <span class="mono">{{ state.last_error }}</span></div>{% endif %}
+
+<form method="post" action="{{ url_for('syslog_save') }}" class="stack" data-syslog>
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Serveur syslog") }}</h2>
+      <label class="switch-row"><span>{{ _("Activer l'envoi") }}</span><span class="switch"><input type="checkbox" name="enabled" value="1" role="switch"{{ ' checked' if cfg.enabled }}><i aria-hidden="true"></i></span></label>
+    </div>
+    <div class="panel-b stack-sm">
+      <div class="syslog-target">
+        <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="host" value="{{ cfg.host }}" placeholder="syslog.exemple.lan" spellcheck="false" autocomplete="off" class="mono"></label>
+        <label class="f"><span>{{ _("Port") }}</span><input type="number" name="port" value="{{ cfg.port or '' }}" min="1" max="65535" placeholder="{{ _('auto') }}" class="field-sm"></label>
+        <div class="f"><span id="syslog-transport">{{ _("Protocole") }}</span>
+          <div class="seg" role="radiogroup" aria-labelledby="syslog-transport">
+            {% for value, label in [('tls', 'TLS'), ('tcp', 'TCP'), ('udp', 'UDP')] %}
+            <label><input type="radio" name="transport" value="{{ value }}"{{ ' checked' if cfg.transport == value }}><span>{{ label }}</span></label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+      <p class="hint" data-show-for="transport:tls">{{ _("Port 6514 si vous le laissez vide.") }}</p>
+      <div class="note warn" data-show-for="transport:tcp udp">{{ _("Sans chiffrement : les journaux, qui peuvent contenir des noms de comptes et des adresses, circulent en clair sur le réseau. Port 514 si vous le laissez vide.") }}</div>
+      <div data-show-for="transport:tls">
+        <label class="f"><span>{{ _("Autorité de certification du serveur") }} <em class="faint">{{ _("(optionnel, format PEM)") }}</em></span>
+          <textarea name="ca" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----">{{ cfg.ca }}</textarea></label>
+        <p class="hint">{{ _("Vide : les autorités reconnues par ce serveur. Le certificat doit correspondre à l'adresse saisie.") }}</p>
+      </div>
+      <details class="syslog-more">
+        <summary>{{ _("Options du format") }}</summary>
+        <div class="grid2">
+          <label class="f"><span>{{ _("Service (facility) des événements de loco") }}</span>
+            <select name="facility">{% for f in facilities %}<option value="{{ f }}"{{ ' selected' if cfg.facility == f }}>local{{ f - 16 }}</option>{% endfor %}</select></label>
+          <label class="f" data-show-for="transport:tls tcp"><span>{{ _("Séparation des messages") }}</span>
+            <select name="framing">
+              <option value="lf"{{ ' selected' if cfg.framing == 'lf' }}>{{ _("Fin de ligne (compatible avec la plupart des serveurs)") }}</option>
+              <option value="octet"{{ ' selected' if cfg.framing == 'octet' }}>{{ _("Longueur en tête (RFC 5425 et 6587)") }}</option>
+            </select></label>
+        </div>
+      </details>
+      <div class="row test-row"><button type="button" class="btn sm" data-test-channel="syslog" data-test-url="{{ url_for('syslog_test') }}"><span class="spin"></span>{{ _("Envoyer un message de test") }}</button><span class="test-result" data-test-result="syslog"></span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Ce qui est envoyé") }}</h2></div>
+    <div class="feature-list cfg-list">
+      <label class="feature-row">
+        <span class="feature-text"><strong>{{ _("Journal de loco") }}</strong><small>{{ _("Connexions, actions des administrateurs, accès distants, déploiements : tout ce qui figure dans la page Journal, à partir de l'activation.") }}</small></span>
+        <span class="switch"><input type="checkbox" name="loco" value="1" role="switch"{{ ' checked' if cfg.loco }}><i aria-hidden="true"></i></span>
+      </label>
+      <label class="feature-row">
+        <span class="feature-text"><strong>{{ _("Journaux des postes") }}</strong><small>{{ _("Journald sous Linux, journaux d'événements sous Windows. Ils passent par loco : les postes n'ont pas besoin de joindre le serveur syslog. Agents %(v)s et plus, à partir de l'activation.", v=min_version) }}</small></span>
+        <span class="switch"><input type="checkbox" name="devices" value="1" role="switch"{{ ' checked' if cfg.devices }} data-syslog-devices><i aria-hidden="true"></i></span>
+      </label>
+    </div>
+    <div class="panel-b stack-sm syslog-devices" data-syslog-options>
+      <div class="grid2">
+        <label class="f"><span>{{ _("Niveau minimal sur les postes") }}</span>
+          <select name="min_severity">
+            {% for value, label in [(3, _('Erreurs')), (4, _('Avertissements et erreurs')), (5, _('Notices et plus')), (6, _('Informations et plus (volumineux)'))] %}
+            <option value="{{ value }}"{{ ' selected' if cfg.min_severity == value }}>{{ label }}</option>
+            {% endfor %}
+          </select></label>
+        <label class="switch-row syslog-security"><span class="switch"><input type="checkbox" name="security" value="1" role="switch"{{ ' checked' if cfg.security }}><i aria-hidden="true"></i></span>
+          <span>{{ _("Toujours inclure la sécurité") }}<span class="sub">{{ _("Linux : tous les messages d'authentification (connexions, sudo). Windows : les échecs d'audit du journal Sécurité, et aussi les réussites à partir du niveau Informations.") }}</span></span></label>
+      </div>
+      <div>
+        <h3 class="pick-title">{{ _("Postes concernés") }}</h3>
+        {% if device_groups %}
+        <div class="syslog-groups">{% for g in device_groups %}<label class="check"><input type="checkbox" name="groups" value="{{ g.id }}"{{ ' checked' if g.id in cfg.groups }}> {{ g.name }} <span class="faint">{{ g.members }}</span></label>{% endfor %}</div>
+        <p class="hint">{{ _("Aucun groupe coché : tout le parc.") }}</p>
+        {% else %}<p class="hint">{{ _("Tout le parc. Créez des groupes de machines pour limiter l'envoi à certains postes.") }}</p>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <div class="panel-f sticky-actions row-between syslog-save">
+    <span class="muted small">{{ _("Format RFC 5424. Après une panne, l'envoi reprend là où il s'était arrêté et un événement peut arriver en double. Syslog n'a pas d'accusé de réception : une coupure brutale peut perdre quelques messages, et l'UDP ne garantit jamais l'arrivée.") }}</span>
+    <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+  </div>
+</form>
+
+{% if cfg.enabled %}
+<section class="panel syslog-state">
+  <div class="panel-h"><h2>{{ _("État de l'envoi") }}</h2></div>
+  <div class="panel-b">
+    <dl class="kv-grid">
+      <div><dt>{{ _("Dernier envoi réussi") }}</dt><dd>{{ last_ok or _("aucun pour l'instant") }}</dd></div>
+      {% if state.last_error %}<div><dt>{{ _("Dernier échec") }}</dt><dd>{{ last_failed }}<span class="sub">{{ state.last_error }}</span></dd></div>{% endif %}
+      {% if cfg.loco %}<div><dt>{{ _("Journal de loco en attente") }}</dt><dd>{{ ngettext("%(num)s événement", "%(num)s événements", backlog) }}</dd></div>{% endif %}
+      {% if devices %}<div><dt>{{ _("Postes qui envoient") }}</dt><dd>{{ _("%(n)s sur %(total)s, depuis une heure", n=devices.active, total=devices.total) }}</dd></div>{% endif %}
+    </dl>
+  </div>
+  {% if devices and devices.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>{{ _("Poste") }}</th><th>{{ _("État") }}</th><th>{{ _("Dernier envoi") }}</th><th class="right">{{ _("Lignes") }}</th></tr></thead>
+      <tbody>
+        {% for d in devices.rows %}
+        <tr><td><a href="{{ url_for('fleet_device', dev_id=d.id) }}">{{ d.hostname }}</a></td><td><span class="st {{ d.tone }}">{{ d.state }}</span></td><td class="muted">{{ d.sent or '—' }}</td><td class="right num">{{ d.lines }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if devices.total > devices.rows|length %}<div class="panel-f">{{ _("Les %(n)s premiers sur %(total)s, ceux à regarder d'abord.", n=devices.rows|length, total=devices.total) }}</div>{% endif %}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

@@ -89,6 +89,7 @@ GROUPS = [
         ("audit.view", L_("Consulter le journal"), L_("Historique des connexions et actions d'administration."), (), False),
         ("audit.export", L_("Exporter le journal"), L_("Télécharger le journal en JSON, sur une période ou en entier."), ("audit.view",), True),
         ("audit.configure", L_("Configurer la conservation du journal"), L_("Durée de conservation des événements."), ("audit.view",), True),
+        ("syslog.configure", L_("Envoyer les journaux vers un serveur syslog"), L_("Choisir le serveur syslog et ce qui lui est envoyé : le journal de loco, les journaux des postes, ou les deux."), ("audit.view",), True),
     ]),
     (L_("Serveur MCP"), [
         ("mcp.manage", L_("Créer des jetons MCP"),
@@ -144,6 +145,7 @@ ENDPOINTS = {
     "cache_purge": ("wu.configure", "linux.delete", "rpm.delete", "flatpak.delete"),
     "fleet": "fleet.view", "fleet_device": "fleet.view", "fleet_device_live": "fleet.view", "fleet_device_progress": "fleet.view", "fleet_action": "fleet.view",
     "fleet_updates": "fleet.view",
+    "syslog_settings": "syslog.configure", "syslog_save": "syslog.configure", "syslog_test": "syslog.configure",
     "fleet_cancel_command": "fleet.view", "fleet_search": "fleet.view", "fleet_windows_update": "fleet.update",
     "fleet_group_windows_update": "fleet.update",
     "schedules": "fleet.view", "schedule_editor": ("fleet.update", "scripts.run"),

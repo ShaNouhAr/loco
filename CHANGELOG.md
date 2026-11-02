@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.124.0 — 2026-11-02
+
+- **Envoi des journaux vers un serveur syslog ou un SIEM** (*Administration › Envoi syslog*). Au choix : le **journal de loco**, les **journaux des postes**, ou les deux. Format RFC 5424, en TLS (recommandé, avec votre autorité de certification), TCP ou UDP, et un bouton pour envoyer un message de test.
+  - **Postes** : journald sous Linux, journaux d'événements sous Windows, au niveau minimal choisi, avec les événements de sécurité si vous le souhaitez, sur tout le parc ou des groupes de machines. Les postes passent par loco : aucune ouverture réseau vers le serveur syslog. Agents 2.124.0 et plus (mise à jour automatique).
+  - **Serveur syslog absent** : l'envoi reprend là où il s'était arrêté, sans rien stocker sur le serveur loco. Un événement peut arriver en double après une panne.
+  - **Suivi** : dernier envoi, dernier échec et état de chaque poste sur la page ; nouvelle règle d'alerte *Envoi syslog en échec* après 5 minutes.
+
 ## 2.123.1 — 2026-11-02
 
 - **Page *Mon parc › Mises à jour* refaite** : une seule liste en colonnes alignées (poste, action, état, date, auteur), groupée en *En cours*, *En attente* et *Terminées*. Sur téléphone, chaque ligne s'empile.

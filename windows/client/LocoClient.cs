@@ -16,6 +16,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
 using System.Management;
@@ -115,6 +116,7 @@ namespace Loco
         static readonly string ConfigPath = Path.Combine(Root, "client.json");
         static readonly string StatePath = Path.Combine(Root, "state.json");
         static readonly string CaPath = Path.Combine(Root, "ca.crt");
+        static readonly string LogStatePath = Path.Combine(Root, "logs.json");
         static readonly string LogPath = Path.Combine(Root, "loco-client.log");
         const string SecurityCategory = "0fa1201d-4330-4fa8-8ae9-b877473b6441";   // Windows Update : Security Updates
         const int OutputLimit = 60000;
@@ -1092,6 +1094,11 @@ namespace Loco
                 }
                 if (answer.TryGetValue("interval", out v)) Interval = Math.Max(30, Convert.ToInt32(v));
                 if (answer.TryGetValue("scan_hours", out v)) scanHours = Math.Max(1, Convert.ToInt32(v));
+                try { ForwardLogs(conf, answer, stopping); }
+                catch (Exception e) when (!(e is OutOfMemoryException))     // serveur syslog absent (503), journal illisible : au prochain contact
+                {
+                    if (!(e is LocoHttpException)) Log(Lang.T("journaux non remontés : ", "logs not forwarded: ", "registros no enviados: ") + e.Message);
+                }
                 foreach (Dictionary<string, object> cmd in (answer["commands"] as ArrayList) ?? new ArrayList())
                 {
                     if (stopping != null && stopping.WaitOne(0)) break;
@@ -1202,6 +1209,100 @@ namespace Loco
                 return true;
             }
             finally { Monitor.Exit(runLock); }
+        }
+
+        // ------------------------------------------------------------ journaux du poste vers syslog (par loco)
+
+        const int LogLines = 300;                       // événements par journal et par contact
+        const int LogMessage = 4000;
+        const long AuditFailure = 0x10000000000000L;    // mot-clé Windows : échec d'audit
+
+        static long NewestRecord(string channel)
+        {
+            var query = new EventLogQuery(channel, PathType.LogName) { ReverseDirection = true };
+            using (var reader = new EventLogReader(query))
+            using (var record = reader.ReadEvent())
+                return record != null && record.RecordId.HasValue ? record.RecordId.Value : 0;
+        }
+
+        // Filtre XPath de l'événement : gravité minimale, ou journal Sécurité (niveaux sans objet : échecs d'audit, et aussi
+        // les réussites à partir du niveau Informations).
+        static string LogFilter(string channel, int minimum)
+        {
+            if (channel == "Security") return minimum >= 6 ? "" : " and band(Keywords," + AuditFailure + ")";
+            if (minimum <= 3) return " and (Level=1 or Level=2)";
+            if (minimum == 4) return " and (Level=1 or Level=2 or Level=3)";
+            return " and (Level=0 or Level=1 or Level=2 or Level=3 or Level=4)";
+        }
+
+        static Dictionary<string, object> LogEntry(EventRecord record, string channel)
+        {
+            int level = record.Level.HasValue ? record.Level.Value : 4;
+            int severity = level == 1 ? 2 : level == 2 ? 3 : level == 3 ? 4 : level == 5 ? 7 : 6;
+            if (channel == "Security") severity = record.Keywords.HasValue && (record.Keywords.Value & AuditFailure) != 0 ? 4 : 6;
+            string text = null;
+            try { text = record.FormatDescription(); }
+            catch (Exception) { }                       // description du fournisseur absente ou illisible
+            if (string.IsNullOrWhiteSpace(text)) text = Lang.T("Événement ", "Event ", "Evento ") + record.Id;
+            if (text.Length > LogMessage) text = text.Substring(0, LogMessage);
+            DateTime when = (record.TimeCreated ?? DateTime.Now).ToUniversalTime();
+            return new Dictionary<string, object> {
+                { "t", (when - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds }, { "p", severity },
+                { "f", channel == "Security" ? 4 : channel == "System" ? 3 : 1 }, { "a", record.ProviderName ?? "-" },
+                { "i", record.ProcessId.HasValue ? record.ProcessId.Value.ToString() : "-" }, { "n", record.Id.ToString() },
+                { "c", channel }, { "m", text } };
+        }
+
+        // Remonte à loco les journaux d'événements, si la consigne du serveur le demande. Position avancée seulement quand
+        // loco a relayé : si le serveur syslog est absent (503), les événements repartent au prochain contact.
+        static void ForwardLogs(Dictionary<string, object> conf, Dictionary<string, object> answer, WaitHandle stopping)
+        {
+            object value;
+            var settings = answer.TryGetValue("syslog", out value) ? value as Dictionary<string, object> : null;
+            if (settings == null)
+            {
+                if (File.Exists(LogStatePath)) File.Delete(LogStatePath);   // envoi coupé : à la reprise, on repart de ce moment
+                return;
+            }
+            int minimum = settings.TryGetValue("min", out value) ? Convert.ToInt32(value) : 4;
+            bool security = settings.TryGetValue("security", out value) && Convert.ToBoolean(value);
+            var positions = ReadJson(LogStatePath) ?? new Dictionary<string, object>();
+            var channels = security ? new[] { "System", "Application", "Security" } : new[] { "System", "Application" };
+            var watch = Stopwatch.StartNew();
+            foreach (string channel in channels)
+            {
+                if (stopping.WaitOne(0) || watch.Elapsed.TotalSeconds > 30) return;
+                long newest = NewestRecord(channel);
+                if (!positions.ContainsKey(channel))    // à partir de maintenant, pas tout l'historique
+                {
+                    positions[channel] = newest;
+                    SaveJson(LogStatePath, positions);
+                    continue;
+                }
+                long position = Convert.ToInt64(positions[channel]);
+                if (newest < position) position = 0;    // journal vidé : numéros repartis de zéro
+                if (newest <= position) continue;
+                string xpath = "*[System[EventRecordID>" + position + " and EventRecordID<=" + newest + LogFilter(channel, minimum) + "]]";
+                var entries = new List<object>();
+                long last = position;
+                using (var reader = new EventLogReader(new EventLogQuery(channel, PathType.LogName, xpath)))
+                {
+                    EventRecord record;
+                    while (entries.Count < LogLines && (record = reader.ReadEvent()) != null)
+                        using (record)
+                        {
+                            entries.Add(LogEntry(record, channel));
+                            if (record.RecordId.HasValue) last = record.RecordId.Value;
+                        }
+                }
+                if (entries.Count > 0)
+                {
+                    var reply = Post(Str(conf, "server"), "/agent/api/logs", new Dictionary<string, object> { { "entries", entries } }, Str(conf, "token"), 30000);
+                    if (reply.ContainsKey("off")) return;
+                }
+                positions[channel] = entries.Count >= LogLines ? last : newest;
+                SaveJson(LogStatePath, positions);
+            }
         }
 
         static void SaveState(double lastScan, int scanHours, bool rescan)

@@ -31,6 +31,7 @@ import stat
 import struct
 import ssl
 import subprocess
+import threading
 import sys
 import tempfile
 import termios
@@ -926,6 +927,116 @@ def remove_local():
             os.unlink(link)
 
 
+# --------------------------------------------------------------------------- journaux du poste vers syslog (par loco)
+
+LOG_LINES = 500                         # lignes par envoi (limite aussi côté serveur)
+LOG_ROUNDS = 6                          # envois au plus par contact : la suite part au contact suivant
+LOG_SECONDS = 20
+LOG_MESSAGE = 4000
+
+
+def journal_matches(settings):
+    """Filtre journald : gravité minimale, et toute l'authentification si la sécurité est demandée."""
+    level = settings.get("min") if isinstance(settings.get("min"), int) else 4
+    matches = [f"PRIORITY={p}" for p in range(0, max(0, min(level, 7)) + 1)]
+    return matches + (["+", "SYSLOG_FACILITY=4", "+", "SYSLOG_FACILITY=10"] if settings.get("security") else [])
+
+
+def journal_entry(fields):
+    """Ligne de journald (une ligne de « journalctl -o json ») -> entrée remontée à loco ; None si elle n'a pas de texte."""
+    text = fields.get("MESSAGE")
+    if isinstance(text, list):                  # journald donne les messages non UTF-8 sous forme d'octets
+        text = bytes(b for b in text if isinstance(b, int) and 0 <= b < 256).decode("utf-8", "replace")
+    if not isinstance(text, str) or not text.strip():
+        return None
+
+    def number(key, default):
+        try:
+            return int(fields.get(key, default))
+        except (TypeError, ValueError):
+            return default
+    return {"t": number("__REALTIME_TIMESTAMP", 0) / 1000000 or time.time(), "p": number("PRIORITY", 6),
+            "f": number("SYSLOG_FACILITY", 1), "a": str(fields.get("SYSLOG_IDENTIFIER") or fields.get("_COMM") or "-")[:48],
+            "i": str(fields.get("_PID") or fields.get("SYSLOG_PID") or "-")[:16], "m": text[:LOG_MESSAGE]}
+
+
+def journal_cursor():
+    """Position la plus récente de journald : les journaux partent à partir de maintenant, pas tout l'historique."""
+    code, out = run(["journalctl", "--no-pager", "-n", "1", "-o", "json"], timeout=30)
+    try:
+        return json.loads(out.splitlines()[-1]).get("__CURSOR") if code == 0 and out.strip() else None
+    except ValueError:
+        return None
+
+
+def read_journal(settings, cursor):
+    """Lignes suivant la position : (entrées, nouvelle position, reste-t-il des lignes ?). None si la position n'existe
+    plus (journal purgé) : on repart de maintenant."""
+    # Pas de -n : avec --after-cursor il donnerait les dernières lignes, et non les suivantes. On lit puis on s'arrête.
+    process = subprocess.Popen(["journalctl", "--no-pager", "-o", "json", f"--after-cursor={cursor}", *journal_matches(settings)],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=ENV, stdin=subprocess.DEVNULL)
+    guard = threading.Timer(LOG_SECONDS, process.kill)
+    guard.start()
+    entries, last, more = [], cursor, False
+    try:
+        for raw in process.stdout:
+            try:
+                fields = json.loads(raw)
+            except ValueError:
+                continue
+            last = fields.get("__CURSOR") or last
+            entry = journal_entry(fields)
+            if entry:
+                entries.append(entry)
+            if len(entries) >= LOG_LINES:
+                more = True
+                break
+        if more:
+            process.kill()
+        code = process.wait()
+        failure = process.stderr.read(4000).decode("utf-8", "replace")
+    finally:
+        guard.cancel()
+        process.stdout.close()
+        process.stderr.close()
+    if not more and code != 0 and not entries and "cursor" in failure.lower():
+        return None
+    return entries, last, more
+
+
+def forward_logs(conf, settings, state):
+    """Remonte à loco les journaux du poste, si la consigne du serveur le demande. Position avancée seulement quand loco a
+    relayé : si le serveur syslog est absent (503), les lignes repartent au prochain contact."""
+    if not isinstance(settings, dict):
+        state.pop("log_cursor", None)           # envoi coupé : à la reprise, on repart de ce moment
+        state.pop("log_error", None)
+        return
+    if not shutil.which("journalctl"):
+        if not state.get("log_error"):
+            state["log_error"] = True
+            call(conf["server"], "/agent/api/logs", {"entries": [], "error": "journald absent"}, conf["token"], timeout=30)
+        return
+    cursor = state.get("log_cursor") or journal_cursor()
+    state["log_cursor"] = cursor
+    if not cursor:
+        return
+    deadline = time.monotonic() + LOG_SECONDS
+    for _round in range(LOG_ROUNDS):
+        batch = read_journal(settings, cursor)
+        if batch is None:
+            state["log_cursor"] = journal_cursor()
+            return
+        entries, last, more = batch
+        if entries:
+            answer = call(conf["server"], "/agent/api/logs", {"entries": entries}, conf["token"], timeout=30)
+            if answer.get("off"):
+                return
+        cursor = state["log_cursor"] = last
+        save(STATE, state)
+        if not more or time.monotonic() > deadline:
+            return
+
+
 def service():
     conf = load(CONFIG)
     if not conf.get("token"):
@@ -965,6 +1076,10 @@ def service():
         return 1
     state["scan_hours"] = answer.get("scan_hours", 6)
     apply_trust(answer)
+    try:
+        forward_logs(conf, answer.get("syslog"), state)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass                                    # serveur syslog absent, 503 : on réessaie au prochain contact, sans bruit
     for cmd in answer.get("commands", []):
         action = cmd.get("action")
         log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))

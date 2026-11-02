@@ -64,7 +64,9 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     # Serveur MCP : authentifié par son propre jeton (en-tête Authorization).
                     "mcp_endpoint",
                     # Haute disponibilité : le serveur pair s'authentifie par l'en-tête X-Loco-HA.
-                    "ha_join_api", "ha_state_api", "ha_bundle_api", "ha_db_api", "ha_manifest_api", "ha_file_api", "ha_leave_api"}
+                    "ha_join_api", "ha_state_api", "ha_bundle_api", "ha_db_api", "ha_manifest_api", "ha_file_api", "ha_leave_api",
+                    # Journaux des postes relayés vers syslog : l'agent s'authentifie par son jeton.
+                    "agent_logs"}
 
 
 @app.before_request
@@ -151,11 +153,11 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, ha  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, ha, logforward  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
-                 mcp_remote, ha)
+                 mcp_remote, ha, logforward)
 
 
 def startup():

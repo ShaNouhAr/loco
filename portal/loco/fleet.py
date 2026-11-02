@@ -625,6 +625,10 @@ def agent_checkin():
         # l'agent qui ne l'a pas encore : il pourra suivre une bascule d'autorité sans perdre la connexion.
         sha = hashlib.sha256(bundle.encode()).hexdigest()
         answer["trust"] = {"sha256": sha, **({"pem": bundle} if reported_trust != sha else {})}
+    from . import logforward
+    forwarding = logforward.directive(conn, dev)
+    if forwarding:
+        answer["syslog"] = forwarding   # agents 2.124.0 et plus : remonter les journaux du poste
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":

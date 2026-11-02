@@ -1551,6 +1551,21 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .pkg-items li { min-width: 172px; max-width: 100%; font-size: 13px; color: var(--text-2); overflow-wrap: anywhere; }
 .pkg-items li.pkg-failed { color: var(--err); }
 .pkg-items li.pkg-running { color: var(--text); }
+/* Envoi syslog */
+.syslog-note { margin-bottom: 20px; }
+.syslog-target { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; align-items: end; gap: 16px; }
+.syslog-target .f { margin: 0; }
+.syslog-target div.f > span:first-child { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; }
+.syslog-target .seg { display: flex; width: max-content; }
+.syslog-more > .grid2 { margin-top: 12px; }
+.syslog-devices { border-top: 1px solid var(--line); }
+.syslog-security { align-self: end; align-items: flex-start; }
+.syslog-groups { display: flex; flex-wrap: wrap; gap: 6px 4px; margin-top: 8px; }
+.syslog-state { margin-top: 20px; }
+.syslog-save { flex-wrap: nowrap; gap: 24px; }
+.syslog-save .btn { flex: none; }
+.kv-grid dd .sub { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+@media (max-width: 720px) { .syslog-target { grid-template-columns: minmax(0, 1fr) 110px; } .syslog-target > .f:last-child { grid-column: 1 / -1; } .syslog-save { flex-wrap: wrap; } }
 /* Déroulé des mises à jour du parc : mêmes colonnes dans les trois groupes. */
 .upd-panel > .panel-h.sub:first-child { border-top: 0; }
 .upd-panel { overflow: hidden; }

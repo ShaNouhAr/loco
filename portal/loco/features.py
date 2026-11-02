@@ -46,7 +46,7 @@ PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu"
                "mcp": ("mcp",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                   "agent_file", "agent_deb", "agent_rpm", "remote_agent"}
+                   "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs"}
 
 
 def disabled(conn=None):

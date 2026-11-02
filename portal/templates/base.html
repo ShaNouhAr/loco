@@ -64,6 +64,7 @@
         ('server', ha_available and can('system.view'), 'ha_page', ep.startswith('ha_'), 'ha', _('Haute disponibilité'), _('Second serveur et IP virtuelle')),
         ('watch', can('audit.view'), 'journal', ep == 'journal', 'journal', _('Journal'), _('Historique des actions')),
         ('watch', can('alerts.view'), 'alerts', ep.startswith('alerts'), 'bell', _('Alertes'), _('Notifications e-mail et webhook')),
+        ('watch', can('syslog.configure'), 'syslog_settings', ep.startswith('syslog'), 'forward', _('Envoi syslog'), _('Journaux de loco et des postes vers votre serveur syslog')),
       ] %}
       {% set admin_sections = [('access', _('Accès')), ('server', _('Serveur')), ('watch', _('Suivi'))] %}
       {% set adminnav = namespace(any=false, on=none) %}

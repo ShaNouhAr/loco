@@ -502,6 +502,12 @@ MIGRATIONS = [
     """
     ALTER TABLE device_groups ADD COLUMN enroll_key TEXT NOT NULL DEFAULT '';
     """,
+    # 32 : envoi syslog, où en est chaque poste qui remonte ses journaux.
+    """
+    ALTER TABLE devices ADD COLUMN log_sent_at TEXT NOT NULL DEFAULT '';
+    ALTER TABLE devices ADD COLUMN log_lines INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN log_error TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 
