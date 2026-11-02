@@ -26,11 +26,16 @@ class TestVmImageDownload(unittest.TestCase):
 import os,sys
 from pathlib import Path
 args=sys.argv[1:]; target=Path(args[args.index('-o')+1]); sums=any(a.endswith('.sha256') for a in args)
+mode=os.environ.get('MODE')
 if sums:
- target.write_text("''' + digest + '''  fixture.qcow2\\n")
- sys.exit(92 if os.environ.get('MODE')=='manifest-fail' else 0)
-target.write_bytes(b'PARTIAL' if os.environ.get('MODE') in ('interrupted','corrupt') else b'OFFICIAL_IMAGE_BYTES')
-sys.exit(92 if os.environ.get('MODE')=='interrupted' else 0)
+ dated="''' + digest + '''  fixture-20261102.qcow2\\n" if mode=='stale-alias' else ""
+ target.write_text("''' + digest + '''  fixture.qcow2\\n"+dated)
+ sys.exit(92 if mode=='manifest-fail' else 0)
+if mode=='stale-alias' and not any(a.endswith('/fixture-20261102.qcow2') for a in args):
+ target.write_bytes(b'STALE_ALIAS_FROM_THE_MIRROR_CACHE')
+ sys.exit(0)
+target.write_bytes(b'PARTIAL' if mode in ('interrupted','corrupt') else b'OFFICIAL_IMAGE_BYTES')
+sys.exit(92 if mode=='interrupted' else 0)
 ''')
         curl.chmod(0o755)
         self.library = Path(__file__).resolve().parents[1] / 'tests/lib-vm.sh'
@@ -51,6 +56,11 @@ sys.exit(92 if os.environ.get('MODE')=='interrupted' else 0)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Empreinte de l'image incorrecte", result.stderr)
         self.assertFalse(self.cached.exists())
+
+    def test_stale_latest_alias_is_bypassed_by_the_dated_file_with_the_same_checksum(self):
+        result = self.fetch('stale-alias')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.cached.read_bytes(), self.image)
 
     def test_manifest_failure_stops_before_downloading_the_image(self):
         self.assertNotEqual(self.fetch('manifest-fail').returncode, 0)

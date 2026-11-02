@@ -43,6 +43,11 @@ else:
     sys.exit("Empreinte absente du manifeste officiel")
 PY
 ) || return 1
+    # Le cache d'un miroir peut garder un ancien alias « latest » alors que le manifeste annonce déjà la nouvelle image
+    # (AlmaLinux, 2026-11-02) : le fichier daté de même empreinte, lui, ne change jamais.
+    local dated
+    dated=$(awk -v h="$expected" -v n="$name" '$1 == h && $2 != n && $2 ~ /^[A-Za-z0-9._+-]+$/ { print $2; exit }' "$WORK/$2.sums")
+    [ -z "$dated" ] || url=${url%/*}/$dated
     image="$cache/$2-$name"
     local tool=sha256sum
     [ "${#expected}" -eq 128 ] && tool=sha512sum
