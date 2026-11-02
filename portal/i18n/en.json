@@ -3427,5 +3427,9 @@
  "Terminées récemment": "Finished recently",
  "au prochain contact (moins de %(v)s min)": "at the next check-in (under %(v)s min)",
  "Aucune mise à jour en cours sur les postes que vous gérez.": "No updates in progress on the devices you manage.",
- "Aller à Mon parc": "Go to Devices"
+ "Aller à Mon parc": "Go to Devices",
+ "%(n)s en cours": "%(n)s in progress",
+ "%(n)s en échec": "%(n)s failed",
+ "%(n)s installé(s)": "%(n)s installed",
+ "voir les paquets": "show packages"
 }

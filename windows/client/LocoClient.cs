@@ -685,7 +685,7 @@ namespace Loco
 
         // Mises à jour Windows une par une (téléchargement puis installation), toutes ou seulement celles choisies dans
         // loco (identifiants Windows Update) ; l'avancement part au serveur à chaque étape.
-        static bool InstallWindowsUpdates(List<string> lines, HashSet<string> only = null, Progress progress = null)
+        static bool InstallWindowsUpdates(List<string> lines, HashSet<string> only = null, Progress progress = null, Action<string, string> markPkg = null)
         {
             dynamic session = NewSession();
             if (progress != null) progress("updates", "", 0, 0, -1, "prepare");
@@ -706,6 +706,7 @@ namespace Loco
             {
                 dynamic u = chosen[i];
                 string title = Convert.ToString(u.Title);
+                if (markPkg != null) markPkg(title, "running");
                 try
                 {
                     dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
@@ -725,6 +726,7 @@ namespace Loco
                     int code = (int)r.ResultCode;
                     string state = code == 2 ? "OK" : code == 3 ? Lang.T("OK avec erreurs", "OK with errors", "OK con errores") : code == 4 ? Lang.T("ÉCHEC", "FAILED", "FALLO") : code == 5 ? Lang.T("ANNULÉE", "CANCELLED", "CANCELADA") : "code " + code;
                     if (code >= 4) ok = false;
+                    if (markPkg != null) markPkg(title, code >= 4 ? "failed" : "ok");
                     int hr = (int)r.HResult;
                     lines.Add("  " + state + (hr != 0 ? string.Format(" (0x{0:X8})", hr) : "") + " : " + title);
                     if ((bool)result.RebootRequired) reboot = true;
@@ -732,10 +734,12 @@ namespace Loco
                 catch (Exception e)
                 {
                     ok = false;                          // une mise à jour en échec n'empêche pas les suivantes
+                    if (markPkg != null) markPkg(title, "failed");
                     lines.Add("  " + Lang.T("ÉCHEC", "FAILED", "FALLO") + " (" + e.Message.Trim() + ") : " + title);
                 }
             }
             if (reboot) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish.", "Reinicio necesario para terminar."));
+            if (progress != null && markPkg != null) progress("updates", "", chosen.Count, chosen.Count, 100, "");   // état final des mises à jour
             return ok;
         }
 
@@ -1108,6 +1112,16 @@ namespace Loco
                         bool ok = true;
                         // Avancement : au plus une remontée par seconde pour une même étape, immédiate à chaque changement.
                         string lastStep = ""; var lastSent = DateTime.MinValue;
+                        // Suivi mise à jour par mise à jour (installée, en cours, en échec), pour l'affichage en direct.
+                        var pkgOrder = new List<string>();
+                        var pkgState = new Dictionary<string, string>();
+                        Action<string, string> markPkg = (name, st) =>
+                        {
+                            if (string.IsNullOrEmpty(name)) return;
+                            if (!pkgState.ContainsKey(name)) pkgOrder.Add(name);
+                            else if (pkgState[name] == "failed" && st != "failed") return;
+                            pkgState[name] = st;
+                        };
                         Progress progress = (step, app, index, total, percent, phase) =>
                         {
                             string key = step + "|" + phase + "|" + app + "|" + index;
@@ -1117,6 +1131,19 @@ namespace Loco
                             if (index > 0 && total > 0) { detail["index"] = index; detail["total"] = total; }
                             if (percent >= 0) detail["percent"] = percent;
                             if (!string.IsNullOrEmpty(phase)) detail["phase"] = phase;
+                            if (pkgOrder.Count > 0)
+                            {
+                                var items = new List<object>();
+                                int nOk = 0, nFailed = 0, nRunning = 0;
+                                foreach (var n in pkgOrder)
+                                {
+                                    string s = pkgState[n];
+                                    items.Add(new Dictionary<string, object> { { "name", n }, { "state", s } });
+                                    if (s == "ok") nOk++; else if (s == "failed") nFailed++; else if (s == "running") nRunning++;
+                                }
+                                detail["items"] = items;
+                                detail["counts"] = new Dictionary<string, object> { { "ok", nOk }, { "failed", nFailed }, { "running", nRunning }, { "total", pkgOrder.Count } };
+                            }
                             var report = new Dictionary<string, object> { { "id", id }, { "state", "running" }, { "output", "" }, { "exit_code", null }, { "progress", detail } };
                             try { Post(Str(conf, "server"), "/agent/api/result", report, Str(conf, "token")); }
                             catch (Exception) { }
@@ -1133,7 +1160,7 @@ namespace Loco
                                 if (((Dictionary<string, object>)onlyValue).TryGetValue("updates", out ids) && ids is System.Collections.IEnumerable)
                                     foreach (object one in (System.Collections.IEnumerable)ids) only.Add(Convert.ToString(one));
                             }
-                            try { ok = InstallWindowsUpdates(lines, only, progress); }
+                            try { ok = InstallWindowsUpdates(lines, only, progress, markPkg); }
                             catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
                         }
                         object apps;

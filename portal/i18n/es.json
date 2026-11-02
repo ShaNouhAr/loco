@@ -3427,5 +3427,9 @@
  "Terminées récemment": "Terminadas recientemente",
  "au prochain contact (moins de %(v)s min)": "en el próximo contacto (menos de %(v)s min)",
  "Aucune mise à jour en cours sur les postes que vous gérez.": "No hay actualizaciones en curso en los equipos que gestiona.",
- "Aller à Mon parc": "Ir a Mi parque"
+ "Aller à Mon parc": "Ir a Mi parque",
+ "%(n)s en cours": "%(n)s en curso",
+ "%(n)s en échec": "%(n)s con error",
+ "%(n)s installé(s)": "%(n)s instalado(s)",
+ "voir les paquets": "ver paquetes"
 }

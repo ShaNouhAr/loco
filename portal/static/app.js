@@ -1486,6 +1486,33 @@
     syncAll(); render();
   });
 
+  /* Liste des paquets d'une mise à jour, réécrite en direct (installés, en cours, en échec) — cf. macro pkg_progress. */
+  function renderPkg(id, items, counts) {
+    var box = document.querySelector('[data-pkg="' + id + '"]');
+    if (!box) return;
+    var c = $(".pkg-counts", box);
+    if (c && counts) {
+      var html = "";
+      if (counts.ok) html += '<span class="pkg-c ok"><span class="st ok"></span>' + t("%(n)s installé(s)", { n: counts.ok }) + "</span>";
+      if (counts.failed) html += '<span class="pkg-c err"><span class="st err"></span>' + t("%(n)s en échec", { n: counts.failed }) + "</span>";
+      if (counts.running) html += '<span class="pkg-c run"><span class="st warn"></span>' + t("%(n)s en cours", { n: counts.running }) + "</span>";
+      c.innerHTML = html;
+    }
+    var ul = $(".pkg-items", box);
+    if (ul && items) {
+      ul.textContent = "";
+      items.forEach(function (it) {
+        var li = document.createElement("li");
+        li.className = "pkg-" + it.state;
+        var dot = document.createElement("span");
+        dot.className = "st " + (it.state === "ok" ? "ok" : it.state === "failed" ? "err" : "warn");
+        li.appendChild(dot);
+        li.appendChild(document.createTextNode(it.name));
+        ul.appendChild(li);
+      });
+    }
+  }
+
   /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
   (function () {
     var form = $("[data-update-select]");
@@ -1525,6 +1552,7 @@
             var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
             if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
             if (bar && c.state === "running") bar.setAttribute("width", Math.max(1, c.percent || 0));
+            renderPkg(c.id, c.items, c.counts);
             if (c.app && rows[c.app]) {
               if (seen.indexOf(c.app) < 0) seen.push(c.app);
               seen.forEach(function (name) {
@@ -1555,6 +1583,7 @@
             var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
             if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
             if (bar) bar.setAttribute("width", Math.max(1, c.percent || 0));
+            renderPkg(c.id, c.items, c.counts);
           });
           setTimeout(step, 2000);
         })

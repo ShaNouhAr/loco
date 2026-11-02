@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.123.0 — 2026-11-02
+
+- **Avancement des mises à jour paquet par paquet, en direct.** Pendant une mise à jour, on voit désormais chaque paquet (ou chaque mise à jour Windows) défiler avec son issue : **installé** (✓), **en cours**, ou **en échec** (✗), plus un récapitulatif « X installé(s) · Y en échec · Z en cours ». Visible sur la fiche du poste et sur le déroulé *Mon parc › Mises à jour*, rafraîchi toutes les 2 s sans recharger.
+  - **APT** : dépaquetage → en cours, *Setting up* → installé, erreur dpkg → en échec. **DNF/YUM** et **Windows Update** : une entrée par mise à jour avec son résultat. **Flatpak** : une entrée globale.
+  - La liste reste consultable après coup dans l'historique du poste (à côté du journal), pour revoir ce qui a réussi ou échoué.
+
 ## 2.122.0 — 2026-11-01
 
 - **Déroulé global des mises à jour du parc.** Nouvelle page *Mon parc › Mises à jour* : le suivi, en un seul endroit, de toutes les mises à jour du parc — **en cours** (avancement en direct, barre par poste, rafraîchie toutes les 2 s sans recharger), **en attente** du prochain contact, et **terminées récemment** (succès ou échec avec le motif). Chaque ligne mène à la fiche du poste.

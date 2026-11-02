@@ -659,6 +659,16 @@ def _progress(value):
         number = value.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and low <= number <= high:
             out[key] = number
+    items = value.get("items")
+    if isinstance(items, list) and items:
+        clean = [{"name": _text(it.get("name"), 120), "state": it["state"]}
+                 for it in items[:120] if isinstance(it, dict) and it.get("state") in ("running", "ok", "failed") and it.get("name")]
+        if clean:
+            out["items"] = clean
+    counts = value.get("counts")
+    if isinstance(counts, dict):
+        out["counts"] = {k: counts[k] for k in ("ok", "failed", "running", "total")
+                         if isinstance(counts.get(k), int) and not isinstance(counts.get(k), bool) and 0 <= counts[k] <= 100000}
     return out
 
 
@@ -670,6 +680,7 @@ def progress_view(raw):
         p = None
     if not isinstance(p, dict) or p.get("step") not in PROGRESS_STEPS:
         return None
+    extra = {k: p[k] for k in ("items", "counts") if k in p}      # liste des paquets et compteurs (affichage en direct)
     total, index = p.get("total") or 1, min(p.get("index") or 1, p.get("total") or 1)
     if p["step"] in ("updates", "flatpak"):
         # Mises à jour du système : pourcentage de l'agent s'il le connaît, sinon la part des éléments traités.
@@ -681,7 +692,7 @@ def progress_view(raw):
         if total > 1:
             label += f" · {index}/{total}"
         return {"label": label, "percent": max(1, min(99, percent)), "step": p["step"], "app": p.get("app", ""),
-                "phase": phase}
+                "phase": phase, **extra}
     # Part de chaque logiciel : téléchargement 0-60 %, vérification 60-70 %, installation 70-100 %.
     within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "windows_update": 0.0}[p["step"]]
     overall = round(100 * ((index - 1) + within) / total)
@@ -1366,7 +1377,8 @@ def fleet_device_progress(dev_id):
     for c in pending(dev_id):
         live = progress_view(c["progress"]) if c["state"] == "running" else None
         out.append({"id": c["id"], "state": c["state"], "label": live["label"] if live else "",
-                    "percent": live["percent"] if live else 0, "app": live.get("app", "") if live else ""})
+                    "percent": live["percent"] if live else 0, "app": live.get("app", "") if live else "",
+                    "items": live.get("items", []) if live else [], "counts": live.get("counts") if live else None})
     return {"commands": out}, 200, {"Cache-Control": "no-store"}
 
 
@@ -1379,7 +1391,9 @@ def fleet_updates():
     if request.headers.get("X-Requested-With") == "fetch":
         # Barres rafraîchies en place ; la page ne se recharge que si l'ensemble change (signature).
         live = [{"id": r["id"], "percent": r["progress"]["percent"] if r.get("progress") else 0,
-                 "label": r["progress"]["label"] if r.get("progress") else ""} for r in data["running"]]
+                 "label": r["progress"]["label"] if r.get("progress") else "",
+                 "items": r["progress"].get("items", []) if r.get("progress") else [],
+                 "counts": r["progress"].get("counts") if r.get("progress") else None} for r in data["running"]]
         return {"signature": data["signature"], "running": live}, 200, {"Cache-Control": "no-store"}
     return render_template("fleet_updates.html", **data, checkin=CHECKIN)
 

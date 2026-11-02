@@ -2,6 +2,7 @@
 {% block title %}{{ dev.hostname }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% from "_charts.html" import line_chart, legend %}
+{% from "_macros.html" import pkg_progress with context %}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False) -%}
 <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}
@@ -70,7 +71,7 @@
       {% else %}{{ _("au prochain contact") }}{% endif %}</span></span>
       {% if c.state in ('sent', 'running') %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ live.percent if live else 0 }}" height="6" data-cmd-bar/></svg>{% endif %}
       {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}
-    </div>{% endfor %}</div>{% endif %}
+    </div>{% if live and 'items' in live %}{{ pkg_progress(c.id, live, open=true) }}{% endif %}{% endfor %}</div>{% endif %}
   {% if planned %}<div class="planned">
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
   </div>{% endif %}
@@ -324,13 +325,14 @@
           <thead><tr><th>{{ _("Date") }}</th><th>{{ _("Action") }}</th><th class="hide-sm">{{ _("Par") }}</th><th>{{ _("État") }}</th></tr></thead>
           <tbody>
           {% for c in history %}
-            <tr class="{{ 'has-note' if c.output }}">
+            {% set hv = progress_view(c.progress) if c.action == 'update' else none %}
+            <tr class="{{ 'has-note' if c.output or (hv and 'items' in hv) }}">
               <td class="muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
               <td>{{ action_label(c) }}</td>
               <td class="muted hide-sm">{{ c.created_by or '—' }}</td>
               <td>{% if c.state == 'success' %}<span class="st ok">{{ _("réussie") }}</span>{% elif c.state == 'failed' %}<span class="st err">{{ _("échec") }}</span>{% elif c.state == 'cancelled' %}<span class="st">{{ _("annulée") }}</span>{% else %}<span class="st warn">{{ 'en cours' if c.state == 'running' else ('transmise' if c.state == 'sent' else 'en attente') }}</span>{% endif %}</td>
             </tr>
-            {% if c.output %}<tr class="note-row"><td colspan="4"><details><summary class="small muted">{{ _("Journal") }}</summary><pre class="log">{{ c.output }}</pre></details></td></tr>{% endif %}
+            {% if c.output or (hv and 'items' in hv) %}<tr class="note-row"><td colspan="4">{% if hv and 'items' in hv %}{{ pkg_progress(c.id, hv) }}{% endif %}{% if c.output %}<details><summary class="small muted">{{ _("Journal") }}</summary><pre class="log">{{ c.output }}</pre></details>{% endif %}</td></tr>{% endif %}
           {% endfor %}
           </tbody>
         </table>

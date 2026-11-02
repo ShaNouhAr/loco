@@ -1537,6 +1537,19 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .pending-item { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-2); }
 .pending-item > span:nth-child(2) { min-width: 0; }
 .pending-item strong { font-weight: 500; color: var(--text); }
+/* Déroulé des paquets d'une mise à jour : installés, en cours, en échec (macro pkg_progress) */
+.pkg-progress { margin: 2px 0 8px 18px; }
+.pkg-progress > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.pkg-progress > summary::-webkit-details-marker { display: none; }
+.pkg-counts { display: inline-flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.pkg-c { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.pkg-c.ok { color: var(--ok); } .pkg-c.err { color: var(--err); }
+.pkg-toggle { font-size: 12.5px; color: var(--text-3); text-decoration: underline; text-underline-offset: 2px; }
+.pkg-progress[open] .pkg-toggle { display: none; }
+.pkg-items { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 5px 16px; max-height: 260px; overflow: auto; scrollbar-width: thin; }
+.pkg-items li { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); min-width: 170px; }
+.pkg-items li.pkg-failed { color: var(--err); }
+.pkg-items li.pkg-running { color: var(--text); }
 .pending-cancel { flex: none; display: inline-flex; margin-left: 4px; }
 .pending-cancel .linkbtn { font-size: 13px; color: var(--text-3); text-decoration: underline; text-underline-offset: 3px; }
 .pending-cancel .linkbtn:hover { color: var(--text); }

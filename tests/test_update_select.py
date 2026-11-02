@@ -100,6 +100,27 @@ class TestSelection(FleetTest):
         after = self.admin.c.get(f"/fleet/{dev_id}", headers={"X-Requested-With": "fetch"}).get_json()["signature"]
         self.assertEqual(before, after)
 
+    def test_live_progress_lists_each_package_with_its_outcome(self):
+        agent, dev_id = self.linux()
+        self.select(dev_id, only=["openssl", "curl"])
+        cmd = agent.checkin().get_json()["commands"][0]
+        agent.post("/agent/api/result", {"id": cmd["id"], "state": "running", "output": "", "exit_code": None,
+                   "progress": {"step": "updates", "phase": "install", "app": "curl", "percent": 60,
+                                "items": [{"name": "openssl", "state": "ok"}, {"name": "curl", "state": "running"},
+                                          {"name": "nginx", "state": "failed"}],
+                                "counts": {"ok": 1, "failed": 1, "running": 1, "total": 3}}}, agent.token)
+        live = self.admin.c.get(f"/fleet/{dev_id}/progress", headers={"X-Requested-With": "fetch"}).get_json()["commands"][0]
+        self.assertEqual([(i["name"], i["state"]) for i in live["items"]],
+                         [("openssl", "ok"), ("curl", "running"), ("nginx", "failed")])
+        self.assertEqual((live["counts"]["ok"], live["counts"]["failed"]), (1, 1))
+        # Même liste en direct sur le déroulé global, et rendue dans la page du poste.
+        g = self.admin.c.get("/fleet/updates", headers={"X-Requested-With": "fetch"}).get_json()
+        self.assertEqual(len(g["running"][0]["items"]), 3)
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn('class="pkg-progress"', page)
+        self.assertIn('<li class="pkg-ok">', page)
+        self.assertIn('<li class="pkg-failed">', page)
+
     def test_mcp_update_device_with_a_selection_and_progress(self):
         _agent, dev_id = self.linux()
         token, _r = create(self.admin, "Claude", ["update_device", "get_device"])
@@ -151,6 +172,28 @@ class TestLinuxAgent(unittest.TestCase):
         progress("updates", "install", app="b", percent=41)              # même phase, moins d'une seconde : ignoré
         progress("flatpak")
         self.assertEqual([p["step"] + "/" + p.get("phase", "") for p in posts], ["updates/prepare", "updates/install", "flatpak/"])
+
+    def test_apt_per_package_tracking(self):
+        prog = AGENT.Progress(lambda data: None)
+        on_line = AGENT._compose(AGENT.apt_progress(prog), AGENT.apt_items(prog))
+        for line in ("Unpacking openssl (3.5.4-1) over (3.5.3-1) ...", "Setting up openssl (3.5.4-1) ...",
+                     "Unpacking curl (8.0) ...", "dpkg: error processing package curl (--configure):"):
+            on_line(line)
+        prog.finalize(ok=False)
+        items, counts = prog._items_view()
+        states = {i["name"]: i["state"] for i in items}
+        self.assertEqual((states["openssl"], states["curl"]), ("ok", "failed"))
+        self.assertEqual((counts["ok"], counts["failed"], counts["total"]), (1, 1, 2))
+
+    def test_dnf_per_package_tracking(self):
+        prog = AGENT.Progress(lambda data: None)
+        on_line = AGENT.dnf_items(prog)
+        on_line("  Upgrading        : openssl-libs-1:3.2.2-6.el9.x86_64                     1/2 ")
+        on_line("  Verifying        : openssl-libs-1:3.2.2-6.el9.x86_64                     1/2 ")
+        prog.finalize(ok=True)
+        items, counts = prog._items_view()
+        self.assertEqual(items[0]["name"], "openssl-libs")
+        self.assertEqual(counts["ok"], 1)
 
     def test_selected_packages_keep_their_automatic_mark(self):
         calls = []

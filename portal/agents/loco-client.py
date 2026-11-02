@@ -314,16 +314,61 @@ def run_stream(cmd, on_line, timeout=7200):
     return p.returncode, "".join(kept)
 
 
+def _compose(*handlers):
+    """Combine plusieurs analyseurs de lignes : chacun voit la ligne ; masquée du journal si l'un d'eux le demande."""
+    handlers = [h for h in handlers if h]
+    if len(handlers) == 1:
+        return handlers[0]
+
+    def on_line(line):
+        hidden = False
+        for h in handlers:
+            if h(line):
+                hidden = True
+        return hidden
+    return on_line
+
+
 class Progress:
     """Avancement d'une action remonté au serveur : tout de suite à chaque changement d'étape ou de phase, sinon au
-    plus une fois par seconde (paquet en cours, pourcentage)."""
+    plus une fois par seconde (paquet en cours, pourcentage). Suit aussi l'état de chaque paquet (en cours, installé,
+    en échec) pour l'afficher en direct."""
+
+    ITEMS_CAP = 80
 
     def __init__(self, send):
         self.send, self.last, self.stage = send, 0.0, None
+        self.items, self.order = {}, []       # nom du paquet -> « running » / « ok » / « failed », dans l'ordre vu
 
-    def __call__(self, step, phase="", app="", index=0, total=0, percent=None):
+    def item(self, name, state):
+        """État d'un paquet (jamais rétrogradé une fois en échec)."""
+        name = str(name).split(":")[0][:120]
+        if not name:
+            return
+        if name not in self.items:
+            self.order.append(name)
+        elif self.items[name] == "failed" and state != "failed":
+            return
+        self.items[name] = state
+
+    def finalize(self, ok):
+        """Fin de la commande : les paquets encore « en cours » sont installés (succès) ou en échec."""
+        for name in self.order:
+            if self.items[name] == "running":
+                self.items[name] = "ok" if ok else "failed"
+        self(self.stage[0] if self.stage else "updates", self.stage[1] if self.stage else "install", force=True)
+
+    def _items_view(self):
+        failed = [n for n in self.order if self.items[n] == "failed"]
+        rest = [n for n in self.order if self.items[n] != "failed"]
+        shown = failed + rest[-self.ITEMS_CAP:]       # on garde tous les échecs + les plus récents
+        counts = {"ok": sum(1 for s in self.items.values() if s == "ok"), "failed": len(failed),
+                  "running": sum(1 for s in self.items.values() if s == "running"), "total": len(self.order)}
+        return [{"name": n, "state": self.items[n]} for n in shown], counts
+
+    def __call__(self, step, phase="", app="", index=0, total=0, percent=None, force=False):
         now = time.monotonic()
-        if (step, phase) == self.stage and now - self.last < 1:
+        if not force and (step, phase) == self.stage and now - self.last < 1:
             return
         self.stage, self.last = (step, phase), now
         data = {"step": step, "app": str(app)[:100]}
@@ -333,6 +378,8 @@ class Progress:
             data.update(index=min(index, total), total=total)
         if percent is not None:
             data["percent"] = max(0, min(100, int(percent)))
+        if self.order:
+            data["items"], data["counts"] = self._items_view()
         try:
             self.send(data)
         except Exception:
@@ -360,6 +407,45 @@ def apt_progress(send):
         else:
             send("updates", "install", app=":".join(fields[:number]).split(":")[0], percent=30 + 70 * percent / 100)
         return True
+    return on_line
+
+
+APT_UNPACK_RE = re.compile(r"^Unpacking (\S+) \(")
+APT_SETUP_RE = re.compile(r"^Setting up (\S+) \(")
+APT_ERR_RE = re.compile(r"^dpkg: error processing package (\S+)")
+
+
+def apt_items(progress):
+    """Suit chaque paquet APT pour l'affichage en direct : dépaquetage = en cours, « Setting up » = installé,
+    « dpkg: error processing » = en échec. Ces lignes restent dans le journal (renvoie False)."""
+    def on_line(line):
+        m = APT_UNPACK_RE.match(line)
+        if m:
+            progress.item(m.group(1), "running")
+            return False
+        m = APT_SETUP_RE.match(line)
+        if m:
+            progress.item(m.group(1), "ok")
+            progress("updates", "install", app=m.group(1))      # pousse la liste à jour (throttlé 1/s)
+            return False
+        m = APT_ERR_RE.match(line)
+        if m:
+            progress.item(m.group(1), "failed")
+            progress("updates", "install", app=m.group(1), force=True)   # un échec remonte tout de suite
+        return False
+    return on_line
+
+
+def dnf_items(progress):
+    """Suit chaque paquet dnf/yum : « Upgrading/Installing : pkg » = en cours, « Verifying : pkg » = installé."""
+    def on_line(line):
+        m = DNF_STEP_RE.match(line)
+        if m:
+            verb = line.split(":", 1)[0].strip()
+            progress.item(_rpm_name(m.group(1)), "ok" if verb == "Verifying" else "running")
+            if verb == "Verifying":
+                progress("updates", "install", app=_rpm_name(m.group(1)))
+        return False
     return on_line
 
 
@@ -692,6 +778,7 @@ def update(cmd=None, progress=None):
     Flatpak). progress(step, phase, app, index, total, percent) reçoit l'avancement au fil de l'eau."""
     cmd = cmd or {}
     send = progress or (lambda *a, **k: None)
+    prog = progress if isinstance(progress, Progress) else None    # suivi paquet par paquet si remonté au serveur
     only = cmd.get("only") if isinstance(cmd.get("only"), dict) else None
     names = [] if only is None else [n for n in only.get("packages") or [] if isinstance(n, str) and PACKAGE_RE.fullmatch(n)][:2000]
     fam = family()
@@ -708,14 +795,19 @@ def update(cmd=None, progress=None):
                 target = ["install", *names] if only is not None else ["upgrade", "--with-new-pkgs"]
                 code, out = run_stream(["apt-get", "-y", "-q", "-o", "APT::Status-Fd=1", "-o", "DPkg::Lock::Timeout=300",
                                         "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold",
-                                        *target], apt_progress(send))
+                                        *target], _compose(apt_progress(send), apt_items(prog) if prog else None))
                 logs.append(out)
+                if prog:
+                    prog.finalize(code == 0)
                 if auto:
                     run(["apt-mark", "auto", *auto])
         elif fam == "rhel":
             send("updates", "prepare")
-            code, out = run_stream(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade", *names], dnf_progress(send))
+            code, out = run_stream(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade", *names],
+                                   _compose(dnf_progress(send), dnf_items(prog) if prog else None))
             logs.append(out)
+            if prog:
+                prog.finalize(code == 0)
         else:
             code, logs = 1, ["gestionnaire de paquets non reconnu"]
     if (only is None or only.get("flatpak")) and shutil.which("flatpak"):
@@ -723,6 +815,9 @@ def update(cmd=None, progress=None):
         fcode, out = run(["flatpak", "update", "-y", "--noninteractive", "--system"], timeout=3600)
         logs.append(out)
         code = code or fcode
+        if prog:
+            prog.item("Flatpak", "ok" if fcode == 0 else "failed")
+            prog("flatpak", force=True)
     return code, "\n".join(logs)
 
 
