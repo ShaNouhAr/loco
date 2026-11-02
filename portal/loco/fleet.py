@@ -707,50 +707,108 @@ def progress_view(raw):
 app.jinja_env.globals["progress_view"] = progress_view
 
 # Déroulé global des mises à jour du parc : les mises à jour et les redémarrages qui les accompagnent.
-UPDATE_ACTIVITY = ("update", "reboot")
-ACTIVITY_RECENT_MINUTES = 30
+ACTIVITY_FINISHED_HOURS = 24    # ensuite, seulement dans l'historique du poste
+ACTIVITY_FINISHED_LIMIT = 100
+FAILURE_LINE_RE = re.compile(r"^\s*(E:|Err:|dpkg: error|error\b|Error\b|ÉCHEC|FAILED|FALLO)")
 
 
 def _activity_rows():
-    cutoff = (datetime.datetime.now() - datetime.timedelta(minutes=ACTIVITY_RECENT_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
-    return db().execute(
-        "SELECT c.id, c.device_id, c.action, c.params, c.state, c.created_at, c.created_by, c.finished_at, "
-        "c.exit_code, c.output, c.progress, d.hostname, d.os_family, d.os_name "
-        "FROM device_commands c JOIN devices d ON d.id = c.device_id "
-        "WHERE c.action IN ('update', 'reboot') AND d.state != 'removed'" + scope.sql("d.id") + " "
-        "AND (c.state IN ('queued', 'sent', 'running') OR (c.state IN ('success', 'error') AND c.finished_at >= ?)) "
-        "ORDER BY c.id DESC", (cutoff,)).fetchall()
+    """Commandes suivies par le déroulé, dans le parc du compte : (actives, terminées des dernières 24 h)."""
+    base = ("SELECT c.*, d.hostname, d.os_family, d.os_name, d.state AS device_state, d.last_seen "
+            "FROM device_commands c JOIN devices d ON d.id = c.device_id "
+            "WHERE c.action IN ('update', 'reboot') AND d.state != 'removed'" + scope.sql("d.id"))
+    since = (datetime.datetime.now() - datetime.timedelta(hours=ACTIVITY_FINISHED_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    active = db().execute(base + " AND c.state IN ('queued', 'sent', 'running') ORDER BY c.id").fetchall()
+    finished = db().execute(base + " AND c.state IN ('success', 'failed') AND c.finished_at >= ? "
+                            "ORDER BY c.finished_at DESC, c.id DESC LIMIT ?", (since, ACTIVITY_FINISHED_LIMIT)).fetchall()
+    return active, finished
 
 
-def update_activity():
-    """Mises à jour du parc (dans le périmètre du compte) : en cours, en attente, terminées récemment, + signature."""
-    rows = _activity_rows()
-    running, pending, recent = [], [], []
-    for c in rows:
-        item = {"id": c["id"], "dev_id": c["device_id"], "hostname": c["hostname"] or c["device_id"],
-                "os_short": short_os(c["os_name"]), "action": c["action"], "label": action_label(c),
-                "state": c["state"], "created_at": c["created_at"], "finished_at": c["finished_at"], "by": c["created_by"]}
+def _command_online(c):
+    return presence({"last_seen": c["last_seen"], "state": c["device_state"]})["online"]
+
+
+def _activity_signature(active, finished):
+    """Change quand une ligne change d'état ou qu'un poste en attente apparaît ou disparaît, et toutes les 5 min pour
+    garder justes les « il y a … » ; pas à chaque paquet (les barres et les listes sont réécrites en place)."""
+    return hashlib.sha256(json.dumps([[[c["id"], c["state"], _command_online(c)] for c in active],
+                                      [[c["id"], c["state"]] for c in finished],
+                                      int(time.time() // 300)]).encode()).hexdigest()[:16]
+
+
+def _failure_reason(view, output):
+    """Pourquoi une commande a échoué : les éléments en échec, sinon la ligne d'erreur du journal."""
+    failed = [i["name"] for i in (view or {}).get("items", []) if i["state"] == "failed"]
+    if failed:
+        return ", ".join(failed[:3]) + ("…" if len(failed) > 3 else "")
+    lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
+    line = next((line for line in reversed(lines) if FAILURE_LINE_RE.match(line)), lines[-1] if lines else "")
+    return re.sub(r"^(ÉCHEC|FAILED|FALLO)\s*", "", line)[:160]         # la ligne affiche déjà « Échec »
+
+
+def _success_summary(c, view):
+    """Ce qu'une commande réussie a fait ; rien plutôt que la dernière ligne du journal, souvent sans rapport."""
+    if c["action"] == "reboot":
+        return (c["output"] or "").strip()[:160]
+    n = ((view or {}).get("counts") or {}).get("ok", 0)
+    if not n:
+        return ""
+    if c["os_family"] == "windows":
+        return _("%(n)s mise à jour installée", n=n) if n == 1 else _("%(n)s mises à jour installées", n=n)
+    return _("%(n)s paquet installé", n=n) if n == 1 else _("%(n)s paquets installés", n=n)
+
+
+def update_activity(active, finished):
+    """Lignes du déroulé : en cours (avancement), en attente (ce qu'elles attendent vraiment), terminées (échecs d'abord)."""
+    running, waiting, done = [], [], []
+    now = _now()
+
+    def line(c):
+        return {"id": c["id"], "dev_id": c["device_id"], "hostname": c["hostname"] or str(c["device_id"]),
+                "os_short": short_os(c["os_name"]), "action": c["action"], "label": action_label(c), "state": c["state"],
+                "by": c["created_by"]}
+    for c in active:
+        item, online = line(c), _command_online(c)
+        item["online"] = online
         if c["state"] == "running":
             item["progress"] = progress_view(c["progress"]) if c["action"] == "update" else None
+            item["since"] = ago_text(c["sent_at"] or c["created_at"])
+            item["seen"] = ago_text(c["last_seen"])
             running.append(item)
-        elif c["state"] in ("queued", "sent"):
-            pending.append(item)
+            continue
+        item["since"] = ago_text(c["created_at"])
+        if c["run_after"] and c["run_after"] > now:
+            item.update(tone="", status=_("Planifiée"), detail=_("le %(date)s", date=date_fr(c["run_after"][:16])))
+        elif not online and c["state"] == "sent":       # déjà remise à l'agent : plus rien à attendre de ce côté
+            item.update(tone="warn", status=_("Sans réponse du poste"), detail=_("vu %(seen)s", seen=ago_text(c["last_seen"])))
+        elif not online:
+            item.update(tone="", status=_("Poste hors ligne"),
+                        detail=_("vu %(seen)s · partira à son retour", seen=ago_text(c["last_seen"])))
+        elif c["state"] == "sent":
+            item.update(tone="warn", status=_("Transmise à l'agent"), detail=_("démarrage imminent"))
         else:
-            item["ok"] = c["state"] == "success"
-            item["summary"] = (c["output"] or "").strip().splitlines()[-1][:160] if c["output"] else ""
-            recent.append(item)
-    signature = hashlib.sha256(json.dumps([[c["id"], c["state"], c["finished_at"]] for c in rows]).encode()).hexdigest()[:16]
-    return {"running": running, "pending": pending, "recent": recent, "signature": signature,
-            "active": len(running) + len(pending)}
+            item.update(tone="warn", status=_("Au prochain contact"), detail=_("moins de %(v)s min", v=CHECKIN // 60))
+        waiting.append(item)
+    waiting.sort(key=lambda r: not r["online"])         # d'abord ce qui va partir
+    for c in finished:
+        item, view = line(c), progress_view(c["progress"]) if c["action"] == "update" else None
+        item.update(ok=c["state"] == "success", view=view, since=ago_text(c["finished_at"]))
+        item["detail"] = _success_summary(c, view) if item["ok"] else _failure_reason(view, c["output"])
+        done.append(item)
+    done.sort(key=lambda r: r["ok"])                    # tri stable : les échecs d'abord, puis du plus récent au plus ancien
+    return {"running": running, "waiting": waiting, "done": done,
+            "offline": sum(1 for r in waiting if not r["online"]), "failures": sum(1 for r in done if not r["ok"])}
 
 
 def updating_count():
-    """Nombre de mises à jour (ou redémarrages) en cours ou en attente dans le périmètre du compte (pastille de navigation)."""
+    """Pastille de navigation : ce qui bouge vraiment, sans les postes hors ligne ni les planifications à venir."""
+    now = datetime.datetime.now()
+    alive = (now - datetime.timedelta(seconds=ONLINE_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        row = db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
-                           "WHERE c.action IN ('update', 'reboot') AND c.state IN ('queued', 'sent', 'running') "
-                           "AND d.state != 'removed'" + scope.sql("d.id")).fetchone()
-        return row[0]
+        return db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
+                            "WHERE c.action IN ('update', 'reboot') AND c.state IN ('queued', 'sent', 'running') "
+                            "AND d.state != 'removed' AND d.last_seen >= ? AND (c.run_after = '' OR c.run_after <= ?)"
+                            + scope.sql("d.id"), (alive, _now())).fetchone()[0]
     except Exception:  # noqa: BLE001 - une pastille de navigation ne doit jamais faire tomber une page
         return 0
 
@@ -1385,17 +1443,30 @@ def fleet_device_progress(dev_id):
 @app.route("/fleet/updates")
 @login_required
 def fleet_updates():
-    """Déroulé global des mises à jour du parc : en cours (avancement en direct), en attente, terminées récemment."""
+    """Déroulé global des mises à jour du parc : en cours (avancement en direct), en attente, terminées."""
     require("fleet.view")
-    data = update_activity()
+    active, finished = _activity_rows()
+    signature = _activity_signature(active, finished)
     if request.headers.get("X-Requested-With") == "fetch":
-        # Barres rafraîchies en place ; la page ne se recharge que si l'ensemble change (signature).
-        live = [{"id": r["id"], "percent": r["progress"]["percent"] if r.get("progress") else 0,
-                 "label": r["progress"]["label"] if r.get("progress") else "",
-                 "items": r["progress"].get("items", []) if r.get("progress") else [],
-                 "counts": r["progress"].get("counts") if r.get("progress") else None} for r in data["running"]]
-        return {"signature": data["signature"], "running": live}, 200, {"Cache-Control": "no-store"}
-    return render_template("fleet_updates.html", **data, checkin=CHECKIN)
+        # Barres et listes réécrites en place ; la page ne se recharge que si l'ensemble change (signature).
+        live = []
+        for c in active:
+            if c["state"] == "running":
+                view = (progress_view(c["progress"]) if c["action"] == "update" else None) or {}
+                live.append({"id": c["id"], "percent": view.get("percent", 0), "label": view.get("label", ""),
+                             "items": view.get("items", []), "counts": view.get("counts")})
+        return {"signature": signature, "running": live}, 200, {"Cache-Control": "no-store"}
+    return render_template("fleet_updates.html", signature=signature, finished_hours=ACTIVITY_FINISHED_HOURS,
+                           **update_activity(active, finished))
+
+
+def _back_to_origin(dev_id):
+    """Depuis une liste (Mon parc, déroulé), y rester avec un message ; sinon aller à la fiche du poste."""
+    dest = request.form.get("return", "")
+    if dest:
+        target = safe_next(dest)
+        return {"redirect": target} if request.headers.get("X-Requested-With") == "fetch" else redirect(target)
+    return back("fleet_device", dev_id=dev_id)
 
 
 @app.route("/fleet/<int:dev_id>/action", methods=["POST"])
@@ -1433,12 +1504,7 @@ def fleet_action(dev_id):
         flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
-    # Depuis la liste du parc (bouton Redémarrer), rester sur la liste avec un message ; sinon aller à la fiche.
-    dest = request.form.get("return", "")
-    if dest:
-        target = safe_next(dest)
-        return {"redirect": target} if request.headers.get("X-Requested-With") == "fetch" else redirect(target)
-    return back("fleet_device", dev_id=dev_id)
+    return _back_to_origin(dev_id)
 
 
 @app.route("/fleet/<int:dev_id>/windows-update", methods=["POST"])
@@ -1472,7 +1538,7 @@ def fleet_cancel_command(dev_id, cmd_id):
     db().commit()
     audit(f"parc.{cmd['action']}.annulation", dev["hostname"])
     flash(_('Action planifiée annulée.'), "ok")
-    return back("fleet_device", dev_id=dev_id)
+    return _back_to_origin(dev_id)
 
 
 @app.route("/fleet/update-all", methods=["POST"])

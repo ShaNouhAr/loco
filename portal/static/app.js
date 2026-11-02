@@ -1489,29 +1489,45 @@
   /* Liste des paquets d'une mise à jour, réécrite en direct (installés, en cours, en échec) — cf. macro pkg_progress. */
   function renderPkg(id, items, counts) {
     var box = document.querySelector('[data-pkg="' + id + '"]');
-    if (!box) return;
+    if (!box || !items || !items.length) return;
+    box.hidden = false;
     var c = $(".pkg-counts", box);
     if (c && counts) {
-      var html = "";
-      if (counts.ok) html += '<span class="pkg-c ok"><span class="st ok"></span>' + t("%(n)s installé(s)", { n: counts.ok }) + "</span>";
-      if (counts.failed) html += '<span class="pkg-c err"><span class="st err"></span>' + t("%(n)s en échec", { n: counts.failed }) + "</span>";
-      if (counts.running) html += '<span class="pkg-c run"><span class="st warn"></span>' + t("%(n)s en cours", { n: counts.running }) + "</span>";
-      c.innerHTML = html;
+      c.textContent = "";
+      [["ok", counts.ok, counts.ok > 1 ? t("%(n)s installés", { n: counts.ok }) : t("%(n)s installé", { n: counts.ok })],
+       ["err", counts.failed, t("%(n)s en échec", { n: counts.failed })],
+       ["run", counts.running, t("%(n)s en cours", { n: counts.running })]].forEach(function (part) {
+        if (!part[1]) return;
+        var chip = document.createElement("span");
+        chip.className = "pkg-c " + part[0];
+        chip.textContent = part[2];
+        c.appendChild(chip);
+      });
     }
     var ul = $(".pkg-items", box);
-    if (ul && items) {
+    if (ul) {
       ul.textContent = "";
       items.forEach(function (it) {
         var li = document.createElement("li");
         li.className = "pkg-" + it.state;
-        var dot = document.createElement("span");
-        dot.className = "st " + (it.state === "ok" ? "ok" : it.state === "failed" ? "err" : "warn");
-        li.appendChild(dot);
-        li.appendChild(document.createTextNode(it.name));
+        li.textContent = it.name;
         ul.appendChild(li);
       });
     }
   }
+
+  /* Listes de paquets dépliées ou repliées à la main : gardées quand la page se recharge pendant une vague de mises à jour. */
+  (function () {
+    var folded = {};
+    try { folded = JSON.parse(sessionStorage.getItem("loco-pkg") || "{}"); } catch (e) { folded = {}; }
+    $$(".pkg-progress[data-pkg]").forEach(function (d) { if (d.dataset.pkg in folded) d.open = folded[d.dataset.pkg]; });
+    document.addEventListener("toggle", function (e) {
+      var d = e.target;
+      if (!d.matches || !d.matches(".pkg-progress[data-pkg]")) return;
+      folded[d.dataset.pkg] = d.open;
+      try { sessionStorage.setItem("loco-pkg", JSON.stringify(folded)); } catch (err) { /* stockage indisponible */ }
+    }, true);
+  })();
 
   /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
   (function () {
@@ -1568,26 +1584,28 @@
     setTimeout(step, 1000);
   })();
 
-  /* Déroulé global des mises à jour du parc : barres en direct ; rechargement quand l'ensemble change (signature). */
+  /* Déroulé global des mises à jour du parc : barres et paquets en direct ; rechargement quand l'ensemble change.
+     Toutes les 2 s tant qu'une mise à jour tourne, sinon toutes les 10 s. */
   (function (feed) {
     if (!feed) return;
     var step = function () {
       fetch(feed.dataset.updates, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          if (!d) return setTimeout(step, 5000);
-          if (d.signature !== feed.dataset.signature) return location.reload();   // un poste a changé d'état
+          if (!d) return setTimeout(step, 10000);
+          if (d.signature !== feed.dataset.signature) return location.reload();
           d.running.forEach(function (c) {
             var item = $('[data-cmd="' + c.id + '"]', feed);
             if (!item) return;
-            var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
-            if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
-            if (bar) bar.setAttribute("width", Math.max(1, c.percent || 0));
+            var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item), pct = $("[data-cmd-pct]", item);
+            if (c.label && label) label.textContent = c.label;
+            if (bar && c.percent) bar.setAttribute("width", c.percent);
+            if (pct && c.percent) pct.textContent = c.percent + " %";
             renderPkg(c.id, c.items, c.counts);
           });
-          setTimeout(step, 2000);
+          setTimeout(step, d.running.length ? 2000 : 10000);
         })
-        .catch(function () { setTimeout(step, 5000); });
+        .catch(function () { setTimeout(step, 10000); });
     };
     setTimeout(step, 2000);
   })($("[data-updates-feed]"));

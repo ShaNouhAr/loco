@@ -343,6 +343,10 @@ distribués ; supprimer le groupe aussi.
   progression, et dans le tableau les éléments terminés (✓) et celui en cours. Sous Windows, les mises à jour
   s'installent une par une (pile de maintenance d'abord) et une erreur n'arrête plus les suivantes. Agents 2.120.0 et
   plus (ils se mettent à jour seuls) ; l'outil MCP `update_device` accepte la même sélection (`updates`, `flatpak`).
+- **Suivi des mises à jour** (*Mon parc → Mises à jour*) : les mises à jour et redémarrages de votre parc, en direct. **En cours** :
+  étape, barre et paquets ou mises à jour Windows un par un (installé, en cours, en échec). **En attente** : ce que chaque ligne
+  attend vraiment (prochain contact, planification, poste hors ligne) ; une action en attente n'expire pas, elle part au retour du
+  poste, et *Annuler* la retire. **Terminées** : 24 heures sur cette page, échecs d'abord avec leur motif, puis dans l'historique du poste.
 - **Planifications** (*Mon parc → Planifications*) : mises à jour et scripts lancés **une fois, chaque jour, chaque
   semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour), à l'heure du serveur, sur tout le parc, des
   groupes (membres résolus à chaque exécution) ou des appareils. On planifie aussi en contexte : bouton calendrier à

@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.123.1 — 2026-11-02
+
+- **Page *Mon parc › Mises à jour* refaite** : une seule liste en colonnes alignées (poste, action, état, date, auteur), groupée en *En cours*, *En attente* et *Terminées*. Sur téléphone, chaque ligne s'empile.
+- **Les échecs apparaissent enfin sur cette page** : les mises à jour en échec n'y figuraient jamais (mauvais état dans la requête). Ils passent désormais en tête des terminées, avec les paquets concernés ou la ligne d'erreur, au lieu de la dernière ligne du journal.
+- **La liste des paquets s'affiche vraiment en direct** : elle n'apparaissait pas si la page avait été ouverte avant le premier paquet (fiche du poste et déroulé). Les listes dépliées ou repliées restent dans cet état quand la page se recharge.
+- **« En attente » dit la vérité** : un poste éteint n'affiche plus « moins de 2 min » mais *Poste hors ligne, vu le …, partira à son retour* ; une commande en cours ou transmise à un poste muet affiche *Sans réponse du poste*. Bouton *Annuler* directement sur la ligne, et la pastille de l'onglet ne compte plus les postes hors ligne ni les planifications à venir.
+- **Durées visibles sur la page** : une action en attente n'expire pas ; les terminées restent 24 heures (au lieu de 30 minutes, trop court pour suivre une vague), puis dans l'historique du poste.
+
 ## 2.123.0 — 2026-11-02
 
 - **Avancement des mises à jour paquet par paquet, en direct.** Pendant une mise à jour, on voit désormais chaque paquet (ou chaque mise à jour Windows) défiler avec son issue : **installé** (✓), **en cours**, ou **en échec** (✗), plus un récapitulatif « X installé(s) · Y en échec · Z en cours ». Visible sur la fiche du poste et sur le déroulé *Mon parc › Mises à jour*, rafraîchi toutes les 2 s sans recharger.

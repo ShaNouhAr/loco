@@ -306,6 +306,62 @@ class TestActions(FleetTest):
                               headers={"X-Requested-With": "fetch"})
         self.assertEqual(r.get_json()["redirect"], "/")
 
+    def test_update_activity_tells_what_each_line_really_waits_for(self):
+        now = fleet._now()
+        online, offline = Agent(LINUX, "192.168.44.12"), Agent(WINDOWS, "192.168.44.13")
+        for agent in (online, offline):
+            agent.enroll()
+            agent.checkin({"updates": []})
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen='2026-01-05 08:00:00' WHERE uid=?", (offline.uid,))
+            ids = [conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at,created_by) VALUES (?,?,?,?,?,?)",
+                                (device(a.uid)["id"], "update", "{}", "queued", now, "admin")).lastrowid for a in (online, offline)]
+        page = self.admin.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn("Au prochain contact", page)                     # le poste répond
+        self.assertIn("Poste hors ligne", page)                        # le poste éteint n'attend pas « moins de 2 min »
+        self.assertIn("partira à son retour", page)
+        self.assertLess(page.index("Au prochain contact"), page.index("Poste hors ligne"))
+        self.assertIn('class="tab-badge">1<', page)                    # la pastille ne compte que ce qui bouge
+        # Annuler depuis le déroulé y reste, et retire la ligne.
+        r = self.admin.post(f"/fleet/{device(offline.uid)['id']}/cancel/{ids[1]}",
+                            {"return": "/fleet/updates"}, page="/fleet/updates")
+        self.assertTrue(r.location.endswith("/fleet/updates"), r.location)
+        self.assertNotIn("Poste hors ligne", self.admin.c.get("/fleet/updates").get_data(as_text=True))
+
+    def test_update_activity_shows_failures_first_with_their_reason(self):
+        now = fleet._now()
+        a = Agent(LINUX, "192.168.44.14")
+        a.enroll()
+        a.checkin({"updates": []})
+        dev = device(a.uid)["id"]
+        rows = [("success", json.dumps({"step": "updates", "items": [{"name": "vim", "state": "ok"}], "counts": {"ok": 1, "total": 1}}),
+                 "Processing triggers for man-db (2.13.1-1) ..."),
+                ("failed", json.dumps({"step": "updates", "items": [{"name": "curl", "state": "failed"}], "counts": {"failed": 1, "total": 1}}),
+                 "dpkg: error processing package curl"),
+                ("failed", "", "Reading package lists...\nE: Unable to locate package x\nFin du journal")]
+        with transaction() as conn:
+            for state, progress, output in rows:
+                conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at,finished_at,output,progress) "
+                             "VALUES (?,?,?,?,?,?,?,?)", (dev, "update", "{}", state, now, now, output, progress))
+        page = self.admin.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn(">Échec<", page)
+        self.assertIn("1 paquet installé", page)
+        self.assertIn("E: Unable to locate package x", page)                # la ligne d'erreur, pas la dernière du journal
+        self.assertNotIn("Processing triggers", page)                       # ni un bout de journal sans rapport
+        self.assertLess(page.index(">Échec<"), page.index(">Réussie<"))     # les échecs d'abord
+
+    def test_package_list_is_ready_before_the_first_package(self):
+        # Page ouverte avant le premier paquet : le bloc existe (masqué) pour que le direct puisse le remplir.
+        a = Agent(LINUX, "192.168.44.15")
+        a.enroll()
+        a.checkin({"updates": []})
+        dev = device(a.uid)["id"]
+        with transaction() as conn:
+            cmd = conn.execute("INSERT INTO device_commands (device_id,action,params,state,created_at,sent_at) VALUES (?,?,?,?,?,?)",
+                               (dev, "update", "{}", "running", fleet._now(), fleet._now())).lastrowid
+        for path in ("/fleet/updates", f"/fleet/{dev}"):
+            self.assertRegex(self.admin.c.get(path).get_data(as_text=True), rf'<details class="pkg-progress" data-pkg="{cmd}"[^>]* hidden>')
+
     def test_global_update_activity_page_lists_running_pending_recent(self):
         import datetime
         a = Agent(LINUX, "192.168.44.10"); a.enroll(); a.checkin({"updates": [{"name": "openssl", "version": "3.5"}]})
@@ -323,7 +379,7 @@ class TestActions(FleetTest):
         page = self.admin.c.get("/fleet/updates").get_data(as_text=True)
         self.assertIn("En cours", page)
         self.assertIn("En attente", page)
-        self.assertIn("Terminées récemment", page)
+        self.assertIn("Terminées", page)
         self.assertIn('width="42"', page)              # barre d'avancement du poste en cours
         # Flux en direct : barres sans recharger, rechargement quand la signature change.
         live = self.admin.c.get("/fleet/updates", headers={"X-Requested-With": "fetch"}).get_json()

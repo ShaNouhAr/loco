@@ -1,66 +1,82 @@
 {% extends 'base.html' %}
 {% block title %}{{ _("Mises à jour") }} · {{ host }}{% endblock %}
+{% macro device(r) -%}
+<div class="upd-host"><a class="host" href="{{ url_for('fleet_device', dev_id=r.dev_id) }}">{{ r.hostname }}</a><span class="sub" title="{{ r.os_short }}">{{ r.os_short }}</span></div>
+<div class="upd-action">{{ r.label }}</div>
+{%- endmacro %}
+{% macro when(r) -%}
+<div class="upd-when">{{ r.since }}{% if r.by %}<span class="sub">{{ _("par %(who)s", who=r.by) }}</span>{% endif %}</div>
+{%- endmacro %}
 {% block content %}
 {% from "_macros.html" import pkg_progress with context %}
 {% include '_fleet_nav.html' %}
 <div class="head">
   <div>
     <h1>{{ _("Mises à jour du parc") }}</h1>
-    <p>{{ _("Le déroulé des mises à jour en cours sur les postes que vous gérez : avancement en direct, celles qui attendent le prochain contact, et celles qui viennent de se terminer.") }}</p>
+    <p>{{ _("Suivi en direct des mises à jour et des redémarrages sur les postes que vous gérez.") }}</p>
   </div>
 </div>
 
-<div class="stack" data-updates-feed data-updates="{{ url_for('fleet_updates') }}" data-signature="{{ signature }}">
-  {% if not running and not pending and not recent %}
+<div data-updates-feed data-updates="{{ url_for('fleet_updates') }}" data-signature="{{ signature }}">
+  {% if not running and not waiting and not done %}
   <div class="panel"><div class="panel-b">
-    <p class="empty">{{ _("Aucune mise à jour en cours sur les postes que vous gérez.") }} <a href="{{ url_for('fleet') }}">{{ _("Aller à Mon parc") }}</a></p>
+    <p class="empty">{{ _("Aucune mise à jour en cours ni terminée ces dernières %(n)s heures.", n=finished_hours) }} <a href="{{ url_for('fleet') }}">{{ _("Aller à Mon parc") }}</a></p>
   </div></div>
-  {% endif %}
-
-  {% if running %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("En cours") }}</h2><div class="aside">{{ running|length }}</div></div>
-    <div class="panel-b pending-list">
+  {% else %}
+  <section class="panel upd-panel">
+    {% if running %}
+    <div class="panel-h sub"><h2>{{ _("En cours") }} <span class="h-count">{{ running|length }}</span></h2></div>
+    <div role="list">
       {% for r in running %}
-      <div class="pending-item" data-cmd="{{ r.id }}">
-        <span class="st ok"></span>
-        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
-          <span data-cmd-label>{% set lbl = r.progress.label if r.progress else r.label %}{{ lbl[:1]|lower }}{{ lbl[1:] }}</span></span>
-        {% if r.progress %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent }}" height="6" data-cmd-bar/></svg>{% endif %}
+      <div class="upd-row" role="listitem" data-cmd="{{ r.id }}">
+        {{ device(r) }}
+        <div class="upd-state">
+          {% if r.online %}<span class="upd-step" data-cmd-label>{{ r.progress.label if r.progress else (_("Démarrage…") if r.action == 'update' else _("Redémarrage en cours")) }}</span>
+          {% else %}<span class="st warn">{{ _("Sans réponse du poste") }}</span><span class="sub">{{ _("vu %(seen)s", seen=r.seen) }}</span>{% endif %}
+          {% if r.action == 'update' %}<span class="upd-bar"><svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent if r.progress else 0 }}" height="6" data-cmd-bar/></svg><span class="upd-pct" data-cmd-pct>{{ r.progress.percent ~ ' %' if r.progress }}</span></span>{% endif %}
+        </div>
+        {{ when(r) }}
+        <div class="upd-link"></div>
+        {% if r.action == 'update' %}{{ pkg_progress(r.id, r.progress, open=true) }}{% endif %}
       </div>
-      {% if r.progress and 'items' in r.progress %}{{ pkg_progress(r.id, r.progress) }}{% endif %}
       {% endfor %}
     </div>
-  </section>
-  {% endif %}
+    {% endif %}
 
-  {% if pending %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("En attente") }}</h2><div class="aside">{{ pending|length }}</div></div>
-    <div class="panel-b pending-list">
-      {% for r in pending %}
-      <div class="pending-item">
-        <span class="st warn"></span>
-        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
-          {{ r.label[:1]|lower }}{{ r.label[1:] }} — <span class="muted">{{ _("au prochain contact (moins de %(v)s min)", v=checkin // 60) }}</span></span>
+    {% if waiting %}
+    <div class="panel-h sub">
+      <h2>{{ _("En attente") }} <span class="h-count">{{ waiting|length }}</span></h2>
+      <div class="aside">{{ _("sans limite de durée : elles partent dès que le poste répond") }}</div>
+    </div>
+    <div role="list">
+      {% for r in waiting %}
+      <div class="upd-row{{ ' upd-idle' if not r.online }}" role="listitem">
+        {{ device(r) }}
+        <div class="upd-state"><span class="st {{ r.tone }}">{{ r.status }}</span><span class="sub">{{ r.detail }}</span></div>
+        {{ when(r) }}
+        <div class="upd-link">{% if r.state == 'queued' and can('fleet.update' if r.action == 'update' else 'fleet.reboot') %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=r.dev_id, cmd_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return" value="{{ url_for('fleet_updates') }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}</div>
       </div>
       {% endfor %}
     </div>
-  </section>
-  {% endif %}
+    {% endif %}
 
-  {% if recent %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Terminées récemment") }}</h2></div>
-    <div class="panel-b pending-list">
-      {% for r in recent %}
-      <div class="pending-item">
-        <span class="st {{ 'ok' if r.ok else 'err' }}"></span>
-        <span class="upd-dev"><a href="{{ url_for('fleet_device', dev_id=r.dev_id) }}"><strong>{{ r.hostname }}</strong></a> <span class="sub">{{ r.os_short }}</span> ·
-          {{ r.label[:1]|lower }}{{ r.label[1:] }} — {{ _("terminé") if r.ok else _("échec") }}{% if r.summary %} <span class="muted" title="{{ r.summary }}">· {{ r.summary }}</span>{% endif %}</span>
+    {% if done %}
+    <div class="panel-h sub">
+      <h2>{{ _("Terminées") }} <span class="h-count">{{ done|length }}</span></h2>
+      <div class="aside">{{ _("%(n)s dernières heures, puis dans l'historique du poste", n=finished_hours) }}</div>
+    </div>
+    <div role="list">
+      {% for r in done %}
+      <div class="upd-row" role="listitem">
+        {{ device(r) }}
+        <div class="upd-state"><span class="st {{ 'ok' if r.ok else 'err' }}">{{ _("Réussie") if r.ok else _("Échec") }}</span>{% if r.detail %}<span class="sub" title="{{ r.detail }}">{{ r.detail }}</span>{% endif %}</div>
+        {{ when(r) }}
+        <div class="upd-link"><a class="linkbtn" href="{{ url_for('fleet_device', dev_id=r.dev_id, _anchor='historique') }}">{{ _("Détail") }}</a></div>
+        {% if r.view and 'items' in r.view %}{{ pkg_progress(r.id, r.view) }}{% endif %}
       </div>
       {% endfor %}
     </div>
+    {% endif %}
   </section>
   {% endif %}
 </div>

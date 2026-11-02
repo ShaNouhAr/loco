@@ -71,7 +71,7 @@
       {% else %}{{ _("au prochain contact") }}{% endif %}</span></span>
       {% if c.state in ('sent', 'running') %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ live.percent if live else 0 }}" height="6" data-cmd-bar/></svg>{% endif %}
       {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}
-    </div>{% if live and 'items' in live %}{{ pkg_progress(c.id, live, open=true) }}{% endif %}{% endfor %}</div>{% endif %}
+    </div>{% if c.action == 'update' %}{{ pkg_progress(c.id, live, open=true) }}{% endif %}{% endfor %}</div>{% endif %}
   {% if planned %}<div class="planned">
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
   </div>{% endif %}

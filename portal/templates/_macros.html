@@ -6,20 +6,19 @@
 <span class="st {{ 'ok' if active else 'err' }}">{{ _('actif') if active else _('arrêté') }}</span>
 {%- endmacro %}
 
-{# Déroulé des paquets d'une mise à jour : installés, en cours, en échec. Rempli au départ par le serveur,
-   puis réécrit en direct par app.js (renderPkgList, même structure). `view` = progress_view (items + counts). #}
+{# Paquets d'une mise à jour : installés, en cours, en échec. Rendu par le serveur puis réécrit en direct par app.js
+   (renderPkg, même structure) ; le bloc existe avant le premier paquet, masqué, pour que le direct puisse le remplir.
+   `view` = progress_view (clés « items » et « counts » : à lire entre crochets, .items serait la méthode du dict). #}
 {% macro pkg_progress(cmd_id, view, open=false) -%}
 {% set counts = view['counts'] if view and 'counts' in view else none %}
 {% set items = view['items'] if view and 'items' in view else [] %}
-<details class="pkg-progress"{% if counts %} data-pkg="{{ cmd_id }}"{% endif %}{% if open %} open{% endif %}>
+<details class="pkg-progress" data-pkg="{{ cmd_id }}"{% if open %} open{% endif %}{% if not items %} hidden{% endif %}>
   <summary><span class="pkg-counts">
-    {% if counts and counts.ok %}<span class="pkg-c ok"><span class="st ok"></span>{{ _("%(n)s installé(s)", n=counts.ok) }}</span>{% endif %}
-    {% if counts and counts.failed %}<span class="pkg-c err"><span class="st err"></span>{{ _("%(n)s en échec", n=counts.failed) }}</span>{% endif %}
-    {% if counts and counts.running %}<span class="pkg-c run"><span class="st warn"></span>{{ _("%(n)s en cours", n=counts.running) }}</span>{% endif %}
-  </span><span class="pkg-toggle">{{ _("voir les paquets") }}</span></summary>
-  <ul class="pkg-items">
-    {% for it in items %}<li class="pkg-{{ it.state }}"><span class="st {{ 'ok' if it.state=='ok' else 'err' if it.state=='failed' else 'warn' }}"></span>{{ it.name }}</li>{% endfor %}
-  </ul>
+    {%- if counts and counts.ok %}<span class="pkg-c ok">{{ _("%(n)s installés", n=counts.ok) if counts.ok > 1 else _("%(n)s installé", n=counts.ok) }}</span>{% endif %}
+    {%- if counts and counts.failed %}<span class="pkg-c err">{{ _("%(n)s en échec", n=counts.failed) }}</span>{% endif %}
+    {%- if counts and counts.running %}<span class="pkg-c run">{{ _("%(n)s en cours", n=counts.running) }}</span>{% endif -%}
+  </span></summary>
+  <ul class="pkg-items">{% for it in items %}<li class="pkg-{{ it.state }}">{{ it.name }}</li>{% endfor %}</ul>
 </details>
 {%- endmacro %}
 
