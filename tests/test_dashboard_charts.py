@@ -1,9 +1,12 @@
 """Vue d'ensemble : historique Windows Update par jour (journaux tournants) et graphiques SVG."""
 import datetime
 import gzip
+import html
 import os
+import re
 import tempfile
 import unittest
+import urllib.parse
 from unittest import mock
 
 from test_fleet import FleetTest, Agent, LINUX, WINDOWS
@@ -90,7 +93,10 @@ class TestDashboardCharts(FleetTest):
         panel = page.split("Derniers ajouts", 1)[1]
         self.assertIn('<table data-row-links>', panel)
         self.assertIn('<a class="strong-link" href="/windows-apps/software/notepad">Notepad++</a>', panel)
-        self.assertIn('<a class="strong-link" href="/linux?repository=debian/trixie&amp;q=acme-agent">acme-agent</a>', panel)
+        # Dépôt filtré sur le paquet : comparé décodé (les anciens Werkzeug écrivent debian%2Ftrixie).
+        link = urllib.parse.urlsplit(html.unescape(re.search(r'<a class="strong-link" href="([^"]+)">acme-agent</a>', panel).group(1)))
+        self.assertEqual(link.path, "/linux")
+        self.assertEqual(urllib.parse.parse_qs(link.query), {"repository": ["debian/trixie"], "q": ["acme-agent"]})
         self.assertEqual(self.admin.c.get("/windows-apps/software/notepad").status_code, 200)
 
     def test_package_filter_can_be_prefilled_from_a_link(self):
