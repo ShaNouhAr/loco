@@ -147,7 +147,7 @@
     <div class="panel-h">
       <h2>{{ label }} <span class="h-count">{{ _("%(packages)s paquet%(v)s", packages=packages|length, v='s' if packages|length != 1) }}{% if packages %} · {{ packages|sum(attribute='size')|human }}{% endif %}{% if devices is not none %} {{ _("· %(devices)s poste%(v)s du parc sur cette version", devices=devices, v='s' if devices != 1) }}{% endif %}</span></h2>
       <div class="aside">
-        {% if packages %}<input type="search" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}" data-filter="#pkgs tbody tr" data-empty="#pkgs-none" class="search-sm">{% endif %}
+        {% if packages %}<input type="search" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}" data-filter="#pkgs tbody tr" data-empty="#pkgs-none" class="search-sm" value="{{ request.args.get('q', '') }}">{% endif %}
         {% if can_upload %}<button type="button" class="btn sm" data-open="#pkg-add">{{ _("Ajouter des paquets") }}</button>{% endif %}
       </div>
     </div>

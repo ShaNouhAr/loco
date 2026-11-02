@@ -7,7 +7,8 @@ import unittest
 from unittest import mock
 
 from test_fleet import FleetTest, Agent, LINUX, WINDOWS
-from loco import config, util, wupdate
+from loco import config, dashboard, linux, util, wupdate
+from loco.db import transaction
 
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
@@ -76,6 +77,29 @@ class TestDashboardCharts(FleetTest):
         self.assertIn("Disque des données", page)
         self.assertIn('class="usage-list"', page)
         self.assertNotIn("<script", page.split("Windows Update, 14 derniers jours")[1].split("Services")[0])
+
+    def test_latest_additions_lead_to_their_page(self):
+        deb = {"file": "acme.deb", "package": "acme-agent", "version": "1.2", "description": "", "arch": "amd64", "size": 1,
+               "mtime": 1793600000, "repository": "debian/trixie", "url": "/x"}
+        with transaction() as conn:
+            conn.execute("DELETE FROM win_apps")
+            conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect, updated_at) "
+                         "VALUES ('notepad', 'Notepad++', '8.9', 'exe', '/S', 'npp.exe', ?, 'ready', '', '2026-11-02 10:00')", ("b" * 64,))
+        with mock.patch.object(dashboard, "list_debs", return_value=[deb]):
+            page = self.admin.c.get("/").get_data(as_text=True)
+        panel = page.split("Derniers ajouts", 1)[1]
+        self.assertIn('<table data-row-links>', panel)
+        self.assertIn('<a class="strong-link" href="/windows-apps/software/notepad">Notepad++</a>', panel)
+        self.assertIn('<a class="strong-link" href="/linux?repository=debian/trixie&amp;q=acme-agent">acme-agent</a>', panel)
+        self.assertEqual(self.admin.c.get("/windows-apps/software/notepad").status_code, 200)
+
+    def test_package_filter_can_be_prefilled_from_a_link(self):
+        deb = {"file": "acme.deb", "package": "acme", "version": "1", "description": "", "arch": "amd64", "size": 1,
+               "mtime": 1793600000, "repository": "legacy", "url": "/x"}
+        with mock.patch.object(linux, "list_debs", return_value=[deb]), mock.patch.object(linux, "LEGACY", "legacy"), \
+                mock.patch.object(linux, "require_repository", return_value="/x"):
+            page = self.admin.c.get('/linux?repository=legacy&q="><b>').get_data(as_text=True)
+        self.assertIn('class="search-sm" value="&#34;&gt;&lt;b&gt;"', page)      # repris tel quel, et échappé
 
     def test_fleet_chart_follows_permissions(self):
         import test_permissions

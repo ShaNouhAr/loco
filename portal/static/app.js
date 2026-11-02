@@ -765,6 +765,7 @@
       });
       if (input.dataset.empty) $(input.dataset.empty).classList.toggle("hidden", shown > 0);
     });
+    if (input.value) input.dispatchEvent(new Event("input"));     // filtre déjà rempli (lien depuis la vue d'ensemble)
   });
 
   /* ------------------------------------------------- paquets : recherche + pastilles */

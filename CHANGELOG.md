@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.124.1 — 2026-11-02
+
+- **Vue d'ensemble : les derniers ajouts sont cliquables.** Un logiciel Windows ouvre sa fiche ; un paquet APT, qui n'a pas de page à lui, ouvre son dépôt déjà filtré sur ce paquet. Toute la ligne est cliquable, comme dans Mon parc.
+
 ## 2.124.0 — 2026-11-02
 
 - **Envoi des journaux vers un serveur syslog ou un SIEM** (*Administration › Envoi syslog*). Au choix : le **journal de loco**, les **journaux des postes**, ou les deux. Format RFC 5424, en TLS (recommandé, avec votre autorité de certification), TCP ou UDP, et un bouton pour envoyer un message de test.

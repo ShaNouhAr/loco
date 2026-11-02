@@ -3,7 +3,7 @@
 import datetime
 import time
 
-from flask import render_template
+from flask import render_template, url_for
 
 from . import app
 from .i18n import L_, _
@@ -42,9 +42,12 @@ def recent_activity(limit=6):
     events = []
     for d in list_debs() if can("linux.view") else []:
         events.append({"when": datetime.datetime.fromtimestamp(d["mtime"]).strftime("%Y-%m-%d %H:%M"),
-                       "kind": "linux", "title": d["package"], "package_id": None, "detail": f"{d['version']} · {d['arch']}"})
-    for r in db().execute("SELECT name, version, kind, status, updated_at, winget_id FROM win_apps") if can("windows.view") else []:
+                       "kind": "linux", "title": d["package"], "package_id": None, "detail": f"{d['version']} · {d['arch']}",
+                       # Un paquet APT n'a pas de page à lui : son dépôt, filtré sur ce paquet.
+                       "url": url_for("linux", repository=d["repository"], q=d["package"])})
+    for r in db().execute("SELECT slug, name, version, kind, status, updated_at, winget_id FROM win_apps") if can("windows.view") else []:
         events.append({"when": r["updated_at"], "kind": "windows", "title": r["name"], "package_id": r["winget_id"],
+                       "url": url_for("software_detail", slug=r["slug"]),
                        "detail": " · ".join(str(x) for x in (r["version"], r["kind"], STATUS_LABELS.get(r["status"], "")) if x)})
     events.sort(key=lambda e: e["when"], reverse=True)
     return events[:limit]
