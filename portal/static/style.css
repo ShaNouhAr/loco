@@ -980,46 +980,69 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .legend .num { color: var(--text); margin-left: 6px; font-weight: 500; }
 .legend .key { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 3px; vertical-align: -1px; }
 
-/* État du parc : barre segmentée et liste des états (couleurs d'état réservées, toujours accompagnées du libellé). */
-.status-total { display: flex; align-items: baseline; gap: 8px; }
-.status-total b { font-size: 28px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+/* Vue d'ensemble : ce qui demande une action, puis le parc (couleurs d'état réservées, toujours accompagnées du libellé). */
+.attention { margin: 0; padding: 0; list-style: none; }
+.attention li + li { border-top: 1px solid var(--line); }
+.attention-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 24px; color: var(--text); font-size: 13.5px; }
+a.attention-row { text-decoration: none; }
+a.attention-row:hover { background: var(--bg-2); }
+.attention-row .st { align-items: baseline; white-space: normal; }
+.attention-row .st::before { transform: translateY(-1px); }
+.attention-row svg { flex: none; width: 15px; height: 15px; color: var(--text-3); }
+.state-ok { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 14px 24px; }
+.fleet-sum { display: flex; align-items: center; gap: 20px; }
+.status-total { display: flex; flex: none; align-items: baseline; gap: 8px; margin: 0; }
+.status-total b { font-size: 20px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
 .status-total span { color: var(--text-2); }
-.status-bar { height: 8px; margin-top: 14px; }
+.status-bar { flex: 1 1 auto; min-width: 0; height: 8px; }
 .status-bar rect { rx: 2px; }
-.status-list { margin: 16px 0 0; padding: 0; list-style: none; }
-.status-list li { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--text-2); }
-.status-list li:first-child { border-top: 0; }
-.status-list .key { flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.status-list .num { margin-left: auto; color: var(--text); font-weight: 500; }
+.fleet-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 32px; margin-top: 12px; }
+.fleet-states { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 -8px; }
+.fleet-state { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; text-decoration: none; }
+a.fleet-state:hover { background: var(--bg-2); color: var(--text); }
+.fleet-state .key { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.fleet-state .num { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.fleet-state.zero { color: var(--text-3); }
+.fleet-state.zero .key { background: var(--bg-3); }
+.fleet-state.zero .num { color: var(--text-3); font-weight: 400; }
+.fleet-facts { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; color: var(--text-2); font-size: 13.5px; }
+.fleet-facts a { color: inherit; text-decoration: none; }
+.fleet-facts a:hover { color: var(--text); text-decoration: underline; }
+.fleet-facts b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .fleet-sum { flex-wrap: wrap; gap: 10px; } .status-bar { flex-basis: 100%; } }
 .ring-green { fill: var(--ok); background: var(--ok); }
 .ring-orange { fill: var(--warn); background: var(--warn); }
 .ring-red { fill: var(--err); background: var(--err); }
 .ring-grey { fill: var(--text-3); background: var(--text-3); }
 .ring-bg { fill: var(--bg-3); }
 
-/* Réseau en direct : débit courant, pic et courbe des 2 dernières minutes, une colonne par sens. */
-.net-grid { display: grid; grid-template-columns: 1fr 1fr; }
-.net-cell { padding: 16px; min-width: 0; }
-.net-cell + .net-cell { border-left: 1px solid var(--line); }
-.net-cell .v { font-variant-numeric: tabular-nums; }
-.net-cell .s { margin-top: 2px; font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.net-spark { display: block; width: 100%; height: 56px; margin-top: 14px; overflow: visible; cursor: crosshair; }
+/* Serveur : une cellule par mesure sur une seule bande ; le réseau garde sa courbe des 2 dernières minutes. */
+.server-cells { display: flex; flex-wrap: wrap; }
+.net-cells { display: contents; }
+.server-cell { display: flex; flex: 1 1 190px; flex-direction: column; min-width: 0; margin: 0; padding: 14px 24px 16px; }
+.server-cell + .server-cell, .net-cells .server-cell { border-left: 1px solid var(--line); }
+.server-cell .k { font-size: 13px; color: var(--text-2); }
+.server-cell .v { margin-top: 4px; font-size: 20px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.server-cell .s { margin: 2px 0 10px; font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.server-cell .meter { margin-top: auto; }
+@media (max-width: 760px) { .server-cell { flex-basis: 50%; border-bottom: 1px solid var(--line); } }
+.net-spark { display: block; width: 100%; height: 22px; margin-top: auto; overflow: visible; cursor: crosshair; }
 .net-spark .base { stroke: var(--line); vector-effect: non-scaling-stroke; }
 .net-spark .area { fill: var(--viz-1); opacity: .14; }
 .net-spark .line { fill: none; stroke: var(--viz-1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.net-live .aside .mono { color: var(--text-2); }
+[data-net] .aside .mono { color: var(--text-2); }
 
 /* Occupation du disque : une ligne par poste de dépense, barres d'une seule teinte. */
 .usage-list { margin: 0; padding: 0; list-style: none; }
-.usage-list li { display: grid; grid-template-columns: minmax(0, 1fr) 90px minmax(80px, 34%); align-items: center; gap: 16px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.usage-list li { display: grid; grid-template-columns: minmax(0, 1fr) 90px minmax(80px, 34%); align-items: center; gap: 16px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
 .usage-list li:first-child { border-top: 0; padding-top: 0; }
+.usage-list a { color: inherit; text-decoration: none; }
+.usage-list a:hover { text-decoration: underline; }
+.usage-list .sub { display: inline; margin-left: 10px; font-size: 12.5px; color: var(--text-3); }
 .usage-list .size { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
 .usage-list .bar { display: block; width: 100%; height: 6px; }
 .usage-list .bar .track { fill: var(--bg-3); }
 .usage-list .bar .fill { fill: var(--viz-1); }
-.usage-list li.free { color: var(--text-3); }
-.usage-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 4px; font-size: 13.5px; color: var(--text-2); }
-.usage-head b { color: var(--text); font-size: 16px; font-weight: 600; }
 .usage-head + .meter { margin: 0 0 18px; }
 
 /* ------------------------------------------------------------------ fiche d'un appareil */

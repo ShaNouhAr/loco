@@ -817,6 +817,16 @@ def updating_count():
         return 0
 
 
+def failed_updates_count():
+    """Postes dont une mise à jour a échoué depuis 24 h, sans réussite depuis."""
+    since = (datetime.datetime.now() - datetime.timedelta(hours=ACTIVITY_FINISHED_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    return db().execute("SELECT COUNT(DISTINCT c.device_id) FROM device_commands c JOIN devices d ON d.id = c.device_id "
+                        "WHERE c.action = 'update' AND c.state = 'failed' AND c.finished_at >= ? AND d.state != 'removed' "
+                        "AND NOT EXISTS (SELECT 1 FROM device_commands n WHERE n.device_id = c.device_id "
+                        "AND n.action = 'update' AND n.state = 'success' AND n.id > c.id)" + scope.sql("d.id"),
+                        (since,)).fetchone()[0]
+
+
 @app.route("/agent/api/result", methods=["POST"])
 def agent_result():
     dev = _device()

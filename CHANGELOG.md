@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.126.0 — 2026-11-02
+
+- **Vue d'ensemble refaite pour répondre d'abord à « est-ce que tout va bien, et que dois-je faire ? ».**
+  - **État général en tête** : « Aucun point à traiter » avec ce qui a été contrôlé, ou la liste de ce qui demande une action, le plus grave d'abord, avec un lien vers la page où agir. Services arrêtés, certificat, sauvegardes, syslog, disque, mises à jour de sécurité, mises à jour en échec : tout y apparaît, même si la notification correspondante est désactivée. La liste s'actualise seule et suit les droits et le parc de chaque compte. Un poste simplement éteint n'y figure pas.
+  - **Parc juste en dessous** : chaque état ouvre la liste filtrée, les états à zéro restent discrets, et les mises à jour en cours, redémarrages nécessaires et postes hors ligne sont indiqués.
+  - **Serveur sur une seule bande** : processeur, mémoire, disque et réseau. Le chiffre du disque et sa barre disent enfin la même chose, et la courbe réseau survit aux rechargements et aux allers-retours dans le portail.
+  - **Stockage en un seul tableau**, trié par taille, avec un lien vers chaque cache. Il remplace les tuiles de cache et « Disque des données », qui faisaient double emploi.
+  - **Retirés de la page** : les 8 tuiles, le tableau des services (le détail reste dans *Système*, un service arrêté remonte dans l'état général) et le second pourcentage Windows Update, qui pouvait contredire celui du graphique.
+- **Alertes** : les messages n'écrivent plus « mise(s) » ni « jour(s) » pour les mises à jour de sécurité, le certificat et les échecs de connexion.
+
 ## 2.125.0 — 2026-11-02
 
 - **Changer le port de l'interface web** depuis *Système › Réseau*. Le nouveau port s'ouvre à côté de l'ancien : ni l'administrateur ni les postes ne sont coupés. Les agents apprennent le nouveau port à leur prochain contact, la page compte ceux qui le connaissent, et l'ancien port se ferme seulement depuis le nouveau, ce qui prouve qu'il est joignable, pare-feu compris. Les valeurs inutilisables sont refusées avant toute modification : port déjà pris, port réservé à loco, port que les navigateurs bloquent. Un échec rétablit la configuration précédente. Docker et serveur Windows : le port reste réglé à l'installation, la page l'explique.

@@ -77,7 +77,7 @@ class TestDashboardCharts(FleetTest):
         self.assertIn('class="bar-hit"', page)
         self.assertIn("17/10 : 3,00 Go depuis le cache, 1,00 Go depuis Internet", page)
         self.assertIn('class="ring-green"', page)
-        self.assertIn("Disque des données", page)
+        self.assertIn("Stockage", page)
         self.assertIn('class="usage-list"', page)
         self.assertNotIn("<script", page.split("Windows Update, 14 derniers jours")[1].split("Services")[0])
 

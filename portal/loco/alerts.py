@@ -142,8 +142,15 @@ def _expected_services():
     return units
 
 
-def evaluate(conn, cfg=None):
-    """Conditions actuellement en alerte : liste de {key, severity, subject, body}. N'envoie rien."""
+def every_rule(conn):
+    """Réglages avec toutes les règles actives : la vue d'ensemble ne dépend pas du choix des notifications."""
+    cfg = load(conn)
+    return dict(cfg, rules={key: dict(cfg["rules"].get(key, {}), on=True) for key in RULES})
+
+
+def evaluate(conn, cfg=None, devices=""):
+    """Conditions actuellement en alerte : liste de {key, severity, subject, body}. N'envoie rien.
+    devices : filtre SQL du parc visible (« AND id IN (…) ») ; vide : tout le parc."""
     from .util import service_active, disk_usage
     from .system import cert_info, list_backups, _age
     cfg = cfg or load(conn)
@@ -163,7 +170,7 @@ def evaluate(conn, cfg=None):
         cert = cert_info(os.path.join(config.TLS_DIR, "server.crt"))
         days = (cert or {}).get("end", {}).get("days")
         if days is not None and days <= _threshold(cfg, "cert_expiring"):
-            add("cert_expiring", _("Le certificat HTTPS expire dans %(n)s jour(s).", n=days),
+            add("cert_expiring", _("Le certificat HTTPS expire dans %(n)s jour.", n=days) if days == 1 else _("Le certificat HTTPS expire dans %(n)s jours.", n=days),
                 "critical" if days <= 7 else "warning")
 
     if _rule_on(cfg, "backup_overdue"):
@@ -195,17 +202,17 @@ def evaluate(conn, cfg=None):
         n = conn.execute("SELECT COUNT(*) FROM audit WHERE at >= ? AND (action LIKE '%echec' OR action LIKE '%bloquee')",
                          (since,)).fetchone()[0]
         if n >= _threshold(cfg, "login_failures"):
-            add("login_failures", _("%(n)s échec(s) de connexion au portail en 24 h.", n=n))
+            add("login_failures", _("%(n)s échec de connexion au portail en 24 h.", n=n) if n == 1 else _("%(n)s échecs de connexion au portail en 24 h.", n=n))
 
     if fleet_on and _rule_on(cfg, "security_updates"):
-        n = conn.execute("SELECT COALESCE(SUM(security_updates),0) FROM devices WHERE state != 'removed'").fetchone()[0]
+        n = conn.execute("SELECT COALESCE(SUM(security_updates),0) FROM devices WHERE state != 'removed'" + devices).fetchone()[0]
         if n >= _threshold(cfg, "security_updates"):
-            add("security_updates", _("%(n)s mise(s) à jour de sécurité en attente sur le parc.", n=n))
+            add("security_updates", _("%(n)s mise à jour de sécurité en attente sur le parc.", n=n) if n == 1 else _("%(n)s mises à jour de sécurité en attente sur le parc.", n=n))
 
     if fleet_on and _rule_on(cfg, "devices_offline"):
         from .fleet import ONLINE_SECONDS
         cutoff = (datetime.datetime.now() - datetime.timedelta(seconds=ONLINE_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
-        n = conn.execute("SELECT COUNT(*) FROM devices WHERE state != 'removed' AND last_seen != '' AND last_seen < ?",
+        n = conn.execute("SELECT COUNT(*) FROM devices WHERE state != 'removed' AND last_seen != '' AND last_seen < ?" + devices,
                          (cutoff,)).fetchone()[0]
         if n >= _threshold(cfg, "devices_offline"):
             add("devices_offline", _("%(n)s poste(s) sans contact depuis plus de %(m)s min.",
@@ -216,8 +223,8 @@ def evaluate(conn, cfg=None):
         from . import monitoring
         averages = monitoring.recent_averages(conn)
         found = {k: [] for k in device_rules}
-        for row in conn.execute("SELECT id, hostname, metrics FROM devices WHERE state != 'removed' AND metrics != '' "
-                                "ORDER BY hostname").fetchall():
+        for row in conn.execute("SELECT id, hostname, metrics FROM devices WHERE state != 'removed' AND metrics != ''" + devices +
+                                " ORDER BY hostname").fetchall():
             m = monitoring.latest(row)
             if not m or m["stale"]:
                 continue                                  # poste hors contact : signalé par « Postes hors contact »

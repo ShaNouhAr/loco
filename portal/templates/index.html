@@ -1,85 +1,108 @@
 {% extends "base.html" %}
-{% from "_macros.html" import service %}
 {% from "_charts.html" import daily_bars, status_bar, usage_bar %}
+{% from "_nav_icons.html" import ui_icon %}
 {% from "_software_logo.html" import software_logo %}
 {% block title %}{{ _("Vue d'ensemble") }}{% endblock %}
 {% block content %}
 <div class="head">
   <div>
     <h1>{{ _("Vue d'ensemble") }}</h1>
-    <p>{{ _("Caches et dépôts servis par <span class=\"mono\">%(host)s</span>.", host=host) }}</p>
+    <p>{{ _("État du serveur <span class=\"mono\">%(host)s</span> et de ses postes.", host=host) }}</p>
   </div>
 </div>
 
-<div class="stack" data-poll="{{ url_for('api_status') }}" data-poll-kind="status" data-poll-every="10000">
-  <div class="metrics">
-    {% if feature('apt') %}<div class="metric">
-      <div class="k">{{ _("Cache APT") }}</div>
-      <div class="v" data-bind="acng_size" data-fmt="bytes">{{ d.acng_size|human }}</div>
-      <div class="s"><span data-bind="debs">{{ d.debs }}</span> {{ _("paquet(s) local(aux)") }}</div>
-    </div>{% endif %}
-    {% if feature('wu') %}<div class="metric">
-      <div class="k">{{ _("Cache Windows") }}</div>
-      <div class="v" data-bind="wucache_size" data-fmt="bytes">{{ d.wucache_size|human }}</div>
-      <div class="s">{{ _("sur disque") }}</div>
-    </div>
-    <div class="metric">
-      <div class="k">{{ _("Servi en local") }}</div>
-      <div class="v" data-bind="wu.hit_bytes" data-fmt="bytes">{{ d.wu.hit_bytes|human }}</div>
-      <div class="s"><span data-bind="wu.ratio" data-fmt="pct">{{ d.wu.ratio }} %</span> {{ _("du trafic récent") }}</div>
-    </div>{% endif %}
-    {% if feature('windows_apps') %}<div class="metric">
-      <div class="k">{{ _("Logiciels Windows") }}</div>
-      <div class="v" data-bind="apps">{{ d.apps }}</div>
-      <div class="s" data-bind="apps_size" data-fmt="bytes">{{ d.apps_size|human }}</div>
-    </div>{% endif %}
-    {% if flatpak_enabled and feature('flatpak') %}
-    <div class="metric">
-      <div class="k">{{ _("Cache Flathub") }}</div>
-      <div class="v" data-bind="flatpak_cache" data-fmt="bytes">{{ d.flatpak_cache|human }}</div>
-      <div class="s">{{ _("applications Flatpak") }}</div>
-    </div>
-    {% endif %}
-  </div>
-  <div class="metrics">
-    {% if d.cpu %}<div class="metric">
-      <div class="k">{{ _("Processeur") }}</div>
-      <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>
-      <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
-      <div class="meter {{ 'err' if d.cpu.pct >= 90 else 'warn' if d.cpu.pct >= 75 }}"><i data-bind="cpu.pct" data-fmt="meter" data-width="{{ d.cpu.pct }}"></i></div>
-    </div>{% endif %}
-    {% if d.mem %}<div class="metric">
-      <div class="k">{{ _("Mémoire") }}</div>
-      <div class="v"><span data-bind="mem.pct" data-fmt="pct">{{ d.mem.pct }} %</span></div>
-      <div class="s"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span> {{ _("sur %(total)s", total=d.mem.total|human) }}</div>
-      <div class="meter {{ 'err' if d.mem.pct >= 90 else 'warn' if d.mem.pct >= 80 }}"><i data-bind="mem.pct" data-fmt="meter" data-width="{{ d.mem.pct }}"></i></div>
-    </div>{% endif %}
-    <div class="metric">
-      <div class="k">{{ _("Disque") }}</div>
-      <div class="v"><span data-bind="disk.free" data-fmt="bytes">{{ d.disk.free|human }}</span></div>
-      <div class="s">{{ _("libres sur %(total)s", total=d.disk.total|human) }}</div>
-      <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-bind="disk.pct" data-fmt="meter" data-width="{{ d.disk.pct }}"></i></div>
-    </div>
-  </div>
-
-  <section class="panel net-live" data-net="{{ url_for('api_network') }}">
-    <div class="panel-h"><h2>{{ _("Réseau en direct") }}</h2><div class="aside"><span class="mono" data-net-iface></span><span>{{ _("relevé toutes les 2 s") }}</span></div></div>
-    <div class="net-grid">
-      {% for dir, label in [('rx', _('Entrant')), ('tx', _('Sortant'))] %}
-      <div class="net-cell" data-net-dir="{{ dir }}">
-        <div class="k">{{ label }}</div>
-        <div class="v" data-net-value>—</div>
-        <div class="s" data-net-note>{{ _("mesure en cours…") }}</div>
-        <svg class="net-spark" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="Débit {{ label|lower }} des 2 dernières minutes"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
-      </div>
+<div class="stack" data-poll="{{ url_for('api_status') }}" data-poll-kind="status" data-poll-every="10000" data-signature="{{ state.signature }}">
+  {% if state.attention %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("À traiter") }}</h2></div>
+    <ul class="attention">
+      {% for a in state.attention %}
+      <li>{% if a.url %}<a class="attention-row" href="{{ a.url }}"><span class="st {{ a.tone }}">{{ a.text }}</span>{{ ui_icon('arrow-right') }}</a>{% else %}<div class="attention-row"><span class="st {{ a.tone }}">{{ a.text }}</span></div>{% endif %}</li>
       {% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <section class="panel state-ok"><span class="st ok">{{ _("Aucun point à traiter") }}</span><span class="muted small">{{ _("Contrôlés : %(list)s.", list=state.checked) }}</span></section>
+  {% endif %}
+
+  {% set fleet = state.fleet %}
+  {% if fleet %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Parc") }}</h2><div class="aside"><a href="{{ url_for('fleet') }}">{{ _("Ouvrir Mon parc") }}</a></div></div>
+    <div class="panel-b">
+      {% if fleet.total %}
+      <div class="fleet-sum">
+        <p class="status-total"><b>{{ fleet.total }}</b><span>{{ _("poste%(v)s équipé%(v)s", v='s' if fleet.total != 1) }}</span></p>
+        {{ status_bar(fleet) }}
+      </div>
+      <div class="fleet-line">
+        <div class="fleet-states">
+          {% for s in fleet.ring %}
+          {% if s.count %}<a class="fleet-state" href="{{ url_for('fleet', statut=s.key) }}"><i class="key ring-{{ s.key }}"></i><span>{{ s.label|capitalize }}</span><b class="num">{{ s.count }}</b></a>
+          {% else %}<span class="fleet-state zero"><i class="key"></i><span>{{ s.label|capitalize }}</span><b class="num">0</b></span>{% endif %}
+          {% endfor %}
+        </div>
+        {% if fleet.updating or fleet.reboot or fleet.offline %}
+        <p class="fleet-facts">
+          {% if fleet.updating %}<a href="{{ url_for('fleet_updates') }}">{{ _("Mises à jour en cours :") }} <b data-bind="updating">{{ fleet.updating }}</b></a>{% endif %}
+          {% if fleet.reboot %}<span>{{ _("Redémarrage nécessaire :") }} <b>{{ fleet.reboot }}</b></span>{% endif %}
+          {% if fleet.offline %}<span>{{ _("Hors ligne :") }} <b>{{ fleet.offline }}</b></span>{% endif %}
+        </p>
+        {% endif %}
+      </div>
+      {% else %}
+      <p class="empty">{{ _("Aucun poste : installez l'agent depuis <a href=\"%(v)s\">Mon parc</a>.", v=url_for('fleet')) }}</p>
+      {% endif %}
     </div>
-    <p class="empty hidden" data-net-off>{{ _("Débit réseau indisponible sur ce système.") }}</p>
+  </section>
+  {% endif %}
+
+  <section class="panel" data-net="{{ url_for('api_network') }}">
+    <div class="panel-h"><h2>{{ _("Serveur") }}</h2><div class="aside"><span class="mono" data-net-iface></span>{% if can('system.view') %}<a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}</div></div>
+    <div class="server-cells">
+      {% if d.cpu %}<div class="server-cell">
+        <div class="k">{{ _("Processeur") }}</div>
+        <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>
+        <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
+        <div class="meter {{ 'err' if d.cpu.pct >= 90 else 'warn' if d.cpu.pct >= 75 }}"><i data-bind="cpu.pct" data-fmt="meter" data-width="{{ d.cpu.pct }}"></i></div>
+      </div>{% endif %}
+      {% if d.mem %}<div class="server-cell">
+        <div class="k">{{ _("Mémoire") }}</div>
+        <div class="v"><span data-bind="mem.pct" data-fmt="pct">{{ d.mem.pct }} %</span></div>
+        <div class="s"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span> {{ _("sur %(total)s", total=d.mem.total|human) }}</div>
+        <div class="meter {{ 'err' if d.mem.pct >= 90 else 'warn' if d.mem.pct >= 80 }}"><i data-bind="mem.pct" data-fmt="meter" data-width="{{ d.mem.pct }}"></i></div>
+      </div>{% endif %}
+      <div class="server-cell">
+        <div class="k">{{ _("Disque") }}</div>
+        <div class="v"><span data-bind="disk.pct" data-fmt="pct">{{ d.disk.pct }} %</span></div>
+        <div class="s"><span data-bind="disk.free" data-fmt="bytes">{{ d.disk.free|human }}</span> {{ _("libres sur %(total)s", total=d.disk.total|human) }}</div>
+        <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-bind="disk.pct" data-fmt="meter" data-width="{{ d.disk.pct }}"></i></div>
+      </div>
+      <div class="net-cells">
+        {% for dir, label in [('rx', _('Réseau entrant')), ('tx', _('Réseau sortant'))] %}
+        <div class="server-cell" data-net-dir="{{ dir }}">
+          <div class="k">{{ label }}</div>
+          <div class="v" data-net-value>—</div>
+          <div class="s" data-net-note>{{ _("mesure en cours…") }}</div>
+          <svg class="net-spark" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="{{ _('%(label)s, 2 dernières minutes', label=label) }}"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="server-cell muted small hidden" data-net-off>{{ _("Débit réseau indisponible sur ce système.") }}</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Stockage") }}</h2>{% if d.stats_updated %}<div class="aside">{{ _("tailles du %(stats_updated)s", stats_updated=d.stats_updated|date_fr) }}</div>{% endif %}</div>
+    <div class="panel-b">
+      <ul class="usage-list">
+        {% for s in charts.disk %}<li><span>{% if s.url %}<a href="{{ s.url }}">{{ s.label }}</a>{% else %}{{ s.label }}{% endif %}{% if s.note %}<span class="sub">{{ s.note }}</span>{% endif %}</span><span class="size">{{ s.size|human }}</span>{{ usage_bar(s.pct) }}</li>{% endfor %}
+      </ul>
+    </div>
   </section>
 
   {% set wu_on = feature('wu') %}
-  {% if wu_on or charts.fleet %}
-  <div class="{{ 'cols w21 even' if charts.fleet and wu_on }}">
+  <div class="{{ 'cols w21 even' if wu_on }}">
     {% if wu_on %}<section class="panel">
       <div class="panel-h"><h2>{{ _("Windows Update, 14 derniers jours") }}</h2>
         <div class="aside">{% if charts.wu.hit or charts.wu.miss %}{{ _("%(ratio)s %% servis par le cache", ratio=charts.wu.ratio) }}{% endif %}</div></div>
@@ -95,53 +118,6 @@
         {% endif %}
       </div>
     </section>{% endif %}
-    {% if charts.fleet %}
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("Parc") }}</h2><div class="aside"><a href="{{ url_for('fleet') }}">{{ _("Ouvrir Mon parc") }}</a></div></div>
-      <div class="panel-b">
-        {% if charts.fleet.total %}
-        <p class="status-total"><b>{{ charts.fleet.total }}</b><span>{{ _("poste%(v)s équipé%(v)s", v='s' if charts.fleet.total != 1) }}</span></p>
-        {{ status_bar(charts.fleet) }}
-        <ul class="status-list">
-          {% for s in charts.fleet.ring %}<li><i class="key ring-{{ s.key }}"></i>{{ s.label|capitalize }}<span class="num">{{ s.count }}</span></li>{% endfor %}
-        </ul>
-        {% else %}
-        <p class="empty">{{ _("Aucun poste : installez l'agent depuis <a href=\"%(v)s\">Mon parc</a>.", v=url_for('fleet')) }}</p>
-        {% endif %}
-      </div>
-    </section>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Disque des données") }}</h2>{% if d.stats_updated %}<div class="aside">{{ _("tailles du %(stats_updated)s", stats_updated=d.stats_updated|date_fr) }}</div>{% endif %}</div>
-    <div class="panel-b">
-      <div class="usage-head"><span><b>{{ d.disk.used|human }}</b> {{ _("utilisés sur %(total)s", total=d.disk.total|human) }}</span><span>{{ _("%(free)s libres", free=d.disk.free|human) }}</span></div>
-      <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-width="{{ d.disk.pct }}"></i></div>
-      <ul class="usage-list">
-        {% for s in charts.disk if s.cls != 'free' %}<li><span>{{ s.label }}</span><span class="size">{{ s.size|human }}</span>{{ usage_bar(s.pct) }}</li>{% endfor %}
-      </ul>
-    </div>
-  </section>
-
-  <div class="cols w21 even">
-      <section class="panel">
-        <div class="panel-h"><h2>{{ _("Services") }}</h2>{% if can('system.view') %}<div class="aside"><a href="{{ url_for('system') }}">{{ _("Système") }}</a></div>{% endif %}</div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>{{ _("Service") }}</th><th class="hide-sm">{{ _("Rôle") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("État") }}</th></tr></thead>
-            <tbody>
-              <tr><td>{{ _('Cache APT') if apt_nginx else 'apt-cacher-ng' }}</td><td class="muted hide-sm">{{ _('nginx, paquets Debian / Ubuntu') if apt_nginx else _('Cache des paquets Debian / Ubuntu') }}</td><td class="mono">:{{ acng_port }}</td><td><span data-bind="services.acng" data-fmt="service">{{ service(d.services.acng) }}</span></td></tr>
-              <tr><td>{{ _("Cache Windows Update") }}</td><td class="muted hide-sm">{{ _("nginx, ports 80 et 443") }}</td><td class="mono">:80 :443</td><td><span data-bind="services.nginx" data-fmt="service">{{ service(d.services.nginx) }}</span></td></tr>
-              {% if rpm_enabled %}<tr><td>{{ _("Cache RPM") }}</td><td class="muted hide-sm">{{ _("Rocky Linux, AlmaLinux, EPEL") }}</td><td class="mono nowrap">{{ _("/rpmcache/") }}</td><td><span data-bind="services.nginx" data-fmt="service">{{ service(d.services.nginx) }}</span></td></tr>{% endif %}
-              {% if flatpak_enabled %}<tr><td>{{ _("Cache Flathub") }}</td><td class="muted hide-sm">{{ _("nginx, avec le portail") }}</td><td class="mono nowrap">{{ _("/flathub/") }}</td><td><span data-bind="services.nginx" data-fmt="service">{{ service(d.services.nginx) }}</span></td></tr>{% endif %}
-              <tr><td>{{ _("Portail") }}</td><td class="muted hide-sm">{{ _("Interface et postes clients") }}{% if http_url %} {{ _("(HTTP pour l'amorçage)") }}{% endif %}</td><td class="mono nowrap">{{ https_url.rsplit(':', 1)[1] }}{% if http_url %} / {{ http_url.rsplit(':', 1)[1] }}{% endif %}</td><td>{{ service(true) }}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Derniers ajouts") }}</h2></div>
       {% if activity %}

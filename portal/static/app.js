@@ -1134,6 +1134,10 @@
   if (net) {
     var SPAN = 60, EVERY = 2000, samples = [], previous = null;
     var cells = $$("[data-net-dir]", net);
+    // La courbe survit à un rechargement ou à un aller-retour dans le portail, tant que la mesure reste récente.
+    var kept = {};
+    try { kept = JSON.parse(sessionStorage.getItem("loco-net")) || {}; } catch (e) { /* mémoire indisponible : courbe vide */ }
+    samples = (kept.samples || []).filter(function (p) { return Date.now() - p.at < SPAN * EVERY; });
     var bits = function (v) {
       var units = ["bit/s", "kbit/s", "Mbit/s", "Gbit/s"], i = 0;
       while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
@@ -1177,19 +1181,23 @@
         .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(function (d) {
           $("[data-net-off]", net).classList.toggle("hidden", d.available);
-          $(".net-grid", net).classList.toggle("hidden", !d.available);
+          $(".net-cells", net).classList.toggle("hidden", !d.available);
           if (!d.available) return;
           $("[data-net-iface]", net).textContent = d.iface;
+          if (kept.iface && kept.iface !== d.iface) samples = [];
+          kept.iface = d.iface;
           if (previous && d.t > previous.t && d.iface === previous.iface) {
             var dt = d.t - previous.t;
             samples.push({ rx: Math.max(0, (d.rx - previous.rx) * 8 / dt), tx: Math.max(0, (d.tx - previous.tx) * 8 / dt), at: Date.now() });
             if (samples.length > SPAN) samples.shift();
+            try { sessionStorage.setItem("loco-net", JSON.stringify({ iface: d.iface, samples: samples })); } catch (e) { /* idem */ }
             render();
           }
           previous = d;
         })
         .catch(function () {});
     };
+    if (samples.length) render();
     sample();
     setTimeout(sample, 1000);
     setInterval(sample, EVERY);
@@ -1645,7 +1653,7 @@
     // Parc : rechargement quand un poste ou une action change (rien n'est saisi sur ces pages).
     // Suspendu tant que le gestionnaire de fichiers est ouvert : ne pas interrompre un transfert ou une édition.
     var reload = function (d) { if (document.body.dataset.noReload) return; if (d.signature && d.signature !== live.dataset.signature) window.location.reload(); };
-    var handler = { status: bind, wu: function (d) { bind(d); renderWuLog(d); }, apps: renderApps, job: renderJob,
+    var handler = { status: function (d) { bind(d); reload(d); }, wu: function (d) { bind(d); renderWuLog(d); }, apps: renderApps, job: renderJob,
                     reload: reload }[kind];
     var tick = poll(live.dataset.poll, Number(live.dataset.pollEvery) || 10000, handler);
     if (kind === "apps" || kind === "job") tick();
