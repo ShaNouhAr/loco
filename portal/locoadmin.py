@@ -66,7 +66,7 @@ def valid_source(value):
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert",
-           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode",
+           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode", "set-https-port",
            "ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 HA_ACTIONS = ("ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 # Opérations qui redémarrent le portail : en haute disponibilité, le contrôle de santé ne doit pas y voir une panne.
@@ -165,6 +165,68 @@ SETTINGS = {
     "MAX_UPLOAD": ("Envoi de fichier, taille max", _upload, lambda v: ["--max-upload", v]),
     "BACKUP_KEEP": ("Sauvegardes conservées", _count, lambda v: ["--backup-keep", v]),
 }
+
+
+# Ports que les navigateurs refusent d'ouvrir (« bad ports » de la norme Fetch) : l'interface y serait inaccessible.
+BROWSER_BLOCKED_PORTS = frozenset((
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111,
+    113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548,
+    554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566,
+    6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080))
+APP_PORT = 8089
+ACNG_PORT = 3142
+
+
+def ha_configured():
+    return os.path.exists(os.path.join(ETC, "ha", "node.json"))
+
+
+def _port_listening(port):
+    """Un service écoute déjà sur ce port TCP, d'après /proc/net (lisible sans droits, propre au conteneur)."""
+    for path in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            with open(path) as f:
+                next(f, None)
+                for line in f:
+                    fields = line.split()
+                    if len(fields) > 3 and fields[3] == "0A" and int(fields[1].rsplit(":", 1)[1], 16) == port:
+                        return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def https_port_params(params, conf=None):
+    """Nouveau port de l'interface, ou fermeture des anciens ; revalidé par l'agent (ValueError sinon)."""
+    conf = read_conf() if conf is None else conf
+    p = params or {}
+    if ha_configured():
+        raise ValueError(t("quittez d'abord la haute disponibilité : les deux serveurs partagent le même port",
+                           "leave high availability first: both servers share the same port",
+                           "salga primero de la alta disponibilidad: ambos servidores comparten el mismo puerto"))
+    old = conf.get("HTTPS_OLD_PORTS", "").split()
+    if str(p.get("close", "")) == "1":
+        if not old:
+            raise ValueError(t("aucun ancien port n'est ouvert", "no old port is open", "no hay ningún puerto antiguo abierto"))
+        return {"close": "1"}
+    value = str(p.get("port", "")).strip()
+    if not value.isdigit() or not 1 <= int(value) <= 65535:
+        raise ValueError(t("port entre 1 et 65535 attendu", "port between 1 and 65535 expected", "se espera un puerto entre 1 y 65535"))
+    port = int(value)
+    if str(port) == conf.get("HTTPS_PORT", "8443"):
+        raise ValueError(t(f"l'interface utilise déjà le port {port}", f"the interface already uses port {port}", f"la interfaz ya usa el puerto {port}"))
+    if port in BROWSER_BLOCKED_PORTS:
+        raise ValueError(t(f"les navigateurs refusent d'ouvrir le port {port}", f"browsers refuse to open port {port}", f"los navegadores se niegan a abrir el puerto {port}"))
+    taken = {ACNG_PORT: t("cache APT", "APT cache", "caché APT"), APP_PORT: t("application loco", "loco application", "aplicación loco")}
+    if conf.get("HTTP_ENABLED", "1") != "0":
+        taken[int(conf.get("PORTAL_PORT", "8088") or 8088)] = t("accès HTTP des postes", "HTTP access for machines", "acceso HTTP de los equipos")
+    if conf.get("WU_ENABLED", "1") != "0":
+        taken.update({80: "Windows Update", 443: "Windows Update", int(conf.get("WU_PROXY_PORT", "3128") or 3128): "Windows Update"})
+    if port in taken:
+        raise ValueError(t(f"le port {port} sert déjà à loco ({taken[port]})", f"port {port} is already used by loco ({taken[port]})", f"el puerto {port} ya lo usa loco ({taken[port]})"))
+    if str(port) not in old and _port_listening(port):
+        raise ValueError(t(f"le port {port} est déjà utilisé par un autre service", f"port {port} is already used by another service", f"el puerto {port} ya lo usa otro servicio"))
+    return {"port": str(port)}
 
 
 def read_conf(path=None):
@@ -968,18 +1030,11 @@ def _restart_stale(log):
     return ok
 
 
-def configure(changes, log=print):
-    clean = validate(changes)
-    if not clean:
-        log("Aucun changement.")
-        return True
+def _reinstall(args, log):
+    """Relance install.sh avec ces options ; en cas d'échec, retour à la configuration précédente."""
     source = read_conf().get("SOURCE_DIR", "")
     if not source or not os.path.isfile(os.path.join(source, "linux", "install.sh")):
         raise ValueError(f"sources de loco introuvables (SOURCE_DIR de {CONF})")
-    args = []
-    for key, value in clean.items():
-        args += SETTINGS[key][2](value)
-        log(f"{SETTINGS[key][0]} : {value or 'automatique'}")
     with _snapshot() as snapshot:
         try:
             ok = _install(source, args, log) == 0
@@ -989,6 +1044,31 @@ def configure(changes, log=print):
         if not ok:
             _rollback(snapshot, source, log)
         return ok
+
+
+def configure(changes, log=print):
+    clean = validate(changes)
+    if not clean:
+        log("Aucun changement.")
+        return True
+    args = []
+    for key, value in clean.items():
+        args += SETTINGS[key][2](value)
+        log(f"{SETTINGS[key][0]} : {value or 'automatique'}")
+    return _reinstall(args, log)
+
+
+def set_https_port(params, log=print):
+    """Déplace l'interface sans rien couper : l'ancien port reste servi jusqu'à sa fermeture explicite."""
+    conf = read_conf()
+    params = https_port_params(params, conf)
+    current, old = conf.get("HTTPS_PORT", "8443"), conf.get("HTTPS_OLD_PORTS", "").split()
+    if params.get("close"):
+        log(t(f"Fermeture de l'ancien port : {' '.join(old)}", f"Closing the old port: {' '.join(old)}", f"Cierre del puerto antiguo: {' '.join(old)}"))
+        return _reinstall(["--https-old-ports", ""], log)
+    kept = " ".join(p for p in old + [current] if p != params["port"])
+    log(t(f"Port de l'interface : {params['port']} (reste ouvert : {kept})", f"Interface port: {params['port']} (stays open: {kept})", f"Puerto de la interfaz: {params['port']} (sigue abierto: {kept})"))
+    return _reinstall(["--https-port", params["port"], "--https-old-ports", kept], log)
 
 
 def _set_conf(key, value):
@@ -2685,6 +2765,8 @@ def _operation(action, params, log):
         return update_system(log, security_only=True)
     if action == "configure":
         return configure(params, log)
+    if action == "set-https-port":
+        return set_https_port(params, log)
     if action == "reboot":
         return reboot(log)
     if action == "set-repo":
@@ -2788,7 +2870,7 @@ def run_job(job_id):
         ok = False
         try:
             with contextlib.ExitStack() as stack:
-                if job["action"] in HA_MAINTENANCE and os.path.exists(os.path.join(ETC, "ha", "node.json")):
+                if job["action"] in HA_MAINTENANCE and ha_configured():
                     stack.enter_context(_ha().maintenance())
                 ok = _operation(job["action"], job.get("params") or {}, log)
         except Exception as e:  # noqa: BLE001 - tout échec est rapporté dans le journal de l'opération
@@ -2996,6 +3078,11 @@ def agent():
                         params = tls_params(req["action"], req.get("params"))
                     except ValueError:
                         continue
+                elif req["action"] == "set-https-port":
+                    try:
+                        params = https_port_params(req.get("params"))
+                    except ValueError:
+                        continue
                 elif req["action"] in HA_ACTIONS:
                     try:
                         params = ha_params(req["action"], req.get("params"))
@@ -3092,6 +3179,8 @@ def request(action, params=None, user=""):
         params = {"upload": upload}
     elif action in ("import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode"):
         params = tls_params(action, params)
+    elif action == "set-https-port":
+        params = https_port_params(params)
     elif action in HA_ACTIONS:
         params = ha_params(action, params)
     else:

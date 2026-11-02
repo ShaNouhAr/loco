@@ -130,6 +130,14 @@ if curl -fsS --max-time 10 --interface 10.0.2.15 --proxy http://10.0.2.15:3142 h
 fi
 ./install.sh --allow '10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10' > "$install_log" 2>&1
 health
+# Changement de port : SELinux et firewalld suivent, l'ancien reste servi puis se ferme.
+./install.sh --https-port 9443 --https-old-ports 8443 > "$install_log" 2>&1
+curl -fsS --max-time 5 --cacert "$CA" https://127.0.0.1:9443/healthz | grep -x ok > /dev/null
+health
+grep -qx 'HTTPS_OLD_PORTS="8443"' /etc/loco/loco.conf
+./install.sh --https-port 8443 --https-old-ports "" > "$install_log" 2>&1
+health
+if curl -fsS --max-time 5 --cacert "$CA" https://127.0.0.1:9443/healthz > /dev/null 2>&1; then echo 'Le port 9443 devrait être fermé' >&2; exit 1; fi
 [ "$keys" = "$(sha256sum "$CA" /srv/loco/apt/loco.gpg)" ]
 if [ -n "$apt_binary_stamp" ]; then
     [ "$apt_binary_stamp" = "$(stat -c '%Y:%i' /usr/local/lib/loco/apt/bin/apt-ftparchive)" ]

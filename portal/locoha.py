@@ -46,7 +46,6 @@ DATA = "/srv/loco"
 AGENT_DIR = "/var/lib/loco-agent"
 RUN = "/run/loco-ha"
 KEEPALIVED_CONF = "/etc/keepalived/keepalived.conf"
-PORT = 8443
 
 AREAS = ("apt", "rpm", "flatpak", "win")               # dépôts répliqués (les caches ne le sont pas)
 ETC_SKIP = {"ha", "server-shell", "appliance"}         # propres à chaque serveur
@@ -362,9 +361,20 @@ def _context(pinned=True):
     return ctx
 
 
-def call(address, path, token, data=None, pinned=True, timeout=30, into=None):
+def https_port():
+    """Port HTTPS de ce serveur, le même sur les deux une fois appairés : loco.conf est répliqué."""
+    try:
+        with open(os.path.join(ETC, "loco.conf")) as f:
+            found = re.search(r"^HTTPS_PORT=([0-9]+)$", f.read(), re.M)
+    except OSError:
+        found = None
+    return found.group(1) if found else "8443"
+
+
+def call(address, path, token, data=None, pinned=True, timeout=30, into=None, port=None):
     """Requête au portail du pair. data : JSON envoyé (POST) ; into : fichier où écrire une réponse volumineuse."""
-    url = f"https://{_host(address)}:{PORT}{path}"
+    # Un secours en cours d'appairage n'a pas encore le port du principal : il l'a noté dans sa configuration.
+    url = f"https://{_host(address)}:{port or node().get('peer_port') or https_port()}{path}"
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, method="POST" if body is not None else "GET",
                                  headers={"X-Loco-HA": token, "Content-Type": "application/json",
@@ -381,6 +391,16 @@ def _host(address):
         return f"[{address}]" if ipaddress.ip_address(address).version == 6 else address
     except ValueError:
         return address
+
+
+def _split_address(value):
+    """(adresse, port) d'une saisie « 192.168.1.11 », « 192.168.1.11:9443 », « [fd00::1]:9443 » ou « https://… » ; port vide si absent."""
+    value = re.sub(r"^https?://", "", value.strip()).split("/")[0]
+    if value.count(":") == 1 or "]:" in value:
+        value, _, port = value.rpartition(":")
+    else:
+        port = ""
+    return value.strip("[]"), port
 
 
 # --------------------------------------------------------------------------- paquet de configuration
@@ -830,7 +850,7 @@ def check():
     ctx = ssl.create_default_context()
     ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
     try:
-        with urllib.request.urlopen(f"https://127.0.0.1:{PORT}/healthz", context=ctx, timeout=3) as r:
+        with urllib.request.urlopen(f"https://127.0.0.1:{https_port()}/healthz", context=ctx, timeout=3) as r:
             return 0 if r.status == 200 else 1
     except (OSError, urllib.error.URLError):
         return 1
@@ -968,7 +988,7 @@ def join(params, log, admin):
     """Secours : appairage avec le code, copie complète du principal, puis keepalived."""
     if node().get("vip"):
         raise ValueError("haute disponibilité déjà configurée sur ce serveur")
-    primary = re.sub(r"^https?://", "", str(params.get("primary", "")).strip()).split("/")[0].rsplit(":", 1)[0].strip("[]")
+    primary, port = _split_address(str(params.get("primary", "")))
     code = str(params.get("code", "")).strip()
     if not CODE_RE.fullmatch(code):
         raise ValueError("code d'appairage invalide")
@@ -985,12 +1005,12 @@ def join(params, log, admin):
     try:
         blob = call(primary, "/ha/api/join", auth_token(code), {"address": address, "version": version,
                                                                   "name": socket.gethostname().split(".")[0]},
-                    pinned=False, timeout=30)
+                    pinned=False, timeout=30, port=port)
     except urllib.error.HTTPError as e:
         raise ValueError({403: "code refusé (déjà utilisé, ou principal sans appairage en attente)",
                           409: "versions de loco différentes : mettez les deux serveurs à jour"}.get(e.code, f"HTTP {e.code}"))
     except (OSError, urllib.error.URLError) as e:
-        raise ValueError(f"principal injoignable : {getattr(e, 'reason', e)}")
+        raise ValueError(f"principal injoignable sur le port {port or https_port()} (autre port : adresse:port) : {getattr(e, 'reason', e)}")
     package = json.loads(unseal(blob, derive(code, "join")))
     vip = ipaddress.ip_interface(package["vip"])
     if ipaddress.ip_address(address) not in vip.network:
@@ -1000,7 +1020,8 @@ def join(params, log, admin):
     conf = {"vip": package["vip"], "interface": iface_name, "vrid": package["vrid"], "auth_pass": package["auth_pass"],
             "role": "standby", "epoch": 0, "since": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "self": {"address": address, "name": socket.gethostname().split(".")[0], "priority": 100},
-            "peer": {"address": package["primary"]["address"], "name": package["primary"].get("name", ""), "priority": 150}}
+            "peer": {"address": package["primary"]["address"], "name": package["primary"].get("name", ""), "priority": 150},
+            "peer_port": port or https_port()}
     save_secret(package["secret"])
     save_node(conf)
     _write(ca_path(), package["ca"], 0o644)

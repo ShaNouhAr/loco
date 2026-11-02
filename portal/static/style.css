@@ -605,6 +605,7 @@ pre.log { margin: 0; padding: 12px 16px; max-height: 440px; overflow: auto; bord
 .repo-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .repo-form input { flex: 1 1 320px; min-width: 0; }
 .repo-form .btn { flex: none; }
+.port-form input { flex: 0 0 110px; }
 /* Réglages du parc : lignes de réglage, légende de pastilles, aperçu de clé. */
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
 .set-row.sub { gap: 8px 16px; }

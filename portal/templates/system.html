@@ -224,6 +224,60 @@
   </div></div>
 
   <div class="tab-panel" data-panel="reseau"><div class="stack">
+    {% if https_port %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Port de l'interface web") }}</h2><div class="aside mono">{{ https_port.url }}</div></div>
+      <div class="panel-b stack-sm">
+        {% set job = https_port.job %}
+        {% if https_port.busy %}
+        <div class="note" data-operations="{{ url_for('appliance_operations_state') }}" data-signature="{{ https_port.signature }}">{{ _("Changement en cours : les services redémarrent quelques secondes.") }}{% if job and job.state in ('queued', 'running') %} <a href="{{ url_for('appliance_job', job_id=job.id) }}">{{ _("Voir le déroulé") }}</a>{% endif %}</div>
+        {% else %}
+        {% if job and job.state == 'failed' %}
+        <div class="note err">{{ _("Le dernier changement de port a échoué.") }} <a href="{{ url_for('appliance_job', job_id=job.id) }}">{{ _("Voir le journal") }}</a></div>
+        {% endif %}
+        {% if https_port.old %}
+        <div class="note warn">{% if https_port.old|length == 1 %}{{ _("Le port %(old)s reste ouvert en plus du port %(port)s, le temps que les postes suivent.", old=https_port.old[0], port=https_port.port) }}{% else %}{{ _("Les ports %(old)s restent ouverts en plus du port %(port)s, le temps que les postes suivent.", old=https_port.old|join(', '), port=https_port.port) }}{% endif %}</div>
+        {% if https_port.total %}
+        <p class="small"><span class="st {{ 'ok' if https_port.known == https_port.total else 'warn' }}">{{ _("Postes qui connaissent le nouveau port : %(known)s sur %(total)s", known=https_port.known, total=https_port.total) }}</span></p>
+        {% endif %}
+        {% for callback in https_port.sso %}
+        <div class="note warn">{{ _("Connexion SSO : déclarez cette adresse de retour chez votre fournisseur d'identité.") }} <span class="mono">{{ callback }}</span></div>
+        {% endfor %}
+        {% if not https_port.on_current %}
+        <div><a class="btn primary" href="{{ https_port.url }}{{ url_for('system') }}#reseau">{{ _("Ouvrir l'interface sur le port %(port)s", port=https_port.port) }}</a></div>
+        <p class="hint">{{ _("L'ancien port se ferme depuis le nouveau : c'est la preuve qu'il est joignable depuis votre poste, pare-feu compris.") }}</p>
+        {% elif not https_port.ha and can('system.configure') %}
+        <form method="post" action="{{ url_for('system_https_port') }}" data-confirm="{{ _('Fermer l’ancien port ?') }}" data-confirm-ok="{{ _('Fermer le port') }}"
+              data-confirm-text="{{ _('Tous les postes connaissent le nouveau port : ils basculeront seuls à leur prochain contact, dépôts compris.') if https_port.known == https_port.total else _('Postes qui ne connaissent pas encore le nouveau port : %(n)s. Ils ne joindront plus loco et devront être réinscrits avec la commande d’installation, en gardant leur identité.', n=https_port.total - https_port.known) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="close" value="1">
+          <button class="btn danger"><span class="spin"></span>{{ _("Fermer l'ancien port") }}</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if https_port.ha %}
+        <p class="hint">{{ _("En haute disponibilité, les deux serveurs partagent le même port : quittez-la pour le changer.") }}</p>
+        {% elif can('system.configure') %}
+        <form method="post" action="{{ url_for('system_https_port') }}" class="repo-form port-form" data-confirm="{{ _('Changer le port de l’interface ?') }}" data-confirm-ok="{{ _('Changer le port') }}"
+              data-confirm-text="{{ _('Le port %(port)s reste ouvert en plus du nouveau : rien n’est coupé. Les services redémarrent quelques secondes.', port=https_port.port) }}{% if https_port.sso %} {{ _('La connexion SSO ne marchera plus tant que la nouvelle adresse de retour n’est pas déclarée chez le fournisseur d’identité.') }}{% endif %}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="number" name="port" min="1" max="65535" required value="{{ https_port.port }}" aria-label="{{ _('Nouveau port HTTPS') }}" class="mono">
+          <button class="btn"><span class="spin"></span>{{ _("Changer le port") }}</button>
+        </form>
+        <details class="set-help">
+          <summary>{{ _("Comment ça se passe pour les postes ?") }}</summary>
+          <ol>
+            <li>{{ _("Le nouveau port s'ouvre et l'ancien reste ouvert : ni vous ni les postes n'êtes coupés.") }}</li>
+            <li>{{ _("Chaque agent apprend le nouveau port à son prochain contact, sans s'en servir tout de suite.") }}</li>
+            <li>{{ _("Une fois connecté sur le nouveau port, vous fermez l'ancien : les agents basculent seuls et mettent à jour leurs dépôts HTTPS.") }}</li>
+          </ol>
+          <p class="muted small">{{ _("Autorisez le nouveau port sur un éventuel pare-feu devant ce serveur. Pensez aussi à vos favoris, aux clients MCP et à la supervision (/metrics).") }}</p>
+        </details>
+        {% endif %}
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Ports réseau") }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
       <div class="panel-b">
@@ -244,7 +298,7 @@
           </tbody>
         </table>
       </div>
-      <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas.") }}</div>
+      <div class="panel-f">{{ _("Le port interne de l'application (waitress/gunicorn) n'écoute qu'en local (127.0.0.1) : ne l'ouvrez pas.") }}{% if https_port_hint %} {{ https_port_hint }}{% endif %}</div>
     </section>
 
     {% if egress %}

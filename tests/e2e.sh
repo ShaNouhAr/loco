@@ -51,6 +51,14 @@ ready
 # Vérifie aussi les redémarrages successifs du serveur applicatif (nouvelles versions de Gunicorn).
 for _ in 1 2 3; do sudo systemctl restart loco-portal; ready; done
 python3 tests/https_redirect.py https://127.0.0.1:8443
+step "Changement de port : l'ancien reste servi, puis se ferme"
+sudo ./install.sh --https-port 9443 --https-old-ports 8443 >/dev/null
+curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null
+ready
+grep -qx 'HTTPS_OLD_PORTS="8443"' /etc/loco/loco.conf
+sudo ./install.sh --https-port 8443 --https-old-ports "" >/dev/null
+ready
+if curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null 2>&1; then echo 'Le port 9443 devrait être fermé' >&2; exit 1; fi
 # shellcheck disable=SC1091
 HOST=$(. /etc/loco/loco.conf && echo "$HOST")
 if [ -f "$work/old-ca" ]; then

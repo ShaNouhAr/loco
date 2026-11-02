@@ -8,6 +8,7 @@
 #
 #   --host IP                adresse annoncée aux postes (défaut : IP de la route par défaut)
 #   --https-port N           port HTTPS de l'interface et des postes (défaut : 8443)
+#   --https-old-ports "N.."  anciens ports HTTPS gardés ouverts en plus, le temps que les postes suivent (vide : aucun)
 #   --http-port N            port HTTP d'amorçage des postes (défaut : 8088)
 #   --no-http / --http       désactive / réactive le port HTTP (HTTPS seul : autorité déployée sur les postes)
 #   --allow "CIDR ..."       réseaux autorisés à utiliser les dépôts et caches (défaut : réseaux privés)
@@ -124,7 +125,7 @@ fi
 . "$SRC/lib/migrate.sh"
 if [[ " $* " != *" --help "* && " $* " != *" -h "* ]]; then migrate_local_repo; fi
 # Valeurs par défaut, puis celles de l'installation précédente, puis les options.
-PORTAL_PORT=8088 HTTPS_PORT=8443 HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
+PORTAL_PORT=8088 HTTPS_PORT=8443 HTTPS_OLD_PORTS="" HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
 RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 WU_PROXY_PORT=3128 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
 MAX_UPLOAD=8g BACKUP_KEEP=3 BACKUP_DIR=/var/backups/loco FLATPAK_ENABLED=1 FLATPAK_CACHE_SIZE=""
 RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE="" GITHUB_REPO=""
@@ -136,6 +137,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --host) need "$@"; HOST="$2"; shift 2 ;;
         --https-port) need "$@"; HTTPS_PORT="$2"; shift 2 ;;
+        --https-old-ports) need "$@"; HTTPS_OLD_PORTS="$2"; shift 2 ;;
         --http-port|--port) need "$@"; PORTAL_PORT="$2"; shift 2 ;;
         --no-http) HTTP_ENABLED=0; shift ;;
         --http) HTTP_ENABLED=1; shift ;;
@@ -173,6 +175,9 @@ if [ -z "$ADMIN_ALLOW" ]; then ADMIN_ALLOW="$ALLOW"; fi
 # ---------------------------------------------------------------- vérifications
 num() { [[ "$2" =~ ^[0-9]+$ ]] || die "$1 doit être un nombre." "$1 must be a number." "$1 debe ser un número."; }
 num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-keep "$BACKUP_KEEP"
+for port in $HTTPS_OLD_PORTS; do num --https-old-ports "$port"; done
+# Le port actuel n'est pas un ancien port : nginx refuserait deux « listen » identiques.
+HTTPS_OLD_PORTS=$(for port in $HTTPS_OLD_PORTS; do [ "$port" = "$HTTPS_PORT" ] || echo "$port"; done | sort -un | xargs)
 [ "$PORTAL_PORT" != "$HTTPS_PORT" ] || die "--http-port et --https-port doivent être différents." "--http-port and --https-port must differ." "--http-port y --https-port deben ser diferentes."
 [[ "$MAX_UPLOAD" =~ ^[0-9]+[kKmMgG]?$ ]] || die "--max-upload : taille invalide (ex. 8g, 500m)." "--max-upload: invalid size (e.g. 8g, 500m)." "--max-upload: tamaño no válido (ej. 8g, 500m)."
 [[ "$WU_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--wu-cache-size : taille invalide (ex. 50g)." "--wu-cache-size: invalid size (e.g. 50g)." "--wu-cache-size: tamaño no válido (ej. 50g)."
@@ -235,6 +240,7 @@ check_port() {
 }
 say "Vérification des ports" "Checking ports" "Comprobación de los puertos"
 check_port "$HTTPS_PORT" nginx
+for port in $HTTPS_OLD_PORTS; do check_port "$port" nginx; done
 if [ "$HTTP_ENABLED" = 1 ]; then check_port "$PORTAL_PORT" nginx; fi
 if [ "$PLATFORM" = debian ]; then check_port 3142 apt-cacher-ng; else check_port 3142 nginx; fi
 check_port "$APP_PORT" gunicorn
@@ -313,6 +319,7 @@ cat > "$ETC/loco.conf" <<EOF
 # Généré par install.sh : modifiez puis relancez sudo ./install.sh pour appliquer.
 HOST=$HOST
 HTTPS_PORT=$HTTPS_PORT
+HTTPS_OLD_PORTS="$HTTPS_OLD_PORTS"
 PORTAL_PORT=$PORTAL_PORT
 HTTP_ENABLED=$HTTP_ENABLED
 ALLOW="$ALLOW"
@@ -514,6 +521,9 @@ export LRT_PORTAL_PORT="$PORTAL_PORT" LRT_HTTPS_PORT="$HTTPS_PORT" LRT_APP_PORT=
        LRT_BACKUP_DIR="$BACKUP_DIR" LRT_PROXY_ENV="$PROXY_ENV" LRT_ALLOW_SPACE="$ALLOW_LIST" \
        LRT_FLATPAK_CACHE_SIZE="$FLATPAK_CACHE_SIZE" LRT_FLATPAK="$FLATPAK_ENABLED" LRT_GUNICORN_FLAGS="$GUNICORN_FLAGS" \
        LRT_RPM="$RPM_ENABLED" LRT_RPM_CACHE_SIZE="$RPM_CACHE_SIZE" LRT_LOG_GROUP="$LOG_GROUP" LRT_CA_BUNDLE="$CA_BUNDLE" LRT_GUNICORN="$GUNICORN"
+# Anciens ports de l'interface, servis comme le port actuel le temps que les postes suivent.
+LRT_HTTPS_OLD_LISTEN=$(for port in $HTTPS_OLD_PORTS; do printf '    listen %s ssl;\n    listen [::]:%s ssl;\n' "$port" "$port"; done)
+export LRT_HTTPS_OLD_LISTEN
 # Emplacements Flatpak insérés dans les deux serveurs du portail (déjà rendus).
 LRT_FLATPAK_LOCATIONS=""
 if [ "$FLATPAK_ENABLED" = 1 ]; then LRT_FLATPAK_LOCATIONS=$(render "$PREFIX/conf/nginx-flatpak-locations.conf"); fi

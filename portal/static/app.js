@@ -586,7 +586,7 @@
       $(".dlg-b p", dlg).textContent = text || "";
       $("[data-ok]", dlg).textContent = okLabel || t("Confirmer");
       // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
-      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Révoquer|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Revoke|Vaciar|Eliminar|Quitar|Retirar|Revocar)/.test(okLabel || "");
+      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Révoquer|Fermer|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Revoke|Close|Vaciar|Eliminar|Quitar|Retirar|Revocar|Cerrar)/.test(okLabel || "");
       $("[data-ok]", dlg).classList.toggle("danger", danger);
       $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;

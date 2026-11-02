@@ -15,6 +15,7 @@ import base64
 import ctypes
 import datetime
 import fcntl
+import glob
 import http.client
 import hashlib
 import json
@@ -141,6 +142,7 @@ def call(server, path, data, token=None, timeout=60):
 
 
 SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
+SOURCE_FILES = ("/etc/apt/sources.list.d/loco*.sources", "/etc/apt/sources.list.d/loco*.list", "/etc/yum.repos.d/loco*.repo")
 
 
 def known_servers(conf):
@@ -151,6 +153,32 @@ def known_servers(conf):
         if SERVER_RE.match(url) and url not in out:
             out.append(url)
     return out[:8]
+
+
+def follow_sources(old, new):
+    """Les dépôts loco installés en HTTPS portent l'adresse du serveur : ils la suivent quand l'agent en change."""
+    old, new = old.rstrip("/") + "/", new.rstrip("/") + "/"
+    for pattern in SOURCE_FILES:
+        for path in glob.glob(pattern):
+            try:
+                with open(path) as f:
+                    text = f.read()
+                if old in text:
+                    with open(path + ".loco-new", "w") as f:
+                        f.write(text.replace(old, new))
+                    shutil.copymode(path, path + ".loco-new")
+                    os.replace(path + ".loco-new", path)
+            except OSError as e:
+                log(t(f"source {path} non mise à jour : {e}", f"source {path} not updated: {e}", f"origen {path} no actualizado: {e}"))
+    if not shutil.which("flatpak"):
+        return
+    try:
+        remotes = subprocess.run(["flatpak", "remotes", "--system", "--columns=name,url"], capture_output=True, text=True, timeout=60).stdout
+        for name, _, url in (line.partition("\t") for line in remotes.splitlines()):
+            if url.startswith(old):
+                subprocess.run(["flatpak", "remote-modify", "--system", name, "--url=" + new + url[len(old):]], capture_output=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        log(t(f"dépôts Flatpak non mis à jour : {e}", f"Flatpak remotes not updated: {e}", f"repositorios Flatpak no actualizados: {e}"))
 
 
 def checkin(conf, data):
@@ -168,6 +196,7 @@ def checkin(conf, data):
             continue
         announced = [u.rstrip("/") for u in answer.get("servers") or [] if isinstance(u, str) and SERVER_RE.match(u.rstrip("/"))][:8]
         if server != conf["server"]:
+            follow_sources(conf["server"], server)
             log(t(f"serveur joint à sa nouvelle adresse : {server} (au lieu de {conf['server']})", f"server reached at its new address: {server} (instead of {conf['server']})", f"servidor contactado en su nueva dirección: {server} (en lugar de {conf['server']})"))
         if server != conf["server"] or (announced and announced != conf.get("servers")):
             conf["server"] = server

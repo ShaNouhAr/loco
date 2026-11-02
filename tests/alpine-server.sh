@@ -95,6 +95,15 @@ step "Mise à jour réelle et retour arrière après échec"
 python3 tests/appliance-update.py
 ready
 
+step "Changement de port : l'ancien reste servi, puis se ferme"
+sh ./install.sh --https-port 9443 --https-old-ports 8443 > /tmp/alpine-install.log 2>&1 || { tail -40 /tmp/alpine-install.log; fail "ouverture du nouveau port"; }
+curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null || fail "nouveau port muet"
+ready
+grep -qx 'HTTPS_OLD_PORTS="8443"' /etc/loco/loco.conf || fail "ancien port non conservé"
+sh ./install.sh --https-port 8443 --https-old-ports "" > /tmp/alpine-install.log 2>&1 || { tail -40 /tmp/alpine-install.log; fail "fermeture de l'ancien port"; }
+ready
+if curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null 2>&1; then fail "le port 9443 devrait être fermé"; fi
+
 step "Relance : clés et dépôts conservés"
 ca=$(sha256sum /etc/loco/tls/ca.crt | cut -d' ' -f1)
 sh ./install.sh > /tmp/alpine-install.log 2>&1 || { tail -40 /tmp/alpine-install.log; fail "relance"; }

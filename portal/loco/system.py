@@ -17,7 +17,7 @@ import urllib.parse
 
 from flask import Response, abort, flash, g, render_template, request, send_file
 
-from . import app, config
+from . import addresses, app, config
 from .i18n import L_, _
 from .auth import audit, login_required
 from .db import db
@@ -285,6 +285,41 @@ def _url_port(url, default):
         return default
 
 
+def _request_port():
+    """Port par lequel le navigateur joint l'interface."""
+    try:
+        return urllib.parse.urlsplit("//" + request.host).port or (443 if request.scheme == "https" else 80)
+    except ValueError:
+        return None
+
+
+def https_port_state():
+    """Port de l'interface, ancien port encore ouvert et ce qu'il reste à faire (onglet Réseau)."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        return None
+    from .directories import enabled_directories
+    from .oidc import callback_url
+    _url, known, total = addresses.coverage(db())[0]
+    port = _url_port(config.HTTPS_URL, 8443)
+    latest = next(iter(locoadmin.jobs(limit=1)), {})
+    job = latest if latest.get("action") == "set-https-port" else None
+    return {"port": port, "old": locoadmin.read_conf().get("HTTPS_OLD_PORTS", "").split(), "url": config.HTTPS_URL,
+            "on_current": _request_port() == port, "known": known, "total": total, "ha": locoadmin.ha_configured(),
+            "sso": [callback_url(d["id"]) for d in enabled_directories() if d["kind"] == "oidc"],
+            # « attente » : dernière opération connue à l'envoi ; tant qu'elle reste la dernière, l'agent n'a pas encore pris la demande.
+            "job": job, "busy": request.args.get("attente") == latest.get("id", "aucune") or bool(job and job.get("state") in ("queued", "running")),
+            "signature": f"{latest['id']}:{latest['state']}" if latest else ""}
+
+
+def https_port_hint():
+    """Docker et serveur Windows : le port se règle à l'installation, sans passer par l'agent root."""
+    if config.CONTAINER:
+        return _("Pour changer le port de l'interface : variable LOCO_HTTPS_PORT, puis docker compose up -d. Annoncez d'abord la nouvelle adresse aux agents dans les réglages du parc.")
+    if config.WINDOWS:
+        return _("Pour changer le port de l'interface : relancez install.ps1 avec -HttpsPort. Annoncez d'abord la nouvelle adresse aux agents dans les réglages du parc.")
+    return None
+
+
 def firewall_ports():
     """Ports à ouvrir en entrée sur le serveur loco, selon la configuration et les fonctionnalités actives.
 
@@ -294,6 +329,10 @@ def firewall_ports():
     https = _url_port(config.HTTPS_URL, 8443)
     rows = [{"port": str(https), "proto": "TCP", "service": _("Interface web, agents du parc et dépôts (APT, RPM, Flatpak, fichiers)"),
              "audience": _("Administration + postes"), "scheme": "HTTPS", "on": True, "always": True}]
+    if config.SERVER_UPDATES:
+        rows += [{"port": old, "proto": "TCP", "service": _("Ancien port de l'interface, ouvert le temps que les postes suivent"),
+                  "audience": _("Postes"), "scheme": "HTTPS", "on": True, "always": False}
+                 for old in locoadmin.read_conf().get("HTTPS_OLD_PORTS", "").split()]
     if config.HTTP_URL:
         rows.append({"port": str(_url_port(config.HTTP_URL, 8088)), "proto": "TCP",
                      "service": _("Amorçage HTTP des postes (déploiement de l'autorité et des dépôts)"),
@@ -472,7 +511,7 @@ def system():
     return render_template(
         "system.html",
         services=services, stopped=[unit for unit, _, active in services if not active],
-        firewall=firewall_ports(),
+        firewall=firewall_ports(), https_port=https_port_state(), https_port_hint=https_port_hint(),
         egress=firewall_egress(time_info),
         last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
@@ -1044,6 +1083,30 @@ def system_tls_mode():
                   _("Bascule vers l'autorité d'entreprise lancée : rechargez la page dans quelques secondes.")
                   if mode == "enterprise" else _("Retour à l'autorité loco lancé : rechargez la page dans quelques secondes."))
     return back("system", _anchor="certificat")
+
+
+@app.route("/system/https-port", methods=["POST"])
+@login_required
+def system_https_port():
+    """Déplace l'interface sur un autre port, ou ferme les anciens une fois les postes passés."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    latest = next(iter(locoadmin.jobs(limit=1)), {}).get("id", "aucune")
+    if request.form.get("close") != "1":
+        port = request.form.get("port", "").strip()
+        sent = _agent_action("set-https-port", {"port": port}, "systeme.port", port,
+                             _("Changement de port lancé : l'ancien reste ouvert, rien n'est coupé."))
+        if sent:    # Le décompte repart de zéro : un poste ne compte qu'après avoir signalé le nouveau port.
+            db().execute("UPDATE devices SET servers=''")
+            db().commit()
+    elif _request_port() != _url_port(config.HTTPS_URL, 8443):
+        # Depuis le port actuel seulement : le navigateur prouve qu'il le joint, pare-feu compris.
+        flash(_("Ouvrez d'abord l'interface sur son nouveau port : c'est depuis celui-ci que l'ancien se ferme."), "error")
+        sent = False
+    else:
+        sent = _agent_action("set-https-port", {"close": "1"}, "systeme.port.fermeture", locoadmin.read_conf().get("HTTPS_OLD_PORTS", ""),
+                             _("Fermeture de l'ancien port lancée : les postes basculent à leur prochain contact."))
+    return back("system", _anchor="reseau", attente=latest) if sent else back("system", _anchor="reseau")
 
 
 @app.route("/system/backup-retention", methods=["POST"])

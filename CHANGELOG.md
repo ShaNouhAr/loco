@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.125.0 — 2026-11-02
+
+- **Changer le port de l'interface web** depuis *Système › Réseau*. Le nouveau port s'ouvre à côté de l'ancien : ni l'administrateur ni les postes ne sont coupés. Les agents apprennent le nouveau port à leur prochain contact, la page compte ceux qui le connaissent, et l'ancien port se ferme seulement depuis le nouveau, ce qui prouve qu'il est joignable, pare-feu compris. Les valeurs inutilisables sont refusées avant toute modification : port déjà pris, port réservé à loco, port que les navigateurs bloquent. Un échec rétablit la configuration précédente. Docker et serveur Windows : le port reste réglé à l'installation, la page l'explique.
+- **Les agents Linux suivent l'adresse du serveur jusque dans leurs dépôts.** Quand un agent adopte une nouvelle adresse, nouvelle IP comprise, il met à jour ses sources APT et RPM et ses dépôts Flatpak installés en HTTPS. Ils restaient jusqu'ici sur l'ancienne adresse.
+- **Haute disponibilité : le port n'est plus supposé être 8443.** Contrôle de santé et échanges entre serveurs utilisent le port configuré, et un secours peut rejoindre un principal sur un autre port (`adresse:port`). Le port se change hors haute disponibilité.
+
 ## 2.124.2 — 2026-11-02
 
 - **Retirer un logiciel du catalogue local, directement depuis la liste.** Jusqu'ici, ce n'était possible que depuis le menu *Plus* de sa fiche. Un bouton *Retirer* apparaît sur chaque ligne et à côté de *Réessayer* quand le téléchargement a échoué, par exemple si un firewall bloque le site source. Cochez plusieurs logiciels pour les retirer d'un coup, y compris ceux en erreur, qui ne pouvaient pas être cochés jusqu'ici ; *Déployer*, *Créer un groupe* et la commande PowerShell restent limités aux logiciels prêts. Rien n'est désinstallé des postes.

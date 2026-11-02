@@ -234,7 +234,7 @@ def render_nginx(cfg):
 
     values = {
         "DATA": _slash(cfg["data_dir"]), "HOST": cfg["host"], "HOSTNAME": hostname(),
-        "HTTPS_PORT": str(cfg["https_port"]), "PORTAL_PORT": str(cfg.get("http_port") or 0),
+        "HTTPS_PORT": str(cfg["https_port"]), "HTTPS_OLD_LISTEN": "", "PORTAL_PORT": str(cfg.get("http_port") or 0),
         "APP_PORT": str(cfg["app_port"]), "ACNG_PORT": str(cfg["acng_port"]),
         "MAX_UPLOAD": cfg.get("max_upload", "8g"), "WU_CACHE_SIZE": cfg.get("wu_cache_size", "50g"),
         "FLATPAK_CACHE_SIZE": cfg.get("flatpak_cache_size", "20g"), "RPM_CACHE_SIZE": cfg.get("rpm_cache_size", "20g"),

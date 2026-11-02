@@ -258,7 +258,7 @@ rocky_access() {
             rocky_context "$pattern" httpd_cache_t "$path"
             restorecon -R "$path"
         done
-        for port in "$HTTPS_PORT" "$PORTAL_PORT" 3142; do
+        for port in "$HTTPS_PORT" $HTTPS_OLD_PORTS "$PORTAL_PORT" 3142; do
             if ! semanage port -l | awk '$1=="http_port_t" && $2=="tcp" {for(i=3;i<=NF;i++){gsub(/,/,"",$i);print $i}}' | grep -qx "$port"; then
                 semanage port -a -t http_port_t -p tcp "$port" >> "$LOG" 2>&1 || die "SELinux : port $port réservé à un autre service ; choisissez un autre port." "SELinux: port $port reserved for another service; choose another port." "SELinux: puerto $port reservado para otro servicio; elija otro puerto."
                 echo "$port" >> "$ROCKY_STATE/rocky-selinux-ports"
@@ -270,6 +270,7 @@ rocky_access() {
         {
             echo '<?xml version="1.0" encoding="utf-8"?><service><short>loco</short>'
             echo "<port protocol=\"tcp\" port=\"$HTTPS_PORT\"/><port protocol=\"tcp\" port=\"3142\"/>"
+            for port in $HTTPS_OLD_PORTS; do echo "<port protocol=\"tcp\" port=\"$port\"/>"; done
             if [ "$HTTP_ENABLED" = 1 ]; then echo "<port protocol=\"tcp\" port=\"$PORTAL_PORT\"/>"; fi
             if [ "$WU_ENABLED" = 1 ]; then echo '<port protocol="tcp" port="80"/><port protocol="tcp" port="443"/>'; fi
             echo '</service>'
