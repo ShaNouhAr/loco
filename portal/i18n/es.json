@@ -1292,7 +1292,6 @@
  "Installeur de %(row)s absent ou altéré.": "Instalador de %(row)s ausente o alterado.",
  "Installeur retéléchargé": "Instalador vuelto a descargar",
  "Installeur sans empreinte SHA-256 valide.": "Instalador sin huella SHA-256 válida.",
- "Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.": "Instaladores Windows servidos por loco a los equipos. Marque programas para desplegarlos juntos o hacer un grupo.",
  "Installez curl ou wget avant de configurer ce poste.": "Instale curl o wget antes de configurar este equipo.",
  "Installez curl ou wget.": "Instala curl o wget.",
  "Installez python3 puis relancez.": "Instale python3 y vuelva a ejecutar.",
@@ -2224,7 +2223,6 @@
  "Supprimer des paquets APT": "Eliminar paquetes APT",
  "Supprimer des paquets RPM": "Eliminar paquetes RPM",
  "Supprimer du cache": "Quitar de la caché",
- "Supprimer du catalogue…": "Eliminar del catálogo…",
  "Supprimer le compte %(username)s ?": "¿Eliminar la cuenta %(username)s?",
  "Supprimer le dossier « %(name)s » et tout son contenu sur le poste ? Cette action est définitive.": "¿Eliminar la carpeta «%(name)s» y todo su contenido en el equipo? Esta acción es definitiva.",
  "Supprimer le groupe %(name)s ?": "¿Eliminar el grupo %(name)s?",
@@ -3516,5 +3514,16 @@
  "aucun pour l'instant": "ninguno por ahora",
  "auto": "auto",
  "Échec de la négociation TLS : %(reason)s": "Fallo en la negociación TLS: %(reason)s",
- "État de l'envoi": "Estado del envío"
+ "État de l'envoi": "Estado del envío",
+ "%(n)s logiciel retiré du catalogue.": "%(n)s programa retirado del catálogo.",
+ "%(n)s logiciels retirés du catalogue.": "%(n)s programas retirados del catálogo.",
+ "%(row)s retiré du catalogue.": "%(row)s retirado del catálogo.",
+ "Il est retiré du catalogue et de ses groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.": "Se retira del catálogo y de sus grupos; no se desinstala nada de los equipos. Las versiones de los despliegues ya confirmados siguen disponibles hasta su ejecución.",
+ "Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble, en faire un groupe ou les retirer.": "Instaladores de Windows servidos por loco a los equipos. Marque programas para desplegarlos juntos, crear un grupo o retirarlos.",
+ "Les logiciels cochés sont retirés du catalogue et de leurs groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.": "Los programas marcados se retiran del catálogo y de sus grupos; no se desinstala nada de los equipos. Las versiones de los despliegues ya confirmados siguen disponibles hasta su ejecución.",
+ "Retirer %(name)s du catalogue ?": "¿Retirar %(name)s del catálogo?",
+ "Retirer %(num)s logiciels du catalogue ?": "¿Retirar %(num)s programas del catálogo?",
+ "Retirer ce logiciel du catalogue ?": "¿Retirar este programa del catálogo?",
+ "Retirer du catalogue": "Retirar del catálogo",
+ "Retirer du catalogue…": "Retirar del catálogo…"
 }

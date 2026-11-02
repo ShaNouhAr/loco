@@ -281,18 +281,44 @@ def windows_apps_trust_source(slug):
     return _back_to(slug)
 
 
+def _remove_app(row):
+    """Retire un logiciel du catalogue et de ses groupes ; rien n'est désinstallé des postes."""
+    if row["status"] == "downloading":
+        CANCELLED.add(row["slug"])
+    shutil.rmtree(app_dir(row["slug"]), ignore_errors=True)
+    db().execute("DELETE FROM win_apps WHERE id=?", (row["id"],))
+    db().commit()
+    audit("windows.suppression", row["slug"])
+
+
+def _back_to_list():
+    """Retour à la liste, sur le filtre d'où vient le formulaire (retirer plusieurs logiciels en erreur à la suite)."""
+    state = request.form.get("etat", "")
+    return back("windows_apps", etat=state) if state in ATTENTION else back("windows_apps")
+
+
 @app.route("/windows-apps/<slug>/delete", methods=["POST"])
 @login_required
 def windows_apps_delete(slug):
     row = get_app(slug)
-    if row["status"] == "downloading":
-        CANCELLED.add(slug)
-    shutil.rmtree(app_dir(slug), ignore_errors=True)
-    db().execute("DELETE FROM win_apps WHERE id=?", (row["id"],))
-    db().commit()
-    audit("windows.suppression", slug)
-    flash(_('%(row)s supprimé.', row=row['name']), "ok")
-    return back("windows_apps")
+    _remove_app(row)
+    flash(_("%(row)s retiré du catalogue.", row=row["name"]), "ok")
+    return _back_to_list()
+
+
+@app.route("/windows-apps/delete-selected", methods=["POST"])
+@login_required
+def windows_apps_delete_selected():
+    """Retire les logiciels cochés dans la liste (identifiants inconnus ignorés : déjà retirés par quelqu'un d'autre)."""
+    wanted = set(request.form.getlist("slug"))
+    if not wanted:
+        abort(400)
+    rows = [r for r in db().execute("SELECT * FROM win_apps").fetchall() if r["slug"] in wanted]
+    for row in rows:
+        _remove_app(row)
+    flash(_("%(n)s logiciel retiré du catalogue.", n=len(rows)) if len(rows) == 1
+          else _("%(n)s logiciels retirés du catalogue.", n=len(rows)), "ok")
+    return _back_to_list()
 
 
 @app.route("/windows-apps/software/<slug>")

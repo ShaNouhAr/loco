@@ -1,9 +1,11 @@
 """Catalogue local Windows et groupes : points à traiter, actions de la fiche d'un logiciel, aperçu des groupes, droits."""
+import os
 import unittest
 from unittest import mock
 
 import test_permissions
 from test_fleet import FleetTest, Agent, WINDOWS
+from loco import winapps
 from loco.db import transaction
 from test_fleet import device
 
@@ -47,7 +49,7 @@ class TestSoftwareCatalog(FleetTest):
     def test_detail_page_manages_the_software_and_returns_to_it(self):
         page = self.admin.c.get("/windows-apps/software/7-zip").get_data(as_text=True)
         self.assertIn("Déployer la mise à jour", page)
-        self.assertIn("Supprimer du catalogue", page)
+        self.assertIn("Retirer du catalogue", page)
         self.assertIn('id="edit"', page)
         r = self.admin.post("/windows-apps/vlc/edit", {"name": "VLC media player", "version": "3.0.21", "kind": "exe",
                                                        "args": "/S", "retour": "fiche"}, page="/windows-apps/software/vlc")
@@ -60,6 +62,33 @@ class TestSoftwareCatalog(FleetTest):
         self.assertTrue(r.headers["Location"].endswith("/windows-apps"))
         self.assertEqual(self.admin.c.get("/windows-apps/software/vlc").status_code, 404)
 
+    def test_software_can_be_removed_from_the_list_one_or_several_at_a_time(self):
+        page = self.admin.c.get("/windows-apps").get_data(as_text=True)
+        self.assertEqual(page.count('/delete" data-ajax data-confirm='), 3)  # une fois par logiciel, en erreur ou non
+        self.assertIn("data-remove-selected", page)
+        self.assertNotRegex(page, r'value="git"[^>]* disabled')              # un logiciel en erreur se coche pour être retiré
+        self.assertRegex(page, r'value="7-zip"[^>]*data-ready=1')
+        self.assertNotRegex(page, r'value="git"[^>]*data-ready')
+        self.assertIn("Retirer", self.admin.c.get("/windows-apps/software/git").get_data(as_text=True).split('class="note err')[1].split("</div></div>")[0])
+        # Depuis un filtre, on y revient.
+        r = self.admin.post("/windows-apps/git/delete", {"etat": "erreur"}, page="/windows-apps")
+        self.assertTrue(r.headers["Location"].endswith("/windows-apps?etat=erreur"), r.headers["Location"])
+        self.assertEqual(self.admin.c.get("/windows-apps/software/git").status_code, 404)
+        add("git", "Git", "2.51.0", kind="exe", args="/VERYSILENT", status="error", error="Certificat")
+        # Plusieurs d'un coup, y compris en erreur ; un identifiant inconnu est ignoré. Fichiers retirés, journal tenu.
+        folder = winapps.app_dir("vlc")
+        os.makedirs(folder, exist_ok=True)
+        r = self.admin.post("/windows-apps/delete-selected", {"slug": ["git", "vlc", "inconnu"]}, page="/windows-apps")
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(os.path.exists(folder))
+        with transaction() as conn:
+            left = {x[0] for x in conn.execute("SELECT slug FROM win_apps")}
+            logged = {x[0] for x in conn.execute("SELECT detail FROM audit WHERE action='windows.suppression'")}
+        self.assertEqual(left, {"7-zip"})
+        self.assertLessEqual({"git", "vlc"}, logged)
+        self.assertNotIn("inconnu", logged)
+        self.assertEqual(self.admin.post("/windows-apps/delete-selected", {}, page="/windows-apps").status_code, 400)
+
     def test_readers_see_neither_management_nor_fleet_usage(self):
         self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
         reader = test_permissions.TestPermissions.browser(
@@ -70,7 +99,12 @@ class TestSoftwareCatalog(FleetTest):
         self.assertNotIn('data-open="#edit"', page)
         self.assertNotIn("Ajouter un logiciel", page)
         page = reader.c.get("/windows-apps/software/7-zip").get_data(as_text=True)
-        self.assertNotIn("Supprimer du catalogue", page)
+        self.assertNotIn("/delete", page)
+        catalog = reader.c.get("/windows-apps").get_data(as_text=True)
+        self.assertNotIn("/delete", catalog)
+        self.assertRegex(catalog, r'value="git"[^>]* disabled')          # pas de droit : pas de sélection d'un logiciel en erreur
+        self.assertEqual(reader.post("/windows-apps/git/delete", {}, page="/windows-apps").status_code, 403)
+        self.assertEqual(reader.post("/windows-apps/delete-selected", {"slug": ["git"]}, page="/windows-apps").status_code, 403)
         self.assertNotIn('data-open="#edit"', page)
         self.assertIn("Le droit de consultation du parc est requis.", page)
 

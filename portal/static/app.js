@@ -586,7 +586,7 @@
       $(".dlg-b p", dlg).textContent = text || "";
       $("[data-ok]", dlg).textContent = okLabel || t("Confirmer");
       // Rouge réservé aux actions destructrices ou perturbantes ; les autres confirmations restent un bouton principal.
-      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Révoquer|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Revoke|Vaciar|Eliminar|Quitar|Revocar)/.test(okLabel || "");
+      var danger = /^(Supprimer|Retirer|Vider|Oublier|Abandonner|Annuler|Redémarrer|Réinitialiser|Révoquer|Delete|Remove|Empty|Forget|Abandon|Cancel|Restart|Reboot|Reset|Revoke|Vaciar|Eliminar|Quitar|Retirar|Revocar)/.test(okLabel || "");
       $("[data-ok]", dlg).classList.toggle("danger", danger);
       $("[data-ok]", dlg).classList.toggle("primary", !danger);
       var answered = false;
@@ -805,6 +805,9 @@
 
   var selbar = $(".selbar");
   if (selbar) {
+    // Sur fond photo, le flou de la feuille (backdrop-filter de main) sert de repère aux éléments fixes : dedans, la barre
+    // se calerait sur le bas de la feuille, et non sur celui de l'écran.
+    document.body.appendChild(selbar);
     var base = selbar.dataset.base;
     var all = $("#pick-all");
     var boxes = function () { return $$("input.pick:not(:disabled)"); };
@@ -813,15 +816,30 @@
       picked.forEach(function (c) { c.closest("tr").classList.add("sel"); });
       boxes().filter(function (c) { return !c.checked; }).forEach(function (c) { c.closest("tr").classList.remove("sel"); });
       var slugs = picked.map(function (c) { return c.value; });
+      // Déployer, grouper et la commande PowerShell ne concernent que les logiciels prêts ; retirer, tous les cochés.
+      var ready = picked.filter(function (c) { return c.dataset.ready; }).map(function (c) { return c.value; });
+      var removing = $("[data-remove-selected]", selbar);
+      if (removing) {
+        var holder = $("[data-slugs]", removing);
+        holder.textContent = "";
+        slugs.forEach(function (slug) {
+          var field = document.createElement("input");
+          field.type = "hidden"; field.name = "slug"; field.value = slug;
+          holder.appendChild(field);
+        });
+        removing.dataset.confirm = slugs.length > 1 ? t("Retirer %(num)s logiciels du catalogue ?", { num: slugs.length }) : t("Retirer ce logiciel du catalogue ?");
+      }
       $(".count", selbar).textContent = slugs.length > 1 ? t("%(num)s sélectionnés", { num: slugs.length }) : t("%(num)s sélectionné", { num: slugs.length });
-      $("code", selbar).textContent = "irm '" + base + slugs.join(",") + "' | iex";
+      $("code", selbar).textContent = "irm '" + base + ready.join(",") + "' | iex";
+      $(".cmd", selbar).hidden = !ready.length;
       ["data-deploy-selected", "data-group-selected"].forEach(function (attribute) {
         var link = $("[" + attribute + "]", selbar);
         if (!link) return;
         if (!link.dataset.base) link.dataset.base = link.getAttribute("href");
         var destination = new URL(link.dataset.base, window.location.href);
-        slugs.forEach(function (slug) { destination.searchParams.append("app", slug); });
+        ready.forEach(function (slug) { destination.searchParams.append("app", slug); });
         link.href = destination.href;
+        link.hidden = !ready.length;
       });
       selbar.classList.toggle("on", slugs.length > 0);
       if (all) all.checked = slugs.length > 0 && slugs.length === boxes().length;

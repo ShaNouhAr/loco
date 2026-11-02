@@ -2,6 +2,11 @@
 {% from '_software_logo.html' import software_logo %}
 {% from "_app_edit_dialog.html" import app_data with context %}
 {% block title %}{{ software.name }}{% endblock %}
+{% macro remove_form(button, label) -%}
+<form method="post" action="{{ url_for('windows_apps_delete', slug=software.slug) }}" data-ajax data-confirm="{{ _('Retirer %(name)s du catalogue ?', name=software.name) }}" data-confirm-text="{{ _('Il est retiré du catalogue et de ses groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.') }}" data-confirm-ok="{{ _('Retirer') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><button class="{{ button }}"><span class="spin"></span>{{ label }}</button>
+</form>
+{%- endmacro %}
 {% block content %}
 {% include '_software_nav.html' %}
 {% set outdated = installed|selectattr('outdated')|list %}
@@ -23,9 +28,7 @@
           <button class="menu-item" {{ 'disabled' if software.status == 'downloading' }}><span class="spin"></span>{{ _("Retélécharger l'installeur") }}</button>
         </form>{% endif %}
         {% if can('windows.delete') %}<hr>
-        <form method="post" action="{{ url_for('windows_apps_delete', slug=software.slug) }}" data-ajax data-confirm="{{ _('Supprimer %(name)s ?', name=software.name) }}" data-confirm-text="{{ _('Le logiciel est retiré du catalogue et des groupes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.') }}" data-confirm-ok="{{ _('Supprimer') }}">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item danger"><span class="spin"></span>{{ _("Supprimer du catalogue…") }}</button>
-        </form>{% endif %}
+        {{ remove_form("menu-item danger", _("Retirer du catalogue…")) }}{% endif %}
       </div>
     </details>
     {% endif %}
@@ -34,10 +37,11 @@
 
 <div class="stack" data-poll="{{ url_for('api_apps') }}" data-poll-kind="apps" data-poll-every="2000">
   {% if software.status == 'error' %}
-  <div class="note err row-between"><span>{{ software.error or _('Téléchargement impossible.') }}</span>
+  <div class="note err row-between"><span>{{ software.error or _('Téléchargement impossible.') }}</span><div class="row-acts">
     {% if software.source_url and can('windows.refresh') %}<form method="post" action="{{ url_for('windows_apps_refresh', slug=software.slug) }}" data-ajax>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="retour" value="fiche"><button class="btn sm"><span class="spin"></span>{{ _("Réessayer") }}</button>
-    </form>{% endif %}</div>
+    </form>{% endif %}
+    {% if can('windows.delete') %}{{ remove_form("btn sm", _("Retirer")) }}{% endif %}</div></div>
   {% elif software.status == 'ready' and software.kind == 'exe' and not software.args %}
   <div class="note warn row-between"><span>{{ _("Aucun argument silencieux : l'installeur risque d'attendre un clic sur les postes (souvent <code>/S</code>).") }}</span>
     {% if can('windows.edit') %}<button type="button" class="btn sm" data-open="#edit" data-app='{{ app_data(software) }}'>{{ _("Renseigner") }}</button>{% endif %}</div>

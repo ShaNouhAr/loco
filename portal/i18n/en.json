@@ -1292,7 +1292,6 @@
  "Installeur de %(row)s absent ou altéré.": "Installer for %(row)s missing or altered.",
  "Installeur retéléchargé": "Installer downloaded again",
  "Installeur sans empreinte SHA-256 valide.": "Installer without a valid SHA-256 fingerprint.",
- "Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.": "Windows installers served by loco to devices. Check applications to deploy them together or make a group of them.",
  "Installez curl ou wget avant de configurer ce poste.": "Install curl or wget before setting up this machine.",
  "Installez curl ou wget.": "Install curl or wget.",
  "Installez python3 puis relancez.": "Install python3 then run again.",
@@ -2224,7 +2223,6 @@
  "Supprimer des paquets APT": "Delete APT packages",
  "Supprimer des paquets RPM": "Delete RPM packages",
  "Supprimer du cache": "Remove from cache",
- "Supprimer du catalogue…": "Delete from the catalog…",
  "Supprimer le compte %(username)s ?": "Delete the account %(username)s?",
  "Supprimer le dossier « %(name)s » et tout son contenu sur le poste ? Cette action est définitive.": "Delete the folder “%(name)s” and all its contents on the device? This cannot be undone.",
  "Supprimer le groupe %(name)s ?": "Delete the group %(name)s?",
@@ -3516,5 +3514,16 @@
  "aucun pour l'instant": "none yet",
  "auto": "auto",
  "Échec de la négociation TLS : %(reason)s": "TLS negotiation failed: %(reason)s",
- "État de l'envoi": "Forwarding status"
+ "État de l'envoi": "Forwarding status",
+ "%(n)s logiciel retiré du catalogue.": "%(n)s software item removed from the catalog.",
+ "%(n)s logiciels retirés du catalogue.": "%(n)s software items removed from the catalog.",
+ "%(row)s retiré du catalogue.": "%(row)s removed from the catalog.",
+ "Il est retiré du catalogue et de ses groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.": "It is removed from the catalog and its groups; nothing is uninstalled from devices. Versions in deployments already confirmed stay available until they run.",
+ "Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble, en faire un groupe ou les retirer.": "Windows installers served by loco to devices. Select software to deploy it together, make a group, or remove it.",
+ "Les logiciels cochés sont retirés du catalogue et de leurs groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.": "The selected software is removed from the catalog and its groups; nothing is uninstalled from devices. Versions in deployments already confirmed stay available until they run.",
+ "Retirer %(name)s du catalogue ?": "Remove %(name)s from the catalog?",
+ "Retirer %(num)s logiciels du catalogue ?": "Remove %(num)s software items from the catalog?",
+ "Retirer ce logiciel du catalogue ?": "Remove this software from the catalog?",
+ "Retirer du catalogue": "Remove from catalog",
+ "Retirer du catalogue…": "Remove from catalog…"
 }

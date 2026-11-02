@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.124.2 — 2026-11-02
+
+- **Retirer un logiciel du catalogue local, directement depuis la liste.** Jusqu'ici, ce n'était possible que depuis le menu *Plus* de sa fiche. Un bouton *Retirer* apparaît sur chaque ligne et à côté de *Réessayer* quand le téléchargement a échoué, par exemple si un firewall bloque le site source. Cochez plusieurs logiciels pour les retirer d'un coup, y compris ceux en erreur, qui ne pouvaient pas être cochés jusqu'ici ; *Déployer*, *Créer un groupe* et la commande PowerShell restent limités aux logiciels prêts. Rien n'est désinstallé des postes.
+- **Barre de sélection du catalogue corrigée sur fond photo** : elle restait en partie visible sans sélection et se calait sur le bas de la page au lieu de celui de l'écran, hors de vue dans un long catalogue.
+
 ## 2.124.1 — 2026-11-02
 
 - **Vue d'ensemble : les derniers ajouts sont cliquables.** Un logiciel Windows ouvre sa fiche ; un paquet APT, qui n'a pas de page à lui, ouvre son dépôt déjà filtré sur ce paquet. Toute la ligne est cliquable, comme dans Mon parc.

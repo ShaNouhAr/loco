@@ -3,12 +3,17 @@
 {% from "_software_logo.html" import software_logo %}
 {% from "_app_edit_dialog.html" import app_data with context %}
 {% block title %}{{ _("Logiciels Windows") }}{% endblock %}
+{% macro remove_form(a) -%}
+<form method="post" action="{{ url_for('windows_apps_delete', slug=a.slug) }}" data-ajax data-confirm="{{ _('Retirer %(name)s du catalogue ?', name=a.name) }}" data-confirm-text="{{ _('Il est retiré du catalogue et de ses groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.') }}" data-confirm-ok="{{ _('Retirer') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="etat" value="{{ state }}"><button class="linkbtn">{{ _("Retirer") }}</button>
+</form>
+{%- endmacro %}
 {% block content %}
 {% include '_software_nav.html' %}
 <div class="head">
   <div>
     <h1>{{ _("Catalogue local") }}</h1>
-    <p>{{ _("Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble ou en faire un groupe.") }}</p>
+    <p>{{ _("Installeurs Windows servis par loco aux postes. Cochez des logiciels pour les déployer ensemble, en faire un groupe ou les retirer.") }}</p>
   </div>
   {% if can_any("windows.add", "windows.refresh") %}
   <div class="actions">
@@ -50,7 +55,7 @@
         <tbody>
         {% for i in items %}{% set a = i.a %}
           <tr data-slug="{{ a.slug }}" data-status="{{ a.status }}" data-search="{{ a.name }} {{ a.winget_id }} {{ a.slug }}" class="{{ 'has-note' if 'erreur' in i.flags or 'arguments' in i.flags }}">
-            <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}" {{ 'disabled' if a.status != 'ready' }}></td>
+            <td class="chk"><input type="checkbox" class="pick" value="{{ a.slug }}" aria-label="{{ a.name }}"{{ ' data-ready=1' if a.status == 'ready' }}{{ ' disabled' if a.status != 'ready' and not can('windows.delete') }}></td>
             <td><div class="store-card-top">{{ software_logo(a.winget_id, a.name, 'small') }}<div>
               <a href="{{ url_for('software_detail', slug=a.slug) }}">{{ a.name }}</a>
               <span class="sub sans">{{ a.kind }} · {{ 'WinGet ' ~ a.winget_id if a.winget_id else _('ajouté manuellement') }}</span></div></div></td>
@@ -68,7 +73,7 @@
               {% elif a.status == 'error' %}<span class="st err">{{ _("erreur") }}</span>
               {% else %}<span class="st">{{ _("en attente") }}</span>{% endif %}
             </td>
-            <td class="right nowrap">{% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit" data-app='{{ app_data(a) }}'>{{ _("Modifier") }}</button>{% endif %}</td>
+            <td class="right nowrap"><div class="row-acts row-links">{% if can("windows.edit") %}<button type="button" class="linkbtn" data-open="#edit" data-app='{{ app_data(a) }}'>{{ _("Modifier") }}</button>{% endif %}{% if can("windows.delete") %}{{ remove_form(a) }}{% endif %}</div></td>
           </tr>
           {% if 'erreur' in i.flags %}
           <tr class="note-row err"><td></td><td colspan="{{ 6 if show_usage else 5 }}">
@@ -97,7 +102,7 @@
 
 <div class="selbar" data-base="{{ client_url }}/win/i/">
   <div class="selbar-in">
-    <div class="software-selection-actions">{% if can('fleet.install') %}<a class="btn primary" data-deploy-selected href="{{ url_for('deployment_compose') }}">{{ _("Déployer sur le parc") }}</a>{% endif %}{% if can('windows.groups') %}<a class="btn" data-group-selected href="{{ url_for('software_group_editor',group_id=0) }}">{{ _("Créer un groupe") }}</a>{% endif %}</div>
+    <div class="software-selection-actions">{% if can('fleet.install') %}<a class="btn primary" data-deploy-selected href="{{ url_for('deployment_compose') }}">{{ _("Déployer sur le parc") }}</a>{% endif %}{% if can('windows.groups') %}<a class="btn" data-group-selected href="{{ url_for('software_group_editor',group_id=0) }}">{{ _("Créer un groupe") }}</a>{% endif %}{% if can('windows.delete') %}<form method="post" action="{{ url_for('windows_apps_delete_selected') }}" data-ajax data-remove-selected data-confirm="{{ _('Retirer ce logiciel du catalogue ?') }}" data-confirm-text="{{ _('Les logiciels cochés sont retirés du catalogue et de leurs groupes ; rien n’est désinstallé des postes. Les versions des déploiements déjà confirmés restent disponibles jusqu’à leur exécution.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="etat" value="{{ state }}"><span data-slugs></span><button class="btn danger"><span class="spin"></span>{{ _("Retirer du catalogue") }}</button></form>{% endif %}</div>
     <span class="count">{{ _("0 sélectionné") }}</span>
     {{ cmd('cmd-sel', '', 'PS>') }}
     <button type="button" class="btn" data-clear>{{ _("Désélectionner") }}</button>
