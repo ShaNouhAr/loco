@@ -123,6 +123,22 @@ jobs:
           path: test-results/
           retention-days: 14
 
+  update-blocks:
+    name: Mises à jour bloquées / ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    needs: plan
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:13", "ubuntu:24.04", "rockylinux:9", "rockylinux:8", "fedora:43"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Vrais paquets, vrai apt ou dnf, code de l'agent
+        run: tests/linux-blocks-e2e.sh '${{ matrix.image }}'
+
   alpine-server:
     name: Serveur natif / Alpine 3.24
     runs-on: ubuntu-24.04

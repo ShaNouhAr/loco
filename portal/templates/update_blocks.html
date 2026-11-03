@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}{{ _("Mises à jour bloquées") }} · {{ host }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<div class="head">
+  <div>
+    <h1>{{ _("Mises à jour bloquées") }}</h1>
+    <p>{{ _("Une mise à jour bloquée n'est plus installée par loco, quel que soit le chemin : fiche d'un poste, tout le parc, vagues, planifications ou assistants IA.") }}</p>
+  </div>
+</div>
+
+<div class="stack">
+  {% if can('fleet.block') %}
+  <form method="post" action="{{ url_for('update_block_add') }}" class="panel" id="bloquer">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-h"><h2>{{ _("Bloquer une mise à jour") }}</h2></div>
+    <div class="panel-b stack-sm">
+      <div class="seg" role="radiogroup" aria-label="{{ _('Système') }}">
+        <label><input type="radio" name="family" value="linux"{{ ' checked' if family == 'linux' }}><span>Linux</span></label>
+        <label><input type="radio" name="family" value="windows"{{ ' checked' if family == 'windows' }}><span>Windows</span></label>
+      </div>
+      <div class="block-fields">
+        <label class="f"><span>{{ _("Mise à jour") }}</span><input type="text" name="pattern" value="{{ pattern }}" required maxlength="200" spellcheck="false" autocomplete="off" class="mono"{% if pattern %} autofocus{% endif %}></label>
+        <label class="f"><span>{{ _("Où") }}</span><select name="group">
+          <option value="">{{ _("Tout le parc") }}</option>
+          {% for id, name in groups.items() %}<option value="{{ id }}">{{ name }}</option>{% endfor %}
+        </select></label>
+        <label class="f"><span>{{ _("Raison") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="text" name="reason" maxlength="300"></label>
+      </div>
+      <p class="hint" data-show-for="family:linux">{{ _("Nom du paquet, avec « * » si besoin : openssl, linux-image-*.") }}</p>
+      <p class="hint" data-show-for="family:windows">{{ _("Numéro KB, ou titre exact si la mise à jour n'en a pas (pilotes), avec « * » si besoin : KB5034441, Intel - Display*.") }}</p>
+    </div>
+    <div class="panel-f row-between"><span></span><button class="btn primary">{{ _("Bloquer") }}</button></div>
+  </form>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Blocages en place") }}{% if rows %} <span class="h-count">{{ rows|length }}</span>{% endif %}</h2></div>
+    {% if rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>{{ _("Mise à jour") }}</th><th>{{ _("Système") }}</th><th>{{ _("Où") }}</th><th>{{ _("En attente sur") }}</th><th>{{ _("Bloquée") }}</th>{% if can('fleet.block') %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td><span class="mono">{{ row.rule.pattern }}</span>{% if row.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if row.rule.reason %}<span class="sub">{{ row.rule.reason }}</span>{% endif %}</td>
+            <td>{{ 'Windows' if row.rule.family == 'windows' else 'Linux' }}</td>
+            <td>{{ row.where or _("Tout le parc") }}</td>
+            <td>{% if row.hosts %}<span title="{{ row.hosts|join(', ') }}">{{ ngettext("%(num)s poste", "%(num)s postes", row.hosts|length) }}</span>{% else %}<span class="muted">{{ _("aucun poste") }}</span>{% endif %}</td>
+            <td class="nowrap">{{ row.rule.created_at|date_fr }}<span class="sub">{{ _("par %(who)s", who=row.rule.created_by) }}</span></td>
+            {% if can('fleet.block') %}<td class="right"><form method="post" action="{{ url_for('update_block_remove', rule_id=row.rule.id) }}" data-confirm="{{ _('Lever ce blocage ?') }}" data-confirm-text="{{ _('La mise à jour pourra de nouveau être installée, y compris par les planifications déjà prévues.') }}" data-confirm-ok="{{ _('Lever le blocage') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Lever") }}</button></form></td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">{{ _("Aucune mise à jour bloquée.") }}</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Ce que le blocage couvre") }}</h2></div>
+    <div class="panel-b">
+      <ul class="block-limits">
+        <li>{{ _("Debian et Ubuntu : le paquet est retenu sur le poste, ce qui vaut aussi pour les mises à jour automatiques du système.") }}</li>
+        <li>{{ _("Windows : la mise à jour est masquée, ce qui vaut aussi pour Windows Update. Windows refuse de masquer certaines mises à jour imposées : loco ne les installe pas, mais Windows peut encore le faire.") }}</li>
+        <li>{{ _("Red Hat et dérivés : seules les mises à jour lancées par loco sont concernées.") }}</li>
+        <li>{{ _("Une mise à jour dépendant d'un paquet bloqué reste aussi en attente.") }}</li>
+        <li>{{ _("Une mise à jour déjà en cours sur un poste n'est pas interrompue. Flatpak et logiciels du catalogue ne sont pas concernés.") }}</li>
+      </ul>
+    </div>
+  </section>
+</div>
+{% endblock %}

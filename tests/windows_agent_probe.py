@@ -246,6 +246,58 @@ contacts = []
 print('Réveil demandé, état remonté :', wait('deux contacts après la demande de réveil', two_contacts_later, 420))
 with sqlite3.connect(db_path) as conn:
     conn.execute("UPDATE devices SET wake_policy='' WHERE id=?", (dev,))
+# Mises à jour bloquées : les motifs arrivent sur le vrai agent, survivent sur disque ; une mise à jour réellement en attente
+# (s'il y en a une sur cette machine) est masquée, reste signalée au portail, puis est rendue à Windows quand le blocage est levé.
+blocks_file = Path(os.environ['ProgramData'], 'loco-client', 'update-blocks.json')
+
+
+def blocks_state():
+    try:
+        return json.loads(blocks_file.read_text(encoding='utf-8-sig'))
+    except (OSError, ValueError):
+        return {}
+
+
+def block(pattern):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("INSERT INTO update_blocks (family, pattern, created_at, created_by) VALUES ('windows', ?, datetime('now','localtime'), 'sonde')", (pattern,))
+
+
+def hidden_ids():
+    found = powershell("$s = New-Object -ComObject Microsoft.Update.Session; "
+                       "$s.CreateUpdateSearcher().Search('IsInstalled=0 and IsHidden=1').Updates | ForEach-Object { $_.Identity.UpdateID }")
+    return found.stdout.split()
+
+
+block('KB0000001')
+wait('motif de blocage reçu par l\'agent', lambda: 'KB0000001' in (blocks_state().get('patterns') or []), 420)
+with sqlite3.connect(db_path) as conn:
+    pending = json.loads(conn.execute('SELECT inventory FROM devices WHERE id=?', (dev,)).fetchone()[0] or '{}').get('updates') or []
+if pending:
+    target = pending[0]
+    block(target['version'].split()[0] if target.get('version') else target['name'])
+    wait('mise à jour bloquée masquée par l\'agent', lambda: target['id'] in (blocks_state().get('hidden') or []), 1200)
+    assert target['id'] in hidden_ids(), 'Mise à jour bloquée non masquée dans Windows Update'
+
+
+    def reported_blocked():
+        with sqlite3.connect(db_path) as conn:
+            count, inventory = conn.execute('SELECT blocked_updates, inventory FROM devices WHERE id=?', (dev,)).fetchone()
+        return count >= 1 and any(u.get('id') == target['id'] for u in json.loads(inventory or '{}').get('updates') or [])
+
+
+    wait('mise à jour masquée toujours signalée au portail', reported_blocked, 900)
+    print('Mise à jour bloquée, masquée et signalée :', target['name'])
+with sqlite3.connect(db_path) as conn:
+    conn.execute('DELETE FROM update_blocks')
+wait('motifs levés sur l\'agent', lambda: not blocks_state().get('patterns'), 420)
+if pending:
+    wait('mise à jour rendue à Windows', lambda: not blocks_state().get('hidden'), 1200)
+    assert target['id'] not in hidden_ids(), 'Mise à jour restée masquée après la levée du blocage'
+    print('Blocage levé : mise à jour rendue à Windows')
+else:
+    print('Aucune mise à jour en attente sur cette machine : masquage non essayé ici')
+
 # Adresses du serveur Windows, lues comme le fait le portail : sans elles, il ne proposerait pas d'envoyer le paquet lui-même.
 server = subprocess.run([sys.executable, '-c', 'import locowin; locowin.apply_environment(locowin.load_config()); from loco import wake; print(wake.server_networks())'],
                         cwd=str(Path(locowin.__file__).parent), capture_output=True, text=True, timeout=120)

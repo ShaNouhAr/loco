@@ -9,8 +9,8 @@ from flask import abort, g
 from .db import db
 
 # Droits qui agissent sur tout le parc quel que soit le profil (groupes dont dépendent les parcs des profils, clé
-# d'inscription, adresses et seuils) : sans effet pour un profil limité à une partie du parc.
-WHOLE_FLEET = frozenset({"fleet.groups", "fleet.settings", "syslog.configure"})
+# d'inscription, adresses et seuils, mises à jour bloquées) : sans effet pour un profil limité à une partie du parc.
+WHOLE_FLEET = frozenset({"fleet.groups", "fleet.settings", "fleet.block", "syslog.configure"})
 
 
 def declared(conn, role_id):

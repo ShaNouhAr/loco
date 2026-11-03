@@ -88,7 +88,7 @@
     <div class="metric">
       <div class="k">{{ _("Mises à jour système") }}</div>
       <div class="v">{{ summary.updates if dev.last_scan else '—' }}</div>
-      <div class="s">{% if summary.security %}<span class="sec-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s de sécurité", security=summary.security) }}</span>{% elif dev.last_scan %}{{ _('à installer') if summary.updates else _('système à jour') }}{% else %}{{ _("inventaire en cours") }}{% endif %}</div>
+      <div class="s">{% if summary.security %}<span class="sec-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s de sécurité", security=summary.security) }}</span>{% elif dev.last_scan %}{% if summary.updates %}{{ _('à installer') }}{% elif summary.blocked %}{{ ngettext("%(num)s mise à jour bloquée", "%(num)s mises à jour bloquées", summary.blocked) }}{% else %}{{ _('système à jour') }}{% endif %}{% else %}{{ _("inventaire en cours") }}{% endif %}</div>
     </div>
     <div class="metric">
       <div class="k">{{ _('Logiciels') if windows else 'Flatpak' }}</div>
@@ -127,13 +127,14 @@
       {% if inv.updates or (sel and inv.flatpak) %}
       <div class="table-wrap">
         <table class="update-table">
-          {% if sel %}<thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="{{ _('Tout cocher') }}"></th><th>{{ _("Mise à jour") }}</th><th class="right">{{ _("Version") }}</th></tr></thead>{% endif %}
+          {% if sel %}<thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="{{ _('Tout cocher') }}"></th><th>{{ _("Mise à jour") }}</th><th class="right">{{ _("Version") }}</th>{% if can('fleet.block') %}<th></th>{% endif %}</tr></thead>{% endif %}
           <tbody>
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
-            <tr data-update-row="{{ u.name }}">{% if sel %}<td class="check"><input type="checkbox" name="only" value="{{ u.id if windows else u.name }}" aria-label="{{ u.name }}"></td>{% endif %}<td class="upd-name">{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}</td><td class="mono muted right">{{ u.version }}</td></tr>
+            {% set block_target = u.version.split()|first if windows and u.version else u.name.split(':')|first %}
+            <tr data-update-row="{{ u.name }}"{% if u.blocked %} class="upd-blocked"{% endif %}>{% if sel %}<td class="check">{% if not u.blocked %}<input type="checkbox" name="only" value="{{ u.id if windows else u.name }}" aria-label="{{ u.name }}">{% endif %}</td>{% endif %}<td class="upd-name">{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}{% if u.blocked %} <span class="tag">{{ _("bloquée") }}</span>{% if u.blocked.reason %}<span class="sub">{{ u.blocked.reason }}</span>{% endif %}{% endif %}</td><td class="mono muted right">{{ u.version }}</td>{% if can('fleet.block') %}<td class="right nowrap small">{% if u.blocked %}<a href="{{ url_for('update_blocks') }}">{{ _("Voir le blocage") }}</a>{% else %}<a href="{{ url_for('update_blocks', family='windows' if windows else 'linux', pattern=block_target) }}#bloquer">{{ _("Bloquer") }}</a>{% endif %}</td>{% endif %}</tr>
           {% endfor %}
           {% if sel and inv.flatpak and not windows %}
-            <tr data-update-row=""><td class="check"><input type="checkbox" name="only_flatpak" value="1" aria-label="{{ _('Applications Flatpak') }}"></td><td class="upd-name">{{ _("Applications Flatpak") }}</td><td class="muted right">{{ ngettext("%(num)s mise à jour", "%(num)s mises à jour", inv.flatpak) }}</td></tr>
+            <tr data-update-row=""><td class="check"><input type="checkbox" name="only_flatpak" value="1" aria-label="{{ _('Applications Flatpak') }}"></td><td class="upd-name">{{ _("Applications Flatpak") }}</td><td class="muted right">{{ ngettext("%(num)s mise à jour", "%(num)s mises à jour", inv.flatpak) }}</td>{% if can('fleet.block') %}<td></td>{% endif %}</tr>
           {% endif %}
           </tbody>
         </table>

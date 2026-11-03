@@ -80,7 +80,7 @@ class BrowserTest(unittest.TestCase):
 
     def setUp(self):
         with transaction() as conn:
-            for table in ("device_commands", "device_group_members", "device_groups", "devices", "win_apps"):
+            for table in ("update_blocks", "device_commands", "device_group_members", "device_groups", "devices", "win_apps"):
                 conn.execute(f"DELETE FROM {table}")
             conn.execute("DELETE FROM settings WHERE key='fleet_red_threshold'")
             conn.execute("UPDATE users SET appearance='' WHERE username='admin'")
@@ -518,6 +518,35 @@ class TestWake(BrowserTest):
             expect(self.page.locator(".head, .device-head").get_by_role("button", name="Réveiller")).to_have_count(0)
             self.assertLessEqual(self.overflow(), 0)
             self.assertTrue(wired["id"])
+
+
+class TestUpdateBlocks(BrowserTest):
+    def test_blocking_from_the_device_then_lifting_it(self):
+        agent = Agent(dict(LINUX, hostname="poste-bloque"), "192.168.43.77", uid=hashlib.sha256(b"poste-bloque").hexdigest()[:32])
+        agent.enroll()
+        agent.checkin({"updates": [{"name": "openssl", "version": "3.0.1", "security": True}, {"name": "curl", "version": "8.0"}], "flatpak": 0})
+        dev = device(agent.uid)
+        self.page.goto(f"/fleet/{dev['id']}")
+        row = self.page.locator('[data-update-row="openssl"]')
+        row.get_by_role("link", name="Bloquer").click()
+        expect(self.page.locator('input[name="pattern"]')).to_have_value("openssl")
+        self.assertLessEqual(self.overflow(), 0)
+        expect(self.page.locator('[data-show-for="family:windows"]')).to_be_hidden()
+        self.page.locator('input[name="reason"]').fill("casse nginx")
+        self.page.locator("#bloquer button.primary").click()
+        expect(self.page.locator("table")).to_contain_text("openssl")
+        expect(self.page.locator("table")).to_contain_text("casse nginx")
+        expect(self.page.locator("table")).to_contain_text("1 poste")
+        self.page.goto(f"/fleet/{dev['id']}")
+        row = self.page.locator('[data-update-row="openssl"]')
+        expect(row).to_contain_text("bloquée")
+        expect(row.locator("input[type=checkbox]")).to_have_count(0)
+        self.assertEqual(agent.checkin().get_json()["update_blocks"], {"patterns": ["openssl"]})
+        self.page.goto("/fleet/blocks")
+        self.page.get_by_role("button", name="Lever").click()
+        self.confirm()
+        expect(self.page.locator(".panel", has_text="Blocages en place")).to_contain_text("Aucune mise à jour bloquée")
+        self.assertEqual(agent.checkin().get_json()["update_blocks"], {"patterns": []})
 
 
 class TestWakeSetting(BrowserTest):

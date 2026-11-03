@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.137.0 — 2026-11-04
+
+- **Bloquer une mise à jour** : nouvel onglet *Blocages* dans Mon parc, ou *Bloquer* sur la ligne d'une mise à jour dans la fiche d'un poste. Un paquet (Linux) ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe de machines, avec une raison.
+  - **Respecté partout** : fiche d'un poste, tout le parc, vagues, planifications, assistants IA. Un blocage posé après une demande s'applique tant que le poste ne l'a pas reçue. Un agent trop ancien pour le respecter reçoit la commande après sa mise à jour automatique.
+  - **Sur le poste** : Debian et Ubuntu retiennent le paquet (`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques ; une retenue posée à la main n'est jamais touchée. Windows masque la mise à jour, sauf celles qu'il impose. Avec DNF, seules les mises à jour lancées par loco sont concernées.
+  - **Toujours visible** : une mise à jour bloquée n'est plus comptée comme en attente, mais reste signalée sur la fiche, et la page indique les postes où elle attend. Droit *Bloquer des mises à jour*, réservé par défaut aux administrateurs et aux profils qui couvrent tout le parc.
+  - Flatpak et logiciels du catalogue ne sont pas concernés.
+
 ## 2.136.0 — 2026-11-03
 
 - **Nouvelle apparence par défaut** : thème *Sombre doux*, sans couleur d'accent, avec une photo de crêtes dans la brume (preset *Brume*). *Minuit* et *Alpes* restent disponibles.

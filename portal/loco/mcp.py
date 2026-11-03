@@ -22,7 +22,7 @@ import time
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
 
-from . import app, config, features, fleet, groups, journal, permissions, scope, scripts, wake
+from . import app, config, features, fleet, groups, journal, permissions, scope, scripts, update_blocks, wake
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
@@ -304,7 +304,7 @@ def _get_device(args):
     dev = _device(args["device"])
     inv = fleet.inventory(dev)
     color, reason = fleet.status(dev)
-    updates = inv.get("updates") or []
+    updates = update_blocks.annotate(db(), dev, inv.get("updates") or [])
     out = {"id": dev["id"], "hostname": dev["hostname"], "os": dev["os_name"], "family": dev["os_family"],
            "agent_version": dev["agent_version"], "addresses": (dev["addresses"] or "").split(),
            "contact_address": dev["ip"], "online": fleet.presence(dev)["online"], "last_seen": dev["last_seen"] or None,
@@ -312,7 +312,8 @@ def _get_device(args):
            "status_detail": reason, "agent_state": dev["state"], "reboot_required": bool(dev["reboot_required"]),
            "inventory_error": inv.get("error") or None, "inventory_warning": inv.get("warning") or None, "pending_updates_total": len(updates),
            "pending_updates": [{"name": u.get("name"), "version": u.get("version"), "security": bool(u.get("security")),
-                                **({"id": u["id"]} if u.get("id") else {})} for u in updates[:200] if isinstance(u, dict)],
+                                **({"id": u["id"]} if u.get("id") else {}), **({"blocked": True} if u.get("blocked") else {})}
+                               for u in updates[:200] if isinstance(u, dict)],
            "updates_selectable": fleet.selectable(dev), "wake": _wake_state(dev),
            "flatpak_updates": int(inv.get("flatpak") or 0),
            "groups": [x["name"] for x in groups.memberships("device", dev["id"])],
@@ -388,7 +389,7 @@ def _scan(args):
 
 @tool("update_device", "fleet", "Update a device", L_("Mettre à jour un poste"),
       L_("Système, Flatpak et logiciels du catalogue déjà installés, sur un poste."), ("fleet.update",),
-      "Install the pending updates of one device: operating system, Flatpak and, on Windows, the catalog software "
+      "Install the pending updates of one device (updates blocked in loco are never installed): operating system, Flatpak and, on Windows, the catalog software "
       "already installed — or only some of them with `updates` (Linux package names; Windows update titles, KB numbers "
       "or ids, as listed by get_device) and `flatpak`. reboot=true also restarts it afterwards (only if this access may "
       "reboot devices). Follow the progress with get_device.",

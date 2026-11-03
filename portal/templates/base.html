@@ -150,6 +150,7 @@
 <template id="cmdk-links">
   {% if can("fleet.view") %}
   <a href="{{ url_for('enrollment') }}" data-group="{{ _('Mon parc') }}">{{ _("Enrôlement") }}</a>
+  <a href="{{ url_for('update_blocks') }}" data-group="{{ _('Mon parc') }}">{{ _("Mises à jour bloquées") }}</a>
   <a href="{{ url_for('fleet_groups') }}" data-group="{{ _('Mon parc') }}">{{ _("Groupes de machines") }}</a>
   {% if can_any('deployments.view', 'fleet.install') %}<a href="{{ url_for('deployments') }}" data-group="{{ _('Mon parc') }}">{{ _("Déploiements") }}</a>{% endif %}
   {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" data-group="{{ _('Mon parc') }}">{{ _("Scripts") }}</a>{% endif %}

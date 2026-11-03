@@ -790,21 +790,150 @@ namespace Loco
             }
         }
 
+        static Dictionary<string, object> UpdateEntry(dynamic u)
+        {
+            var kbs = new List<string>();
+            foreach (object kb in u.KBArticleIDs) kbs.Add("KB" + kb);
+            return new Dictionary<string, object> { { "name", Convert.ToString(u.Title) },
+                { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) }, { "driver", IsDriver(u) },
+                { "id", Convert.ToString(u.Identity.UpdateID) } };
+        }
+
+        // ------------------------------------------------------------ mises à jour bloquées dans loco
+
+        // Motifs reçus du serveur et mises à jour masquées par loco, gardés sur disque : un service qui redémarre refait
+        // son inventaire avant son premier contact, et ne doit pas démasquer ce qui reste bloqué.
+        static readonly string BlocksPath = Path.Combine(Root, "update-blocks.json");
+        static List<string> blockPatterns;
+        static List<Regex> blockRules;
+        static HashSet<string> hiddenUpdates;
+
+        static void SetBlockRules(List<string> patterns)
+        {
+            blockPatterns = patterns;
+            blockRules = patterns.Select(p => new Regex("^" + string.Join(".*", p.Split('*').Select(Regex.Escape)) + "$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)).ToList();
+        }
+
+        static void LoadBlocks()
+        {
+            if (blockRules != null) return;
+            var patterns = new List<string>();
+            hiddenUpdates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (File.Exists(BlocksPath))
+                {
+                    var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(BlocksPath));
+                    foreach (object one in (data["patterns"] as IEnumerable) ?? new ArrayList()) patterns.Add(Convert.ToString(one));
+                    foreach (object one in (data["hidden"] as IEnumerable) ?? new ArrayList()) hiddenUpdates.Add(Convert.ToString(one));
+                }
+            }
+            catch (Exception e) { Log(Lang.T("blocages illisibles : ", "unreadable blocks: ", "bloqueos ilegibles: ") + e.Message); }
+            SetBlockRules(patterns);
+        }
+
+        static void SaveBlocks()
+        {
+            try
+            {
+                File.WriteAllText(BlocksPath, new JavaScriptSerializer().Serialize(new Dictionary<string, object> {
+                    { "patterns", blockPatterns }, { "hidden", hiddenUpdates.ToList() } }));
+            }
+            catch (Exception e) { Log(Lang.T("blocages non enregistrés : ", "blocks not saved: ", "bloqueos no guardados: ") + e.Message); }
+        }
+
+        // Réappliqués à chaque contact. Vrai si la liste a changé : l'inventaire suivant masque ou démasque ce qu'il faut.
+        static bool ApplyUpdateBlocks(Dictionary<string, object> answer)
+        {
+            object v;
+            if (!answer.TryGetValue("update_blocks", out v) || !(v is Dictionary<string, object>)) return false;   // serveur plus ancien : ne rien changer
+            LoadBlocks();
+            var patterns = new List<string>();
+            object list;
+            if (((Dictionary<string, object>)v).TryGetValue("patterns", out list) && list is IEnumerable)
+                foreach (object one in (IEnumerable)list)
+                {
+                    string pattern = Convert.ToString(one);
+                    if (pattern.Length > 0 && pattern.Length <= 200) patterns.Add(pattern);
+                }
+            if (patterns.SequenceEqual(blockPatterns)) return false;
+            SetBlockRules(patterns);
+            SaveBlocks();
+            return true;
+        }
+
+        static bool IsBlocked(dynamic u)
+        {
+            LoadBlocks();
+            if (blockRules.Count == 0) return false;
+            var texts = new List<string>();
+            texts.Add(Convert.ToString(u.Title));
+            foreach (object kb in u.KBArticleIDs) texts.Add("KB" + kb);
+            return texts.Any(text => blockRules.Any(rule => rule.IsMatch(text)));
+        }
+
+        // Masquée (comme l'outil « Afficher ou masquer des mises à jour » de Microsoft) : Windows ne l'installe plus seul.
+        // Windows refuse de masquer certaines mises à jour imposées : loco ne les installe pas pour autant.
+        static void HideUpdate(dynamic u)
+        {
+            try
+            {
+                string id = Convert.ToString(u.Identity.UpdateID);
+                if (!(bool)u.IsHidden) u.IsHidden = true;
+                if (hiddenUpdates.Add(id)) SaveBlocks();
+            }
+            catch (Exception e) { Log(Lang.T("mise à jour bloquée non masquée : ", "blocked update not hidden: ", "actualización bloqueada no ocultada: ") + e.Message); }
+        }
+
+        // Les masquées n'apparaissent plus dans la recherche habituelle : le portail doit les voir pour les signaler bloquées.
+        // Celles qui ne sont plus bloquées sont rendues à Windows ; celles masquées à la main sur le poste ne sont jamais touchées.
+        static void AddHiddenUpdates(dynamic searcher, List<Dictionary<string, object>> updates)
+        {
+            LoadBlocks();
+            if (hiddenUpdates.Count == 0) return;
+            try
+            {
+                var seen = new HashSet<string>(updates.Select(entry => Convert.ToString(entry["id"])), StringComparer.OrdinalIgnoreCase);
+                var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                dynamic hidden = searcher.Search("IsInstalled=0 and IsHidden=1");
+                foreach (dynamic u in hidden.Updates)
+                {
+                    string id = Convert.ToString(u.Identity.UpdateID);
+                    if (!hiddenUpdates.Contains(id)) continue;
+                    if (IsBlocked(u)) kept.Add(id);
+                    else u.IsHidden = false;
+                    if (seen.Add(id)) updates.Add(UpdateEntry(u));
+                }
+                hiddenUpdates = kept;
+                SaveBlocks();
+            }
+            catch (Exception e) { Log(Lang.T("mises à jour masquées illisibles : ", "cannot read hidden updates: ", "actualizaciones ocultas ilegibles: ") + e.Message); }
+        }
+
+        static void ReleaseHiddenUpdates()
+        {
+            LoadBlocks();
+            if (hiddenUpdates.Count == 0) return;
+            dynamic hidden = NewSession().CreateUpdateSearcher().Search("IsInstalled=0 and IsHidden=1");
+            foreach (dynamic u in hidden.Updates)
+                if (hiddenUpdates.Contains(Convert.ToString(u.Identity.UpdateID))) u.IsHidden = false;
+        }
+
         static Dictionary<string, object> Inventory()
         {
             var updates = new List<Dictionary<string, object>>();
             string error = "";
             try
             {
-                dynamic result = SearchUpdates(NewSession().CreateUpdateSearcher());
+                dynamic searcher = NewSession().CreateUpdateSearcher();
+                dynamic result = SearchUpdates(searcher);
                 foreach (dynamic u in result.Updates)
                 {
-                    var kbs = new List<string>();
-                    foreach (object kb in u.KBArticleIDs) kbs.Add("KB" + kb);
-                    updates.Add(new Dictionary<string, object> { { "name", Convert.ToString(u.Title) },
-                        { "version", string.Join(" ", kbs) }, { "security", IsSecurity(u) }, { "driver", IsDriver(u) },
-                        { "id", Convert.ToString(u.Identity.UpdateID) } });
+                    updates.Add(UpdateEntry(u));
+                    if (IsBlocked(u)) HideUpdate(u);
                 }
+                AddHiddenUpdates(searcher, updates);
             }
             catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
             return new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
@@ -827,6 +956,7 @@ namespace Loco
             foreach (dynamic u in found.Updates)
             {
                 if (only != null && !only.Contains(Convert.ToString(u.Identity.UpdateID))) continue;
+                if (IsBlocked(u)) { lines.Add(Lang.T("Bloquée dans loco, non installée : ", "Blocked in loco, not installed: ", "Bloqueada en loco, no instalada: ") + Convert.ToString(u.Title)); HideUpdate(u); continue; }
                 if ((bool)u.InstallationBehavior.CanRequestUserInput) { lines.Add(Lang.T("Ignorée (interactive) : ", "Skipped (interactive): ", "Omitida (interactiva): ") + u.Title); continue; }
                 if (!(bool)u.EulaAccepted) u.AcceptEula();
                 chosen.Add(u);
@@ -1052,6 +1182,8 @@ namespace Loco
         static void Uninstall()
         {
             DesktopIndicator.StopSessions();
+            try { ReleaseHiddenUpdates(); } catch (Exception) { }     // plus d'agent pour les démasquer : les rendre à Windows
+            try { File.Delete(BlocksPath); } catch (Exception) { }
             try { File.Delete(DesktopStatus.FilePath); } catch (Exception) { }
             try { if (File.Exists(WuProxyMarker)) { string o; RunCapture("netsh", "winhttp reset proxy", 20, out o); File.Delete(WuProxyMarker); } } catch (Exception) { }
             try { if (File.Exists(WuBlockMarker)) { using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(WuPolicyKey, true)) if (k != null && k.GetValue("NoAutoUpdate") != null) k.DeleteValue("NoAutoUpdate", false); File.Delete(WuBlockMarker); } } catch (Exception) { }
@@ -1225,6 +1357,7 @@ namespace Loco
                 }
                 if (answer.TryGetValue("interval", out v)) Interval = Math.Max(30, Convert.ToInt32(v));
                 if (answer.TryGetValue("scan_hours", out v)) scanHours = Math.Max(1, Convert.ToInt32(v));
+                if (ApplyUpdateBlocks(answer)) rescan = true;
                 try { ForwardLogs(conf, answer, stopping); }
                 catch (Exception e) when (!(e is OutOfMemoryException))     // serveur syslog absent (503), journal illisible : au prochain contact
                 {

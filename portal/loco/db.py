@@ -527,6 +527,20 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN wake_policy TEXT NOT NULL DEFAULT '';
     """,
+    # 37 : mises à jour bloquées (paquet, KB ou titre), sur tout le parc ou un groupe, et combien chaque poste en a en attente.
+    """
+    CREATE TABLE update_blocks (
+        id INTEGER PRIMARY KEY,
+        family TEXT NOT NULL,
+        pattern TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        group_id INTEGER REFERENCES device_groups(id),
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX update_blocks_unique ON update_blocks(family, pattern, COALESCE(group_id, 0));
+    ALTER TABLE devices ADD COLUMN blocked_updates INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

@@ -397,6 +397,12 @@ que si la précédente compte au moins une réussite et moins d'échecs que le s
 d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
 planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
 
+**Bloquer une mise à jour** : onglet *Blocages* de Mon parc, ou *Bloquer* sur sa ligne dans la fiche d'un poste. Un paquet (Linux)
+ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe. loco ne l'installe plus, quel que soit le
+chemin : poste, tout le parc, vagues, planifications, assistants IA. Sur le poste, Debian et Ubuntu retiennent le paquet
+(`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques, et Windows masque la mise à jour, sauf celles qu'il
+impose. Avec DNF, seules les mises à jour lancées par loco sont concernées. Flatpak et logiciels du catalogue ne le sont pas.
+
 **Réveiller un poste éteint** (Wake-on-LAN) : bouton *Réveiller* dans Mon parc et sur la fiche du poste. Il n'apparaît que si
 le poste a une carte Ethernet branchée à son dernier contact, jamais en Wi-Fi, et si le serveur ou un poste allumé est sur le
 même réseau : un paquet de réveil ne traverse pas les routeurs. La fiche indique les cartes du poste et, sinon, pourquoi le

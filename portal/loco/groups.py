@@ -4,7 +4,7 @@ import zipfile
 
 from flask import abort, flash, g, render_template, request
 
-from . import app, fleet, scope
+from . import app, fleet, scope, update_blocks
 from .i18n import _
 from .auth import audit, lock_access, login_required, require
 from .db import db
@@ -133,6 +133,8 @@ def _save(kind, group_id):
             conn.execute(f"INSERT INTO {member_table} (group_id,{column},position) VALUES (?,?,?)", (group_id, entity_id, position))
         else:
             conn.execute(f"INSERT INTO {member_table} (group_id,{column}) VALUES (?,?)", (group_id, entity_id))
+    if not software:
+        update_blocks.recount_grouped(conn)
     audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {counted(len(selected), 'membre')}", commit=False)
     conn.commit()
     flash(_('Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.'), "ok")
@@ -172,6 +174,10 @@ def _delete(kind, group_id):
     conn = lock_access("windows.groups" if software else "fleet.groups")
     group = _group(kind, group_id)
     table = "software_groups" if software else "device_groups"
+    if not software and update_blocks.group_blocks(conn, group_id):
+        conn.rollback()
+        flash(_("Ce groupe porte des mises à jour bloquées : levez d'abord ces blocages."), "error")
+        return back("fleet_groups")
     conn.execute(f"DELETE FROM {table} WHERE id=?", (group_id,))
     audit("groupes.suppression", f"{kind} : {group['name']}", commit=False)
     conn.commit()
@@ -258,6 +264,7 @@ def fleet_group_membership(dev_id):
         abort(400)
     conn.execute("DELETE FROM device_group_members WHERE device_id=?", (dev_id,))
     conn.executemany("INSERT INTO device_group_members VALUES (?,?)", [(gid, dev_id) for gid in selected])
+    update_blocks.recount_grouped(conn)
     audit("groupes.appartenance", f"{dev['hostname']} : {counted(len(selected), 'groupe')}", commit=False)
     conn.commit()
     return back("fleet_device", dev_id=dev_id)

@@ -261,6 +261,8 @@ def status(dev, apps=None):
         reasons.append(n_("%(num)s logiciel à mettre à jour", "%(num)s logiciels à mettre à jour", pending_apps))
     if dev["reboot_required"]:
         reasons.append(_("redémarrage nécessaire"))
+    if dev["blocked_updates"]:
+        reasons.append(n_("%(num)s mise à jour bloquée", "%(num)s mises à jour bloquées", dev["blocked_updates"]))
     last = last_result(dev["id"])
     if last and last["state"] == "failed":
         reasons.append(_("échec : %(action)s", action=ACTIONS.get(last["action"], last["action"]).lower()))
@@ -334,7 +336,8 @@ def select_updates(dev, wanted, flatpak=False):
     if not selectable(dev):
         raise ValueError(_("Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.",
                            v=".".join(map(str, SELECT_UPDATES))))
-    updates = inventory(dev).get("updates") or []
+    from . import update_blocks
+    updates = [u for u in update_blocks.annotate(db(), dev, inventory(dev).get("updates") or []) if not u.get("blocked")]
     wanted = [str(w).strip() for w in wanted if str(w).strip()]
     if dev["os_family"] == "windows":
         def matches(u, w):
@@ -486,9 +489,10 @@ def _store_inventory(dev, inv):
         "error": _text(inv.get("error"), 500),
         "warning": _text(inv.get("warning"), 500),
     }
-    total = len(clean["updates"]) + clean["flatpak"]
-    db().execute("UPDATE devices SET inventory=?, last_scan=?, updates=?, security_updates=?, reboot_required=? "
-                 "WHERE id=?", (json.dumps(clean), _now(), total, sum(u["security"] for u in clean["updates"]),
+    from . import update_blocks
+    total, security, blocked = update_blocks.counts(db(), dev, clean)
+    db().execute("UPDATE devices SET inventory=?, last_scan=?, updates=?, security_updates=?, blocked_updates=?, reboot_required=? "
+                 "WHERE id=?", (json.dumps(clean), _now(), total, security, blocked,
                                 int(bool(inv.get("reboot_required"))), dev["id"]))
     _store_software(dev, inv)
 
@@ -543,8 +547,11 @@ def _payload(dev, cmd):
     """Action transmise à l'agent, avec ce qu'il lui faut (fichiers du catalogue vérifiés par SHA-256)."""
     params = json.loads(cmd["params"] or "{}")
     out = {"id": cmd["id"], "action": cmd["action"], "reboot": bool(params.get("reboot"))}
+    if cmd["action"] == "update":
+        from . import update_blocks                 # à l'envoi : un blocage posé depuis la demande s'applique
+        out["blocks"] = update_blocks.patterns_for(db(), dev)
     if cmd["action"] == "update" and isinstance(params.get("only"), dict):
-        out["only"] = params["only"]                # mises à jour choisies une par une (agents 2.120.0 et plus)
+        out["only"] = update_blocks.trim(db(), dev, params["only"])   # mises à jour choisies une par une (agents 2.120.0 et plus)
     elif cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
     if cmd["action"] == "wake-relay":
@@ -605,6 +612,7 @@ def agent_checkin():
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     from . import schedules
     schedules.materialize(conn)       # planifications dues : commandes créées, occurrence suivante
+    from . import update_blocks
     commands = []
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
                           "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
@@ -622,6 +630,8 @@ def agent_checkin():
             if c["action"] == "uninstall":
                 conn.execute("UPDATE devices SET state='active' WHERE id=? AND state='removing'", (dev["id"],))
             continue
+        if c["action"] == "update" and version_key(dev["agent_version"]) < update_blocks.AGENT_VERSION and update_blocks.for_device(conn, dev):
+            continue                # agent trop ancien pour respecter un blocage : il se met à jour seul, la commande l'attend
         payload = _payload(dev, c)
         if payload is None:
             conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE id=?",
@@ -647,6 +657,7 @@ def agent_checkin():
         answer["syslog"] = forwarding   # agents 2.124.0 et plus : remonter les journaux du poste
     if dev["wake_policy"]:
         answer["wake"] = {"enabled": dev["wake_policy"] == "on"}   # agents 2.135.0 et plus
+    answer["update_blocks"] = {"patterns": update_blocks.patterns_for(conn, dev)}   # agents 2.137.0 et plus
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
@@ -1281,11 +1292,10 @@ def _enrich(rows, names=None):
     for r in rows:
         d = r["d"]
         own = (d["addresses"] or "").split()
-        updates = inventory(d).get("updates") or []
         r.update(label=status_label(d, r["color"]), presence=presence(d), address=main_address(d),
                  os_short=short_os(d["os_name"]) or FAMILIES.get(d["os_family"], ""),
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
-                 system=d["updates"], security=sum(1 for u in updates if u.get("security")),
+                 system=d["updates"], security=d["security_updates"],
                  linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
     rows.sort(key=_urgency)
     return rows
@@ -1488,7 +1498,8 @@ def fleet_device(dev_id):
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
-    updates = inv.get("updates") or []
+    from . import update_blocks
+    updates = inv["updates"] = update_blocks.annotate(db(), dev, inv.get("updates") or [])
     soft = software(dev) if dev["os_family"] != "windows" else {}
     pkg_updates = {u.get("name"): u.get("version") for u in updates if u.get("name")}
     pkgs = soft.get("packages") or []
@@ -1499,7 +1510,7 @@ def fleet_device(dev_id):
         boot_text = ago_text(datetime.datetime.fromtimestamp(boot).strftime("%Y-%m-%d %H:%M:%S")) if boot else ""
     except (OverflowError, OSError, ValueError):                              # horodatage de démarrage incohérent
         boot_text = ""
-    summary = {"updates": len(updates) + int(inv.get("flatpak") or 0), "security": sum(1 for u in updates if u.get("security")),
+    summary = {"updates": dev["updates"], "security": dev["security_updates"], "blocked": dev["blocked_updates"],
                "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
                "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
     from . import groups, schedules

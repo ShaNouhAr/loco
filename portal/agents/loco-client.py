@@ -943,7 +943,7 @@ def apt_update():
     return code, out
 
 
-def scan():
+def scan(state=None):
     """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
     installés, caractéristiques du poste."""
     inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": "", "warning": ""}
@@ -959,12 +959,15 @@ def scan():
                 inv["warning"] = t(f"Dépôt injoignable, ses mises à jour ne sont pas comptées : {sources}", f"Repository unreachable, its updates are not counted: {sources}", f"Repositorio inaccesible, sus actualizaciones no se cuentan: {sources}")
             elif failed:
                 inv["warning"] = t(f"{len(failed)} dépôts injoignables, leurs mises à jour ne sont pas comptées : {sources}", f"{len(failed)} repositories unreachable, their updates are not counted: {sources}", f"{len(failed)} repositorios inaccesibles, sus actualizaciones no se cuentan: {sources}")
-        code, out = run(["apt-get", "-s", "-q", "-o", "Debug::NoLocking=1", "upgrade", "--with-new-pkgs"])
-        for line in out.splitlines():
-            m = re.match(r"^Inst (\S+) (?:\[[^\]]*\] )?\((\S+) ([^)]*)\)", line)
-            if m:
-                inv["updates"].append({"name": m.group(1), "version": m.group(2),
-                                       "security": "-security" in m.group(3) or "Security" in m.group(3)})
+        inv["updates"] = apt_simulation()
+        # Paquets retenus par loco : absents de la simulation, mais le portail doit les voir pour les signaler bloqués.
+        patterns = (state or {}).get("blocks") or []
+        if patterns:
+            seen = {u["name"] for u in inv["updates"]}
+            inv["updates"] += [u for u in apt_simulation("--ignore-hold") if u["name"] not in seen and is_blocked(u["name"], patterns)]
+            error = sync_holds(patterns, state, [u["name"] for u in inv["updates"]])
+            if error:
+                log(error)
     elif fam == "rhel":
         tool = "dnf" if shutil.which("dnf") else "yum"
         # -y : accepte l'import de la clé d'un dépôt signé ajouté depuis (dépôt loco du paquet complet, par exemple) ;
@@ -996,14 +999,89 @@ def scan():
     return inv
 
 
-def update(cmd=None, progress=None):
+BLOCK_RE = re.compile(r"[A-Za-z0-9*][A-Za-z0-9+._:*-]{0,127}")
+
+
+def clean_blocks(patterns):
+    return [p for p in patterns or [] if isinstance(p, str) and BLOCK_RE.fullmatch(p)][:500]
+
+
+def is_blocked(name, patterns):
+    """Paquet visé par un blocage de loco (« * » est le seul joker ; libfoo:i386 répond aussi à libfoo)."""
+    for pattern in patterns:
+        regex = ".*".join(re.escape(part) for part in pattern.split("*"))
+        if re.fullmatch(regex, name) or re.fullmatch(regex, name.split(":")[0]):
+            return True
+    return False
+
+
+def apt_simulation(*options):
+    """Ce qu'une mise à jour installerait : [{name, version, security}]."""
+    _, out = run(["apt-get", "-s", "-q", "-o", "Debug::NoLocking=1", *options, "upgrade", "--with-new-pkgs"])
+    found = []
+    for line in out.splitlines():
+        m = re.match(r"^Inst (\S+) (?:\[[^\]]*\] )?\((\S+) ([^)]*)\)", line)
+        if m:
+            found.append({"name": m.group(1), "version": m.group(2),
+                          "security": "-security" in m.group(3) or "Security" in m.group(3)})
+    return found
+
+
+def sync_holds(patterns, state, seen=()):
+    """Retient sur le poste les paquets bloqués dans loco (apt-mark hold) : cela vaut aussi pour les mises à jour
+    automatiques du système. Seuls ceux que loco a retenus sont relâchés : une retenue posée à la main sur le poste
+    n'est jamais touchée. Renvoie le message d'erreur, ou vide."""
+    mine = set(state.get("holds") or [])
+    if not patterns and not mine:
+        return ""
+    code, out = run(["apt-mark", "showhold"])
+    code2, installed = run(["dpkg-query", "-W", "-f=${binary:Package}\\n"])
+    if code or code2:
+        return t("Blocages non appliqués : liste des paquets illisible.", "Blocks not applied: cannot read the package list.",
+                 "Bloqueos no aplicados: lista de paquetes ilegible.")
+    current = set(out.split())
+    wanted = {n for n in set(installed.split()) | mine | set(seen) if is_blocked(n, patterns)} - (current - mine)
+    hold, release = sorted(wanted - current), sorted(mine - wanted)
+    if hold:
+        code, out = run(["apt-mark", "hold", *hold])
+        if code:
+            return t("Blocages non appliqués : ", "Blocks not applied: ", "Bloqueos no aplicados: ") + out.strip()[:300]
+        mine |= set(hold)
+        state["holds"] = sorted(mine)
+    if release:
+        code, out = run(["apt-mark", "unhold", *release])
+        if code:
+            return t("Blocages non levés : ", "Blocks not lifted: ", "Bloqueos no levantados: ") + out.strip()[:300]
+    state["holds"] = sorted(wanted)
+    return ""
+
+
+def apply_blocks(answer, state):
+    """Mises à jour bloquées dans loco : réappliquées à chaque contact, même sans mise à jour demandée."""
+    blocks = answer.get("update_blocks")
+    if not isinstance(blocks, dict):
+        return                                  # serveur plus ancien : ne rien changer
+    patterns = clean_blocks(blocks.get("patterns"))
+    if patterns != (state.get("blocks") or []):
+        state["rescan"] = True                  # inventaire suivant : nouveaux paquets visés, et l'état réel pour le portail
+    state["blocks"] = patterns
+    if family() == "debian":
+        error = sync_holds(patterns, state)
+        if error:
+            log(error)
+
+
+def update(cmd=None, progress=None, state=None):
     """Mises à jour du système (et Flatpak) : toutes, ou seulement celles choisies dans loco (« only » : paquets et
-    Flatpak). progress(step, phase, app, index, total, percent) reçoit l'avancement au fil de l'eau."""
+    Flatpak). progress(step, phase, app, index, total, percent) reçoit l'avancement au fil de l'eau. Ce qui est bloqué
+    dans loco (« blocks ») n'est jamais installé."""
     cmd = cmd or {}
     send = progress or (lambda *a, **k: None)
     prog = progress if isinstance(progress, Progress) else None    # suivi paquet par paquet si remonté au serveur
     only = cmd.get("only") if isinstance(cmd.get("only"), dict) else None
     names = [] if only is None else [n for n in only.get("packages") or [] if isinstance(n, str) and PACKAGE_RE.fullmatch(n)][:2000]
+    patterns = clean_blocks(cmd.get("blocks"))
+    names = [n for n in names if not is_blocked(n, patterns)]
     fam = family()
     logs, code = [], 0
     if only is None or names:
@@ -1011,6 +1089,12 @@ def update(cmd=None, progress=None):
             send("updates", "prepare")
             code, out = apt_update()
             logs.append(out)
+            # Avant d'installer : aussi les nouveaux paquets bloqués (nouveau noyau…) que seule cette lecture des dépôts révèle.
+            if code == 0 and state is not None and (patterns or state.get("holds")):
+                error = sync_holds(patterns, state, [u["name"] for u in apt_simulation("--ignore-hold")])
+                if error:
+                    code = 1
+                    logs.append(error)
             if code == 0:
                 # Sélection : « install » prend aussi les nouveaux paquets d'une mise à jour (nouveau noyau…), puis les
                 # paquets installés automatiquement le redeviennent (sinon apt les marquerait « manuels »).
@@ -1026,7 +1110,9 @@ def update(cmd=None, progress=None):
                     run(["apt-mark", "auto", *auto])
         elif fam == "rhel":
             send("updates", "prepare")
-            code, out = run_stream(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade", *names],
+            # Sans best=False, dnf refuse toute la mise à jour dès qu'une autre dépend d'un paquet exclu.
+            excluded = [f"--exclude={p}" for p in patterns] + (["--setopt=best=False"] if patterns else [])
+            code, out = run_stream(["dnf" if shutil.which("dnf") else "yum", "-y", "upgrade", *excluded, *names],
                                    _compose(dnf_progress(send), dnf_items(prog) if prog else None))
             logs.append(out)
             if prog:
@@ -1136,6 +1222,9 @@ def self_update(conf, wanted):
 
 
 def remove_local():
+    holds = load(STATE).get("holds")
+    if holds:
+        run(["apt-mark", "unhold", *holds])       # plus d'agent pour les relâcher : rendre les paquets au système
     subprocess.run(["systemctl", "disable", "--now", "loco-client-remote.service"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     subprocess.run(["systemctl", "disable", "--now", "loco-client.timer"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     for path in UNITS:
@@ -1280,7 +1369,7 @@ def service():
     # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).
     if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
             or state.get("inventory_version") != VERSION):
-        data["inventory"] = scan()
+        data["inventory"] = scan(state)
         state.update(last_scan=time.time(), rescan=_apt_lock_busy(data["inventory"].get("error") or ""), inventory_version=VERSION)
     try:
         answer = checkin(conf, data)
@@ -1301,6 +1390,7 @@ def service():
     state["scan_hours"] = answer.get("scan_hours", 6)
     apply_trust(answer)
     apply_wake(answer, state)
+    apply_blocks(answer, state)
     try:
         forward_logs(conf, answer.get("syslog"), state)
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -1310,13 +1400,13 @@ def service():
         log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))
         report(conf, cmd["id"], "running")
         if action == "scan":
-            inv = scan()
+            inv = scan(state)
             state["last_scan"] = time.time()
             report(conf, cmd["id"], "success" if not inv["error"] else "failed", inv["error"] or t("Inventaire transmis.", "Inventory sent.", "Inventario transmitido."),
                    0, inv)
         elif action == "update":
-            code, out = update(cmd, Progress(lambda data, i=cmd["id"]: report(conf, i, "running", progress=data)))
-            inv = scan()
+            code, out = update(cmd, Progress(lambda data, i=cmd["id"]: report(conf, i, "running", progress=data)), state)
+            inv = scan(state)
             state["last_scan"] = time.time()
             reboot = cmd.get("reboot") and inv["reboot_required"] and code == 0
             report(conf, cmd["id"], "success" if code == 0 else "failed",
@@ -1327,7 +1417,7 @@ def service():
                 return 0
         elif action == "install-package":
             code, out = install_package(cmd)
-            inv = scan()
+            inv = scan(state)
             state["last_scan"] = time.time()
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, inv)
         elif action == "run-script":

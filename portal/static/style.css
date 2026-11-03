@@ -2345,6 +2345,10 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 
 /* Mises à jour d'un poste : choix une par une et avancement en direct (ligne en cours, lignes terminées). */
 .update-table th.check, .update-table td.check { width: 34px; padding-right: 0; }
+.update-table tr.upd-blocked .upd-name { color: var(--text-2); }
+.block-fields { display: grid; grid-template-columns: 1.2fr .8fr 1.4fr; gap: 16px; }
+.block-limits { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--text-2); }
+@media (max-width: 860px) { .block-fields { grid-template-columns: 1fr; } }
 .update-select-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 18px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .update-select-bar label.check { margin: 0; }
 .update-select-hint { padding: 0 20px 12px; }
