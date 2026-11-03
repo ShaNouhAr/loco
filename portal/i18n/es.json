@@ -3717,7 +3717,6 @@
  "Faites un essai avec Tester pour voir si la connexion aboutit. URL de retour à déclarer :": "Pruebe con Probar para ver si la conexión funciona. URL de retorno que debe declararse:",
  "Adresse de connexion du fournisseur injoignable : %(e)s": "Dirección de conexión del proveedor inalcanzable: %(e)s",
  "Vérifiez que l’adresse authorization_endpoint répond depuis ce serveur.": "Compruebe que la dirección authorization_endpoint responde desde este servidor.",
- "Non effectuée : corrigez d’abord l’étape en échec.": "No realizada: corrija primero el paso con error.",
  "Les appels passent par le proxy %(proxy)s : il s’en charge.": "Las llamadas pasan por el proxy %(proxy)s: él se encarga.",
  "Étape interrompue (%(type)s).": "Paso interrumpido (%(type)s).",
  "Vérifier la configuration": "Comprobar la configuración",
@@ -3751,5 +3750,6 @@
  "Retirer %(name)s ?": "¿Retirar %(name)s?",
  "Ce serveur devra alors le résoudre par son DNS.": "Este servidor tendrá que resolverlo entonces por su DNS.",
  "sso.exemple.lan": "sso.ejemplo.lan",
- "Adresse IP": "Dirección IP"
+ "Adresse IP": "Dirección IP",
+ "Corrigez d’abord l’étape en échec.": "Corrija primero el paso con error."
 }

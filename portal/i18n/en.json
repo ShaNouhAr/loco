@@ -3717,7 +3717,6 @@
  "Faites un essai avec Tester pour voir si la connexion aboutit. URL de retour à déclarer :": "Try it with Test to see whether the sign-in succeeds. Redirect URL to declare:",
  "Adresse de connexion du fournisseur injoignable : %(e)s": "Provider's sign-in address unreachable: %(e)s",
  "Vérifiez que l’adresse authorization_endpoint répond depuis ce serveur.": "Check that the authorization_endpoint address answers from this server.",
- "Non effectuée : corrigez d’abord l’étape en échec.": "Not run: fix the failed step first.",
  "Les appels passent par le proxy %(proxy)s : il s’en charge.": "Calls go through the proxy %(proxy)s: it handles this.",
  "Étape interrompue (%(type)s).": "Step interrupted (%(type)s).",
  "Vérifier la configuration": "Check configuration",
@@ -3751,5 +3750,6 @@
  "Retirer %(name)s ?": "Remove %(name)s?",
  "Ce serveur devra alors le résoudre par son DNS.": "This server will then have to resolve it through its DNS.",
  "sso.exemple.lan": "sso.example.lan",
- "Adresse IP": "IP address"
+ "Adresse IP": "IP address",
+ "Corrigez d’abord l’étape en échec.": "Fix the failed step first."
 }

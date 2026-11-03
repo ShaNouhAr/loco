@@ -395,7 +395,7 @@ def run(directory):
     blocked = False
     for key, _title in STEPS:
         if blocked:
-            results[key] = _done(SKIPPED, _("Non effectuée : corrigez d’abord l’étape en échec."))
+            results[key] = _done(SKIPPED, _("Corrigez d’abord l’étape en échec."))
         elif proxy and key in ("dns", "tcp", "tls"):
             results[key] = _done(SKIPPED, _("Les appels passent par le proxy %(proxy)s : il s’en charge.", proxy=proxy))
         else:
