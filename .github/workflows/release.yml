@@ -16,6 +16,8 @@ jobs:
   checks:
     uses: ./.github/workflows/ci.yml
   integration:
+    # Les VM ne démarrent qu'une fois les vérifications rapides passées : un test cassé se voit en quelques minutes, pas 30.
+    needs: checks
     uses: ./.github/workflows/integration.yml
   publish:
     name: Publication

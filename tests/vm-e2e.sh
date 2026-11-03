@@ -108,6 +108,7 @@ if [ -n "${platform[6]}" ]; then
     ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 'mkdir -p loco-legacy && tar -xzf - -C loco-legacy' < "$work/legacy.tar.gz"
     LEGACY_SRC=/home/ci/loco-legacy
 fi
+# Les tests unitaires sur les bibliothèques de chaque distribution tournent avant, dans ci.yml (conteneurs).
 # shellcheck disable=SC2029  # LEGACY_SRC est un chemin constant fixé ci-dessus, transmis volontairement à la VM.
-ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 "cd loco && sudo apt-get update -q && sudo apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm && python3 -W error::ResourceWarning -m unittest discover -s tests -v && LOCO_E2E_LEGACY_SRC=$LEGACY_SRC tests/e2e.sh" 2>&1 | tee "$LOG_DIR/tests.log"
+ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 "cd loco && sudo apt-get update -q && sudo apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm && LOCO_E2E_LEGACY_SRC=$LEGACY_SRC tests/e2e.sh" 2>&1 | tee "$LOG_DIR/tests.log"
 echo "Validation VM réussie : $PLATFORM"

@@ -1,5 +1,6 @@
 name: CI
-# Vérifications rapides à chaque push et pull request : lint, tests unitaires et parcours dans un navigateur, sans machine virtuelle.
+# Vérifications rapides à chaque push et pull request, sans machine virtuelle : lint, tests unitaires sur les bibliothèques
+# de chaque distribution et parcours dans un navigateur.
 # Les tests d'intégration (VM, Docker, ISO, Windows) sont dans integration.yml : ils tournent quand un push
 # touche les installeurs ou les agents, et toujours avant une publication (release.yml).
 on:
@@ -48,6 +49,36 @@ jobs:
               if ([IO.File]::ReadAllBytes($file.FullName)[0] -ne 0xEF) { Write-Host "$($file.FullName) : UTF-8 avec BOM requis (Windows PowerShell 5.1)"; $errors++ }
           }
           exit $errors
+  libraries:
+    name: Tests unitaires sur ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Versions de Python, Flask, Werkzeug et cryptography livrées par les distributions prises en charge : ce que la
+        # plus récente accepte casse souvent sur la plus ancienne, et c'est bien plus rapide à voir ici que dans une VM.
+        image: ['debian:12', 'debian:13', 'ubuntu:22.04', 'ubuntu:26.04']
+    env:
+      LANG: C.UTF-8
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Paquets de la distribution
+        run: |
+          for attempt in 1 2 3; do
+              apt-get update -q && apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm git ca-certificates && exit 0
+              sleep 20
+          done
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests unitaires (sans droits root, comme dans les VM)
+        run: |
+          useradd -m ci
+          chown -R ci .
+          runuser -u ci -- python3 -W error::ResourceWarning -m unittest discover -s tests
   browser:
     name: Parcours dans un vrai navigateur
     runs-on: ubuntu-24.04
