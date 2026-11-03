@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Mon parc") }}{% endblock %}
 {% from "_nav_icons.html" import ui_icon %}
-{% macro filter_url(statut=None, os=None) -%}
+{% macro filter_url(statut=None, os=None, q=None, page=None) -%}
 {{ url_for('fleet', group=selected_group.id if selected_group else None,
            statut=(statut or None) if statut is not none else (state or None),
-           os=(os or None) if os is not none else (system or None)) }}
+           os=(os or None) if os is not none else (system or None),
+           q=(q or None) if q is not none else (query or None), page=page) }}
 {%- endmacro %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% block content %}
@@ -41,7 +42,7 @@
       </nav>
       {% if device_groups %}
       <form method="get" class="inline-form">
-        {% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}
+        {% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}{% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
         <select name="group" aria-label="{{ _('Groupe de machines') }}" data-autosubmit>
           <option value="">{{ _("Tous les groupes") }}</option>
           {% for group in device_groups %}<option value="{{ group.id }}" {{ 'selected' if selected_group and selected_group.id == group.id }}>{{ group.name }} ({{ group.members }})</option>{% endfor %}
@@ -49,14 +50,19 @@
         <noscript><button class="btn sm">{{ _("Afficher") }}</button></noscript>
       </form>
       {% endif %}
-      {% if rows %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher un poste') }}" data-filter="#fleet-table tbody tr" data-empty="#fleet-none" aria-label="{{ _('Rechercher un poste') }}">{% endif %}
+      {% if total or query %}
+      <form method="get" class="inline-form" data-search-form>
+        {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}{% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}
+        <input type="search" name="q" value="{{ query }}" class="search-sm" placeholder="{{ _('Rechercher un poste') }}" aria-label="{{ _('Rechercher un poste') }}">
+      </form>
+      {% endif %}
     </div>
   </div>
 
   <section class="panel">
     {% if rows and can_select %}
     <div class="fleet-select-bar" data-select-bar hidden>
-      <span class="fleet-select-count"><strong data-select-count>0</strong> {{ _("sélectionné(s)") }}</span>
+      <span class="fleet-select-count"><strong data-select-count>0</strong> {{ _("sélectionné(s)") }} <span class="muted small" data-select-elsewhere></span></span>
       <div class="row">
         {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" data-select-reboot> {{ _("Redémarrer si nécessaire") }}</label>{% endif %}
         <button type="button" class="btn sm ghost" data-select-clear>{{ _("Désélectionner") }}</button>
@@ -67,10 +73,10 @@
     {% if rows %}
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
-        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
+        <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner sur cette page') }}" title="{{ _('Tout sélectionner sur cette page') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}{% set d = r.d %}
-          <tr data-search="{{ d.hostname }} {{ d.os_name }} {{ r.address }} {{ r.groups|map(attribute='name')|join(' ') }}">
+          <tr>
             {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=d.hostname or d.uid[:8]) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
               <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
@@ -120,8 +126,16 @@
         {% endfor %}
         </tbody>
       </table>
-      <div id="fleet-none" class="empty hidden">{{ _("Aucun poste ne correspond à la recherche.") }}</div>
     </div>
+    {% if pages > 1 %}
+    <nav class="row store-pagination fleet-pager" aria-label="{{ _('Pages du parc') }}">
+      {% if page > 1 %}<a class="btn sm" href="{{ filter_url(page=page - 1) }}">{{ _("Précédente") }}</a>{% endif %}
+      <span class="muted small">{{ _("Page %(page)s sur %(pages)s · %(total)s poste%(v)s", page=page, pages=pages, total=shown, v='s' if shown > 1) }}</span>
+      {% if page < pages %}<a class="btn sm" href="{{ filter_url(page=page + 1) }}">{{ _("Suivante") }}</a>{% endif %}
+    </nav>
+    {% endif %}
+    {% elif query and not total %}
+    <div class="empty">{{ _("Aucun poste ne correspond à la recherche.") }} <a href="{{ filter_url(q='') }}">{{ _("Effacer la recherche") }}</a></div>
     {% elif total %}
     <div class="empty">{{ _("Aucun poste dans cet état.") }} <a href="{{ filter_url(statut='', os='') }}">{{ _("Tout afficher") }}</a></div>
     {% else %}

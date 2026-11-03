@@ -21,6 +21,7 @@ import secrets
 import tempfile
 import threading
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import zipfile
@@ -1227,6 +1228,7 @@ def _commands(key):
 
 
 SEVERITY = {"red": 0, "orange": 1, "grey": 2, "green": 3}
+PAGE_SIZE = 50
 
 
 def main_address(dev):
@@ -1244,12 +1246,21 @@ def short_os(name):
     return name.replace(" GNU/Linux", "").strip()
 
 
-def _enrich(rows):
-    """Colonnes de la liste : adresse du poste, compteurs, groupes, contact en clair ; postes à traiter d'abord."""
+def _group_names():
     names = {}
     for r in db().execute("SELECT m.device_id, g.id, g.name FROM device_group_members m JOIN device_groups g ON g.id=m.group_id "
                           "ORDER BY g.name COLLATE NOCASE"):
         names.setdefault(r[0], []).append({"id": r[1], "name": r[2]})
+    return names
+
+
+def _urgency(row):
+    return SEVERITY.get(row["color"], 9), (row["d"]["hostname"] or "").lower()
+
+
+def _enrich(rows, names=None):
+    """Colonnes de la liste : adresse du poste, compteurs, groupes, contact en clair ; postes à traiter d'abord."""
+    names = _group_names() if names is None else names
     for r in rows:
         d = r["d"]
         own = (d["addresses"] or "").split()
@@ -1259,8 +1270,27 @@ def _enrich(rows):
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
                  system=d["updates"], security=sum(1 for u in updates if u.get("security")),
                  linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
-    rows.sort(key=lambda r: (SEVERITY.get(r["color"], 9), (r["d"]["hostname"] or "").lower()))
+    rows.sort(key=_urgency)
     return rows
+
+
+def _fold(text):
+    return "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c)).casefold()
+
+
+def _search(rows, query, names):
+    """Postes dont le nom, le système, une adresse ou un groupe contient tous les mots recherchés."""
+    terms = _fold(query).split()
+    if not terms:
+        return rows
+    found = []
+    for r in rows:
+        d = r["d"]
+        text = _fold(" ".join([d["hostname"] or "", d["os_name"] or "", d["addresses"] or "", d["ip"] or ""]
+                              + [g["name"] for g in names.get(d["id"], [])]))
+        if all(term in text for term in terms):
+            found.append(r)
+    return found
 
 
 @app.route("/fleet")
@@ -1275,6 +1305,11 @@ def fleet():
         selected_group = groups._group("device", group_id)
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         rows = [r for r in rows if r["d"]["id"] in member_ids]
+    # Ce que « Tout mettre à jour » fera vraiment : tout le groupe ou le parc, quels que soient les filtres affichés.
+    to_update = sum(1 for r in rows if r["needs_update"])
+    names = _group_names()
+    query = request.args.get("q", "").strip()[:100]
+    rows = _search(rows, query, names)
     counts = {c: sum(1 for r in rows if r["color"] == c) for c in ("green", "orange", "red", "grey")}
     systems = {"windows": sum(1 for r in rows if r["d"]["os_family"] == "windows")}
     systems["linux"] = len(rows) - systems["windows"]
@@ -1285,21 +1320,29 @@ def fleet():
         rows = [r for r in rows if r["color"] == state]
     if system in systems:
         rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
-    rows = _enrich(rows)
+    rows.sort(key=_urgency)
+    shown = len(rows)
+    pages = max(1, (shown + PAGE_SIZE - 1) // PAGE_SIZE)
+    try:
+        page = min(pages, max(1, int(request.args.get("page", "1"))))
+    except ValueError:
+        page = 1
+    rows = rows[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
+    signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
+                                             presence(r["d"])["online"], len(r["pending"])] for r in rows],
+                                           counts, systems, shown]).encode()).hexdigest()[:16]
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"signature": signature}
+    rows = _enrich(rows, names)
     from . import monitoring
     for r in rows:
         r["mon"] = monitoring.latest(r["d"])
-    signature = hashlib.sha256(json.dumps([[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
-                                            r["presence"]["online"], len(r["pending"])] for r in rows]).encode()).hexdigest()[:16]
-    if request.headers.get("X-Requested-With") == "fetch":
-        return {"signature": signature}
     from .auth import scope_summary
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
-                           fleet_limit=limit,
+                           fleet_limit=limit, query=query, page=page, pages=pages, shown=shown,
                            counts=counts, systems=systems, total=total, state=state, system=system,
-                           signature=signature, families=FAMILIES, actions=ACTIONS,
-                           to_update=sum(1 for r in rows if r["needs_update"]),
+                           signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 
 

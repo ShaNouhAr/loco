@@ -436,20 +436,28 @@
     var selTable = $("#fleet-table"), selAll = $("[data-select-all]");
     var selBoxes = function () { return $$("[data-select]", selTable); };
     var selChecked = function () { return selBoxes().filter(function (b) { return b.checked; }); };
+    // La sélection suit le changement de page et de filtre : elle est gardée pour l'onglet, jusqu'à l'envoi ou « Désélectionner ».
+    var SEL_KEY = "loco-fleet-selection", selKept = [];
+    try { selKept = JSON.parse(sessionStorage.getItem(SEL_KEY)) || []; } catch (e) { /* mémoire indisponible : sélection de la page seule */ }
+    selBoxes().forEach(function (b) { b.checked = selKept.indexOf(b.dataset.id) >= 0; });
     var selSync = function () {
-      var boxes = selBoxes(), n = selChecked().length;
+      var boxes = selBoxes(), here = boxes.map(function (b) { return b.dataset.id; }), shown = selChecked().length;
+      selKept = selKept.filter(function (id) { return here.indexOf(id) < 0; }).concat(selChecked().map(function (b) { return b.dataset.id; }));
+      try { sessionStorage.setItem(SEL_KEY, JSON.stringify(selKept)); } catch (e) { /* idem */ }
+      var n = selKept.length, away = n - shown;
       selBar.hidden = n === 0;
       if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;   // ne pas rafraîchir pendant une sélection
       var c = $("[data-select-count]"); if (c) c.textContent = n;
-      if (selAll) { selAll.checked = n > 0 && n === boxes.length; selAll.indeterminate = n > 0 && n < boxes.length; }
+      var far = $("[data-select-elsewhere]"); if (far) far.textContent = away ? t("dont %(n)s hors de cette page", { n: away }) : "";
+      if (selAll) { selAll.checked = shown > 0 && shown === boxes.length; selAll.indeterminate = shown > 0 && shown < boxes.length; }
     };
     selTable.addEventListener("change", function (e) { if (e.target.matches("[data-select]")) selSync(); });
     if (selAll) selAll.addEventListener("change", function () { selBoxes().forEach(function (b) { b.checked = selAll.checked; }); selSync(); });
     var selClear = $("[data-select-clear]");
-    if (selClear) selClear.addEventListener("click", function () { selBoxes().forEach(function (b) { b.checked = false; }); selSync(); });
+    if (selClear) selClear.addEventListener("click", function () { selKept = []; selBoxes().forEach(function (b) { b.checked = false; }); selSync(); });
     var selSubmit = $("[data-select-submit]");
     if (selSubmit) selSubmit.addEventListener("click", function () {
-      var ids = selChecked().map(function (b) { return b.dataset.id; });
+      var ids = selKept.slice();
       if (!ids.length) return;
       confirmDialog(selSubmit.dataset.confirm, selSubmit.dataset.confirmText, selSubmit.dataset.confirmOk).then(function (ok) {
         if (!ok) return;
@@ -460,12 +468,31 @@
         selSubmit.disabled = true; selSubmit.classList.add("loading");
         fetch(selSubmit.dataset.action, { method: "POST", body: data })
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-          .then(function () { delete document.body.dataset.noReload; window.location.reload(); })
+          .then(function () { try { sessionStorage.removeItem(SEL_KEY); } catch (e) { /* idem */ } delete document.body.dataset.noReload; window.location.reload(); })
           .catch(function () { selSubmit.disabled = false; selSubmit.classList.remove("loading"); toast(t("Action impossible."), "error"); });
       });
     });
     selSync();
   }
+
+  /* Recherche de postes côté serveur (la liste est paginée) : envoi à la pause de frappe, le curseur reste dans le champ. */
+  $$("[data-search-form]").forEach(function (form) {
+    var input = $("input[type=search]", form), wait = null;
+    var send = function () {
+      clearTimeout(wait);
+      try { sessionStorage.setItem("loco-fleet-typing", "1"); } catch (e) { /* le champ perd seulement le focus */ }
+      form.submit();
+    };
+    input.addEventListener("input", function () { clearTimeout(wait); wait = setTimeout(send, 350); });
+    form.addEventListener("submit", function () { clearTimeout(wait); });
+    try {
+      if (sessionStorage.getItem("loco-fleet-typing")) {
+        sessionStorage.removeItem("loco-fleet-typing");
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    } catch (e) { /* idem */ }
+  });
 
   /* ---------------------------------------------------------------- aller à une page (Ctrl+K) */
 

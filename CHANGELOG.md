@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.127.0 — 2026-11-03
+
+- **Mon parc est paginé**, par 50 postes, les plus urgents d'abord. La navigation n'apparaît qu'au-delà de 50 postes et garde les filtres.
+- **La recherche de postes porte sur tout le parc**, plus seulement sur la page affichée : nom, système, n'importe quelle adresse du poste, groupe, sans tenir compte des majuscules ni des accents. Elle survit au rafraîchissement et se partage par son adresse.
+- **La sélection de postes suit le changement de page.** La barre indique combien de postes sélectionnés sont hors de la page ; « Tout sélectionner » porte sur la page affichée.
+- **Corrigé : « Tout mettre à jour » annonçait un nombre faux quand un filtre était actif.** Le compteur suivait le filtre alors que l'action porte sur tout le groupe ou le parc : avec le filtre Windows, des postes Linux étaient aussi mis à jour. Le compteur indique maintenant ce qui sera vraiment fait.
+
 ## 2.126.1 — 2026-11-03
 
 - **Mauvaise adresse affichée pour un poste qui a Docker.** Mon parc pouvait montrer l'adresse du pont Docker (`172.17.0.1`) au lieu de celle de la carte réseau. Le portail affiche maintenant d'abord l'adresse par laquelle il voit le poste, et les agents Linux et Windows classent en tête la carte de la route par défaut, les interfaces virtuelles en dernier (Docker, machines virtuelles, Hyper-V, WSL) et l'IPv4 avant l'IPv6. Toutes les adresses restent listées sur la fiche du poste.

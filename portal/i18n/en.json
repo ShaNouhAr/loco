@@ -3560,5 +3560,9 @@
  "%(n)s logiciel Windows": "%(n)s Windows application",
  "%(n)s logiciels Windows": "%(n)s Windows applications",
  "%(n)s poste avec une mise à jour en échec depuis 24 h.": "%(n)s machine with a failed update in the last 24 h.",
- "%(n)s postes avec une mise à jour en échec depuis 24 h.": "%(n)s machines with a failed update in the last 24 h."
+ "%(n)s postes avec une mise à jour en échec depuis 24 h.": "%(n)s machines with a failed update in the last 24 h.",
+ "Tout sélectionner sur cette page": "Select all on this page",
+ "Pages du parc": "Fleet pages",
+ "Page %(page)s sur %(pages)s · %(total)s poste%(v)s": "Page %(page)s of %(pages)s · %(total)s machine%(v)s",
+ "dont %(n)s hors de cette page": "including %(n)s outside this page"
 }

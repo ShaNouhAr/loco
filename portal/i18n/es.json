@@ -3560,5 +3560,9 @@
  "%(n)s logiciel Windows": "%(n)s programa de Windows",
  "%(n)s logiciels Windows": "%(n)s programas de Windows",
  "%(n)s poste avec une mise à jour en échec depuis 24 h.": "%(n)s equipo con una actualización fallida en las últimas 24 h.",
- "%(n)s postes avec une mise à jour en échec depuis 24 h.": "%(n)s equipos con una actualización fallida en las últimas 24 h."
+ "%(n)s postes avec une mise à jour en échec depuis 24 h.": "%(n)s equipos con una actualización fallida en las últimas 24 h.",
+ "Tout sélectionner sur cette page": "Seleccionar todo en esta página",
+ "Pages du parc": "Páginas del parque",
+ "Page %(page)s sur %(pages)s · %(total)s poste%(v)s": "Página %(page)s de %(pages)s · %(total)s equipo%(v)s",
+ "dont %(n)s hors de cette page": "de ellos %(n)s fuera de esta página"
 }

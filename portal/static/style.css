@@ -1155,6 +1155,7 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .store-item-action .st { font-size: 13px; }
 .store-description { white-space: pre-line; }
 .store-pagination { justify-content: center; }
+.fleet-pager { padding: 12px 24px; border-top: 1px solid var(--line); }
 .app-logo-box { position: relative; display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 9px; font-weight: 600; font-size: 18px; color: var(--text-2); background: var(--bg-2); overflow: hidden; }
 .store-item .app-logo-box { flex-basis: 46px; width: 46px; height: 46px; border-radius: 11px; }
 .app-logo-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 6px; opacity: 0; }
@@ -1719,6 +1720,7 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
   .selbar .cmd { flex-basis: 100%; order: 3; }
   .password-rules { grid-template-columns: 1fr; }
   .search-sm, .fleet-filters .search-sm { width: 100% !important; }
+  .fleet-filters [data-search-form] { flex: 1 1 100%; }
   .fleet-filters > .row { width: 100%; }
   .fleet-filters select { flex: 1; }
   .usage-list li { grid-template-columns: minmax(0, 1fr) auto; }
