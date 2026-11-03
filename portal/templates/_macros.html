@@ -1,3 +1,22 @@
+{# Choix du déroulement d'un déploiement : d'un coup ou par vagues (voir deployments._rollout_options). #}
+{% macro rollout_fields(size, groups) -%}
+<div class="f"><span id="rollout-mode">{{ _("Déroulement") }}</span>
+  <div class="seg" role="radiogroup" aria-labelledby="rollout-mode">
+    <label><input type="radio" name="mode" value="all" checked><span>{{ _("Tous les postes d'un coup") }}</span></label>
+    <label><input type="radio" name="mode" value="waves"><span>{{ _("Par vagues") }}</span></label>
+  </div>
+</div>
+<div class="stack-sm" data-show-for="mode:waves" hidden>
+  <div class="rollout-fields">
+    <label class="f"><span>{{ _("Postes par vague") }}</span><input type="number" name="wave_size" min="1" value="{{ size }}" required></label>
+    <label class="f"><span>{{ _("Attente entre deux vagues (minutes)") }}</span><input type="number" name="wave_delay" min="0" max="1440" value="30" required></label>
+    <label class="f"><span>{{ _("Échecs avant la pause") }}</span><input type="number" name="wave_stop" min="1" max="100" value="1" required></label>
+    {% if groups %}<label class="f"><span>{{ _("Groupe pilote (première vague)") }}</span><select name="wave_pilot"><option value="">{{ _("Aucun") }}</option>{% for g in groups %}<option value="{{ g.id }}">{{ g.name }} ({{ g.members }})</option>{% endfor %}</select></label>{% endif %}
+  </div>
+  <p class="hint">{{ _("Une vague ne part que si la précédente compte au moins une réussite et moins d'échecs que le seuil. Sinon, tout s'arrête et vous décidez de la suite. Un poste éteint ne bloque pas : il recevra sa commande à son retour.") }}</p>
+</div>
+{%- endmacro %}
+
 {% macro cmd(id, text, prompt='$') -%}
 <div class="cmd"><code id="{{ id }}" data-prompt="{{ prompt }}">{{ text }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
 {%- endmacro %}

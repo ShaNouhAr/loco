@@ -50,6 +50,8 @@ RULES = {
                          "fleet", "warning", ("count", 1, 1, 1000, lambda: _("mises à jour")), 86400, True),
     "devices_offline":  (lambda: _("Postes hors contact"),       lambda: _("Des postes du parc n'ont pas contacté loco récemment."),
                          "fleet", "warning", ("count", 1, 1, 1000, lambda: _("postes")), 21600, True),
+    "rollout_paused":   (lambda: _("Déploiement par vagues en pause"), lambda: _("Une vague a échoué : les suivantes attendent une décision."),
+                         "fleet", "warning", None, 21600, True),
     "device_disk_high": (lambda: _("Disque d'un poste presque plein"), lambda: _("Un disque d'un poste du parc dépasse le seuil d'occupation."),
                          "fleet", "warning", ("percent", 90, 50, 99, lambda: "%"), 21600, True),
     "device_memory_high": (lambda: _("Mémoire d'un poste saturée"), lambda: _("La mémoire d'un poste dépasse le seuil en moyenne sur 15 minutes."),
@@ -218,6 +220,13 @@ def evaluate(conn, cfg=None, devices=""):
             add("devices_offline", n_("%(num)s poste sans contact depuis plus de %(m)s min.", "%(num)s postes sans contact depuis plus de %(m)s min.",
                                      n, m=ONLINE_SECONDS // 60))
 
+    if fleet_on and not devices and _rule_on(cfg, "rollout_paused"):     # la vue d'ensemble filtre elle-même selon le parc du compte
+        for row in conn.execute("SELECT title,waves FROM deployments WHERE waves LIKE '%\"paused\"%' AND state='queued' AND cancel_requested=0").fetchall():
+            pause = json.loads(row["waves"])["paused"]
+            add("rollout_paused", n_("Déploiement « %(title)s » en pause à la vague %(wave)s : %(num)s échec.",
+                                     "Déploiement « %(title)s » en pause à la vague %(wave)s : %(num)s échecs.",
+                                     pause["failed"], title=row["title"], wave=pause["wave"]))
+
     device_rules = [k for k in ("device_disk_high", "device_memory_high", "device_cpu_high") if _rule_on(cfg, k)]
     if fleet_on and device_rules:
         from . import monitoring
@@ -354,9 +363,11 @@ _started = False
 
 
 def _tick():
+    from .deployments import advance_rollouts
     from .fleet import expire_commands
     with transaction() as conn:
         expire_commands(conn)
+        advance_rollouts(conn)
     with transaction() as conn:
         dispatch(conn)
 

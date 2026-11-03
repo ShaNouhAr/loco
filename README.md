@@ -391,6 +391,12 @@ lui-même). Les agents passent seuls à la nouvelle adresse, après vérificatio
 resté éteint pendant toute l'annonce se réinscrit avec la commande d'installation (même identité). Les agents Linux
 mettent aussi à jour leur proxy APT et leurs dépôts ; un poste configuré par `setup.sh` sans agent doit le relancer.
 
+**Déployer par vagues** : dans *Tout mettre à jour* et à la confirmation d'un déploiement, choisissez *Par vagues*, le nombre
+de postes par vague, l'attente entre deux vagues, le seuil d'échecs et, si besoin, un groupe pilote. Une vague ne part
+que si la précédente compte au moins une réussite et moins d'échecs que le seuil ; sinon tout se met en pause, la vue
+d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
+planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
+
 **Changer le port de l'interface** : *Système › Réseau › Port de l'interface web*. Le nouveau port s'ouvre à côté de
 l'ancien, donc rien n'est coupé. Les agents l'apprennent à leur prochain contact et la page compte ceux qui le
 connaissent. Ouvrez ensuite l'interface sur le nouveau port et fermez l'ancien depuis celui-ci : les agents basculent

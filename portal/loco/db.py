@@ -508,6 +508,13 @@ MIGRATIONS = [
     ALTER TABLE devices ADD COLUMN log_lines INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE devices ADD COLUMN log_error TEXT NOT NULL DEFAULT '';
     """,
+    # 33 : déploiement par vagues. waves : réglages et avancement (JSON, vide = tout d'un coup) ; wave : vague du poste
+    # (0 = sans vague) ; pending : la commande à créer quand sa vague commencera.
+    """
+    ALTER TABLE deployments ADD COLUMN waves TEXT NOT NULL DEFAULT '';
+    ALTER TABLE deployment_targets ADD COLUMN wave INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE deployment_targets ADD COLUMN pending TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

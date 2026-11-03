@@ -129,6 +129,10 @@ def _attention():
         if failed:
             text = _("%(n)s poste avec une mise à jour en échec depuis 24 h.", n=failed) if failed == 1 else _("%(n)s postes avec une mise à jour en échec depuis 24 h.", n=failed)
             rows.append({"tone": "warn", "text": text, "url": url_for("fleet_updates")})
+        from .deployments import paused_rollouts
+        for row in paused_rollouts():
+            rows.append({"tone": "warn", "text": _("Déploiement « %(title)s » en pause après un échec : à vous de décider de la suite.", title=row["title"]),
+                         "url": url_for("deployment_detail", deployment_id=row["id"])})
     rows.sort(key=lambda row: row["tone"] != "err")
     return rows
 

@@ -9,6 +9,7 @@
            voir=(voir or None) if voir is not none else (view or None), page=page) }}
 {%- endmacro %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
+{% from "_macros.html" import rollout_fields %}
 {% block content %}
 {% from '_charts.html' import resources %}
 {% include '_fleet_nav.html' %}
@@ -164,6 +165,7 @@
         <span>{{ _("Redémarrer les postes si nécessaire") }}<span class="sub">{{ _("Seulement ceux dont une mise à jour l'exige, une fois installée.") }}</span></span>
       </label>
       {% endif %}
+      {% if to_update > 1 %}{{ rollout_fields((to_update / 10)|int or 1, device_groups) }}{% endif %}
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Mettre à jour") }}</button></div>
   </form>

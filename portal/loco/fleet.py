@@ -1628,11 +1628,25 @@ def fleet_update_all():
     member_ids = None
     if group_id:
         group_id = groups.identifiers([group_id])[0]
-        groups._group("device", group_id)
+        group = groups._group("device", group_id)
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
+    if request.form.get("mode") == "waves":
+        from .deployments import start_update_rollout
+        devices = [r["d"] for r in _rows(apps) if r["needs_update"] and (member_ids is None or r["d"]["id"] in member_ids)]
+        if not devices:
+            flash(_("Aucun poste à mettre à jour."), "ok")
+            return back("fleet", **({"group": group_id} if group_id else {}))
+        try:
+            deployment_id = start_update_rollout(db(), devices, request.form, reboot, group["name"] if group_id else "")
+        except ValueError as e:
+            db().rollback()
+            flash(str(e), "error")
+            return back("fleet", **({"group": group_id} if group_id else {}))
+        db().commit()
+        return back("deployment_detail", deployment_id=deployment_id)
     count = 0
     for r in _rows(apps):
         if member_ids is not None and r["d"]["id"] not in member_ids:

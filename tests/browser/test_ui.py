@@ -8,6 +8,8 @@ Sans Chromium sur la machine, LOCO_BROWSER_CDP désigne un navigateur déjà lan
 que ce navigateur doit pouvoir joindre sur 127.0.0.1.
 """
 import datetime
+import hashlib
+import json
 import logging
 import os
 from pathlib import Path
@@ -27,7 +29,7 @@ import test_portal as fixture  # noqa: E402  (crée la base temporaire et le com
 from test_fleet import Agent, LINUX, device  # noqa: E402
 from test_fleet_pages import add_devices  # noqa: E402
 import locoadmin  # noqa: E402
-from loco import alerts, app, config, dashboard  # noqa: E402
+from loco import alerts, app, config, dashboard, deployments  # noqa: E402
 from loco.db import transaction  # noqa: E402
 
 ARTIFACTS = ROOT / "test-results" / "browser"
@@ -395,6 +397,74 @@ class TestPortPanel(BrowserTest):
             conf.update(HTTPS_OLD_PORTS="8443")
             expect(self.page.locator(".note.warn")).to_contain_text("Le port 8443 reste ouvert", timeout=LONG)
             expect(self.page.locator("[data-operations]")).to_have_count(0)
+
+
+class TestRollouts(BrowserTest):
+    def finish_wave(self, number, state):
+        with transaction() as conn:
+            conn.execute("UPDATE device_commands SET state=?,finished_at=? WHERE id IN (SELECT command_id FROM deployment_targets WHERE wave=?)", (state, stamp(), number))
+            deployments.advance_rollouts(conn)
+
+    def test_fleet_update_in_waves_pauses_on_failure_and_waits_for_a_decision(self):
+        add_devices(6, prefix="poste", updates=3)
+        with transaction() as conn:
+            conn.execute("DELETE FROM deployment_targets")
+            conn.execute("DELETE FROM deployments")
+        self.page.goto("/fleet")
+        self.page.locator('[data-open="#update-all"]').click()
+        dialog = self.page.locator("#update-all")
+        size = dialog.locator("[name=wave_size]")
+        expect(size).to_be_hidden()
+        dialog.locator("input[name=mode][value=waves]").check(force=True)
+        expect(size).to_be_visible()
+        size.fill("2")
+        dialog.locator("[name=wave_delay]").fill("0")
+        self.assertEqual(self.overflow(), 0)
+        dialog.locator(".btn.primary").click()
+        expect(self.page).to_have_url(re.compile(r"/fleet/deployments/[0-9a-f]+"))
+        panel = self.page.locator("section.panel", has=self.page.locator("h2", has_text="Vagues"))
+        expect(panel).to_contain_text("Vague 1 sur 3")
+        self.assertEqual(commands(), 2)
+        self.finish_wave(1, "failed")
+        expect(panel.locator(".note.err")).to_contain_text("Vague 1 : 2 échecs", timeout=LONG)
+        self.assertEqual(commands(), 2)
+        panel.get_by_role("button", name="Lancer la vague suivante").click()
+        expect(self.page.locator("dialog[open]")).to_contain_text("risquent le même problème")
+        self.confirm()
+        expect(panel).to_contain_text("Vague 2 sur 3", timeout=LONG)
+        self.assertEqual(commands(), 4)
+
+    def test_a_prepared_deployment_offers_waves_and_starts_only_the_first(self):
+        ids = add_devices(5, prefix="lin", family="debian")
+        with transaction() as conn:
+            devices = conn.execute("SELECT id,uid,hostname,os_family FROM devices").fetchall()
+            plan = {"kind": "linux", "bulk": True, "force": False, "groups": {"software": [], "devices": []},
+                    "apps": [{"name": "acme", "kind": "deb", "family": "debian", "version": "1", "arch": "all", "repositories": ["debian/trixie"]}],
+                    "devices": [{"id": d["id"], "uid": d["uid"], "hostname": d["hostname"], "os_family": d["os_family"], "reason": ""} for d in devices]}
+        self.assertEqual(len(ids), 5)
+        catalog = {"deb:acme": {"name": "acme", "kind": "deb", "family": "debian", "version": "1", "arch": "all", "archs": ["all"], "repositories": {"debian/trixie"}}}
+        self.page.goto("/fleet/deployments")
+        with mock.patch.object(deployments, "_package_catalog", return_value=catalog):
+            with transaction() as conn:
+                user = conn.execute("SELECT id,username,pw_version FROM users WHERE username='admin'").fetchone()
+            owner = self.browser_owner()
+            with transaction() as conn:
+                conn.execute("INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan) VALUES (?,?,?,?,?,?,?,?,?)",
+                             ("c" * 32, "Paquets Linux · acme", user["id"], user["username"], user["pw_version"], owner, stamp(), 9999999999, json.dumps(plan)))
+            self.page.goto("/fleet/deployments/" + "c" * 32)
+            self.page.locator("input[name=mode][value=waves]").check(force=True)
+            self.page.locator("[name=wave_size]").fill("2")
+            self.page.get_by_role("button", name="Confirmer le déploiement").click()
+            expect(self.page.locator("section.panel", has=self.page.locator("h2", has_text="Vagues"))).to_contain_text("Vague 1 sur 3")
+        self.assertEqual(commands("install-package"), 2)
+        self.page.set_viewport_size(PHONE)
+        self.page.reload()
+        self.assertLessEqual(self.overflow(), 1, "ascenseur horizontal sur téléphone")
+
+    def browser_owner(self):
+        """Empreinte de la session du navigateur, à laquelle une préparation est liée."""
+        token = self.page.locator("input[name=csrf]").first.get_attribute("value")
+        return hashlib.sha256(token.encode()).hexdigest()
 
 
 class TestPageTools(BrowserTest):

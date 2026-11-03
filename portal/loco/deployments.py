@@ -22,8 +22,10 @@ from .util import back, sha256_of, counted
 
 MAX_APPS = 100
 MAX_DEVICES = 500
+MAX_WAVE_SIZE = 5000
 ACTIVE = ('queued', 'sent', 'running')
-STATES = {'queued': L_('En attente du poste'), 'sent': L_('Transmis à l’agent'), 'running': L_('Installation en cours'),
+WAITING = ACTIVE + ('planned',)     # planned : poste d'une vague pas encore commencée
+STATES = {'planned': L_('Prévu dans une vague suivante'), 'queued': L_('En attente du poste'), 'sent': L_('Transmis à l’agent'), 'running': L_('Installation en cours'),
           'success': L_('Réussi'), 'failed': L_('Échec'), 'cancelled': L_('Annulé'), 'skipped': L_('Non déployé')}
 FIELDS = ('id', 'slug', 'name', 'version', 'kind', 'args', 'detect', 'source_url', 'expected_sha256')
 
@@ -224,7 +226,7 @@ def deployment_preview_linux():
     return back('deployment_detail', deployment_id=deployment_id)
 
 
-def _confirm_linux(conn, deployment_id, plan):
+def _confirm_linux(conn, deployment_id, plan, rollout):
     """Confirmation d'un déploiement de paquets Linux : une commande install-package par poste compatible."""
     catalog = _package_catalog()
     ready = []
@@ -233,7 +235,7 @@ def _confirm_linux(conn, deployment_id, plan):
             abort(409, _('Le paquet %(name)s n’est plus publié : préparez à nouveau le déploiement.', name=snap['name']))
         ready.append(snap)
     families = {p['family'] for p in ready}
-    queued = 0
+    queued, entries = 0, []
     for target in plan['devices']:
         if target['reason']:
             conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
@@ -244,17 +246,13 @@ def _confirm_linux(conn, deployment_id, plan):
         if dev is None or dev['uid'] != target['uid'] or _target_reason_pkg(dev, families) or not scope.allows(dev['id']):
             abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
         installed = [p for p in ready if p['family'] == dev['os_family']]
-        command_id = None
+        params = None
         if installed:
             params = {'packages': [p['name'] for p in installed], 'deployment_id': deployment_id,
                       'bulk_install': plan['bulk'], 'kind': 'linux'}
-            command_id = conn.execute('INSERT INTO device_commands(device_id,action,params,created_at,created_by) '
-                                      "VALUES (?,'install-package',?,?,?)", (dev['id'], json.dumps(params, sort_keys=True),
-                                      fleet._now(), g.user['username'])).lastrowid
             queued += 1
-        conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
-                     'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, dev['id'], target['uid'], target['hostname'],
-                     target['os_family'], command_id, json.dumps(installed), '[]', target['reason']))
+        entries.append({'target': target, 'dev': dev, 'action': 'install-package', 'params': params, 'apps': installed, 'skipped': []})
+    _add_targets(conn, deployment_id, entries, rollout, g.user['username'])
     return queued, len(ready)
 
 
@@ -349,8 +347,10 @@ def _state(row, targets):
     if row['state'] == 'draft':
         return 'expired' if row['expires'] < time.time() else 'draft'
     states = [t['state'] for t in targets]
-    if any(state in ACTIVE for state in states):
-        return 'cancelling' if row['cancel_requested'] else 'running'
+    if any(state in WAITING for state in states):
+        if row['cancel_requested']:
+            return 'cancelling'
+        return 'paused' if _rollout(row).get('paused') else 'running'
     if 'failed' in states:
         return 'failed'
     if 'cancelled' in states or row['cancel_requested']:
@@ -371,7 +371,7 @@ def _targets(deployment_id):
 
 
 # Filtres de la liste : clé -> (libellé, états de déploiement retenus, classe de la pastille).
-FILTERS = {'en-cours': (L_('En cours'), ('running', 'cancelling'), 'warn'), 'a-confirmer': (L_('À confirmer'), ('draft',), 'warn'),
+FILTERS = {'en-cours': (L_('En cours'), ('running', 'cancelling', 'paused'), 'warn'), 'a-confirmer': (L_('À confirmer'), ('draft',), 'warn'),
            'erreurs': (L_('Avec erreurs'), ('failed',), 'err'), 'termines': (L_('Terminés'), ('success', 'cancelled', 'expired'), 'ok')}
 
 
@@ -379,7 +379,7 @@ def _progress(targets):
     """Postes réussis, en attente, en échec et non concernés (non déployés ou annulés)."""
     counts = {'success': 0, 'active': 0, 'failed': 0, 'other': 0}
     for t in targets:
-        key = 'active' if t['state'] in ACTIVE else t['state'] if t['state'] in ('success', 'failed') else 'other'
+        key = 'active' if t['state'] in WAITING else t['state'] if t['state'] in ('success', 'failed') else 'other'
         counts[key] += 1
     counts['total'] = len(targets)
     return counts
@@ -442,11 +442,13 @@ def deployment_detail(deployment_id):
         elif plan['bulk'] and not can('fleet.bulk_install'):
             blocked = 'Le droit de déploiement sur plusieurs postes est requis pour confirmer.'
     confirmable = state == 'draft' and not blocked
-    signature = hashlib.sha256(json.dumps([state, [(a['current']['status'] if a['current'] else '', a['problem']) for a in apps],
+    signature = hashlib.sha256(json.dumps([state, row['waves'], [(a['current']['status'] if a['current'] else '', a['problem']) for a in apps],
                                           [(t['id'], t['state'], t['output'], t['progress']) for t in targets]]).encode()).hexdigest()[:16]
     if request.headers.get('X-Requested-With') == 'fetch':
         return {'signature': signature}
-    if kind == 'linux':
+    if kind == 'update':
+        recompose = url_for('fleet')
+    elif kind == 'linux':
         recompose = url_for("deployment_compose_linux", package=[f"{a['kind']}:{a['name']}" for a in plan['apps']],
                             device=[d['id'] for d in plan['devices']])
     else:
@@ -454,7 +456,8 @@ def deployment_detail(deployment_id):
                             device=[d['id'] for d in plan['devices']])
     return render_template('deployment_detail.html', deployment=row, plan=plan, apps=apps, targets=targets,
                            state=state, states=STATES, confirmable=confirmable, blocked=blocked, signature=signature,
-                           progress=_progress(targets), families=fleet.FAMILIES, kind=kind, recompose=recompose)
+                           progress=_progress(targets), families=fleet.FAMILIES, kind=kind, recompose=recompose,
+                           rollout=_rollout_view(row, targets), device_groups=groups.listing('device'), default_size=_default_size(plan))
 
 
 def _pin(row):
@@ -508,6 +511,8 @@ def cleanup_artifacts(conn):
     for row in conn.execute("SELECT params FROM device_commands WHERE state IN ('queued','sent','running') AND action='install-app'"):
         params = json.loads(row[0])
         needed.update(a['sha256'] for a in params.get('app_snapshots', []))
+    for row in conn.execute("SELECT pending FROM deployment_targets WHERE pending!=''"):      # vagues à venir
+        needed.update(a['sha256'] for a in json.loads(row[0])['params'].get('app_snapshots', []))
     root = Path(config.WIN_DIR, '_deployments')
     if root.is_dir():
         for directory in root.iterdir():
@@ -557,14 +562,19 @@ def deployment_confirm(deployment_id):
     plan = json.loads(row['plan'])
     if plan['bulk']:
         require('fleet.bulk_install')
+    try:
+        rollout = _rollout_options(request.form)
+    except ValueError as e:
+        flash(str(e), 'error')
+        return back('deployment_detail', deployment_id=deployment_id)
     if plan.get('kind') == 'linux':
         try:
-            queued_count, ready_n = _confirm_linux(conn, deployment_id, plan)
+            queued_count, ready_n = _confirm_linux(conn, deployment_id, plan, rollout)
         except (OSError, ValueError) as e:
             conn.rollback()
             flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
             return back('deployment_detail', deployment_id=deployment_id)
-        conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
+        conn.execute("UPDATE deployments SET state='queued',confirmed_at=?,waves=? WHERE id=?", (fleet._now(), json.dumps(rollout) if rollout else '', deployment_id))
         audit('deploiement.confirmation', f"{row['title']} : {counted(queued_count, 'poste')}, {counted(ready_n, 'paquet')}, {deployment_id}", commit=False)
         conn.commit()
         flash(n_("Déploiement confirmé sur %(num)s poste. L'agent installe les paquets à son prochain contact.", 'Déploiement confirmé sur %(num)s postes. Les agents installent les paquets à leur prochain contact.', queued_count), 'ok')
@@ -586,6 +596,7 @@ def deployment_confirm(deployment_id):
         devices.append((target, dev))
     pinned = {}
     queued_count = 0
+    entries = []
     try:
         for target, dev in devices:
             required, skipped = [], []
@@ -600,20 +611,17 @@ def deployment_confirm(deployment_id):
                         if software['id'] not in pinned:
                             pinned[software['id']] = _pin(software)
                         required.append(pinned[software['id']])
-            command_id = None
+            params = None
             if required:
                 params = {'app_snapshots': required, 'deployment_id': deployment_id, 'bulk_install': plan['bulk'], 'force': plan['force']}
-                command_id = conn.execute('INSERT INTO device_commands(device_id,action,params,created_at,created_by) '
-                                          "VALUES (?,'install-app',?,?,?)", (dev['id'], json.dumps(params, sort_keys=True), fleet._now(), g.user['username'])).lastrowid
                 queued_count += 1
-            conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
-                         'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, target['id'] if dev else None, target['uid'], target['hostname'],
-                         target['os_family'], command_id, json.dumps(required), json.dumps(skipped), target['reason']))
+            entries.append({'target': target, 'dev': dev, 'action': 'install-app', 'params': params, 'apps': required, 'skipped': skipped})
+        _add_targets(conn, deployment_id, entries, rollout, g.user['username'])
     except (OSError, ValueError) as e:
         conn.rollback()
         flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
         return back('deployment_detail', deployment_id=deployment_id)
-    conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
+    conn.execute("UPDATE deployments SET state='queued',confirmed_at=?,waves=? WHERE id=?", (fleet._now(), json.dumps(rollout) if rollout else '', deployment_id))
     cleanup_artifacts(conn)
     audit('deploiement.confirmation', f"{row['title']} : {counted(queued_count, 'poste')}, {counted(len(ready), 'logiciel')}, {deployment_id}", commit=False)
     conn.commit()
@@ -624,21 +632,219 @@ def deployment_confirm(deployment_id):
 @app.route('/fleet/deployments/<deployment_id>/cancel', methods=['POST'])
 @login_required
 def deployment_cancel(deployment_id):
-    conn = lock_access('fleet.install')
     row = _get(deployment_id)
     plan = json.loads(row['plan'])
-    if plan['bulk']:
+    conn = lock_access(_manage_permission(plan))
+    if plan['bulk'] and plan.get('kind') != 'update':
         require('fleet.bulk_install')
     if row['state'] == 'draft':
         conn.execute("UPDATE deployments SET state='cancelled',cancel_requested=1 WHERE id=?", (deployment_id,))
     else:
         conn.execute("UPDATE device_commands SET state='cancelled',finished_at=?,output='Annulé avant transmission à l’agent.' "
                      "WHERE state='queued' AND id IN (SELECT command_id FROM deployment_targets WHERE deployment_id=?)", (fleet._now(), deployment_id))
+        conn.execute("UPDATE deployment_targets SET last_state='cancelled',pending='',last_output='Vague annulée avant son départ.' "
+                     "WHERE deployment_id=? AND pending!=''", (deployment_id,))
         conn.execute('UPDATE deployments SET cancel_requested=1 WHERE id=?', (deployment_id,))
     cleanup_artifacts(conn)
     audit('deploiement.annulation', f"{row['title']} : {deployment_id}", commit=False)
     conn.commit()
     flash(_('Commandes non transmises annulées. Les installations déjà reçues par un agent peuvent se terminer.'), 'ok')
+    return back('deployment_detail', deployment_id=deployment_id)
+
+
+# --------------------------------------------------------------------------- vagues
+
+def _manage_permission(plan):
+    return 'fleet.bulk_update' if plan.get('kind') == 'update' else 'fleet.install'
+
+
+def _rollout(row):
+    return json.loads(row['waves']) if row['waves'] else {}
+
+
+def _default_size(plan):
+    """Première proposition : un dixième des postes, au moins un."""
+    return max(1, len(plan['devices']) // 10)
+
+
+def _bounded(form, name, low, high, label):
+    value = form.get(name, '').strip()
+    if not value.isdigit() or not low <= int(value) <= high:
+        raise ValueError(_('%(label)s : nombre entre %(low)s et %(high)s attendu.', label=label, low=low, high=high))
+    return int(value)
+
+
+def _rollout_options(form):
+    """Réglages choisis par la personne, ou None pour tout déployer d'un coup."""
+    if form.get('mode') != 'waves':
+        return None
+    options = {'size': _bounded(form, 'wave_size', 1, MAX_WAVE_SIZE, _('Postes par vague')),
+               'delay': _bounded(form, 'wave_delay', 0, 1440, _('Attente entre deux vagues')),
+               'stop_after': _bounded(form, 'wave_stop', 1, 100, _('Échecs avant la pause')), 'current': 1}
+    pilot = form.get('wave_pilot', '').strip()
+    if pilot:
+        if not pilot.isdigit() or db().execute('SELECT 1 FROM device_groups WHERE id=?', (int(pilot),)).fetchone() is None:
+            raise ValueError(_('Groupe pilote inconnu.'))
+        options['pilot'] = int(pilot)
+    return options
+
+
+def _assign_waves(conn, entries, rollout):
+    """Répartit les postes qui ont quelque chose à faire. Le groupe pilote forme la première vague ; ensuite, ceux qui sont
+    en ligne d'abord : ils donnent une réponse rapide, alors qu'un poste éteint ne dit rien de la mise à jour."""
+    work = [e for e in entries if e['params']]
+    pilot = set()
+    if rollout.get('pilot'):
+        pilot = {r[0] for r in conn.execute('SELECT device_id FROM device_group_members WHERE group_id=?', (rollout['pilot'],))}
+    first = [e for e in work if e['dev']['id'] in pilot]
+    rest = sorted((e for e in work if e['dev']['id'] not in pilot),
+                  key=lambda e: (not fleet.presence(e['dev'])['online'], (e['dev']['hostname'] or '').lower()))
+    start = 2 if first else 1
+    for e in first:
+        e['wave'] = 1
+    for i, e in enumerate(rest):
+        e['wave'] = start + i // rollout['size']
+    return (start - 1) + ((len(rest) + rollout['size'] - 1) // rollout['size'])
+
+
+def _new_command(conn, dev, action, params, user):
+    return conn.execute('INSERT INTO device_commands(device_id,action,params,created_at,created_by) VALUES (?,?,?,?,?)',
+                        (dev['id'], action, json.dumps(params, sort_keys=True), fleet._now(), user)).lastrowid
+
+
+def _add_targets(conn, deployment_id, entries, rollout, user):
+    """Enregistre les cibles : commande créée tout de suite, ou gardée pour le départ de sa vague."""
+    if rollout:
+        rollout['total'] = _assign_waves(conn, entries, rollout)
+    for e in entries:
+        wave, command_id, pending = e.get('wave', 0), None, ''
+        if e['params']:
+            if wave > 1:
+                pending = json.dumps({'action': e['action'], 'params': e['params']}, sort_keys=True)
+            else:
+                command_id = _new_command(conn, e['dev'], e['action'], e['params'], user)
+        target = e['target']
+        conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason,wave,pending,last_state) '
+                     'VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (deployment_id, target['id'] if e['dev'] else None, target['uid'], target['hostname'], target['os_family'],
+                     command_id, json.dumps(e['apps']), json.dumps(e['skipped']), target['reason'], wave, pending, 'planned' if pending else ''))
+
+
+def start_update_rollout(conn, devices, form, reboot, group_name):
+    """Mise à jour du parc par vagues, lancée depuis Mon parc : un déploiement de type « update », confirmé d'emblée."""
+    rollout = _rollout_options(form)
+    deployment_id = secrets.token_hex(16)
+    title = (_('Mises à jour · groupe %(name)s', name=group_name) if group_name else _('Mises à jour du parc'))[:100]
+    targets = [{'id': d['id'], 'uid': d['uid'], 'hostname': d['hostname'], 'os_family': d['os_family'], 'reason': ''} for d in devices]
+    plan = {'kind': 'update', 'apps': [], 'devices': targets, 'groups': {'software': [], 'devices': [group_name] if group_name else []},
+            'bulk': True, 'force': False, 'reboot': reboot}
+    params = {'reboot': reboot, 'deployment_id': deployment_id}
+    entries = [{'target': t, 'dev': d, 'action': 'update', 'params': params, 'apps': [], 'skipped': []} for t, d in zip(targets, devices)]
+    conn.execute('INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan,state,confirmed_at,waves) '
+                 "VALUES (?,?,?,?,?,?,?,?,?,'queued',?,'')", (deployment_id, title, g.user['id'], g.user['username'], g.user['pw_version'], _owner(),
+                 fleet._now(), time.time() + 3600, json.dumps(plan), fleet._now()))
+    _add_targets(conn, deployment_id, entries, rollout, g.user['username'])
+    conn.execute('UPDATE deployments SET waves=? WHERE id=?', (json.dumps(rollout), deployment_id))
+    audit('deploiement.confirmation', f"{title} : {counted(len(devices), 'poste')}, {counted(rollout['total'], 'vague')}, {deployment_id}", commit=False)
+    return deployment_id
+
+
+def _start_wave(conn, row, rollout, number):
+    """Crée les commandes d'une vague. Un poste retiré du parc entre-temps n'est plus concerné."""
+    for target in conn.execute('SELECT * FROM deployment_targets WHERE deployment_id=? AND wave=? AND pending!=\'\'', (row['id'], number)).fetchall():
+        dev = conn.execute("SELECT * FROM devices WHERE id=? AND state='active'", (target['device_id'],)).fetchone()
+        if dev is None:
+            conn.execute("UPDATE deployment_targets SET pending='',last_state='skipped',reason='Poste retiré du parc avant le départ de sa vague' WHERE id=?", (target['id'],))
+            continue
+        pending = json.loads(target['pending'])
+        if pending['action'] == 'update' and not fleet.needs_update(dev):      # mis à jour entre-temps, ou déjà en attente
+            conn.execute("UPDATE deployment_targets SET pending='',last_state='skipped',reason='Rien à mettre à jour au départ de sa vague' WHERE id=?", (target['id'],))
+            continue
+        command_id = _new_command(conn, dev, pending['action'], pending['params'], row['created_by'])
+        conn.execute("UPDATE deployment_targets SET command_id=?,pending='',last_state='' WHERE id=?", (command_id, target['id']))
+    rollout['current'] = number
+    for key in ('next_at', 'paused', 'silent'):
+        rollout.pop(key, None)
+
+
+def _advance(conn, row):
+    """Avance un déploiement par vagues d'un cran. Rien ne part sans preuve : au moins une réussite dans la vague en cours,
+    et moins d'échecs que le seuil. Un poste hors ligne ne bloque pas : sa commande l'attend, il suivra à son retour."""
+    rollout, before = _rollout(row), row['waves']
+    if rollout.get('finished') or rollout.get('paused'):
+        return
+    now = time.time()
+    current = rollout['current']
+    success = failed = busy = 0
+    for t in conn.execute('SELECT c.state AS state,d.state AS device_state,d.last_seen FROM deployment_targets t LEFT JOIN device_commands c ON c.id=t.command_id '
+                          'LEFT JOIN devices d ON d.id=t.device_id WHERE t.deployment_id=? AND t.wave=?', (row['id'], current)):
+        success += t['state'] == 'success'
+        failed += t['state'] == 'failed'
+        if t['state'] in ('sent', 'running'):
+            busy += 1                                       # sans réponse, il finit en échec au bout de 6 h
+        elif t['state'] == 'queued' and fleet.presence({'state': t['device_state'] or 'removed', 'last_seen': t['last_seen'] or ''})['online']:
+            busy += 1
+    if failed >= rollout['stop_after']:
+        if current < rollout['total']:
+            rollout['paused'] = {'wave': current, 'failed': failed}
+        else:
+            rollout['finished'] = True                      # plus rien à décider : le résultat se lit sur le déploiement
+    elif not busy:
+        rollout['silent'] = not success                     # personne n'a répondu : rien ne dit qu'on peut continuer
+        if current >= rollout['total']:
+            rollout['finished'] = True
+        elif success:
+            rollout.setdefault('next_at', now + rollout['delay'] * 60)
+            if now >= rollout['next_at']:
+                _start_wave(conn, row, rollout, current + 1)
+    updated = json.dumps(rollout)
+    if updated != before:
+        conn.execute('UPDATE deployments SET waves=? WHERE id=?', (updated, row['id']))
+
+
+def advance_rollouts(conn):
+    """Fil de fond : fait avancer les déploiements par vagues."""
+    with app.app_context():                                 # fleet.needs_update lit la base par db()
+        for row in conn.execute("SELECT * FROM deployments WHERE waves!='' AND state='queued' AND cancel_requested=0").fetchall():
+            _advance(conn, row)
+
+
+def paused_rollouts():
+    """Déploiements en pause visibles du compte courant (vue d'ensemble)."""
+    rows = db().execute("SELECT * FROM deployments WHERE waves LIKE '%\"paused\"%' AND state='queued' AND cancel_requested=0").fetchall()
+    return [r for r in rows if _in_scope(r)]
+
+
+def _rollout_view(row, targets):
+    """Avancement par vague pour la fiche du déploiement ; None pour un déploiement sans vagues."""
+    rollout = _rollout(row)
+    if not rollout:
+        return None
+    waves = []
+    for number in range(1, rollout['total'] + 1):
+        members = [t for t in targets if t['wave'] == number]
+        progress = _progress(members)
+        started = number <= rollout['current']
+        state = 'planned' if not started else 'done' if not progress['active'] else 'running'
+        waves.append({'number': number, 'progress': progress, 'state': state})
+    wait = max(0, round((rollout['next_at'] - time.time()) / 60)) if rollout.get('next_at') else None
+    can_continue = not row['cancel_requested'] and not rollout.get('finished') and rollout['current'] < rollout['total'] \
+        and bool(rollout.get('paused') or rollout.get('silent') or rollout.get('next_at'))
+    return {**rollout, 'waves': waves, 'wait': wait, 'can_continue': can_continue}
+
+
+@app.route('/fleet/deployments/<deployment_id>/next-wave', methods=['POST'])
+@login_required
+def deployment_next_wave(deployment_id):
+    """Décision humaine : passer à la vague suivante malgré une pause, un silence ou une attente."""
+    row = _get(deployment_id)
+    conn = lock_access(_manage_permission(json.loads(row['plan'])))
+    row = conn.execute('SELECT * FROM deployments WHERE id=?', (deployment_id,)).fetchone()
+    rollout = _rollout(row)
+    if rollout and not row['cancel_requested'] and not rollout.get('finished') and rollout['current'] < rollout['total']:
+        _start_wave(conn, row, rollout, rollout['current'] + 1)
+        conn.execute('UPDATE deployments SET waves=? WHERE id=?', (json.dumps(rollout), deployment_id))
+        audit('deploiement.vague', f"{row['title']} : vague {rollout['current']}, {deployment_id}", commit=False)
+    conn.commit()
     return back('deployment_detail', deployment_id=deployment_id)
 
 

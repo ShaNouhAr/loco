@@ -3,7 +3,7 @@
 {% block title %}{{ _("Déploiements") }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
-{% set labels = {'draft': _('À confirmer'), 'expired': _('Préparation expirée'), 'running': _('En cours'), 'cancelling': _('Annulation demandée'), 'success': _('Terminé'), 'failed': _('Terminé avec erreurs'), 'cancelled': _('Annulé')} %}
+{% set labels = {'draft': _('À confirmer'), 'expired': _('Préparation expirée'), 'running': _('En cours'), 'cancelling': _('Annulation demandée'), 'success': _('Terminé'), 'failed': _('Terminé avec erreurs'), 'cancelled': _('Annulé'), 'paused': _('En pause après un échec')} %}
 <div class="head">
   <div>
     <h1>{{ _("Déploiements") }}</h1>
@@ -40,7 +40,7 @@
           <tr>
             <td><a href="{{ url_for('deployment_detail', deployment_id=item.row.id) }}" class="strong-link">{{ item.row.title }}</a>
               <span class="sub sans">{{ item.row.created_at|date_fr }} · {{ item.row.created_by }}</span></td>
-            <td class="hide-sm"><span class="os-tag">{{ _("Linux") if item.kind == 'linux' else _("Windows") }}</span> <span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
+            <td class="hide-sm"><span class="os-tag">{{ _("Mises à jour") if item.kind == 'update' else _("Linux") if item.kind == 'linux' else _("Windows") }}</span> <span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
             <td class="deploy-progress">
               {% if item.state in ('draft', 'expired') %}<span class="faint small">{{ _("%(devices)s poste%(v)s prévu%(v)s", devices=item.devices, v='s' if item.devices > 1) }}</span>
               {% else %}
@@ -48,7 +48,7 @@
               <span class="small muted">{{ _("%(success)s/%(total)s réussi%(v)s", success=p.success, total=p.total, v='s' if p.success > 1) }}{% if p.active %} {{ _("· %(active)s en attente", active=p.active) }}{% endif %}{% if p.failed %} · <span class="err-text">{{ _("%(failed)s échec%(v)s", failed=p.failed, v='s' if p.failed > 1) }}</span>{% endif %}</span>
               {% endif %}
             </td>
-            <td class="nowrap"><span class="st {{ 'ok' if item.state == 'success' else 'err' if item.state == 'failed' else 'warn' if item.state in ('running', 'draft', 'cancelling') else '' }}">{{ labels[item.state] }}</span></td>
+            <td class="nowrap"><span class="st {{ 'ok' if item.state == 'success' else 'err' if item.state == 'failed' else 'warn' if item.state in ('running', 'draft', 'cancelling', 'paused') else '' }}">{{ labels[item.state] }}</span></td>
           </tr>
         {% endfor %}
         </tbody>

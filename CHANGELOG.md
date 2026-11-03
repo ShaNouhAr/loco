@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.128.0 — 2026-11-03
+
+- **Déploiement par vagues.** Une mise à jour du parc ou d'un groupe, un déploiement de logiciels ou de paquets peuvent partir par vagues au lieu de toucher tous les postes d'un coup. On choisit le nombre de postes par vague, l'attente entre deux vagues, le nombre d'échecs qui met tout en pause, et éventuellement un groupe pilote pour commencer.
+  - **Une vague ne part que sur preuve** : au moins une réussite dans la précédente et moins d'échecs que le seuil. Sinon tout s'arrête : les postes suivants ne reçoivent rien, la vue d'ensemble le signale, une notification part, et c'est à vous de décider de lancer la vague suivante ou d'annuler le reste.
+  - **Un poste éteint ne bloque pas** : sa commande l'attend et il suivra à son retour. Les postes en ligne passent d'abord, car ils répondent vite. Si aucun poste d'une vague n'a répondu, rien ne part tout seul.
+  - **Au départ de chaque vague**, un poste retiré du parc, ou qui n'a plus rien à mettre à jour, est écarté.
+
 ## 2.127.3 — 2026-11-03
 
 - **Commandes sans réponse** : une commande envoyée à un poste qui ne revient jamais passe maintenant en échec au bout de 6 h. Elle restait affichée indéfiniment, car seul un contact du poste pouvait la clore.

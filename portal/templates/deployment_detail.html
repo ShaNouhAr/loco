@@ -1,29 +1,29 @@
 {% extends 'base.html' %}
 {% from "_charts.html" import progress as progress_bar %}
+{% from "_macros.html" import rollout_fields %}
 {% block title %}{{ deployment.title }}{% endblock %}
 {% block content %}
 {% include '_fleet_nav.html' %}
-{% set labels = {'draft': _('Préparation à confirmer · aucune installation lancée'), 'expired': _('Préparation expirée'), 'running': _('Déploiement en cours'), 'cancelling': _('Annulation demandée'), 'success': _('Déploiement terminé'), 'failed': _('Déploiement terminé avec erreurs'), 'cancelled': _('Déploiement annulé')} %}
-{% set cls = 'ok' if state == 'success' else 'err' if state == 'failed' else 'warn' if state in ('running', 'draft', 'cancelling') else '' %}
+{% set labels = {'draft': _('Préparation à confirmer · aucune installation lancée'), 'expired': _('Préparation expirée'), 'running': _('Déploiement en cours'), 'cancelling': _('Annulation demandée'), 'success': _('Déploiement terminé'), 'failed': _('Déploiement terminé avec erreurs'), 'cancelled': _('Déploiement annulé'), 'paused': _('En pause après un échec')} %}
+{% set cls = 'ok' if state == 'success' else 'err' if state == 'failed' else 'warn' if state in ('running', 'draft', 'cancelling', 'paused') else '' %}
 {% set draft = deployment.state == 'draft' %}
-{% set can_cancel = can('fleet.install') and state in ('draft', 'expired', 'running') and (not plan.bulk or can('fleet.bulk_install')) %}
+{% set manage = can('fleet.bulk_update') if kind == 'update' else can('fleet.install') %}
+{% set can_cancel = manage and state in ('draft', 'expired', 'running', 'paused') and (kind == 'update' or not plan.bulk or can('fleet.bulk_install')) %}
 <p class="small back-link"><a href="{{ url_for('deployments') }}">{{ _("← Déploiements") }}</a></p>
 <div class="head">
   <div>
     <h1>{{ deployment.title }}</h1>
     <p><span class="st {{ cls }}">{{ labels[state] }}</span> · {{ deployment.created_by }} · {{ deployment.created_at|date_fr }}{% if plan.groups.software or plan.groups.devices %} {{ _("· groupes %(v)s", v=(plan.groups.software + plan.groups.devices)|join(', ')) }}{% endif %}</p>
   </div>
-  {% if can('fleet.install') %}
+  {% if manage %}
   <div class="actions">
     {% if draft %}
       {% if can_cancel %}<form method="post" action="{{ url_for('deployment_cancel', deployment_id=deployment.id) }}" data-confirm="{{ _('Abandonner cette préparation ?') }}" data-confirm-text="{{ _('Aucune installation n\'a été lancée : la préparation est simplement fermée.') }}" data-confirm-ok="{{ _('Abandonner') }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ _("Abandonner") }}</button>
       </form>{% endif %}
-      {% if state == 'draft' %}<form method="post" action="{{ url_for('deployment_confirm', deployment_id=deployment.id) }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" {{ 'disabled' if not confirmable }}><span class="spin"></span>{{ _("Confirmer le déploiement") }}</button>
-      </form>{% else %}<a class="btn primary" href="{{ recompose }}">{{ _("Préparer à nouveau") }}</a>{% endif %}
+      {% if state == 'draft' %}<button class="btn primary" form="deploy-confirm" {{ 'disabled' if not confirmable }}><span class="spin"></span>{{ _("Confirmer le déploiement") }}</button>{% else %}<a class="btn primary" href="{{ recompose }}">{{ _("Préparer à nouveau") }}</a>{% endif %}
     {% else %}
-      <a class="btn" href="{{ recompose }}">{{ _("Préparer un déploiement similaire") }}</a>
+      {% if kind != 'update' %}<a class="btn" href="{{ recompose }}">{{ _("Préparer un déploiement similaire") }}</a>{% endif %}
       {% if can_cancel and not draft %}
       <details class="menu">
         <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
@@ -46,6 +46,14 @@
     {% else %}<p class="note">{{ _("Vérifiez les logiciels et les postes ci-dessous, puis confirmez. Les postes ajoutés plus tard aux groupes ne rejoignent pas ce déploiement.") }}{% if plan.bulk %} {{ _("Déploiement sur plusieurs postes.") }}{% endif %}</p>{% endif %}
   {% elif state == 'expired' %}<p class="note warn">{{ _("Cette préparation a expiré (une heure). <a href=\"%(recompose)s\">Préparez-la à nouveau</a> pour reprendre la même sélection.", recompose=recompose) }}</p>
   {% endif %}
+  {% if state == 'draft' %}
+  <section class="panel">
+    <form id="deploy-confirm" method="post" action="{{ url_for('deployment_confirm', deployment_id=deployment.id) }}" class="panel-b stack-sm">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {{ rollout_fields(default_size, device_groups) }}
+    </form>
+  </section>
+  {% endif %}
   {% if plan.force %}<p class="note warn">{{ _("Réinstallation demandée : les logiciels sont réinstallés même quand une version à jour est détectée.") }}</p>{% endif %}
 
   {% if not draft %}
@@ -56,6 +64,30 @@
     <div class="metric"><div class="k">{{ _("Non déployés") }}</div><div class="v">{{ progress.other }}</div><div class="s">{{ _("incompatibles ou annulés") }}</div></div>
   </div>
   {{ progress_bar(progress) }}
+  {% endif %}
+
+  {% if rollout %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Vagues") }}</h2><div class="aside">{{ _("Vague %(current)s sur %(total)s", current=rollout.current, total=rollout.total) }}</div></div>
+    {% if rollout.paused %}<div class="panel-b"><p class="note err">{{ ngettext("Vague %(wave)s : %(num)s échec. Les vagues suivantes ne partiront pas sans votre décision.", "Vague %(wave)s : %(num)s échecs. Les vagues suivantes ne partiront pas sans votre décision.", rollout.paused.failed, wave=rollout.paused.wave) }}</p></div>
+    {% elif rollout.silent and not rollout.finished %}<div class="panel-b"><p class="note warn">{{ _("Aucun poste de cette vague n'a répondu : rien ne prouve encore que la suite peut partir. Elle attend, ou votre décision.") }}</p></div>{% endif %}
+    <div class="table-wrap">
+      <table class="rollout-table">
+        <thead><tr><th>{{ _("Vague") }}</th><th>{{ _("État") }}</th><th class="right">{{ _("Postes") }}</th><th class="right">{{ _("Réussis") }}</th><th class="right">{{ _("Échecs") }}</th><th class="right">{{ _("En attente") }}</th></tr></thead>
+        <tbody>
+        {% for w in rollout.waves %}{% set wcls = 'err' if w.progress.failed else 'ok' if w.state == 'done' else 'warn' if w.state == 'running' else '' %}
+          <tr><td>{{ w.number }}</td><td><span class="st {{ wcls }}">{{ {'done': _('Terminée'), 'running': _('En cours'), 'planned': _('À venir')}[w.state] }}</span></td><td class="right num">{{ w.progress.total }}</td><td class="right num">{{ w.progress.success }}</td><td class="right num">{{ w.progress.failed }}</td><td class="right num">{{ w.progress.active }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="panel-f row-between">
+      <span class="muted small">{% if rollout.wait is not none and not rollout.paused %}{{ ngettext("Vague suivante dans %(num)s minute.", "Vague suivante dans %(num)s minutes.", rollout.wait) }}{% elif rollout.finished %}{{ _("Toutes les vagues sont parties.") }}{% else %}{{ _("Pause à partir de %(stop)s échec%(v)s dans une vague, %(delay)s min entre deux vagues.", stop=rollout.stop_after, v='s' if rollout.stop_after > 1, delay=rollout.delay) }}{% endif %}</span>
+      {% if rollout.can_continue and manage %}<form method="post" action="{{ url_for('deployment_next_wave', deployment_id=deployment.id) }}" data-confirm="{{ _('Lancer la vague suivante ?') }}" data-confirm-text="{{ _('La vague précédente a échoué : les postes suivants risquent le même problème.') if rollout.paused else _('Elle part tout de suite, sans attendre.') }}" data-confirm-ok="{{ _('Lancer la vague') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn"><span class="spin"></span>{{ _("Lancer la vague suivante") }}</button>
+      </form>{% endif %}
+    </div>
+  </section>
   {% endif %}
 
   <section class="panel">
@@ -76,6 +108,7 @@
           {% for t in targets %}{% set tcls = 'ok' if t.state == 'success' else 'err' if t.state == 'failed' else 'warn' if t.state in ('queued', 'sent', 'running') else '' %}
           <tr>
             <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}
+              {% if t.wave %}<span class="sub sans">{{ _("Vague %(n)s", n=t.wave) }}</span>{% endif %}
               {% if t.apps %}<span class="sub sans">{% if kind == 'linux' %}{{ _("%(apps)s paquet%(v)s à installer", apps=t.apps|length, v='s' if t.apps|length > 1) }}{% else %}{{ _("%(apps)s logiciel%(v)s à installer", apps=t.apps|length, v='s' if t.apps|length > 1) }}{% endif %}</span>{% endif %}</td>
             <td class="nowrap"><span class="st {{ tcls }}">{{ states[t.state] }}</span>{% if t.sent_at and t.state in ('sent', 'running') %}<span class="sub sans">{{ _("transmis %(sent_at)s", sent_at=t.sent_at|date_fr) }}</span>{% elif t.finished_at %}<span class="sub sans">{{ t.finished_at|date_fr }}</span>{% endif %}</td>
             <td>
@@ -95,6 +128,7 @@
     </div>
   </section>
 
+  {% if kind != 'update' %}
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Paquets") if kind == 'linux' else _("Logiciels") }} <span class="h-count">{{ apps|length }}</span></h2>
       <div class="aside">{% if kind == 'linux' %}{{ _('installés depuis les dépôts loco') }}{% else %}{{ _('versions vérifiées à la confirmation') if draft else _('versions conservées à la confirmation') }}{% endif %}</div></div>
@@ -114,5 +148,6 @@
     </div>
     <div class="panel-f">{% if kind == 'linux' %}{{ _("Un poste hors ligne reçoit sa commande à son prochain contact. Chaque poste n'installe que les paquets compatibles avec son système, depuis le dépôt loco déjà configuré. Les résultats restent consultables même si un groupe est modifié ou supprimé.") }}{% else %}{{ _("Un poste hors ligne reçoit sa commande à son prochain contact. Les logiciels déjà à jour et les installations identiques déjà en attente sont ignorés. Les résultats restent consultables même si un groupe est modifié ou supprimé.") }}{% endif %}</div>
   </section>
+  {% endif %}
 </div>
 {% endblock %}
