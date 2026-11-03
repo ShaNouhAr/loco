@@ -315,6 +315,37 @@
     </section>
     {% endif %}
 
+    {% if internal_hosts %}
+    <section class="panel" id="noms-internes">
+      <div class="panel-h"><h2>{{ _("Noms internes") }}</h2></div>
+      <div class="panel-b stack-sm">
+        <p class="muted small">{{ _("Les noms que le DNS de ce serveur ne résout pas, comme l'adresse d'un fournisseur SSO interne. Ils sont écrits dans un bloc dédié de /etc/hosts, conservé par les mises à jour. Le cache Windows Update garde ses propres DNS.") }}</p>
+        {% if internal_hosts.entries %}
+        <div class="table-wrap"><table>
+          <thead><tr><th>{{ _("Nom") }}</th><th>{{ _("Adresse IP") }}</th>{% if can('system.configure') %}<th></th>{% endif %}</tr></thead>
+          <tbody>
+            {% for name, address in internal_hosts.entries %}
+            <tr><td class="mono">{{ name }}</td><td class="mono">{{ address }}</td>
+              {% if can('system.configure') %}<td class="right"><form method="post" action="{{ url_for('system_internal_hosts') }}" data-confirm="{{ _('Retirer %(name)s ?', name=name) }}" data-confirm-text="{{ _('Ce serveur devra alors le résoudre par son DNS.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="remove"><input type="hidden" name="name" value="{{ name }}"><button class="btn sm"><span class="spin"></span>{{ _("Retirer") }}</button></form></td>{% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
+        {% endif %}
+        {% if can('system.configure') %}
+        <form method="post" action="{{ url_for('system_internal_hosts') }}" class="repo-form hosts-form">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add">
+          <input type="text" name="name" required placeholder="{{ _('sso.exemple.lan') }}" aria-label="{{ _('Nom') }}" spellcheck="false" autocapitalize="none" class="mono">
+          <input type="text" name="address" required placeholder="{{ _('192.168.1.10') }}" aria-label="{{ _('Adresse IP') }}" spellcheck="false" class="mono">
+          <button class="btn"><span class="spin"></span>{{ _("Ajouter") }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </section>
+    {% elif internal_hosts_hint %}
+    <p class="hint">{{ internal_hosts_hint }}</p>
+    {% endif %}
+
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Ports réseau") }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
       <div class="panel-b">

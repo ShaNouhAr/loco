@@ -2079,6 +2079,9 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .check-detail, .check-fix { margin: 0; font-size: 13px; }
 .check-detail { color: var(--text-2); }
 .check-step .copy-field { max-width: 680px; }
+.hosts-form input[name=address] { flex: 0 1 200px; }
+.check-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.check-add input[name=address] { flex: 0 1 200px; min-width: 0; }
 @media (max-width: 560px) { .check-step { grid-template-columns: minmax(0, 1fr); } }
 
 @media (max-width: 560px) {

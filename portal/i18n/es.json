@@ -3736,5 +3736,20 @@
  "Vérifiez chez le fournisseur : client « Confidentiel », URL de redirection identique à celle affichée par loco, et type d’autorisation « Authorization Code » permis. « Vérifier la configuration » indique la cause et sa correction.": "Compruebe en el proveedor: cliente «Confidencial», URL de redirección idéntica a la que muestra loco y tipo de concesión «Authorization Code» permitido. «Comprobar la configuración» indica la causa y su corrección.",
  "Fournisseur injoignable ou mal configuré : %(e)s. « Vérifier la configuration » indique la cause et sa correction.": "Proveedor inaccesible o mal configurado: %(e)s. «Comprobar la configuración» indica la causa y su corrección.",
  "Refusé, mais Authentik répond ainsi aussi quand l’URL de retour n’est pas déclarée : le secret n’est pas forcément en cause.": "Rechazado, pero Authentik también responde así cuando la URL de retorno no está declarada: el secreto no tiene por qué ser la causa.",
- "Déclarez d’abord l’URL de retour, puis relancez la vérification.": "Declare primero la URL de retorno y vuelva a lanzar la comprobación."
+ "Déclarez d’abord l’URL de retour, puis relancez la vérification.": "Declare primero la URL de retorno y vuelva a lanzar la comprobación.",
+ "Pour qu'un nom interne soit résolu par loco : extra_hosts dans docker-compose.yml.": "Para que loco resuelva un nombre interno: extra_hosts en docker-compose.yml.",
+ "Pour qu'un nom interne soit résolu par loco : fichier C:\\Windows\\System32\\drivers\\etc\\hosts du serveur.": "Para que loco resuelva un nombre interno: archivo C:\\Windows\\System32\\drivers\\etc\\hosts del servidor.",
+ "Noms internes mis à jour.": "Nombres internos actualizados.",
+ "Le changement a échoué : consultez le journal de l'opération dans Système.": "El cambio ha fallado: consulte el registro de la operación en Sistema.",
+ "Noms internes modifiés": "Nombres internos modificados",
+ "Noms internes": "Nombres internos",
+ "Ou indiquez son adresse à ce serveur :": "O indique su dirección a este servidor:",
+ "Adresse IP de %(name)s": "Dirección IP de %(name)s",
+ "Ajouter ce nom": "Añadir este nombre",
+ "192.168.1.10": "192.168.1.10",
+ "Les noms que le DNS de ce serveur ne résout pas, comme l'adresse d'un fournisseur SSO interne. Ils sont écrits dans un bloc dédié de /etc/hosts, conservé par les mises à jour. Le cache Windows Update garde ses propres DNS.": "Los nombres que el DNS de este servidor no resuelve, como la dirección de un proveedor SSO interno. Se escriben en un bloque dedicado de /etc/hosts, que se conserva en las actualizaciones. La caché de Windows Update mantiene sus propios DNS.",
+ "Retirer %(name)s ?": "¿Retirar %(name)s?",
+ "Ce serveur devra alors le résoudre par son DNS.": "Este servidor tendrá que resolverlo entonces por su DNS.",
+ "sso.exemple.lan": "sso.ejemplo.lan",
+ "Adresse IP": "Dirección IP"
 }

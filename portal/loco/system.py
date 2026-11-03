@@ -15,7 +15,7 @@ import sys
 import time
 import urllib.parse
 
-from flask import Response, abort, flash, g, has_request_context, render_template, request, send_file
+from flask import Response, abort, flash, g, has_request_context, redirect, render_template, request, send_file, url_for
 
 from . import addresses, app, config
 from .i18n import L_, _, locale
@@ -328,6 +328,32 @@ def portal_state():
             "providers": [{"label": d["label"], "url": callback_url(d["id"])} for d in enabled_directories() if d["kind"] == "oidc"]}
 
 
+def internal_hosts_state():
+    """Noms internes de ce serveur (onglet Réseau). Docker et Windows : indication seulement, pas d'agent root."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        return None
+    return {"entries": sorted(locoadmin.read_internal_hosts().items())}
+
+
+def internal_hosts_hint():
+    if config.CONTAINER:
+        return _("Pour qu'un nom interne soit résolu par loco : extra_hosts dans docker-compose.yml.")
+    if config.WINDOWS:
+        return _("Pour qu'un nom interne soit résolu par loco : fichier C:\\Windows\\System32\\drivers\\etc\\hosts du serveur.")
+    return ""
+
+
+def _wait_for_job(marker, seconds=10):
+    """Attend la fin de l'opération déposée après « marker » : le diagnostic relancé juste après doit voir son effet."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        latest = next(iter(locoadmin.jobs(limit=1)), {})
+        if latest.get("id", "aucune") != marker and latest.get("state") in ("success", "failed"):
+            return latest
+        time.sleep(0.25)
+    return None
+
+
 def https_port_hint():
     """Docker et serveur Windows : le port se règle à l'installation, sans passer par l'agent root."""
     if config.CONTAINER:
@@ -528,7 +554,7 @@ def system():
     return render_template(
         "system.html",
         services=services, stopped=[unit for unit, _, active in services if not active],
-        firewall=firewall_ports(), https_port=https_port_state(), https_port_hint=https_port_hint(), portal=portal_state(),
+        firewall=firewall_ports(), https_port=https_port_state(), https_port_hint=https_port_hint(), portal=portal_state(), internal_hosts=internal_hosts_state(), internal_hosts_hint=internal_hosts_hint(),
         egress=firewall_egress(time_info),
         last_backup=_age(backups[0]["mtime"]) if backups else None,
         cert=cert_info(os.path.join(config.TLS_DIR, "server.crt")),
@@ -1137,6 +1163,26 @@ def system_portal_url():
     sent = _agent_action("set-portal-url", {"url": url, "extend": "1" if request.form.get("extend") == "1" else ""},
                          "systeme.adresse-portail", url or config.HTTPS_URL, _("Changement de l'adresse du portail lancé."))
     return back("system", _anchor="reseau", attente_portail=latest) if sent else back("system", _anchor="reseau")
+
+
+@app.route("/system/internal-hosts", methods=["POST"])
+@login_required
+def system_internal_hosts():
+    """Ajoute ou retire un nom interne ; depuis le diagnostic d'un fournisseur SSO, y revient et le relance."""
+    if config.WINDOWS or not config.SERVER_UPDATES:
+        abort(404)
+    marker = next(iter(locoadmin.jobs(limit=1)), {}).get("id", "aucune")
+    name, address, operation = request.form.get("name", "").strip(), request.form.get("address", "").strip(), request.form.get("op", "add")
+    sent = _agent_action("set-internal-hosts", {"op": operation, "name": name, "address": address}, "systeme.noms-internes",
+                         f"{operation} {name} {address}".strip(), _("Noms internes mis à jour."))
+    if sent:
+        job = _wait_for_job(marker)
+        if job and job["state"] == "failed":
+            flash(_("Le changement a échoué : consultez le journal de l'opération dans Système."), "error")
+    directory = request.form.get("directory", "")
+    if re.fullmatch(r"[0-9a-f]{16}", directory) and db().execute("SELECT 1 FROM auth_directories WHERE id=?", (directory,)).fetchone():
+        return redirect(url_for("sso_settings", verifier=directory))
+    return back("system", _anchor="reseau")
 
 
 @app.route("/system/backup-retention", methods=["POST"])

@@ -164,7 +164,7 @@ ENDPOINTS = {
     "system_cert_renew": "system.configure", "system_cert_import": "system.configure", "system_cert_remove": "system.configure",
     "system_ca_import": "system.configure", "system_ca_remove": "system.configure", "system_csr": "system.configure",
     "system_csr_download": "system.configure", "system_enterprise_import": "system.configure",
-    "system_tls_mode": "system.configure", "system_https_port": "system.configure", "system_portal_url": "system.configure",
+    "system_tls_mode": "system.configure", "system_https_port": "system.configure", "system_portal_url": "system.configure", "system_internal_hosts": "system.configure",
     "system_backup_delete": "system.configure",
     "system_offsite": "system.configure", "system_offsite_test": "system.configure",
     "system_shell_enable": "system.configure", "system_shell_disable": "system.configure", "system_shell_open": "system.configure",

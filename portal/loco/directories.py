@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash
 
 from . import app, config, permissions
 from .i18n import L_, _
-from .auth import audit, can_assign, lock_access, login_required, require
+from .auth import audit, can, can_assign, lock_access, login_required, require
 from .db import db
 from .directory_protocols import DirectoryError, USERNAME_RE, ldap_authenticate, radius_authenticate
 
@@ -487,7 +487,8 @@ def directory_check(directory_id):
     failed = ", ".join(s["key"] for s in steps if s["state"] == "fail")
     audit("sso.verification", f"{row['label']} : {counts['ok']} OK, {counts['fail']} échec, {counts['unsure']} non concluant" + (f" ({failed})" if failed else ""), commit=False)
     db().commit()
-    return render_template("_sso_check.html", steps=steps, counts=counts, label=row["label"])
+    return render_template("_sso_check.html", steps=steps, counts=counts, label=row["label"], directory_id=directory_id,
+                           can_add_name=config.SERVER_UPDATES and not config.WINDOWS and can("system.configure"))
 
 
 @app.route("/accounts/<int:user_id>/approve", methods=["POST"])

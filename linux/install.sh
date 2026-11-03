@@ -599,6 +599,7 @@ render "$PREFIX/conf/nginx-rpm-proxy-snippet.conf" > /etc/nginx/snippets/loco-rp
 ln -sf ../sites-available/loco-portal.conf /etc/nginx/sites-enabled/loco-portal.conf
 # Certificat importé depuis le portail : son bloc (SNI) est dérivé du bloc ci-dessus, donc refait à chaque installation.
 "$PYTHON" -I "$PREFIX/portal/locoadmin.py" tls-sni >> "$LOG" 2>&1 || warn "certificat importé : bloc nginx non régénéré (journal : $LOG)." "imported certificate: nginx block not regenerated (log: $LOG)." "certificado importado: bloque nginx no regenerado (registro: $LOG)."
+"$PYTHON" -I "$PREFIX/portal/locoadmin.py" hosts-apply >> "$LOG" 2>&1 || warn "noms internes : /etc/hosts non mis à jour." "internal names: /etc/hosts not updated." "nombres internos: /etc/hosts no actualizado."
 # Site nginx par défaut (port 80) : désactivé si nginx a été installé par loco,
 # ou si le cache Windows Update a besoin du port 80 ; sinon on le laisse (ou le remet) en place.
 if [ "$WU_ENABLED" = 1 ] || [ "$CONTAINER" = 1 ] || grep -qx nginx "$PACKAGE_RECORD"; then

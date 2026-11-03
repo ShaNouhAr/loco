@@ -68,7 +68,7 @@ LABELS = {
     "planifications.suppression": L_("Planification supprimée"), "planifications.pause": L_("Planification suspendue"),
     "planifications.reprise": L_("Planification reprise"), "planifications.execution": L_("Planification exécutée"),
     "systeme.restauration": L_("Restauration d'une sauvegarde"),
-    "systeme.adresse-portail": L_("Adresse du portail modifiée"), "systeme.port": L_("Port de l'interface modifié"), "systeme.port.fermeture": L_("Ancien port de l'interface fermé"),
+    "systeme.noms-internes": L_("Noms internes modifiés"), "systeme.adresse-portail": L_("Adresse du portail modifiée"), "systeme.port": L_("Port de l'interface modifié"), "systeme.port.fermeture": L_("Ancien port de l'interface fermé"),
     "systeme.certificat.renouvellement": L_("Certificat HTTPS renouvelé"), "systeme.certificat.import": L_("Certificat HTTPS importé"),
     "systeme.certificat.retrait": L_("Certificat importé retiré"),
     "systeme.autorite.import": L_("Autorité d'entreprise importée"), "systeme.autorite.retrait": L_("Autorité d'entreprise retirée"),

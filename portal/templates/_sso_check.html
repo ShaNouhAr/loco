@@ -15,6 +15,14 @@
       <strong>{{ s.title }}</strong>
       <p class="check-detail">{{ s.detail }}</p>
       {% if s.fix %}<p class="check-fix"><b>{{ _("Correction :") }}</b> {{ s.fix }}</p>{% endif %}
+      {% if s.host and can_add_name %}
+      <form method="post" action="{{ url_for('system_internal_hosts') }}" class="check-add">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="op" value="add"><input type="hidden" name="directory" value="{{ directory_id }}"><input type="hidden" name="name" value="{{ s.host }}">
+        <span>{{ _("Ou indiquez son adresse à ce serveur :") }} <span class="mono">{{ s.host }}</span></span>
+        <input type="text" name="address" required class="mono" placeholder="{{ _('192.168.1.10') }}" aria-label="{{ _('Adresse IP de %(name)s', name=s.host) }}" spellcheck="false">
+        <button class="btn sm"><span class="spin"></span>{{ _("Ajouter ce nom") }}</button>
+      </form>
+      {% endif %}
       {% if s.value %}<div class="copy-field"><input type="text" readonly class="mono" value="{{ s.value }}" aria-label="{{ _('URL de redirection') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copiée') }}">{{ _("Copier") }}</button></div>{% endif %}
     </div>
   </li>

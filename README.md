@@ -412,6 +412,10 @@ couvre. La page liste les URL de retour à redéclarer chez les fournisseurs SSO
 portal-url https://loco.exemple.lan:8443 [--add-to-certificate]`, et `--default` pour revenir à l'adresse des agents. Sous
 Docker : `LOCO_PORTAL_URL`. Sur un serveur Windows : `install.ps1 -PortalUrl`.
 
+**Noms que le DNS du serveur ne résout pas** : *Système › Réseau › Noms internes*, ou directement depuis *Vérifier la
+configuration* d'un fournisseur SSO. Ils vont dans un bloc dédié de `/etc/hosts`, refait après une mise à jour ou
+`setup-loco`. Les DNS du cache Windows Update (`--resolvers`) ne changent pas. Sous Docker : `extra_hosts`.
+
 Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session utilisateur. Sa pastille reprend l'état de Mon parc : vert sans mise à jour, orange de 1 à 9 mises à jour, rouge à partir de 10 (seuil réglable). Un état indisponible ou ancien est gris. Le menu et le double-clic affichent uniquement des détails : **aucune action de mise à jour n'est accessible à l'utilisateur**. Le compagnon ne contacte pas le serveur et ne lit aucun jeton ; il consulte un fichier d'état public, accessible uniquement en lecture aux utilisateurs standards. Le service privilégié reste seul responsable des actions reçues de loco.
 
 </details>

@@ -73,6 +73,7 @@ rm -f /etc/apt-cacher-ng/zz-loco.conf /usr/local/sbin/loco-user /usr/local/sbin/
 for f in /etc/hosts.allow /etc/hosts.deny; do
     if [ -f "$f" ]; then sed -i '/# loco$/d' "$f"; fi
 done
+sed -i '/^# BEGIN loco : noms internes/,/^# END loco$/d' /etc/hosts 2>/dev/null || true
 systemctl daemon-reload 2>/dev/null || true
 
 say "Configuration nginx" "nginx configuration" "Configuración de nginx"

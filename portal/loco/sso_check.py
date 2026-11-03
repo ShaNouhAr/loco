@@ -50,7 +50,11 @@ def _resolvers():
 
 
 def _dns_fix(host):
+    from .system import internal_hosts_hint
     servers = _resolvers()
+    hint = internal_hosts_hint()
+    if hint:
+        return hint
     if servers:
         return _("Déclarez %(host)s dans le DNS utilisé par ce serveur (%(servers)s), ou utilisez dans l’émetteur un nom qu’il résout.",
                  host=host, servers=", ".join(servers[:3]))
@@ -67,9 +71,9 @@ def _step_dns(host, port):
     try:
         found = pool.submit(socket.getaddrinfo, host, port, type=socket.SOCK_STREAM).result(NET_TIMEOUT)
     except socket.gaierror as e:
-        return _done(FAIL, _("Ce serveur ne résout pas %(host)s : %(e)s.", host=host, e=e.strerror or e), _dns_fix(host))
+        return dict(_done(FAIL, _("Ce serveur ne résout pas %(host)s : %(e)s.", host=host, e=e.strerror or e), _dns_fix(host)), host=host)
     except concurrent.futures.TimeoutError:
-        return _done(FAIL, _("Le DNS de ce serveur ne répond pas pour %(host)s.", host=host), _dns_fix(host))
+        return dict(_done(FAIL, _("Le DNS de ce serveur ne répond pas pour %(host)s.", host=host), _dns_fix(host)), host=host)
     finally:
         pool.shutdown(wait=False)
     return _done(OK, _("%(host)s : %(addresses)s.", host=host, addresses=", ".join(dict.fromkeys(i[4][0] for i in found))))

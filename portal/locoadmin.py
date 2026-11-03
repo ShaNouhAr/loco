@@ -66,7 +66,7 @@ def valid_source(value):
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert",
-           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode", "set-https-port", "set-portal-url",
+           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode", "set-https-port", "set-portal-url", "set-internal-hosts",
            "ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 HA_ACTIONS = ("ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 # Opérations qui redémarrent le portail : en haute disponibilité, le contrôle de santé ne doit pas y voir une panne.
@@ -2310,6 +2310,125 @@ def set_portal_url(params, log=print):
     return True
 
 
+# Noms internes : ceux que le DNS de ce serveur ne résout pas (émetteur SSO de l'entreprise). La liste vit dans /etc/loco, donc
+# sauvegardée et répliquée en haute disponibilité ; /etc/hosts porte un bloc dédié, refait dès qu'install.sh ou setup-loco réécrivent
+# ce fichier. RESOLVERS et resolv.conf, ceux du cache Windows Update, ne sont pas touchés.
+HOSTS_FILE = "/etc/hosts"
+INTERNAL_HOSTS = os.path.join(ETC, "internal-hosts")
+HOSTS_BEGIN, HOSTS_END = "# BEGIN loco : noms internes, gérés depuis le portail", "# END loco"
+MAX_INTERNAL_HOSTS = 64
+HOST_ENTRY_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*")
+
+
+def hosts_params(params):
+    """Ajout ou retrait d'un nom interne, validé par le portail puis revalidé par l'agent root."""
+    p = params or {}
+    name = str(p.get("name", "")).strip().lower().rstrip(".")
+    if len(name) > 253 or not HOST_ENTRY_RE.fullmatch(name):
+        raise ValueError(t("nom invalide : lettres, chiffres, tirets et points", "invalid name: letters, digits, hyphens and dots",
+                           "nombre no válido: letras, cifras, guiones y puntos"))
+    if p.get("op") == "remove":
+        return {"op": "remove", "name": name}
+    if p.get("op") != "add":
+        raise ValueError(t("opération inconnue", "unknown operation", "operación desconocida"))
+    if name == "localhost" or name.endswith(".localhost") or name == socket.gethostname().lower():
+        raise ValueError(t(f"{name} est réservé à ce serveur", f"{name} is reserved for this server", f"{name} está reservado para este servidor"))
+    try:
+        address = ipaddress.ip_address(str(p.get("address", "")).strip())
+    except ValueError:
+        raise ValueError(t("adresse IP attendue", "IP address expected", "se espera una dirección IP")) from None
+    if address.is_unspecified or address.is_multicast or address.is_loopback:
+        raise ValueError(t(f"{address} ne peut pas être l'adresse d'un serveur", f"{address} cannot be a server's address",
+                           f"{address} no puede ser la dirección de un servidor"))
+    return {"op": "add", "name": name, "address": str(address)}
+
+
+def read_internal_hosts():
+    """{nom : adresse}. Une ligne mal formée est ignorée : elle n'atteint jamais /etc/hosts."""
+    found = {}
+    try:
+        with open(INTERNAL_HOSTS, encoding="utf-8") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2 and HOST_ENTRY_RE.fullmatch(parts[0]) and _valid_ip(parts[1]):
+                    found[parts[0]] = parts[1]
+    except OSError:
+        pass
+    return found
+
+
+def _with_hosts_block(text, entries):
+    """Texte de /etc/hosts avec le bloc de loco à jour ; le reste du fichier est conservé tel quel."""
+    lines = text.splitlines()
+    if HOSTS_BEGIN in lines:
+        start = lines.index(HOSTS_BEGIN)
+        end = lines.index(HOSTS_END, start) if HOSTS_END in lines[start:] else start
+        lines[start:end + 1] = []
+    elif not entries:
+        return text
+    block = [HOSTS_BEGIN, *(f"{address}\t{name}" for name, address in sorted(entries.items())), HOSTS_END] if entries else []
+    return "\n".join(lines + block) + "\n"
+
+
+def apply_internal_hosts():
+    """Met le bloc de /etc/hosts en accord avec la liste ; n'écrit rien s'il l'est déjà."""
+    try:
+        with open(HOSTS_FILE, encoding="utf-8") as f:
+            current = f.read()
+    except OSError:
+        return False
+    wanted = _with_hosts_block(current, read_internal_hosts())
+    if wanted == current:
+        return False
+    tmp = HOSTS_FILE + ".loco-tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(wanted)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, HOSTS_FILE)
+    except OSError:                                          # fichier monté : pas de remplacement possible
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        with open(HOSTS_FILE, "w", encoding="utf-8") as f:
+            f.write(wanted)
+    return True
+
+
+def _hosts_stamp():
+    stamp = []
+    for path in (INTERNAL_HOSTS, HOSTS_FILE):
+        try:
+            stamp.append(os.stat(path).st_mtime_ns)
+        except OSError:
+            stamp.append(0)
+    return stamp
+
+
+def set_internal_hosts(params, log=print):
+    p = hosts_params(params)
+    if ha_configured() and _ha().role() == "standby":
+        raise ValueError(t("serveur de secours : changez ces noms sur le principal, ils seront répliqués",
+                           "standby server: change these names on the primary, they will be replicated",
+                           "servidor de respaldo: cambie estos nombres en el principal, se replicarán"))
+    entries = read_internal_hosts()
+    if p["op"] == "remove":
+        entries.pop(p["name"], None)
+        log(t(f"Nom retiré : {p['name']}", f"Name removed: {p['name']}", f"Nombre retirado: {p['name']}"))
+    else:
+        if p["name"] not in entries and len(entries) >= MAX_INTERNAL_HOSTS:
+            raise ValueError(t(f"{MAX_INTERNAL_HOSTS} noms au plus : utilisez plutôt un DNS interne", f"{MAX_INTERNAL_HOSTS} names at most: use an internal DNS instead",
+                               f"{MAX_INTERNAL_HOSTS} nombres como máximo: use mejor un DNS interno"))
+        entries[p["name"]] = p["address"]
+        log(t(f"{p['name']} : {p['address']}", f"{p['name']}: {p['address']}", f"{p['name']}: {p['address']}"))
+    tmp = INTERNAL_HOSTS + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.writelines(f"{name} {address}\n" for name, address in sorted(entries.items()))
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, INTERNAL_HOSTS)
+    apply_internal_hosts()
+    return True
+
+
 def _valid_ip(text):
     try:
         ipaddress.ip_address(text)
@@ -2864,6 +2983,8 @@ def _operation(action, params, log):
         return set_https_port(params, log)
     if action == "set-portal-url":
         return set_portal_url(params, log)
+    if action == "set-internal-hosts":
+        return set_internal_hosts(params, log)
     if action == "reboot":
         return reboot(log)
     if action == "set-repo":
@@ -3098,7 +3219,13 @@ def agent():
         write_time_status()
     except Exception as e:                                 # l'heure ne doit jamais empêcher l'agent de démarrer
         print(f"état de l'heure indisponible : {e}", file=sys.stderr)
+    hosts_stamp = None
     while True:
+        # Noms internes : à appliquer après une réplication, une restauration, ou si /etc/hosts a été réécrit (setup-loco).
+        if _hosts_stamp() != hosts_stamp:
+            with contextlib.suppress(OSError):
+                apply_internal_hosts()
+            hosts_stamp = _hosts_stamp()
         for job in jobs(limit=40):
             if job.get("state") in ("queued", "running") and job.get("pid") and not _alive(job["pid"]):
                 job.update(state="failed", finished=_now())
@@ -3183,6 +3310,11 @@ def agent():
                 elif req["action"] == "set-portal-url":
                     try:
                         params = portal_params(req.get("params"))
+                    except ValueError:
+                        continue
+                elif req["action"] == "set-internal-hosts":
+                    try:
+                        params = hosts_params(req.get("params"))
                     except ValueError:
                         continue
                 elif req["action"] in HA_ACTIONS:
@@ -3285,6 +3417,8 @@ def request(action, params=None, user=""):
         params = https_port_params(params)
     elif action == "set-portal-url":
         params = portal_params(params)
+    elif action == "set-internal-hosts":
+        params = hosts_params(params)
     elif action in HA_ACTIONS:
         params = ha_params(action, params)
     else:
@@ -3378,6 +3512,9 @@ def main(argv):
     cmd, args = (argv[0], argv[1:]) if argv else ("", [])
     if cmd == "agent":
         agent()
+        return 0
+    if cmd == "hosts-apply":                               # install.sh : bloc des noms internes dans /etc/hosts
+        apply_internal_hosts()
         return 0
     if cmd == "tls-sni":                                   # install.sh : bloc nginx du certificat importé, à jour
         write_sni_site()

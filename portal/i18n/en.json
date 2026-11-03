@@ -3736,5 +3736,20 @@
  "Vérifiez chez le fournisseur : client « Confidentiel », URL de redirection identique à celle affichée par loco, et type d’autorisation « Authorization Code » permis. « Vérifier la configuration » indique la cause et sa correction.": "Check the provider: “Confidential” client, redirect URL identical to the one shown by loco, and the “Authorization Code” grant type allowed. \"Check configuration\" shows the cause and how to fix it.",
  "Fournisseur injoignable ou mal configuré : %(e)s. « Vérifier la configuration » indique la cause et sa correction.": "Provider unreachable or misconfigured: %(e)s. \"Check configuration\" shows the cause and how to fix it.",
  "Refusé, mais Authentik répond ainsi aussi quand l’URL de retour n’est pas déclarée : le secret n’est pas forcément en cause.": "Refused, but Authentik also answers this way when the redirect URL is not declared: the secret is not necessarily at fault.",
- "Déclarez d’abord l’URL de retour, puis relancez la vérification.": "Declare the redirect URL first, then run the check again."
+ "Déclarez d’abord l’URL de retour, puis relancez la vérification.": "Declare the redirect URL first, then run the check again.",
+ "Pour qu'un nom interne soit résolu par loco : extra_hosts dans docker-compose.yml.": "For loco to resolve an internal name: extra_hosts in docker-compose.yml.",
+ "Pour qu'un nom interne soit résolu par loco : fichier C:\\Windows\\System32\\drivers\\etc\\hosts du serveur.": "For loco to resolve an internal name: the server's C:\\Windows\\System32\\drivers\\etc\\hosts file.",
+ "Noms internes mis à jour.": "Internal names updated.",
+ "Le changement a échoué : consultez le journal de l'opération dans Système.": "The change failed: see the operation log in System.",
+ "Noms internes modifiés": "Internal names changed",
+ "Noms internes": "Internal names",
+ "Ou indiquez son adresse à ce serveur :": "Or give this server its address:",
+ "Adresse IP de %(name)s": "IP address of %(name)s",
+ "Ajouter ce nom": "Add this name",
+ "192.168.1.10": "192.168.1.10",
+ "Les noms que le DNS de ce serveur ne résout pas, comme l'adresse d'un fournisseur SSO interne. Ils sont écrits dans un bloc dédié de /etc/hosts, conservé par les mises à jour. Le cache Windows Update garde ses propres DNS.": "Names this server's DNS does not resolve, such as an internal SSO provider's address. They are written to a dedicated block in /etc/hosts, kept across updates. The Windows Update cache keeps its own DNS.",
+ "Retirer %(name)s ?": "Remove %(name)s?",
+ "Ce serveur devra alors le résoudre par son DNS.": "This server will then have to resolve it through its DNS.",
+ "sso.exemple.lan": "sso.example.lan",
+ "Adresse IP": "IP address"
 }

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.131.0 — 2026-11-03
+
+- **Noms internes gérés depuis le portail** : *Système › Réseau › Noms internes*. Quand le DNS du serveur ne connaît pas un nom, comme l'adresse d'Authentik sur un réseau interne, indiquez son adresse IP, sans ouvrir de shell.
+  - **Proposé par le diagnostic** : quand « Vérifier la configuration » échoue sur le DNS, un champ permet d'ajouter le nom sur place, puis la vérification repart.
+  - **Conservé** : la liste est dans `/etc/loco`, donc sauvegardée et répliquée en haute disponibilité. Le bloc dédié de `/etc/hosts` est refait si le fichier est réécrit, par une mise à jour ou par `setup-loco`.
+  - **Rien d'autre ne change** : `RESOLVERS` et `resolv.conf`, utilisés par le cache Windows Update, ne sont pas touchés. Sous Docker et sur un serveur Windows, la page indique comment faire : `extra_hosts`, ou le fichier `hosts`.
+
 ## 2.130.0 — 2026-11-03
 
 - **Bouton « Vérifier la configuration » pour les fournisseurs OpenID Connect**, dans *Annuaires et SSO*. Il part aussi tout seul à l'enregistrement. Sans connexion d'un utilisateur et sans créer de compte, il contrôle sept étapes depuis le serveur et donne pour chacune son état et sa correction : résolution du nom, connexion, certificat, découverte, clés de signature, client et secret, demande de connexion. Plus besoin de lire les journaux d'Authentik.
