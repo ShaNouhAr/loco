@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.127.1 — 2026-11-03
+
+- **Corrigé : après un changement d'IP du serveur, tous les dépôts d'un poste Linux tombaient.** L'agent rejoignait le nouveau serveur, mais le proxy APT (`01loco-proxy`) et les sources HTTP gardaient l'ancienne adresse : le poste ne lisait plus aucun dépôt, dépôts officiels compris. Les agents mettent maintenant à jour le proxy APT, les sources APT et RPM et les dépôts Flatpak, en HTTP comme en HTTPS, quand ils adoptent une nouvelle adresse. La note de la 2.125.0 sur le suivi d'une nouvelle IP était donc incomplète.
+- **Restent à reprendre à la main** : les postes qui avaient déjà changé d'adresse avant cette version, et ceux configurés par `setup.sh` sans agent : relancez `setup.sh` une fois.
+
 ## 2.127.0 — 2026-11-03
 
 - **Mon parc est paginé**, par 50 postes, les plus urgents d'abord. La navigation n'apparaît qu'au-delà de 50 postes et garde les filtres.

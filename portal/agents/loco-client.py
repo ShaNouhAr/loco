@@ -143,7 +143,8 @@ def call(server, path, data, token=None, timeout=60):
 
 SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
 VIRTUAL_NIC = re.compile(r"(docker|br-|veth|virbr|vboxnet|vmnet|cni|flannel|cali|lxc|lxd|podman)")     # conteneurs et machines virtuelles
-SOURCE_FILES = ("/etc/apt/sources.list.d/loco*.sources", "/etc/apt/sources.list.d/loco*.list", "/etc/yum.repos.d/loco*.repo")
+SOURCE_FILES = ("/etc/apt/sources.list.d/loco*.sources", "/etc/apt/sources.list.d/loco*.list", "/etc/yum.repos.d/loco*.repo",
+                "/etc/apt/apt.conf.d/01loco-proxy")
 
 
 def known_servers(conf):
@@ -156,17 +157,35 @@ def known_servers(conf):
     return out[:8]
 
 
+def _url_host(url):
+    netloc = urllib.parse.urlsplit(url).netloc
+    host, _, port = netloc.rpartition(":")
+    return host if host and port.isdigit() else netloc
+
+
+def _moved(text, old, new):
+    """Texte d'un fichier de dépôt ou de proxy loco une fois le serveur passé de l'adresse old à new.
+    Une IP qui change touche aussi les adresses HTTP et le cache APT, sur leurs propres ports."""
+    text = text.replace(old + "/", new + "/")
+    before, after = _url_host(old), _url_host(new)
+    if before != after:
+        text = re.sub(r"(https?://)" + re.escape(before) + r"(?=[:/\"\s]|$)", lambda m: m.group(1) + after, text, flags=re.M)
+        text = text.replace("Proxy::" + before + ' "', "Proxy::" + after + ' "')
+    return text
+
+
 def follow_sources(old, new):
-    """Les dépôts loco installés en HTTPS portent l'adresse du serveur : ils la suivent quand l'agent en change."""
-    old, new = old.rstrip("/") + "/", new.rstrip("/") + "/"
+    """Les dépôts et le proxy APT installés par loco portent l'adresse du serveur : ils la suivent quand l'agent en change."""
+    old, new = old.rstrip("/"), new.rstrip("/")
     for pattern in SOURCE_FILES:
         for path in glob.glob(pattern):
             try:
                 with open(path) as f:
                     text = f.read()
-                if old in text:
+                moved = _moved(text, old, new)
+                if moved != text:
                     with open(path + ".loco-new", "w") as f:
-                        f.write(text.replace(old, new))
+                        f.write(moved)
                     shutil.copymode(path, path + ".loco-new")
                     os.replace(path + ".loco-new", path)
             except OSError as e:
@@ -176,8 +195,9 @@ def follow_sources(old, new):
     try:
         remotes = subprocess.run(["flatpak", "remotes", "--system", "--columns=name,url"], capture_output=True, text=True, timeout=60).stdout
         for name, _, url in (line.partition("\t") for line in remotes.splitlines()):
-            if url.startswith(old):
-                subprocess.run(["flatpak", "remote-modify", "--system", name, "--url=" + new + url[len(old):]], capture_output=True, timeout=60)
+            moved = _moved(url, old, new)
+            if moved != url:
+                subprocess.run(["flatpak", "remote-modify", "--system", name, "--url=" + moved], capture_output=True, timeout=60)
     except (OSError, subprocess.SubprocessError) as e:
         log(t(f"dépôts Flatpak non mis à jour : {e}", f"Flatpak remotes not updated: {e}", f"repositorios Flatpak no actualizados: {e}"))
 

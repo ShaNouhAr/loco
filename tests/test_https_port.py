@@ -310,6 +310,121 @@ class TestAgentFollowsSources(unittest.TestCase):
         self.assertEqual((saved["server"], saved["servers"]), (self.OLD, [self.NEW]))
 
 
+class TestAgentFollowsNewAddress(unittest.TestCase):
+    """Changement d'IP : proxy APT et adresses HTTP suivent aussi, sur leurs propres ports."""
+    OLD, NEW = "https://192.168.42.226:8443", "https://192.168.42.227:8443"
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("loco_client_ip", ROOT / "portal/agents/loco-client.py")
+        self.agent = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.agent)
+        self.work = tempfile.TemporaryDirectory()
+        self.addCleanup(self.work.cleanup)
+        self.dir = Path(self.work.name)
+        self.agent.CONFIG = str(self.dir / "client.json")
+        self.agent.log = lambda _text: None
+        self.agent.SOURCE_FILES = (str(self.dir / "loco*.sources"), str(self.dir / "loco*.repo"), str(self.dir / "01loco-proxy"))
+        self.which = mock.patch.object(self.agent.shutil, "which", return_value=None)
+        self.which.start()
+        self.addCleanup(self.which.stop)
+
+    def write(self, name, text, mode=0o644):
+        path = self.dir / name
+        path.write_text(text)
+        path.chmod(mode)
+        return path
+
+    def test_apt_proxy_follows_including_its_exception(self):
+        proxy = self.write("01loco-proxy", 'Acquire::http::Proxy "http://192.168.42.226:3142";\nAcquire::https::Proxy "DIRECT";\n'
+                                           'Acquire::http::Proxy::192.168.42.226 "DIRECT";\n')
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertEqual(proxy.read_text(), 'Acquire::http::Proxy "http://192.168.42.227:3142";\nAcquire::https::Proxy "DIRECT";\n'
+                                            'Acquire::http::Proxy::192.168.42.227 "DIRECT";\n')
+
+    def test_http_sources_keep_their_port(self):
+        source = self.write("loco.sources", "URIs: http://192.168.42.226:8088/apt/repositories/debian/trixie/\n")
+        repo = self.write("loco-cache.repo", "[baseos]\nbaseurl=http://192.168.42.226:8088/rpmcache/rocky/9/\n")
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertIn("http://192.168.42.227:8088/apt/", source.read_text())
+        self.assertIn("http://192.168.42.227:8088/rpmcache/", repo.read_text())
+
+    def test_port_and_address_can_change_together(self):
+        source = self.write("loco.sources", "URIs: https://192.168.42.226:8443/apt/\nURIs: http://192.168.42.226:8088/apt/\n")
+        self.agent.follow_sources(self.OLD, "https://192.168.42.227:9443")
+        self.assertEqual(source.read_text(), "URIs: https://192.168.42.227:9443/apt/\nURIs: http://192.168.42.227:8088/apt/\n")
+
+    def test_other_hosts_are_left_alone(self):
+        text = ("URIs: http://192.168.42.2260:8088/apt/\nURIs: http://192.168.42.226.exemple.lan:8088/apt/\n"
+                "URIs: http://1192.168.42.226:8088/apt/\nURIs: http://deb.debian.org/debian/\n")
+        source = self.write("loco.sources", text)
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertEqual(source.read_text(), text)
+
+    def test_a_proxy_on_another_loco_is_not_touched(self):
+        text = 'Acquire::http::Proxy "http://10.0.0.5:3142";\nAcquire::http::Proxy::10.0.0.5 "DIRECT";\n'
+        proxy = self.write("01loco-proxy", text)
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertEqual(proxy.read_text(), text)
+
+    def test_a_port_change_leaves_http_addresses_and_proxy_alone(self):
+        proxy = self.write("01loco-proxy", 'Acquire::http::Proxy "http://192.168.42.226:3142";\n')
+        source = self.write("loco.sources", "URIs: http://192.168.42.226:8088/apt/\n")
+        self.agent.follow_sources(self.OLD, "https://192.168.42.226:9443")
+        self.assertIn(":3142", proxy.read_text())
+        self.assertIn("http://192.168.42.226:8088/apt/", source.read_text())
+
+    def test_file_mode_is_kept_and_no_temporary_file_stays(self):
+        proxy = self.write("01loco-proxy", 'Acquire::http::Proxy "http://192.168.42.226:3142";\n', 0o640)
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertEqual(proxy.stat().st_mode & 0o777, 0o640)
+        self.assertEqual([p.name for p in self.dir.iterdir() if "loco-new" in p.name], [])
+
+    def test_names_and_ipv6_addresses(self):
+        self.assertEqual(self.agent._url_host("https://loco.lan"), "loco.lan")
+        self.assertEqual(self.agent._url_host("https://loco.lan:8443"), "loco.lan")
+        self.assertEqual(self.agent._url_host("https://[fd00::1]:8443"), "[fd00::1]")
+        self.assertEqual(self.agent._url_host("https://[fd00::1]"), "[fd00::1]")
+        moved = self.agent._moved('Acquire::http::Proxy "http://[fd00::1]:3142";', "https://[fd00::1]:8443", "https://loco.lan:8443")
+        self.assertEqual(moved, 'Acquire::http::Proxy "http://loco.lan:3142";')
+
+    def test_flatpak_http_remote_follows(self):
+        self.which.stop()
+        remotes = "loco\thttp://192.168.42.226:8088/flatpak/repo/\nflathub\thttps://dl.flathub.org/repo/\n"
+        calls = []
+
+        def run(args, **_kw):
+            calls.append(args)
+            return mock.Mock(stdout=remotes if args[1] == "remotes" else "")
+        with mock.patch.object(self.agent.shutil, "which", return_value="/usr/bin/flatpak"), mock.patch.object(self.agent.subprocess, "run", run):
+            self.agent.follow_sources(self.OLD, self.NEW)
+        self.which.start()
+        self.assertEqual(calls[1:], [["flatpak", "remote-modify", "--system", "loco", "--url=http://192.168.42.227:8088/flatpak/repo/"]])
+
+    def test_https_sources_follow(self):
+        source = self.write("loco.sources", f"URIs: {self.OLD}/apt/\n")
+        self.agent.follow_sources(self.OLD, self.NEW)
+        self.assertEqual(source.read_text(), f"URIs: {self.NEW}/apt/\n")
+
+    def test_proxy_follows_when_the_agent_falls_back_to_the_new_address(self):
+        proxy = self.write("01loco-proxy", 'Acquire::http::Proxy "http://192.168.42.226:3142";\n')
+        conf = {"server": self.OLD, "uid": "u", "token": "t", "servers": [self.NEW]}
+
+        def call(server, path, data, token=None, timeout=60):
+            if server == self.OLD:
+                raise urllib.error.URLError(OSError(113, "No route to host"))
+            return {"commands": [], "servers": [self.NEW]}
+        with mock.patch.object(self.agent, "call", call):
+            self.agent.checkin(conf, {})
+        self.assertIn("192.168.42.227:3142", proxy.read_text())
+
+    def test_proxy_stays_on_the_old_address_while_it_answers(self):
+        proxy = self.write("01loco-proxy", 'Acquire::http::Proxy "http://192.168.42.226:3142";\n')
+        conf = {"server": self.OLD, "uid": "u", "token": "t", "servers": []}
+        with mock.patch.object(self.agent, "call", return_value={"commands": [], "servers": [self.NEW]}):
+            self.agent.checkin(conf, {})
+        self.assertIn("192.168.42.226:3142", proxy.read_text())
+
+
 class TestHighAvailabilityPort(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

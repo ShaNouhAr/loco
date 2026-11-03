@@ -388,7 +388,8 @@ L'agent se met à jour automatiquement avec loco.
 ou `sudo loco-fleet announce https://192.168.1.20:8443`), attendez que tous les postes soient prévenus
 (`loco-fleet servers`), puis changez l'adresse (`install.sh --host`, ou `setup-loco` sur l'appliance qui fait l'annonce
 lui-même). Les agents passent seuls à la nouvelle adresse, après vérification de l'autorité HTTPS de loco ; un poste
-resté éteint pendant toute l'annonce se réinscrit avec la commande d'installation (même identité).
+resté éteint pendant toute l'annonce se réinscrit avec la commande d'installation (même identité). Les agents Linux
+mettent aussi à jour leur proxy APT et leurs dépôts ; un poste configuré par `setup.sh` sans agent doit le relancer.
 
 **Changer le port de l'interface** : *Système › Réseau › Port de l'interface web*. Le nouveau port s'ouvre à côté de
 l'ancien, donc rien n'est coupé. Les agents l'apprennent à leur prochain contact et la page compte ceux qui le
