@@ -230,6 +230,22 @@ def relay_result():
 state, output = wait('relais du paquet de réveil', relay_result, 300)
 assert state == 'success' and '02:00:00:00:00:01' in output, (state, output)
 print('Réveil à distance : relais exécuté par l\'agent Windows :', output)
+# Réveil demandé : l'agent le traite à son contact, sans casser le contact suivant, que la carte de cette machine le gère ou non.
+with sqlite3.connect(db_path) as conn:
+    conn.execute("UPDATE devices SET wake_policy='on' WHERE id=?", (dev,))
+    before = conn.execute('SELECT last_seen FROM devices WHERE id=?', (dev,)).fetchone()[0]
+
+
+def two_contacts_later():
+    with sqlite3.connect(db_path) as conn:
+        seen, info = conn.execute('SELECT last_seen, net_info FROM devices WHERE id=?', (dev,)).fetchone()
+    return info if seen != before and contacts.append(seen) is None and len(set(contacts)) >= 2 else None
+
+
+contacts = []
+print('Réveil demandé, état remonté :', wait('deux contacts après la demande de réveil', two_contacts_later, 420))
+with sqlite3.connect(db_path) as conn:
+    conn.execute("UPDATE devices SET wake_policy='' WHERE id=?", (dev,))
 # Adresses du serveur Windows, lues comme le fait le portail : sans elles, il ne proposerait pas d'envoyer le paquet lui-même.
 server = subprocess.run([sys.executable, '-c', 'import locowin; locowin.apply_environment(locowin.load_config()); from loco import wake; print(wake.server_networks())'],
                         cwd=str(Path(locowin.__file__).parent), capture_output=True, text=True, timeout=120)

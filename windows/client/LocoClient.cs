@@ -583,7 +583,7 @@ namespace Loco
             var cards = NetworkCards(networks);
             return new Dictionary<string, object> {
                 { "hostname", Environment.MachineName.ToLowerInvariant() }, { "agent_version", Version },
-                { "addresses", addresses }, { "trust", TrustSha() }, { "cards", cards }, { "networks", networks.Take(16).ToList() },
+                { "addresses", addresses }, { "trust", TrustSha() }, { "cards", cards }, { "networks", networks.Take(16).ToList() }, { "wake_error", wakeError },
                 { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } } };
         }
 
@@ -637,6 +637,34 @@ namespace Loco
                     { "up", up }, { "usb", usb.Contains(nic.Id) }, { "wol", wifi ? "" : state }, { "networks", addresses } });
             }
             return cards.Take(16).ToList();
+        }
+
+        static string wakeError = "";
+        static DateTime wakeTried = DateTime.MinValue;
+        static bool wakeTriedFor;
+
+        // Réveil demandé depuis le portail. Sous Windows le réglage persiste, et la commande peut relancer la carte : une tentative par jour au plus.
+        static void ApplyWake(Dictionary<string, object> answer)
+        {
+            object v;
+            if (!answer.TryGetValue("wake", out v) || !(v is Dictionary<string, object>)) { wakeError = ""; return; }
+            bool enabled = Convert.ToBoolean(((Dictionary<string, object>)v)["enabled"]);
+            var todo = NetworkCards(new List<string>()).Where(c => Convert.ToString(c["kind"]) == "ethernet" && Convert.ToString(c["wol"]) == (enabled ? "off" : "on")).ToList();
+            if (todo.Count == 0) { wakeError = ""; wakeTried = DateTime.MinValue; return; }
+            if (enabled == wakeTriedFor && (DateTime.UtcNow - wakeTried).TotalHours < 24) return;
+            wakeTried = DateTime.UtcNow;
+            wakeTriedFor = enabled;
+            var errors = new List<string>();
+            foreach (var card in todo)
+            {
+                string name = Convert.ToString(card["name"]), output;
+                string script = "Set-NetAdapterPowerManagement -Name '" + name.Replace("'", "''") + "' -WakeOnMagicPacket " + (enabled ? "Enabled" : "Disabled") + " -ErrorAction Stop";
+                string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+                if (RunCapture("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded, 90, out output) != 0)
+                    errors.Add(name + " : " + (output ?? "").Trim());
+            }
+            string all = string.Join(" ; ", errors);
+            wakeError = all.Length > 200 ? all.Substring(0, 200) : all;
         }
 
         // Diffuse des paquets magiques pour des postes éteints voisins, seulement sur un réseau de ce poste.
@@ -1313,6 +1341,7 @@ namespace Loco
                 ApplyTrust(answer);
                 ApplyWuProxy(answer);
                 ApplyWindowsUpdatePolicy(answer);
+                ApplyWake(answer);
                 SelfUpdate(conf, answer);
                 return true;
             }

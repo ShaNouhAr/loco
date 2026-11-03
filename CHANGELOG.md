@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.135.0 — 2026-11-03
+
+- **L'agent peut activer le réveil** : bouton *Activer le réveil* sur la fiche d'un poste et pour une sélection dans Mon parc, sur ses cartes Ethernet.
+  - **Sous Linux**, l'agent le réapplique à chaque contact : la plupart des cartes repassent en « désactivé » à chaque redémarrage. La configuration réseau du poste n'est pas modifiée, et la commande `ethtool` n'est pas nécessaire.
+  - **Sous Windows**, le réglage persiste. La carte peut redémarrer au moment du changement : quelques secondes de coupure, une seule tentative par jour en cas d'échec.
+  - **En cas de refus** du pilote ou du système, la fiche affiche l'erreur.
+  - *Ne plus l'activer* coupe le réveil et arrête de le maintenir. Le BIOS reste à régler à la main : l'agent n'y a pas accès. Rien n'est activé sans demande.
+
 ## 2.134.0 — 2026-11-03
 
 - **Réveil à distance (Wake-on-LAN)** : bouton *Réveiller* sur un poste éteint, dans Mon parc et sur sa fiche, pour un poste ou une sélection. Aussi disponible par le serveur MCP (`wake_device`).

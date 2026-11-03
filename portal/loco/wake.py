@@ -23,6 +23,7 @@ MAX_CARDS, MAX_NETWORKS = 16, 16
 MAX_TARGETS = 64                # par commande de relais
 RELAYS = 2                      # postes allumés sollicités par réseau : l'un peut s'éteindre entre-temps
 RELAY_VERSION = (2, 134)        # agents qui savent relayer
+POLICY_VERSION = (2, 135)       # agents qui savent activer le réveil de leurs cartes
 BACK_MINUTES = 10               # ensuite, le poste est considéré comme n'ayant pas répondu
 RELAY_MINUTES = 5               # un relais revenu plus tard ne réveille plus personne à l'improviste
 MAC_RE = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
@@ -60,7 +61,8 @@ def clean_info(data):
             continue
         cards.append({"name": str(raw.get("name", ""))[:60], "mac": mac, "kind": raw["kind"], "up": raw.get("up") is True, "usb": raw.get("usb") is True,
                       "wol": raw.get("wol") if raw.get("wol") in ("on", "off", "none") else "", "networks": _clean_networks(raw.get("networks"))})
-    return json.dumps({"cards": cards, "networks": _clean_networks(data.get("networks"))}, ensure_ascii=False)
+    error = re.sub(r"[\x00-\x1f]", " ", str(data.get("wake_error") or ""))[:200]
+    return json.dumps({"cards": cards, "networks": _clean_networks(data.get("networks")), "wake_error": error}, ensure_ascii=False)
 
 
 def info(dev):
@@ -150,10 +152,12 @@ def offer(dev, senders):
     usable = [c for c in plugged if c.get("wol") not in ("off", "none")]
     if not usable:
         card = plugged[0]
-        return dict(refused, reason=_("La carte %(name)s ne gère pas le réveil.", name=card.get("name", "")) if card.get("wol") == "none"
-                    else _("Réveil désactivé sur la carte %(name)s : activez-le dans le BIOS et dans ses propriétés (Gestion de l’alimentation).", name=card.get("name", ""))
-                    if dev["os_family"] == "windows"
-                    else _("Réveil désactivé sur la carte %(name)s : activez-le dans le BIOS et avec « ethtool -s %(name)s wol g », à rendre permanent dans la configuration réseau.", name=card.get("name", "")))
+        if card.get("wol") == "none":
+            return dict(refused, reason=_("La carte %(name)s ne gère pas le réveil.", name=card.get("name", "")))
+        if dev["wake_policy"] == "on":
+            return dict(refused, reason=_("L’agent n’a pas pu activer le réveil : %(e)s", e=known["wake_error"]) if known.get("wake_error")
+                        else _("Activation demandée à l’agent : appliquée à son prochain contact."))
+        return dict(refused, reason=_("Réveil désactivé sur la carte %(name)s : à activer avec « Activer le réveil », et dans le BIOS du poste.", name=card.get("name", "")))
     missing = []
     for card in usable:
         for address in card["networks"]:
@@ -165,6 +169,21 @@ def offer(dev, senders):
                         "note": _("Adaptateur USB : le réveil n’est pas garanti.") if card.get("usb") else ""}
             missing.append(network)
     return dict(refused, reason=_("Ni le serveur ni un poste allumé ne sont sur le réseau %(network)s pour envoyer le réveil.", network=", ".join(dict.fromkeys(missing))))
+
+
+def controls(dev):
+    """Ce que le compte peut demander à l'agent sur cette fiche : activer le réveil, ou ne plus le maintenir."""
+    from . import fleet
+    if dev["state"] != "active" or fleet.version_key(dev["agent_version"]) < POLICY_VERSION:
+        return {"enable": False, "disable": False}
+    wired = [c for c in info(dev).get("cards") or [] if c.get("kind") == "ethernet"]
+    return {"enable": dev["wake_policy"] != "on" and any(c.get("wol") in ("off", "") for c in wired), "disable": dev["wake_policy"] == "on"}
+
+
+def set_policy(conn, device_ids, enabled):
+    """L'agent l'applique dès son prochain contact, et à chacun des suivants : un redémarrage le remet souvent à zéro sous Linux."""
+    for dev_id in device_ids:
+        conn.execute("UPDATE devices SET wake_policy=? WHERE id=?", ("on" if enabled else "off", dev_id))
 
 
 def magic_packet(mac):

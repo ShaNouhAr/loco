@@ -140,6 +140,118 @@ class TestDetection(Agents):
             self.assertEqual(self.agent.local_networks(), {"eth0": [ADDRESS], "vlan7": ["10.7.0.2/16"]})
 
 
+class TestEnablingOnAgent(Agents):
+    """Le noyau simulé garde l'état de la carte, comme une vraie : GWOL le lit, SWOL le change."""
+    def setUp(self):
+        self.agent = self.load()
+        self.supported, self.enabled, self.refuse, self.ignore = 0x20 | 2, 0, None, False
+        self.writes = []
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.agent.SYS_NET = tmp.name
+        Path(tmp.name, "eth0", "device", "power").mkdir(parents=True)
+        Path(tmp.name, "eth0", "device", "power", "wakeup").write_text("disabled")
+        Path(tmp.name, "eth0", "type").write_text("1")
+        Path(tmp.name, "eth0", "address").write_text(MAC)
+        Path(tmp.name, "wlan0", "device").mkdir(parents=True)
+        Path(tmp.name, "wlan0", "wireless").mkdir()
+        Path(tmp.name, "wlan0", "type").write_text("1")
+        Path(tmp.name, "wlan0", "address").write_text(OTHER_MAC)
+        self.sys = tmp.name
+        patcher = mock.patch.object(self.agent.fcntl, "ioctl", self.ioctl)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def ioctl(self, _fd, _request, data):
+        name, pointer = struct.unpack_from("16sP", data)
+        self.assertEqual(name.rstrip(b"\0"), b"eth0")                   # jamais la carte Wi-Fi
+        command, _supported, options = struct.unpack("III", ctypes.string_at(pointer, 12))
+        if command == 6:
+            if self.refuse:
+                raise OSError(self.refuse, "Operation not supported")
+            self.writes.append(options)
+            if not self.ignore:
+                self.enabled = options
+        ctypes.memmove(pointer, struct.pack("III", command, self.supported, self.enabled), 12)
+
+    def test_it_turns_magic_on_and_keeps_the_other_modes(self):
+        self.enabled = 2
+        self.assertEqual(self.agent.set_wol("eth0", True), "")
+        self.assertEqual(self.enabled, 2 | 0x20)
+        self.assertEqual(Path(self.sys, "eth0", "device", "power", "wakeup").read_text(), "enabled")
+
+    def test_it_turns_magic_off(self):
+        self.enabled = 2 | 0x20
+        self.assertEqual(self.agent.set_wol("eth0", False), "")
+        self.assertEqual(self.enabled, 2)
+
+    def test_nothing_is_written_when_it_is_already_right(self):
+        self.enabled = 0x20
+        self.assertEqual(self.agent.set_wol("eth0", True), "")
+        self.assertEqual(self.writes, [])
+
+    def test_a_card_without_magic_is_left_alone(self):
+        self.supported = 2
+        self.assertEqual(self.agent.set_wol("eth0", True), "")
+        self.assertEqual(self.writes, [])
+
+    def test_a_refusal_is_reported(self):
+        self.refuse = errno.EOPNOTSUPP
+        self.assertIn("not supported", self.agent.set_wol("eth0", True))
+
+    def test_a_driver_that_ignores_it_is_reported(self):
+        self.ignore = True
+        self.assertTrue(self.agent.set_wol("eth0", True))
+
+    def test_the_contact_applies_the_request_again_after_a_restart(self):
+        state = {}
+        self.agent.apply_wake({"wake": {"enabled": True}}, state)
+        self.assertEqual((self.enabled, state["wake_error"]), (0x20, ""))
+        self.enabled = 0                                                 # le pilote a tout remis à zéro au démarrage
+        self.agent.apply_wake({"wake": {"enabled": True}}, state)
+        self.assertEqual(self.enabled, 0x20)
+
+    def test_after_a_restart_the_first_contact_already_tells_the_truth(self):
+        # Trouvé en réel : l'état partait avant d'être réappliqué, et un poste éteint juste après restait marqué « désactivé ».
+        state = {}
+        self.agent.apply_wake({"wake": {"enabled": True}}, state)
+        self.enabled = 0                                                 # redémarrage
+        self.agent.reapply_wake(state)
+        self.assertEqual(self.agent.wol_state("eth0"), "on")
+
+    def test_nothing_to_reapply_without_a_request(self):
+        self.enabled = 0
+        state = {}
+        self.agent.reapply_wake(state)
+        self.assertEqual(self.writes, [])
+        self.agent.apply_wake({"wake": {"enabled": True}}, state)
+        self.agent.apply_wake({}, state)                                 # demande retirée côté serveur
+        self.enabled = 0
+        self.writes.clear()
+        self.agent.reapply_wake(state)
+        self.assertEqual(self.writes, [])
+
+    def test_the_contact_applies_it_before_announcing_the_cards(self):
+        source = (ROOT / "portal/agents/loco-client.py").read_text(encoding="utf-8")
+        self.assertLess(source.index("    reapply_wake(state)\n    data = identity()"), source.index('    apply_wake(answer, state)'))
+
+    def test_without_a_request_the_agent_touches_nothing(self):
+        self.enabled = 0
+        state = {"wake_error": "ancienne"}
+        self.agent.apply_wake({}, state)
+        self.assertEqual(self.writes, [])
+        self.assertNotIn("wake_error", state)
+        for odd in ({"wake": "oui"}, {"wake": {}}, {"wake": {"enabled": "1"}}):
+            self.agent.apply_wake(odd, state)
+        self.assertEqual(self.writes, [])
+
+    def test_a_refusal_goes_back_with_the_next_contact(self):
+        self.refuse = errno.EOPNOTSUPP
+        state = {}
+        self.agent.apply_wake({"wake": {"enabled": True}}, state)
+        self.assertIn("eth0", state["wake_error"])
+
+
 class TestRelayOnAgent(Agents):
     def setUp(self):
         self.agent = self.load()
@@ -535,6 +647,80 @@ class TestResult(WakeTest):
 
     def test_the_list_shows_it_is_on_its_way(self):
         self.assertIn("réveil en attente", self.fleet_page())
+
+
+class TestEnabling(WakeTest):
+    def ask(self, agent, enabled="1"):
+        return self.admin.post(f"/fleet/{self.row(agent)['id']}/wake-policy", {"enabled": enabled}, page="/account")
+
+    def test_nothing_is_asked_of_an_agent_by_default(self):
+        agent = self.agent("poste1", [card(wol="off")], version="2.135.0")
+        self.assertNotIn("wake", agent.checkin().get_json())
+
+    def test_the_request_reaches_the_agent_at_every_contact(self):
+        agent = self.agent("poste1", [card(wol="off")], version="2.135.0")
+        self.assertEqual(self.ask(agent).status_code, 302)
+        for _round in range(2):
+            self.assertEqual(agent.checkin().get_json()["wake"], {"enabled": True})
+        with transaction() as conn:
+            self.assertIn("activé", conn.execute("SELECT detail FROM audit WHERE action='parc.wake-reglage' ORDER BY id DESC LIMIT 1").fetchone()["detail"])
+
+    def test_the_card_page_offers_it_only_when_it_helps(self):
+        off = self.agent("poste-off", [card(wol="off")], version="2.135.0")
+        self.assertIn("Activer le réveil", self.device_page(off))
+        for name, cards in (("poste-on", [card(wol="on")]), ("poste-none", [card(wol="none")]), ("poste-wifi", [card(kind="wifi", wol="")])):
+            self.assertNotIn(">Activer le réveil<", self.device_page(self.agent(name, cards, version="2.135.0")).replace("</span>", ""), name)
+
+    def test_an_agent_too_old_is_not_asked(self):
+        agent = self.agent("ancien", [card(wol="off")], version="2.134.0")
+        self.assertEqual(self.ask(agent).status_code, 400)
+        self.assertNotIn('action="/fleet/%d/wake-policy"' % self.row(agent)["id"], self.device_page(agent))
+
+    def test_waiting_for_the_contact_then_the_state_it_reports(self):
+        agent = self.agent("poste1", [card(wol="off")], version="2.135.0")
+        self.off(agent)
+        self.ask(agent)
+        self.assertIn("appliquée à son prochain contact", self.device_page(agent))
+        self.assertFalse(self.offered(agent))
+        agent.ident["cards"] = [card(wol="on")]
+        agent.checkin()
+        self.off(agent)
+        self.assertTrue(self.offered(agent))
+        self.assertIn("L’agent maintient le réveil", self.device_page(agent))
+
+    def test_a_refusal_by_the_card_is_shown(self):
+        agent = self.agent("poste1", [card(wol="off")], version="2.135.0")
+        self.ask(agent)
+        agent.ident["wake_error"] = "eth0 : Operation not supported"
+        agent.checkin()
+        self.assertIn("L’agent n’a pas pu activer le réveil : eth0 : Operation not supported", self.device_page(agent))
+
+    def test_stopping(self):
+        agent = self.agent("poste1", [card(wol="on")], version="2.135.0")
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET wake_policy='on' WHERE uid=?", (agent.uid,))
+        self.assertIn("Ne plus l’activer", self.device_page(agent))
+        self.assertEqual(self.ask(agent, "0").status_code, 302)
+        self.assertEqual(agent.checkin().get_json()["wake"], {"enabled": False})
+        self.assertEqual(self.ask(agent, "0").status_code, 400)         # déjà fait
+
+    def test_a_selection_only_touches_what_can_benefit(self):
+        good = self.agent("bon", [card(wol="off")], version="2.135.0")
+        already = self.agent("deja", [card(wol="on", mac="bc:24:11:1c:a4:05")], version="2.135.0")
+        old = self.agent("ancien", [card(wol="off", mac="bc:24:11:1c:a4:06")], version="2.134.0")
+        token = self.admin.token("/account")
+        r = self.admin.c.post("/fleet/wake-policy-selected", data={"csrf": token, "ids": [self.row(a)["id"] for a in (good, already, old)]})
+        self.assertEqual(r.get_json(), {"ok": True, "count": 1, "skipped": 2})
+        self.assertEqual([self.row(a)["wake_policy"] for a in (good, already, old)], ["on", "", ""])
+
+    def test_rights(self):
+        self.assertEqual((ENDPOINTS["fleet_wake_policy"], ENDPOINTS["fleet_wake_policy_selected"]), ("fleet.wake", "fleet.wake"))
+        agent = self.agent("poste1", [card(wol="off")], version="2.135.0")
+        token = self.admin.token("/account")
+        with mock.patch("loco.scope.sql", return_value=" AND id=-1"):
+            r = self.admin.c.post("/fleet/wake-policy-selected", data={"csrf": token, "ids": [self.row(agent)["id"]]})
+        self.assertEqual(r.get_json()["count"], 0)
+        self.assertEqual(self.row(agent)["wake_policy"], "")
 
 
 class TestSelection(WakeTest):

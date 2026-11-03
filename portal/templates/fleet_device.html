@@ -426,6 +426,16 @@
       </table></div>
       {% endif %}
       <p class="hint wake-hint">{% if wake_offer.ok %}{{ _("Réveil à distance possible sur le réseau %(network)s, par %(via)s.", network=wake_offer.network, via=_("le serveur") if wake_offer.server else wake_offer.relays[0].hostname) }}{% if wake_offer.note %} {{ wake_offer.note }}{% endif %}{% else %}{{ _("Réveil à distance indisponible : %(reason)s", reason=wake_offer.reason) }}{% endif %}</p>
+      {% if can('fleet.wake') and (wake_controls.enable or wake_controls.disable) %}
+      <div class="wake-policy">
+        {% if wake_controls.disable %}<span class="muted small">{{ _("L’agent maintient le réveil activé, y compris après un redémarrage.") }}</span>{% endif %}
+        {% if net.wake_error and wake_offer.ok %}<span class="st warn small">{{ _("L’agent n’a pas pu activer le réveil partout : %(e)s", e=net.wake_error) }}</span>{% endif %}
+        <form method="post" action="{{ url_for('fleet_wake_policy', dev_id=dev.id) }}"{% if wake_controls.enable %} data-confirm="{{ _('Activer le réveil sur %(name)s ?', name=dev.hostname) }}" data-confirm-text="{{ _('L’agent active le réveil sur ses cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}"{% endif %}>
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="enabled" value="{{ '1' if wake_controls.enable else '0' }}">
+          <button class="btn sm"><span class="spin"></span>{{ _("Activer le réveil") if wake_controls.enable else _("Ne plus l’activer") }}</button>
+        </form>
+      </div>
+      {% endif %}
       {% endif %}
       {% if soft.system and (soft.system.kernel or soft.system.cpu) %}
       <div class="panel-h sub"><h2>{{ _("Caractéristiques") }}</h2></div>

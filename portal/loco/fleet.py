@@ -645,6 +645,8 @@ def agent_checkin():
     forwarding = logforward.directive(conn, dev)
     if forwarding:
         answer["syslog"] = forwarding   # agents 2.124.0 et plus : remonter les journaux du poste
+    if dev["wake_policy"]:
+        answer["wake"] = {"enabled": dev["wake_policy"] == "on"}   # agents 2.135.0 et plus
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
     if dev["os_family"] == "windows":
@@ -1504,7 +1506,7 @@ def fleet_device(dev_id):
     from . import monitoring
     mon = monitoring.view(db(), dev, request.args.get("periode", "24h"))
     return render_template("fleet_device.html", address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
-                           wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev),
+                           wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev), wake_controls=wake.controls(dev),
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
@@ -1733,6 +1735,47 @@ def _report_wake(result):
         flash(_("Réveil de %(dev)s confié à %(relay)s : envoyé à son prochain contact (moins de %(v)s min).", dev=name, relay=relay, v=CHECKIN // 60), "ok")
     for name, reason in result["skipped"]:
         flash(_("%(dev)s n'a pas été réveillé : %(reason)s", dev=name, reason=reason), "error")
+
+
+@app.route("/fleet/<int:dev_id>/wake-policy", methods=["POST"])
+@login_required
+def fleet_wake_policy(dev_id):
+    """Demande à l'agent d'activer le réveil sur ses cartes Ethernet, et de le maintenir ; ou de l'arrêter."""
+    require("fleet.wake")
+    dev = _get(dev_id)
+    enabled = request.form.get("enabled") == "1"
+    allowed = wake.controls(dev)
+    if not (allowed["enable"] if enabled else allowed["disable"]):
+        abort(400)
+    wake.set_policy(db(), [dev_id], enabled)
+    db().commit()
+    audit("parc.wake-reglage", f"{dev['hostname']} : {'activé' if enabled else 'désactivé'}")
+    flash(_("Réveil demandé sur %(dev)s : l'agent l'active à son prochain contact (moins de %(v)s min), puis le maintient. Il doit aussi être autorisé dans le BIOS du poste.", dev=dev["hostname"], v=CHECKIN // 60) if enabled
+          else _("Réveil coupé sur %(dev)s à son prochain contact (moins de %(v)s min).", dev=dev["hostname"], v=CHECKIN // 60), "ok")
+    return _back_to_origin(dev_id)
+
+
+@app.route("/fleet/wake-policy-selected", methods=["POST"])
+@login_required
+def fleet_wake_policy_selected():
+    """Active le réveil sur les postes sélectionnés dont l'agent en est capable ; les autres sont comptés."""
+    require("fleet.wake")
+    try:
+        ids = {int(i) for i in request.form.getlist("ids")}
+    except ValueError:
+        abort(400)
+    if not ids or len(ids) > 5000:
+        abort(400)
+    devices = [d for d in db().execute("SELECT * FROM devices WHERE state='active'" + scope.sql()).fetchall() if d["id"] in ids]
+    chosen = [d["id"] for d in devices if wake.controls(d)["enable"]]
+    wake.set_policy(db(), chosen, True)
+    db().commit()
+    audit("parc.wake-reglage", f"{counted(len(chosen), 'poste')} sur {counted(len(ids), 'sélectionné')} : activé")
+    if chosen:
+        flash(n_("Réveil demandé sur %(num)s poste : l'agent l'active à son prochain contact, puis le maintient. Il doit aussi être autorisé dans le BIOS.", "Réveil demandé sur %(num)s postes : les agents l'activent à leur prochain contact, puis le maintiennent. Il doit aussi être autorisé dans le BIOS.", len(chosen)), "ok")
+    if len(ids) > len(chosen):
+        flash(n_("%(num)s poste laissé tel quel : réveil déjà actif, carte Ethernet absente ou sans réveil, ou agent trop ancien.", "%(num)s postes laissés tels quels : réveil déjà actif, carte Ethernet absente ou sans réveil, ou agent trop ancien.", len(ids) - len(chosen)), "error")
+    return {"ok": True, "count": len(chosen), "skipped": len(ids) - len(chosen)}
 
 
 @app.route("/fleet/wake-selected", methods=["POST"])

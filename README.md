@@ -400,7 +400,9 @@ planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup
 **Réveiller un poste éteint** (Wake-on-LAN) : bouton *Réveiller* dans Mon parc et sur la fiche du poste. Il n'apparaît que si
 le poste a une carte Ethernet branchée à son dernier contact, jamais en Wi-Fi, et si le serveur ou un poste allumé est sur le
 même réseau : un paquet de réveil ne traverse pas les routeurs. La fiche indique les cartes du poste et, sinon, pourquoi le
-réveil n'est pas disponible. Le réveil doit aussi être activé dans le BIOS et le système du poste.
+réveil n'est pas disponible. *Activer le réveil* (fiche du poste, ou sélection) demande à l'agent de l'activer sur ses cartes
+Ethernet et de le maintenir : sous Linux, il le réapplique à chaque contact, car un redémarrage le remet souvent à zéro. Il doit
+aussi être autorisé dans le BIOS, ce que l'agent ne peut pas faire.
 
 **Changer le port de l'interface** : *Système › Réseau › Port de l'interface web*. Le nouveau port s'ouvre à côté de
 l'ancien, donc rien n'est coupé. Les agents l'apprennent à leur prochain contact et la page compte ceux qui le

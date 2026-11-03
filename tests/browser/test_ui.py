@@ -520,6 +520,27 @@ class TestWake(BrowserTest):
             self.assertTrue(wired["id"])
 
 
+class TestWakeSetting(BrowserTest):
+    def test_enabling_asks_for_confirmation_then_the_page_says_it_is_waiting(self):
+        card = dict(TestWake.CARD, wol="off")
+        agent = Agent(dict(LINUX, hostname="poste-reglage", agent_version="2.135.0", cards=[card], networks=["192.168.50.20/24"]), "192.168.50.20",
+                      uid=hashlib.sha256(b"poste-reglage").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        self.page.goto(f"/fleet/{dev['id']}#details")
+        self.page.locator('[data-tab="details"]').click()
+        expect(self.page.locator(".wake-hint")).to_contain_text("Activer le réveil")
+        self.page.locator(".wake-policy").get_by_role("button", name="Activer le réveil").click()
+        self.confirm()
+        self.page.locator('[data-tab="details"]').click()
+        expect(self.page.locator(".wake-hint")).to_contain_text("appliquée à son prochain contact", timeout=LONG)
+        self.assertEqual(agent.checkin().get_json()["wake"], {"enabled": True})
+        self.page.goto("/fleet")
+        self.page.locator("#fleet-table tr", has_text="poste-reglage").locator("input[type=checkbox]").first.check()
+        expect(self.page.locator("[data-select-bar]").get_by_role("button", name="Activer le réveil")).to_be_visible()
+        self.assertLessEqual(self.overflow(), 0)
+
+
 class TestRollouts(BrowserTest):
     def finish_wave(self, number, state):
         with transaction() as conn:

@@ -523,6 +523,10 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN net_info TEXT NOT NULL DEFAULT '';
     """,
+    # 36 : réveil demandé sur le poste, réappliqué par l'agent : on, off, ou vide (l'agent n'y touche pas).
+    """
+    ALTER TABLE devices ADD COLUMN wake_policy TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

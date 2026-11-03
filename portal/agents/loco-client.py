@@ -146,7 +146,7 @@ def call(server, path, data, token=None, timeout=60):
 
 SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
 SYS_NET = "/sys/class/net"
-SIOCETHTOOL, ETHTOOL_GWOL, WAKE_MAGIC = 0x8946, 5, 0x20
+SIOCETHTOOL, ETHTOOL_GWOL, ETHTOOL_SWOL, WAKE_MAGIC = 0x8946, 5, 6, 0x20
 VPN_NIC = re.compile(r"(tun|tap|wg|tailscale|zt)")      # pas de diffusion possible
 WAKE_MAC_RE = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
 VIRTUAL_NIC = re.compile(r"(docker|br-|veth|virbr|vboxnet|vmnet|cni|flannel|cali|lxc|lxd|podman)")     # conteneurs et machines virtuelles
@@ -306,17 +306,71 @@ def _sys_net(nic, name):
         return ""                               # « carrier » n'est pas lisible sur une interface arrêtée
 
 
-def wol_state(nic):
-    """Réveil par paquet magique de cette carte : on, off, none (non géré), vide si illisible. Sans dépendre d'ethtool."""
-    info = array.array("B", struct.pack("III8s", ETHTOOL_GWOL, 0, 0, b""))
+def _ethtool_wol(nic, command, options=0):
+    """(modes gérés, modes actifs) de la carte, sans dépendre de la commande ethtool."""
+    info = array.array("B", struct.pack("III8s", command, 0, options, b""))
     request = struct.pack("16sP", nic.encode()[:15], info.buffer_info()[0]).ljust(40, b"\0")
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        fcntl.ioctl(sock.fileno(), SIOCETHTOOL, request)
+    return struct.unpack_from("II", info, 4)
+
+
+def wol_state(nic):
+    """Réveil par paquet magique de cette carte : on, off, none (non géré), vide si illisible."""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            fcntl.ioctl(sock.fileno(), SIOCETHTOOL, request)
+        supported, enabled = _ethtool_wol(nic, ETHTOOL_GWOL)
     except OSError as e:
         return "none" if e.errno == errno.EOPNOTSUPP else ""
-    supported, enabled = struct.unpack_from("II", info, 4)
     return "on" if enabled & WAKE_MAGIC else "off" if supported & WAKE_MAGIC else "none"
+
+
+def set_wol(nic, enable):
+    """Active ou coupe le réveil par paquet magique sur cette carte ; renvoie l'erreur, vide si tout va bien."""
+    try:
+        supported, enabled = _ethtool_wol(nic, ETHTOOL_GWOL)
+        wanted = enabled | WAKE_MAGIC if enable else enabled & ~WAKE_MAGIC
+        if not supported & WAKE_MAGIC or wanted == enabled:
+            return ""
+        _ethtool_wol(nic, ETHTOOL_SWOL, wanted)
+        supported, enabled = _ethtool_wol(nic, ETHTOOL_GWOL)
+        if bool(enabled & WAKE_MAGIC) != bool(enable):
+            return t("le pilote n'a pas pris le réglage", "the driver did not take the setting", "el controlador no ha aplicado el ajuste")
+    except OSError as e:
+        return e.strerror or str(e)
+    if enable:                                  # certaines cartes USB demandent aussi l'autorisation du périphérique
+        try:
+            with open(os.path.join(SYS_NET, nic, "device", "power", "wakeup"), "w", encoding="utf-8") as f:
+                f.write("enabled")
+        except OSError:
+            pass
+    return ""
+
+
+def _set_wake(enabled, state):
+    errors = []
+    for card in network_cards({}):
+        if card["kind"] == "ethernet" and card["wol"] != "none":
+            problem = set_wol(card["name"], enabled)
+            if problem:
+                errors.append(f"{card['name']} : {problem}")
+    state["wake_error"] = " ; ".join(errors)[:200]
+
+
+def reapply_wake(state):
+    """Avant d'annoncer l'état des cartes : un redémarrage le remet souvent à zéro sous Linux, et ce premier contact doit dire la vérité."""
+    if isinstance(state.get("wake_enabled"), bool):
+        _set_wake(state["wake_enabled"], state)
+
+
+def apply_wake(answer, state):
+    """Réveil demandé depuis le portail : appliqué tout de suite, et retenu pour les contacts suivants."""
+    policy = answer.get("wake")
+    if not isinstance(policy, dict) or not isinstance(policy.get("enabled"), bool):
+        state.pop("wake_error", None)
+        state.pop("wake_enabled", None)
+        return
+    state["wake_enabled"] = policy["enabled"]
+    _set_wake(policy["enabled"], state)
 
 
 def network_cards(networks):
@@ -1217,7 +1271,9 @@ def service():
         return 0
     ensure_remote_service()
     state = load(STATE)
+    reapply_wake(state)
     data = identity()
+    data["wake_error"] = state.get("wake_error", "")
     data["metrics"] = metrics(state)
     last = state.get("last_scan", 0)
     # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
@@ -1244,6 +1300,7 @@ def service():
         return 1
     state["scan_hours"] = answer.get("scan_hours", 6)
     apply_trust(answer)
+    apply_wake(answer, state)
     try:
         forward_logs(conf, answer.get("syslog"), state)
     except (OSError, ValueError, subprocess.SubprocessError):
