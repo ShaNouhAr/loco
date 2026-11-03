@@ -305,7 +305,7 @@ def _get_device(args):
            "contact_address": dev["ip"], "online": fleet.presence(dev)["online"], "last_seen": dev["last_seen"] or None,
            "last_inventory": dev["last_scan"] or None, "enrolled_at": dev["enrolled_at"], "status": STATUS[color],
            "status_detail": reason, "agent_state": dev["state"], "reboot_required": bool(dev["reboot_required"]),
-           "inventory_error": inv.get("error") or None, "pending_updates_total": len(updates),
+           "inventory_error": inv.get("error") or None, "inventory_warning": inv.get("warning") or None, "pending_updates_total": len(updates),
            "pending_updates": [{"name": u.get("name"), "version": u.get("version"), "security": bool(u.get("security")),
                                 **({"id": u["id"]} if u.get("id") else {})} for u in updates[:200] if isinstance(u, dict)],
            "updates_selectable": fleet.selectable(dev),

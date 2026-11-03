@@ -192,6 +192,104 @@ class TestTrustBundle(unittest.TestCase):
         self.assertEqual(agent.trust_sha(), "")
 
 
+# Sorties réelles d'apt-get update (Debian 13), code de retour 0 dans les deux cas.
+APT_NOTHING = """Err:1 http://security.debian.org trixie-security InRelease
+  Could not connect to 192.168.42.226:3142 (192.168.42.226). - connect (113: No route to host)
+Err:2 http://deb.debian.org/debian trixie InRelease
+  Unable to connect to 192.168.42.226:3142:
+Reading package lists...
+W: Failed to fetch http://security.debian.org/dists/trixie-security/InRelease  Could not connect to 192.168.42.226:3142
+W: Some index files failed to download. They have been ignored, or old ones used instead.
+"""
+APT_PARTIAL = """Hit:1 http://deb.debian.org/debian trixie InRelease
+Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Err:3 http://ppa.example.org/abandoned noble InRelease
+  Temporary failure resolving 'ppa.example.org'
+Reading package lists...
+W: Failed to fetch http://ppa.example.org/abandoned/dists/noble/InRelease  Temporary failure resolving 'ppa.example.org'
+W: Some index files failed to download. They have been ignored, or old ones used instead.
+"""
+APT_FINE = "Hit:1 http://deb.debian.org/debian trixie InRelease\nReading package lists...\n"
+UPGRADE = "Inst curl [8.0] (8.1 Debian:13/stable [amd64])\n"
+
+
+class TestAptRepositoriesDown(unittest.TestCase):
+    """apt-get update rend 0 même si aucun dépôt ne répond : l'agent doit le voir sans bloquer pour un seul dépôt mort."""
+
+    def apt(self, update_output, code=0):
+        def run(cmd, timeout=7200):
+            if cmd[:2] == ["apt-get", "update"]:
+                return code, update_output
+            if cmd[0] == "apt-get" and "-s" in cmd:
+                return 0, UPGRADE
+            return 1, ""
+        return run
+
+    def test_nothing_readable_is_a_failure_with_its_cause(self):
+        with mock.patch.object(agent, "run", self.apt(APT_NOTHING)):
+            code, out = agent.apt_update()
+        self.assertEqual(code, 100)
+        self.assertIn("192.168.42.226:3142", out.splitlines()[-1])
+        self.assertIn("(113: No route to host)", out.splitlines()[-1])
+
+    def test_one_repository_down_among_others_is_not_a_failure(self):
+        with mock.patch.object(agent, "run", self.apt(APT_PARTIAL)):
+            self.assertEqual(agent.apt_update(), (0, APT_PARTIAL))
+
+    def test_healthy_or_empty_output_changes_nothing(self):
+        for output in (APT_FINE, ""):
+            with mock.patch.object(agent, "run", self.apt(output)):
+                self.assertEqual(agent.apt_update(), (0, output))
+
+    def test_failure_already_reported_by_apt_is_kept(self):
+        with mock.patch.object(agent, "run", self.apt("E: Malformed entry\n", code=100)):
+            self.assertEqual(agent.apt_update(), (100, "E: Malformed entry\n"))
+
+    def test_cause_does_not_end_with_a_colon(self):
+        self.assertEqual(agent.apt_unreachable("Err:1 http://a.example/x y InRelease\n  Unable to connect to a:3142:\n"),
+                         {"http://a.example/x y": "Unable to connect to a:3142"})
+
+    def test_same_repository_is_only_counted_once(self):
+        out = "Err:1 http://a.example/x y InRelease\n  down\nErr:2 http://a.example/x y Release\n  down\n"
+        self.assertEqual(agent.apt_unreachable(out), {"http://a.example/x y": "down"})
+
+    def inventory(self, output):
+        with mock.patch.object(agent, "run", self.apt(output)), mock.patch.object(agent, "family", return_value="debian"), \
+                mock.patch.object(agent, "flatpak_updates", return_value=[], create=True), mock.patch.object(agent.shutil, "which", return_value=None):
+            return agent.scan()
+
+    def test_scan_reports_the_outage_as_an_error(self):
+        inv = self.inventory(APT_NOTHING)
+        self.assertIn("apt-get update : ", inv["error"])
+        self.assertIn("192.168.42.226:3142", inv["error"])
+        self.assertEqual(inv["warning"], "")
+
+    def test_scan_keeps_counting_updates_with_one_repository_down(self):
+        inv = self.inventory(APT_PARTIAL)
+        self.assertEqual(inv["error"], "")
+        self.assertIn("http://ppa.example.org/abandoned noble", inv["warning"])
+        self.assertEqual([u["name"] for u in inv["updates"]], ["curl"])
+
+    def test_scan_stays_silent_when_all_is_fine(self):
+        inv = self.inventory(APT_FINE)
+        self.assertEqual((inv["error"], inv["warning"]), ("", ""))
+
+    def test_update_stops_when_nothing_is_readable_but_not_for_one_repository(self):
+        for output, upgraded in ((APT_NOTHING, False), (APT_PARTIAL, True)):
+            streamed = []
+
+            def stream(cmd, _on_line, timeout=7200):
+                streamed.append(cmd)
+                return 0, ""
+            with mock.patch.object(agent, "run", self.apt(output)), mock.patch.object(agent, "run_stream", stream), \
+                    mock.patch.object(agent, "family", return_value="debian"), mock.patch.object(agent.shutil, "which", return_value=None):
+                code, log = agent.update()
+            self.assertEqual(bool(streamed), upgraded, output[:20])
+            self.assertEqual(code != 0, not upgraded)
+            if not upgraded:
+                self.assertIn("192.168.42.226:3142", log)
+
+
 class TestAptUpdateLockRetry(unittest.TestCase):
     """apt-get update patiente quand un autre apt tient le verrou (installation en cours, mises à jour
     automatiques), et ne réessaie pas une erreur sans rapport."""

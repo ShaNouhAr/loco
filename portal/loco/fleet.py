@@ -266,6 +266,9 @@ def status(dev, apps=None):
     error = inventory(dev).get("error")
     if error:
         reasons.append(_("inventaire incomplet : %(error)s", error=error))
+    warning = inventory(dev).get("warning")
+    if warning:
+        reasons.append(warning)     # un dépôt en panne parmi d'autres : le voyant reste celui du reste des mises à jour
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
         reasons.append(_("poste sans contact récent"))
     if error or not dev["last_scan"] or seen is None or seen > datetime.timedelta(days=STALE_DAYS):
@@ -478,6 +481,7 @@ def _store_inventory(dev, inv):
                   "publisher": _text(a.get("publisher"), 120)} for a in apps],
         "flatpak": int(inv.get("flatpak") or 0) if str(inv.get("flatpak") or 0).isdigit() else 0,
         "error": _text(inv.get("error"), 500),
+        "warning": _text(inv.get("warning"), 500),
     }
     total = len(clean["updates"]) + clean["flatpak"]
     db().execute("UPDATE devices SET inventory=?, last_scan=?, updates=?, security_updates=?, reboot_required=? "

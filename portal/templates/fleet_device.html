@@ -76,6 +76,7 @@
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
   </div>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
+  {% if inv.warning %}<p class="note warn">{{ inv.warning }}</p>{% endif %}
 
   <div class="device-update-state">
     <span class="small muted">{{ _("Mises à jour") }}</span>

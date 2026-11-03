@@ -771,27 +771,51 @@ def _apt_lock_busy(out):
     return any(s in out for s in ("Unable to lock", "Could not get lock", "held by process", "Could not open lock file"))
 
 
+def apt_unreachable(out):
+    """Dépôts que apt-get update n'a pas pu lire : {source: cause}. Il rend 0 même si aucun ne répond."""
+    lines, found = out.splitlines(), {}
+    for i, line in enumerate(lines):
+        if line.startswith("Err:"):
+            cause = lines[i + 1].strip().rstrip(":") if i + 1 < len(lines) and lines[i + 1].startswith(" ") else ""
+            found.setdefault(" ".join(line.split()[1:3]), cause)
+    return found
+
+
 def apt_update():
     """apt-get update, en patientant jusqu'à ~1 min si un autre apt tient le verrou — évite l'« inventaire incomplet »
     passager juste après l'installation de l'agent ou pendant les mises à jour automatiques du poste
-    (DPkg::Lock::Timeout ne couvre pas le verrou de /var/lib/apt/lists, d'où la reprise explicite)."""
+    (DPkg::Lock::Timeout ne couvre pas le verrou de /var/lib/apt/lists, d'où la reprise explicite).
+    Aucun dépôt lisible est un échec ; un dépôt en panne parmi d'autres n'empêche pas de mettre à jour le reste."""
     deadline = time.monotonic() + 60
     while True:
         code, out = run(["apt-get", "update", "-q", "-o", "DPkg::Lock::Timeout=60"], timeout=1800)
         if code == 0 or time.monotonic() >= deadline or not _apt_lock_busy(out):
-            return code, out
+            break
         time.sleep(5)
+    failed = apt_unreachable(out)
+    if code == 0 and failed and not re.search(r"^(Hit|Get):", out, re.M):
+        source, cause = next(iter(failed.items()))
+        reason = cause or source
+        return 100, out.rstrip("\n") + "\n" + t(f"Aucun dépôt joignable : {reason}", f"No repository reachable: {reason}", f"Ningún repositorio accesible: {reason}") + "\n"
+    return code, out
 
 
 def scan():
     """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
     installés, caractéristiques du poste."""
-    inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": ""}
+    inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": "", "warning": ""}
     fam = family()
     if fam == "debian":
         code, out = apt_update()
         if code != 0:
             inv["error"] = "apt-get update : " + out.strip().splitlines()[-1][:300] if out.strip() else "apt-get update"
+        else:
+            failed = list(apt_unreachable(out))
+            sources = ", ".join(failed[:3]) + (" …" if len(failed) > 3 else "")
+            if len(failed) == 1:
+                inv["warning"] = t(f"Dépôt injoignable, ses mises à jour ne sont pas comptées : {sources}", f"Repository unreachable, its updates are not counted: {sources}", f"Repositorio inaccesible, sus actualizaciones no se cuentan: {sources}")
+            elif failed:
+                inv["warning"] = t(f"{len(failed)} dépôts injoignables, leurs mises à jour ne sont pas comptées : {sources}", f"{len(failed)} repositories unreachable, their updates are not counted: {sources}", f"{len(failed)} repositorios inaccesibles, sus actualizaciones no se cuentan: {sources}")
         code, out = run(["apt-get", "-s", "-q", "-o", "Debug::NoLocking=1", "upgrade", "--with-new-pkgs"])
         for line in out.splitlines():
             m = re.match(r"^Inst (\S+) (?:\[[^\]]*\] )?\((\S+) ([^)]*)\)", line)

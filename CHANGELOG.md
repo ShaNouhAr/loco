@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.127.2 — 2026-11-03
+
+- **Dépôts en panne enfin détectés sur les postes Debian et Ubuntu.** `apt-get update` répond « succès » même quand aucun dépôt ne répond, donc l'agent ne voyait rien et une mise à jour pouvait se terminer en succès sans rien installer.
+  - **Aucun dépôt lisible** : le poste passe en *État inconnu* avec la cause, et une mise à jour s'arrête en échec au lieu de prétendre avoir réussi.
+  - **Un dépôt en panne parmi d'autres** (dépôt tiers abandonné, par exemple) : le voyant ne change pas et les mises à jour continuent, mais la fiche du poste signale que les mises à jour de ce dépôt ne sont pas comptées.
+
 ## 2.127.1 — 2026-11-03
 
 - **Corrigé : après un changement d'IP du serveur, tous les dépôts d'un poste Linux tombaient.** L'agent rejoignait le nouveau serveur, mais le proxy APT (`01loco-proxy`) et les sources HTTP gardaient l'ancienne adresse : le poste ne lisait plus aucun dépôt, dépôts officiels compris. Les agents mettent maintenant à jour le proxy APT, les sources APT et RPM et les dépôts Flatpak, en HTTP comme en HTTPS, quand ils adoptent une nouvelle adresse. La note de la 2.125.0 sur le suivi d'une nouvelle IP était donc incomplète.

@@ -72,6 +72,11 @@ def status_of(uid):
         return fleet.status(db().execute("SELECT * FROM devices WHERE uid=?", (uid,)).fetchone())
 
 
+def fleet_status(dev):
+    with fixture.loco.app.test_request_context("/", headers={"Accept-Language": "fr"}):
+        return fleet.status(dev)
+
+
 class FleetTest(unittest.TestCase):
     def setUp(self):
         with transaction() as conn:
@@ -81,6 +86,42 @@ class FleetTest(unittest.TestCase):
         fixture.reset_failures()
         self.admin = fixture.Browser()
         self.admin.login("admin", fixture.ADMIN_PW)
+
+
+class TestRepositoryWarning(FleetTest):
+    """Un dépôt en panne parmi d'autres ne change pas le voyant ; aucun dépôt lisible, si."""
+
+    def machine(self, **inventory):
+        agent = Agent(LINUX, "192.168.43.95")
+        agent.enroll()
+        agent.checkin(dict({"updates": []}, **inventory))
+        return device(agent.uid)
+
+    def test_one_repository_down_keeps_the_light_and_is_shown_on_the_card(self):
+        dev = self.machine(warning="Dépôt injoignable, ses mises à jour ne sont pas comptées : http://ppa.example.org noble")
+        color, reason = fleet_status(dev)
+        self.assertEqual(color, "green")
+        self.assertIn("Dépôt injoignable", reason)
+        page = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
+        self.assertIn('<p class="note warn">Dépôt injoignable', page)
+
+    def test_no_repository_readable_makes_the_state_unknown_with_its_cause(self):
+        dev = self.machine(error="apt-get update : Aucun dépôt joignable : Could not connect to 192.168.42.226:3142")
+        color, reason = fleet_status(dev)
+        self.assertEqual(color, "grey")
+        self.assertIn("192.168.42.226:3142", reason)
+        page = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
+        self.assertIn('<p class="note err">apt-get update : Aucun dépôt joignable', page)
+
+    def test_warning_is_cleared_by_the_next_inventory(self):
+        agent = Agent(LINUX, "192.168.43.96")
+        agent.enroll()
+        agent.checkin({"updates": [], "warning": "Dépôt injoignable"})
+        agent.checkin({"updates": []})
+        self.assertEqual(fleet_status(device(agent.uid))[1], "à jour")
+
+    def test_old_agents_without_the_field_are_unchanged(self):
+        self.assertEqual(fleet_status(self.machine())[0], "green")
 
 
 class TestEnrollment(FleetTest):
