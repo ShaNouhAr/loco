@@ -515,6 +515,10 @@ MIGRATIONS = [
     ALTER TABLE deployment_targets ADD COLUMN wave INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE deployment_targets ADD COLUMN pending TEXT NOT NULL DEFAULT '';
     """,
+    # 34 : groupes reçus du fournisseur à la dernière connexion (JSON) : ils proposent un profil à l'approbation, sans rien accorder seuls.
+    """
+    ALTER TABLE directory_identities ADD COLUMN groups TEXT NOT NULL DEFAULT '[]';
+    """,
 ]
 
 

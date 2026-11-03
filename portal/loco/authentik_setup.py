@@ -287,7 +287,8 @@ def save_directory(ident, label, issuer, client_id, client_secret, ca_pem, enabl
     row = conn.execute("SELECT * FROM auth_directories WHERE id=?", (ident,)).fetchone()
     old = json.loads(row["config"]) if row else {}
     cfg = {"preset": "authentik", "issuer": issuer, "client_id": client_id, "scopes": old.get("scopes") or SCOPES,
-           "username_claim": old.get("username_claim") or "preferred_username", "ca_pem": ca_pem, "client_secret": _seal(client_secret)}
+           "username_claim": old.get("username_claim") or "preferred_username", "ca_pem": ca_pem, "client_secret": _seal(client_secret),
+           "group_roles": old.get("group_roles") or {}}
     if row:
         _revoke(ident)
         conn.execute("UPDATE auth_directories SET config=?, enabled=?, revision=revision+1 WHERE id=?", (json.dumps(cfg), enabled, ident))

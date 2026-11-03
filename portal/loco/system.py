@@ -933,13 +933,31 @@ def _tls_file(name):
         return b""
 
 
+def csr_preview():
+    """Ce qu'une demande de certificat contiendra : le FQDN proposé, les SAN, et l'IP que l'autorité doit conserver."""
+    if not config.SERVER_UPDATES:
+        return None
+    portal = urllib.parse.urlsplit(config.portal_url()).hostname or ""
+    fqdn = socket.getfqdn()
+    suggested = portal if portal and not _is_ip(portal) else fqdn if "." in fqdn else ""
+    return {"fqdn": suggested, "san": [s.split(":", 1)[1] for s in locoadmin._agent_names()], "ip": config.HOST if _is_ip(config.HOST) else ""}
+
+
+def _is_ip(text):
+    try:
+        ipaddress.ip_address(text)
+        return True
+    except ValueError:
+        return False
+
+
 def tls_state():
     """Autorité en service, autorité d'entreprise importée, certificat préparé et demande en attente."""
     from cryptography import x509
     state = {"mode": "enterprise" if _tls_file("mode").strip() == b"enterprise" else "loco",
              "authority": [_cert_summary(c) for c in _load_certs(_tls_file("enterprise-ca.pem"))],
              "prepared": cert_info(os.path.join(config.TLS_DIR, "enterprise.crt")) if _tls_file("enterprise.crt") else None,
-             "request": None, "host": config.HOST}
+             "request": None, "host": config.HOST, "csr": csr_preview()}
     csr = _tls_file("enterprise.csr")
     if csr:
         try:
@@ -1031,7 +1049,7 @@ def system_csr():
     """Demande de certificat (CSR) préparée par le serveur : la clé privée ne le quitte jamais."""
     _tls_routes_allowed()
     try:
-        params = locoadmin.tls_params("ca-csr", {"names": request.form.get("names", "")})
+        params = locoadmin.tls_params("ca-csr", {"names": f'{request.form.get("fqdn", "")} {request.form.get("names", "")}'})
     except ValueError:
         flash(_("Noms DNS invalides : séparez-les par des espaces, huit au plus."), "error")
         return back("system", _anchor="certificat")
@@ -1058,7 +1076,7 @@ def system_enterprise_import():
     _tls_routes_allowed()
     from cryptography.hazmat.primitives import serialization
     try:
-        pfx, crt, key = _tls_upload("pfx"), _tls_upload("certificate"), _tls_upload("key")
+        pfx, crt, key, extra_chain = _tls_upload("pfx"), _tls_upload("certificate"), _tls_upload("key"), _tls_upload("intermediate")
         key_pem = None
         if pfx:
             from cryptography.hazmat.primitives.serialization import pkcs12
@@ -1083,13 +1101,28 @@ def system_enterprise_import():
                 key_pem = key
         else:
             raise ValueError(_("choisissez le certificat émis (.cer, .crt, .pem, .p7b) ou un fichier PFX"))
+        if extra_chain:                                         # feuille seule, avec l'intermédiaire en complément
+            more = _load_certs(extra_chain)
+            if not more:
+                raise ValueError(_("intermédiaire illisible : PEM, DER (.cer) ou PKCS#7 (.p7b) attendu"))
+            certs = certs + more
         leaf = next((c for c in certs if not _is_ca(c)), None)
         if leaf is None:
             raise ValueError(_("aucun certificat de serveur dans le fichier (uniquement des autorités)"))
         if _cert_summary(leaf)["days"] < 0:
             raise ValueError(_("certificat expiré"))
-        if config.HOST and not _covers(leaf, config.HOST):
-            raise ValueError(_("il ne couvre pas %(host)s, l'adresse utilisée par les agents du parc", host=config.HOST))
+        portal = urllib.parse.urlsplit(config.portal_url()).hostname or ""
+        for wanted, what in ((config.HOST, _("l'adresse utilisée par les agents du parc")), (portal, _("l'adresse du portail"))):
+            if wanted and not _covers(leaf, wanted):
+                from .sso_check import _san
+                raise ValueError(_("SAN absent : il couvre %(names)s, mais pas %(host)s, %(what)s. Votre autorité l'a peut-être retiré (certains profils, comme EJBCA, ne gardent pas les IP) : demandez un profil qui le conserve",
+                                   names=", ".join(_san(leaf)[:8]) or "—", host=wanted, what=what))
+        authority = locoadmin._pem_blocks(_tls_file("enterprise-ca.pem").decode(errors="replace"))
+        if authority:
+            blocks = locoadmin._pem_blocks(b"".join(c.public_bytes(serialization.Encoding.PEM) for c in [leaf] + [c for c in certs if c is not leaf]).decode())
+            problem = locoadmin.chain_problem(blocks[0], blocks[1:], authority)[0]
+            if problem:
+                raise ValueError(problem)
         if key_pem is not None:
             spki = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
             if leaf.public_key().public_bytes(*spki) != k.public_key().public_bytes(*spki):

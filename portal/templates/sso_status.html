@@ -15,6 +15,8 @@
   <dt>{{ _("Identité (sub)") }}</dt><dd class="mono break">{{ test.sub }}</dd>
 </dl>
 <a class="btn" href="{{ url_for('sso_settings') }}">{{ _("Retour à Annuaires et SSO") }}</a>
+{% elif to_account %}
+<a class="btn" href="{{ url_for('account') }}">{{ _("Retour à Mon compte") }}</a>
 {% elif next_url %}
 <a class="btn primary" href="{{ next_url }}" data-continue="{{ next_url }}">{{ _("Continuer") }}</a>
 {% elif testing %}

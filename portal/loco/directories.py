@@ -204,6 +204,32 @@ def _ldap_form():
 OIDC_SUFFIX = "/.well-known/openid-configuration"
 
 
+def _group_roles(text):
+    """« groupe = profil », une ligne par groupe : le profil que l'approbation proposera pour ce groupe. Rien n'est accordé seul."""
+    labels = permissions.role_labels(db())
+    by_label = {str(label).lower(): key for key, label in labels.items()}
+    found = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        group, separator, role = line.rpartition("=")
+        group, role = group.strip(), role.strip()
+        wanted = role if role in labels else by_label.get(role.lower())
+        if not separator or not group or len(group) > 200 or not wanted or wanted == "pending":
+            raise ValueError(_("Groupes et profils : une ligne « groupe = profil », avec un profil existant (%(line)s).", line=line.strip()[:80]))
+        found[group] = wanted
+    return found
+
+
+def proposed_role(row):
+    """Profil proposé à l'approbation d'une demande, d'après ses groupes chez le fournisseur : (profil, groupe) ou (None, None)."""
+    if not row["directory_config"]:
+        return None, None
+    mapping = json.loads(row["directory_config"]).get("group_roles") or {}
+    groups = json.loads(row["directory_groups"] or "[]")
+    return next(((role, group) for group, role in mapping.items() if group in groups), (None, None))
+
+
 def _oidc_form(old):
     """Émetteur, client et options d'un fournisseur OpenID Connect. Authentik : l'émetteur d'une application est
     https://authentik…/application/o/<slug>/ (affiché dans Authentik sur la page du fournisseur)."""
@@ -244,7 +270,8 @@ def _oidc_form(old):
     if len(secret) > 1024:
         raise ValueError(_("Secret client trop long."))
     cfg = {"preset": preset, "issuer": issuer, "client_id": client_id, "scopes": scopes, "username_claim": claim,
-           "ca_pem": ca_pem, "client_secret": _seal(secret) if secret else (old or {}).get("client_secret", "")}
+           "ca_pem": ca_pem, "client_secret": _seal(secret) if secret else (old or {}).get("client_secret", ""),
+           "group_roles": _group_roles(f.get("group_roles", ""))}
     if not cfg["client_secret"]:
         raise ValueError(_("Secret client (Client Secret) requis."))
     return cfg
@@ -355,7 +382,9 @@ def directory_add():
 
 
 def _revoke(directory_id):
-    for row in db().execute("SELECT user_id FROM directory_identities WHERE directory_id=?", (directory_id,)).fetchall():
+    # Un compte local lié garde son mot de passe et sa session : seul un compte d'annuaire dépend du fournisseur.
+    for row in db().execute("SELECT i.user_id FROM directory_identities i JOIN users u ON u.id=i.user_id "
+                            "WHERE i.directory_id=? AND u.auth_source='directory'", (directory_id,)).fetchall():
         permissions.revoke(db(), row[0])
 
 
@@ -385,7 +414,7 @@ def directory_delete(directory_id):
     row = _directory(directory_id)
     _revoke(directory_id)
     # Comptes conservés (journal, profils) mais désactivés : aucune réassociation automatique à un autre annuaire.
-    conn.execute("UPDATE users SET disabled=1 WHERE id IN (SELECT user_id FROM directory_identities WHERE directory_id=?)", (directory_id,))
+    conn.execute("UPDATE users SET disabled=1 WHERE auth_source='directory' AND id IN (SELECT user_id FROM directory_identities WHERE directory_id=?)", (directory_id,))
     conn.execute("DELETE FROM auth_directories WHERE id=?", (directory_id,))
     audit("sso.fournisseur.suppression", row["label"], commit=False)
     conn.commit()

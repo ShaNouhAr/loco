@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.133.0 — 2026-11-03
+
+- **Demande de certificat (CSR)** : la page demande le nom complet (FQDN), affiche les SAN demandés et prévient que l'autorité doit conserver l'IP si les agents l'utilisent. Un nom court comme `loco` n'est plus écarté sans le dire.
+- **Import d'un certificat d'entreprise** : la feuille seule est acceptée, avec l'intermédiaire en complément. Les trois erreurs sont distinctes et disent quoi corriger : intermédiaire manquant, SAN absent (avec la liste de ce que couvre le certificat) et mauvaise autorité.
+- **Lier un compte administrateur à son identité SSO** : *Mon compte › Connexion SSO*. Le lien se fait par un passage réel chez le fournisseur, depuis un compte déjà connecté. Rien n'est rapproché automatiquement par nom ou courriel.
+  - Le mot de passe et les droits ne changent pas, et la double authentification du compte reste exigée.
+  - Supprimer ou désactiver le fournisseur ne coupe pas le compte local.
+  - Une identité déjà liée à un autre compte actif est refusée. Une demande d'accès encore en attente pour cette identité est remplacée.
+- **Profil proposé d'après un groupe** : pour chaque fournisseur OpenID Connect, des lignes `groupe = profil`. Le profil est présélectionné à l'approbation d'une demande : rien n'est accordé sans approbation.
+
 ## 2.132.0 — 2026-11-03
 
 - **Configurer Authentik depuis loco** : bouton dans *Annuaires et SSO*.

@@ -1941,7 +1941,9 @@ TLS_UPLOAD_RE = re.compile(r"[0-9a-f]{32}")
 PORTAL_SITE = "/etc/nginx/sites-available/loco-portal.conf"
 SNI_SITE = "/etc/nginx/sites-available/loco-portal.sni.conf"    # trié APRÈS loco-portal.conf (« . » + « s » > « . » + « c »)
 SNI_LINK = "/etc/nginx/sites-enabled/loco-portal.sni.conf"
-CERT_NAME_RE = re.compile(r"(\*\.)?[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+")
+# Nom court accepté (« loco ») : une autorité d'entreprise l'émet, et install.sh le met déjà dans le certificat de loco. Joker : deux niveaux au moins.
+CERT_NAME_RE = re.compile(r"\*\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+"
+                          r"|[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*")
 
 
 def _ssl(args, log=None, data=None):
@@ -2450,32 +2452,74 @@ def _check_enterprise_pair(crt_pem, key_path, log):
         raise ValueError(t("la clé ne correspond pas au certificat", "the key does not match the certificate",
                            "la clave no corresponde al certificado"))
     host = read_conf().get("HOST", "")
+    covered = ", ".join(re.findall(r"(?:DNS:|IP Address:)([^\s,]+)", _x509(leaf, "-ext", "subjectAltName")[1])) or "—"
     if host and not _covers_host(leaf, host):
-        raise ValueError(t(f"il ne couvre pas {host}, l'adresse utilisée par les agents du parc",
-                           f"it does not cover {host}, the address used by the agents",
-                           f"no cubre {host}, la dirección usada por los agentes"))
+        raise ValueError(t(f"SAN absent : il couvre {covered}, mais pas {host}, l'adresse utilisée par les agents. Votre autorité l'a peut-être retiré (certains profils, comme EJBCA, ne gardent pas les IP) : demandez un profil qui le conserve",
+                           f"missing SAN: it covers {covered}, but not {host}, the address used by the agents. Your authority may have removed it (some profiles, such as EJBCA, drop IPs): ask for a profile that keeps it",
+                           f"falta el SAN: cubre {covered}, pero no {host}, la dirección usada por los agentes. Puede que su autoridad lo haya retirado (algunos perfiles, como EJBCA, no conservan las IP): solicite un perfil que lo mantenga"))
     portal = urllib.parse.urlsplit(read_conf().get("PORTAL_URL", "")).hostname
     if portal and not _covers_host(leaf, portal):
-        raise ValueError(t(f"il ne couvre pas {portal}, l'adresse du portail",
-                           f"it does not cover {portal}, the portal address",
-                           f"no cubre {portal}, la dirección del portal"))
+        raise ValueError(t(f"SAN absent : il couvre {covered}, mais pas {portal}, l'adresse du portail",
+                           f"missing SAN: it covers {covered}, but not {portal}, the portal address",
+                           f"falta el SAN: cubre {covered}, pero no {portal}, la dirección del portal"))
     authority = _pem_blocks(_read(tls_path("ENTERPRISE_CA")))
     if not authority:
         raise ValueError(t("importez d'abord l'autorité d'entreprise", "import the enterprise authority first",
                            "importe primero la autoridad de empresa"))
-    intermediates = [b for b in blocks[1:] + authority if not _self_signed(b)]
-    intermediates = [b for b in dict.fromkeys(intermediates) if b != leaf]
-    with tempfile.TemporaryDirectory(dir=TLS, prefix=".verify-") as tmp:
+    problem, intermediates = chain_problem(leaf, blocks[1:], authority, log, TLS)
+    if problem:
+        raise ValueError(problem)
+    return "\n".join([leaf] + intermediates) + "\n"
+
+
+def chain_problem(leaf, given, authority, log=None, workdir=None):
+    """(raison du refus ou None, intermédiaires à servir). Le portail l'appelle aussi : le refus s'affiche aussitôt sur la page,
+    sans attendre l'opération de l'agent root, qui revalide de toute façon."""
+    intermediates = [b for b in dict.fromkeys(b for b in given + authority if not _self_signed(b)) if b != leaf]
+    with tempfile.TemporaryDirectory(dir=workdir, prefix=".verify-") as tmp:
         files = {}
         for name, text in (("leaf.pem", leaf), ("ca.pem", "\n".join(authority)), ("chain.pem", "\n".join(intermediates))):
             files[name] = os.path.join(tmp, name)
-            _write_public(files[name], text + "\n")
+            with open(files[name], "w", encoding="utf-8") as f:
+                f.write(text + "\n")
         args = ["verify", "-CAfile", files["ca.pem"]] + (["-untrusted", files["chain.pem"]] if intermediates else [])
         if _ssl(args + [files["leaf.pem"]], log)[0] != 0:
-            raise ValueError(t("il n'est pas signé par l'autorité d'entreprise importée",
-                               "it is not signed by the imported enterprise authority",
-                               "no está firmado por la autoridad de empresa importada"))
-    return "\n".join([leaf] + intermediates) + "\n"
+            return _chain_refusal(leaf, intermediates, authority), intermediates
+    return None, intermediates
+
+
+def _dn(pem, which):
+    """Sujet ou émetteur d'un certificat PEM (RFC 2253), pour comparer les maillons d'une chaîne."""
+    return _x509(pem, f"-{which}", "-nameopt", "RFC2253")[1].strip().split("=", 1)[-1].strip()
+
+
+def _cn_of(dn):
+    found = re.search(r"(?:^|,)CN=((?:[^,\\]|\\.)+)", dn)
+    return found.group(1) if found else dn
+
+
+def _chain_refusal(leaf, intermediates, authority):
+    """Pourquoi la chaîne ne remonte pas à l'autorité importée : intermédiaire manquant, ou mauvaise autorité."""
+    imported = ", ".join(_cn_of(_dn(a, "subject")) for a in authority[:3])
+    pool, current, seen = intermediates + authority, leaf, []
+    while current not in seen and not _self_signed(current):
+        seen.append(current)
+        issuer = _dn(current, "issuer")
+        parent = next((b for b in pool if _dn(b, "subject") == issuer and b != current), None)
+        if parent is None:
+            name = _cn_of(issuer)
+            if current == leaf:
+                return t(f"intermédiaire manquant : le certificat est signé par {name}, absent de l'autorité importée ({imported}). Joignez cet intermédiaire en complément. Si {name} est en fait la racine, importez-la : l'autorité importée n'est pas la bonne",
+                         f"missing intermediate: the certificate is signed by {name}, not in the imported authority ({imported}). Attach this intermediate as a complement. If {name} is actually the root, import it: the imported authority is the wrong one",
+                         f"falta el intermedio: el certificado está firmado por {name}, ausente de la autoridad importada ({imported}). Adjunte ese intermedio como complemento. Si {name} es en realidad la raíz, impórtela: la autoridad importada no es la correcta")
+            below = _cn_of(_dn(current, "subject"))
+            return t(f"mauvaise autorité : {below} est signé par {name}, mais l'autorité importée est {imported}. Importez {name}",
+                     f"wrong authority: {below} is signed by {name}, but the imported authority is {imported}. Import {name}",
+                     f"autoridad incorrecta: {below} está firmado por {name}, pero la autoridad importada es {imported}. Importe {name}")
+        current = parent
+    return t(f"mauvaise autorité : le nom correspond à {imported}, mais pas la clé qui a signé. Importez la bonne autorité",
+             f"wrong authority: the name matches {imported}, but not the signing key. Import the right authority",
+             f"autoridad incorrecta: el nombre coincide con {imported}, pero no la clave que firmó. Importe la autoridad correcta")
 
 
 def import_ca(params, log=print):

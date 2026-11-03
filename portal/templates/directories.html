@@ -107,6 +107,10 @@
     <label class="f"><span>{{ _("Portées (scopes)") }}</span><input type="text" name="scopes" maxlength="200" class="mono" spellcheck="false" value="{{ cfg.scopes if cfg else 'openid profile email' }}"></label>
     <label class="f"><span>{{ _("Revendication du nom d’utilisateur") }}</span><input type="text" name="username_claim" maxlength="60" class="mono" spellcheck="false" value="{{ cfg.username_claim if cfg else 'preferred_username' }}"></label>
   </div>
+  <label class="f"><span>{{ _("Profil proposé selon le groupe") }} <em class="opt">{{ _("facultatif") }}</em></span>
+    <textarea name="group_roles" rows="3" class="mono" spellcheck="false" placeholder="{{ _('loco-admins = Administrateur') }}">{% if cfg and cfg.group_roles %}{% for group, role in cfg.group_roles.items() %}{{ group }} = {{ role }}
+{% endfor %}{% endif %}</textarea>
+    <small class="hint">{{ _("Une ligne « groupe = profil ». À l’approbation d’une demande, ce profil est présélectionné : rien n’est accordé sans approbation. Les groupes viennent de la portée profile.") }}</small></label>
   {{ ca_field(cfg, _("Vide : les autorités de confiance du système. Collez l’autorité de votre réseau, ou le certificat auto-signé d’Authentik (épinglé tel quel)."), _("Certificat ou autorité du fournisseur (PEM)")) }}
 {% endcall %}
 {% endmacro %}

@@ -213,8 +213,8 @@ class TestEnterpriseAuthority(CertTest):
         locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
         locoadmin.ca_csr({"names": ""}, log=self.QUIET)
         csr = os.path.join(self.tls, "enterprise.csr")
-        for issued, reason in ((self.sign(csr, corp, san="DNS:loco.corp.example"), "ne couvre pas"),
-                               (self.sign(csr, other), "pas signé")):
+        for issued, reason in ((self.sign(csr, corp, san="DNS:loco.corp.example"), "SAN absent"),
+                               (self.sign(csr, other), "intermédiaire manquant")):
             with self.assertRaises(ValueError) as e:
                 locoadmin.import_enterprise_cert({"upload": self.spool(issued, "3" * 32, ".crt")}, log=self.QUIET)
             self.assertIn(reason, str(e.exception))

@@ -30,7 +30,7 @@
           <td>
             {% if u.pending %}
             <span class="st warn">{{ _("En attente d'approbation · aucun accès") }}</span>
-            {% if manageable and can('users.approve') and feature('directories') %}<form method="post" action="{{ url_for('users_approve', user_id=u.id) }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="role" aria-label="{{ _('Profil après approbation') }}">{% for key, label in assignable_roles.items() if key != 'pending' %}<option value="{{ key }}" {{ 'selected' if key == 'viewer' }}>{{ label }}</option>{% endfor %}</select><button class="btn sm primary">{{ _("Approuver") }}</button></form>{% endif %}
+            {% if manageable and can('users.approve') and feature('directories') %}<form method="post" action="{{ url_for('users_approve', user_id=u.id) }}" class="inline-form"><input type="hidden" name="csrf" value="{{ csrf }}"><select name="role" aria-label="{{ _('Profil après approbation') }}">{% set proposed = proposals.get(u.id, (None, None)) %}{% for key, label in assignable_roles.items() if key != 'pending' %}<option value="{{ key }}" {{ 'selected' if key == (proposed[0] if proposed[0] in assignable_roles else 'viewer') }}>{{ label }}</option>{% endfor %}</select><button class="btn sm primary">{{ _("Approuver") }}</button></form>{% if proposed[0] in assignable_roles %}<span class="sub">{{ _("Profil proposé d’après le groupe %(group)s.", group=proposed[1]) }}</span>{% endif %}{% endif %}
             {% elif not me and manageable and can('users.edit') %}
             <form method="post" action="{{ url_for('users_update', user_id=u.id) }}" class="inline-form" data-ajax>
               <input type="hidden" name="csrf" value="{{ csrf }}">

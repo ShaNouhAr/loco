@@ -555,23 +555,34 @@
               {% endif %}
               {% if tls.request %}
               <div class="ca-request">
-                <div class="ca-request-h"><strong>{{ _("Demande en attente de signature") }}</strong><span class="faint small mono">{{ tls.request.names|join(', ') }}</span>
+                <div class="ca-request-h"><strong>{{ _("Demande en attente de signature") }}</strong><span class="faint small mono">{{ _("SAN demandés :") }} {{ tls.request.names|join(', ') }}</span>
                   <a class="btn sm" href="{{ url_for('system_csr_download') }}">{{ ui_icon('download') }}<span>{{ _("Télécharger .csr") }}</span></a></div>
                 <div class="cmd ca-csr"><code>{{ tls.request.pem }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
                 <p class="hint">{{ _("Avec AD CS, sur un poste du domaine (modèle « Serveur Web »), ou par l'inscription web https://votre-autorité/certsrv › Demande avancée :") }}</p>
                 {{ cmd('csr-adcs', 'certreq -submit -attrib "CertificateTemplate:WebServer" loco.csr loco.cer', 'PS>') }}
                 {% if can('system.configure') %}
-                <form method="post" action="{{ url_for('system_enterprise_import') }}" enctype="multipart/form-data">
+                <form method="post" action="{{ url_for('system_enterprise_import') }}" enctype="multipart/form-data" class="stack-sm">
                   <input type="hidden" name="csrf" value="{{ csrf }}">
-                  <label class="btn sm primary file-btn">{{ ui_icon('upload') }}<span>{{ _("Importer le certificat émis") }}</span><input type="file" name="certificate" accept=".cer,.crt,.pem,.der,.p7b" data-autosubmit></label>
+                  <div class="grid2">
+                    <label class="f"><span>{{ _("Certificat émis") }}</span><input type="file" name="certificate" required accept=".cer,.crt,.pem,.der,.p7b"></label>
+                    <label class="f"><span>{{ _("Intermédiaire") }} <em class="opt">{{ _("facultatif") }}</em></span><input type="file" name="intermediate" accept=".cer,.crt,.pem,.der,.p7b"></label>
+                  </div>
+                  <div><button class="btn sm primary"><span class="spin"></span>{{ _("Importer le certificat émis") }}</button></div>
                 </form>
                 {% endif %}
               </div>
               {% endif %}
               {% if can('system.configure') %}
+              {% if tls.csr %}
+              <div class="ca-san stack-sm">
+                <p class="small">{{ _("La demande inclura ces noms (SAN) :") }} <span class="mono">{{ tls.csr.san|join(', ') }}</span></p>
+                {% if tls.csr.ip %}<p class="note warn">{{ _("Votre autorité doit conserver l'IP %(ip)s dans le certificat : les agents du parc s'y connectent. Certains profils, comme ceux d'EJBCA, retirent les IP : vérifiez le vôtre avant de soumettre la demande.", ip=tls.csr.ip) }}</p>{% endif %}
+              </div>
+              {% endif %}
               <form method="post" action="{{ url_for('system_csr') }}" class="ca-csr-form">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
-                <input type="text" name="names" class="mono" placeholder="{{ _('noms DNS en plus (facultatif) : loco.entreprise.lan') }}" aria-label="{{ _('Noms DNS supplémentaires') }}" spellcheck="false" autocapitalize="none" {{ 'disabled' if not authority_ok }}>
+                <input type="text" name="fqdn" class="mono" value="{{ tls.csr.fqdn if tls.csr }}" placeholder="{{ _('nom complet (FQDN) : loco.entreprise.lan') }}" aria-label="{{ _('Nom complet du serveur (FQDN)') }}" spellcheck="false" autocapitalize="none" {{ 'disabled' if not authority_ok }}>
+                <input type="text" name="names" class="mono" placeholder="{{ _('noms en plus (facultatif) : loco') }}" aria-label="{{ _('Noms DNS supplémentaires') }}" spellcheck="false" autocapitalize="none" {{ 'disabled' if not authority_ok }}>
                 <button class="btn sm{{ ' primary' if authority_ok and not prepared_ok and not tls.request }}" {{ 'disabled' if not authority_ok }}>{{ ui_icon('key') }}<span>{{ _("Nouvelle demande (CSR)") if tls.request or prepared_ok else _("Générer la demande (CSR)") }}</span></button>
               </form>
               <details class="ca-more">
@@ -581,6 +592,7 @@
                   <div class="grid2">
                     <label class="f"><span>{{ _("Certificat (.cer, .crt, .pem)") }}</span><input type="file" name="certificate" accept=".cer,.crt,.pem,.der,.p7b"></label>
                     <label class="f"><span>{{ _("Clé privée (PEM, non chiffrée)") }}</span><input type="file" name="key" accept=".key,.pem"></label>
+                    <label class="f"><span>{{ _("Intermédiaire") }} <em class="opt">{{ _("facultatif") }}</em></span><input type="file" name="intermediate" accept=".cer,.crt,.pem,.der,.p7b"></label>
                   </div>
                   <p class="hint">{{ _("ou un fichier PFX (PKCS#12) exporté avec sa clé :") }}</p>
                   <div class="grid2">

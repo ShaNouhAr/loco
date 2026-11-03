@@ -383,7 +383,8 @@ def account():
     activity = [{"r": r, **journal_view.describe(r["action"])} for r in db().execute(
         "SELECT * FROM audit WHERE username=? ORDER BY id DESC LIMIT 10", (g.user["username"],))]
     from . import totp
-    return render_template(template, min_password=config.MIN_PASSWORD, activity=activity,
+    from .oidc import link_state
+    return render_template(template, min_password=config.MIN_PASSWORD, activity=activity, sso_link=link_state(g.user),
                            mfa_recovery_left=totp.recovery_left(g.user["recovery_codes"]) if g.user["mfa_enabled"] else 0,
                            granted_count=len(granted), total_permissions=len(permissions.PERMISSIONS),
                            granted_groups=[(label, [permissions.PERMISSIONS[item[0]] for item in items if item[0] in granted])
@@ -480,12 +481,15 @@ def users_mfa_reset(user_id):
 @login_required
 def users():
     rows = db().execute("SELECT u.*, COALESCE(di.display_name, i.display_name) AS display_name, COALESCE(di.email, i.email) AS email, "
-                        "COALESCE(di.subject, i.subject) AS subject, COALESCE(d.label, p.label) AS provider_label, d.kind AS directory_kind "
+                        "COALESCE(di.subject, i.subject) AS subject, COALESCE(d.label, p.label) AS provider_label, d.kind AS directory_kind, "
+                        "d.config AS directory_config, di.groups AS directory_groups "
                         "FROM users u LEFT JOIN sso_identities i ON i.user_id=u.id LEFT JOIN sso_providers p ON p.id=i.provider_id "
                         "LEFT JOIN directory_identities di ON di.user_id=u.id LEFT JOIN auth_directories d ON d.id=di.directory_id "
                         "ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
-    return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user, min_password=config.MIN_PASSWORD,
+    from .directories import proposed_role
+    proposals = {r["id"]: proposed_role(r) for r in rows if r["pending"]}
+    return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user, min_password=config.MIN_PASSWORD, proposals=proposals,
                            assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)},
                            role_choices=[r for r in permissions.role_details(db()) if can_assign(r["id"])],
                            draft=session.pop("new_account_draft", None))

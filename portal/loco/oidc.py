@@ -17,11 +17,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from flask import abort, g, make_response, redirect, render_template, request, url_for
+from flask import abort, flash, g, make_response, redirect, render_template, request, session, url_for
 from werkzeug.security import generate_password_hash
 
 from . import app, config
-from .auth import _complete_login, audit
+from .auth import _complete_login, audit, can, login_required, require
 from .db import db
 from .i18n import L_, _
 from .util import safe_next
@@ -402,7 +402,7 @@ def _open_flow(value):
     return flow if isinstance(flow, dict) else None
 
 
-def begin(directory, mode="login", next_url="/"):
+def begin(directory, mode="login", next_url="/", account=None):
     """Redirige vers le fournisseur ; l'état (PKCE, nonce, état) reste dans un cookie chiffré lié à ce navigateur."""
     from .directories import config_of
     cfg = config_of(directory)
@@ -410,14 +410,16 @@ def begin(directory, mode="login", next_url="/"):
     state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     flow = {"d": directory["id"], "r": directory["revision"], "s": state, "n": nonce, "v": verifier, "m": mode,
             "u": callback_url(directory["id"]), "next": safe_next(next_url)}
+    if account is not None:                                      # liaison : le compte qui l'a demandée, connecté à ce moment-là
+        flow.update(a=account["id"], p=account["pw_version"])
     # Pas de prompt=login pour le test : Authentik redemanderait alors les identifiants une 2e fois à un navigateur
     # qui vient de se connecter. Le test se fait donc avec le compte ouvert chez le fournisseur, s'il y en a un.
     url = authorize_url(cfg, meta, flow["u"], state, nonce, _s256(verifier))
-    if mode == "test":
+    if mode in ("test", "link"):
         # Le test part d'un formulaire (POST + CSRF) : la CSP « form-action 'self' » interdit au navigateur d'en suivre
         # une redirection vers un autre site. Il y va donc depuis une page intermédiaire.
         response = make_response(render_template("sso_status.html", message=_("Redirection vers %(label)s…",
-                                 label=directory["label"]), kind="", next_url=url, heading=_("Test de connexion")))
+                                 label=directory["label"]), kind="", next_url=url, heading=_("Test de connexion") if mode == "test" else _("Liaison du compte")))
     else:
         response = redirect(url)
     # SameSite=Lax : le retour du fournisseur est une navigation d'un autre site ; la session reste en Strict.
@@ -460,9 +462,9 @@ def admin_hint():
     return _("Administrateur : connectez-vous avec votre compte loco, puis « Vérifier la configuration » dans Annuaires et SSO indique la cause et sa correction.")
 
 
-def _status(message, code=200, kind="err", next_url=None, test=None, testing=False, hint=None):
+def _status(message, code=200, kind="err", next_url=None, test=None, testing=False, hint=None, heading=None, to_account=False):
     response = make_response(render_template("sso_status.html", message=message, kind=kind, next_url=next_url,
-                                             test=test, testing=testing, hint=hint), code)
+                                             test=test, testing=testing, hint=hint, heading=heading, to_account=to_account), code)
     response.delete_cookie(FLOW_COOKIE, path=FLOW_PATH, secure=app.config["SESSION_COOKIE_SECURE"], httponly=True,
                            samesite="Lax")
     return response
@@ -478,6 +480,42 @@ def _wanted_username(claims, cfg):
     return "sso-" + secrets.token_hex(4)
 
 
+def _claim_groups(claims):
+    found = claims.get("groups")
+    return json.dumps([str(g)[:200] for g in found[:100]] if isinstance(found, list) else [], ensure_ascii=False)
+
+
+def _finish_link(directory, claims, flow):
+    """Lie l'identité reçue au compte local qui a demandé la liaison. Rien n'est rapproché par nom ou courriel : seule cette demande
+    explicite, faite depuis un compte connecté, crée le lien. Une demande d'accès encore en attente pour cette identité est retirée."""
+    from . import permissions
+    label, subject = directory["label"], claims["sub"]
+    conn = db()
+    conn.execute("BEGIN IMMEDIATE")
+    user = conn.execute("SELECT * FROM users WHERE id=?", (flow.get("a"),)).fetchone()
+    if (user is None or user["disabled"] or user["pending"] or user["auth_source"] != "local" or user["pw_version"] != flow.get("p")
+            or "sso.manage" not in permissions.role_permissions(conn, user["role"])):
+        conn.rollback()
+        return _status(_("Ce compte ne peut plus être lié : reconnectez-vous puis recommencez."), 403, heading=_("Liaison du compte"), to_account=True)
+    current = conn.execute("SELECT i.user_id, u.pending, u.auth_source, u.username FROM directory_identities i JOIN users u ON u.id=i.user_id "
+                           "WHERE i.directory_id=? AND i.subject=?", (directory["id"], subject)).fetchone()
+    if current and current["user_id"] != user["id"]:
+        if not (current["pending"] and current["auth_source"] == "directory"):
+            conn.rollback()
+            audit("sso.liaison", f"{user['username']} : refusée, identité déjà liée à {current['username']}", username=user["username"])
+            return _status(_("Cette identité %(label)s est déjà liée au compte %(other)s : il faut d’abord l’en délier.", label=label, other=current["username"]), 409,
+                           heading=_("Liaison du compte"), to_account=True)
+        conn.execute("DELETE FROM users WHERE id=?", (current["user_id"],))
+    conn.execute("DELETE FROM directory_identities WHERE user_id=?", (user["id"],))
+    conn.execute("INSERT INTO directory_identities (directory_id, subject, user_id, display_name, email, groups) VALUES (?,?,?,?,?,?)",
+                 (directory["id"], subject, user["id"], str(claims.get("name") or claims.get("preferred_username") or "")[:200],
+                  str(claims.get("email") or "")[:254], _claim_groups(claims)))
+    audit("sso.liaison", f"{user['username']} : {label}", username=user["username"], commit=False)
+    conn.commit()
+    return _status(_("Votre compte %(username)s est maintenant lié à %(label)s. Vous pouvez aussi vous connecter avec ce bouton ; votre mot de passe reste valable.",
+                     username=user["username"], label=label), kind="ok", heading=_("Liaison du compte"), to_account=True)
+
+
 def _link(directory, cfg, claims):
     """(compte, None) si une identité liée existe ; (None, message) pour une nouvelle demande ou un compte en attente."""
     from .directories import _free_username
@@ -486,6 +524,7 @@ def _link(directory, cfg, claims):
     subject = claims["sub"]                                      # identifiant opaque : casse conservée
     display = str(claims.get("name") or claims.get("preferred_username") or "")[:200]
     email = str(claims.get("email") or "")[:254]
+    groups = _claim_groups(claims)
     link = conn.execute("SELECT * FROM directory_identities WHERE directory_id=? AND subject=?",
                         (directory["id"], subject)).fetchone()
     if link is None:
@@ -495,13 +534,13 @@ def _link(directory, cfg, claims):
         uid = conn.execute("INSERT INTO users (username,password_hash,role,disabled,pending,auth_source,created_at) "
                            "VALUES (?,?,'pending',1,1,'directory',?)",
                            (name, generate_password_hash(secrets.token_urlsafe(48)), now)).lastrowid
-        conn.execute("INSERT INTO directory_identities (directory_id, subject, user_id, display_name, email) VALUES (?,?,?,?,?)",
-                     (directory["id"], subject, uid, display, email))
+        conn.execute("INSERT INTO directory_identities (directory_id, subject, user_id, display_name, email, groups) VALUES (?,?,?,?,?,?)",
+                     (directory["id"], subject, uid, display, email, groups))
         audit("sso.demande", f"{name} via {directory['label']}", username=name, commit=False)
         conn.commit()
         return None, _("Votre demande d’accès a été créée. Un administrateur doit l’approuver avant votre première connexion.")
-    conn.execute("UPDATE directory_identities SET display_name=?, email=? WHERE directory_id=? AND subject=?",
-                 (display or link["display_name"], email or link["email"], directory["id"], subject))
+    conn.execute("UPDATE directory_identities SET display_name=?, email=?, groups=? WHERE directory_id=? AND subject=?",
+                 (display or link["display_name"], email or link["email"], groups, directory["id"], subject))
     user = conn.execute("SELECT * FROM users WHERE id=?", (link["user_id"],)).fetchone()
     conn.commit()
     if user["pending"]:
@@ -518,6 +557,7 @@ def sso_callback(directory_id):
     if flow is not None and flow.get("d") == directory_id:
         directory = _any(directory_id) if flow.get("m") == "test" else _enabled(directory_id)
     test = flow is not None and flow.get("m") == "test"
+    linking = flow is not None and flow.get("m") == "link"
     if (flow is None or directory is None or flow.get("r") != directory["revision"]
             or not hmac.compare_digest(str(request.args.get("state", ""))[:512], str(flow.get("s", "")))):
         if flow is None and off_portal():
@@ -536,7 +576,7 @@ def sso_callback(directory_id):
                                   "loco chez le fournisseur.", label=label))
             # Détail du fournisseur (texte libre) : seulement pour l'administrateur qui teste, et le journal.
             detail = " ".join(re.sub(r"[^\w .,:;'’()/-]", "", str(request.args.get("error_description", ""))).split())[:200]
-            if test:
+            if test or linking:
                 hint = _("Vérifiez chez le fournisseur : client « Confidentiel », URL de redirection identique à celle "
                          "affichée par loco, et type d’autorisation « Authorization Code » permis. « Vérifier la configuration » "
                          "indique la cause et sa correction.")
@@ -555,6 +595,8 @@ def sso_callback(directory_id):
               username="")
         if test:
             return _status(str(e), 400, testing=True, hint=hint)
+        if linking:
+            return _status(str(e), 400, hint=hint, heading=_("Liaison du compte"), to_account=True)
         return _status(_("Connexion avec %(label)s impossible : %(e)s", label=label, e=e), 400, hint=admin_hint())
     if test:
         groups = claims.get("groups") if isinstance(claims.get("groups"), list) else []
@@ -564,12 +606,66 @@ def sso_callback(directory_id):
             "sub": claims["sub"], "username": _wanted_username(claims, cfg),
             "name": str(claims.get("name") or ""), "email": str(claims.get("email") or ""),
             "groups": ", ".join(str(x) for x in groups[:20])})
+    if linking:
+        return _finish_link(directory, claims, flow)
     user, notice = _link(directory, cfg, claims)
     if user is None:
         return _status(notice, 202, kind="ok")
+    if user["auth_source"] == "local" and user["mfa_enabled"]:
+        # Compte local lié : sa double authentification reste exigée, le SSO ne la contourne pas.
+        session.clear()
+        session.permanent = True
+        session["mfa_pending"] = {"uid": user["id"], "pwv": user["pw_version"], "ip": request.remote_addr or "", "at": time.time(), "next": flow.get("next") or "/"}
+        return _status(_("Identité vérifiée. Code de double authentification demandé…"), kind="ok", next_url=url_for("login_mfa"))
     _complete_login(user, request.remote_addr or "", directory_id)
     # Page intermédiaire : la navigation suivante part de loco, le cookie de session (SameSite=Strict) est donc envoyé.
     return _status(_("Connexion réussie. Ouverture de loco…"), kind="ok", next_url=flow.get("next") or "/")
+
+
+@app.route("/account/sso/<directory_id>/link", methods=["POST"])
+@login_required
+def sso_link(directory_id):
+    """Lier son compte local à son identité chez le fournisseur : passage réel par le fournisseur, rien d'automatique."""
+    require("sso.manage")
+    directory = _enabled(directory_id)
+    if directory is None:
+        abort(404)
+    if g.user["auth_source"] != "local":
+        abort(400)
+    if off_portal():
+        flash(_("La liaison doit partir de l’adresse du portail, où revient le fournisseur : ouvrez %(url)s.", url=config.portal_url()), "error")
+        return redirect(url_for("account"))
+    try:
+        return begin(directory, "link", "/account", account=g.user)
+    except OIDCError as e:
+        flash(_("Fournisseur injoignable ou mal configuré : %(e)s. « Vérifier la configuration » indique la cause et sa correction.", e=e), "error")
+        return redirect(url_for("account"))
+
+
+@app.route("/account/sso/unlink", methods=["POST"])
+@login_required
+def sso_unlink():
+    require("sso.manage")
+    if g.user["auth_source"] != "local":
+        abort(400)
+    conn = db()
+    conn.execute("DELETE FROM directory_identities WHERE user_id=?", (g.user["id"],))
+    audit("sso.liaison", f"{g.user['username']} : liaison retirée", commit=False)
+    conn.commit()
+    flash(_("Liaison retirée : connectez-vous avec votre mot de passe."), "ok")
+    return redirect(url_for("account"))
+
+
+def link_state(user):
+    """Bloc « Connexion SSO » de Mon compte, pour un administrateur à compte local."""
+    from . import features
+    from .directories import enabled_directories
+    if user["auth_source"] != "local" or not can("sso.manage") or "directories" in features.disabled():
+        return None
+    providers = [d for d in enabled_directories() if d["kind"] == "oidc"]
+    current = db().execute("SELECT d.label, i.display_name, i.email, i.subject FROM directory_identities i JOIN auth_directories d "
+                           "ON d.id=i.directory_id WHERE i.user_id=?", (user["id"],)).fetchone()
+    return {"providers": providers, "current": current} if providers or current else None
 
 
 def start_test(directory):

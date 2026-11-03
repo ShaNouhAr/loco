@@ -54,6 +54,20 @@
       </ul></div>
     </section>
   </div>
+  {% if sso_link %}
+  <section class="panel" id="liaison-sso">
+    <div class="panel-h"><h2>{{ _("Connexion SSO") }}</h2><div class="aside">{% if sso_link.current %}<span class="st ok">{{ _("liée à %(label)s", label=sso_link.current.label) }}</span>{% else %}<span class="st">{{ _("non liée") }}</span>{% endif %}</div></div>
+    <div class="panel-b stack-sm">
+      <p class="muted small">{{ _("Liez ce compte à votre identité chez le fournisseur pour vous connecter avec son bouton. Votre mot de passe et vos droits ne changent pas. Rien n’est rapproché automatiquement par nom ou courriel : seul ce bouton crée le lien.") }}</p>
+      {% if sso_link.current %}
+      <p class="small">{{ sso_link.current.display_name or sso_link.current.email or sso_link.current.subject }}</p>
+      <form method="post" action="{{ url_for('sso_unlink') }}" data-confirm="{{ _('Retirer la liaison ?') }}" data-confirm-text="{{ _('Vous devrez vous connecter avec votre mot de passe.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Retirer la liaison") }}</button></form>
+      {% else %}
+      <div class="row">{% for d in sso_link.providers %}<form method="post" action="{{ url_for('sso_link', directory_id=d.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm"><span class="spin"></span>{{ _("Lier à %(label)s", label=d.label) }}</button></form>{% endfor %}</div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Double authentification") }}</h2>
       <div class="aside">{% if current_user.mfa_enabled %}<span class="st ok">{{ _("activée") }}</span>{% else %}<span class="st warn">{{ _("désactivée") }}</span>{% endif %}</div>
