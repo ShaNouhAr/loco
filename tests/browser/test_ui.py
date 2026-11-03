@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import sys
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -361,6 +362,10 @@ class TestUpdatesLive(BrowserTest):
                                (device(agent.uid)["id"], "update", "running", stamp(), stamp(), "admin")).lastrowid
         send = lambda state, *items: agent.post("/agent/api/result", {"id": cmd, "state": state, "output": "", "exit_code": None if state == "running" else 1,
                                                                        "progress": self.progress(*items)}, agent.token)
+        # La page se recharge exprès toutes les 5 min (signature, pour les « il y a… ») : ne pas tomber sur ce créneau.
+        left = 300 - time.time() % 300
+        if left < 45:
+            time.sleep(left + 1)
         self.page.goto("/fleet/updates")
         self.page.evaluate("window.sameDocument = true")
         send("running", ("libc6", "running"))
