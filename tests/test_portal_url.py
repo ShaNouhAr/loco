@@ -12,6 +12,7 @@ from unittest import mock
 import urllib.parse
 
 from flask import g
+from werkzeug.test import EnvironBuilder, run_wsgi_app
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -324,9 +325,12 @@ class TestSignInByName(OidcTest):
             self.assertNotIn("evil", r.headers["Location"])
 
     def test_a_malformed_host_is_no_error(self):
-        r = self.browser.get(self.path, headers={"Host": "loco.lab.local:abc"})
-        self.assertEqual(r.status_code, 302)
-        self.assertTrue(r.headers["Location"].startswith(NAME))
+        # Directement sur l'application : le client de test de Werkzeug récent plante lui-même sur cet en-tête.
+        environ = EnvironBuilder(path=self.path, base_url=AGENTS).get_environ()
+        environ["HTTP_HOST"] = "loco.lab.local:abc"
+        _body, status, headers = run_wsgi_app(fixture.loco.app, environ, buffered=True)
+        self.assertTrue(status.startswith("302"))
+        self.assertTrue(headers["Location"].startswith(NAME))
 
     def test_no_open_redirect_through_next(self):
         for evil in ("//evil.example/", "https://evil.example/", "/\\evil.example", "javascript:alert(1)"):
