@@ -1,6 +1,7 @@
 """Apparence par utilisateur : modèle (validation, bornage) et routes (enregistrement, fond, bornes)."""
 import glob
 import io
+import json
 import os
 import unittest
 
@@ -254,6 +255,73 @@ class InstancePolicyTest(unittest.TestCase):
         self.assertEqual(saved, {"theme": "oled", "accent": "brand", "alpha": 100, "bg": ""})
         anon = Browser().c.get("/login").get_data(as_text=True)          # écran de connexion : le défaut de l'instance
         self.assertIn('data-theme="light" data-accent="brand"', anon)
+
+    def anon_html(self):
+        return Browser().c.get("/login").get_data(as_text=True)
+
+    def test_login_screen_follows_the_default_until_it_has_its_own_look(self):
+        self.save()
+        self.assertIn('data-theme="midnight" data-accent="blue" data-alpha="90" data-bg="w:montagne"', self.anon_html())
+        # Une apparence à part, même avec un thème non proposé : seul l'écran de connexion change.
+        self.save(themes=["light", "oled"], default_theme="light", login_mode="custom", login_theme="sapin",
+                  login_accent="green", login_alpha="86", login_bg="w:foret")
+        self.assertIn('data-theme="sapin" data-accent="green" data-alpha="86" data-bg="w:foret"', self.anon_html())
+        v = self.viewer()
+        self.assertIn('data-theme="light" data-accent="blue"', v.c.get("/fleet").get_data(as_text=True))
+        page = self.b.c.get("/system/appearance").get_data(as_text=True)
+        self.assertIn('name="login_mode" value="custom" checked', page)
+        self.assertIn('<option value="sapin" selected', page.split('name="login_theme"')[1])
+        # Retour au défaut : les champs de la section sont désactivés côté navigateur, donc non envoyés.
+        self.save(login_mode="default")
+        self.assertIn('data-theme="midnight" data-accent="blue"', self.anon_html())
+        with connect() as conn:
+            stored = json.loads(conn.execute("SELECT value FROM settings WHERE key=?", (appearance.POLICY_KEY,)).fetchone()["value"])
+        self.assertNotIn("login", stored)
+        # Les réglages d'origine la retirent aussi.
+        self.save(login_mode="custom", login_theme="sapin", login_accent="green", login_alpha="86", login_bg="w:foret")
+        self.b.post("/system/appearance/reset", page="/system/appearance")
+        self.assertIn(f'data-theme="{appearance.FACTORY["theme"]}"', self.anon_html())
+
+    def test_current_look_applied_to_the_login_screen_from_the_dialog(self):
+        self.save(accent_free="")                                       # le reste du cadre ne doit pas bouger
+        look = {"theme": "sapin", "accent": "green", "alpha": "86", "bg": "w:foret"}
+        answer = self.b.post("/system/appearance/login", look)
+        self.assertEqual(answer.get_json(), {"theme": "sapin", "accent": "green", "alpha": 86, "bg": "w:foret"})
+        self.assertIn('data-theme="sapin" data-accent="green" data-alpha="86" data-bg="w:foret"', self.anon_html())
+        with test_portal.loco.app.test_request_context():
+            pol = appearance.policy()
+        self.assertEqual((pol["default"]["theme"], pol["accent_free"]), ("midnight", False))
+        self.assertIn('"theme": "sapin"', self.b.c.get("/fleet").get_data(as_text=True).split("data-login='")[1].split("'")[0])
+        # Une image personnelle n'est pas servie sans compte : refusée, l'écran de connexion ne change pas.
+        self.assertEqual(self.b.post("/system/appearance/login", dict(look, theme="oled", bg="u")).status_code, 400)
+        self.assertIn('data-theme="sapin"', self.anon_html())
+        # Réservé à qui configure le serveur, et le bouton n'est proposé qu'à lui.
+        v = self.viewer()
+        self.assertEqual(v.post("/system/appearance/login", dict(look, theme="oled")).status_code, 403)
+        self.assertNotIn("data-apply-login", v.c.get("/fleet").get_data(as_text=True))
+        self.assertIn('data-theme="sapin"', self.anon_html())
+        with connect() as conn:
+            row = conn.execute("SELECT detail FROM audit WHERE action='apparence.connexion' ORDER BY id DESC LIMIT 1").fetchone()
+        self.assertEqual(row["detail"], "sapin/green/w:foret/86")
+
+    def test_login_look_does_not_freeze_the_default_of_a_fresh_instance(self):
+        self.b.post("/system/appearance/login", {"theme": "oled", "accent": "teal", "alpha": "80", "bg": "w:aurore"})
+        with test_portal.loco.app.test_request_context():
+            pol = appearance.policy()
+        self.assertEqual(pol["default"], appearance.FACTORY)
+        self.assertEqual((pol["themes"], pol["accent_free"], pol["background_free"]), (list(appearance.THEMES), True, True))
+
+    def test_login_look_without_its_company_color_or_background_uses_the_default(self):
+        with connect() as conn:
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (appearance.POLICY_KEY, json.dumps(
+                {"login": {"theme": "sapin", "accent": "brand", "alpha": 86, "bg": "c"}})))
+        with test_portal.loco.app.test_request_context():
+            login = appearance.login_look()
+        self.assertEqual(login, dict(appearance.FACTORY, theme="sapin", alpha=86))
+        with connect() as conn:
+            conn.execute("UPDATE settings SET value=? WHERE key=?", (json.dumps({"login": {"theme": "oled", "bg": "u"}}), appearance.POLICY_KEY))
+        with test_portal.loco.app.test_request_context():
+            self.assertEqual(appearance.login_look()["bg"], "")          # une image personnelle ne passe jamais
 
     def test_invalid_settings_are_refused(self):
         self.save(brand_on="1", brand="rouge")

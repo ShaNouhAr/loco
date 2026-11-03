@@ -179,7 +179,7 @@ ENDPOINTS = {
     "appearance_logo_set": "system.configure", "appearance_logo_delete": "system.configure",
     "appearance_company_set": "system.configure", "appearance_company_delete": "system.configure",
     "instance_appearance": "system.configure", "instance_appearance_save": "system.configure",
-    "instance_appearance_reset": "system.configure",
+    "instance_appearance_reset": "system.configure", "instance_appearance_login": "system.configure",
     "users": "users.view", "users_add": "users.create", "users_update": "users.edit",
     "users_approve": "users.approve",
     "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage", "directory_toggle": "sso.manage",

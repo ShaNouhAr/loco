@@ -128,6 +128,7 @@ def inject_globals():
         "has_bg": appearance.has_background(user),
         "custom_logo": appearance.logo_info(),
         "appearance_default": appearance.default(),
+        "appearance_login": appearance.login_look(),
         "appearance_policy": appearance.policy(),
         "brand": appearance.brand_info(),
         "company_bg": appearance.company_file() is not None,

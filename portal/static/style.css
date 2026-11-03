@@ -97,6 +97,31 @@
 }
 
 /* Minuit : bleu nuit profond (variante sombre plus colorée que l'OLED). */
+[data-theme="sapin"] {
+  --canvas: #060d0a;
+  --bg: #0c1712;
+  --bg-2: #13221b;
+  --bg-3: #1c3026;
+  --field: #0f1c16;
+  --line: #213629;
+  --line-2: #314c3d;
+  --text: #e8f0ea;
+  --text-2: #a5b8ac;
+  --text-3: #7e9286;
+  --ok: #4cc27a;
+  --warn: #e0aa45;
+  --err: #f26b63;
+  --sel: #11211a;
+  --viz-1: #4fb583;
+  --viz-2: #1d5c40;
+  --series-1: #4cc28a;
+  --series-2: #e0a03c;
+  --shadow-pop: 0 0 0 1px rgb(255 255 255 / .02), 0 14px 36px rgb(0 0 0 / .66);
+  --shadow-card: inset 0 1px 0 rgb(255 255 255 / .04), 0 3px 14px rgb(0 0 0 / .42);
+  --shadow-btn: none;
+  color-scheme: dark;
+}
+
 [data-theme="midnight"] {
   --canvas: #070b14;
   --bg: #0d1322;
@@ -2110,8 +2135,9 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 }
 
 /* Pastilles de thème / accent (menu rapide hors session) pour les thèmes ajoutés. */
-.swatch-midnight { background: #0d1322; } .swatch-sepia { background: #faf4e8; }
+.swatch-sapin { background: #0c1712; } .swatch-midnight { background: #0d1322; } .swatch-sepia { background: #faf4e8; }
 .accent-teal { background: #0d9488; } .accent-amber { background: #b45309; }
+.preview-sapin { background: #060d0a; } .preview-sapin i { background: #1c3026; }
 .preview-midnight { background: #070b14; } .preview-midnight i { background: #1e2740; }
 .preview-sepia { background: #ece3d2; } .preview-sepia i { background: #e8dcc3; }
 
@@ -2127,6 +2153,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .ap-preset, .ap-theme { display: grid; gap: 8px; justify-items: stretch; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: none; color: var(--text); font: 500 12.5px var(--sans); text-align: center; cursor: pointer; }
 .ap-preset > span:last-child, .ap-theme > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ap-preset:hover, .ap-theme:hover { background: var(--bg-2); }
+.ap-preset { background: var(--bg); }           /* porte son propre thème : son libellé reste lisible sur la fenêtre, claire ou sombre */
 .ap-preset[aria-checked="true"], .ap-theme[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 /* Vignette : un mini-portail rendu avec les variables du thème/accent/fond cible (l'attribut data-* re-scope les variables). */
@@ -2166,6 +2193,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg^="w:"] .bg-layer { background-size: cover; background-position: center; }
 [data-bg="w:montagne"] .bg-layer { background-image: url("wallpapers/montagne.jpg"); }
 [data-bg="w:foret"] .bg-layer { background-image: url("wallpapers/foret.jpg"); }
+[data-bg="w:brume"] .bg-layer { background-image: url("wallpapers/brume.jpg"); }
 [data-bg="w:desert"] .bg-layer { background-image: url("wallpapers/desert.jpg"); }
 [data-bg="w:dunes"] .bg-layer { background-image: url("wallpapers/dunes.jpg"); }
 [data-bg="w:ocean"] .bg-layer { background-image: url("wallpapers/ocean.jpg"); }
@@ -2195,6 +2223,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 /* Vignettes (aperçus de presets + choix de fond) : miniatures légères des photos. */
 .ap-preview[data-bg="w:montagne"] { background-image: url("wallpapers/montagne-thumb.jpg"); }
 .ap-preview[data-bg="w:foret"] { background-image: url("wallpapers/foret-thumb.jpg"); }
+.ap-preview[data-bg="w:brume"] { background-image: url("wallpapers/brume-thumb.jpg"); }
 .ap-preview[data-bg="w:desert"] { background-image: url("wallpapers/desert-thumb.jpg"); }
 .ap-preview[data-bg="w:dunes"] { background-image: url("wallpapers/dunes-thumb.jpg"); }
 .ap-preview[data-bg="w:ocean"] { background-image: url("wallpapers/ocean-thumb.jpg"); }
@@ -2206,6 +2235,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .ap-photo > span { width: 100%; padding: 16px 8px 5px; font: 600 11px var(--sans); color: #fff; text-align: left; line-height: 1.1; background: linear-gradient(transparent, rgb(0 0 0 / .7)); text-shadow: 0 1px 2px rgb(0 0 0 / .55); }
 .wp-montagne { background-image: url("wallpapers/montagne-thumb.jpg"); }
 .wp-foret { background-image: url("wallpapers/foret-thumb.jpg"); }
+.wp-brume { background-image: url("wallpapers/brume-thumb.jpg"); }
 .wp-desert { background-image: url("wallpapers/desert-thumb.jpg"); }
 .wp-dunes { background-image: url("wallpapers/dunes-thumb.jpg"); }
 .wp-ocean { background-image: url("wallpapers/ocean-thumb.jpg"); }
@@ -2297,6 +2327,7 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .ia-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ia-acts form { display: inline-flex; }
 .ia-default { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.ia-default > * { margin-top: 0; }
 .ia-themes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
 .ia-theme { position: relative; display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; font-size: 13.5px; }
 .ia-theme:hover { background: var(--bg-2); }
@@ -2304,6 +2335,9 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .ia-theme input { position: absolute; top: 16px; left: 16px; z-index: 1; margin: 0; }
 .ia-theme small { display: block; font-size: 12px; color: var(--text-3); }
 .ia-save { padding: 0 2px; }
+.ap-login { gap: 16px; }
+.ap-login .hint { margin: 0; }
+.ap-login .btn { flex: none; }
 @media (max-width: 900px) {
   .ia-row { grid-template-columns: minmax(0, 1fr); }
   .ia-default, .ia-themes { grid-template-columns: repeat(2, minmax(0, 1fr)); }

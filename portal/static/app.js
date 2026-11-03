@@ -136,6 +136,22 @@
         if (range) { range.value = c.alpha; range.style.setProperty("--range-pct", alphaPct(c.alpha).toFixed(0) + "%"); }
         var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = c.alpha + " %";
       }
+      syncLogin();
+    }
+
+    // Bouton « Appliquer à la connexion » (droit de configurer le serveur) : inutile si l'écran de connexion a déjà
+    // cette apparence, impossible avec une image personnelle, servie seulement à son compte.
+    function loginState(name) {
+      $$("[data-login-state]", ap).forEach(function (p) { p.classList.toggle("hidden", p.dataset.loginState !== name); });
+    }
+    function syncLogin() {
+      var btn = ap && ap.querySelector("[data-apply-login]");
+      if (!btn) return;
+      var c = current(), l = {};
+      try { l = JSON.parse(ap.dataset.login); } catch (err) { /* rien à comparer */ }
+      var same = c.theme === l.theme && c.accent === l.accent && c.alpha === l.alpha && c.bg === l.bg, personal = c.bg === "u";
+      btn.disabled = same || personal;
+      loginState(personal ? "personal" : same ? "same" : "apply");
     }
 
     var saveTimer = null;
@@ -218,6 +234,16 @@
         var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = this.value + " %";
         this.style.setProperty("--range-pct", alphaPct(this.value).toFixed(0) + "%");
         persist();
+      });
+      var applyLogin = ap.querySelector("[data-apply-login]");
+      if (applyLogin) applyLogin.addEventListener("click", function () {
+        var c = current(), fd = new FormData();
+        fd.append("csrf", ap.dataset.csrf); fd.append("theme", c.theme); fd.append("accent", c.accent);
+        fd.append("alpha", c.alpha); fd.append("bg", c.bg);
+        fetch(this.dataset.url, { method: "POST", body: fd, credentials: "same-origin" })
+          .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(function (look) { ap.dataset.login = JSON.stringify(look); syncLogin(); })
+          .catch(function () { loginState("failed"); });
       });
       var upload = ap.querySelector("[data-bg-upload]"), msg = ap.querySelector("[data-bg-msg]");
       if (upload) upload.addEventListener("change", function () {

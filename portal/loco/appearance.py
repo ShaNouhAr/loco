@@ -20,20 +20,22 @@ from .db import db
 from .i18n import L_, _
 
 # Thèmes (clés data-theme, définies en CSS) et couleurs d'accent (clés data-accent).
-THEMES = ("oled", "dim", "light", "midnight", "sepia")
+THEMES = ("oled", "dim", "light", "midnight", "sepia", "sapin")
 ACCENTS = ("neutral", "blue", "green", "violet", "orange", "pink", "teal", "amber")
 # Fonds dégradés fournis (rendus en CSS, aucun fichier) : clé « g:<nom> ».
 GRADIENTS = ("aurora", "ocean", "forest", "dusk", "rose", "slate")
 # Fonds photo fournis (fichiers portal/static/wallpapers/<nom>.jpg + <nom>-thumb.jpg) : clé « w:<nom> ».
-WALLPAPERS = ("montagne", "foret", "desert", "dunes", "ocean", "aurore", "nuit", "hiver")
+WALLPAPERS = ("montagne", "foret", "desert", "dunes", "ocean", "aurore", "nuit", "hiver", "brume")
 ALPHA_MIN, ALPHA_MAX = 55, 100          # opacité des panneaux, en %
 
 # Presets prêts à l'emploi : (clé, libellé, thème, accent, transparence, fond).
 PRESETS = (
     ("oled", "OLED", "oled", "neutral", 100, ""),
     ("clair", "Clair", "light", "neutral", 100, ""),
+    ("brume", "Brume", "dim", "neutral", 88, "w:brume"),
     ("ocean", "Océan", "dim", "blue", 82, "g:ocean"),
     ("alpes", "Alpes", "midnight", "blue", 90, "w:montagne"),
+    ("foret", "Forêt", "sapin", "green", 86, "w:foret"),
     ("boreale", "Boréale", "oled", "teal", 80, "w:aurore"),
     ("desert", "Désert", "sepia", "amber", 84, "w:dunes"),
 )
@@ -49,16 +51,16 @@ _LOGO_MIME = {"png": "image/png", "jpg": "image/jpeg", "gif": "image/gif", "webp
 
 
 # Libellés (page d'administration de l'instance).
-THEME_LABELS = {"oled": L_("OLED"), "dim": L_("Sombre doux"), "light": L_("Clair"), "midnight": L_("Minuit"), "sepia": L_("Sépia")}
+THEME_LABELS = {"oled": L_("OLED"), "dim": L_("Sombre doux"), "light": L_("Clair"), "midnight": L_("Minuit"), "sepia": L_("Sépia"), "sapin": L_("Sapin")}
 ACCENT_LABELS = {"neutral": L_("Neutre"), "blue": L_("Bleu"), "green": L_("Vert"), "violet": L_("Violet"), "orange": L_("Orange"),
                  "pink": L_("Rose"), "teal": L_("Sarcelle"), "amber": L_("Ambre")}
 GRADIENT_LABELS = {"aurora": L_("Aurore"), "ocean": L_("Océan"), "forest": L_("Forêt"), "dusk": L_("Crépuscule"),
                    "rose": L_("Rose"), "slate": L_("Ardoise")}
 WALLPAPER_LABELS = {"montagne": L_("Montagne"), "foret": L_("Forêt"), "desert": L_("Désert"), "dunes": L_("Dunes"),
-                    "ocean": L_("Océan"), "aurore": L_("Aurore"), "nuit": L_("Nuit étoilée"), "hiver": L_("Hiver")}
+                    "ocean": L_("Océan"), "aurore": L_("Aurore"), "nuit": L_("Nuit étoilée"), "hiver": L_("Hiver"), "brume": L_("Brume")}
 
-# Défaut « attirant » à l'installation = preset « Alpes » : bleu nuit, accent bleu, photo montagne en fond, verre dépoli.
-FACTORY = {"theme": "midnight", "accent": "blue", "alpha": 90, "bg": "w:montagne"}
+# Défaut à l'installation = preset « Brume » : sombre et sobre, accent neutre, crêtes dans la brume en fond.
+FACTORY = {"theme": "dim", "accent": "neutral", "alpha": 88, "bg": "w:brume"}
 POLICY_KEY = "appearance_policy"
 BRAND_RE = re.compile(r"#[0-9a-fA-F]{6}")
 # Thèmes clairs (les autres sont sombres) : la page d'administration rappelle d'en garder un de chaque.
@@ -92,12 +94,30 @@ def _clean(data, base, brand, company):
     return out
 
 
+def _stored():
+    row = db().execute("SELECT value FROM settings WHERE key=?", (POLICY_KEY,)).fetchone()
+    return _loads(row["value"] if row else "")
+
+
+def _store(data):
+    db().execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (POLICY_KEY, json.dumps(data)))
+
+
+def _login_clean(raw, base, brand, company):
+    """Apparence de l'écran de connexion : une image personnelle n'y serait pas servie (réservée à son compte)."""
+    look = _clean(raw, base, brand, company)
+    if look["bg"] == "u":
+        look["bg"] = ""
+    return look
+
+
 def policy():
-    """Cadre de l'instance : {brand, themes, accent_free, background_free, default}, relu une fois par requête."""
+    """Cadre de l'instance : {brand, themes, accent_free, background_free, default, login}, relu une fois par requête.
+    login : apparence choisie pour l'écran de connexion, ou None s'il suit l'apparence par défaut."""
     if has_request_context() and "appearance_policy" in g:
         return g.appearance_policy
-    row = db().execute("SELECT value FROM settings WHERE key=?", (POLICY_KEY,)).fetchone()
-    data = _loads(row["value"] if row else "")
+    data = _stored()
     brand = str(data.get("brand") or "")
     brand = brand.lower() if BRAND_RE.fullmatch(brand) else ""
     themes = [t for t in THEMES if t in (data.get("themes") or THEMES)] or list(THEMES)
@@ -108,16 +128,25 @@ def policy():
         default_look["bg"] = ""                       # le fond personnel d'un compte n'est le défaut de personne
     if default_look["theme"] not in themes:
         default_look["theme"] = themes[0]
+    # Hors du cadre des thèmes proposés : ceux-ci limitent le choix de chaque compte, pas ce que l'instance affiche.
+    login = _loads(data.get("login"))
     out = {"brand": brand, "themes": themes, "accent_free": data.get("accent_free") is not False,
-           "background_free": data.get("background_free") is not False, "default": default_look}
+           "background_free": data.get("background_free") is not False, "default": default_look,
+           "login": _login_clean(login, default_look, brand, company) if login else None}
     if has_request_context():
         g.appearance_policy = out
     return out
 
 
 def default():
-    """Apparence par défaut de l'instance : nouveaux comptes, écran de connexion, « Réinitialiser »."""
+    """Apparence par défaut de l'instance : nouveaux comptes, « Réinitialiser »."""
     return dict(policy()["default"])
+
+
+def login_look():
+    """Apparence vue sans compte (écran de connexion) : celle choisie, sinon l'apparence par défaut."""
+    pol = policy()
+    return dict(pol["login"] or pol["default"])
 
 
 def _valid_bg(bg):
@@ -148,7 +177,9 @@ def constrain(appear):
 
 
 def for_user(user):
-    if not user or "appearance" not in user.keys():
+    if not user:
+        return login_look()
+    if "appearance" not in user.keys():
         return default()
     return constrain(parse(user["appearance"]))
 
@@ -373,6 +404,10 @@ def appearance_company_delete():
 
 # --- page d'administration : apparence de l'instance (droit « Configurer le serveur ») ---
 
+def _look_text(look):
+    return f"{look['theme']}/{look['accent']}/{look['bg'] or 'aucun'}/{look['alpha']}"
+
+
 @app.route("/system/appearance")
 @login_required
 def instance_appearance():
@@ -403,16 +438,34 @@ def instance_appearance_save():
         return redirect(url_for("instance_appearance"))
     data = {"brand": brand, "themes": themes, "accent_free": form.get("accent_free") == "1",
             "background_free": form.get("background_free") == "1", "default": look}
-    db().execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                 (POLICY_KEY, json.dumps(data)))
+    login = None
+    if form.get("login_mode") == "custom":
+        login = _login_clean({k: form.get("login_" + k) for k in ("theme", "accent", "alpha", "bg")}, look, brand, company)
+        data["login"] = login
+    _store(data)
     audit("apparence.instance", f"thèmes {', '.join(themes)} ; couleur {'au choix' if data['accent_free'] else 'imposée'} ; "
-                                f"fond {'au choix' if data['background_free'] else 'imposé'} ; défaut {look['theme']}/"
-                                f"{look['accent']}/{look['bg'] or 'aucun'}/{look['alpha']}" + (f" ; marque {brand}" if brand else ""),
+                                f"fond {'au choix' if data['background_free'] else 'imposé'} ; défaut {_look_text(look)} ; connexion "
+                                + (_look_text(login) if login else "comme le défaut") + (f" ; marque {brand}" if brand else ""),
           commit=False)
     db().commit()
     g.pop("appearance_policy", None)
     flash(_("Apparence de l'instance enregistrée : elle s'applique à tous les comptes dès leur prochaine page."), "ok")
     return redirect(url_for("instance_appearance"))
+
+
+@app.route("/system/appearance/login", methods=["POST"])
+@login_required
+def instance_appearance_login():
+    """Fenêtre Apparence : l'apparence affichée devient celle de l'écran de connexion, le reste du cadre ne bouge pas."""
+    if request.form.get("bg") == "u":
+        return jsonify(error="personnel"), 400
+    pol = policy()
+    look = _login_clean(request.form, pol["default"], pol["brand"], company_file() is not None)
+    _store(dict(_stored(), login=look))
+    audit("apparence.connexion", _look_text(look), commit=False)
+    db().commit()
+    g.pop("appearance_policy", None)
+    return jsonify(look)
 
 
 @app.route("/system/appearance/reset", methods=["POST"])

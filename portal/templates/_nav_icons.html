@@ -128,14 +128,14 @@
 {# Panneau Apparence complet : presets, thème, accent, transparence, fond. Enregistré par utilisateur (serveur). #}
 {% macro appearance_dialog() -%}
 {% set pol = appearance_policy %}{% set pol_free = pol.accent_free and pol.background_free %}
-{% set theme_labels = {'oled': _('OLED'), 'dim': _('Sombre doux'), 'light': _('Clair'), 'midnight': _('Minuit'), 'sepia': _('Sépia')} %}
+{% set theme_labels = {'oled': _('OLED'), 'dim': _('Sombre doux'), 'light': _('Clair'), 'midnight': _('Minuit'), 'sepia': _('Sépia'), 'sapin': _('Sapin')} %}
 {% set accent_labels = {'neutral': _('Neutre'), 'blue': _('Bleu'), 'green': _('Vert'), 'violet': _('Violet'), 'orange': _('Orange'), 'pink': _('Rose'), 'teal': _('Sarcelle'), 'amber': _('Ambre')} %}
 {% set gradient_labels = {'aurora': _('Aurore'), 'ocean': _('Océan'), 'forest': _('Forêt'), 'dusk': _('Crépuscule'), 'rose': _('Rose'), 'slate': _('Ardoise')} %}
-{% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver')} %}
-<dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}" data-default='{{ appearance_default|tojson }}'>
+{% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver'), 'brume': _('Brume')} %}
+<dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}" data-default='{{ appearance_default|tojson }}'{% if can('system.configure') %} data-login='{{ appearance_login|tojson }}'{% endif %}>
   <div class="dlg-h">
     <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") if pol_free else _("Enregistrée sur votre compte, dans le cadre fixé pour toute l’organisation.") }}</p></div>
-    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ nav_icon('close') }}</button>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button>
   </div>
   <div class="dlg-b ap-body">
     {% if pol_free %}
@@ -180,7 +180,7 @@
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Fond — uni et dégradés") }}</h3>
       <div class="ap-bgs">
-        <button type="button" class="ap-bg ap-bg-none" data-set-bg="" role="radio" aria-checked="false" aria-label="{{ _('Aucun fond') }}" title="{{ _('Aucun') }}">{{ nav_icon('close') }}</button>
+        <button type="button" class="ap-bg ap-bg-none" data-set-bg="" role="radio" aria-checked="false" aria-label="{{ _('Aucun fond') }}" title="{{ _('Aucun') }}">{{ ui_icon('close') }}</button>
         {% for g in appearance_catalog.gradients %}
         <button type="button" class="ap-bg bg-g-{{ g }}" data-set-bg="g:{{ g }}" role="radio" aria-checked="false" aria-label="{{ gradient_labels[g] }}" title="{{ gradient_labels[g] }}"></button>
         {% endfor %}
@@ -201,6 +201,18 @@
         <span class="hint" data-bg-msg></span>
       </div>
       <p class="hint">{{ _("Astuce : baissez la transparence pour mieux voir le fond ; le texte reste lisible dans tous les thèmes.") }}</p>
+    </section>
+    {% endif %}
+    {% if can('system.configure') %}
+    <section class="ap-sec">
+      <h3 class="ap-label">{{ _("Écran de connexion") }}</h3>
+      <div class="row-between ap-login">
+        <p class="hint" data-login-state="apply">{{ _("Reprend l’apparence choisie ici pour l’écran vu par tous avant de se connecter.") }}</p>
+        <p class="hint hidden" data-login-state="same">{{ _("L’écran de connexion a déjà cette apparence.") }}</p>
+        <p class="hint hidden" data-login-state="personal">{{ _("Votre image personnelle n’est visible qu’une fois connecté : choisissez un autre fond, ou importez-la comme fond de l’entreprise.") }}</p>
+        <p class="hint hidden" data-login-state="failed">{{ _("Échec de l’enregistrement : réessayez.") }}</p>
+        <button type="button" class="btn sm" data-apply-login data-url="{{ url_for('instance_appearance_login') }}">{{ _("Appliquer à la connexion") }}</button>
+      </div>
     </section>
     {% endif %}
     {% if can('system.configure') %}<p class="hint ap-instance-link"><a href="{{ url_for('instance_appearance') }}">{{ _("Apparence de l’instance : logo, couleur et fond de l’entreprise, thèmes proposés…") }}</a></p>{% endif %}

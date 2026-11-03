@@ -40,7 +40,7 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 
 | | |
 |---|---|
-| ![Vue d'ensemble — fond « Alpes » (apparence par défaut)](docs/dashboard.jpg) | ![Vue d'ensemble — thème sépia, fond « Désert »](docs/dashboard-sepia.jpg) |
+| ![Vue d'ensemble — fond « Alpes »](docs/dashboard.jpg) | ![Vue d'ensemble — thème sépia, fond « Désert »](docs/dashboard-sepia.jpg) |
 | ![Catalogue de logiciels Windows](docs/apps.jpg) | ![Cache Windows Update](docs/windows-update.jpg) |
 
 ## Sommaire

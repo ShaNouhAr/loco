@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.136.0 — 2026-11-03
+
+- **Nouvelle apparence par défaut** : thème *Sombre doux*, sans couleur d'accent, avec une photo de crêtes dans la brume (preset *Brume*). *Minuit* et *Alpes* restent disponibles.
+  - **Sur un serveur existant**, elle s'applique à l'écran de connexion et aux comptes sans apparence enregistrée, sauf si une apparence d'instance a été choisie. Les comptes qui ont enregistré la leur la gardent.
+- **L'écran de connexion peut avoir sa propre apparence** : dans *Apparence de l'instance*, il suit l'apparence par défaut ou reçoit la sienne. Depuis la fenêtre *Apparence*, *Appliquer à la connexion* lui donne celle que vous êtes en train d'essayer, sans toucher au défaut des comptes. Réservé au droit de configurer le serveur.
+- **Nouveau preset *Forêt*** avec un nouveau thème *Sapin*.
+- **Corrections** : dans la fenêtre *Apparence*, la croix de fermeture et la vignette *Aucun fond* étaient vides, et les libellés des presets pouvaient manquer de contraste.
+
 ## 2.135.0 — 2026-11-03
 
 - **L'agent peut activer le réveil** : bouton *Activer le réveil* sur la fiche d'un poste et pour une sélection dans Mon parc, sur ses cartes Ethernet.

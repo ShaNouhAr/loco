@@ -125,7 +125,8 @@ healthy
 grep -q 'PORTAL_URL="https://loco.e2e.test:8443"' <(dc exec -T loco cat /etc/loco/loco.conf) || fail "adresse du portail absente de loco.conf"
 openssl s_client -connect 127.0.0.1:8443 -servername loco.e2e.test </dev/null 2>/dev/null | openssl x509 -noout -checkhost loco.e2e.test | grep -q "does match" \
     || fail "certificat sans l'adresse du portail"
-curl -fsS "https://$HOST:8443/linux/setup.sh" | grep -q "https://$HOST:8443" || fail "script d'installation : adresse des agents perdue"
+curl -fsS "https://$HOST:8443/linux/setup.sh" -o "$work/setup.sh"
+grep -q "https://$HOST:8443" "$work/setup.sh" || { sed -n 1,20p "$work/setup.sh" >&2; fail "script d'installation : adresse des agents perdue"; }
 printf 'LOCO_BACKUP_KEEP=2\n' > linux/docker/.env
 dc up -d
 healthy

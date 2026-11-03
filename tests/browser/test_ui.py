@@ -642,6 +642,37 @@ class TestPageTools(BrowserTest):
         self.page.reload()
         expect(self.page.locator("html")).to_have_attribute("data-theme", "light")
 
+    def test_look_tried_in_the_dialog_is_applied_to_the_login_screen(self):
+        self.addCleanup(self.forget_appearance_policy)
+        self.page.goto("/fleet")
+        self.page.locator("[data-open-appearance]").first.evaluate("el => el.click()")
+        button = self.page.locator("[data-apply-login]")
+        expect(button).to_be_disabled()                                 # le compte a l'apparence de l'écran de connexion
+        expect(self.page.locator('[data-login-state="same"]')).to_be_visible()
+        self.page.locator('.ap-preset[data-theme="sapin"]').click()
+        expect(button).to_be_enabled()
+        with self.page.expect_response(lambda r: "/system/appearance/login" in r.url) as answer:
+            button.click()
+        self.assertEqual(answer.value.status, 200)
+        expect(button).to_be_disabled()
+        visitor = self.browser.new_context(viewport=self.viewport, locale="fr-FR", base_url=BASE)
+        self.addCleanup(visitor.close)
+        page = visitor.new_page()
+        page.goto("/login")
+        expect(page.locator("html")).to_have_attribute("data-theme", "sapin")
+        expect(page.locator("html")).to_have_attribute("data-bg", "w:foret")
+
+    def test_login_screen_fields_appear_only_for_its_own_look(self):
+        self.page.goto("/system/appearance")
+        fields = self.page.locator('[data-show-for="login_mode:custom"]')
+        expect(fields).to_be_hidden()
+        self.page.locator("input[name=login_mode][value=custom]").check(force=True)
+        expect(fields).to_be_visible()
+
+    def forget_appearance_policy(self):
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key='appearance_policy'")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
