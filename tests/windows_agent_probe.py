@@ -6,12 +6,14 @@ inventaire, action à distance, puis retrait poussé depuis loco (service et MSI
 import base64
 import http.cookiejar
 import json
+import ipaddress
 import os
 from pathlib import Path
 import re
 import socket
 import ssl
 import struct
+import sqlite3
 import subprocess
 import sys
 import time
@@ -203,6 +205,36 @@ url, html = post(f'/fleet/{dev}/action', {'csrf': csrf(get(f'/fleet/{dev}')), 'a
 wait('résultat de l\'inventaire demandé',
      lambda: re.search(r'<td>Inventaire</td>\s*<td[^>]*>[^<]*</td>\s*<td><span class="st (ok|err)">', get(f'/fleet/{dev}')), 900)
 print('Action à distance : inventaire exécuté et rapporté')
+
+# Réveil à distance : cartes vues par le vrai agent Windows, et vrai relais d'un paquet magique sur son réseau.
+db_path = Path(cfg['state_dir']) / 'portal.db'
+with sqlite3.connect(db_path) as conn:
+    net_info = json.loads(conn.execute('SELECT net_info FROM devices WHERE id=?', (dev,)).fetchone()[0] or '{}')
+assert isinstance(net_info.get('cards'), list), f'Cartes réseau non remontées : {net_info}'
+print('Cartes réseau remontées :', net_info)
+address = powershell("(Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } | "
+                     "Select-Object -First 1 | ForEach-Object { $_.IPAddress + '/' + $_.PrefixLength })").stdout.strip()
+broadcast = str(ipaddress.ip_interface(address).network.broadcast_address)
+with sqlite3.connect(db_path) as conn:
+    actor = conn.execute("SELECT username FROM users WHERE role='admin' LIMIT 1").fetchone()[0]
+    relay = conn.execute("INSERT INTO device_commands (device_id, action, params, created_at, created_by) VALUES (?,?,?,datetime('now','localtime'),?)",
+                         (dev, 'wake-relay', json.dumps({'broadcast': broadcast, 'macs': ['02:00:00:00:00:01']}), actor)).lastrowid
+
+
+def relay_result():
+    with sqlite3.connect(db_path) as conn:
+        state, output = conn.execute('SELECT state, output FROM device_commands WHERE id=?', (relay,)).fetchone()
+    return (state, output) if state in ('success', 'failed') else None
+
+
+state, output = wait('relais du paquet de réveil', relay_result, 300)
+assert state == 'success' and '02:00:00:00:00:01' in output, (state, output)
+print('Réveil à distance : relais exécuté par l\'agent Windows :', output)
+# Adresses du serveur Windows, lues comme le fait le portail : sans elles, il ne proposerait pas d'envoyer le paquet lui-même.
+server = subprocess.run([sys.executable, '-c', 'import locowin; locowin.apply_environment(locowin.load_config()); from loco import wake; print(wake.server_networks())'],
+                        cwd=str(Path(locowin.__file__).parent), capture_output=True, text=True, timeout=120)
+assert server.returncode == 0 and "'" in server.stdout, (server.stdout[-300:], server.stderr[-600:])
+print('Réseaux du serveur Windows :', server.stdout.strip())
 
 # Autre MSI du même numéro de version : remplace le produit sans perdre le service ni l'identité.
 # Deux compilations ont des ProductCode distincts ; réutiliser le même MSI ne teste que la maintenance.

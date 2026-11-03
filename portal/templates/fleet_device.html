@@ -40,6 +40,7 @@
     {% endif %}
     {% endfor %}
     {% endif %}
+    {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
     {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install') %}
     <details class="menu">
@@ -405,6 +406,27 @@
         <dt>{{ _("Inscrit") }}</dt><dd>{{ summary.enrolled }} <span class="faint small">· {{ dev.enrolled_at|date_fr }}</span></dd>
         <dt>{{ _("Identifiant") }}</dt><dd class="mono small break">{{ dev.uid }}</dd>
       </dl>
+      {% if net.cards is defined %}
+      <div class="panel-h sub"><h2>{{ _("Cartes réseau") }}</h2></div>
+      {% if net.cards %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>{{ _("Carte") }}</th><th>{{ _("Type") }}</th><th>{{ _("État") }}</th><th>{{ _("Adresse MAC") }}</th><th>{{ _("Réseau") }}</th><th>{{ _("Réveil") }}</th></tr></thead>
+        <tbody>
+          {% for c in net.cards %}
+          <tr>
+            <td>{{ c.name }}{% if c.usb %}<span class="sub">{{ _("adaptateur USB") }}</span>{% endif %}</td>
+            <td class="nowrap">{{ 'Wi-Fi' if c.kind == 'wifi' else 'Ethernet' }}</td>
+            <td class="nowrap">{% if c.up %}<span class="st ok">{{ _("branchée") }}</span>{% else %}<span class="st">{{ _("débranchée") }}</span>{% endif %}</td>
+            <td class="mono small nowrap">{{ c.mac }}</td>
+            <td class="mono small">{{ c.networks|join(', ') or '—' }}</td>
+            <td class="nowrap">{% if c.kind == 'wifi' %}<span class="muted">{{ _("pas en Wi-Fi") }}</span>{% elif c.wol == 'on' %}<span class="st ok">{{ _("activé") }}</span>{% elif c.wol == 'off' %}<span class="st warn">{{ _("désactivé") }}</span>{% elif c.wol == 'none' %}<span class="muted">{{ _("non géré") }}</span>{% else %}<span class="muted">{{ _("inconnu") }}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      {% endif %}
+      <p class="hint wake-hint">{% if wake_offer.ok %}{{ _("Réveil à distance possible sur le réseau %(network)s, par %(via)s.", network=wake_offer.network, via=_("le serveur") if wake_offer.server else wake_offer.relays[0].hostname) }}{% if wake_offer.note %} {{ wake_offer.note }}{% endif %}{% else %}{{ _("Réveil à distance indisponible : %(reason)s", reason=wake_offer.reason) }}{% endif %}</p>
+      {% endif %}
       {% if soft.system and (soft.system.kernel or soft.system.cpu) %}
       <div class="panel-h sub"><h2>{{ _("Caractéristiques") }}</h2></div>
       <dl class="kv">

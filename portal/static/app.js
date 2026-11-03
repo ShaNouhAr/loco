@@ -480,8 +480,7 @@
     if (selAll) selAll.addEventListener("change", function () { selBoxes().forEach(function (b) { b.checked = selAll.checked; }); selSync(); });
     var selClear = $("[data-select-clear]");
     if (selClear) selClear.addEventListener("click", function () { selKept = []; selBoxes().forEach(function (b) { b.checked = false; }); selSync(); });
-    var selSubmit = $("[data-select-submit]");
-    if (selSubmit) selSubmit.addEventListener("click", function () {
+    $$("[data-select-submit]", selBar).forEach(function (selSubmit) { selSubmit.addEventListener("click", function () {
       var ids = selKept.slice();
       if (!ids.length) return;
       confirmDialog(selSubmit.dataset.confirm, selSubmit.dataset.confirmText, selSubmit.dataset.confirmOk).then(function (ok) {
@@ -489,14 +488,14 @@
         var data = new FormData();
         data.set("csrf", selSubmit.dataset.csrf);
         ids.forEach(function (id) { data.append("ids", id); });
-        var rb = $("[data-select-reboot]"); if (rb && rb.checked) data.set("reboot", "1");
+        var rb = $("[data-select-reboot]"); if (rb && rb.checked && !selSubmit.hasAttribute("data-no-reboot")) data.set("reboot", "1");
         selSubmit.disabled = true; selSubmit.classList.add("loading");
         fetch(selSubmit.dataset.action, { method: "POST", body: data })
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
           .then(function () { try { sessionStorage.removeItem(SEL_KEY); } catch (e) { /* idem */ } delete document.body.dataset.noReload; window.location.reload(); })
           .catch(function () { selSubmit.disabled = false; selSubmit.classList.remove("loading"); toast(t("Action impossible."), "error"); });
       });
-    });
+    }); });
     selSync();
   }
 

@@ -38,7 +38,7 @@ LABELS = {
     "parc.cle-groupe": L_("Nouvelle clé d'inscription d'un groupe"),
     "parc.seuil": L_("Seuil des pastilles"), "parc.adresse-annoncee": L_("Adresse du serveur annoncée aux agents"),
     "parc.adresse-retiree": L_("Adresse annoncée retirée"), "parc.tout-mettre-a-jour": L_("Mise à jour de tout le parc"),
-    "parc.update": L_("Mise à jour demandée"), "parc.scan": L_("Inventaire demandé"), "parc.reboot": L_("Redémarrage demandé"),
+    "parc.update": L_("Mise à jour demandée"), "parc.scan": L_("Inventaire demandé"), "parc.wake": L_("Réveil d'un poste"), "parc.reboot": L_("Redémarrage demandé"),
     "parc.uninstall": L_("Retrait de l'agent demandé"), "parc.install-app": L_("Installation demandée"),
     "parc.session.ouverture": L_("Session distante ouverte"), "parc.session.fin": L_("Session distante terminée"),
     "parc.session.fermeture": L_("Session distante fermée"),

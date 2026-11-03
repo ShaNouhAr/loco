@@ -2081,6 +2081,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .check-step .copy-field { max-width: 680px; }
 .hosts-form input[name=address] { flex: 0 1 200px; }
 .plan-list { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; overflow-wrap: anywhere; }
+.wake-hint { padding: 10px 16px 0; margin: 0; }
 .check-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .check-add input[name=address] { flex: 0 1 200px; min-width: 0; }
 @media (max-width: 560px) { .check-step { grid-template-columns: minmax(0, 1fr); } }

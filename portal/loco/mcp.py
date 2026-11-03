@@ -22,7 +22,7 @@ import time
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
 
-from . import app, config, features, fleet, groups, journal, permissions, scope, scripts
+from . import app, config, features, fleet, groups, journal, permissions, scope, scripts, wake
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
@@ -234,6 +234,11 @@ def _command(c, output=1500):
     return out
 
 
+def _wake_state(dev):
+    found = wake.offer(dev, wake.context())
+    return {"possible": found["ok"], "network": found["network"] or None, "reason": str(found["reason"]) or None}
+
+
 def _queued(dev, action, added, detail=""):
     if not added:
         return {"device_id": dev["id"], "hostname": dev["hostname"], "queued": False,
@@ -308,7 +313,7 @@ def _get_device(args):
            "inventory_error": inv.get("error") or None, "inventory_warning": inv.get("warning") or None, "pending_updates_total": len(updates),
            "pending_updates": [{"name": u.get("name"), "version": u.get("version"), "security": bool(u.get("security")),
                                 **({"id": u["id"]} if u.get("id") else {})} for u in updates[:200] if isinstance(u, dict)],
-           "updates_selectable": fleet.selectable(dev),
+           "updates_selectable": fleet.selectable(dev), "wake": _wake_state(dev),
            "flatpak_updates": int(inv.get("flatpak") or 0),
            "groups": [x["name"] for x in groups.memberships("device", dev["id"])],
            "pending_actions": [_command(c) for c in fleet.pending(dev["id"])],
@@ -445,6 +450,22 @@ def _reboot(args):
     dev = _device(args["device"])
     _active(dev)
     return _queued(dev, "reboot", fleet.queue(dev, "reboot"))
+
+
+@tool("wake_device", "fleet", "Wake a device", L_("Réveiller un poste"),
+      L_("Allumer à distance un poste éteint, branché en Ethernet sur un réseau joignable (Wake-on-LAN)."), ("fleet.wake",),
+      "Power on a switched-off device with a Wake-on-LAN packet. Only for a device whose wired network card was plugged in at its last contact, on a network "
+      "where the server or another powered-on device can send the packet. Devices on Wi-Fi cannot be woken. get_device tells whether it is possible and why not.",
+      {"device": DEVICE}, ("device",), read_only=False, destructive=False)
+def _wake(args):
+    dev = _device(args["device"])
+    _active(dev)
+    result = wake.wake([dev])
+    audit("parc.wake", f"{dev['hostname']}{_via()}")
+    if result["skipped"]:
+        return {"device_id": dev["id"], "hostname": dev["hostname"], "sent": False, "message": str(result["skipped"][0][1])}
+    via = "the server" if result["direct"] else result["relayed"][0][1]
+    return {"device_id": dev["id"], "hostname": dev["hostname"], "sent": True, "message": f"Wake packet sent by {via}. Watch `online` with get_device: it should come back within a few minutes."}
 
 
 @tool("cancel_device_action", "fleet", "Cancel a queued action", L_("Annuler une action en attente"),

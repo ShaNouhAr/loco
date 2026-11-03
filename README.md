@@ -397,6 +397,11 @@ que si la précédente compte au moins une réussite et moins d'échecs que le s
 d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
 planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
 
+**Réveiller un poste éteint** (Wake-on-LAN) : bouton *Réveiller* dans Mon parc et sur la fiche du poste. Il n'apparaît que si
+le poste a une carte Ethernet branchée à son dernier contact, jamais en Wi-Fi, et si le serveur ou un poste allumé est sur le
+même réseau : un paquet de réveil ne traverse pas les routeurs. La fiche indique les cartes du poste et, sinon, pourquoi le
+réveil n'est pas disponible. Le réveil doit aussi être activé dans le BIOS et le système du poste.
+
 **Changer le port de l'interface** : *Système › Réseau › Port de l'interface web*. Le nouveau port s'ouvre à côté de
 l'ancien, donc rien n'est coupé. Les agents l'apprennent à leur prochain contact et la page compte ceux qui le
 connaissent. Ouvrez ensuite l'interface sur le nouveau port et fermez l'ancien depuis celui-ci : les agents basculent

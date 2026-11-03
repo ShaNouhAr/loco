@@ -28,7 +28,7 @@ import zipfile
 
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import addresses, agentpkg, app, config, features, permissions, scope
+from . import addresses, agentpkg, app, config, features, permissions, scope, wake
 from .i18n import L_, _, n_
 from .auth import audit, can, login_required, require
 from .db import db
@@ -43,7 +43,8 @@ MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
-           "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent")}
+           "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
+           "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -430,7 +431,7 @@ def _identity(data):
     addresses = [a for a in (data.get("addresses") or []) if isinstance(a, str)][:16]
     return {"hostname": _text(data.get("hostname"), 100), "os_family": family,
             "os_name": _text(os_info.get("name"), 120), "agent_version": _text(data.get("agent_version"), 20),
-            "addresses": " ".join(_text(a, 45) for a in addresses)}
+            "addresses": " ".join(_text(a, 45) for a in addresses), "net_info": wake.clean_info(data)}
 
 
 @app.route("/agent/api/enroll", methods=["POST"])
@@ -460,6 +461,8 @@ def agent_enroll():
                               "agent_version, addresses) VALUES (?,?,?,?,?,?,?,?,?,?)",
                               (uid, _hash(token), _now(), _now(), _client_ip(), ident["hostname"], ident["os_family"],
                                ident["os_name"], ident["agent_version"], ident["addresses"])).lastrowid
+    if ident["net_info"] is not None:
+        conn.execute("UPDATE devices SET net_info=? WHERE id=?", (ident["net_info"], dev_id))
     joined = ""
     if group:                                   # clé d'un groupe : le poste le rejoint (ses autres groupes restent)
         conn.execute("INSERT OR IGNORE INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, dev_id))
@@ -531,8 +534,9 @@ def expire_commands(conn, dev_id=None):
     """Commandes envoyées restées sans réponse. Le fil de fond s'en charge aussi : un poste mort ne reviendrait jamais les solder."""
     limit = (datetime.datetime.now() - datetime.timedelta(hours=SENT_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output='Pas de réponse du poste.' "
-                 "WHERE state IN ('sent', 'running') AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
+                 "WHERE state IN ('sent', 'running') AND action != 'wake' AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
                  (_now(), limit, *([dev_id] if dev_id else [])))
+    wake.expire(conn, dev_id)
 
 
 def _payload(dev, cmd):
@@ -543,6 +547,8 @@ def _payload(dev, cmd):
         out["only"] = params["only"]                # mises à jour choisies une par une (agents 2.120.0 et plus)
     elif cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
+    if cmd["action"] == "wake-relay":
+        out["wake"] = {"broadcast": params.get("broadcast", ""), "macs": params.get("macs", [])}
     if cmd["action"] == "run-script":
         from . import scripts
         run = db().execute("SELECT * FROM script_runs WHERE id=?", (params.get("run_id"),)).fetchone()
@@ -582,6 +588,9 @@ def agent_checkin():
                  "os_name=COALESCE(NULLIF(?, ''), os_name), agent_version=?, addresses=? WHERE id=?",
                  (_now(), _client_ip(), ident["hostname"], ident["os_name"], ident["agent_version"],
                   ident["addresses"], dev["id"]))
+    if ident["net_info"] is not None:   # agents 2.134.0 et plus : cartes et réseaux, pour le réveil à distance
+        conn.execute("UPDATE devices SET net_info=? WHERE id=?", (ident["net_info"], dev["id"]))
+    wake.arrived(conn, dev["id"])
     if "servers" in data:           # agents 2.9.0 et plus : adresses du serveur qu'ils connaissent
         conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
     reported_trust = data.get("trust") if isinstance(data.get("trust"), str) else None
@@ -1351,8 +1360,11 @@ def fleet():
         return {"signature": signature}
     rows = _enrich(rows, names)
     from . import monitoring
+    senders = wake.context() if can("fleet.wake") else {}
     for r in rows:
         r["mon"] = monitoring.latest(r["d"])
+        # Proposé seulement si le poste est éteint, branché en Ethernet, et si quelque chose peut émettre sur son réseau.
+        r["wake"] = (can("fleet.wake") and r["d"]["state"] == "active" and not presence(r["d"])["online"] and wake.offer(r["d"], senders)["ok"])
     from .auth import scope_summary
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
@@ -1492,6 +1504,7 @@ def fleet_device(dev_id):
     from . import monitoring
     mon = monitoring.view(db(), dev, request.args.get("periode", "24h"))
     return render_template("fleet_device.html", address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
+                           wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev),
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
@@ -1563,8 +1576,13 @@ def fleet_action(dev_id):
         audit("parc.oubli", dev["hostname"])
         flash(_("%(dev)s retiré de la liste (l'agent éventuel n'est plus accepté).", dev=dev['hostname']), "ok")
         return back("fleet")
-    if action not in ACTIONS or dev["state"] != "active":
+    if action not in ACTIONS or action == "wake-relay" or dev["state"] != "active":
         abort(400)
+    if action == "wake":
+        result = wake.wake([dev])
+        _report_wake(result)
+        audit("parc.wake", dev["hostname"] + (f" ({result['skipped'][0][1]})" if result["skipped"] else ""))
+        return _back_to_origin(dev_id)
     params = {}
     if action == "update":
         params["reboot"] = request.form.get("reboot") == "1"
@@ -1706,6 +1724,37 @@ def fleet_update_selected():
     db().commit()
     audit("parc.mise-a-jour-selection", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
     return {"ok": True, "count": count}
+
+
+def _report_wake(result):
+    for name in result["direct"]:
+        flash(_("Réveil de %(dev)s envoyé : il devrait reprendre contact d'ici quelques minutes.", dev=name), "ok")
+    for name, relay in result["relayed"]:
+        flash(_("Réveil de %(dev)s confié à %(relay)s : envoyé à son prochain contact (moins de %(v)s min).", dev=name, relay=relay, v=CHECKIN // 60), "ok")
+    for name, reason in result["skipped"]:
+        flash(_("%(dev)s n'a pas été réveillé : %(reason)s", dev=name, reason=reason), "error")
+
+
+@app.route("/fleet/wake-selected", methods=["POST"])
+@login_required
+def fleet_wake_selected():
+    """Réveille les postes sélectionnés ; ceux qui ne peuvent pas l'être sont comptés, sans bloquer les autres."""
+    require("fleet.wake")
+    try:
+        ids = {int(i) for i in request.form.getlist("ids")}
+    except ValueError:
+        abort(400)
+    if not ids or len(ids) > 5000:
+        abort(400)
+    devices = [d for d in db().execute("SELECT * FROM devices WHERE state='active'" + scope.sql()).fetchall() if d["id"] in ids]
+    result = wake.wake(devices)
+    done = len(result["direct"]) + len(result["relayed"])
+    audit("parc.wake", f"{counted(done, 'poste')} sur {counted(len(ids), 'sélectionné')}")
+    if done:
+        flash(n_("Réveil envoyé à %(num)s poste : il devrait reprendre contact d'ici quelques minutes.", "Réveil envoyé à %(num)s postes : ils devraient reprendre contact d'ici quelques minutes.", done), "ok")
+    if result["skipped"]:
+        flash(n_("%(num)s poste n'a pas été réveillé : déjà allumé, ou pas branché en Ethernet sur un réseau joignable.", "%(num)s postes n'ont pas été réveillés : déjà allumés, ou pas branchés en Ethernet sur un réseau joignable.", len(result["skipped"])), "error")
+    return {"ok": True, "count": done, "skipped": len(result["skipped"])}
 
 
 @app.route("/fleet/key", methods=["POST"])

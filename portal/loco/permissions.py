@@ -23,6 +23,7 @@ GROUPS = [
         ("fleet.groups", L_("Gérer les groupes de machines"), L_("Créer les groupes et organiser leurs membres, sans déployer de logiciel."), ("fleet.view",), False),
         ("deployments.view", L_("Consulter les déploiements"), L_("Versions, cibles confirmées, avancement et résultats par poste."), ("fleet.view", "windows.view"), False),
         ("fleet.reboot", L_("Redémarrer les appareils"), L_("Redémarrage direct ou après une mise à jour."), ("fleet.view",), True),
+        ("fleet.wake", L_("Réveiller les appareils"), L_("Allumer à distance un poste éteint, branché en Ethernet sur un réseau joignable (Wake-on-LAN)."), ("fleet.view",), False),
         ("fleet.remove", L_("Retirer les agents et appareils"), L_("Désinstaller l'agent ou oublier un appareil."), ("fleet.view",), True),
         ("fleet.settings", L_("Configurer le parc"), L_("Seuil des pastilles, clé d'inscription et adresses du serveur annoncées aux agents."), ("fleet.view",), True),
         ("remote.terminal", L_("Ouvrir un terminal distant"), L_("Shell root ou PowerShell SYSTEM : contrôle privilégié du poste."), ("fleet.view",), True),
@@ -105,7 +106,7 @@ DEFAULTS = {
     "admin": (N_("Administrateur"), N_("Accès complet, y compris aux futurs droits. Profil protégé."), set(PERMISSIONS)),
     "viewer": (N_("Lecture seule"), N_("Consultation des appareils, caches et catalogues locaux."), VIEWER),
     "operator": (N_("Opérateur"), N_("Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage."),
-                 VIEWER | {"fleet.scan", "fleet.update", "fleet.install"}),
+                 VIEWER | {"fleet.scan", "fleet.update", "fleet.install", "fleet.wake"}),
     "repository_manager": (N_("Gestionnaire des dépôts"), N_("Gestion des paquets et installeurs. Aucun déploiement sur les postes."),
                            {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
     "auditor": (N_("Auditeur"), N_("Consultation, journal et son export, comptes et profils. Aucune modification."),
@@ -164,7 +165,7 @@ ENDPOINTS = {
     "system_cert_renew": "system.configure", "system_cert_import": "system.configure", "system_cert_remove": "system.configure",
     "system_ca_import": "system.configure", "system_ca_remove": "system.configure", "system_csr": "system.configure",
     "system_csr_download": "system.configure", "system_enterprise_import": "system.configure",
-    "system_tls_mode": "system.configure", "system_https_port": "system.configure", "system_portal_url": "system.configure", "system_internal_hosts": "system.configure",
+    "system_tls_mode": "system.configure", "system_https_port": "system.configure", "system_portal_url": "system.configure", "system_internal_hosts": "system.configure", "fleet_wake_selected": "fleet.wake",
     "system_backup_delete": "system.configure",
     "system_offsite": "system.configure", "system_offsite_test": "system.configure",
     "system_shell_enable": "system.configure", "system_shell_disable": "system.configure", "system_shell_open": "system.configure",
@@ -201,7 +202,8 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_appearance", "account_appearance_background", "account_appearance_background_delete",
                      "appearance_background", "sso_start", "sso_callback"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
-                      "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove"}
+                      "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
+                      "wake": "fleet.wake", "wake-relay": "fleet.wake"}
 
 
 def expand(values):

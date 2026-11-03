@@ -13,7 +13,7 @@
 {% block content %}
 {% from '_charts.html' import resources %}
 {% include '_fleet_nav.html' %}
-{% set can_select = can('fleet.update') %}
+{% set can_select = can('fleet.update') or can('fleet.wake') %}
 <div class="head">
   <div>
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
@@ -69,9 +69,10 @@
     <div class="fleet-select-bar" data-select-bar hidden>
       <span class="fleet-select-count">{{ _("Sélection :") }} <strong data-select-count>0</strong> <span class="muted small" data-select-elsewhere></span></span>
       <div class="row">
-        {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" data-select-reboot> {{ _("Redémarrer si nécessaire") }}</label>{% endif %}
+        {% if can('fleet.update') and can('fleet.reboot') %}<label class="check"><input type="checkbox" data-select-reboot> {{ _("Redémarrer si nécessaire") }}</label>{% endif %}
         <button type="button" class="btn sm ghost" data-select-clear>{{ _("Désélectionner") }}</button>
-        <button type="button" class="btn sm primary" data-select-submit data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}" data-confirm-ok="{{ _('Mettre à jour') }}"><span class="spin"></span>{{ _("Mettre à jour les sélectionnés") }}</button>
+        {% if can('fleet.wake') %}<button type="button" class="btn sm" data-select-submit data-no-reboot data-action="{{ url_for('fleet_wake_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Réveiller les postes sélectionnés ?') }}" data-confirm-text="{{ _('Seuls les postes éteints et branchés en Ethernet sur un réseau joignable seront réveillés.') }}" data-confirm-ok="{{ _('Réveiller') }}"><span class="spin"></span>{{ _("Réveiller") }}</button>{% endif %}
+        {% if can('fleet.update') %}<button type="button" class="btn sm primary" data-select-submit data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}" data-confirm-ok="{{ _('Mettre à jour') }}"><span class="spin"></span>{{ _("Mettre à jour les sélectionnés") }}</button>{% endif %}
       </div>
     </div>
     {% endif %}
@@ -109,8 +110,14 @@
               {% else %}
               {% set row_update = can('fleet.update') and r.needs_update %}
               {% set row_reboot = can('fleet.reboot') and d.reboot_required and d.state == 'active' %}
-              {% if row_update or row_reboot %}
+              {% if row_update or row_reboot or r.wake %}
               <div class="row-acts">
+                {% if r.wake %}
+                <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
+                  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="wake"><input type="hidden" name="return" value="{{ request.full_path }}">
+                  <button class="btn sm"><span class="spin"></span>{{ _("Réveiller") }}</button>
+                </form>
+                {% endif %}
                 {% if row_update %}
                 <form method="post" action="{{ url_for('fleet_action', dev_id=d.id) }}" data-ajax>
                   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update">

@@ -30,7 +30,7 @@ import test_portal as fixture  # noqa: E402  (crée la base temporaire et le com
 from test_fleet import Agent, LINUX, device  # noqa: E402
 from test_fleet_pages import add_devices  # noqa: E402
 import locoadmin  # noqa: E402
-from loco import alerts, app, config, dashboard, deployments  # noqa: E402
+from loco import alerts, app, config, dashboard, deployments, wake  # noqa: E402
 from loco.db import transaction  # noqa: E402
 
 ARTIFACTS = ROOT / "test-results" / "browser"
@@ -237,10 +237,10 @@ class TestFleet(BrowserTest):
         expect(bar).to_contain_text("dont 2 hors de cette page")
         boxes.nth(0).check()
         expect(bar).to_contain_text("Sélection : 3")
-        self.page.locator("[data-select-submit]").click()
+        self.page.locator("[data-select-submit]:not([data-no-reboot])").click()
         self.confirm(accept=False)
         self.assertEqual(commands(), 0)
-        self.page.locator("[data-select-submit]").click()
+        self.page.locator("[data-select-submit]:not([data-no-reboot])").click()
         self.confirm()
         expect(bar).to_be_hidden(timeout=LONG)
         self.assertEqual(commands(), 3)
@@ -491,6 +491,33 @@ class TestAuthentikSetup(BrowserTest):
             expect(self.page.locator(".note.warn")).to_contain_text("Racine Lab")
             self.assertEqual(self.page.locator("input[name=token]").count(), 0)
             self.assertLessEqual(self.overflow(), 0)
+
+
+class TestWake(BrowserTest):
+    CARD = {"name": "eth0", "mac": "bc:24:11:1c:a4:02", "kind": "ethernet", "up": True, "usb": False, "wol": "on", "networks": ["192.168.50.20/24"]}
+
+    def enroll(self, name, cards):
+        agent = Agent(dict(LINUX, hostname=name, agent_version="2.134.0", cards=cards, networks=["192.168.50.20/24"]), "192.168.50.20", uid=hashlib.sha256(name.encode()).hexdigest()[:32])
+        agent.enroll()
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE uid=?", (stamp(2), agent.uid))
+        return device(agent.uid)
+
+    def test_only_the_wired_machine_is_offered_then_it_is_followed(self):
+        wired, wifi = self.enroll("poste-filaire", [self.CARD]), self.enroll("portable-wifi", [dict(self.CARD, kind="wifi", wol="", mac="bc:24:11:1c:a4:03")])
+        with mock.patch.object(wake, "server_networks", lambda: {"192.168.50.0/24": "192.168.50.1"}), mock.patch.object(wake, "send_packet") as send:
+            self.page.goto("/fleet?voir=hors-ligne")
+            row = self.page.locator("#fleet-table tr", has_text="poste-filaire")
+            expect(self.page.locator("#fleet-table tr", has_text="portable-wifi").get_by_role("button", name="Réveiller")).to_have_count(0)
+            self.assertLessEqual(self.overflow(), 0)
+            row.get_by_role("button", name="Réveiller").click()
+            expect(self.page.locator("#fleet-table tr", has_text="poste-filaire")).to_contain_text("réveil en attente", timeout=LONG)
+            send.assert_called_once_with("bc:24:11:1c:a4:02", "192.168.50.0/24", "192.168.50.1")
+            self.page.goto(f"/fleet/{wifi['id']}#details")
+            expect(self.page.locator(".wake-hint")).to_contain_text("Aucune carte Ethernet")
+            expect(self.page.locator(".head, .device-head").get_by_role("button", name="Réveiller")).to_have_count(0)
+            self.assertLessEqual(self.overflow(), 0)
+            self.assertTrue(wired["id"])
 
 
 class TestRollouts(BrowserTest):

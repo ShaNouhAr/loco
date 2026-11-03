@@ -579,10 +579,109 @@ namespace Loco
                 }
             }
             var addresses = found.OrderBy(f => f.Key).Select(f => f.Value).Take(16).ToList();
+            var networks = new List<string>();
+            var cards = NetworkCards(networks);
             return new Dictionary<string, object> {
                 { "hostname", Environment.MachineName.ToLowerInvariant() }, { "agent_version", Version },
-                { "addresses", addresses }, { "trust", TrustSha() },
+                { "addresses", addresses }, { "trust", TrustSha() }, { "cards", cards }, { "networks", networks.Take(16).ToList() },
                 { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } } };
+        }
+
+        static readonly Regex VirtualNic = new Regex("virtual|vpn|tap-|wintun|wireguard|tailscale|zerotier|bluetooth|npcap|loopback|wsl|^vethernet", RegexOptions.IgnoreCase);
+        static readonly Regex WakeMac = new Regex("^[0-9a-f]{2}(:[0-9a-f]{2}){5}$");
+
+        // Cartes physiques (Ethernet, Wi-Fi), branchées ou non : le réveil à distance dépend de ce qu'elles sont à l'extinction.
+        static List<Dictionary<string, object>> NetworkCards(List<string> networks)
+        {
+            var wake = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                // MSFT_NetAdapterPowerManagementSettingData.WakeOnMagicPacket : 0 non géré, 1 désactivé, 2 activé, 3 inactif.
+                using (var s = new ManagementObjectSearcher(@"root\StandardCimv2", "SELECT Name, WakeOnMagicPacket FROM MSFT_NetAdapterPowerManagementSettingData"))
+                    foreach (ManagementObject o in s.Get())
+                    {
+                        uint state = Convert.ToUInt32(o["WakeOnMagicPacket"]);
+                        wake[Convert.ToString(o["Name"])] = state == 2 ? "on" : state == 0 ? "none" : "off";
+                    }
+            }
+            catch (Exception) { }
+            try
+            {
+                using (var s = new ManagementObjectSearcher("SELECT GUID, PNPDeviceID FROM Win32_NetworkAdapter WHERE GUID IS NOT NULL"))
+                    foreach (ManagementObject o in s.Get())
+                        if (Convert.ToString(o["PNPDeviceID"]).StartsWith("USB\\", StringComparison.OrdinalIgnoreCase)) usb.Add(Convert.ToString(o["GUID"]));
+            }
+            catch (Exception) { }
+            var cards = new List<Dictionary<string, object>>();
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                var type = nic.NetworkInterfaceType;
+                bool wifi = type == NetworkInterfaceType.Wireless80211;
+                bool wired = type == NetworkInterfaceType.Ethernet || type == NetworkInterfaceType.Ethernet3Megabit || type == NetworkInterfaceType.FastEthernetFx
+                    || type == NetworkInterfaceType.FastEthernetT || type == NetworkInterfaceType.GigabitEthernet;
+                if ((!wifi && !wired) || VirtualNic.IsMatch(nic.Name + " " + nic.Description)) continue;
+                var bytes = nic.GetPhysicalAddress().GetAddressBytes();
+                if (bytes.Length != 6) continue;
+                bool up = nic.OperationalStatus == OperationalStatus.Up;
+                var addresses = new List<string>();
+                if (up)
+                    foreach (var a in nic.GetIPProperties().UnicastAddresses)
+                        if (a.Address.AddressFamily == AddressFamily.InterNetwork && !a.Address.ToString().StartsWith("169.254."))
+                            addresses.Add(a.Address + "/" + a.PrefixLength);
+                networks.AddRange(addresses);
+                string state;
+                if (!wake.TryGetValue(nic.Name, out state)) state = "";
+                cards.Add(new Dictionary<string, object> {
+                    { "name", nic.Name }, { "mac", string.Join(":", bytes.Select(b => b.ToString("x2"))) }, { "kind", wifi ? "wifi" : "ethernet" },
+                    { "up", up }, { "usb", usb.Contains(nic.Id) }, { "wol", wifi ? "" : state }, { "networks", addresses } });
+            }
+            return cards.Take(16).ToList();
+        }
+
+        // Diffuse des paquets magiques pour des postes éteints voisins, seulement sur un réseau de ce poste.
+        static bool RelayWake(Dictionary<string, object> cmd, out string output)
+        {
+            object value;
+            var order = cmd.TryGetValue("wake", out value) ? value as Dictionary<string, object> : null;
+            string broadcast = order != null && order.ContainsKey("broadcast") ? Convert.ToString(order["broadcast"]) : "";
+            var macs = new List<string>();
+            if (order != null && order.ContainsKey("macs") && order["macs"] is IEnumerable)
+                foreach (object one in (IEnumerable)order["macs"])
+                    if (WakeMac.IsMatch(Convert.ToString(one)) && macs.Count < 64) macs.Add(Convert.ToString(one));
+            IPAddress source = null;
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (nic.OperationalStatus != OperationalStatus.Up) continue;
+                foreach (var a in nic.GetIPProperties().UnicastAddresses)
+                {
+                    if (a.Address.AddressFamily != AddressFamily.InterNetwork || a.IPv4Mask == null) continue;
+                    byte[] ip = a.Address.GetAddressBytes(), mask = a.IPv4Mask.GetAddressBytes(), edge = new byte[4];
+                    for (int i = 0; i < 4; i++) edge[i] = (byte)(ip[i] | ~mask[i]);
+                    if (new IPAddress(edge).ToString() == broadcast) source = a.Address;
+                }
+            }
+            if (source == null || macs.Count == 0)
+            {
+                output = Lang.T("Ce poste n'est plus sur ce réseau, ou l'adresse à réveiller est invalide.", "This machine is no longer on this network, or the address to wake is invalid.",
+                                "Este equipo ya no está en esta red, o la dirección que despertar no es válida.");
+                return false;
+            }
+            using (var udp = new UdpClient(new IPEndPoint(source, 0)))
+            {
+                udp.EnableBroadcast = true;
+                foreach (string mac in macs)
+                {
+                    var packet = new byte[102];
+                    for (int i = 0; i < 6; i++) packet[i] = 0xff;
+                    var parts = mac.Split(':');
+                    for (int i = 0; i < 96; i++) packet[6 + i] = Convert.ToByte(parts[i % 6], 16);
+                    foreach (string target in new[] { broadcast, "255.255.255.255" })
+                        for (int round = 0; round < 3; round++) udp.Send(packet, packet.Length, target, 9);
+                }
+            }
+            output = Lang.T("Paquet de réveil envoyé depuis ", "Wake packet sent from ", "Paquete de activación enviado desde ") + source + " (" + string.Join(", ", macs) + ").";
+            return true;
         }
 
         static List<Dictionary<string, object>> InstalledApps()
@@ -1188,6 +1287,11 @@ namespace Loco
                     {
                         string output; int code = RunScript(cmd, out output);
                         Report(conf, id, code == 0 ? "success" : "failed", output, code, null);
+                    }
+                    else if (action == "wake-relay")
+                    {
+                        string output; bool sent = RelayWake(cmd, out output);
+                        Report(conf, id, sent ? "success" : "failed", output, sent ? 0 : 1, null);
                     }
                     else if (action == "reboot")
                     {

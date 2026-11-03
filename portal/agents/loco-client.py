@@ -11,13 +11,16 @@ demandées depuis le portail : inventaire, mise à jour, redémarrage, retrait d
 Bibliothèque standard de Python uniquement ; autorité du serveur épinglée (/etc/loco-client/ca.crt).
 """
 
+import array
 import base64
 import ctypes
 import datetime
+import errno
 import fcntl
 import glob
-import http.client
 import hashlib
+import http.client
+import ipaddress
 import json
 import os
 import platform
@@ -26,23 +29,23 @@ import pwd
 import re
 import select
 import shutil
-import socket
 import signal
+import socket
+import ssl
 import stat
 import struct
-import ssl
 import subprocess
-import threading
 import sys
 import tempfile
 import termios
+import threading
 import time
 import unicodedata
-import zlib
 import urllib.error
-import urllib.request
 import urllib.parse
+import urllib.request
 import uuid
+import zlib
 
 VERSION = "@VERSION@"
 CONSOLE_LIB = "@CONSOLE_LIB@"
@@ -142,6 +145,10 @@ def call(server, path, data, token=None, timeout=60):
 
 
 SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
+SYS_NET = "/sys/class/net"
+SIOCETHTOOL, ETHTOOL_GWOL, WAKE_MAGIC = 0x8946, 5, 0x20
+VPN_NIC = re.compile(r"(tun|tap|wg|tailscale|zt)")      # pas de diffusion possible
+WAKE_MAC_RE = re.compile(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}")
 VIRTUAL_NIC = re.compile(r"(docker|br-|veth|virbr|vboxnet|vmnet|cni|flannel|cali|lxc|lxd|podman)")     # conteneurs et machines virtuelles
 SOURCE_FILES = ("/etc/apt/sources.list.d/loco*.sources", "/etc/apt/sources.list.d/loco*.list", "/etc/yum.repos.d/loco*.repo",
                 "/etc/apt/apt.conf.d/01loco-proxy")
@@ -276,9 +283,91 @@ def addresses():
     return [f[2] for f in sorted(found, key=lambda f: f[:2])][:16]
 
 
+def local_networks():
+    """Adresses IPv4 du poste par interface : {"eth0": ["192.168.1.5/24"]}."""
+    found = {}
+    try:
+        out = subprocess.run(("ip", "-o", "-4", "addr", "show", "scope", "global"), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             universal_newlines=True, timeout=10).stdout
+        for line in out.splitlines():
+            fields = line.split()
+            if len(fields) > 3 and fields[2] == "inet":
+                found.setdefault(fields[1].split("@")[0], []).append(fields[3])
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return found
+
+
+def _sys_net(nic, name):
+    try:
+        with open(os.path.join(SYS_NET, nic, name), encoding="utf-8") as f:
+            return f.read().strip()
+    except (OSError, ValueError):
+        return ""                               # « carrier » n'est pas lisible sur une interface arrêtée
+
+
+def wol_state(nic):
+    """Réveil par paquet magique de cette carte : on, off, none (non géré), vide si illisible. Sans dépendre d'ethtool."""
+    info = array.array("B", struct.pack("III8s", ETHTOOL_GWOL, 0, 0, b""))
+    request = struct.pack("16sP", nic.encode()[:15], info.buffer_info()[0]).ljust(40, b"\0")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            fcntl.ioctl(sock.fileno(), SIOCETHTOOL, request)
+    except OSError as e:
+        return "none" if e.errno == errno.EOPNOTSUPP else ""
+    supported, enabled = struct.unpack_from("II", info, 4)
+    return "on" if enabled & WAKE_MAGIC else "off" if supported & WAKE_MAGIC else "none"
+
+
+def network_cards(networks):
+    """Cartes physiques (Ethernet, Wi-Fi), branchées ou non : le réveil à distance dépend de ce qu'elles sont à l'extinction."""
+    cards = []
+    try:
+        names = sorted(os.listdir(SYS_NET))
+    except OSError:
+        return cards
+    for nic in names:
+        base = os.path.join(SYS_NET, nic)
+        if nic == "lo" or VIRTUAL_NIC.match(nic) or not os.path.exists(os.path.join(base, "device")) or _sys_net(nic, "type") != "1":
+            continue
+        wifi = os.path.exists(os.path.join(base, "wireless")) or os.path.exists(os.path.join(base, "phy80211"))
+        master = os.path.basename(os.path.realpath(os.path.join(base, "master"))) if os.path.exists(os.path.join(base, "master")) else ""
+        cards.append({"name": nic, "mac": _sys_net(nic, "address").lower(), "kind": "wifi" if wifi else "ethernet", "up": _sys_net(nic, "carrier") == "1",
+                      "usb": "usb" in os.path.realpath(os.path.join(base, "device", "subsystem")), "wol": "" if wifi else wol_state(nic),
+                      "networks": networks.get(nic) or networks.get(master) or []})
+    return cards[:16]
+
+
+def relay_wake(order):
+    """Diffuse des paquets magiques pour des postes éteints voisins, seulement sur un réseau de ce poste."""
+    order = order if isinstance(order, dict) else {}
+    broadcast = str(order.get("broadcast", ""))
+    macs = [m for m in order.get("macs") or [] if isinstance(m, str) and WAKE_MAC_RE.fullmatch(m)][:64]
+    source = ""
+    for values in local_networks().values():
+        for value in values:
+            address = ipaddress.ip_interface(value)
+            if str(address.network.broadcast_address) == broadcast:
+                source = str(address.ip)
+    if not source or not macs:
+        return 1, t("Ce poste n'est plus sur ce réseau, ou l'adresse à réveiller est invalide.", "This machine is no longer on this network, or the address to wake is invalid.",
+                    "Este equipo ya no está en esta red, o la dirección que despertar no es válida.")
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind((source, 0))
+        for mac in macs:
+            packet = b"\xff" * 6 + bytes.fromhex(mac.replace(":", "")) * 16
+            for target in (broadcast, "255.255.255.255"):
+                for _round in range(3):
+                    sock.sendto(packet, (target, 9))
+    return 0, t(f"Paquet de réveil envoyé depuis {source} ({', '.join(macs)}).", f"Wake packet sent from {source} ({', '.join(macs)}).", f"Paquete de activación enviado desde {source} ({', '.join(macs)}).")
+
+
 def identity():
     rel = os_release()
-    return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(), "trust": trust_sha(),
+    networks = local_networks()
+    return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(), "trust": trust_sha(), "cards": network_cards(networks),
+            "networks": [a for nic, values in networks.items() if not VIRTUAL_NIC.match(nic) and not VPN_NIC.match(nic) for a in values][:16],
             "os": {"family": family(), "name": rel.get("PRETTY_NAME") or platform.platform()}}
 
 
@@ -1186,6 +1275,9 @@ def service():
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, inv)
         elif action == "run-script":
             code, out = run_script(cmd)
+            report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)
+        elif action == "wake-relay":
+            code, out = relay_wake(cmd.get("wake"))
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)
         elif action == "reboot":
             report(conf, cmd["id"], "success", t("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."), 0)

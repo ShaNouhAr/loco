@@ -519,6 +519,10 @@ MIGRATIONS = [
     """
     ALTER TABLE directory_identities ADD COLUMN groups TEXT NOT NULL DEFAULT '[]';
     """,
+    # 35 : cartes et réseaux annoncés par l'agent (JSON) : le réveil à distance en dépend.
+    """
+    ALTER TABLE devices ADD COLUMN net_info TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

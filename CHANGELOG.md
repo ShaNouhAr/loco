@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.134.0 — 2026-11-03
+
+- **Réveil à distance (Wake-on-LAN)** : bouton *Réveiller* sur un poste éteint, dans Mon parc et sur sa fiche, pour un poste ou une sélection. Aussi disponible par le serveur MCP (`wake_device`).
+  - **Proposé seulement quand il a une chance de marcher** : le poste a une carte Ethernet branchée à son dernier contact, le réveil n'y est pas désactivé, et quelque chose peut émettre sur son réseau. Jamais en Wi-Fi, où un poste éteint n'écoute plus.
+  - **Émis par le serveur** s'il est sur le même réseau, sinon par un poste allumé de ce réseau à son prochain contact, car un paquet de réveil ne traverse pas les routeurs. Un relais revenu trop tard ne réveille plus personne à l'improviste.
+  - **Résultat suivi** dans l'historique du poste : revenu en ligne, ou pas revenu après 10 minutes, avec ce qu'il faut vérifier.
+- **Cartes réseau sur la fiche d'un poste** : type (Ethernet, Wi-Fi), branchée ou non, adresse MAC, réseau et état du réveil. La fiche dit aussi pourquoi le réveil n'est pas disponible. Il faut un agent 2.134.0 ou plus récent.
+- **Nouveau droit *Réveiller les appareils***, accordé au profil Opérateur.
+
 ## 2.133.0 — 2026-11-03
 
 - **Demande de certificat (CSR)** : la page demande le nom complet (FQDN), affiche les SAN demandés et prévient que l'autorité doit conserver l'IP si les agents l'utilisent. Un nom court comme `loco` n'est plus écarté sans le dire.
