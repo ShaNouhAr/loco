@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.130.0 — 2026-11-03
+
+- **Bouton « Vérifier la configuration » pour les fournisseurs OpenID Connect**, dans *Annuaires et SSO*. Il part aussi tout seul à l'enregistrement. Sans connexion d'un utilisateur et sans créer de compte, il contrôle sept étapes depuis le serveur et donne pour chacune son état et sa correction : résolution du nom, connexion, certificat, découverte, clés de signature, client et secret, demande de connexion. Plus besoin de lire les journaux d'Authentik.
+  - **Certificat** : le message nomme l'intermédiaire ou la racine qui manque et donne l'empreinte à vérifier avant de la coller. Un nom non couvert, un certificat expiré ou un certificat épinglé qui a changé sont signalés séparément.
+  - **URL de retour non déclarée** : l'URL à déclarer est affichée, prête à copier.
+  - **Flux « code » non autorisé** : `invalid_request`, « The request is otherwise malformed », est enfin expliqué.
+  - **Mauvais secret** : détecté avec un faux code, sans obtenir de jeton. Authentik répondant `invalid_client` aussi quand l'URL de retour n'est pas déclarée, le secret n'est alors pas mis en cause.
+  - **Autres fournisseurs** : une réponse inconnue donne « non concluant », jamais « échec ». Aucun secret n'est affiché ni journalisé.
+- **Connexion refusée** : la page indique aux administrateurs où trouver la cause. Le détail reste réservé à ceux qui ont le droit de gérer le SSO.
+
 ## 2.129.0 — 2026-11-03
 
 - **Adresse du portail séparée de celle des agents.** Nouveau réglage dans *Système › Réseau › Adresse du portail* : ouvrir loco par son nom (`https://loco.lab.local:8443`) ne demande plus de relancer l'installeur avec `--host`, qui changeait aussi l'adresse d'enrôlement. Les agents et l'enrôlement restent sur leur adresse. Sans réglage, rien ne change.

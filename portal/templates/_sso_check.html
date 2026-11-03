@@ -1,0 +1,22 @@
+{# Résultat de « Vérifier la configuration » : inséré sous la ligne du fournisseur. #}
+<div class="note {{ 'err' if counts.fail else 'warn' if counts.unsure or counts.skipped }} check-summary" role="status">
+  {% if counts.fail %}{{ ngettext("%(num)s problème à corriger pour %(label)s.", "%(num)s problèmes à corriger pour %(label)s.", counts.fail, label=label) }}
+  {% elif counts.unsure or counts.skipped %}{{ _("Aucun échec pour %(label)s, mais tout n’a pas pu être confirmé : Tester fait une vraie connexion.", label=label) }}
+  {% else %}{{ _("Aucun problème trouvé pour %(label)s. Tester vérifie ensuite une vraie connexion, avec un compte.", label=label) }}{% endif %}
+</div>
+<ol class="check-steps">
+  {% for s in steps %}
+  <li class="check-step">
+    {% if s.state == 'ok' %}<span class="st ok">{{ _("OK") }}</span>
+    {% elif s.state == 'fail' %}<span class="st err">{{ _("Échec") }}</span>
+    {% elif s.state == 'unsure' %}<span class="st warn">{{ _("Non concluant") }}</span>
+    {% else %}<span class="st">{{ _("Non effectuée") }}</span>{% endif %}
+    <div class="check-body">
+      <strong>{{ s.title }}</strong>
+      <p class="check-detail">{{ s.detail }}</p>
+      {% if s.fix %}<p class="check-fix"><b>{{ _("Correction :") }}</b> {{ s.fix }}</p>{% endif %}
+      {% if s.value %}<div class="copy-field"><input type="text" readonly class="mono" value="{{ s.value }}" aria-label="{{ _('URL de redirection') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copiée') }}">{{ _("Copier") }}</button></div>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ol>

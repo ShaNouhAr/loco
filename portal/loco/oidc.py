@@ -36,14 +36,18 @@ ALGORITHMS = ("RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES
 
 
 class OIDCError(Exception):
-    """Configuration ou dialogue avec le fournisseur en échec ; le message ne contient jamais de secret."""
+    """Configuration ou dialogue avec le fournisseur en échec ; le message ne contient jamais de secret. info : détails pour
+    le diagnostic (status, oauth, kind)."""
+    def __init__(self, message="", **info):
+        super().__init__(message)
+        self.info = info
 
 
 # --------------------------------------------------------------------------- HTTP vers le fournisseur
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
-        raise OIDCError(_("Redirection inattendue du fournisseur : vérifiez l’adresse de l’émetteur."))
+        raise OIDCError(_("Redirection inattendue du fournisseur : vérifiez l’adresse de l’émetteur."), kind="redirect")
 
 
 def https_url(value):
@@ -126,9 +130,10 @@ def _json(cfg, url, data=None, headers=None):
             except (ValueError, OSError):
                 body = {}
         detail = body.get("error") if isinstance(body, dict) else None
+        oauth = re.sub(r"[^a-z_]", "", detail)[:40] if isinstance(detail, str) else ""
         if isinstance(detail, str) and detail in TOKEN_ERRORS:
-            raise OIDCError(str(TOKEN_ERRORS[detail]))
-        raise OIDCError(_("Le fournisseur a répondu HTTP %(code)s.", code=e.code))
+            raise OIDCError(str(TOKEN_ERRORS[detail]), status=e.code, oauth=oauth)
+        raise OIDCError(_("Le fournisseur a répondu HTTP %(code)s.", code=e.code), status=e.code, oauth=oauth)
     except ssl.SSLCertVerificationError:
         raise OIDCError(_("Certificat du fournisseur non reconnu : collez son autorité (PEM) dans les options avancées."))
     except (urllib.error.URLError, OSError) as e:
@@ -172,7 +177,7 @@ def metadata(cfg, fresh=False):
         found = doc.get("issuer")
         if not isinstance(found, str) or found.rstrip("/") != issuer.rstrip("/"):
             raise OIDCError(_("L’émetteur annoncé par le fournisseur (%(found)s) ne correspond pas à celui configuré.",
-                              found=str(found)[:200]))
+                              found=str(found)[:200]), kind="issuer")
         for name in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
             if not isinstance(doc.get(name), str):
                 raise OIDCError(_("Document de découverte incomplet (%(name)s).", name=name))
@@ -181,7 +186,7 @@ def metadata(cfg, fresh=False):
             https_url(str(doc["userinfo_endpoint"]))
         methods = doc.get("code_challenge_methods_supported")
         if isinstance(methods, list) and "S256" not in methods:
-            raise OIDCError(_("Le fournisseur ne gère pas PKCE (S256)."))
+            raise OIDCError(_("Le fournisseur ne gère pas PKCE (S256)."), kind="pkce")
         return doc
     return _cached("meta", cfg, fetch, fresh)
 
@@ -340,9 +345,8 @@ def off_portal():
         return True
 
 
-def identity(cfg, meta, code, flow):
-    """Échange le code, vérifie le jeton d'identité ; complète par userinfo si nom d'utilisateur ou courriel manquent."""
-    params = {"grant_type": "authorization_code", "code": code, "redirect_uri": flow["u"], "code_verifier": flow["v"]}
+def _client_auth(cfg, meta, params):
+    """En-têtes d'authentification du client à l'échange du code (complète params avec client_secret_post)."""
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     methods = meta.get("token_endpoint_auth_methods_supported") or ["client_secret_basic"]
     if "client_secret_basic" in methods:
@@ -352,6 +356,22 @@ def identity(cfg, meta, code, flow):
         params.update(client_id=cfg["client_id"], client_secret=cfg["client_secret"])
     else:
         raise OIDCError(_("Le fournisseur n’accepte ni client_secret_basic ni client_secret_post."))
+    return headers
+
+
+def authorize_url(cfg, meta, redirect_uri, state, nonce, challenge):
+    """Adresse de connexion chez le fournisseur : flux « code » avec PKCE et nonce."""
+    params = {"response_type": "code", "client_id": cfg["client_id"], "redirect_uri": redirect_uri,
+              "scope": cfg.get("scopes") or SCOPES, "state": state, "nonce": nonce,
+              "code_challenge": challenge, "code_challenge_method": "S256"}
+    endpoint = meta["authorization_endpoint"]
+    return endpoint + ("&" if "?" in endpoint else "?") + urllib.parse.urlencode(params)
+
+
+def identity(cfg, meta, code, flow):
+    """Échange le code, vérifie le jeton d'identité ; complète par userinfo si nom d'utilisateur ou courriel manquent."""
+    params = {"grant_type": "authorization_code", "code": code, "redirect_uri": flow["u"], "code_verifier": flow["v"]}
+    headers = _client_auth(cfg, meta, params)
     tokens = _json(cfg, meta["token_endpoint"], urllib.parse.urlencode(params).encode(), headers)
     claims = verify_id_token(tokens.get("id_token"), cfg, meta, flow["n"])
     access = tokens.get("access_token")
@@ -390,13 +410,9 @@ def begin(directory, mode="login", next_url="/"):
     state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     flow = {"d": directory["id"], "r": directory["revision"], "s": state, "n": nonce, "v": verifier, "m": mode,
             "u": callback_url(directory["id"]), "next": safe_next(next_url)}
-    params = {"response_type": "code", "client_id": cfg["client_id"], "redirect_uri": flow["u"],
-              "scope": cfg.get("scopes") or SCOPES, "state": state, "nonce": nonce,
-              "code_challenge": _s256(verifier), "code_challenge_method": "S256"}
     # Pas de prompt=login pour le test : Authentik redemanderait alors les identifiants une 2e fois à un navigateur
     # qui vient de se connecter. Le test se fait donc avec le compte ouvert chez le fournisseur, s'il y en a un.
-    endpoint = meta["authorization_endpoint"]
-    url = endpoint + ("&" if "?" in endpoint else "?") + urllib.parse.urlencode(params)
+    url = authorize_url(cfg, meta, flow["u"], state, nonce, _s256(verifier))
     if mode == "test":
         # Le test part d'un formulaire (POST + CSRF) : la CSP « form-action 'self' » interdit au navigateur d'en suivre
         # une redirection vers un autre site. Il y va donc depuis une page intermédiaire.
@@ -437,7 +453,11 @@ def sso_start(directory_id):
     except OIDCError as e:
         audit("sso.echec", f"{directory['label']} : {e}", username="")
         return _status(_("%(label)s ne répond pas ou sa configuration est invalide. Réessayez plus tard ou utilisez "
-                         "votre compte loco.", label=directory["label"]), 502)
+                         "votre compte loco.", label=directory["label"]), 502, hint=admin_hint())
+
+
+def admin_hint():
+    return _("Administrateur : connectez-vous avec votre compte loco, puis « Vérifier la configuration » dans Annuaires et SSO indique la cause et sa correction.")
 
 
 def _status(message, code=200, kind="err", next_url=None, test=None, testing=False, hint=None):
@@ -518,7 +538,8 @@ def sso_callback(directory_id):
             detail = " ".join(re.sub(r"[^\w .,:;'’()/-]", "", str(request.args.get("error_description", ""))).split())[:200]
             if test:
                 hint = _("Vérifiez chez le fournisseur : client « Confidentiel », URL de redirection identique à celle "
-                         "affichée par loco, et type d’autorisation « Authorization Code » permis.")
+                         "affichée par loco, et type d’autorisation « Authorization Code » permis. « Vérifier la configuration » "
+                         "indique la cause et sa correction.")
             raise OIDCError(_("%(label)s a refusé la connexion (%(error)s) : %(detail)s", label=label, error=error,
                               detail=detail) if detail and test else _("%(label)s a refusé la connexion (%(error)s).",
                                                                        label=label, error=error))
@@ -534,7 +555,7 @@ def sso_callback(directory_id):
               username="")
         if test:
             return _status(str(e), 400, testing=True, hint=hint)
-        return _status(_("Connexion avec %(label)s impossible : %(e)s", label=label, e=e), 400)
+        return _status(_("Connexion avec %(label)s impossible : %(e)s", label=label, e=e), 400, hint=admin_hint())
     if test:
         groups = claims.get("groups") if isinstance(claims.get("groups"), list) else []
         audit("sso.test", f"{label} : {claims.get('preferred_username') or claims['sub']} (accepté)", username="")

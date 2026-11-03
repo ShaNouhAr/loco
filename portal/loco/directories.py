@@ -325,7 +325,7 @@ def sso_settings():
     from .oidc import callback_url
     new_id = secrets.token_hex(8)                               # connu d'avance : URL de redirection à déclarer
     return render_template("directories.html", directories=directories, kinds=KINDS, presets=LDAP_PRESETS, legacy=legacy,
-                           summary=summary, new_id=new_id, callback_url=callback_url)
+                           summary=summary, new_id=new_id, callback_url=callback_url, verify=request.args.get("verifier", ""))
 
 
 @app.route("/accounts/directories/add", methods=["POST"])
@@ -351,7 +351,7 @@ def directory_add():
     conn.commit()
     flash(_("Fournisseur ajouté. Testez une connexion avant de l’annoncer aux utilisateurs.") if kind == "oidc"
           else _("Annuaire ajouté. Testez-le avec un compte de l'annuaire avant de l'annoncer aux utilisateurs."), "ok")
-    return redirect(url_for("sso_settings"))
+    return redirect(url_for("sso_settings", verifier=ident if kind == "oidc" else None))
 
 
 def _revoke(directory_id):
@@ -375,7 +375,7 @@ def directory_update(directory_id):
     audit("sso.fournisseur.modification", label, commit=False)
     conn.commit()
     flash(_('Annuaire enregistré ; les sessions de ses comptes ont été fermées.'), "ok")
-    return redirect(url_for("sso_settings"))
+    return redirect(url_for("sso_settings", verifier=directory_id if row["kind"] == "oidc" else None))
 
 
 @app.route("/accounts/directories/<directory_id>/delete", methods=["POST"])
@@ -455,7 +455,7 @@ def directory_test(directory_id):
         except OIDCError as e:
             audit("sso.test", f"{row['label']} : {e}", commit=False)
             db().commit()
-            flash(_("Fournisseur injoignable ou mal configuré : %(e)s", e=e), "error")
+            flash(_("Fournisseur injoignable ou mal configuré : %(e)s. « Vérifier la configuration » indique la cause et sa correction.", e=e), "error")
             return redirect(url_for("sso_settings"))
     username, password = request.form.get("username", "").strip().lower(), request.form.get("password", "")
     try:
@@ -471,6 +471,23 @@ def directory_test(directory_id):
     db().commit()
     flash(result["message"], "ok" if result["ok"] else "error")
     return redirect(url_for("sso_settings"))
+
+
+@app.route("/accounts/directories/<directory_id>/check", methods=["POST"])
+@login_required
+def directory_check(directory_id):
+    """Vérifie la configuration d'un fournisseur OpenID Connect, sans connexion ni compte créé ; rend le détail des étapes."""
+    require("sso.manage")                   # pas de verrou de la base pendant les échanges réseau avec le fournisseur
+    row = _directory(directory_id)
+    if row["kind"] != "oidc":
+        abort(404)
+    from .sso_check import run, tally
+    steps = run(row)
+    counts = tally(steps)
+    failed = ", ".join(s["key"] for s in steps if s["state"] == "fail")
+    audit("sso.verification", f"{row['label']} : {counts['ok']} OK, {counts['fail']} échec, {counts['unsure']} non concluant" + (f" ({failed})" if failed else ""), commit=False)
+    db().commit()
+    return render_template("_sso_check.html", steps=steps, counts=counts, label=row["label"])
 
 
 @app.route("/accounts/<int:user_id>/approve", methods=["POST"])

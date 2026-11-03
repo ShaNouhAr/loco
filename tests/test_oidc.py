@@ -310,7 +310,7 @@ class TestAdministration(OidcTest):
         note = re.search(r'<p class="note err"[^>]*>(.*?)</p>', page).group(1)
         self.assertEqual(note, "Connexion avec Authentik impossible : Authentik a refusé la connexion (invalid_request).")
         self.assertNotIn("Authorization Code", page)
-        self.assertNotIn("Annuaires et SSO", page)
+        self.assertNotIn("Retour à Annuaires et SSO", page)
 
     def test_form_validation_and_locked_issuer(self):
         self.add(issuer="https://ak.test/")                                     # émetteur Authentik incomplet

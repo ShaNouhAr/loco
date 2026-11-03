@@ -428,6 +428,48 @@ class TestPortalPanel(BrowserTest):
             expect(panel.locator("[name=url]")).to_have_value(name)
 
 
+class TestSsoCheck(BrowserTest):
+    IDENT = "0123456789abcdef"
+    STEPS = [{"key": "dns", "title": "Résolution du nom", "state": "ok", "detail": "sso.lab.local : 10.0.0.1.", "fix": "", "value": ""},
+             {"key": "client", "title": "Identifiant et secret client", "state": "unsure", "detail": "Réponse inattendue : <HTTP 500>.", "fix": "Faites un essai avec Tester.", "value": ""},
+             {"key": "authorize", "title": "Demande de connexion", "state": "fail", "detail": "Authentik refuse cette URL de retour.", "fix": "Déclarez cette URL :", "value": "https://loco.lab.local:8443/login/sso/0123456789abcdef/callback"}]
+
+    def setUp(self):
+        super().setUp()
+        with transaction() as conn:
+            conn.execute("DELETE FROM auth_directories")
+            conn.execute("INSERT INTO auth_directories (id,kind,label,config,enabled,position,created_at) VALUES (?,?,?,?,1,0,'2026-11-03 10:00')",
+                         (self.IDENT, "oidc", "Authentik", json.dumps({"preset": "authentik", "issuer": "https://sso.lab.local:9443/application/o/loco/", "client_id": "c", "client_secret": ""})))
+        self.addCleanup(self.forget)
+
+    def forget(self):
+        with transaction() as conn:
+            conn.execute("DELETE FROM auth_directories")
+
+    def test_the_button_shows_every_step_and_the_url_to_copy_without_widening_the_page(self):
+        with mock.patch("loco.sso_check.run", return_value=self.STEPS):
+            self.page.goto("/accounts/directories")
+            row = self.page.locator(f"#dir-check-{self.IDENT}")
+            expect(row).to_be_hidden()
+            self.page.locator(f'[data-sso-check="dir-check-{self.IDENT}"]').click()
+            expect(row.locator(".check-summary")).to_contain_text("1 problème à corriger")
+            expect(row.locator(".check-step")).to_have_count(3)
+            expect(row.locator(".check-step").nth(1)).to_contain_text("<HTTP 500>")        # échappé, pas interprété
+            expect(row.locator(".check-step .st.err")).to_have_text("Échec")
+            expect(row.locator("input[readonly]")).to_have_value(self.STEPS[2]["value"])
+            self.assertLessEqual(self.overflow(), 0)
+
+    def test_saving_runs_it_once_without_a_click(self):
+        with mock.patch("loco.sso_check.run", return_value=self.STEPS) as run:
+            self.page.goto(f"/accounts/directories?verifier={self.IDENT}")
+            expect(self.page.locator(f"#dir-check-{self.IDENT} .check-summary")).to_be_visible(timeout=LONG)
+            self.assertEqual(run.call_count, 1)
+            self.assertNotIn("verifier", self.page.url)
+            self.page.reload()
+            expect(self.page.locator(f"#dir-check-{self.IDENT}")).to_be_hidden()
+            self.assertEqual(run.call_count, 1)
+
+
 class TestRollouts(BrowserTest):
     def finish_wave(self, number, state):
         with transaction() as conn:

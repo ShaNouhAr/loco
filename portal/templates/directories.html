@@ -152,6 +152,7 @@
             <td class="right nowrap">
               {% if manage %}
               <div class="dir-acts">
+                {% if d.kind == 'oidc' %}<button type="button" class="btn sm" data-sso-check="dir-check-{{ d.id }}" data-url="{{ url_for('directory_check', directory_id=d.id) }}" data-csrf="{{ csrf }}" data-auto="{{ '1' if verify == d.id }}"><span class="spin"></span>{{ _("Vérifier la configuration") }}</button>{% endif %}
                 <button type="button" class="btn sm" data-open="#dir-test-{{ d.id }}">{{ _("Tester") }}</button>
                 <button type="button" class="btn sm" data-open="#dir-edit-{{ d.id }}">{{ _("Modifier") }}</button>
                 <details class="menu row-menu">
@@ -167,6 +168,7 @@
               {% endif %}
             </td>
           </tr>
+          {% if manage and d.kind == 'oidc' %}<tr class="dir-check" id="dir-check-{{ d.id }}" hidden><td colspan="6" data-check-out aria-live="polite"></td></tr>{% endif %}
         {% endfor %}
         </tbody>
       </table>

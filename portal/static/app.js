@@ -269,6 +269,31 @@
     });
   });
 
+  /* ------------------------------------------------ vérification d'un fournisseur OpenID Connect (Annuaires et SSO) */
+  $$("[data-sso-check]").forEach(function (btn) {
+    var row = document.getElementById(btn.dataset.ssoCheck);
+    if (!row) return;
+    var out = row.querySelector("[data-check-out]");
+    var run = function () {
+      var data = new FormData();
+      data.set("csrf", btn.dataset.csrf);
+      btn.disabled = true;
+      btn.classList.add("loading");
+      row.hidden = false;
+      out.textContent = t("Vérification en cours…");
+      fetch(btn.dataset.url, { method: "POST", body: data })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(function (fragment) { out.innerHTML = fragment; })         /* rendu par le serveur, texte échappé */
+        .catch(function () { out.textContent = t("Vérification impossible : rechargez la page et réessayez."); })
+        .finally(function () { btn.disabled = false; btn.classList.remove("loading"); });
+    };
+    btn.addEventListener("click", run);
+    if (btn.dataset.auto === "1") {
+      history.replaceState(null, "", location.pathname);                 /* un rechargement ne relance pas la vérification */
+      run();
+    }
+  });
+
   /* Envoi syslog : les réglages des postes n'apparaissent que si leurs journaux sont envoyés. */
   (function (devices) {
     if (!devices) return;
