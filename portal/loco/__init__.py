@@ -99,6 +99,7 @@ def inject_globals():
     return {
         "csrf": session.get("csrf", ""),
         "https_url": config.HTTPS_URL,
+        "portal_url": config.portal_url(),
         "http_url": config.HTTP_URL,
         "client_url": config.HTTPS_URL,
         "host": config.HOST,

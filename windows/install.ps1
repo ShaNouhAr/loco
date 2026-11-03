@@ -21,6 +21,7 @@ param(
     # Adresse annoncée aux postes (défaut : IPv4 de l'interface de la route par défaut).
     [string]$HostAddress,
     [int]$HttpsPort,
+    [string]$PortalUrl,
     # Port HTTP d'amorçage des postes ; -NoHttp le désactive.
     [int]$HttpPort,
     [switch]$NoHttp,
@@ -80,7 +81,7 @@ Move-LegacyInstallation
 # ---------------------------------------------------------------- réglages
 # Valeurs par défaut, puis celles de l'installation précédente, puis les paramètres.
 $cfg = [ordered]@{
-    host = ''; https_port = 8443; http_port = 8088; allow = $PrivateNets; admin_allow = @(); proxy = ''
+    host = ''; portal_url = ''; https_port = 8443; http_port = 8088; allow = $PrivateNets; admin_allow = @(); proxy = ''
     wu = $true; flatpak = $true; rpm = $true; wu_cache_size = ''; apt_cache_size = ''; rpm_cache_size = ''
     flatpak_cache_size = ''; resolvers = @('1.1.1.1', '9.9.9.9'); max_upload = '8g'; backup_keep = 3
     data_dir = (Join-Path $Root 'data'); backup_dir = (Join-Path $Root 'backups')
@@ -91,6 +92,8 @@ if (Test-Path $ConfigPath) {
 }
 if ($PSBoundParameters.ContainsKey('HostAddress')) { $cfg.host = $HostAddress }
 if ($PSBoundParameters.ContainsKey('HttpsPort')) { $cfg.https_port = $HttpsPort }
+if ($PSBoundParameters.ContainsKey('PortalUrl')) { $cfg.portal_url = $PortalUrl.TrimEnd('/') }
+if ($cfg.portal_url -and $cfg.portal_url -notmatch '^https://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]{1,5})?$') { Fail 'PortalUrl : adresse https://nom:port attendue.' }
 if ($PSBoundParameters.ContainsKey('HttpPort')) { $cfg.http_port = $HttpPort }
 if ($NoHttp) { $cfg.http_port = 0 }
 if ($PSBoundParameters.ContainsKey('Allow')) { $cfg.allow = $Allow }

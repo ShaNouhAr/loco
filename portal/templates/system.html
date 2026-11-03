@@ -278,6 +278,43 @@
       </div>
     </section>
     {% endif %}
+    {% if portal %}
+    <section class="panel" id="adresse-portail">
+      <div class="panel-h"><h2>{{ _("Adresse du portail") }}</h2><div class="aside mono">{{ portal.url }}</div></div>
+      <div class="panel-b stack-sm">
+        <p class="muted small">{{ _("L'adresse que les navigateurs ouvrent et où revient la connexion SSO. Les agents et l'enrôlement restent sur <span class=\"mono\">%(agents)s</span>.", agents=portal.agents) }}</p>
+        {% if portal.busy %}
+        <div class="note" data-operations="{{ url_for('appliance_operations_state') }}" data-signature="{{ portal.signature }}">{{ _("Changement en cours…") }}{% if portal.job and portal.job.state in ('queued', 'running') %} <a href="{{ url_for('appliance_job', job_id=portal.job.id) }}">{{ _("Voir le déroulé") }}</a>{% endif %}</div>
+        {% else %}
+        {% if portal.job and portal.job.state == 'failed' %}
+        <div class="note err">{{ _("Le dernier changement d'adresse a échoué.") }} <a href="{{ url_for('appliance_job', job_id=portal.job.id) }}">{{ _("Voir le journal") }}</a></div>
+        {% endif %}
+        {% if can('system.configure') %}
+        <form method="post" action="{{ url_for('system_portal_url') }}" class="stack-sm portal-form"{% if portal.providers %} data-confirm="{{ _('Changer l’adresse du portail ?') }}" data-confirm-text="{{ _('La connexion SSO ne marchera plus tant que les nouvelles URL de retour ne sont pas déclarées chez les fournisseurs.') }}" data-confirm-ok="{{ _('Changer l’adresse') }}"{% endif %}>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <div class="repo-form">
+            <input type="text" name="url" value="{{ portal.url if portal.custom }}" placeholder="{{ _('https://loco.exemple.lan:%(port)s', port=https_port.port) }}" aria-label="{{ _('Adresse du portail') }}" spellcheck="false" autocapitalize="none" class="mono">
+            <button class="btn"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+          </div>
+          {% if portal.managed %}<label class="check"><input type="checkbox" name="extend" value="1"> {{ _("Ajouter ce nom au certificat de loco") }}</label>{% endif %}
+          <p class="hint">{{ _("Vide : l'adresse des agents. Ce nom doit figurer dans le certificat et être résolu par les postes qui ouvrent le portail.") }}</p>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if portal.providers %}
+        <div class="stack-sm">
+          <h3 class="pick-title">{{ _("URL de retour à déclarer chez chaque fournisseur SSO") }}</h3>
+          {% for p in portal.providers %}
+          <div class="sso-redirect"><span class="sso-redirect-k">{{ p.label }}</span>
+            <div class="copy-field"><input type="text" readonly class="mono" value="{{ p.url }}" aria-label="{{ _('URL de retour de %(label)s', label=p.label) }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copiée') }}">{{ _("Copier") }}</button></div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% endif %}
+
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Ports réseau") }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
       <div class="panel-b">
@@ -348,7 +385,7 @@
     </div>
     {% if cert %}
     <dl class="kv-grid ca-current">
-      <div><dt>{{ _("Adresse du portail") }}</dt><dd class="mono"><a href="{{ https_url }}">{{ https_url }}</a></dd></div>
+      <div><dt>{{ _("Adresse du portail") }}</dt><dd class="mono"><a href="{{ portal_url }}">{{ portal_url }}</a></dd></div>
       <div><dt>{{ _("Émis par") }}</dt><dd>{{ cert.issuer }}</dd></div>
       <div><dt>{{ _("Noms couverts") }}</dt><dd class="mono small">{{ cert.san|join(', ') }}</dd></div>
       <div><dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=cert.start.text, text2=cert.end.text) }}</dd></div>
@@ -393,7 +430,7 @@
         {% endif %}
         {% if ca %}
         <div class="ca-card">
-          <div class="ca-card-h"><h3>{{ ca.subject }}</h3><a class="btn sm" href="{{ https_url }}/ca.crt" download="loco-ca.crt">{{ ui_icon('download') }}<span>{{ _("Télécharger") }}</span></a></div>
+          <div class="ca-card-h"><h3>{{ ca.subject }}</h3><a class="btn sm" href="{{ portal_url }}/ca.crt" download="loco-ca.crt">{{ ui_icon('download') }}<span>{{ _("Télécharger") }}</span></a></div>
           <p class="small"><span class="muted">{{ _("Empreinte SHA-256 à vérifier avant import") }}</span><br><span class="mono break">{{ ca.sha256 }}</span></p>
           <div class="system-ca">
             <div class="tabs" role="tablist">
@@ -581,7 +618,7 @@
       </div>
       {% if cert %}
       <dl class="kv">
-        <dt>{{ _("Adresse") }}</dt><dd class="mono"><a href="{{ https_url }}">{{ https_url }}</a></dd>
+        <dt>{{ _("Adresse") }}</dt><dd class="mono"><a href="{{ portal_url }}">{{ portal_url }}</a></dd>
         <dt>{{ _("Noms couverts") }}</dt><dd class="mono">{{ cert.san|join(', ') }}</dd>
         <dt>{{ _("Émis par") }}</dt><dd>{{ cert.issuer }}</dd>
         <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=cert.start.text, text2=cert.end.text) }}</dd>
@@ -633,7 +670,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Autorité de certification locale") }}</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ https_url }}/ca.crt" download>{{ _("Télécharger ca.crt") }}</a></div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ _("Autorité de certification locale") }}</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ portal_url }}/ca.crt" download>{{ _("Télécharger ca.crt") }}</a></div>{% endif %}</div>
       {% if ca %}
       <div class="panel-b">
         <p class="muted">{{ _("Elle signe le certificat du portail. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat. Les paquets de la page <a href=\"%(v)s\">Enrôlement</a> s'en chargent ; l'agent seul l'épingle sans l'importer.", v=url_for('enrollment')) }}</p>

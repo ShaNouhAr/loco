@@ -28,6 +28,7 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.parse
 
 CONFIG_PATH = os.environ.get("LOCO_CONFIG", r"C:\ProgramData\loco\etc\loco.json")
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -61,7 +62,7 @@ def apply_environment(cfg):
     tmp = os.path.join(cfg["data_dir"], ".tmp")
     os.environ.update({
         "LOCO_RUNTIME": "windows", "LOCO_DATA": cfg["data_dir"], "LOCO_STATE": cfg["state_dir"], "LOCO_ETC": cfg["etc_dir"],
-        "LOCO_HOST": cfg["host"], "LOCO_ADMIN_URL": https, "LOCO_PUBLIC_URL": http, "LOCO_BACKUP_DIR": cfg["backup_dir"],
+        "LOCO_HOST": cfg["host"], "LOCO_ADMIN_URL": https, "LOCO_PORTAL_URL": cfg.get("portal_url", ""), "LOCO_PUBLIC_URL": http, "LOCO_BACKUP_DIR": cfg["backup_dir"],
         "LOCO_ACNG_PORT": str(cfg["acng_port"]), "LOCO_FLATPAK": "1" if cfg.get("flatpak", True) else "0",
         "LOCO_RPM": "1" if cfg.get("rpm", True) else "0",
         "LOCO_WU_LOG": os.path.join(cfg["log_dir"], "loco-wu.log"), "TEMP": tmp, "TMP": tmp,
@@ -136,6 +137,8 @@ def ensure_tls(cfg):
     with open(ca_key_path, "rb") as f:
         ca_key = serialization.load_pem_private_key(f.read(), password=None)
     ip = ipaddress.ip_address(cfg["host"]) if _is_ip(cfg["host"]) else None
+    portal = urllib.parse.urlsplit(cfg.get("portal_url", "")).hostname or ""
+    portal_ip = ipaddress.ip_address(portal) if portal and _is_ip(portal) else None
     renew = True
     if os.path.exists(server_path):
         with open(server_path, "rb") as f:
@@ -144,6 +147,9 @@ def ensure_tls(cfg):
             san = current.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
             covered = (ip in san.get_values_for_type(x509.IPAddress)) if ip else \
                 (cfg["host"] in san.get_values_for_type(x509.DNSName))
+            if portal:
+                covered = covered and ((portal_ip in san.get_values_for_type(x509.IPAddress)) if portal_ip else
+                                       (portal in san.get_values_for_type(x509.DNSName)))
         except x509.ExtensionNotFound:
             covered = False
         renew = not covered or current.not_valid_after_utc - now < datetime.timedelta(days=30)
@@ -153,6 +159,9 @@ def ensure_tls(cfg):
         fqdn = socket.getfqdn()
         if fqdn and fqdn not in (hostname(), "localhost") and "." in fqdn:
             names.append(x509.DNSName(fqdn))
+        if portal:
+            names.append(x509.IPAddress(portal_ip) if portal_ip else x509.DNSName(portal))
+        names = list(dict.fromkeys(names))
         key = _new_key()
         cert = (x509.CertificateBuilder()
                 .subject_name(x509.Name([x509.NameAttribute(NameOID.ORGANIZATION_NAME, "loco"),

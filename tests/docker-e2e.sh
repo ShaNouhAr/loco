@@ -118,6 +118,19 @@ dc up -d
 healthy
 ss -Hltn | grep -qE ':80 ' || fail "Windows Update non réactivé quand la variable est retirée"
 
+step "Adresse du portail par variable : certificat, agents et enrôlement inchangés"
+printf 'LOCO_BACKUP_KEEP=2\nLOCO_PORTAL_URL=https://loco.e2e.test:8443\n' > linux/docker/.env
+dc up -d
+healthy
+grep -q 'PORTAL_URL="https://loco.e2e.test:8443"' <(dc exec -T loco cat /etc/loco/loco.conf) || fail "adresse du portail absente de loco.conf"
+openssl s_client -connect 127.0.0.1:8443 -servername loco.e2e.test </dev/null 2>/dev/null | openssl x509 -noout -checkhost loco.e2e.test | grep -q "does match" \
+    || fail "certificat sans l'adresse du portail"
+curl -fsS "https://$HOST:8443/linux/setup.sh" | grep -q "https://$HOST:8443" || fail "script d'installation : adresse des agents perdue"
+printf 'LOCO_BACKUP_KEEP=2\n' > linux/docker/.env
+dc up -d
+healthy
+grep -q 'PORTAL_URL=""' <(dc exec -T loco cat /etc/loco/loco.conf) || fail "adresse du portail conservée après retrait de la variable"
+
 step "Nettoyage"
 sudo apt-get purge -y -q lr-e2e >/dev/null
 curl -fsSL "https://$HOST:8443/linux/setup.sh" | sudo sh -s -- --remove

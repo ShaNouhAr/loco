@@ -12,7 +12,7 @@ import urllib.parse
 from flask import abort, flash, redirect, render_template, request, url_for
 from werkzeug.security import generate_password_hash
 
-from . import app, permissions
+from . import app, config, permissions
 from .i18n import L_, _
 from .auth import audit, can_assign, lock_access, login_required, require
 from .db import db
@@ -446,7 +446,10 @@ def directory_test(directory_id):
     row = _directory(directory_id)
     if row["kind"] == "oidc":
         # Vraie connexion chez le fournisseur ; au retour, l'identité reçue est affichée, aucun compte n'est créé.
-        from .oidc import OIDCError, start_test
+        from .oidc import OIDCError, off_portal, start_test
+        if off_portal():
+            flash(_("Le test doit partir de l’adresse du portail, où revient le fournisseur : ouvrez %(url)s.", url=config.portal_url()), "error")
+            return redirect(url_for("sso_settings"))
         try:
             return start_test(row)
         except OIDCError as e:

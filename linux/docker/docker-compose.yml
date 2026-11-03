@@ -19,6 +19,7 @@ services:
     environment:
       LOCO_HOST: ${LOCO_HOST:-}
       LOCO_HTTPS_PORT: ${LOCO_HTTPS_PORT:-8443}
+      LOCO_PORTAL_URL: ${LOCO_PORTAL_URL:-}
       LOCO_HTTP_PORT: ${LOCO_HTTP_PORT:-8088}
       LOCO_HTTP: ${LOCO_HTTP:-1}
       LOCO_ALLOW: ${LOCO_ALLOW:-}

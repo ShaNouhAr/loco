@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.128.0"
+VERSION = "2.129.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -27,8 +27,31 @@ SERVER_UPDATES = not CONTAINER and not WINDOWS
 APT_NGINX = WINDOWS or ALPINE
 GPG = os.environ.get("LOCO_GPG", "gpg")
 
-# Adresse HTTPS (interface, et postes qui font confiance à l'autorité locale).
+# Adresse HTTPS des agents et de l'enrôlement (postes qui font confiance à l'autorité locale). Celle des navigateurs : portal_url().
 HTTPS_URL = os.environ.get("LOCO_ADMIN_URL", "https://localhost:8443").rstrip("/")
+_portal = {"stamp": None, "url": ""}
+
+
+def portal_url():
+    """Adresse du portail pour les navigateurs (retour du SSO, liens affichés). PORTAL_URL de loco.conf, relu quand le
+    fichier change : la changer ne demande ni réinstallation ni redémarrage. Par défaut, l'adresse des agents."""
+    path = os.path.join(ETC, "loco.conf")
+    try:
+        status = os.stat(path)
+        stamp = (status.st_mtime_ns, status.st_size, status.st_ino)
+    except OSError:
+        stamp = None
+    if stamp != _portal["stamp"]:
+        found = None
+        try:
+            with open(path, encoding="utf-8") as f:
+                found = re.search(r'^PORTAL_URL="?(https://[A-Za-z0-9.\[\]:-]+)/?"?$', f.read(), re.M)
+        except (OSError, ValueError):
+            pass
+        _portal.update(stamp=stamp, url=found.group(1) if found else "")
+    return _portal["url"] or os.environ.get("LOCO_PORTAL_URL", "").rstrip("/") or HTTPS_URL
+
+
 # Adresse HTTP des postes clients ; vide si le HTTP est désactivé (--no-http).
 HTTP_URL = os.environ.get("LOCO_PUBLIC_URL", "").rstrip("/")
 

@@ -9,6 +9,7 @@
 #   --host IP                adresse annoncée aux postes (défaut : IP de la route par défaut)
 #   --https-port N           port HTTPS de l'interface et des postes (défaut : 8443)
 #   --https-old-ports "N.."  anciens ports HTTPS gardés ouverts en plus, le temps que les postes suivent (vide : aucun)
+#   --portal-url URL         adresse du portail pour les navigateurs, https://nom (vide : celle des agents) ; le port suit --https-port
 #   --http-port N            port HTTP d'amorçage des postes (défaut : 8088)
 #   --no-http / --http       désactive / réactive le port HTTP (HTTPS seul : autorité déployée sur les postes)
 #   --allow "CIDR ..."       réseaux autorisés à utiliser les dépôts et caches (défaut : réseaux privés)
@@ -125,7 +126,7 @@ fi
 . "$SRC/lib/migrate.sh"
 if [[ " $* " != *" --help "* && " $* " != *" -h "* ]]; then migrate_local_repo; fi
 # Valeurs par défaut, puis celles de l'installation précédente, puis les options.
-PORTAL_PORT=8088 HTTPS_PORT=8443 HTTPS_OLD_PORTS="" HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
+PORTAL_PORT=8088 HTTPS_PORT=8443 HTTPS_OLD_PORTS="" PORTAL_URL="" HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
 RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 WU_PROXY_PORT=3128 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
 MAX_UPLOAD=8g BACKUP_KEEP=3 BACKUP_DIR=/var/backups/loco FLATPAK_ENABLED=1 FLATPAK_CACHE_SIZE=""
 RPM_ENABLED=1 RPM_CACHE_SIZE="" APT_CACHE_SIZE="" GITHUB_REPO=""
@@ -138,6 +139,7 @@ while [ $# -gt 0 ]; do
         --host) need "$@"; HOST="$2"; shift 2 ;;
         --https-port) need "$@"; HTTPS_PORT="$2"; shift 2 ;;
         --https-old-ports) need "$@"; HTTPS_OLD_PORTS="$2"; shift 2 ;;
+        --portal-url) need "$@"; PORTAL_URL="${2%/}"; shift 2 ;;
         --http-port|--port) need "$@"; PORTAL_PORT="$2"; shift 2 ;;
         --no-http) HTTP_ENABLED=0; shift ;;
         --http) HTTP_ENABLED=1; shift ;;
@@ -178,7 +180,16 @@ num --https-port "$HTTPS_PORT"; num --http-port "$PORTAL_PORT"; num --backup-kee
 for port in $HTTPS_OLD_PORTS; do num --https-old-ports "$port"; done
 # Le port actuel n'est pas un ancien port : nginx refuserait deux « listen » identiques.
 HTTPS_OLD_PORTS=$(for port in $HTTPS_OLD_PORTS; do [ "$port" = "$HTTPS_PORT" ] || echo "$port"; done | sort -un | xargs)
+[[ "$PORTAL_URL" =~ ^(https://([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:[0-9]{1,5})?)?$ ]] || die "--portal-url : adresse https://nom:port attendue." "--portal-url: https://name:port address expected." "--portal-url: se espera una dirección https://nombre:puerto."
 [ "$PORTAL_PORT" != "$HTTPS_PORT" ] || die "--http-port et --https-port doivent être différents." "--http-port and --https-port must differ." "--http-port y --https-port deben ser diferentes."
+# Le port de l'adresse du portail est celui de l'interface : il suit --https-port (et donc une mise à jour du réglage).
+if [ -n "$PORTAL_URL" ]; then
+    case "$PORTAL_URL" in
+        *\]*) PORTAL_URL="${PORTAL_URL%%\]*}]" ;;
+        https://*:*) PORTAL_URL="${PORTAL_URL%:*}" ;;
+    esac
+    [ "$HTTPS_PORT" = 443 ] || PORTAL_URL="$PORTAL_URL:$HTTPS_PORT"
+fi
 [[ "$MAX_UPLOAD" =~ ^[0-9]+[kKmMgG]?$ ]] || die "--max-upload : taille invalide (ex. 8g, 500m)." "--max-upload: invalid size (e.g. 8g, 500m)." "--max-upload: tamaño no válido (ej. 8g, 500m)."
 [[ "$WU_CACHE_SIZE" =~ ^([0-9]+[kKmMgGtT]?)?$ ]] || die "--wu-cache-size : taille invalide (ex. 50g)." "--wu-cache-size: invalid size (e.g. 50g)." "--wu-cache-size: tamaño no válido (ej. 50g)."
 [[ "$WU_PROXY_PORT" =~ ^[0-9]+$ && "$WU_PROXY_PORT" -ge 1 && "$WU_PROXY_PORT" -le 65535 ]] || die "--wu-proxy-port : port invalide." "--wu-proxy-port: invalid port." "--wu-proxy-port: puerto no válido."
@@ -320,6 +331,7 @@ cat > "$ETC/loco.conf" <<EOF
 HOST=$HOST
 HTTPS_PORT=$HTTPS_PORT
 HTTPS_OLD_PORTS="$HTTPS_OLD_PORTS"
+PORTAL_URL="$PORTAL_URL"
 PORTAL_PORT=$PORTAL_PORT
 HTTP_ENABLED=$HTTP_ENABLED
 ALLOW="$ALLOW"
@@ -358,6 +370,7 @@ mv "$PREFIX.new" "$PREFIX"
 install -d /usr/local/sbin    # absent sur Alpine minimal
 ln -sf "$PREFIX/bin/loco-user" /usr/local/sbin/loco-user
 ln -sf "$PREFIX/bin/loco-fleet" /usr/local/sbin/loco-fleet
+ln -sf "$PREFIX/bin/loco-config" /usr/local/sbin/loco-config
 ln -sf "$PREFIX/bin/loco-backup" /usr/local/sbin/loco-backup
 ln -sf "$PREFIX/bin/loco-apt" /usr/local/sbin/loco-apt
 
@@ -462,13 +475,33 @@ elif [ ! -f "$TLS/custom" ]; then
         fi
     fi
 fi
+# Adresse du portail : nom ou IP seuls, et le port est toujours celui de l'interface (il suit --https-port).
+PORTAL_HOST=${PORTAL_URL#https://}
+case "$PORTAL_HOST" in \[*) PORTAL_HOST=${PORTAL_HOST#\[}; PORTAL_HOST=${PORTAL_HOST%%\]*} ;; *) PORTAL_HOST=${PORTAL_HOST%%:*} ;; esac
+portal_is_ip() { [[ "$PORTAL_HOST" =~ ^[0-9.]+$ || "$PORTAL_HOST" == *:* ]]; }
+covers_portal() {
+    if portal_is_ip; then openssl x509 -in "$1" -noout -checkip "$PORTAL_HOST" 2>/dev/null | grep -q "does match"
+    else openssl x509 -in "$1" -noout -checkhost "$PORTAL_HOST" 2>/dev/null | grep -q "does match"; fi
+}
+if [ -n "$PORTAL_URL" ] && { [ -f "$TLS/custom" ] || [ -n "$TLS_ENTERPRISE" ]; } && ! covers_portal "$TLS/server.crt" \
+   && { [ ! -f "$TLS/imported.crt" ] || ! covers_portal "$TLS/imported.crt"; }; then
+    warn "Le certificat ne couvre pas $PORTAL_HOST, l'adresse du portail : les navigateurs afficheront une alerte." \
+         "The certificate does not cover $PORTAL_HOST, the portal address: browsers will show a warning." \
+         "El certificado no cubre $PORTAL_HOST, la dirección del portal: los navegadores mostrarán una alerta."
+fi
 if [ ! -f "$TLS/custom" ] && [ -z "$TLS_ENTERPRISE" ]; then
     SAN="IP:$HOST,IP:127.0.0.1,DNS:$(hostname),DNS:localhost"
     FQDN=$(hostname -f 2>/dev/null || true)
     if [ -n "$FQDN" ] && [ "$FQDN" != "$(hostname)" ] && [ "$FQDN" != localhost ]; then SAN="$SAN,DNS:$FQDN"; fi
-    # Certificat serveur (825 jours) : refait s'il manque, expire dans moins de 30 jours ou si l'IP a changé.
+    # Adresse du portail : elle doit rester couverte après une mise à jour.
+    if [ -n "$PORTAL_HOST" ]; then
+        if portal_is_ip; then SAN="$SAN,IP:$PORTAL_HOST"; else SAN="$SAN,DNS:$PORTAL_HOST"; fi
+    fi
+    # Certificat serveur (825 jours) : refait s'il manque, expire dans moins de 30 jours, si l'IP a changé ou si l'adresse
+    # du portail n'est plus couverte.
     if [ ! -f "$TLS/server.crt" ] || ! openssl x509 -in "$TLS/server.crt" -noout -checkend 2592000 >/dev/null 2>&1 \
-       || ! openssl x509 -in "$TLS/server.crt" -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:$HOST\b"; then
+       || ! openssl x509 -in "$TLS/server.crt" -noout -ext subjectAltName 2>/dev/null | grep -q "IP Address:$HOST\b" \
+       || { [ -n "$PORTAL_HOST" ] && ! covers_portal "$TLS/server.crt"; }; then
         openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
             -subj "/O=loco/CN=$(hostname)" -keyout "$TLS/server.key" -out "$TLS/server.csr" 2>>"$LOG"
         openssl x509 -req -in "$TLS/server.csr" -CA "$TLS/ca.crt" -CAkey "$TLS/ca.key" \
@@ -725,7 +758,7 @@ echo
 say "loco est installé" "loco is installed" "loco está instalado"
 row()  { printf '    %-20s : %s\n' "$(t "$1" "$2" "$3")" "$4"; }
 cont() { printf '    %-20s   %s\n' "" "$1"; }
-row "Interface" "Web interface" "Interfaz web" "$ADMIN_URL"
+row "Interface" "Web interface" "Interfaz web" "${PORTAL_URL:-$ADMIN_URL}"
 if [ -n "$ISSUED" ]; then
     row "Compte initial" "Initial account" "Cuenta inicial" "admin / $ISSUED   $(t '(à changer à la première connexion ; affiché une seule fois)' '(change at first sign-in; shown only once)' '(cambiar en la primera conexión; mostrado una sola vez)')"
 fi

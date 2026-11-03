@@ -66,7 +66,7 @@ def valid_source(value):
     value = (value or "").strip()
     return bool(GITLAB_RE.fullmatch(value) if "://" in value else GITHUB_RE.fullmatch(value))
 ACTIONS = ("check", "update-loco", "update-system", "update-security", "reboot", "configure", "set-repo", "set-time", "install-qemu-agent", "restore", "set-backup-keep", "delete-backup", "set-shell", "renew-cert", "import-cert", "remove-imported-cert",
-           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode", "set-https-port",
+           "import-ca", "remove-ca", "ca-csr", "import-enterprise-cert", "set-tls-mode", "set-https-port", "set-portal-url",
            "ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 HA_ACTIONS = ("ha-enable", "ha-join", "ha-peer", "ha-failover", "ha-disable", "ha-reconfigure")
 # Opérations qui redémarrent le portail : en haute disponibilité, le contrôle de santé ne doit pas y voir une panne.
@@ -337,11 +337,15 @@ def _lang():
 LANG = _lang()
 
 
+viewer_lang = None      # portail : langue de la personne connectée, pour les refus affichés sur sa page
+
+
 def t(fr, en, es=None):
     """Texte d'un journal d'opération, dans la langue du serveur (anglais par défaut)."""
-    if LANG == "fr":
+    lang = (viewer_lang() if viewer_lang else "") or LANG
+    if lang == "fr":
         return fr
-    if LANG == "es" and es is not None:
+    if lang == "es" and es is not None:
         return es
     return en
 
@@ -2065,7 +2069,7 @@ def renew_cert(params=None, log=print):
                            "certificate issued by your enterprise authority: import the new certificate",
                            "certificado emitido por su autoridad de empresa: importe el nuevo certificado"))
     with tempfile.TemporaryDirectory(dir=TLS, prefix=".renew-") as tmp:
-        key, crt, san = _loco_cert(tmp, log)
+        key, crt, san = _loco_cert(tmp, log, extra=_ha().cluster_addresses(_ha().node()) if ha_configured() else ())
         _swap_tls({"server.key": key, "server.crt": crt}, log)
     log(t(f"Certificat renouvelé pour {', '.join(s.split(':', 1)[1] for s in san)} (825 jours).",
           f"Certificate renewed for {', '.join(s.split(':', 1)[1] for s in san)} (825 days).",
@@ -2096,6 +2100,11 @@ def import_cert(params, log=print):
             raise ValueError(t(f"il couvre {host}, l'adresse utilisée par les agents : ils perdraient la connexion",
                                f"it covers {host}, the address used by the agents: they would lose the connection",
                                f"cubre {host}, la dirección usada por los agentes: perderían la conexión"))
+        portal = urllib.parse.urlsplit(read_conf().get("PORTAL_URL", "")).hostname
+        if portal and not _covers_host(_read(crt), portal) and not _covers_host(_read(os.path.join(TLS, "server.crt")), portal):
+            raise ValueError(t(f"ni lui ni le certificat du serveur ne couvrent {portal}, l'adresse du portail",
+                               f"neither it nor the server certificate covers {portal}, the portal address",
+                               f"ni este ni el certificado del servidor cubren {portal}, la dirección del portal"))
         with tempfile.TemporaryDirectory(dir=TLS, prefix=".import-") as tmp:
             staged = {}
             for name, src in (("imported.crt", crt), ("imported.key", key)):
@@ -2112,6 +2121,11 @@ def import_cert(params, log=print):
 
 
 def remove_imported_cert(params=None, log=print):
+    portal = urllib.parse.urlsplit(read_conf().get("PORTAL_URL", "")).hostname
+    if portal and not _covers_host(_read(os.path.join(TLS, "server.crt")), portal):
+        raise ValueError(t(f"c'est lui qui couvre {portal}, l'adresse du portail : changez d'abord cette adresse (Système, onglet Réseau)",
+                           f"it is the one covering {portal}, the portal address: change that address first (System, Network tab)",
+                           f"es el que cubre {portal}, la dirección del portal: cambie primero esa dirección (Sistema, pestaña Red)"))
     _swap_tls({n: None for n in ("imported.crt", "imported.key") if os.path.exists(os.path.join(TLS, n))}, log,
               after=write_sni_site)
     log(t("Certificat importé retiré.", "Imported certificate removed.", "Certificado importado retirado."))
@@ -2223,6 +2237,79 @@ def _covers_host(pem, host):
         return any(_name_covers(n, host) for n in re.findall(r"DNS:([^\s,]+)", out))
 
 
+PORTAL_URL_RE = re.compile(r"https://([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
+                           r"|\[[0-9A-Fa-f:.]+\])(:[0-9]{1,5})?")
+
+
+def _served_cert_covers(host):
+    """Le certificat présenté aux navigateurs couvre-t-il ce nom : celui du serveur, ou le certificat importé (SNI) ?"""
+    return any(_covers_host(pem, host) for pem in (_read(os.path.join(TLS, n)) for n in ("server.crt", "imported.crt")) if pem)
+
+
+def portal_params(params, conf=None):
+    """Adresse du portail, validée par le portail puis revalidée par l'agent root ; adresse vide : celle des agents."""
+    conf = read_conf() if conf is None else conf
+    p = params or {}
+    url = str(p.get("url", "")).strip().rstrip("/")
+    if not url:
+        return {"url": "", "extend": ""}
+    try:
+        if len(url) > 255 or not PORTAL_URL_RE.fullmatch(url):
+            raise ValueError
+        parts = urllib.parse.urlsplit(url)
+        port = str(parts.port or 443)
+    except ValueError:
+        raise ValueError(t("adresse attendue : https://nom:port, sans chemin", "expected address: https://name:port, without a path",
+                           "dirección esperada: https://nombre:puerto, sin ruta")) from None
+    expected = conf.get("HTTPS_PORT", "8443")
+    if port != expected:
+        raise ValueError(t(f"le portail écoute sur le port {expected} : indiquez https://nom:{expected}",
+                           f"the portal listens on port {expected}: enter https://name:{expected}",
+                           f"el portal escucha en el puerto {expected}: indique https://nombre:{expected}"))
+    url, host = url.lower().removesuffix(":443"), parts.hostname.lower()
+    if host == conf.get("HOST", "").lower():
+        return {"url": "", "extend": ""}             # l'adresse des agents : c'est le réglage par défaut
+    extend = "1" if str(p.get("extend", "")) == "1" else ""
+    if _served_cert_covers(host):
+        return {"url": url, "extend": ""}
+    if os.path.exists(os.path.join(TLS, "custom")):
+        raise ValueError(t(f"le certificat fourni à l'installation (--tls-cert) ne couvre pas {host} : relancez install.sh avec un certificat qui le couvre",
+                           f"the certificate supplied at installation (--tls-cert) does not cover {host}: rerun install.sh with one that does",
+                           f"el certificado proporcionado en la instalación (--tls-cert) no cubre {host}: vuelva a ejecutar install.sh con uno que lo cubra"))
+    if tls_mode() == "enterprise":
+        raise ValueError(t(f"le certificat de votre autorité d'entreprise ne couvre pas {host} : demandez-en un qui le couvre (Système, onglet Certificat)",
+                           f"your enterprise authority's certificate does not cover {host}: request one that does (System, Certificate tab)",
+                           f"el certificado de su autoridad de empresa no cubre {host}: solicite uno que lo cubra (Sistema, pestaña Certificado)"))
+    if not extend:
+        raise ValueError(t(f"le certificat de loco ne couvre pas {host} : cochez « Ajouter ce nom au certificat de loco » (loco-config : --add-to-certificate)",
+                           f"loco's certificate does not cover {host}: tick \"Add this name to loco's certificate\" (loco-config: --add-to-certificate)",
+                           f"el certificado de loco no cubre {host}: marque «Añadir este nombre al certificado de loco» (loco-config: --add-to-certificate)"))
+    return {"url": url, "extend": "1"}
+
+
+def set_portal_url(params, log=print):
+    """Enregistre l'adresse du portail ; les agents et l'enrôlement ne changent pas. Aucun redémarrage : le portail relit loco.conf."""
+    conf = read_conf()
+    p = portal_params(params, conf)
+    if ha_configured() and _ha().role() == "standby":
+        raise ValueError(t("serveur de secours : changez l'adresse sur le principal, elle sera répliquée",
+                           "standby server: change the address on the primary, it will be replicated",
+                           "servidor de respaldo: cambie la dirección en el principal, se replicará"))
+    previous = conf.get("PORTAL_URL", "")
+    _set_conf("PORTAL_URL", p["url"])
+    if p["extend"]:
+        try:
+            renew_cert(log=log)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            _set_conf("PORTAL_URL", previous)
+            raise
+    shown = p["url"] or t("celle des agents", "the agents' address", "la de los agentes")
+    log(t(f"Adresse du portail : {shown}. Redéclarez l'URL de retour chez chaque fournisseur SSO (Annuaires et SSO).",
+          f"Portal address: {shown}. Declare the redirect URL again with each SSO provider (Directories and SSO).",
+          f"Dirección del portal: {shown}. Vuelva a declarar la URL de retorno en cada proveedor SSO (Directorios y SSO)."))
+    return True
+
+
 def _valid_ip(text):
     try:
         ipaddress.ip_address(text)
@@ -2248,6 +2335,11 @@ def _check_enterprise_pair(crt_pem, key_path, log):
         raise ValueError(t(f"il ne couvre pas {host}, l'adresse utilisée par les agents du parc",
                            f"it does not cover {host}, the address used by the agents",
                            f"no cubre {host}, la dirección usada por los agentes"))
+    portal = urllib.parse.urlsplit(read_conf().get("PORTAL_URL", "")).hostname
+    if portal and not _covers_host(leaf, portal):
+        raise ValueError(t(f"il ne couvre pas {portal}, l'adresse du portail",
+                           f"it does not cover {portal}, the portal address",
+                           f"no cubre {portal}, la dirección del portal"))
     authority = _pem_blocks(_read(tls_path("ENTERPRISE_CA")))
     if not authority:
         raise ValueError(t("importez d'abord l'autorité d'entreprise", "import the enterprise authority first",
@@ -2330,6 +2422,9 @@ def _agent_names(extra=()):
     deux serveurs d'une grappe de haute disponibilité, en plus de son IP virtuelle)."""
     host, name, fqdn = read_conf().get("HOST", "") or "127.0.0.1", socket.gethostname(), socket.getfqdn()
     san = [f"IP:{host}"] if _valid_ip(host) else [f"DNS:{host}"]
+    portal = urllib.parse.urlsplit(read_conf().get("PORTAL_URL", "")).hostname
+    if portal:
+        san.append(f"IP:{portal}" if _valid_ip(portal) else f"DNS:{portal}")
     san += [f"IP:{n}" for n in extra if _valid_ip(n)]
     san += [f"DNS:{n}" for n in (fqdn, name, *extra) if n and n != "localhost" and not _valid_ip(n) and CERT_NAME_RE.fullmatch(n)]
     return list(dict.fromkeys(san))
@@ -2767,6 +2862,8 @@ def _operation(action, params, log):
         return configure(params, log)
     if action == "set-https-port":
         return set_https_port(params, log)
+    if action == "set-portal-url":
+        return set_portal_url(params, log)
     if action == "reboot":
         return reboot(log)
     if action == "set-repo":
@@ -3083,6 +3180,11 @@ def agent():
                         params = https_port_params(req.get("params"))
                     except ValueError:
                         continue
+                elif req["action"] == "set-portal-url":
+                    try:
+                        params = portal_params(req.get("params"))
+                    except ValueError:
+                        continue
                 elif req["action"] in HA_ACTIONS:
                     try:
                         params = ha_params(req["action"], req.get("params"))
@@ -3181,6 +3283,8 @@ def request(action, params=None, user=""):
         params = tls_params(action, params)
     elif action == "set-https-port":
         params = https_port_params(params)
+    elif action == "set-portal-url":
+        params = portal_params(params)
     elif action in HA_ACTIONS:
         params = ha_params(action, params)
     else:
@@ -3244,9 +3348,11 @@ UPDATE_HELP = """Usage : loco-update [COMMANDE]
   all       loco puis le système (appliance Alpine)
   reboot    redémarre le serveur"""
 
-CONFIG_HELP = """Usage : loco-config [show | set CLÉ=VALEUR…]
-  show                  réglages actuels
-  set CLÉ=VALEUR…       applique les réglages (relance l'installation avec les nouvelles valeurs)
+CONFIG_HELP = """Usage : loco-config [show | set CLÉ=VALEUR… | portal-url […]]
+  show                  réglages actuels (appliance)
+  set CLÉ=VALEUR…       applique les réglages, en relançant l'installation (appliance)
+  portal-url            adresse du portail pour les navigateurs (tout serveur Linux), sans réinstallation :
+                          portal-url https://nom:port [--add-to-certificate]    portal-url --default
 Réseau, nom et mot de passe root : setup-loco (console)."""
 
 
@@ -3303,8 +3409,14 @@ def main(argv):
             print(UPDATE_HELP, file=sys.stderr)
             return 0 if sub in ("-h", "--help") else 2
         return _console(actions[sub])
+    if cmd == "config" and args[:1] == ["portal-url"]:
+        wanted = [a for a in args[1:] if not a.startswith("--")]
+        if not wanted and "--default" not in args:
+            print(read_conf().get("PORTAL_URL", "") or t("(adresse des agents)", "(agents' address)", "(dirección de los agentes)"))
+            return 0
+        return _console("set-portal-url", {"url": (wanted or [""])[0], "extend": "1" if "--add-to-certificate" in args else ""})
     if cmd == "config":
-        if not ALPINE:
+        if not ALPINE and not set(args) & {"-h", "--help"}:
             print("Erreur : réglages de l'appliance Alpine ; ailleurs, relancez install.sh avec les options voulues.",
                   file=sys.stderr)
             return 1

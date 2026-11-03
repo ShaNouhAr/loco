@@ -29,6 +29,7 @@ flag() {   # VARIABLE option-si-1 option-si-0 (défaut : 1)
 args=(--container
       --host "${LOCO_HOST:-}"
       --https-port "${LOCO_HTTPS_PORT:-8443}"
+      --portal-url "${LOCO_PORTAL_URL:-}"
       --http-port "${LOCO_HTTP_PORT:-8088}"
       --allow "${LOCO_ALLOW:-$PRIVATE_NETS}"
       --admin-allow "${LOCO_ADMIN_ALLOW:-${LOCO_ALLOW:-$PRIVATE_NETS}}"

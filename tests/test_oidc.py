@@ -104,6 +104,8 @@ class FakeIdP:
 
 
 class OidcTest(FleetTest):
+    on_portal = True            # navigateur de test déjà sur l'adresse du portail (test_portal_url.py teste le contraire)
+
     def setUp(self):
         super().setUp()
         oidc._cache.clear()
@@ -114,6 +116,10 @@ class OidcTest(FleetTest):
         patcher = mock.patch.object(oidc, "_json", self.idp)
         patcher.start()
         self.addCleanup(patcher.stop)
+        if self.on_portal:
+            patcher = mock.patch.object(oidc, "off_portal", return_value=False)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def add(self, preset="authentik", issuer=ISSUER, enabled="1", **extra):
         return self.admin.post("/accounts/directories/add", {"kind": "oidc", "preset": preset, "issuer": issuer,

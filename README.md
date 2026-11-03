@@ -405,6 +405,13 @@ et, avec le SSO, à l'adresse de retour déclarée chez le fournisseur d'identit
 --https-port N --https-old-ports "ANCIEN"`, puis `--https-old-ports ""` pour fermer. Sous Docker (`LOCO_HTTPS_PORT`) et sur
 un serveur Windows (`install.ps1 -HttpsPort`), annoncez d'abord la nouvelle adresse aux agents : il n'y a pas de double écoute.
 
+**Ouvrir loco par son nom** : *Système › Réseau › Adresse du portail*. C'est l'adresse des navigateurs et du retour SSO ;
+les agents et l'enrôlement gardent la leur, donc rien ne change pour le parc. Le certificat doit couvrir ce nom : pour un
+certificat de loco, cochez *Ajouter ce nom au certificat de loco* ; pour un certificat d'entreprise, demandez-en un qui le
+couvre. La page liste les URL de retour à redéclarer chez les fournisseurs SSO. En ligne de commande : `loco-config
+portal-url https://loco.exemple.lan:8443 [--add-to-certificate]`, et `--default` pour revenir à l'adresse des agents. Sous
+Docker : `LOCO_PORTAL_URL`. Sur un serveur Windows : `install.ps1 -PortalUrl`.
+
 Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session utilisateur. Sa pastille reprend l'état de Mon parc : vert sans mise à jour, orange de 1 à 9 mises à jour, rouge à partir de 10 (seuil réglable). Un état indisponible ou ancien est gris. Le menu et le double-clic affichent uniquement des détails : **aucune action de mise à jour n'est accessible à l'utilisateur**. Le compagnon ne contacte pas le serveur et ne lit aucun jeton ; il consulte un fichier d'état public, accessible uniquement en lecture aux utilisateurs standards. Le service privilégié reste seul responsable des actions reçues de loco.
 
 </details>

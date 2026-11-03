@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.129.0 — 2026-11-03
+
+- **Adresse du portail séparée de celle des agents.** Nouveau réglage dans *Système › Réseau › Adresse du portail* : ouvrir loco par son nom (`https://loco.lab.local:8443`) ne demande plus de relancer l'installeur avec `--host`, qui changeait aussi l'adresse d'enrôlement. Les agents et l'enrôlement restent sur leur adresse. Sans réglage, rien ne change.
+  - **Modifiable sans réinstallation ni redémarrage**, depuis le portail ou avec `loco-config portal-url`, désormais présent sur tout serveur Linux. Le réglage survit aux mises à jour et l'agent root le revalide. Sous Docker : `LOCO_PORTAL_URL`. Sur un serveur Windows : `install.ps1 -PortalUrl`.
+  - **Le certificat doit couvrir l'adresse.** Sinon le changement est refusé. Pour un certificat de loco, une case ajoute le nom au certificat. Pour un certificat d'entreprise ou fourni à l'installation, le message indique quoi demander.
+  - **Connexion SSO** : le retour se fait toujours sur l'adresse du portail. Depuis une autre adresse, comme l'IP, le navigateur y est redirigé avant la pose du cookie. Le faux message « connexion expirée » disparaît, et un retour sur une mauvaise adresse dit quoi corriger. Aucune URL n'est construite à partir de l'en-tête Host.
+  - **URL de retour à redéclarer** : la page les liste pour chaque fournisseur et demande confirmation avant le changement.
+- **Haute disponibilité : renouveler le certificat garde les deux serveurs.** Le renouvellement depuis le portail retirait du certificat les adresses des deux serveurs de la grappe, pour ne garder que l'IP virtuelle.
+
 ## 2.128.0 — 2026-11-03
 
 - **Déploiement par vagues.** Une mise à jour du parc ou d'un groupe, un déploiement de logiciels ou de paquets peuvent partir par vagues au lieu de toucher tous les postes d'un coup. On choisit le nombre de postes par vague, l'attente entre deux vagues, le nombre d'échecs qui met tout en pause, et éventuellement un groupe pilote pour commencer.

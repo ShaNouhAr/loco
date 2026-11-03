@@ -951,14 +951,18 @@ def new_join_code(conf, secret):
     return code
 
 
+def cluster_addresses(conf):
+    """Adresses des deux serveurs, à couvrir en plus de l'IP virtuelle."""
+    return [conf["self"]["address"]] + ([conf["peer"]["address"]] if conf.get("peer") else [])
+
+
 def cluster_cert(conf, admin, log):
     """Certificat de loco pour l'IP virtuelle et les deux serveurs (signé par l'autorité de la grappe)."""
     if admin.tls_mode() == "enterprise" or os.path.exists(os.path.join(ETC, "tls", "custom")):
         log("Certificat d'entreprise ou fourni : ajoutez-y l'IP virtuelle et les deux serveurs vous-même.")
         return
-    extra = [conf["self"]["address"]] + ([conf["peer"]["address"]] if conf.get("peer") else [])
     with tempfile.TemporaryDirectory(dir=os.path.join(ETC, "tls"), prefix=".ha-") as tmp:
-        key, crt, san = admin._loco_cert(tmp, log, extra=extra)
+        key, crt, san = admin._loco_cert(tmp, log, extra=cluster_addresses(conf))
         admin._swap_tls({"server.key": key, "server.crt": crt}, log)
     log("Certificat : " + ", ".join(s.split(":", 1)[1] for s in san) + ".")
 

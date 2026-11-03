@@ -637,7 +637,7 @@ def _run_command(args):
 def _server_status(args):
     from . import dashboard
     d = dashboard.dashboard_data()
-    out = {"loco_version": config.VERSION, "admin_url": config.HTTPS_URL,
+    out = {"loco_version": config.VERSION, "admin_url": config.portal_url(),
            "services_running": {"apt_cache": bool(d["services"]["acng"]), "web_server": bool(d["services"]["nginx"])},
            "disk_bytes": d["disk"], "cpu": d["cpu"], "memory_bytes": d["mem"],
            "cache_bytes": {"apt": d["acng_size"], "windows_update": d["wucache_size"], "flatpak": d["flatpak_cache"]},
@@ -760,7 +760,7 @@ def _origin_ok():
     origin = request.headers.get("Origin")
     if not origin:
         return True
-    own = {request.host_url.rstrip("/").lower(), config.HTTPS_URL.rstrip("/").lower()}
+    own = {request.host_url.rstrip("/").lower(), config.HTTPS_URL.rstrip("/").lower(), config.portal_url().lower()}
     return origin.rstrip("/").lower() in own
 
 
@@ -909,7 +909,7 @@ def mcp_endpoint():
 # --------------------------------------------------------------------------- page d'administration
 
 def _endpoint_url():
-    return config.HTTPS_URL.rstrip("/") + "/mcp"
+    return config.portal_url() + "/mcp"
 
 
 def _catalog_view(own):

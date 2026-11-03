@@ -324,8 +324,20 @@ def _s256(verifier):
 
 
 def callback_url(directory_id):
-    # Toujours l'adresse d'administration configurée, jamais l'en-tête Host du navigateur.
-    return config.HTTPS_URL.rstrip("/") + FLOW_PATH + directory_id + "/callback"
+    # Toujours l'adresse configurée du portail, jamais l'en-tête Host du navigateur.
+    return config.portal_url() + FLOW_PATH + directory_id + "/callback"
+
+
+def off_portal():
+    """Le navigateur est-il ailleurs que sur l'adresse du portail ? Le fournisseur revient sur cette adresse : le cookie du
+    flux, posé sur une autre, serait perdu. Host et Origin (ce que voit le navigateur, derrière un relais) servent
+    seulement à cette comparaison, jamais à bâtir une URL."""
+    try:
+        seen = urllib.parse.urlsplit(request.headers.get("Origin") or f"{request.scheme}://{request.host}")
+        wanted = urllib.parse.urlsplit(config.portal_url())
+        return (seen.hostname, seen.port or (443 if seen.scheme == "https" else 80)) != (wanted.hostname, wanted.port or 443)
+    except ValueError:                                           # en-tête mal formé
+        return True
 
 
 def identity(cfg, meta, code, flow):
@@ -416,6 +428,10 @@ def sso_start(directory_id):
     directory = _enabled(directory_id)
     if directory is None:
         abort(404)
+    if off_portal() and not request.args.get("portail"):         # déjà redirigé : un relais réécrit Host, le flux peut partir
+        # Avant de poser le cookie du flux ; next est validé, l'adresse vient de la configuration.
+        return redirect(config.portal_url() + url_for("sso_start", directory_id=directory_id, portail=1,
+                                                      next=safe_next(request.args.get("next", "/"))))
     try:
         return begin(directory, "login", request.args.get("next", "/"))
     except OIDCError as e:
@@ -484,6 +500,9 @@ def sso_callback(directory_id):
     test = flow is not None and flow.get("m") == "test"
     if (flow is None or directory is None or flow.get("r") != directory["revision"]
             or not hmac.compare_digest(str(request.args.get("state", ""))[:512], str(flow.get("s", "")))):
+        if flow is None and off_portal():
+            return _status(_("Le fournisseur est revenu sur une autre adresse que celle du portail (%(url)s) : déclarez chez lui "
+                             "l’URL de retour indiquée dans Annuaires et SSO.", url=config.portal_url()), 400)
         return _status(_("Cette connexion a expiré ou a été commencée dans un autre navigateur. Recommencez."), 400,
                        testing=test)
     label, hint, detail = directory["label"], None, ""

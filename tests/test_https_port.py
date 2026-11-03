@@ -157,7 +157,7 @@ class TestSystemPage(FleetTest):
         self.assertIn("ne connaissent pas encore le nouveau port : 1", page)
 
     def test_sso_return_address_is_shown_during_the_transition(self):
-        directory = {"id": "abc", "kind": "oidc"}
+        directory = {"id": "abc", "kind": "oidc", "label": "Authentik"}
         with mock.patch("loco.directories.enabled_directories", return_value=[directory]):
             page = self.page({"HTTPS_PORT": "9443", "HTTPS_OLD_PORTS": "8443"}, port="9443")
         self.assertIn("https://localhost:9443", page)

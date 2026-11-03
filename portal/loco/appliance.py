@@ -22,7 +22,7 @@ if config.SERVER_UPDATES:
 ACTION_LABELS = {"check": L_("Vérification des mises à jour"), "update-loco": L_("Mise à jour de loco"),
                  "update-system": L_("Mise à jour du système"), "update-security": L_("Correctifs de sécurité"),
                  "configure": L_("Réglages"), "reboot": L_("Redémarrage"), "set-repo": L_("Source des mises à jour"),
-                 "set-https-port": L_("Port de l'interface web"),
+                 "set-https-port": L_("Port de l'interface web"), "set-portal-url": L_("Adresse du portail"),
                  "set-time": L_("Heure du serveur"), "install-qemu-agent": L_("Installation de l'agent invité QEMU"),
                  "restore": L_("Restauration d'une sauvegarde"), "set-backup-keep": L_("Conservation des sauvegardes"),
                  "delete-backup": L_("Suppression d'une sauvegarde"), "set-shell": L_("Shell root du serveur"),
@@ -37,6 +37,8 @@ def job_detail(job):
         return _("activation (effective au redémarrage)") if p.get("enabled") == "1" else _("désactivation")
     if action == "set-backup-keep":
         return _("%(n)s sauvegardes conservées", n=p.get("keep", "?"))
+    if action == "set-portal-url":
+        return p.get("url") or _("celle des agents")
     if action == "set-https-port":
         return _("fermeture de l'ancien port") if p.get("close") else _("nouveau port : %(port)s", port=p.get("port", "?"))
     if action == "set-time":

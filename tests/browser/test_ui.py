@@ -399,6 +399,35 @@ class TestPortPanel(BrowserTest):
             expect(self.page.locator("[data-operations]")).to_have_count(0)
 
 
+class TestPortalPanel(BrowserTest):
+    def test_change_is_followed_and_the_new_address_is_shown(self):
+        name, jobs = "https://loco.lab.local:18083", []
+        conf_path = os.path.join(config.ETC, "loco.conf")
+        job = dict(TestPortPanel.JOB, action="set-portal-url", params={"url": name, "extend": "1"})
+
+        def asked(_action, params, user=""):
+            self.assertEqual(params, {"url": name, "extend": "1"})
+            threading.Timer(0.5, lambda: jobs.append(dict(job, state="running"))).start()
+        self.addCleanup(lambda: os.path.exists(conf_path) and os.unlink(conf_path))
+        with mock.patch.object(locoadmin, "jobs", lambda limit=20: list(jobs)), mock.patch.object(locoadmin, "running_job", lambda: None), \
+                mock.patch.object(locoadmin, "agent_running", lambda: True), mock.patch.object(locoadmin, "ha_configured", lambda: False), \
+                mock.patch.object(locoadmin, "request", asked), mock.patch.object(config, "HTTPS_URL", BASE):
+            self.page.goto("/system#reseau")
+            panel = self.page.locator("#adresse-portail")
+            expect(panel).to_contain_text(BASE)
+            form = panel.locator(".portal-form")
+            form.locator("[name=url]").fill(name)
+            form.locator("[name=extend]").check()
+            form.locator("button").click()
+            expect(panel.locator("[data-operations]")).to_contain_text("Changement en cours")
+            with open(conf_path, "w", encoding="utf-8") as f:
+                f.write(f'PORTAL_URL="{name}"\n')
+            jobs[:] = [dict(job, state="success")]
+            expect(panel.locator(".aside")).to_have_text(name, timeout=LONG)
+            expect(panel.locator("[data-operations]")).to_have_count(0)
+            expect(panel.locator("[name=url]")).to_have_value(name)
+
+
 class TestRollouts(BrowserTest):
     def finish_wave(self, number, state):
         with transaction() as conn:
