@@ -182,7 +182,7 @@ ENDPOINTS = {
     "users": "users.view", "users_add": "users.create", "users_update": "users.edit",
     "users_approve": "users.approve",
     "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage", "directory_toggle": "sso.manage",
-    "directory_delete": "sso.manage", "directory_move": "sso.manage", "directory_move_down": "sso.manage", "directory_test": "sso.manage", "directory_check": "sso.manage",
+    "directory_delete": "sso.manage", "directory_move": "sso.manage", "directory_move_down": "sso.manage", "directory_test": "sso.manage", "directory_check": "sso.manage", "directory_authentik": "sso.manage",
     "users_reset": "users.reset", "users_mfa_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
     "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",

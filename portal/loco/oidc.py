@@ -114,8 +114,8 @@ TOKEN_ERRORS = {
 }
 
 
-def _json(cfg, url, data=None, headers=None):
-    req = urllib.request.Request(https_url(url), data=data, headers={"Accept": "application/json",
+def _json(cfg, url, data=None, headers=None, method=None):
+    req = urllib.request.Request(https_url(url), data=data, method=method, headers={"Accept": "application/json",
                                  "User-Agent": config.USER_AGENT, **(headers or {})})
     context, pin = _tls(cfg)
     opener = urllib.request.build_opener(_NoRedirect(), _PinnedHTTPS(context, pin) if pin
@@ -133,7 +133,7 @@ def _json(cfg, url, data=None, headers=None):
         oauth = re.sub(r"[^a-z_]", "", detail)[:40] if isinstance(detail, str) else ""
         if isinstance(detail, str) and detail in TOKEN_ERRORS:
             raise OIDCError(str(TOKEN_ERRORS[detail]), status=e.code, oauth=oauth)
-        raise OIDCError(_("Le fournisseur a répondu HTTP %(code)s.", code=e.code), status=e.code, oauth=oauth)
+        raise OIDCError(_("Le fournisseur a répondu HTTP %(code)s.", code=e.code), status=e.code, oauth=oauth, body=body)
     except ssl.SSLCertVerificationError:
         raise OIDCError(_("Certificat du fournisseur non reconnu : collez son autorité (PEM) dans les options avancées."))
     except (urllib.error.URLError, OSError) as e:

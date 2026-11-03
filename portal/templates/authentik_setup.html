@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Configurer Authentik") }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Configurer Authentik") }}</h1>
+    <p>{{ _("Loco crée le fournisseur et l’application chez Authentik, puis enregistre le client ici. Une vérification complète suit.") }}</p>
+  </div>
+  <div class="actions"><a class="btn" href="{{ url_for('sso_settings') }}">{{ _("Retour à Annuaires et SSO") }}</a></div>
+</div>
+
+<div class="stack">
+{% if error %}<div class="note err" role="alert">{{ error }}</div>{% endif %}
+
+{% macro kept() %}
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="url" value="{{ url }}"><input type="hidden" name="slug" value="{{ slug }}"><input type="hidden" name="label" value="{{ label }}"><input type="hidden" name="new_id" value="{{ new_id }}">
+{% endmacro %}
+
+{% if stage == 'start' %}
+<form method="post" class="panel">
+  <div class="panel-h"><h2>{{ _("Adresse d’Authentik") }}</h2></div>
+  <div class="panel-b stack-sm">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="f"><span>{{ _("Adresse") }}</span><input type="url" name="url" required maxlength="255" class="mono" spellcheck="false" autocapitalize="none" value="{{ url }}" placeholder="{{ _('https://authentik.exemple.lan:9443') }}"></label>
+    <div class="grid2">
+      <label class="f"><span>{{ _("Identifiant de l’application (slug)") }}</span><input type="text" name="slug" required maxlength="64" class="mono" spellcheck="false" autocapitalize="none" value="{{ slug }}"></label>
+      <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="label" maxlength="80" value="{{ label }}"></label>
+    </div>
+    <p class="hint">{{ _("Avec un jeton API temporaire, loco fait tout : aucun jeton n’est gardé. Sans jeton, vous collez un blueprint dans Authentik et recopiez le secret.") }}</p>
+  </div>
+  <div class="panel-f row-between">
+    <button class="btn" name="stage" value="blueprint">{{ _("Sans jeton : préparer un blueprint") }}</button>
+    <button class="btn primary" name="stage" value="inspect"><span class="spin"></span>{{ _("Avec un jeton API") }}</button>
+  </div>
+</form>
+
+{% elif stage == 'token' %}
+<form method="post" class="panel">
+  <div class="panel-h"><h2>{{ _("Connexion à %(url)s", url=url) }}</h2></div>
+  <div class="panel-b stack-sm">
+    {{ kept() }}
+    {% if tls.status == 'unreachable' or tls.status == 'refused' %}
+    <div class="note err"><p class="check-detail">{{ tls.step.detail }}</p>{% if tls.step.fix %}<p class="check-fix"><b>{{ _("Correction :") }}</b> {{ tls.step.fix }}</p>{% endif %}</div>
+    {% if tls.status == 'unreachable' and can('system.configure') %}<p class="hint">{{ _("Vous pouvez ajouter ce nom dans <a href=\"%(v)s\">Système, Noms internes</a>.", v=url_for('system') + '#reseau') }}</p>{% endif %}
+    <label class="f"><span>{{ _("Certificat ou autorité du fournisseur") }}</span><textarea name="ca_pem" rows="4" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----">{{ ca_pem }}</textarea></label>
+    {% elif tls.status == 'confirm' %}
+    <input type="hidden" name="ca_pem" value="{{ tls.ca_pem }}">
+    <div class="note warn">
+      <p>{{ _("Ce serveur ne connaît pas encore le certificat auto-signé %(subject)s présenté par Authentik." , subject=tls.subject) if tls.self_signed else _("Ce serveur ne connaît pas encore l’autorité %(subject)s qui a signé le certificat d’Authentik.", subject=tls.subject) }}</p>
+      <p>{{ _("Comparez cette empreinte SHA-256 avec celle affichée par votre autorité :") }}</p>
+      <p class="mono break">{{ tls.sha }}</p>
+    </div>
+    {% else %}
+    <input type="hidden" name="ca_pem" value="{{ tls.ca_pem }}">
+    {% if tls.ca_pem %}
+    <div class="note"><p>{{ _("Autorité : %(subject)s. Le certificat d’Authentik est vérifié avec elle.", subject=tls.subject) }}</p><p class="mono break">{{ tls.sha }}</p></div>
+    <label class="check"><input type="checkbox" name="confirmed" value="{{ tls.sha }}" required> {{ _("J’ai vérifié cette empreinte") }}</label>
+    {% else %}
+    <p class="st ok">{{ _("Certificat reconnu par ce serveur.") }}</p>
+    {% endif %}
+    <label class="f"><span>{{ _("Jeton API temporaire") }}</span><input type="password" name="token" required autocomplete="off" maxlength="4096" spellcheck="false"></label>
+    <p class="hint">{{ _("Dans Authentik : Annuaire, Jetons et mots de passe d’application, Créer, intention « API ». Loco ne le garde pas et ne le journalise pas : supprimez-le une fois terminé.") }}</p>
+    {% endif %}
+  </div>
+  <div class="panel-f row-between">
+    <a class="btn" href="{{ url_for('directory_authentik') }}">{{ _("Recommencer") }}</a>
+    {% if tls.status == 'trusted' %}
+    <button class="btn primary" name="stage" value="plan"><span class="spin"></span>{{ _("Voir ce qui sera fait") }}</button>
+    {% else %}
+    <button class="btn primary" name="stage" value="inspect"><span class="spin"></span>{{ _("Utiliser cette autorité") if tls.status == 'confirm' else _("Réessayer") }}</button>
+    {% endif %}
+  </div>
+</form>
+
+{% elif stage == 'plan' %}
+<form method="post" class="panel">
+  <div class="panel-h"><h2>{{ _("Ce qui sera fait chez Authentik") if create or changes else _("Rien à changer chez Authentik") }}</h2></div>
+  <div class="panel-b stack-sm">
+    {{ kept() }}
+    <input type="hidden" name="ca_pem" value="{{ ca_pem }}"><input type="hidden" name="sealed" value="{{ sealed }}"><input type="hidden" name="signature" value="{{ signature }}"><input type="hidden" name="confirmed" value="{{ confirmed }}">
+    {% if changes %}<ul class="plan-list">{% for c in changes %}<li>{{ c }}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">{{ _("L’application est déjà configurée comme il faut : loco récupère seulement l’identifiant et le secret.") }}</p>{% endif %}
+    {% if others %}
+    <div>
+      <h3 class="pick-title">{{ _("Autres URL de retour déclarées") }}</h3>
+      <p class="hint">{{ _("Elles sont conservées. Cochez seulement celles à supprimer.") }}</p>
+      <div class="stack-sm">{% for u in others %}<label class="check"><input type="checkbox" name="remove_uri" value="{{ u.url }}"> {{ _("Supprimer") }} <span class="mono">{{ u.url }}</span></label>{% endfor %}</div>
+    </div>
+    {% endif %}
+    <label class="switch-row"><span class="switch"><input type="checkbox" name="enabled" value="1" role="switch" checked><i aria-hidden="true"></i></span><span>{{ _("Activer le bouton sur la page de connexion") }}</span></label>
+  </div>
+  <div class="panel-f row-between">
+    <a class="btn" href="{{ url_for('directory_authentik') }}">{{ _("Annuler") }}</a>
+    <button class="btn primary" name="stage" value="apply"><span class="spin"></span>{{ _("Appliquer") if create or changes else _("Enregistrer dans loco") }}</button>
+  </div>
+</form>
+
+{% elif stage == 'blueprint' %}
+<section class="panel">
+  <div class="panel-h"><h2>{{ _("1. Collez ce blueprint dans Authentik") }}</h2></div>
+  <div class="panel-b stack-sm">
+    <p class="hint">{{ _("Personnalisation, Blueprints, Créer : collez-le dans le champ de contenu, puis appliquez.") }}</p>
+    <div class="stack-sm">
+      <textarea readonly rows="16" class="mono" spellcheck="false" aria-label="{{ _('Blueprint Authentik') }}">{{ yaml }}</textarea>
+      <button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button>
+    </div>
+  </div>
+</section>
+<form method="post" action="{{ url_for('directory_add') }}" class="panel">
+  <div class="panel-h"><h2>{{ _("2. Saisissez ces valeurs dans loco") }}</h2></div>
+  <div class="panel-b stack-sm">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="oidc"><input type="hidden" name="preset" value="authentik"><input type="hidden" name="new_id" value="{{ new_id }}"><input type="hidden" name="enabled" value="1">
+    <div class="grid2">
+      <label class="f"><span>{{ _("Émetteur (issuer)") }}</span><input type="url" name="issuer" required class="mono" spellcheck="false" value="{{ issuer }}"></label>
+      <label class="f"><span>{{ _("Identifiant client (Client ID)") }}</span><input type="text" name="client_id" required class="mono" spellcheck="false" value="{{ client_id }}"></label>
+      <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="label" maxlength="80" value="{{ label }}"></label>
+      <label class="f"><span>{{ _("Secret client (Client Secret)") }}</span><input type="password" name="client_secret" required maxlength="1024" autocomplete="new-password"></label>
+    </div>
+    <p class="hint">{{ _("Le secret est généré par Authentik : copiez-le depuis la page du fournisseur créé par le blueprint.") }}</p>
+    <label class="f"><span>{{ _("Certificat ou autorité du fournisseur") }} <em class="opt">{{ _("facultatif") }}</em></span><textarea name="ca_pem" rows="3" spellcheck="false" class="mono" placeholder="-----BEGIN CERTIFICATE-----">{{ ca_pem }}</textarea></label>
+  </div>
+  <div class="panel-f row-between"><a class="btn" href="{{ url_for('directory_authentik') }}">{{ _("Recommencer") }}</a><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer et vérifier") }}</button></div>
+</form>
+{% endif %}
+</div>
+{% endblock %}

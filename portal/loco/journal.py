@@ -24,7 +24,7 @@ LABELS = {
     "syslog.configuration": L_("Envoi syslog modifié"),
     "connexion": L_("Connexion"), "deconnexion": L_("Déconnexion"), "connexion.echec": L_("Échec de connexion"),
     "connexion.bloquee": L_("Connexion bloquée (trop d'échecs)"), "sso.connexion": L_("Connexion par annuaire"), "sso.echec": L_("Annuaire injoignable ou en erreur"),
-    "sso.demande": L_("Demande d'accès (annuaire)"), "sso.approbation": L_("Accès approuvé (annuaire)"), "sso.verification": L_("Configuration SSO vérifiée"), "sso.test": L_("Test d'un annuaire"),
+    "sso.demande": L_("Demande d'accès (annuaire)"), "sso.approbation": L_("Accès approuvé (annuaire)"), "sso.verification": L_("Configuration SSO vérifiée"), "sso.authentik": L_("Authentik configuré depuis loco"), "sso.test": L_("Test d'un annuaire"),
     "sso.fournisseur.ajout": L_("Annuaire ajouté"), "sso.fournisseur.modification": L_("Annuaire modifié"),
     "sso.fournisseur.suppression": L_("Annuaire supprimé"),
     "comptes.ajout": L_("Compte créé"), "comptes.modification": L_("Compte modifié"), "comptes.suppression": L_("Compte supprimé"),

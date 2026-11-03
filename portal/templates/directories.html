@@ -118,7 +118,7 @@
     <h1>{{ _("Annuaires et SSO") }}</h1>
     <p>{{ _("Connexion à loco avec les comptes de l’entreprise : Active Directory, FreeIPA, un autre annuaire LDAP, un serveur RADIUS, ou le SSO d’Authentik et d’autres fournisseurs OpenID Connect. Les comptes locaux restent toujours disponibles.") }}</p>
   </div>
-  {% if manage %}<div class="actions"><button type="button" class="btn primary" data-open="#dir-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un annuaire") }}</span></button></div>{% endif %}
+  {% if manage %}<div class="actions"><a class="btn" href="{{ url_for('directory_authentik') }}">{{ _("Configurer Authentik") }}</a><button type="button" class="btn primary" data-open="#dir-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un annuaire") }}</span></button></div>{% endif %}
 </div>
 
 <div class="stack">

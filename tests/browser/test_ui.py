@@ -470,6 +470,24 @@ class TestSsoCheck(BrowserTest):
             self.assertEqual(run.call_count, 1)
 
 
+class TestAuthentikSetup(BrowserTest):
+    def test_start_page_blueprint_and_plan_render_without_widening_the_page(self):
+        from loco import authentik_setup
+        self.page.goto("/accounts/directories/authentik")
+        self.page.fill("input[name=url]", "https://sso.lab.local:9443")
+        self.page.locator("button[value=blueprint]").click()
+        expect(self.page.locator("textarea[readonly]")).to_contain_text("grant_types: [authorization_code]")
+        self.assertLessEqual(self.overflow(), 0)
+        tls = {"status": "confirm", "ca_pem": "-----BEGIN CERTIFICATE-----", "subject": "Racine Lab", "sha": "AA:" * 31 + "AA", "self_signed": False}
+        with mock.patch.object(authentik_setup, "inspect", return_value=tls):
+            self.page.goto("/accounts/directories/authentik")
+            self.page.fill("input[name=url]", "https://sso.lab.local:9443")
+            self.page.locator("button[value=inspect]").click()
+            expect(self.page.locator(".note.warn")).to_contain_text("Racine Lab")
+            self.assertEqual(self.page.locator("input[name=token]").count(), 0)
+            self.assertLessEqual(self.overflow(), 0)
+
+
 class TestRollouts(BrowserTest):
     def finish_wave(self, number, state):
         with transaction() as conn:

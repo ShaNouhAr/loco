@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.132.0 — 2026-11-03
+
+- **Configurer Authentik depuis loco** : bouton dans *Annuaires et SSO*.
+  - **Avec un jeton API temporaire** : loco crée ou met à jour le fournisseur et l'application, sans doublon : client confidentiel, `authorization_code` seul, URL de retour stricte, portées `openid profile email`, signature RS256. Il récupère ensuite le client ID, le secret et l'émetteur, puis lance la vérification.
+  - **Le jeton** n'est ni stocké, ni journalisé, ni passé en argument de commande. Entre deux étapes, il reste chez le navigateur, chiffré et limité à dix minutes. Supprimez-le dans Authentik une fois terminé.
+  - **Certificat d'abord** : le jeton n'est envoyé qu'une fois le certificat d'Authentik reconnu, ou son autorité confirmée par son empreinte. Si le serveur n'envoie pas la racine, la page demande de la coller.
+  - **Application existante** : les changements sont montrés avant d'être appliqués. Le client ID et le secret ne changent pas. Une URL de retour n'est supprimée que si vous la cochez. Si Authentik a changé entre-temps, rien n'est appliqué.
+  - **Sans jeton** : un blueprint prêt à coller, plus les valeurs à saisir. Le secret reste généré par Authentik.
+
 ## 2.131.0 — 2026-11-03
 
 - **Noms internes gérés depuis le portail** : *Système › Réseau › Noms internes*. Quand le DNS du serveur ne connaît pas un nom, comme l'adresse d'Authentik sur un réseau interne, indiquez son adresse IP, sans ouvrir de shell.
