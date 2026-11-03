@@ -21,7 +21,7 @@
     <h1><span>{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
-      <span class="mono">{{ (dev.addresses or dev.ip or '—').split(' ')[0] }}</span>
+      <span class="mono">{{ address or '—' }}</span>
       <span title="{{ dev.last_seen }}">{{ _("vu %(seen)s", seen=summary.seen) }}</span>
       <span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>
     </p>

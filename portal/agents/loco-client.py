@@ -142,6 +142,7 @@ def call(server, path, data, token=None, timeout=60):
 
 
 SERVER_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+(:[0-9]{1,5})?$")
+VIRTUAL_NIC = re.compile(r"(docker|br-|veth|virbr|vboxnet|vmnet|cni|flannel|cali|lxc|lxd|podman)")     # conteneurs et machines virtuelles
 SOURCE_FILES = ("/etc/apt/sources.list.d/loco*.sources", "/etc/apt/sources.list.d/loco*.list", "/etc/yum.repos.d/loco*.repo")
 
 
@@ -237,17 +238,22 @@ def family():
 
 
 def addresses():
-    out = []
+    """Adresses du poste, la principale d'abord : interface de la route par défaut, interfaces virtuelles en dernier, IPv4 avant IPv6."""
+    found = []
+
+    def ip(*args):
+        return subprocess.run(("ip",) + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True, timeout=10).stdout
     try:
-        text = subprocess.run(["ip", "-o", "addr", "show", "scope", "global"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True,
-                              timeout=10).stdout
-        for line in text.splitlines():
+        route = ip("route", "show", "default").split()
+        main = route[route.index("dev") + 1] if "dev" in route[:-1] else ""
+        for line in ip("-o", "addr", "show", "scope", "global").splitlines():
             fields = line.split()
             if len(fields) > 3 and fields[2] in ("inet", "inet6"):
-                out.append(fields[3].split("/")[0])
+                nic = fields[1].split("@")[0]
+                found.append((0 if nic == main else 2 if VIRTUAL_NIC.match(nic) else 1, fields[2] != "inet", fields[3].split("/")[0]))
     except (OSError, subprocess.SubprocessError):
         pass
-    return out[:16]
+    return [f[2] for f in sorted(found, key=lambda f: f[:2])][:16]
 
 
 def identity():

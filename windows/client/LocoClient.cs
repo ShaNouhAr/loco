@@ -564,17 +564,21 @@ namespace Loco
                         caption = Convert.ToString(o["Caption"]).Trim() + " (" + Convert.ToString(o["Version"]) + ")";
             }
             catch (Exception) { }
-            var addresses = new List<string>();
+            // Carte de la route par défaut d'abord (Hyper-V, WSL ou Docker Desktop passent sinon devant), IPv4 avant IPv6.
+            var found = new List<KeyValuePair<int, string>>();
             foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-                foreach (var a in nic.GetIPProperties().UnicastAddresses)
+                var props = nic.GetIPProperties();
+                bool routed = props.GatewayAddresses.Any(g => !g.Address.Equals(IPAddress.Any) && !g.Address.Equals(IPAddress.IPv6Any));
+                foreach (var a in props.UnicastAddresses)
                 {
                     var ip = a.Address;
                     if (IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal || ip.ToString().StartsWith("169.254.")) continue;
-                    if (addresses.Count < 16) addresses.Add(ip.ToString().Split('%')[0]);
+                    found.Add(new KeyValuePair<int, string>((routed ? 0 : 2) + (ip.AddressFamily == AddressFamily.InterNetwork ? 0 : 1), ip.ToString().Split('%')[0]));
                 }
             }
+            var addresses = found.OrderBy(f => f.Key).Select(f => f.Value).Take(16).ToList();
             return new Dictionary<string, object> {
                 { "hostname", Environment.MachineName.ToLowerInvariant() }, { "agent_version", Version },
                 { "addresses", addresses }, { "trust", TrustSha() },

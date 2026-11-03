@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.126.1 — 2026-11-03
+
+- **Mauvaise adresse affichée pour un poste qui a Docker.** Mon parc pouvait montrer l'adresse du pont Docker (`172.17.0.1`) au lieu de celle de la carte réseau. Le portail affiche maintenant d'abord l'adresse par laquelle il voit le poste, et les agents Linux et Windows classent en tête la carte de la route par défaut, les interfaces virtuelles en dernier (Docker, machines virtuelles, Hyper-V, WSL) et l'IPv4 avant l'IPv6. Toutes les adresses restent listées sur la fiche du poste.
+
 ## 2.126.0 — 2026-11-02
 
 - **Vue d'ensemble refaite pour répondre d'abord à « est-ce que tout va bien, et que dois-je faire ? ».**

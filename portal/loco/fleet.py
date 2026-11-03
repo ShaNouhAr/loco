@@ -1229,6 +1229,13 @@ def _commands(key):
 SEVERITY = {"red": 0, "orange": 1, "grey": 2, "green": 3}
 
 
+def main_address(dev):
+    """Adresse à afficher : celle par laquelle loco voit le poste s'il la déclare, sinon la première déclarée.
+    L'ordre seul ne suffit pas : le pont d'un poste qui a Docker peut passer devant sa carte réseau."""
+    own = (dev["addresses"] or "").split()
+    return dev["ip"] if dev["ip"] in own else own[0] if own else dev["ip"] or ""
+
+
 def short_os(name):
     """Système sans l'éditeur ni le numéro de build, pour la liste du parc : « Windows Server 2025 Standard »,
     « Debian 13 (trixie) » (le nom complet reste en infobulle)."""
@@ -1247,7 +1254,7 @@ def _enrich(rows):
         d = r["d"]
         own = (d["addresses"] or "").split()
         updates = inventory(d).get("updates") or []
-        r.update(label=status_label(d, r["color"]), presence=presence(d), address=own[0] if own else (d["ip"] or ""),
+        r.update(label=status_label(d, r["color"]), presence=presence(d), address=main_address(d),
                  os_short=short_os(d["os_name"]) or FAMILIES.get(d["os_family"], ""),
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
                  system=d["updates"], security=sum(1 for u in updates if u.get("security")),
@@ -1303,9 +1310,7 @@ def fleet_search():
     devices = []
     for d in db().execute("SELECT id, hostname, os_name, os_family, ip, addresses FROM devices "
                           "WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
-        own = (d["addresses"] or "").split()
-        address = own[0] if own else (d["ip"] or "")
-        sub = " · ".join(p for p in (d["os_name"] or d["os_family"], address) if p)
+        sub = " · ".join(p for p in (d["os_name"] or d["os_family"], main_address(d)) if p)
         devices.append({"title": d["hostname"] or _("Poste sans nom"),
                         "sub": sub, "href": url_for("fleet_device", dev_id=d["id"])})
     return {"devices": devices}
@@ -1427,7 +1432,7 @@ def fleet_device(dev_id):
     from . import groups, schedules
     from . import monitoring
     mon = monitoring.view(db(), dev, request.args.get("periode", "24h"))
-    return render_template("fleet_device.html", mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
+    return render_template("fleet_device.html", address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
