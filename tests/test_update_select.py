@@ -50,7 +50,7 @@ class TestSelection(FleetTest):
         self.assertEqual(r.status_code, 302)
         cmd = self.commands()[-1]
         self.assertEqual(json.loads(cmd["params"])["only"], {"packages": ["openssl", "curl"], "flatpak": True})
-        self.assertIn("3 sélectionnée(s)", self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True))
+        self.assertIn("3 sélectionnées", self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True))
         sent = agent.checkin().get_json()["commands"][0]
         self.assertEqual((sent["action"], sent["only"]["packages"]), ("update", ["openssl", "curl"]))
         # Rien de reconnu, ou seulement l'inconnu : refusé.

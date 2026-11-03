@@ -18,7 +18,7 @@
         <span class="set-label">{{ _("Adresse actuelle") }}</span>
         <div class="set-current-val">
           <span class="set-value mono">{{ current[0] }}</span>
-          {% if current[2] %}<span class="st {{ 'ok' if current[1] == current[2] else 'warn' }}">{{ _("%(known)s/%(total)s agent(s) l'ont confirmée", known=current[1], total=current[2]) }}</span>
+          {% if current[2] %}<span class="st {{ 'ok' if current[1] == current[2] else 'warn' }}">{{ ngettext("Confirmée par %(num)s agent sur %(total)s", "Confirmée par %(num)s agents sur %(total)s", current[1], total=current[2]) }}</span>
           {% else %}<span class="st">{{ _("aucun agent inscrit") }}</span>{% endif %}
         </div>
       </div>
@@ -30,7 +30,7 @@
         <div class="set-row sub">
           <div class="set-value mono">{{ url }}</div>
           <div class="set-aside">
-            <span class="st {{ 'ok' if known == total else 'warn' }}">{{ _("%(known)s/%(total)s poste(s) prévenu(s)", known=known, total=total) }}</span>
+            <span class="st {{ 'ok' if known == total else 'warn' }}">{{ ngettext("%(num)s poste prévenu sur %(total)s", "%(num)s postes prévenus sur %(total)s", known, total=total) }}</span>
             <form method="post" action="{{ url_for('fleet_server_address') }}" data-ajax class="inline-form">
               <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="forget"><input type="hidden" name="url" value="{{ url }}">
               <button class="linkbtn del">{{ _("Retirer") }}</button>

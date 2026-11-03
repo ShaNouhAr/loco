@@ -29,10 +29,10 @@ import zipfile
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
 from . import addresses, agentpkg, app, config, features, permissions, scope
-from .i18n import L_, _
+from .i18n import L_, _, n_
 from .auth import audit, can, login_required, require
 from .db import db
-from .util import back, date_fr, safe_next
+from .util import back, date_fr, safe_next, counted
 
 CHECKIN = 120                   # secondes entre deux contacts de l'agent
 ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles avant de déclarer le poste hors ligne
@@ -251,13 +251,13 @@ def status(dev, apps=None):
     pending_apps = len(app_updates(dev, apps))
     reasons = []
     if dev["security_updates"]:
-        reasons.append(_("%(n)s mise(s) à jour de sécurité en attente", n=dev["security_updates"]))
+        reasons.append(n_("%(num)s mise à jour de sécurité en attente", "%(num)s mises à jour de sécurité en attente", dev["security_updates"]))
     other = dev["updates"] - dev["security_updates"]
     if other > 0:
-        reasons.append(_("%(n)s autre(s) mise(s) à jour du système", n=other) if dev["security_updates"]
-                       else _("%(n)s mise(s) à jour du système", n=other))
+        reasons.append(n_("%(num)s autre mise à jour du système", "%(num)s autres mises à jour du système", other) if dev["security_updates"]
+                       else n_("%(num)s mise à jour du système", "%(num)s mises à jour du système", other))
     if pending_apps:
-        reasons.append(_("%(n)s logiciel(s) à mettre à jour", n=pending_apps))
+        reasons.append(n_("%(num)s logiciel à mettre à jour", "%(num)s logiciels à mettre à jour", pending_apps))
     if dev["reboot_required"]:
         reasons.append(_("redémarrage nécessaire"))
     last = last_result(dev["id"])
@@ -308,7 +308,7 @@ def action_label(cmd):
     only = params.get("only") if isinstance(params.get("only"), dict) else None
     if only:
         count = len(only.get("packages") or only.get("updates") or []) + (1 if only.get("flatpak") else 0)
-        label = _("%(action)s : %(n)s sélectionnée(s)", action=label, n=count)
+        label = n_("%(action)s : %(num)s sélectionnée", "%(action)s : %(num)s sélectionnées", count, action=label)
     if params.get("reboot"):
         label = _("%(action)s (avec redémarrage)", action=label)
     return label
@@ -527,10 +527,12 @@ def software(dev):
         return {}
 
 
-def _expire(dev_id):
+def expire_commands(conn, dev_id=None):
+    """Commandes envoyées restées sans réponse. Le fil de fond s'en charge aussi : un poste mort ne reviendrait jamais les solder."""
     limit = (datetime.datetime.now() - datetime.timedelta(hours=SENT_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
-    db().execute("UPDATE device_commands SET state='failed', finished_at=?, output='Pas de réponse du poste.' "
-                 "WHERE device_id=? AND state IN ('sent', 'running') AND sent_at < ?", (_now(), dev_id, limit))
+    conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output='Pas de réponse du poste.' "
+                 "WHERE state IN ('sent', 'running') AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
+                 (_now(), limit, *([dev_id] if dev_id else [])))
 
 
 def _payload(dev, cmd):
@@ -590,7 +592,7 @@ def agent_checkin():
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
         from . import monitoring
         monitoring.record(conn, dev["id"], data["metrics"])
-    _expire(dev["id"])
+    expire_commands(db(), dev["id"])
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     from . import schedules
     schedules.materialize(conn)       # planifications dues : commandes créées, occurrence suivante
@@ -1278,6 +1280,15 @@ def _enrich(rows, names=None):
     return rows
 
 
+def _fleet_view(rows, view):
+    """Filtre « Hors ligne » ou « Redémarrage nécessaire » : (lignes gardées, filtre reconnu, nombre de postes de chacun)."""
+    tests = {"hors-ligne": lambda r: not presence(r["d"])["online"], "redemarrage": lambda r: bool(r["d"]["reboot_required"])}
+    extras = {key: sum(1 for r in rows if test(r)) for key, test in tests.items()}
+    if view not in tests:
+        return rows, "", extras
+    return [r for r in rows if tests[view](r)], view, extras
+
+
 def _fold(text):
     return "".join(c for c in unicodedata.normalize("NFD", text) if not unicodedata.combining(c)).casefold()
 
@@ -1324,6 +1335,7 @@ def fleet():
         rows = [r for r in rows if r["color"] == state]
     if system in systems:
         rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
+    rows, view, extras = _fleet_view(rows, request.args.get("voir", ""))
     rows.sort(key=_urgency)
     shown = len(rows)
     pages = max(1, (shown + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -1334,7 +1346,7 @@ def fleet():
     rows = rows[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
     signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                              presence(r["d"])["online"], len(r["pending"])] for r in rows],
-                                           counts, systems, shown]).encode()).hexdigest()[:16]
+                                           counts, systems, extras, shown]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     rows = _enrich(rows, names)
@@ -1344,7 +1356,7 @@ def fleet():
     from .auth import scope_summary
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
-                           fleet_limit=limit, query=query, page=page, pages=pages, shown=shown,
+                           fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
                            counts=counts, systems=systems, total=total, state=state, system=system,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
@@ -1628,8 +1640,8 @@ def fleet_update_all():
         if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
-    audit("parc.tout-mettre-a-jour", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
-    flash((_('Mise à jour demandée sur %(count)s poste(s).', count=count) if count else _('Aucun poste à mettre à jour.')), "ok")
+    audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
+    flash((n_('Mise à jour demandée sur %(num)s poste.', 'Mise à jour demandée sur %(num)s postes.', count) if count else _('Aucun poste à mettre à jour.')), "ok")
     # S'il y a quelque chose à suivre, aller au déroulé des mises à jour ; sinon rester sur la liste.
     return back("fleet_updates") if count else back("fleet", **({"group": group_id} if group_id else {}))
 
@@ -1647,13 +1659,13 @@ def fleet_group_windows_update(group_id):
                        (1 if blocked else 0, group_id))
     db().commit()
     n = cur.rowcount
-    audit("parc.windows-update-groupe", f"{group['name']} : {n} poste(s) {'bloqués' if blocked else 'rendus à Windows'}")
+    audit("parc.windows-update-groupe", f"{group['name']} : {counted(n, 'poste')}, {'Windows Update bloqué' if blocked else 'Windows Update rendu'}")
     if not n:
         flash(_("Aucun poste Windows dans le groupe %(name)s.", name=group["name"]), "error")
     elif blocked:
-        flash(_("Mises à jour Windows bloquées sur %(n)s poste(s) du groupe %(name)s : appliqué au prochain contact.", n=n, name=group["name"]), "ok")
+        flash(n_("Mises à jour Windows bloquées sur %(num)s poste du groupe %(name)s : appliqué au prochain contact.", "Mises à jour Windows bloquées sur %(num)s postes du groupe %(name)s : appliqué au prochain contact.", n, name=group["name"]), "ok")
     else:
-        flash(_("Mises à jour Windows rendues à %(n)s poste(s) du groupe %(name)s : appliqué au prochain contact.", n=n, name=group["name"]), "ok")
+        flash(n_("Mises à jour Windows rendues à %(num)s poste du groupe %(name)s : appliqué au prochain contact.", "Mises à jour Windows rendues à %(num)s postes du groupe %(name)s : appliqué au prochain contact.", n, name=group["name"]), "ok")
     return back("fleet_groups", _anchor=f"group-{group_id}")
 
 
@@ -1678,7 +1690,7 @@ def fleet_update_selected():
         if r and r["d"]["state"] == "active" and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
-    audit("parc.mise-a-jour-selection", f"{count} poste(s){', avec redémarrage' if reboot else ''}")
+    audit("parc.mise-a-jour-selection", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
     return {"ok": True, "count": count}
 
 

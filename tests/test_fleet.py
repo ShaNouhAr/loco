@@ -262,14 +262,14 @@ class TestStatus(FleetTest):
         a.enroll()
         a.checkin({"updates": [], "apps": [{"name": "7-Zip 24.09 (x64 edition)", "version": "24.09.00.0"}]})
         color, reason = status_of(a.uid)
-        self.assertEqual((color, reason), ("orange", "1 logiciel(s) à mettre à jour"))
+        self.assertEqual((color, reason), ("orange", "1 logiciel à mettre à jour"))
         a.checkin({"updates": [], "apps": [{"name": "7-Zip 26.04 (x64 edition)", "version": "26.04.00.0"}]})
         self.assertEqual(status_of(a.uid)[0], "green")
         # La sécurité, les logiciels et le redémarrage restent détaillés ; seul le volume décide de la couleur.
         a.checkin({"updates": [{"name": "KB1", "security": True}, {"name": "KB2", "security": False}],
                    "apps": [{"name": "7-Zip 24.09 (x64 edition)", "version": "24.09.00.0"}], "reboot_required": True})
-        self.assertEqual(status_of(a.uid), ("orange", "1 mise(s) à jour de sécurité en attente, 1 autre(s) mise(s) à jour "
-                                                   "du système, 1 logiciel(s) à mettre à jour, redémarrage nécessaire"))
+        self.assertEqual(status_of(a.uid), ("orange", "1 mise à jour de sécurité en attente, 1 autre mise à jour "
+                                                   "du système, 1 logiciel à mettre à jour, redémarrage nécessaire"))
 
     def test_volume_boundaries_and_configurable_red_threshold(self):
         a = Agent(LINUX, "192.168.43.60")
@@ -1083,7 +1083,7 @@ class TestScheduling(FleetTest):
         self.due()
         self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["update"])
         s = self.schedule()
-        self.assertEqual((s["next_run"], s["last_result"]), ("", "1 poste(s)"))  # terminée
+        self.assertEqual((s["next_run"], s["last_result"]), ("", "1 poste"))  # terminée
         self.assertIn("Terminée", self.admin.c.get("/fleet/schedules").get_data(as_text=True))
 
     def test_recurring_schedule_advances_without_piling_up_missed_runs(self):

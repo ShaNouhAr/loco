@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.127.3 — 2026-11-03
+
+- **Commandes sans réponse** : une commande envoyée à un poste qui ne revient jamais passe maintenant en échec au bout de 6 h. Elle restait affichée indéfiniment, car seul un contact du poste pouvait la clore.
+- **Mon parc : filtres *Hors ligne* et *Redémarrage nécessaire*.** Ils apparaissent quand ils concernent au moins un poste, et ces deux lignes de la vue d'ensemble y mènent, avec le même décompte.
+- **Pluriels** : plus de « poste(s) » ni de « mise(s) » dans le portail, le journal, les agents et la console, en français, anglais et espagnol. Les résultats déjà enregistrés restent lisibles.
+- **Infobulle du voyant** : elle ne répète plus « à jour : à jour » ni « inventaire incomplet : inventaire incomplet ».
+- **Vue d'ensemble** : le processeur affiche une moyenne entre deux actualisations au lieu d'une mesure de 120 ms, très instable, un cache vide n'apparaît plus dans *Stockage* (« Cache APT 2 o »), et la charge s'écrit avec la même décimale dès le chargement.
+
 ## 2.127.2 — 2026-11-03
 
 - **Dépôts en panne enfin détectés sur les postes Debian et Ubuntu.** `apt-get update` répond « succès » même quand aucun dépôt ne répond, donc l'agent ne voyait rien et une mise à jour pouvait se terminer en succès sans rien installer.

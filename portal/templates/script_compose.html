@@ -15,7 +15,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ script.version }}">
   <div class="cols">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Postes") }}</h2><div class="aside"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("Postes") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         {% if device_groups %}
         <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>

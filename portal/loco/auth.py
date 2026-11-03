@@ -14,7 +14,7 @@ from . import app, config, permissions, scope, PUBLIC_ENDPOINTS
 from .i18n import _, gettext, n_
 from . import journal as journal_view
 from .db import db
-from .util import back, safe_next
+from .util import back, safe_next, counted
 
 # Hachage factice : la vérification prend le même temps, que le compte existe ou non.
 _DUMMY_HASH = generate_password_hash(secrets.token_hex(16))
@@ -900,7 +900,7 @@ def journal_export():
                         values).fetchall()
     period = f"{(start or 'début')[:10]}_{(end or 'fin')[:10]}"
     others = {k: v for k, v in args.items() if k not in ("periode", "debut", "fin")}
-    audit("journal.export", f"{len(rows)} événement(s), période {period.replace('_', ' → ')}"
+    audit("journal.export", f"{counted(len(rows), 'événement')}, période {period.replace('_', ' → ')}"
           + "".join(f", {k}={v}" for k, v in others.items()))
     document = {
         "server": config.HOST, "loco_version": config.VERSION,
@@ -928,9 +928,9 @@ def journal_retention():
     db().execute("INSERT INTO settings (key, value) VALUES ('audit_retention_days', ?) "
                  "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(days),))
     removed = purge_audit(db())
-    audit("journal.conservation", f"{days} jour(s)" if days else "illimitée", commit=False)
+    audit("journal.conservation", counted(days, "jour") if days else "illimitée", commit=False)
     db().commit()
-    flash((_('Journal conservé %(days)s jours', days=days) if days else _('Journal conservé sans limite')) + (_(' ; %(removed)s événement(s) plus ancien(s) supprimé(s).', removed=removed) if removed else "."), "ok")
+    flash((_('Journal conservé %(days)s jours', days=days) if days else _('Journal conservé sans limite')) + (n_(' ; %(num)s événement plus ancien supprimé.', ' ; %(num)s événements plus anciens supprimés.', removed) if removed else "."), "ok")
     return back("journal")
 
 

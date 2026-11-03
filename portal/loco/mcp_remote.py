@@ -28,6 +28,7 @@ from werkzeug.exceptions import HTTPException
 
 from . import fleet, remote
 from .auth import audit, can
+from .util import counted
 from .db import db
 from .i18n import L_
 from .mcp import DEVICE, ToolError, _active, _device, _via, tool
@@ -884,7 +885,7 @@ def _screenshot(chan, state, dev, region=None):
     else:
         image, out_w, out_h = render(frame, width, height, step)
         info.update(image_width=out_w, image_height=out_h,
-                    note=f"Coordinates for desktop actions are pixels of this image (1 image pixel = {step} screen pixel(s)).")
+                    note=f"Coordinates for desktop actions are pixels of this image (1 image pixel = {step} screen pixels).")
     return Picture(info, image)
 
 
@@ -971,7 +972,7 @@ def _desktop_type(args):
                 chan.send(event)
                 chan.flush()
                 time.sleep(0.03)
-        audit("parc.bureau.action", f"{dev['hostname']} : saisie de {len(args['text'])} caractère(s){_via()}")
+        audit("parc.bureau.action", f"{dev['hostname']} : saisie de {counted(len(args['text']), 'caractère')}{_via()}")
         return _after(chan, state, dev, args, {"typed": len(args["text"])})
 
 

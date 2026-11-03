@@ -127,7 +127,7 @@ def fleet_command(args):
         elif args != ["servers"]:
             sys.exit(__doc__)
         for i, (url, known, total) in enumerate(addresses.coverage(conn)):
-            print(f"{url:<40} {'actuelle ' if i == 0 else 'annoncée '} {known}/{total} poste(s)")
+            print(f"{url:<40} {'actuelle ' if i == 0 else 'annoncée '} postes : {known}/{total}")
 
 
 def main(argv):

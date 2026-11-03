@@ -24,7 +24,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="package_id" value="{{ store_id }}">
   <div class="cols deployment-columns">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("1 · Logiciels") }}</h2><div class="aside"><span><span data-checked-count="input[name=app], input[name=software_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("1 · Logiciels") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=app], input[name=software_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         {% if store_info %}<div class="note"><strong>{{ store_info.name }} {{ store_info.version }}</strong> {{ _("depuis le centre de logiciels : l'installeur est ajouté à loco et vérifié pendant la préparation.") }}</div>{% endif %}
         {% if software_groups %}
@@ -43,7 +43,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("2 · Postes") }}</h2><div class="aside"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("2 · Postes") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         {% if device_groups %}
         <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>

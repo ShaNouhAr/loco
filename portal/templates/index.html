@@ -45,8 +45,8 @@
         {% if fleet.updating or fleet.reboot or fleet.offline %}
         <p class="fleet-facts">
           {% if fleet.updating %}<a href="{{ url_for('fleet_updates') }}">{{ _("Mises à jour en cours :") }} <b data-bind="updating">{{ fleet.updating }}</b></a>{% endif %}
-          {% if fleet.reboot %}<span>{{ _("Redémarrage nécessaire :") }} <b>{{ fleet.reboot }}</b></span>{% endif %}
-          {% if fleet.offline %}<span>{{ _("Hors ligne :") }} <b>{{ fleet.offline }}</b></span>{% endif %}
+          {% if fleet.reboot %}<a href="{{ url_for('fleet', voir='redemarrage') }}">{{ _("Redémarrage nécessaire :") }} <b>{{ fleet.reboot }}</b></a>{% endif %}
+          {% if fleet.offline %}<a href="{{ url_for('fleet', voir='hors-ligne') }}">{{ _("Hors ligne :") }} <b>{{ fleet.offline }}</b></a>{% endif %}
         </p>
         {% endif %}
       </div>
@@ -63,7 +63,7 @@
       {% if d.cpu %}<div class="server-cell">
         <div class="k">{{ _("Processeur") }}</div>
         <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>
-        <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
+        <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 if lang == 'en' else d.cpu.load1|string|replace('.', ',') }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
         <div class="meter {{ 'err' if d.cpu.pct >= 90 else 'warn' if d.cpu.pct >= 75 }}"><i data-bind="cpu.pct" data-fmt="meter" data-width="{{ d.cpu.pct }}"></i></div>
       </div>{% endif %}
       {% if d.mem %}<div class="server-cell">

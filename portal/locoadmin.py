@@ -520,11 +520,11 @@ def check(log=print):
           f"loco installed: {status['current']} ; latest published version: {latest or 'unknown'}",
           f"loco instalado: {status['current']} ; última versión publicada: {latest or 'desconocida'}"))
     count = len(status.get("system_updates", []))
-    log(t(f"{os_label} : {count} paquet(s) à mettre à jour", f"{os_label}: {count} package(s) to update",
-          f"{os_label}: {count} paquete(s) por actualizar")
-        + (t(f", dont {status.get('security_count', 0)} correctif(s) de sécurité",
-             f", of which {status.get('security_count', 0)} security fix(es)",
-             f", de los cuales {status.get('security_count', 0)} parche(s) de seguridad") if status["security_supported"] else ""))
+    log(t(f"{os_label}, paquets à mettre à jour : {count}", f"{os_label}, packages to update: {count}",
+          f"{os_label}, paquetes por actualizar: {count}")
+        + (t(f", dont correctifs de sécurité : {status.get('security_count', 0)}",
+             f", of which security fixes: {status.get('security_count', 0)}",
+             f", de los cuales parches de seguridad: {status.get('security_count', 0)}") if status["security_supported"] else ""))
     for reason in status["reboot_reasons"]:
         log(t("Redémarrage nécessaire : ", "Reboot required: ", "Reinicio necesario: ") + _reason_log(reason))
     if status["stale_services"]:

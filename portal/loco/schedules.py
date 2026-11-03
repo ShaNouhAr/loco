@@ -13,10 +13,10 @@ import time
 from flask import abort, flash, g, redirect, render_template, request, url_for
 
 from . import app, fleet, groups, scope
-from .i18n import L_, N_, _, locale
+from .i18n import L_, N_, _, locale, n_
 from .auth import audit, login_required, require
 from .db import db
-from .util import safe_next
+from .util import safe_next, counted
 
 RECURRENCES = {"once": L_("Une fois"), "daily": L_("Chaque jour"), "weekly": L_("Chaque semaine"), "monthly": L_("Chaque mois")}
 ACTIONS = {"update": L_("Mise à jour"), "run-script": L_("Script")}
@@ -107,8 +107,8 @@ def when_text(when):
 
 def result_text(text):
     """Résultat d'une exécution, enregistré en français, dans la langue de la page."""
-    m = re.fullmatch(r"(\d+) poste\(s\)", text or "")
-    return _("%(num)s poste(s)", num=m.group(1)) if m else _(text) if text else ""
+    m = re.fullmatch(r"(\d+) postes?(?:\(s\))?", text or "")      # « poste(s) » : résultats déjà enregistrés
+    return n_("%(num)s poste", "%(num)s postes", int(m.group(1))) if m else _(text) if text else ""
 
 
 def describe(s):
@@ -339,7 +339,7 @@ def materialize(conn):
                         if fleet.queue(dev, "update", {"reboot": bool(params.get("reboot"))}, user=s["created_by"],
                                        run_after=s["next_run"]))
             # Résultat gardé en français dans la base, traduit à l'affichage (result_text).
-            result = (f"{added} poste(s)" if added else
+            result = (counted(added, "poste") if added else
                       N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
         else:
             script = conn.execute("SELECT * FROM scripts WHERE id=?", (params.get("script_id"),)).fetchone()
@@ -352,7 +352,7 @@ def materialize(conn):
             targets = [d for d in devices if scripts._compatible(d, script["platform"])]
             if targets:
                 ref = scripts.start_run(conn, script, targets, s["created_by"], s["next_run"])
-            result = f"{len(targets)} poste(s)" if targets else N_("Aucun poste compatible actif")
+            result = counted(len(targets), "poste") if targets else N_("Aucun poste compatible actif")
         conn.execute("UPDATE schedules SET last_result=?, last_ref=? WHERE id=?", (result, ref, s["id"]))
         audit("planifications.execution", f"{action_text(conn, s['action'], params)} : {result}",
               username=s["created_by"], commit=False)

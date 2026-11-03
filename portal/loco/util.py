@@ -30,6 +30,11 @@ UNITS = {"fr": ("o", "Ko", "Mo", "Go", "To"), "en": ("B", "KB", "MB", "GB", "TB"
 MONTHS_EN = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
+def counted(n, noun, plural=""):
+    """« 1 poste », « 3 postes » : texte français enregistré (journal, résultats), traduit ou non à l'affichage."""
+    return f"{n} {noun if n <= 1 else plural or noun + 's'}"
+
+
 def human(n):
     from .i18n import locale
     lang = locale()
@@ -193,16 +198,23 @@ def _cpu_times():
     return sum(fields), idle
 
 
+_cpu_last = None        # dernier relevé : (instant, total, inactif)
+
+
 def cpu_usage(interval=0.12):
-    """Charge processeur du serveur loco : pourcentage (court échantillon sur /proc/stat), charge sur 1 min, cœurs.
-    {} si indisponible (p. ex. serveur Windows)."""
+    """Charge processeur du serveur loco : pourcentage, charge sur 1 min, cœurs. {} si indisponible (p. ex. serveur Windows).
+    Moyenne depuis le relevé précédent s'il est récent (actualisation de la page) : 120 ms de mesure donnent un chiffre instable."""
+    global _cpu_last
     if config.WINDOWS:
         return {}
     try:
-        total1, idle1 = _cpu_times()
-        time.sleep(interval)
+        previous = _cpu_last
+        if previous is None or not 1 <= time.monotonic() - previous[0] <= 60:
+            previous = (time.monotonic(), *_cpu_times())
+            time.sleep(interval)
         total2, idle2 = _cpu_times()
-        delta_total, delta_idle = total2 - total1, idle2 - idle1
+        _cpu_last = (time.monotonic(), total2, idle2)
+        delta_total, delta_idle = total2 - previous[1], idle2 - previous[2]
         pct = round(100 * (delta_total - delta_idle) / delta_total) if delta_total > 0 else 0
         return {"pct": max(0, min(100, pct)), "load1": round(os.getloadavg()[0], 2), "cores": os.cpu_count() or 1}
     except (OSError, ValueError, IndexError, ZeroDivisionError):

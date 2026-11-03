@@ -69,4 +69,4 @@ foreach ($a in $apps) {
 }
 
 Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-if ($failed) { Write-Warning {{ ps_t('%(n)s installation(s) en echec.', n='$failed') }} } else { Write-Host {{ ps_t('Termine.') }} -ForegroundColor Green }
+if ($failed) { Write-Warning {{ ps_t('Installations en echec : %(n)s.', n='$failed') }} } else { Write-Host {{ ps_t('Termine.') }} -ForegroundColor Green }

@@ -45,7 +45,7 @@ class TestAnnouncedAddresses(FleetTest):
             self.assertEqual(addresses.coverage(conn), [(config.HTTPS_URL, 1, 2), (NEW, 1, 2)])
         page = self.admin.c.get("/fleet/settings").get_data(as_text=True)
         self.assertIn(NEW, page)
-        self.assertIn("1/2 poste(s) prévenu(s)", page)
+        self.assertIn("1 poste prévenu sur 2", page)
         self.announce(NEW, "forget")
         self.assertEqual(win.checkin().get_json()["servers"], [config.HTTPS_URL])
         with db.transaction() as conn:

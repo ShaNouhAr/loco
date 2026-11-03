@@ -431,7 +431,7 @@ class TestAdministration(McpTest):
         self.assertIn(token[:13], later)
         with transaction() as conn:
             event = conn.execute("SELECT * FROM audit WHERE action='mcp.acces.ajout' ORDER BY id DESC").fetchone()
-        self.assertIn("2 outil(s)", event["detail"])
+        self.assertIn("2 outils", event["detail"])
 
     def test_form_validation(self):
         self.assertIsNone(create(self.admin, "", ["list_devices"])[0])

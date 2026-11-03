@@ -26,7 +26,7 @@ from . import app, config, features, fleet, groups, journal, permissions, scope,
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
-from .util import MONTHS_EN, back
+from .util import MONTHS_EN, back, counted
 
 LEGACY = ("2025-11-25", "2025-06-18", "2025-03-26")
 MODERN = ("2026-07-28",)
@@ -151,11 +151,11 @@ def arguments(t, values):
     properties = t["schema"]["properties"]
     unknown = sorted(set(values) - set(properties))
     if unknown:
-        raise ToolError(f"Unknown argument(s): {', '.join(unknown[:10])}.")
+        raise ToolError(f"Unknown arguments: {', '.join(unknown[:10])}.")
     clean = {key: _coerce(key, properties[key], value) for key, value in values.items() if value is not None}
     missing = [key for key in t["schema"].get("required", ()) if clean.get(key) in (None, "", [])]
     if missing:
-        raise ToolError(f"Missing argument(s): {', '.join(missing)}.")
+        raise ToolError(f"Missing arguments: {', '.join(missing)}.")
     return clean
 
 
@@ -433,7 +433,7 @@ def _update_many(args):
             skipped.append({"hostname": dev["hostname"], "reason": "an identical update is already waiting"})
     db().commit()
     if queued:
-        audit("parc.mise-a-jour-selection", f"{len(queued)} poste(s){', avec redémarrage' if reboot else ''}{_via()}")
+        audit("parc.mise-a-jour-selection", f"{counted(len(queued), 'poste')}{', avec redémarrage' if reboot else ''}{_via()}")
     return {"queued": queued, "skipped": skipped}
 
 
@@ -584,7 +584,7 @@ def _launch(script, args):
         raise ToolError(f"At most {scripts.MAX_TARGETS} devices per run.")
     conn = db()
     run_id = scripts.start_run(conn, script, compatible, g.user["username"])
-    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(compatible)} poste(s){_via()}", commit=False)
+    audit("scripts.execution", f"{script['name']} v{script['version']} : {counted(len(compatible), 'poste')}{_via()}", commit=False)
     conn.commit()
     chosen = {d["id"] for d in compatible}
     return {"run_id": run_id, "targets": [d["hostname"] for d in compatible],
@@ -1000,7 +1000,7 @@ def mcp_token_add():
     conn.execute("INSERT INTO mcp_tokens (user_id, name, token_hash, hint, tools, created_at, expires_at) VALUES (?,?,?,?,?,?,?)",
                  (g.user["id"], name, hashlib.sha256(secret.encode()).hexdigest(), secret[:len(PREFIX) + 4],
                   json.dumps(chosen), _now(), expires))
-    audit("mcp.acces.ajout", f"{name} : {len(chosen)} outil(s)" + (f", expire le {expires[:10]}" if expires else ""), commit=False)
+    audit("mcp.acces.ajout", f"{name} : {counted(len(chosen), 'outil')}" + (f", expire le {expires[:10]}" if expires else ""), commit=False)
     conn.commit()
     # Affiché une seule fois, dans la réponse même (jamais dans un cookie ni une redirection).
     return _page(created={"name": name, "token": secret})
@@ -1022,7 +1022,7 @@ def mcp_token_update(token_id):
     conn.execute("UPDATE mcp_tokens SET name=?, tools=? WHERE id=?", (name, json.dumps(chosen), token_id))
     from .mcp_remote import close_sessions
     close_sessions(token_id, "Autorisations de l'accès MCP modifiées.")
-    audit("mcp.acces.modification", f"{name} : {len(chosen)} outil(s)", commit=False)
+    audit("mcp.acces.modification", f"{name} : {counted(len(chosen), 'outil')}", commit=False)
     conn.commit()
     flash(_("Outils de « %(name)s » enregistrés : ils s’appliquent dès le prochain appel du client.", name=name), "ok")
     return back("mcp_settings")

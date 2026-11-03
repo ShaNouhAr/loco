@@ -8,7 +8,7 @@ from . import app, fleet, scope
 from .i18n import _
 from .auth import audit, lock_access, login_required, require
 from .db import db
-from .util import back
+from .util import back, counted
 
 
 def identifiers(values, limit=500):
@@ -133,7 +133,7 @@ def _save(kind, group_id):
             conn.execute(f"INSERT INTO {member_table} (group_id,{column},position) VALUES (?,?,?)", (group_id, entity_id, position))
         else:
             conn.execute(f"INSERT INTO {member_table} (group_id,{column}) VALUES (?,?)", (group_id, entity_id))
-    audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {len(selected)} membre(s)", commit=False)
+    audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {counted(len(selected), 'membre')}", commit=False)
     conn.commit()
     flash(_('Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.'), "ok")
     # Retour à la liste, sur le groupe enregistré (surligné), plutôt que de rester dans l'éditeur.
@@ -258,7 +258,7 @@ def fleet_group_membership(dev_id):
         abort(400)
     conn.execute("DELETE FROM device_group_members WHERE device_id=?", (dev_id,))
     conn.executemany("INSERT INTO device_group_members VALUES (?,?)", [(gid, dev_id) for gid in selected])
-    audit("groupes.appartenance", f"{dev['hostname']} : {len(selected)} groupe(s)", commit=False)
+    audit("groupes.appartenance", f"{dev['hostname']} : {counted(len(selected), 'groupe')}", commit=False)
     conn.commit()
     return back("fleet_device", dev_id=dev_id)
 

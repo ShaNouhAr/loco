@@ -13,7 +13,7 @@
   <div class="metrics">
     <div class="metric"><div class="k">{{ _("Cache Flathub") }}</div><div class="v">{{ stats.get('flatpakcache', 0)|human }}</div><div class="s">{{ _("objets immuables gardés 6 mois") }}</div></div>
     {% if local %}
-    <div class="metric"><div class="k">{{ _("Dépôt local") }}</div><div class="v">{{ refs|length }}</div><div class="s">{{ _("référence(s) · %(v)s", v=stats.get('flatpak', 0)|human) }}</div></div>
+    <div class="metric"><div class="k">{{ _("Dépôt local") }}</div><div class="v">{{ refs|length }}</div><div class="s">{{ ngettext("référence · %(v)s", "références · %(v)s", refs|length, v=stats.get('flatpak', 0)|human) }}</div></div>
     <div class="metric"><div class="k">{{ _("Signature") }}</div><div class="v">GPG</div><div class="s">{{ _("clé du dépôt loco") }}</div></div>
     {% else %}
     <div class="metric"><div class="k">{{ _("Dépôt local") }}</div><div class="v">—</div><div class="s">{{ _("indisponible sur un serveur Windows") }}</div></div>

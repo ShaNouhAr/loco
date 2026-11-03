@@ -1,0 +1,435 @@
+"""Parcours dans un vrai navigateur : vrai portail sur une base temporaire, vrai JavaScript, mêmes en-têtes de sécurité.
+
+Ces tests couvrent ce que le client de test de Flask ne voit pas : scripts, rafraîchissement en direct, géométrie de
+la page, erreurs de la console. Ils demandent Playwright et Chromium, installés seulement en CI (voir ci.yml) :
+    pip install playwright && playwright install --with-deps chromium
+    python3 tests/browser/test_ui.py
+Sans Chromium sur la machine, LOCO_BROWSER_CDP désigne un navigateur déjà lancé et LOCO_BROWSER_PORT le port du portail,
+que ce navigateur doit pouvoir joindre sur 127.0.0.1.
+"""
+import datetime
+import logging
+import os
+from pathlib import Path
+import re
+import sys
+import threading
+import unittest
+from unittest import mock
+
+from playwright.sync_api import expect, sync_playwright
+from werkzeug.serving import make_server
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+
+import test_portal as fixture  # noqa: E402  (crée la base temporaire et le compte admin)
+from test_fleet import Agent, LINUX, device  # noqa: E402
+from test_fleet_pages import add_devices  # noqa: E402
+import locoadmin  # noqa: E402
+from loco import alerts, app, config, dashboard  # noqa: E402
+from loco.db import transaction  # noqa: E402
+
+ARTIFACTS = ROOT / "test-results" / "browser"
+PORT = int(os.environ.get("LOCO_BROWSER_PORT", "0"))
+DESKTOP = {"width": 1440, "height": 900}
+PHONE = {"width": 420, "height": 860}
+# Pages que le parcours ne doit ni suivre ni charger comme une page.
+NOT_PAGES = re.compile(r"/(logout|lang|set-language|agent/|win/|apt/|rpm/|flatpak/|flathub/|ca\.crt|sw\.js|metrics|healthz)|\.(msi|deb|rpm|exe|tar|gz|json|ps1|sh)(\?|$)")
+LONG = 30000            # ms : ce qui dépend d'un rafraîchissement en direct (10 à 15 s)
+logging.disable(logging.INFO)
+
+
+server = make_server("127.0.0.1", PORT, app, threaded=True)
+BASE = f"http://127.0.0.1:{server.server_port}"
+threading.Thread(target=server.serve_forever, daemon=True).start()
+
+
+def stamp(hours=0):
+    return (datetime.datetime.now() - datetime.timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def add_app(slug, name, status="ready"):
+    with transaction() as conn:
+        conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect, updated_at) "
+                     "VALUES (?,?,?,?,?,?,?,?,?,?)", (slug, name, "1.0", "exe", "/S", slug + ".exe", "b" * 64, status, "", stamp()))
+
+
+def commands(action="update"):
+    with transaction() as conn:
+        return conn.execute("SELECT COUNT(*) FROM device_commands WHERE action=?", (action,)).fetchone()[0]
+
+
+class BrowserTest(unittest.TestCase):
+    viewport = DESKTOP
+    signed_in = True
+
+    @classmethod
+    def setUpClass(cls):
+        cls.playwright = sync_playwright().start()
+        cdp = os.environ.get("LOCO_BROWSER_CDP")
+        cls.browser = cls.playwright.chromium.connect_over_cdp(cdp) if cdp else cls.playwright.chromium.launch()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.browser.close()
+        cls.playwright.stop()
+
+    def setUp(self):
+        with transaction() as conn:
+            for table in ("device_commands", "device_group_members", "device_groups", "devices", "win_apps"):
+                conn.execute(f"DELETE FROM {table}")
+            conn.execute("DELETE FROM settings WHERE key='fleet_red_threshold'")
+            conn.execute("UPDATE users SET appearance='' WHERE username='admin'")
+        fixture.reset_failures()
+        dashboard._state_cache.clear()
+        self.problems = []
+        self.context = self.browser.new_context(viewport=self.viewport, locale="fr-FR", base_url=BASE)
+        self.context.set_default_timeout(10000)
+        self.page = self.watch(self.context.new_page())
+        if self.signed_in:
+            self.sign_in(self.page)
+            self.page.wait_for_url(BASE + "/")
+
+    def tearDown(self):
+        ARTIFACTS.mkdir(parents=True, exist_ok=True)
+        try:
+            self.page.screenshot(path=ARTIFACTS / f"{self.id().rsplit('.', 2)[-2]}.{self._testMethodName}.png", full_page=True)
+        finally:
+            self.context.close()
+        self.assertEqual(self.problems, [], "erreurs dans la console du navigateur")
+
+    def watch(self, page):
+        page.on("pageerror", lambda error: self.problems.append(f"{page.url} : exception : {error}"))
+
+        def console(message):
+            # Une navigation interrompt les requêtes en cours : ce n'est pas une erreur de la page.
+            if message.type == "error" and not re.search(r"favicon|ERR_ABORTED|ERR_NETWORK_CHANGED", message.text):
+                self.problems.append(f"{page.url} : console : {message.text}")
+        page.on("console", console)
+        return page
+
+    def sign_in(self, page, password=fixture.ADMIN_PW):
+        page.goto("/login")
+        page.fill("[name=username]", "admin")
+        page.fill("[name=password]", password)
+        page.click(".auth-form button.primary")
+
+    def confirm(self, accept=True):
+        dialog = self.page.locator("dialog[open]")
+        expect(dialog).to_be_visible()
+        dialog.locator("[data-ok]" if accept else "[data-cancel]").click()
+
+    def overflow(self):
+        return self.page.evaluate("document.documentElement.scrollWidth - innerWidth")
+
+
+class TestSignIn(BrowserTest):
+    signed_in = False
+
+    def test_wrong_then_right_password(self):
+        self.sign_in(self.page, "mauvais-mot-de-passe")
+        expect(self.page).to_have_url(re.compile(r"/login"))
+        self.problems[:] = [p for p in self.problems if "401" not in p]      # refus attendu du serveur
+        self.sign_in(self.page)
+        expect(self.page.locator("h1")).to_have_text("Vue d'ensemble")
+
+
+class EveryPage(BrowserTest):
+    """Toutes les pages atteignables depuis les menus : aucune erreur, aucun ascenseur horizontal."""
+
+    def crawl(self):
+        ids = add_devices(3, prefix="poste", updates=4, inventory='{"updates": [{"name": "curl", "version": "1", "security": true}]}')
+        add_app("7-zip", "7-Zip")
+        add_app("gimp", "GIMP", "error")
+        seen, queue, broken, wide = set(), ["/", f"/fleet/{ids[0]}", "/windows-apps/software/7-zip", "/account"], [], []
+        request = self.context.request
+        while queue and len(seen) < 150:
+            path = queue.pop(0)
+            if path in seen or NOT_PAGES.search(path):
+                continue
+            seen.add(path)
+            head = request.get(path, max_redirects=0)
+            if head.status in (301, 302) or "text/html" not in head.headers.get("content-type", "") or "content-disposition" in head.headers:
+                continue
+            response = self.page.goto(path, wait_until="load")
+            if response.status >= 400:
+                broken.append(f"{path} : {response.status}")
+                continue
+            if self.overflow() > 1:
+                wide.append(f"{path} : {self.overflow()} px")
+            for href in self.page.eval_on_selector_all(
+                    "nav a[href], .nav a[href], .nav-panel a[href], .subnav a[href]", "links => links.map(a => a.getAttribute('href'))"):
+                target = re.split(r"[?#]", href)[0]         # une page par adresse : ses filtres ne changent pas le gabarit
+                if target.startswith("/") and target not in seen:
+                    queue.append(target)
+        print(f"{len(seen)} adresses visitées : {' '.join(sorted(seen))}", file=sys.stderr)
+        missing = {"/", "/fleet", "/fleet/updates", "/fleet/settings", "/system", "/system/ha", "/windows-apps", "/windows-update", "/linux", "/account"} - seen
+        self.assertEqual(missing, set(), "le parcours n'a pas atteint ces pages")
+        self.assertEqual(broken, [])
+        self.assertEqual(wide, [], "ascenseur horizontal")
+
+
+class TestEveryPageDesktop(EveryPage):
+    def test_every_page(self):
+        self.crawl()
+
+
+class TestEveryPagePhone(EveryPage):
+    viewport = PHONE
+
+    def test_every_page(self):
+        self.crawl()
+
+
+class TestFleet(BrowserTest):
+    def setUp(self):
+        super().setUp()
+        add_devices(4, prefix="urgent", updates=40)
+        add_devices(3, prefix="eteint", last_seen=stamp(3))
+        add_devices(120, prefix="pc")
+
+    def next_page(self):
+        self.page.locator(".fleet-pager a", has_text="Suivante").click()
+
+    def test_pages_keep_the_most_urgent_first_and_the_filters(self):
+        self.page.goto("/fleet")
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(50)
+        expect(self.page.locator(".host").first).to_have_text("urgent-000")
+        expect(self.page.locator(".fleet-pager")).to_contain_text("Page 1 sur 3 · 127 postes")
+        self.next_page()
+        expect(self.page).to_have_url(re.compile(r"page=2"))
+        self.page.locator(".chip", has_text="Windows").click()
+        expect(self.page).not_to_have_url(re.compile(r"page="))
+
+    def test_search_finds_a_machine_on_another_page_and_keeps_the_cursor(self):
+        self.page.goto("/fleet")
+        expect(self.page.locator(".host", has_text="pc-119")).to_have_count(0)
+        box = self.page.locator("[name=q]")
+        box.click()
+        self.page.keyboard.type("PC-11", delay=30)
+        expect(self.page).to_have_url(re.compile(r"q=PC-11"))
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(10)
+        expect(box).to_be_focused()
+        self.page.keyboard.type("9", delay=30)
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(1)
+        expect(self.page.locator(".host")).to_have_text("pc-119")
+        self.assertEqual(box.evaluate("e => [e.selectionStart, e.value.length]"), [6, 6])
+
+    def test_no_result_offers_to_clear(self):
+        self.page.goto("/fleet?q=introuvable")
+        self.page.get_by_role("link", name="Effacer la recherche").click()
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(50)
+
+    def test_selection_follows_pages_and_only_what_is_selected_is_updated(self):
+        self.page.goto("/fleet")
+        boxes = self.page.locator("[data-select]")
+        bar = self.page.locator("[data-select-bar]")
+        expect(bar).to_be_hidden()
+        boxes.nth(0).check()
+        boxes.nth(1).check()
+        expect(bar).to_contain_text("Sélection : 2")
+        self.next_page()
+        expect(self.page).to_have_url(re.compile(r"page=2"))
+        expect(bar).to_contain_text("dont 2 hors de cette page")
+        boxes.nth(0).check()
+        expect(bar).to_contain_text("Sélection : 3")
+        self.page.locator("[data-select-submit]").click()
+        self.confirm(accept=False)
+        self.assertEqual(commands(), 0)
+        self.page.locator("[data-select-submit]").click()
+        self.confirm()
+        expect(bar).to_be_hidden(timeout=LONG)
+        self.assertEqual(commands(), 3)
+        self.assertIn(self.page.evaluate("sessionStorage.getItem('loco-fleet-selection')"), (None, "[]"))
+
+    def test_select_all_only_covers_the_page(self):
+        self.page.goto("/fleet")
+        self.page.locator("[data-select-all]").check()
+        expect(self.page.locator("[data-select-bar]")).to_contain_text("Sélection : 50")
+        self.next_page()
+        expect(self.page).to_have_url(re.compile(r"page=2"))
+        expect(self.page.locator("[data-select-all]")).not_to_be_checked()
+        self.page.locator("[data-select-clear]").click()
+        expect(self.page.locator("[data-select-bar]")).to_be_hidden()
+
+    def test_offline_filter_and_second_click_removes_it(self):
+        self.page.goto("/fleet")
+        chip = self.page.locator(".chip", has_text="Hors ligne")
+        chip.click()
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(3)
+        self.page.locator(".chip", has_text="Hors ligne").click()
+        expect(self.page).not_to_have_url(re.compile(r"voir="))
+
+    def test_update_all_says_what_it_really_does(self):
+        self.page.goto("/fleet?os=linux")
+        button = self.page.locator('[data-open="#update-all"]')
+        expect(button).to_contain_text("(4)")
+        button.click()
+        dialog = self.page.locator("#update-all")
+        expect(dialog).to_contain_text("Mettre à jour 4 postes ?")
+        dialog.locator(".btn.primary").click()
+        expect(self.page).to_have_url(re.compile(r"/fleet/updates"))
+        self.assertEqual(commands(), 4)
+
+
+class TestCatalog(BrowserTest):
+    def setUp(self):
+        super().setUp()
+        add_app("7-zip", "7-Zip")
+        add_app("vlc", "VLC")
+        add_app("gimp", "GIMP", "error")
+
+    def bar(self):
+        return self.page.evaluate("(() => { const r = document.querySelector('.selbar').getBoundingClientRect(); return [r.top, r.bottom, innerHeight]; })()")
+
+    def test_selection_bar_stays_on_the_edge_of_the_screen_on_a_photo_background(self):
+        self.page.goto("/windows-apps")
+        self.assertIsNotNone(self.page.get_attribute("html", "data-bg"), "ce test vise le fond photo, qui est le défaut")
+        top, _bottom, height = self.bar()
+        self.assertGreaterEqual(top, height - 1, "la barre dépasse alors que rien n'est sélectionné")
+        self.page.locator('input[data-ready="1"], input[data-ready]').first.check()
+        expect(self.page.locator(".selbar")).to_have_class(re.compile(r"\bon\b"))
+        self.page.wait_for_timeout(400)
+        _top, bottom, height = self.bar()
+        self.assertLessEqual(abs(bottom - height), 1, "la barre n'est pas calée sur le bas de l'écran")
+
+    def test_removing_from_the_selection_asks_first_and_includes_failed_software(self):
+        self.page.goto("/windows-apps")
+        boxes = self.page.locator("tbody input[type=checkbox]")
+        for i in range(boxes.count()):
+            boxes.nth(i).check()
+        remove = self.page.locator("[data-remove-selected] button")
+        remove.click()
+        expect(self.page.locator("dialog[open] [data-ok]")).to_have_class(re.compile(r"\bdanger\b"))
+        self.confirm(accept=False)
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM win_apps").fetchone()[0], 3)
+        remove.click()
+        self.confirm()
+        expect(self.page.locator("tbody a", has_text="GIMP")).to_have_count(0, timeout=LONG)
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM win_apps").fetchone()[0], 0)
+
+
+class TestOverview(BrowserTest):
+    def test_a_problem_appears_on_its_own_and_leaves_on_its_own(self):
+        add_devices(1, prefix="poste")
+        firing = []
+        with mock.patch.object(alerts, "evaluate", lambda *_a, **_k: list(firing)), mock.patch.object(dashboard, "STATE_TTL", 0):
+            self.page.goto("/")
+            self.page.evaluate("window.notReloaded = true")
+            expect(self.page.locator(".state-ok")).to_contain_text("Aucun point à traiter")
+            firing.append({"key": "service_down", "severity": "critical", "subject": "", "body": "Services arrêtés : nginx."})
+            expect(self.page.locator(".attention-row .st.err")).to_have_text("Services arrêtés : nginx.", timeout=LONG)
+            self.assertIsNone(self.page.evaluate("window.notReloaded || null"), "la page devait s'être rechargée seule")
+            firing.clear()
+            expect(self.page.locator(".state-ok")).to_be_visible(timeout=LONG)
+
+    def test_network_curve_survives_a_reload(self):
+        self.page.goto("/")
+        curve = self.page.locator("[data-net-dir=rx] .line")
+        expect(curve).to_have_attribute("d", re.compile("L"), timeout=LONG)
+        self.page.route("**/api/network", lambda route: route.abort())      # plus aucune nouvelle mesure après le rechargement
+        self.page.reload()
+        expect(curve).to_have_attribute("d", re.compile("L"))
+        self.problems[:] = [p for p in self.problems if "api/network" not in p and "ERR_FAILED" not in p]
+
+    def test_fleet_states_lead_to_the_filtered_list(self):
+        add_devices(2, prefix="eteint", last_seen=stamp(3))
+        with mock.patch.object(alerts, "evaluate", return_value=[]):
+            self.page.goto("/")
+        self.page.locator(".fleet-facts a", has_text="Hors ligne").click()
+        expect(self.page).to_have_url(re.compile(r"voir=hors-ligne"))
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(2)
+
+
+class TestUpdatesLive(BrowserTest):
+    def progress(self, *items):
+        states = [state for _name, state in items]
+        return {"step": "updates", "phase": "install", "app": items[-1][0], "percent": 50,
+                "items": [{"name": name, "state": state} for name, state in items],
+                "counts": {"ok": states.count("ok"), "failed": states.count("failed"), "running": states.count("running"), "total": len(items)}}
+
+    def test_packages_appear_one_by_one_without_reloading_then_the_failure_is_shown(self):
+        agent = Agent(LINUX, "192.168.43.60")
+        agent.enroll()
+        with transaction() as conn:
+            cmd = conn.execute("INSERT INTO device_commands (device_id, action, state, created_at, sent_at, created_by) VALUES (?,?,?,?,?,?)",
+                               (device(agent.uid)["id"], "update", "running", stamp(), stamp(), "admin")).lastrowid
+        send = lambda state, *items: agent.post("/agent/api/result", {"id": cmd, "state": state, "output": "", "exit_code": None if state == "running" else 1,
+                                                                       "progress": self.progress(*items)}, agent.token)
+        self.page.goto("/fleet/updates")
+        self.page.evaluate("window.sameDocument = true")
+        send("running", ("libc6", "running"))
+        expect(self.page.locator("[data-pkg]")).to_contain_text("libc6", timeout=LONG)
+        send("running", ("libc6", "ok"), ("nginx", "running"))
+        expect(self.page.locator("[data-pkg]")).to_contain_text("nginx", timeout=LONG)
+        self.assertTrue(self.page.evaluate("window.sameDocument === true"), "l'avancement devait arriver sans recharger la page")
+        send("failed", ("libc6", "ok"), ("nginx", "failed"))
+        expect(self.page.locator(".upd-row, [data-updates-feed]").first).to_contain_text("nginx", timeout=LONG)
+        expect(self.page.locator("[data-updates-feed]")).to_contain_text(re.compile(r"[ÉE]chec|échou"), timeout=LONG)
+
+
+class TestPortPanel(BrowserTest):
+    JOB = {"id": "20260101-000000-abcdef", "action": "set-https-port", "params": {"port": "9443"}, "user": "admin", "created": "2026-01-01 00:00:00"}
+
+    def test_change_is_followed_until_it_ends_and_never_silently(self):
+        jobs, conf = [], {"HTTPS_PORT": "8443", "HTTPS_OLD_PORTS": "", "PORTAL_PORT": "8088"}
+
+        def asked(_action, params, user=""):
+            self.assertEqual(params, {"port": "9443"})
+            threading.Timer(0.5, lambda: jobs.append(dict(self.JOB, state="running"))).start()
+        with mock.patch.object(locoadmin, "jobs", lambda limit=20: list(jobs)), mock.patch.object(locoadmin, "read_conf", lambda path=None: dict(conf)), \
+                mock.patch.object(locoadmin, "running_job", lambda: None), mock.patch.object(locoadmin, "agent_running", lambda: True), \
+                mock.patch.object(locoadmin, "ha_configured", lambda: False), mock.patch.object(locoadmin, "request", asked), \
+                mock.patch.object(config, "HTTPS_URL", BASE):
+            self.page.goto("/system#reseau")
+            form = self.page.locator(".port-form")
+            form.locator("[name=port]").fill("9443")
+            form.locator("button").click()
+            self.confirm()
+            note = self.page.locator("[data-operations]")
+            expect(note).to_contain_text("Changement en cours")
+            jobs[:] = [dict(self.JOB, state="success")]
+            conf.update(HTTPS_OLD_PORTS="8443")
+            expect(self.page.locator(".note.warn")).to_contain_text("Le port 8443 reste ouvert", timeout=LONG)
+            expect(self.page.locator("[data-operations]")).to_have_count(0)
+
+
+class TestPageTools(BrowserTest):
+    def test_system_tab_opens_from_its_address(self):
+        self.page.goto("/system#reseau")
+        expect(self.page.locator('[data-panel="reseau"]')).to_be_visible()
+        expect(self.page.locator('[data-panel="etat"]')).to_be_hidden()
+
+    def test_palette_finds_a_machine_and_opens_it(self):
+        add_devices(1, prefix="zorin-jacques")
+        self.page.goto("/")
+        self.page.keyboard.press("Control+k")
+        box = self.page.locator("#cmdk input")
+        expect(box).to_be_focused()
+        box.fill("zorin")
+        self.page.locator(".cmdk-list a", has_text="zorin-jacques-000").click()
+        expect(self.page).to_have_url(re.compile(r"/fleet/\d+"))
+
+    def test_syslog_form_shows_what_the_protocol_needs(self):
+        self.page.goto("/admin/syslog")
+        warning = self.page.locator('[data-show-for="transport:tcp udp"]')
+        self.page.locator("input[name=transport][value=tls]").check(force=True)
+        expect(warning).to_be_hidden()
+        self.page.locator("input[name=transport][value=udp]").check(force=True)
+        expect(warning).to_be_visible()
+
+    def test_theme_choice_survives_a_reload(self):
+        self.page.goto("/account#apparence")
+        with self.page.expect_response(lambda r: "/account/appearance" in r.url and r.request.method == "POST") as answer:
+            self.page.locator('.theme-card[data-set-theme="light"]').click()
+        self.assertEqual(answer.value.status, 200)
+        expect(self.page.locator("html")).to_have_attribute("data-theme", "light")
+        self.page.reload()
+        expect(self.page.locator("html")).to_have_attribute("data-theme", "light")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

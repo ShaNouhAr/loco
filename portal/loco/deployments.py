@@ -15,10 +15,10 @@ import zipfile
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
 from . import app, config, fleet, groups, scope, winget
-from .i18n import L_, _
+from .i18n import L_, _, n_
 from .auth import audit, can, lock_access, login_required, require
 from .db import db
-from .util import back, sha256_of
+from .util import back, sha256_of, counted
 
 MAX_APPS = 100
 MAX_DEVICES = 500
@@ -219,7 +219,7 @@ def deployment_preview_linux():
     conn.execute('INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan) '
                  'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, title, g.user['id'], g.user['username'], g.user['pw_version'],
                  _owner(), fleet._now(), time.time() + 3600, json.dumps(plan)))
-    audit('deploiement.preparation', f'{title} : {len(packages)} paquet(s), {len(devices)} cible(s)', commit=False)
+    audit('deploiement.preparation', f"{title} : {counted(len(packages), 'paquet')}, {counted(len(devices), 'cible')}", commit=False)
     conn.commit()
     return back('deployment_detail', deployment_id=deployment_id)
 
@@ -327,7 +327,7 @@ def deployment_preview():
     conn.execute('INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan) '
                  'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, title, g.user['id'], g.user['username'], g.user['pw_version'],
                  _owner(), fleet._now(), time.time() + 3600, json.dumps(plan)))
-    audit('deploiement.preparation', f'{title} : {len(apps)} logiciel(s), {len(devices)} cible(s)', commit=False)
+    audit('deploiement.preparation', f"{title} : {counted(len(apps), 'logiciel')}, {counted(len(devices), 'cible')}", commit=False)
     conn.commit()
     return back('deployment_detail', deployment_id=deployment_id)
 
@@ -565,9 +565,9 @@ def deployment_confirm(deployment_id):
             flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
             return back('deployment_detail', deployment_id=deployment_id)
         conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
-        audit('deploiement.confirmation', f"{row['title']} : {queued_count} poste(s), {ready_n} paquet(s), {deployment_id}", commit=False)
+        audit('deploiement.confirmation', f"{row['title']} : {counted(queued_count, 'poste')}, {counted(ready_n, 'paquet')}, {deployment_id}", commit=False)
         conn.commit()
-        flash(_('Déploiement confirmé sur %(queued_count)s poste(s). Les agents installent les paquets à leur prochain contact.', queued_count=queued_count), 'ok')
+        flash(n_("Déploiement confirmé sur %(num)s poste. L'agent installe les paquets à son prochain contact.", 'Déploiement confirmé sur %(num)s postes. Les agents installent les paquets à leur prochain contact.', queued_count), 'ok')
         return back('deployment_detail', deployment_id=deployment_id)
     ready = []
     for snapshot in plan['apps']:
@@ -615,9 +615,9 @@ def deployment_confirm(deployment_id):
         return back('deployment_detail', deployment_id=deployment_id)
     conn.execute("UPDATE deployments SET state='queued',confirmed_at=? WHERE id=?", (fleet._now(), deployment_id))
     cleanup_artifacts(conn)
-    audit('deploiement.confirmation', f"{row['title']} : {queued_count} poste(s), {len(ready)} logiciel(s), {deployment_id}", commit=False)
+    audit('deploiement.confirmation', f"{row['title']} : {counted(queued_count, 'poste')}, {counted(len(ready), 'logiciel')}, {deployment_id}", commit=False)
     conn.commit()
-    flash(_('Déploiement confirmé sur %(queued_count)s poste(s). Les agents exécutent les installations à leur prochain contact.', queued_count=queued_count), 'ok')
+    flash(n_("Déploiement confirmé sur %(num)s poste. L'agent exécute les installations à son prochain contact.", 'Déploiement confirmé sur %(num)s postes. Les agents exécutent les installations à leur prochain contact.', queued_count), 'ok')
     return back('deployment_detail', deployment_id=deployment_id)
 
 

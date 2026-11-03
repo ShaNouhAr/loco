@@ -706,7 +706,7 @@ namespace Loco
             }
             chosen = chosen.OrderBy(u => ServicingStack.IsMatch(Convert.ToString(((dynamic)u).Title)) ? 0 : 1).ToList();
             if (chosen.Count == 0) { lines.Add(Lang.T("Windows Update : aucune mise à jour.", "Windows Update: no updates.", "Windows Update: sin actualizaciones.")); return true; }
-            lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + chosen.Count + Lang.T(" mise(s) à jour à installer.", " update(s) to install.", " actualización(es) por instalar."));
+            lines.Add(Lang.T("Windows Update, mises à jour à installer : ", "Windows Update, updates to install: ", "Windows Update, actualizaciones por instalar: ") + chosen.Count + ".");
             bool ok = true, reboot = false;
             for (int i = 0; i < chosen.Count; i++)
             {

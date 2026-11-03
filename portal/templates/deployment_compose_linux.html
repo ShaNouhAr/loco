@@ -22,7 +22,7 @@
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <div class="cols deployment-columns">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("1 · Paquets") }}</h2><div class="aside"><span><span data-checked-count="input[name=package]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("1 · Paquets") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=package]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         <div><div class="row-between"><h3 class="pick-title">{{ _("Dépôts loco") }}</h3>{% if packages %}<input class="search-sm" type="search" placeholder="{{ _('Rechercher') }}" data-filter="#deploy-pkgs .selection-item" aria-label="{{ _('Rechercher un paquet') }}">{% endif %}</div>
           <div class="selection-list" id="deploy-pkgs">
@@ -34,7 +34,7 @@
       </div>
     </section>
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("2 · Postes") }}</h2><div class="aside"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("2 · Postes") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         {% if device_groups %}
         <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>

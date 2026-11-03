@@ -43,7 +43,7 @@
       </section>
     </div>
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Sur quels postes") }}</h2><div class="aside" data-show-for="target:selection"><span><span data-checked-count="input[name=device], input[name=device_group]">0</span> {{ _("choisi(s)") }}</span></div></div>
+      <div class="panel-h"><h2>{{ _("Sur quels postes") }}</h2><div class="aside" data-show-for="target:selection"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         <div class="seg" role="radiogroup" aria-label="{{ _('Postes visés') }}">
           {% if whole_fleet %}<label><input type="radio" name="target" value="all" {{ 'checked' if targets.all or not selection }}><span>{{ _("Tout le parc") }}</span></label>{% endif %}

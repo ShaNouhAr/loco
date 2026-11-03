@@ -1,5 +1,5 @@
 name: CI
-# Vérifications rapides à chaque push et pull request : lint et tests unitaires, sans machine virtuelle.
+# Vérifications rapides à chaque push et pull request : lint, tests unitaires et parcours dans un navigateur, sans machine virtuelle.
 # Les tests d'intégration (VM, Docker, ISO, Windows) sont dans integration.yml : ils tournent quand un push
 # touche les installeurs ou les agents, et toujours avant une publication (release.yml).
 on:
@@ -48,3 +48,29 @@ jobs:
               if ([IO.File]::ReadAllBytes($file.FullName)[0] -ne 0xEF) { Write-Host "$($file.FullName) : UTF-8 avec BOM requis (Windows PowerShell 5.1)"; $errors++ }
           }
           exit $errors
+  browser:
+    name: Parcours dans un vrai navigateur
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Paquets du portail
+        uses: ./.github/actions/apt-install
+        with:
+          packages: python3-flask python3-venv apt-utils gnupg createrepo-c rpm
+      - name: Playwright et Chromium
+        run: |
+          python3 -m venv --system-site-packages /tmp/browser
+          /tmp/browser/bin/pip install --quiet playwright==1.64.1
+          /tmp/browser/bin/playwright install --with-deps chromium
+      - name: Scripts, direct, géométrie des pages et console
+        run: /tmp/browser/bin/python3 tests/browser/test_ui.py
+      - name: Captures des pages
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-captures
+          path: test-results/browser/
+          retention-days: 7

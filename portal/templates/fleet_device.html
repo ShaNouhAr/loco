@@ -92,7 +92,7 @@
     <div class="metric">
       <div class="k">{{ _('Logiciels') if windows else 'Flatpak' }}</div>
       <div class="v">{{ summary.apps if windows else (inv.flatpak or 0) }}</div>
-      <div class="s">{% if windows %}{{ _('à mettre à jour') if summary.apps else _('catalogue à jour') }}{% else %}{{ _('mise(s) à jour') if inv.flatpak else _('à jour') }}{% endif %}</div>
+      <div class="s">{% if windows %}{{ _('à mettre à jour') if summary.apps else _('catalogue à jour') }}{% else %}{{ ngettext('mise à jour', 'mises à jour', inv.flatpak) if inv.flatpak else _('à jour') }}{% endif %}</div>
     </div>
     <div class="metric">
       <div class="k">{{ _("Redémarrage") }}</div>
@@ -139,7 +139,7 @@
       </div>
       {% if sel %}
       <div class="update-select-bar">
-        <span class="muted"><span data-select-count>0</span> {{ _("sélectionnée(s)") }}</span>
+        <span class="muted">{{ _("Sélection :") }} <span data-select-count>0</span></span>
         {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1"> {{ _("redémarrer ensuite si nécessaire") }}</label>{% endif %}
         <button class="btn sm primary" data-select-submit disabled>{{ _("Mettre à jour la sélection") }}</button>
       </div>

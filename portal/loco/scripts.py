@@ -5,10 +5,10 @@ import json
 from flask import abort, flash, g, render_template, request
 
 from . import app, fleet, groups, scope
-from .i18n import L_, _
+from .i18n import L_, _, n_
 from .auth import audit, lock_access, login_required
 from .db import db
-from .util import back
+from .util import back, counted
 
 PLATFORMS = {"windows": L_("Windows · PowerShell"), "linux": L_("Linux · shell"), "python": L_("Python · tous systèmes")}
 MAX_CONTENT = 64 * 1024
@@ -100,7 +100,7 @@ def script_runs_cancel_all():
     cur = conn.execute("UPDATE device_commands SET state='cancelled', finished_at=?, output='Annulé avant transmission à l’agent.' "
                        "WHERE state='queued' AND id IN (SELECT command_id FROM script_run_targets)" + scope.sql("device_id"),
                        (fleet._now(),))
-    audit("scripts.execution", f"file vidée : {cur.rowcount} poste(s) en attente annulé(s)", commit=False)
+    audit("scripts.execution", f"file vidée, en attente annulés : {counted(cur.rowcount, 'poste')}", commit=False)
     conn.commit()
     flash((_('File vidée : %(rowcount)s envoi%(v)s en attente annulé%(v)s.', rowcount=cur.rowcount, v='s' if cur.rowcount != 1 else '') if cur.rowcount else _('Aucun envoi en attente.')), "ok")
     return back("scripts")
@@ -126,7 +126,7 @@ def script_history_clear():
     done = _finished_runs(conn)
     _delete_runs(conn, done)
     kept = sum(1 for r in conn.execute("SELECT id FROM script_runs").fetchall() if _run_in_scope(conn, r["id"]))
-    audit("scripts.historique", f"historique vidé : {len(done)} exécution(s) supprimée(s)", commit=False)
+    audit("scripts.historique", f"historique vidé, supprimées : {counted(len(done), 'exécution')}", commit=False)
     conn.commit()
     flash(_('Historique vidé : %(len)s exécution%(v)s supprimée%(v)s', len=len(done), v='s' if len(done) != 1 else '') + (_(' ; %(kept)s encore en cours conservée%(v)s.', kept=kept, v='s' if kept != 1 else '') if kept else "."), "ok")
     return back("scripts")
@@ -264,10 +264,10 @@ def script_run_start(script_id):
         flash(_('Planification créée : %(script)s.', script=script['name']), "ok")
         return back("schedules", _anchor=f"planif-{sched_id}")
     run_id = start_run(conn, script, targets, g.user["username"])
-    audit("scripts.execution", f"{script['name']} v{script['version']} : {len(targets)} poste(s)", commit=False)
+    audit("scripts.execution", f"{script['name']} v{script['version']} : {counted(len(targets), 'poste')}", commit=False)
     conn.commit()
     skipped = len(devices) - len(targets)
-    flash(_('Script envoyé à %(len)s poste(s) au prochain contact de leur agent', len=len(targets)) + (_(' ; %(skipped)s poste(s) incompatible(s) ou inactif(s) ignoré(s).', skipped=skipped) if skipped else "."), "ok")
+    flash(n_('Script envoyé à %(num)s poste au prochain contact de son agent', 'Script envoyé à %(num)s postes au prochain contact de leur agent', len(targets)) + (n_(' ; %(num)s poste incompatible ou inactif ignoré.', ' ; %(num)s postes incompatibles ou inactifs ignorés.', skipped) if skipped else "."), "ok")
     return back("script_run", run_id=run_id)
 
 

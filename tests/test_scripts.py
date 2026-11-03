@@ -59,7 +59,7 @@ class TestScripts(FleetTest):
         with transaction() as conn:
             sched = conn.execute("SELECT * FROM schedules").fetchone()
             run = conn.execute("SELECT * FROM script_runs").fetchone()
-        self.assertEqual((sched["last_ref"], sched["last_result"], run["version"]), (run["id"], "1 poste(s)", 1))
+        self.assertEqual((sched["last_ref"], sched["last_result"], run["version"]), (run["id"], "1 poste", 1))
 
     def test_a_script_changed_after_planning_pauses_its_schedule(self):
         with transaction() as conn:

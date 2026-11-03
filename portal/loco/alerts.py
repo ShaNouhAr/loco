@@ -20,7 +20,7 @@ from email.utils import formatdate
 from flask import abort, flash, render_template, request
 
 from . import app, config, features
-from .i18n import _
+from .i18n import _, n_
 from .auth import audit, can, login_required, require
 from .db import db, transaction, lease
 
@@ -215,8 +215,8 @@ def evaluate(conn, cfg=None, devices=""):
         n = conn.execute("SELECT COUNT(*) FROM devices WHERE state != 'removed' AND last_seen != '' AND last_seen < ?" + devices,
                          (cutoff,)).fetchone()[0]
         if n >= _threshold(cfg, "devices_offline"):
-            add("devices_offline", _("%(n)s poste(s) sans contact depuis plus de %(m)s min.",
-                                     n=n, m=ONLINE_SECONDS // 60))
+            add("devices_offline", n_("%(num)s poste sans contact depuis plus de %(m)s min.", "%(num)s postes sans contact depuis plus de %(m)s min.",
+                                     n, m=ONLINE_SECONDS // 60))
 
     device_rules = [k for k in ("device_disk_high", "device_memory_high", "device_cpu_high") if _rule_on(cfg, k)]
     if fleet_on and device_rules:
@@ -353,6 +353,14 @@ def _drain(conn, cfg):
 _started = False
 
 
+def _tick():
+    from .fleet import expire_commands
+    with transaction() as conn:
+        expire_commands(conn)
+    with transaction() as conn:
+        dispatch(conn)
+
+
 def start_dispatcher():
     """Lance l'aiguilleur dans un fil de fond (une seule fois par processus ; loco tourne en un seul worker)."""
     global _started
@@ -366,8 +374,7 @@ def start_dispatcher():
         while True:
             try:
                 if not ha.skip_background() and lease():   # un seul processus agit ; jamais le serveur de secours
-                    with transaction() as conn:
-                        dispatch(conn)
+                    _tick()
             except Exception:                    # un fil de fond ne doit jamais faire tomber le serveur
                 pass
             time.sleep(60)

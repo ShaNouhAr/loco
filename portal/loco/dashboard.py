@@ -86,7 +86,7 @@ def chart_data(d):
              (_("Cache RPM"), stats.get("rpmcache", 0), _storage_link("rpm", "rpm.view", "rpm"), ""),
              (_("Cache Flathub"), stats.get("flatpakcache", 0), _storage_link("flatpak", "flatpak.view", "flatpak"), ""),
              (_("Dépôts et logiciels locaux"), sum(stats.get(k, 0) for k in ("apt", "rpm", "flatpak", "win")), "", " · ".join(local))]
-    parts = [p for p in parts if p[1] > 0]
+    parts = [p for p in parts if p[1] >= 1024]      # un cache vide pèse quelques octets : rien à montrer
     other = max(0, disk["used"] - sum(p[1] for p in parts))
     total = max(disk["total"], sum(p[1] for p in parts) + other + disk["free"]) or 1
     if other:
@@ -97,16 +97,15 @@ def chart_data(d):
 
 
 def _fleet_summary():
-    from .fleet import ONLINE_SECONDS, catalog, status, updating_count
+    from .fleet import catalog, presence, status, updating_count
     from . import scope
     apps = catalog()
     counts = {"green": 0, "orange": 0, "red": 0, "grey": 0}
     reboot = offline = 0
-    cutoff = (datetime.datetime.now() - datetime.timedelta(seconds=ONLINE_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     for dev in db().execute("SELECT * FROM devices WHERE state != 'removed'" + scope.sql()):
         counts[status(dev, apps)[0]] += 1
         reboot += bool(dev["reboot_required"])
-        offline += bool(dev["last_seen"]) and dev["last_seen"] < cutoff
+        offline += not presence(dev)["online"]
     ring = [{"key": key, "label": label, "count": counts[key]}
             for key, label in (("green", _("à jour")), ("orange", _("mises à jour en attente")), ("red", _("à traiter")),
                                ("grey", _("état inconnu")))]

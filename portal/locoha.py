@@ -773,7 +773,7 @@ def pull(conf, secret, version, hooks, log=print):
         copied, size, removed = sync_files(files, fetch, log=log)
         applied.update(files=remote["files"], files_at=time.time())
         if copied or removed:
-            log(f"Dépôts : {copied} fichier(s) copié(s) ({size} octets), {removed} élément(s) retiré(s).")
+            log(f"Dépôts : fichiers copiés : {copied} ({size} octets), éléments retirés : {removed}.")
     applied["pulled_at"] = time.time()
     _write(applied_path(), json.dumps(applied), 0o644)
     return remote, ""
