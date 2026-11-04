@@ -124,14 +124,19 @@ class Channel:
                         "SELECT COUNT(*) FROM remote_sessions WHERE device_id=? AND state IN ('waiting','active')",
                         (dev["id"],)).fetchone()[0] >= remote.DEVICE_SESSIONS:
                     raise ToolError(f"Four remote sessions are already open on {dev['hostname']}, the most its agent serves: retry later.")
+                consent = remote.asks_consent(dev, self.kind)
+                if consent and not remote.consent_ready(dev):
+                    raise ToolError(f"{dev['hostname']} requires the approval of the person at the machine, and its agent must be updated to "
+                                    f"{'.'.join(map(str, remote.CONSENT_VERSION))}.0 to ask for it.")
                 self.sid, now = secrets.token_hex(16), time.time()
                 cols, rows = ((TTY_COLS, TTY_ROWS) if self.role == "tty" else (TERMINAL_COLS, TERMINAL_ROWS)
                               if self.kind == "terminal" else (100, 30))
                 conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,"
-                             "expires,terminal_fallback,cols,rows) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                             "expires,terminal_fallback,cols,rows,consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                              (self.sid, dev["id"], g.user["id"], owner(self.role), g.user["pw_version"], self.kind, now, now, now + 3600,
-                              int(self.kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal")), cols, rows))
-                audit("parc.session.ouverture", f"{dev['hostname']} : {self.kind}, {self.sid}{_via()}", commit=False)
+                              int(self.kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal")), cols, rows,
+                              "pending" if consent else ""))
+                audit("parc.session.ouverture", f"{dev['hostname']} : {self.kind}, {self.sid}{_via()}{', accord demandé' if consent else ''}", commit=False)
                 self.fresh = True
             else:
                 self.sid = row["id"]
@@ -689,7 +694,7 @@ def _rfb(chan):
     state = chan.state
     if "width" in state:
         return state
-    if chan.take(12, 40) != b"RFB 003.008\n":
+    if chan.take(12, 80) != b"RFB 003.008\n":                # la personne devant le poste peut avoir une minute pour accepter
         raise ChannelError("Unexpected desktop protocol from the agent.")
     chan.send(b"RFB 003.008\n")
     count = chan.take(1, 20)[0]

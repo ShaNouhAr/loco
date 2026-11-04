@@ -7,6 +7,12 @@
   - **Sur le poste** : Debian et Ubuntu retiennent le paquet (`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques ; une retenue posée à la main n'est jamais touchée. Windows masque la mise à jour, sauf celles qu'il impose. Avec DNF, seules les mises à jour lancées par loco sont concernées.
   - **Toujours visible** : une mise à jour bloquée n'est plus comptée comme en attente, mais reste signalée sur la fiche, et la page indique les postes où elle attend. Droit *Bloquer des mises à jour*, réservé par défaut aux administrateurs et aux profils qui couvrent tout le parc.
   - Flatpak et logiciels du catalogue ne sont pas concernés.
+- **Accord de l'utilisateur avant le bureau distant**, désactivé par défaut. La personne devant le poste voit une fenêtre *Accepter / Refuser* avant que quoi que ce soit ne soit capturé.
+  - **Exigé sur un poste** : fiche du poste, onglet *Détails*, ou sélection dans Mon parc. Droit à part, *Régler l'accord avant le bureau distant* : un technicien qui ouvre le bureau ne peut pas le retirer. S'applique aussi aux assistants IA, que la fenêtre nomme comme tels.
+  - **Pour une seule session** : menu *Plus* de la fiche, *Bureau distant, avec l'accord de l'utilisateur*.
+  - **Sans réponse en une minute, ou sur un écran verrouillé, c'est un refus**, expliqué à l'administrateur. Si personne n'est connecté sur le poste, le bureau s'ouvre sans demande, et le journal l'indique. Le terminal et les fichiers ne sont pas concernés.
+  - **Un agent trop ancien ne s'ouvre pas sans accord** : la session est refusée jusqu'à sa mise à jour automatique.
+  - **Sous Linux**, la fenêtre utilise zenity ou kdialog, présents sur les bureaux courants. Sans l'un ni l'autre, le bureau est refusé avec cette explication.
 
 ## 2.136.0 — 2026-11-03
 

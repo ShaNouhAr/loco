@@ -337,6 +337,7 @@ class TestLinuxAgent(unittest.TestCase):
         self.agent.family = lambda: "debian"
         self.agent.apt_update = lambda: (0, "")
         self.agent.apt_simulation = lambda *a: []
+        self.agent.shutil = mock.Mock(which=lambda name: None)
         self.mark_fails = True
         with mock.patch.object(self.agent, "run_stream", side_effect=AssertionError("apt-get lancé")):
             code, out = self.agent.update({"blocks": ["openssl"]}, state={})
@@ -347,7 +348,6 @@ class TestLinuxAgent(unittest.TestCase):
         self.agent.family = lambda: "debian"
         self.agent.apt_update = lambda: (0, "")
         self.agent.apt_simulation = lambda *a: []
-        self.agent._apt = None
         seen = []
         self.agent.run_stream = lambda command, *a, **k: (seen.append(command), (0, ""))[1]
         original = self.fake_run

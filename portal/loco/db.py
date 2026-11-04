@@ -541,6 +541,12 @@ MIGRATIONS = [
     CREATE UNIQUE INDEX update_blocks_unique ON update_blocks(family, pattern, COALESCE(group_id, 0));
     ALTER TABLE devices ADD COLUMN blocked_updates INTEGER NOT NULL DEFAULT 0;
     """,
+    # 38 : accord de la personne devant le poste avant le bureau distant : exigé sur ce poste, et où en est chaque session
+    # (vide : pas demandé ; pending ; given ; nobody : personne de connecté à qui demander).
+    """
+    ALTER TABLE devices ADD COLUMN remote_consent INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE remote_sessions ADD COLUMN consent TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

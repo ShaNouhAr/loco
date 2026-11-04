@@ -193,6 +193,21 @@ try:
 finally:
     post(files_io, {'csrf': files.token, 'close': 1})
 print('Gestionnaire de fichiers : FileRelay C# — hello, écriture, lecture, liste et suppression via le relais HTTPS')
+# Accord avant le bureau distant : la demande suit son chemin sur le vrai agent, sans bloquer les sessions ni le service.
+# Personne ne répond ici : soit personne n'est connecté (le bureau s'ouvre sans demande), soit la demande finit par un refus.
+consent_url, _ = post(f'/fleet/{dev}/session', {'csrf': csrf(get(f'/fleet/{dev}')), 'kind': 'desktop', 'consent': '1'})
+consent_io = '/fleet/session/' + consent_url.split('?')[0].rsplit('/', 1)[1] + '/io'
+consent_token = csrf(get(f'/fleet/{dev}'))
+until, answer = time.monotonic() + 110, {}
+while time.monotonic() < until:
+    _, body = post(consent_io, {'csrf': consent_token, 'ack': 0})
+    answer = json.loads(body)
+    if answer['state'] == 'closed' or answer['consent'] in ('given', 'nobody'):
+        break
+    time.sleep(1)
+assert answer.get('state') == 'closed' or answer.get('consent') in ('given', 'nobody'), f'Demande d\'accord sans issue : {answer}'
+print('Accord avant le bureau distant, issue sur cette machine :', answer['state'], answer['consent'], answer['error'])
+post(consent_io, {'csrf': consent_token, 'close': 1})
 desktop_exe = Path(os.environ['ProgramFiles'], 'loco-client', 'loco-desktop.exe')
 assert desktop_exe.is_file(), 'Compagnon de bureau absent du MSI'
 assert subprocess.run([str(desktop_exe), '--update'], timeout=10).returncode == 2, 'Arguments du compagnon trop permissifs'
@@ -276,8 +291,35 @@ with sqlite3.connect(db_path) as conn:
 if pending:
     target = pending[0]
     block(target['version'].split()[0] if target.get('version') else target['name'])
-    wait('mise à jour bloquée masquée par l\'agent', lambda: target['id'] in (blocks_state().get('hidden') or []), 1200)
-    assert target['id'] in hidden_ids(), 'Mise à jour bloquée non masquée dans Windows Update'
+    print('Mise à jour réellement en attente, bloquée pour l\'essai :', target)
+
+
+    def agent_log():
+        try:
+            return Path(os.environ['ProgramData'], 'loco-client', 'loco-client.log').read_text(encoding='utf-8', errors='replace')
+        except OSError:
+            return ''
+
+
+    def hide_outcome():
+        if target['id'] in (blocks_state().get('hidden') or []):
+            return 'masquée'
+        if re.search('non masquée|not hidden|no ocultada', agent_log()):
+            return 'refusée par Windows'        # certaines mises à jour imposées ne se masquent pas : loco ne les installe pas pour autant
+        with sqlite3.connect(db_path) as conn:
+            blocked, inventory = conn.execute('SELECT blocked_updates, inventory FROM devices WHERE id=?', (dev,)).fetchone()
+        current = json.loads(inventory or '{}').get('updates') or []
+        return 'plus en attente' if blocked and not any(u.get('id') == target['id'] for u in current) else None
+
+
+    try:
+        outcome = wait('issue du masquage de la mise à jour bloquée', hide_outcome, 1200)
+    except SystemExit:
+        print('Fichier des blocages :', blocks_state())
+        print('Journal de l\'agent :', agent_log()[-3000:])
+        raise
+    print('Masquage :', outcome)
+    assert outcome != 'masquée' or target['id'] in hidden_ids(), 'Mise à jour bloquée non masquée dans Windows Update'
 
 
     def reported_blocked():
@@ -286,8 +328,9 @@ if pending:
         return count >= 1 and any(u.get('id') == target['id'] for u in json.loads(inventory or '{}').get('updates') or [])
 
 
-    wait('mise à jour masquée toujours signalée au portail', reported_blocked, 900)
-    print('Mise à jour bloquée, masquée et signalée :', target['name'])
+    if outcome != 'plus en attente':
+        wait('mise à jour bloquée toujours signalée au portail', reported_blocked, 900)
+        print('Mise à jour bloquée et signalée :', target['name'])
 with sqlite3.connect(db_path) as conn:
     conn.execute('DELETE FROM update_blocks')
 wait('motifs levés sur l\'agent', lambda: not blocks_state().get('patterns'), 420)

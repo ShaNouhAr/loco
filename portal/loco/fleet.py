@@ -319,6 +319,7 @@ def action_label(cmd):
 
 UPDATE_ID_RE = re.compile(r"[0-9A-Za-z-]{8,64}")       # identifiant Windows Update (GUID)
 SELECT_UPDATES = (2, 120)                                # agents qui appliquent une sélection (les autres feraient tout)
+CONSENT_VERSION = (2, 137)                               # agents qui savent demander l'accord avant le bureau distant
 
 
 def selectable(dev):
@@ -1519,6 +1520,8 @@ def fleet_device(dev_id):
     return render_template("fleet_device.html", address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev), wake_controls=wake.controls(dev),
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
+                           consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,
+                           consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label,
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,

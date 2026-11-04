@@ -27,6 +27,8 @@ function connectedMessage() {
 }
 // Superposition de la scène : attente de connexion, puis fin de session avec reprise en un clic.
 const overlay = document.getElementById('remote-overlay');
+const overlayTitle = document.getElementById('remote-overlay-title'), overlayText = document.getElementById('remote-overlay-text');
+let overlayBefore = null;                   // texte d'attente remplacé pendant la demande d'accord
 function hideOverlay() { overlay.hidden = true; }
 function showEnd(title, text) {
   document.getElementById('remote-overlay-spinner').hidden = true;
@@ -96,11 +98,17 @@ async function poll() {
     const elapsed = performance.now() - started; rtt = rtt ? rtt * 0.85 + elapsed * 0.15 : elapsed;
     failures = 0; busy = data.packets.length > 0;
     if (pending && data.ack >= pending.seq) pending = null;
-    if (data.state === 'active') {
+    if (data.state === 'active' && data.consent === 'pending') {
+      lastLabel = ''; message(t("En attente de l'accord…"), 'warn');
+      if (!overlayBefore) overlayBefore = [overlayTitle.textContent, overlayText.textContent];
+      overlayTitle.textContent = t("En attente de l'accord de l'utilisateur…");
+      overlayText.textContent = t("La personne devant le poste doit accepter. Sans réponse en une minute, la demande est refusée.");
+    } else if (data.state === 'active') {
+      if (overlayBefore) { [overlayTitle.textContent, overlayText.textContent] = overlayBefore; overlayBefore = null; }
       connectedMessage();
       if (terminal) hideOverlay();
-      if (channel && channel.readyState === 0) { channel.readyState = 1; if (channel.onopen) channel.onopen({}); }
     }
+    if (data.state === 'active' && channel && channel.readyState === 0) { channel.readyState = 1; if (channel.onopen) channel.onopen({}); }
     for (const packet of data.packets) {
       if (packet.seq <= outputAck) continue;
       const buffer = bytes(packet.data);

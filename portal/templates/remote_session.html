@@ -22,13 +22,13 @@
       {% if detached %}<a class="btn" href="{{ url_for('fleet_device', dev_id=remote.device_id) }}" target="_blank" rel="noopener">{{ ui_icon('external') }}<span>{{ _("Fiche du poste") }}</span></a>{% endif %}
       <button class="btn" id="remote-fullscreen" aria-pressed="false" title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
       <form method="post" action="{{ url_for('remote_open', dev_id=remote.device_id) }}" target="_blank" rel="noopener">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">{% if remote.consent %}<input type="hidden" name="consent" value="1">{% endif %}
         <input type="hidden" name="view" value="console">
         <button class="btn" id="remote-new-tab" title="{{ _('Ouvre une nouvelle session sur ce poste') }}">{{ ui_icon('external') }}<span>{{ _("Nouvel onglet") }}</span></button>
       </form>
       <button class="btn danger" id="remote-close">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
       <form method="post" action="{{ url_for('remote_open', dev_id=remote.device_id) }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">{% if remote.consent %}<input type="hidden" name="consent" value="1">{% endif %}
         {% if detached %}<input type="hidden" name="view" value="console">{% endif %}
         <button class="btn primary" id="remote-reconnect" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
       </form>

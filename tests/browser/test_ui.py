@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests"))
 
 import test_portal as fixture  # noqa: E402  (crée la base temporaire et le compte admin)
-from test_fleet import Agent, LINUX, device  # noqa: E402
+from test_fleet import Agent, LINUX, WINDOWS, device  # noqa: E402
 from test_fleet_pages import add_devices  # noqa: E402
 import locoadmin  # noqa: E402
 from loco import alerts, app, config, dashboard, deployments, wake  # noqa: E402
@@ -518,6 +518,27 @@ class TestWake(BrowserTest):
             expect(self.page.locator(".head, .device-head").get_by_role("button", name="Réveiller")).to_have_count(0)
             self.assertLessEqual(self.overflow(), 0)
             self.assertTrue(wired["id"])
+
+
+class TestRemoteConsent(BrowserTest):
+    def test_waiting_for_approval_then_a_refusal_is_explained(self):
+        agent = Agent(dict(WINDOWS, hostname="poste-accord"), "192.168.43.78", uid=hashlib.sha256(b"poste-accord").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        self.page.goto(f"/fleet/{dev['id']}")
+        self.page.locator(".device-actions details.menu summary").click()
+        self.page.get_by_role("button", name="Bureau distant, avec l'accord de l'utilisateur").click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+        sid = self.page.url.rsplit("/", 1)[1].split("?")[0]
+        session = agent.post("/agent/api/remote", {"sessions": []}, agent.token).get_json()["sessions"][0]
+        self.assertEqual(session["consent"], {"by": "admin", "assistant": False})
+        agent.post("/agent/api/remote", {"sessions": [{"id": sid, "state": "active", "seq": 0, "ack": 0, "data": ""}]}, agent.token)
+        expect(self.page.locator("#remote-overlay-title")).to_have_text("En attente de l'accord de l'utilisateur…", timeout=LONG)
+        expect(self.page.locator("#remote-status")).to_contain_text("En attente de l'accord")
+        refusal = "La personne devant le poste a refusé l'ouverture du bureau distant."
+        agent.post("/agent/api/remote", {"sessions": [{"id": sid, "state": "closed", "seq": 0, "ack": 0, "data": "", "error": refusal}]}, agent.token)
+        expect(self.page.locator("#remote-overlay-title")).to_have_text(refusal, timeout=LONG)
+        self.problems[:] = [p for p in self.problems if refusal not in p]    # noVNC journalise cette fermeture attendue
 
 
 class TestUpdateBlocks(BrowserTest):

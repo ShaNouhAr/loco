@@ -29,6 +29,7 @@ GROUPS = [
         ("fleet.settings", L_("Configurer le parc"), L_("Seuil des pastilles, clé d'inscription et adresses du serveur annoncées aux agents."), ("fleet.view",), True),
         ("remote.terminal", L_("Ouvrir un terminal distant"), L_("Shell root ou PowerShell SYSTEM : contrôle privilégié du poste."), ("fleet.view",), True),
         ("remote.desktop", L_("Ouvrir le bureau noVNC"), L_("Contrôler le bureau, y compris l’UAC et l’écran verrouillé sous Windows (SYSTEM)."), ("fleet.view",), True),
+        ("remote.consent", L_("Régler l'accord avant le bureau distant"), L_("Exiger ou non que la personne devant le poste accepte chaque ouverture du bureau distant."), ("fleet.view",), True),
         ("remote.files", L_("Gérer les fichiers du poste"), L_("Parcourir, téléverser, modifier et supprimer les fichiers du poste (accès complet, en root ou SYSTEM)."), ("fleet.view",), True),
     ]),
     (L_("Paquets APT"), [
@@ -160,6 +161,7 @@ ENDPOINTS = {
     "remote_open": ("remote.terminal", "remote.desktop", "remote.files"),
     "remote_session": ("remote.terminal", "remote.desktop", "remote.files"),
     "remote_io": ("remote.terminal", "remote.desktop", "remote.files"),
+    "fleet_remote_consent": "remote.consent", "fleet_remote_consent_selected": "remote.consent",
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",
     "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",

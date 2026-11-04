@@ -397,6 +397,11 @@ que si la précédente compte au moins une réussite et moins d'échecs que le s
 d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
 planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
 
+**Accord de l'utilisateur avant le bureau distant** (désactivé par défaut) : exigé sur un poste (fiche, onglet *Détails*, ou sélection
+dans Mon parc), ou demandé pour une session (menu *Plus* de la fiche). La personne devant le poste accepte ou refuse dans une fenêtre,
+avant toute capture. Sans réponse en une minute, ou sur un écran verrouillé, c'est un refus. Si personne n'est connecté, le bureau
+s'ouvre sans demande. Sous Linux, il faut zenity ou kdialog. Le terminal et les fichiers ne sont pas concernés.
+
 **Bloquer une mise à jour** : onglet *Blocages* de Mon parc, ou *Bloquer* sur sa ligne dans la fiche d'un poste. Un paquet (Linux)
 ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe. loco ne l'installe plus, quel que soit le
 chemin : poste, tout le parc, vagues, planifications, assistants IA. Sur le poste, Debian et Ubuntu retiennent le paquet

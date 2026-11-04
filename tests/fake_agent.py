@@ -62,6 +62,15 @@ class Screen:
 if __name__ == "__main__":
     agent = load_agent()
     if sys.argv[1] == "desktop":
+        consent = agent.consent_arguments(sys.argv[2:])
+        if consent:                                        # réponse simulée de la personne devant le poste
+            agent.ask_consent = lambda *args: os.environ.get("LOCO_TEST_CONSENT", "given")
+            agent.desktop_users = lambda: [1000]
+            try:
+                agent.require_consent(consent)
+            except RuntimeError as e:
+                print(e, file=sys.stderr)
+                sys.exit(1)
         screen = Screen()
         try:
             agent._rfb_serve(screen)

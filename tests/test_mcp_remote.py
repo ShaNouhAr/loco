@@ -259,6 +259,38 @@ class TestDesktop(RemoteTest):
         w, h, rgb = decode_png(base64.b64decode(image["data"]))
         self.assertEqual((w, h, rgb[:3]), (10, 4, bytes((200, 21, 10))))
 
+    def require_consent(self, host):
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET remote_consent=1 WHERE hostname=?", (host,))
+
+    def test_desktop_waits_for_the_approval_the_device_requires(self):
+        os.environ["LOCO_TEST_CONSENT"] = "given"
+        self.addCleanup(os.environ.pop, "LOCO_TEST_CONSENT", None)
+        host = self.device()
+        self.require_consent(host)
+        client = self.client(["desktop_screenshot", "run_command"])
+        self.check_picture(client.call("desktop_screenshot", device=host))
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT consent, owner FROM remote_sessions WHERE kind='desktop'").fetchone()["consent"], "given")
+            actions = [r["detail"] for r in conn.execute("SELECT detail FROM audit WHERE action='parc.session.accord' ORDER BY id DESC LIMIT 1")]
+        self.assertIn("accepté sur le poste", actions[0])
+
+    def test_desktop_refused_by_the_person_gives_the_reason(self):
+        os.environ["LOCO_TEST_CONSENT"] = "refused"
+        self.addCleanup(os.environ.pop, "LOCO_TEST_CONSENT", None)
+        host = self.device()
+        self.require_consent(host)
+        result = self.client(["desktop_screenshot"]).call("desktop_screenshot", device=host)
+        self.assertTrue(result["isError"])
+        self.assertRegex(result["content"][0]["text"], "refusé|declined|rechazó")
+
+    def test_desktop_on_a_device_with_an_old_agent_is_refused_when_approval_is_required(self):
+        host = self.device(dict(LINUX, agent_version="2.136.0"))
+        self.require_consent(host)
+        result = self.client(["desktop_screenshot"]).call("desktop_screenshot", device=host)
+        self.assertTrue(result["isError"])
+        self.assertIn("must be updated", result["content"][0]["text"])
+
     def test_click_type_keys_and_scroll(self):
         host = self.device()
         client = self.client(["desktop_screenshot", "desktop_click", "desktop_type", "desktop_key", "desktop_scroll"])

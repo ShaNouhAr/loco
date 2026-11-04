@@ -1525,6 +1525,7 @@ class RemoteProcess:
         self.sid, self.kind = descriptor["id"], descriptor["kind"]
         self.ack, self.seq, self.pending, self.incoming = 0, 0, b"", []
         self.state, self.error, self.process, self.master = "active", "", None, None
+        self.consent_pipe, self.consent = None, ""
         try:
             if self.kind == "terminal":
                 master, slave = pty.openpty()
@@ -1548,8 +1549,19 @@ class RemoteProcess:
                 command = [sys.executable, PROGRAM, "desktop"]
                 if descriptor.get("terminal_fallback"):
                     command.append("--terminal-fallback")
+                keep, reply = (), None
+                if isinstance(descriptor.get("consent"), dict):
+                    # Réponse de la personne devant le poste : à part, le flux RFB partant tel quel vers le navigateur.
+                    self.consent_pipe, reply = os.pipe()
+                    os.set_blocking(self.consent_pipe, False)
+                    keep = (reply,)
+                    command += [f"--consent-fd={reply}", "--consent-by=" + str(descriptor["consent"].get("by") or "")]
+                    if descriptor["consent"].get("assistant"):
+                        command.append("--consent-assistant")
                 self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                                stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
+                                                stderr=subprocess.PIPE, start_new_session=True, close_fds=True, pass_fds=keep)
+                if reply is not None:
+                    os.close(reply)
                 self.reader, self.writer = self.process.stdout.fileno(), self.process.stdin.fileno()
             elif self.kind == "files":
                 self.process = subprocess.Popen([sys.executable, PROGRAM, "files"], stdin=subprocess.PIPE,
@@ -1627,11 +1639,27 @@ class RemoteProcess:
                 if self.kind in ("desktop", "files") and self.process.stderr:
                     self.error = self.process.stderr.read(1000).decode("utf-8", "replace").strip()[-300:]
                 self.error = self.error or t("Session terminée.", "Session ended.", "Sesión finalizada.")
+        self.read_consent()                     # après le flux : une image lue ici a forcément été précédée de la réponse
         return {"id": self.sid, "ack": self.ack, "seq": self.seq,
-                "data": base64.b64encode(self.pending).decode(), "state": self.state, "error": self.error}
+                "data": base64.b64encode(self.pending).decode(), "state": self.state, "error": self.error, "consent": self.consent}
+
+    def read_consent(self):
+        if self.consent_pipe is None:
+            return
+        try:
+            self.consent = os.read(self.consent_pipe, 16).decode("ascii", "replace").strip()
+        except BlockingIOError:
+            return
+        except OSError:
+            pass
+        os.close(self.consent_pipe)
+        self.consent_pipe = None
 
     def close(self):
         self.state = "closed"
+        if self.consent_pipe is not None:
+            os.close(self.consent_pipe)
+            self.consent_pipe = None
         if self.process:
             try:
                 os.killpg(self.process.pid, signal.SIGHUP if self.kind == "terminal" else signal.SIGTERM)
@@ -2855,8 +2883,128 @@ def _rfb_serve(backend):
         signal.signal(signal.SIGTERM, previous_term)
 
 
-def linux_desktop(terminal_fallback=False):
+CONSENT_SECONDS = 60
+
+
+def desktop_users():
+    """Comptes ouverts sur un écran, la session active d'abord ; l'écran de connexion n'en est pas un."""
+    def loginctl(*args):
+        return subprocess.run(["loginctl"] + list(args), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              universal_newlines=True, env=ENV, timeout=10, check=True).stdout
+    found = []
+    for line in loginctl("list-sessions", "--no-legend").splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        info = dict(item.split("=", 1) for item in loginctl("show-session", fields[0], "-p", "Class", "-p", "Type", "-p", "User", "-p", "State").splitlines() if "=" in item)
+        if info.get("Class") == "user" and info.get("Type") in ("x11", "wayland"):
+            found.append((info.get("State") != "active", int(info["User"])))
+    return [uid for _, uid in sorted(found)]
+
+
+def _session_environment(uid):
+    """Ce qu'il faut pour afficher une fenêtre dans la session de ce compte, lu sur l'un de ses processus."""
+    best, score = {}, 0
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            if os.stat("/proc/" + name).st_uid != uid:
+                continue
+            with open("/proc/" + name + "/environ", "rb") as f:
+                values = f.read(65536).split(b"\0")
+        except OSError:
+            continue
+        env = dict(v.decode("utf-8", "replace").split("=", 1) for v in values if b"=" in v)
+        points = sum(bool(env.get(k)) for k in ("DISPLAY", "WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"))
+        if (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")) and points > score:
+            best, score = env, points
+    keep = ("DISPLAY", "WAYLAND_DISPLAY", "XAUTHORITY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES")
+    return {k: best[k] for k in keep if k in best}
+
+
+def _consent_command(env, text):
+    """Fenêtre de question : (commande, secondes à attendre), selon le bureau ; None si aucun outil n'est installé."""
+    accept, refuse = t("Accepter", "Accept", "Aceptar"), t("Refuser", "Decline", "Rechazar")
+    title = t("Prise de main à distance", "Remote control request", "Solicitud de control remoto")
+    zenity = shutil.which("zenity")
+    kdialog = shutil.which("kdialog")
+    if kdialog and (not zenity or "KDE" in env.get("XDG_CURRENT_DESKTOP", "")):
+        return [kdialog, "--title", title, "--yes-label", accept, "--no-label", refuse, "--yesno", text], CONSENT_SECONDS
+    if zenity:
+        return [zenity, "--question", "--no-markup", "--width=460", f"--title={title}", f"--text={text}", f"--ok-label={accept}",
+                f"--cancel-label={refuse}", f"--timeout={CONSENT_SECONDS}"], CONSENT_SECONDS + 5
+    return None
+
+
+def ask_consent(uid, by, assistant):
+    """Pose la question dans la session de ce compte : given, refused, timeout, failed ou no-tool."""
+    env = _session_environment(uid)
+    if not env:
+        return "failed"
+    global LANG                                 # la question s'adresse à cette personne : dans la langue de sa session
+    session_lang = (env.get("LC_ALL") or env.get("LC_MESSAGES") or env.get("LANG") or "")[:2]
+    if session_lang in ("fr", "en", "es"):
+        LANG = session_lang
+    who = re.sub(r"[^\w .@+-]", "", by)[:64] or t("un administrateur", "an administrator", "un administrador")
+    if assistant:
+        ask = t(f"Un assistant IA, au nom de {who}, demande à voir et à contrôler cet écran avec loco.",
+                f"An AI assistant, on behalf of {who}, asks to view and control this screen with loco.",
+                f"Un asistente de IA, en nombre de {who}, solicita ver y controlar esta pantalla con loco.")
+    else:
+        ask = t(f"{who} demande à voir et à contrôler cet écran avec loco.", f"{who} asks to view and control this screen with loco.",
+                f"{who} solicita ver y controlar esta pantalla con loco.")
+    text = ask + "\n\n" + t(f"Sans réponse dans {CONSENT_SECONDS} secondes, la demande est refusée.",
+                             f"Without an answer within {CONSENT_SECONDS} seconds, the request is declined.",
+                             f"Sin respuesta en {CONSENT_SECONDS} segundos, la solicitud se rechaza.")
+    command = _consent_command(env, text)
+    if command is None:
+        return "no-tool"
+    pw = pwd.getpwuid(uid)
+    child = dict(env, HOME=pw.pw_dir, USER=pw.pw_name, LOGNAME=pw.pw_name, PATH=ENV.get("PATH", "/usr/bin:/bin"))
+
+    def become():
+        os.setgroups(os.getgrouplist(pw.pw_name, pw.pw_gid))
+        os.setgid(pw.pw_gid)
+        os.setuid(uid)
+    try:
+        code = subprocess.run(command[0], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=child, cwd="/",
+                              preexec_fn=become, timeout=command[1]).returncode
+    except subprocess.TimeoutExpired:
+        return "timeout"
+    return {0: "given", 1: "refused", 5: "timeout"}.get(code, "failed")
+
+
+def require_consent(consent):
+    """Avant toute capture : l'accord de la personne devant le poste, si loco le demande. Sans accord, pas de bureau."""
+    if not consent:
+        return
+    try:
+        users = desktop_users()
+        answer = ask_consent(users[0], consent["by"], consent["assistant"]) if users else "nobody"
+    except (OSError, KeyError, ValueError, subprocess.SubprocessError):
+        answer = "failed"
+    if answer not in ("given", "nobody"):
+        raise RuntimeError({
+            "refused": t("La personne devant le poste a refusé l'ouverture du bureau distant.", "The person at the machine declined the remote desktop.", "La persona frente al equipo rechazó el escritorio remoto."),
+            "timeout": t("Pas de réponse de la personne devant le poste : bureau distant refusé.", "No answer from the person at the machine: remote desktop declined.", "Sin respuesta de la persona frente al equipo: escritorio remoto rechazado."),
+            "no-tool": t("Accord impossible à demander : ni zenity ni kdialog sur ce poste.", "Cannot ask for approval: neither zenity nor kdialog on this machine.", "No se puede solicitar la aprobación: ni zenity ni kdialog en este equipo."),
+        }.get(answer, t("La demande d'accord n'a pas pu s'afficher sur ce poste : bureau distant refusé.", "The approval request could not be displayed on this machine: remote desktop declined.", "La solicitud de aprobación no pudo mostrarse en este equipo: escritorio remoto rechazado.")))
+    os.write(consent["fd"], answer.encode())
+    os.close(consent["fd"])
+
+
+def consent_arguments(argv):
+    """Accord demandé par le service des sessions (voir RemoteProcess) : {fd, by, assistant}, ou None."""
+    values = dict(item[2:].split("=", 1) for item in argv if item.startswith("--consent-") and "=" in item)
+    if "consent-fd" not in values:
+        return None
+    return {"fd": int(values["consent-fd"]), "by": values.get("consent-by", ""), "assistant": "--consent-assistant" in argv}
+
+
+def linux_desktop(terminal_fallback=False, consent=None):
     """Serveur RFB 3.8 intégré, Tight/RGB compressé, sans port VNC : X11/XTest, GNOME Wayland via Mutter, autres Wayland via grim."""
+    require_consent(consent)
     try:
         env = x11_environment()
     except RuntimeError as e:
@@ -3106,7 +3254,7 @@ def main(argv):
         return remote_service()
     if cmd == "desktop":
         try:
-            linux_desktop(terminal_fallback="--terminal-fallback" in argv[1:])
+            linux_desktop(terminal_fallback="--terminal-fallback" in argv[1:], consent=consent_arguments(argv[1:]))
             return 0
         except Exception as e:
             print(str(e), file=sys.stderr)

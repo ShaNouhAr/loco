@@ -179,7 +179,9 @@ namespace Loco
         FileRelay files;
         Thread readThread, writeThread;
         IntPtr writeNativeThread;
-        bool disposed, eof;
+        bool disposed, eof, opening;
+        string consent = "";
+        const int ConsentSeconds = 60;
         int queuedBytes, inputBytes, cols, rows;
         long inputAck, inputQueued, outputSeq;
         byte[] pending;
@@ -192,13 +194,53 @@ namespace Loco
             {
                 cols = RemoteControl.Number(descriptor, "cols", 20, 500); rows = RemoteControl.Number(descriptor, "rows", 5, 200);
                 if (kind == "terminal") { terminal = new NativeTerminal(cols, rows); reader = terminal.Output; writer = terminal.Input; }
-                else if (kind == "desktop") { OpenDesktop(stopping); }
+                else if (kind == "desktop")
+                {
+                    object asked;
+                    if (descriptor.TryGetValue("consent", out asked) && asked is Dictionary<string, object>)
+                    {
+                        // La réponse peut prendre une minute : la boucle des sessions ne doit pas l'attendre.
+                        var request = (Dictionary<string, object>)asked;
+                        string by = RemoteControl.Str(request, "by");
+                        bool assistant = String.Equals(RemoteControl.Str(request, "assistant"), "true", StringComparison.OrdinalIgnoreCase);
+                        opening = true;
+                        new Thread(() => AskThenOpen(by, assistant, stopping)) { IsBackground = true, Name = "loco-remote-consent" }.Start();
+                        return;
+                    }
+                    OpenDesktop(stopping);
+                }
                 else if (kind == "files") { files = new FileRelay(); reader = files.Reader; writer = files.Writer; }
                 else throw new InvalidDataException(Lang.T("Type de session inconnu", "Unknown session type", "Tipo de sesión desconocido"));
-                readThread = new Thread(Read) { IsBackground = true, Name = "loco-remote-output" }; readThread.Start();
-                writeThread = new Thread(Write) { IsBackground = true, Name = "loco-remote-input" }; writeThread.Start();
+                StartStreams();
             }
             catch (Exception e) { error = e.Message; Dispose(); }
+        }
+        void StartStreams()
+        {
+            readThread = new Thread(Read) { IsBackground = true, Name = "loco-remote-output" }; readThread.Start();
+            writeThread = new Thread(Write) { IsBackground = true, Name = "loco-remote-input" }; writeThread.Start();
+        }
+        // Avant le compagnon de bureau : rien n'est capturé sans l'accord. Toute erreur revient à un refus.
+        void AskThenOpen(string by, bool assistant, WaitHandle stopping)
+        {
+            try
+            {
+                string answer;
+                try { answer = DesktopIndicator.AskConsent(by, assistant, ConsentSeconds); }
+                catch (Exception) { throw new IOException(Lang.T("La demande d'accord n'a pas pu s'afficher sur ce poste : bureau distant refusé.", "The approval request could not be displayed on this machine: remote desktop declined.", "La solicitud de aprobación no pudo mostrarse en este equipo: escritorio remoto rechazado.")); }
+                if (answer == "refused") throw new IOException(Lang.T("La personne devant le poste a refusé l'ouverture du bureau distant.", "The person at the machine declined the remote desktop.", "La persona frente al equipo rechazó el escritorio remoto."));
+                if (answer == "timeout") throw new IOException(Lang.T("Pas de réponse de la personne devant le poste : bureau distant refusé.", "No answer from the person at the machine: remote desktop declined.", "Sin respuesta de la persona frente al equipo: escritorio remoto rechazado."));
+                lock (gate) { if (disposed) return; consent = answer; }
+                OpenDesktop(stopping);
+                StartStreams();
+            }
+            catch (Exception e) { lock (gate) { error = e.Message; eof = true; } RemoteControl.Activity.Set(); }
+            finally
+            {
+                bool closed;
+                lock (gate) { opening = false; closed = disposed; }
+                if (closed) Release();
+            }
         }
         void OpenDesktop(WaitHandle stopping)
         {
@@ -295,7 +337,7 @@ namespace Loco
                     }
                     outputSeq++; Monitor.PulseAll(gate);
                 }
-                return new { id = id, ack = inputAck, seq = outputSeq, data = pending == null ? "" : Convert.ToBase64String(pending),
+                return new { id = id, ack = inputAck, seq = outputSeq, consent = consent, data = pending == null ? "" : Convert.ToBase64String(pending),
                     state = disposed || (eof && pending == null && output.Count == 0) ? "closed" : "active", error = error.Length > 300 ? error.Substring(0, 300) : error };
             }
         }
@@ -306,7 +348,12 @@ namespace Loco
                 if (disposed) return;
                 disposed = true; Monitor.PulseAll(gate); wake.Set();
                 if (writeNativeThread != IntPtr.Zero) CancelSynchronousIo(writeNativeThread);
+                if (opening) return;                // la question est encore affichée : son fil libérera la session
             }
+            Release();
+        }
+        void Release()
+        {
             // EOF laisse au compagnon le temps de relâcher les touches et boutons injectés, et de rétablir
             // la résolution d'origine (un changement de mode peut prendre plus d'une seconde sur un vrai GPU).
             if (desktop != null && reader != null) { reader.Dispose(); try { desktop.WaitForExit(5000); } catch (Exception) { } }

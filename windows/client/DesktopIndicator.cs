@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web.Script.Serialization;
 
 namespace Loco
@@ -89,6 +90,14 @@ namespace Loco
         {
             string file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "loco-desktop.exe");
             if (!WindowsIdentity.GetCurrent().IsSystem || !File.Exists(file)) throw new IOException(Lang.T("Compagnon de bureau indisponible.", "Desktop companion unavailable.", "Compañero de escritorio no disponible."));
+            int selected = InteractiveSession();
+            if (selected < 0) throw new IOException(Lang.T("Aucune session interactive disponible sur ce poste Windows.", "No interactive session available on this Windows machine.", "Ninguna sesión interactiva disponible en este equipo Windows."));
+            return Launch(selected, file, " --pipe " + pipeName, true);
+        }
+
+        // Session interactive du poste : celle de la console si elle est active, sinon la première active ; -1 s'il n'y en a pas.
+        static int InteractiveSession()
+        {
             IntPtr sessions; int count;
             if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out sessions, out count)) throw new Win32Exception();
             try
@@ -101,10 +110,38 @@ namespace Loco
                     if (session.Id > 0 && session.State == 0) { if (selected < 0 || session.Id == console) selected = session.Id; }
                 }
                 if (selected < 0 && console > 0) selected = console;
-                if (selected < 0) throw new IOException(Lang.T("Aucune session interactive disponible sur ce poste Windows.", "No interactive session available on this Windows machine.", "Ninguna sesión interactiva disponible en este equipo Windows."));
-                return Launch(selected, file, " --pipe " + pipeName, true);
+                return selected;
             }
             finally { WTSFreeMemory(sessions); }
+        }
+
+        // Accord de la personne devant le poste, avant le bureau distant : given, nobody (aucun compte ouvert à qui demander),
+        // refused ou timeout. Fenêtre système affichée par le service dans la session, sans aucun processus de plus.
+        internal static string AskConsent(string by, bool assistant, int seconds)
+        {
+            int session = InteractiveSession();
+            if (session < 0 || SessionUser(session) == "") return "nobody";
+            string who = Regex.Replace(by ?? "", @"[^\w .@+-]", "");
+            if (who.Length > 64) who = who.Substring(0, 64);
+            if (who == "") who = Lang.T("un administrateur", "an administrator", "un administrador");
+            string ask = assistant
+                ? Lang.T("Un assistant IA, au nom de " + who + ", demande à voir et à contrôler cet écran avec loco.", "An AI assistant, on behalf of " + who + ", asks to view and control this screen with loco.", "Un asistente de IA, en nombre de " + who + ", solicita ver y controlar esta pantalla con loco.")
+                : Lang.T(who + " demande à voir et à contrôler cet écran avec loco.", who + " asks to view and control this screen with loco.", who + " solicita ver y controlar esta pantalla con loco.");
+            string text = ask + "\n\n" + Lang.T("Accepter ? Sans réponse dans " + seconds + " secondes, la demande est refusée.", "Accept? Without an answer within " + seconds + " seconds, the request is declined.", "¿Aceptar? Sin respuesta en " + seconds + " segundos, la solicitud se rechaza.");
+            string title = Lang.T("Prise de main à distance", "Remote control request", "Solicitud de control remoto");
+            const int YesNoQuestion = 0x4 | 0x20 | 0x100 | 0x10000 | 0x40000;   // Oui/Non, « Non » par défaut, au premier plan
+            int response;
+            if (!WTSSendMessage(IntPtr.Zero, session, title, title.Length * 2, text, text.Length * 2, YesNoQuestion, seconds, out response, true))
+                throw new Win32Exception();
+            return response == 6 ? "given" : response == 32000 ? "timeout" : "refused";
+        }
+
+        static string SessionUser(int session)
+        {
+            IntPtr buffer; int size;
+            if (!WTSQuerySessionInformation(IntPtr.Zero, session, 5, out buffer, out size)) throw new Win32Exception();
+            try { return Marshal.PtrToStringUni(buffer) ?? ""; }
+            finally { WTSFreeMemory(buffer); }
         }
 
         static Process Launch(int session, string executable, string arguments, bool desktopControl = false)
@@ -156,6 +193,8 @@ namespace Loco
         [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr Process, Thread; public int ProcessId, ThreadId; }
         [DllImport("wtsapi32.dll", SetLastError = true)] static extern bool WTSEnumerateSessions(IntPtr server, int reserved, int version, out IntPtr sessions, out int count);
         [DllImport("wtsapi32.dll")] static extern void WTSFreeMemory(IntPtr memory);
+        [DllImport("wtsapi32.dll", EntryPoint = "WTSQuerySessionInformationW", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool WTSQuerySessionInformation(IntPtr server, int session, int infoClass, out IntPtr buffer, out int size);
+        [DllImport("wtsapi32.dll", EntryPoint = "WTSSendMessageW", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool WTSSendMessage(IntPtr server, int session, string title, int titleBytes, string message, int messageBytes, int style, int timeout, out int response, bool wait);
         [DllImport("kernel32.dll")] static extern uint WTSGetActiveConsoleSessionId();
         [DllImport("wtsapi32.dll", SetLastError = true)] static extern bool WTSQueryUserToken(int session, out IntPtr token);
         [DllImport("userenv.dll", SetLastError = true)] static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);

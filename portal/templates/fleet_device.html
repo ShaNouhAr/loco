@@ -24,6 +24,7 @@
       <span class="mono">{{ address or '—' }}</span>
       <span title="{{ dev.last_seen }}">{{ _("vu %(seen)s", seen=summary.seen) }}</span>
       <span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>
+      {% if dev.remote_consent %}<span class="tag">{{ _("accord exigé pour le bureau") }}</span>{% endif %}
     </p>
     {% if memberships %}<p class="device-groups">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a>{% endfor %}</p>{% endif %}
   </div>
@@ -42,11 +43,17 @@
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
-    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install') %}
+    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop') %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
       <div class="menu-list" role="menu">
         {% if active %}
+        {% if can('remote.desktop') and consent_ready and not dev.remote_consent %}
+        <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="desktop"><input type="hidden" name="consent" value="1">
+          <button class="menu-item">{{ _("Bureau distant, avec l'accord de l'utilisateur") }}</button>
+        </form>
+        {% endif %}
         {% if can('fleet.update') and can('fleet.reboot') %}{{ action('update', _('Mettre à jour puis redémarrer si nécessaire'), reboot=True) }}{% endif %}
         {% if can('fleet.scan') %}{{ action('scan', _('Refaire l\'inventaire')) }}{% endif %}
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
@@ -434,6 +441,18 @@
         <form method="post" action="{{ url_for('fleet_wake_policy', dev_id=dev.id) }}"{% if wake_controls.enable %} data-confirm="{{ _('Activer le réveil sur %(name)s ?', name=dev.hostname) }}" data-confirm-text="{{ _('L’agent active le réveil sur ses cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}"{% endif %}>
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="enabled" value="{{ '1' if wake_controls.enable else '0' }}">
           <button class="btn sm"><span class="spin"></span>{{ _("Activer le réveil") if wake_controls.enable else _("Ne plus l’activer") }}</button>
+        </form>
+      </div>
+      {% endif %}
+      {% endif %}
+      {% if can_any('remote.desktop', 'remote.consent') %}
+      <div class="panel-h sub"><h2>{{ _("Bureau distant") }}</h2><div class="aside">{{ _("Terminal et fichiers ne sont pas concernés") }}</div></div>
+      <p class="hint consent-state">{% if dev.remote_consent %}{{ _("La personne devant le poste doit accepter chaque ouverture du bureau distant. Sans réponse en une minute, la demande est refusée. Si personne n'est connecté sur le poste, le bureau s'ouvre sans demande.") }}{% else %}{{ _("Le bureau distant s'ouvre sans demander d'accord à la personne devant le poste.") }}{% endif %}{% if dev.remote_consent and not consent_ready %} {{ _("L'agent doit d'abord être en version %(v)s.0 ou plus (il se met à jour seul) : d'ici là, le bureau distant est refusé.", v=consent_version) }}{% endif %}</p>
+      {% if can('remote.consent') %}
+      <div class="wake-policy">
+        <form method="post" action="{{ url_for('fleet_remote_consent', dev_id=dev.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="enabled" value="{{ '0' if dev.remote_consent else '1' }}">
+          <button class="btn sm"><span class="spin"></span>{{ _("Ne plus exiger l'accord") if dev.remote_consent else _("Exiger l'accord de l'utilisateur") }}</button>
         </form>
       </div>
       {% endif %}
