@@ -2,9 +2,7 @@
 import time
 import unittest
 
-import test_portal
 from test_portal import Browser, ADMIN_PW
-import loco
 from loco import totp
 from loco.db import transaction as connect
 

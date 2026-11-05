@@ -1,7 +1,8 @@
 """Profils intégrés : un nouveau nom s'applique aux installations existantes, sans écraser un profil personnalisé."""
+import importlib
 import unittest
 
-import test_portal  # noqa: F401  (environnement du portail de test)
+importlib.import_module("test_portal")  # environnement du portail de test
 from loco import permissions
 from loco.db import transaction
 

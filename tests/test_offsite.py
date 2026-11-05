@@ -5,7 +5,6 @@ import tempfile
 import unittest
 from unittest import mock
 
-import test_portal
 from test_portal import Browser, ADMIN_PW
 import loco
 from loco import offsite, config

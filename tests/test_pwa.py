@@ -3,7 +3,6 @@ import json
 import os
 import unittest
 
-import test_portal  # noqa: F401  (initialise l'app)
 from test_portal import ADMIN_PW, Browser
 import loco
 

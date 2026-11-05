@@ -159,7 +159,7 @@ from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, client
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
-                 mcp_remote, ha, logforward)
+                 mcp_remote, ha, logforward, update_blocks)
 
 
 def startup():
