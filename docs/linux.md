@@ -7,7 +7,7 @@ exploitation courante. Pour une présentation rapide, voir le [README](../README
 
 | Élément | Valeur |
 |---|---|
-| Système | Debian 12/13, Ubuntu 22.04/24.04/26.04, Rocky Linux 9/10 (amd64 vérifié, VM recommandée, voir § 10 pour LXC) |
+| Système | Debian 12/13, Ubuntu 22.04/24.04/26.04, Rocky Linux 8/9/10 (amd64 vérifié, VM recommandée, voir § 10 pour LXC) |
 | Ressources | 2 vCPU, 2 Go de RAM ; disque selon les caches (50 Go et plus conseillés) |
 | Droits | root (installation), aucun conteneur Docker |
 | Sortie Internet | HTTP/HTTPS vers les dépôts Debian/Ubuntu, Microsoft (Windows Update), `dl.flathub.org`, miroirs RPM (§ 12) ; directe ou par proxy (§ 5) |

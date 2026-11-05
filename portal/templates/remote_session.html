@@ -7,7 +7,7 @@
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
       <h1>{{ 'Terminal' if remote.kind == 'terminal' else _('Console noVNC') }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
-      <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else _('Shell · root')) if remote.kind == 'terminal' else (_('Bureau du poste, ou console texte root si aucun bureau X11') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris'))) }}</p>
+      <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else _('Shell · root')) if remote.kind == 'terminal' else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris'))) }}</p>
     </div>
     <div class="actions">
       {% if remote.kind == 'terminal' %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">

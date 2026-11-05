@@ -12,7 +12,7 @@ loco est conçu pour un **réseau d'entreprise interne**. Il n'est pas prévu po
 
 | Élément | Mesures |
 |---|---|
-| Interface d'administration | HTTPS uniquement (TLS 1.2+), comptes nommés avec rôles, mots de passe hachés (scrypt), politique de longueur, changement imposé des mots de passe temporaires, blocage après échecs (par compte et par adresse), sessions expirant après 8 h d'inactivité et invalidées au changement de mot de passe, jeton CSRF, cookie `Secure`/`HttpOnly`/`SameSite=Strict`, en-têtes CSP stricte (aucun script ni style en ligne), `X-Frame-Options: DENY`, `nosniff`, réseaux autorisés dédiés (`--admin-allow`), journal d'audit |
+| Interface d'administration | HTTPS uniquement (TLS 1.2+), comptes nommés avec rôles, mots de passe hachés (scrypt, ou PBKDF2 avec les versions de Werkzeug des distributions plus anciennes), politique de longueur, changement imposé des mots de passe temporaires, blocage après échecs (par compte et par adresse), double authentification TOTP avec codes de secours, connexion possible par annuaire (LDAP, RADIUS) ou SSO OpenID Connect, sessions expirant après 8 h d'inactivité et invalidées au changement de mot de passe, jeton CSRF, cookie `Secure`/`HttpOnly`/`SameSite=Strict`, en-têtes CSP stricte (aucun script ni style en ligne), `X-Frame-Options: DENY`, `nosniff`, réseaux autorisés dédiés (`--admin-allow`), journal d'audit |
 | Dépôts APT locaux | Index signés GPG (RSA 4096), clé générée sur le serveur ; paquets et index isolés par distribution/version ; noms de dépôts validés ; un même paquet/version ne peut pas être remplacé par un contenu différent |
 | Dépôts RPM locaux | `repomd.xml` signé GPG et vérifié par dnf (`repo_gpgcheck=1`) ; il contient l'empreinte SHA-256 de chaque paquet |
 | Cache RPM (Rocky Linux, AlmaLinux, EPEL) | Certificats des miroirs vérifiés ; paquets vérifiés par les postes avec les clés GPG de leur distribution (`gpgcheck=1`) |
@@ -35,7 +35,8 @@ loco est conçu pour un **réseau d'entreprise interne**. Il n'est pas prévu po
 - Le port HTTP d'amorçage (8088) sert scripts et installeurs sans chiffrement : un attaquant sur le réseau
   pourrait modifier un script. Déployez l'autorité de certification puis utilisez `--no-http`.
 - `setup.sh --trust-ca` fait confiance à l'autorité reçue au premier contact (comparer l'empreinte affichée).
-- Pas d'authentification annuaire (LDAP/AD) ni de double authentification à ce jour.
+- La double authentification de loco ne s'applique qu'à la connexion par mot de passe local. Une connexion par annuaire ou
+  par SSO suit les règles de l'annuaire ou du fournisseur d'identité.
 - Les postes accèdent aux dépôts sans authentification ; la restriction se fait par réseau (`--allow`).
 - Envoi syslog : en TCP et en UDP, les journaux circulent en clair ; préférez TLS. Le contenu des journaux des postes reste déclaratif
   (un poste compromis peut écrire ce qu'il veut dans ses propres lignes) : loco impose le nom d'hôte et retire les retours à la ligne et

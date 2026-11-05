@@ -520,7 +520,7 @@
  "Broker du shell injoignable (service loco-agent).": "Broker del shell inaccesible (servicio loco-agent).",
  "Bureau": "Escritorio",
  "Bureau distant, logiciels, utilisateurs…": "Escritorio remoto, programas, usuarios…",
- "Bureau du poste, ou console texte root si aucun bureau X11": "Escritorio del equipo, o consola de texto root si no hay escritorio X11",
+ "Bureau du poste, ou console texte root si aucun bureau graphique": "Escritorio del equipo, o consola de texto root si no hay escritorio gráfico",
  "Bureau déconnecté.": "Escritorio desconectado.",
  "Bureau sécurisé Windows · Via l’agent loco": "Escritorio seguro de Windows · Mediante el agente loco",
  "Bureautique": "Ofimática",

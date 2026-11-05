@@ -520,7 +520,7 @@
  "Broker du shell injoignable (service loco-agent).": "Shell broker unreachable (loco-agent service).",
  "Bureau": "Desktop",
  "Bureau distant, logiciels, utilisateurs…": "Remote desktop, software, users…",
- "Bureau du poste, ou console texte root si aucun bureau X11": "Device desktop, or root text console if there is no X11 desktop",
+ "Bureau du poste, ou console texte root si aucun bureau graphique": "Device desktop, or root text console if there is no graphical desktop",
  "Bureau déconnecté.": "Desktop disconnected.",
  "Bureau sécurisé Windows · Via l’agent loco": "Windows secure desktop · Through the loco agent",
  "Bureautique": "Office",
