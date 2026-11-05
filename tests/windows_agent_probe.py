@@ -289,7 +289,10 @@ wait('motif de blocage reçu par l\'agent', lambda: 'KB0000001' in (blocks_state
 with sqlite3.connect(db_path) as conn:
     pending = json.loads(conn.execute('SELECT inventory FROM devices WHERE id=?', (dev,)).fetchone()[0] or '{}').get('updates') or []
 if pending:
-    target = pending[0]
+    # Windows installe seul les mises à jour de Defender : elles peuvent disparaître pendant l'essai, on préfère une autre cible.
+    target = sorted(pending, key=lambda u: 'Defender' in u.get('name', ''))[0]
+    with sqlite3.connect(db_path) as conn:
+        scan_before = conn.execute('SELECT last_scan FROM devices WHERE id=?', (dev,)).fetchone()[0]
     block(target['version'].split()[0] if target.get('version') else target['name'])
     print('Mise à jour réellement en attente, bloquée pour l\'essai :', target)
 
@@ -301,15 +304,19 @@ if pending:
             return ''
 
 
+    def latest_inventory():
+        with sqlite3.connect(db_path) as conn:
+            last_scan, inventory = conn.execute('SELECT last_scan, inventory FROM devices WHERE id=?', (dev,)).fetchone()
+        return last_scan, json.loads(inventory or '{}').get('updates') or []
+
+
     def hide_outcome():
         if target['id'] in (blocks_state().get('hidden') or []):
             return 'masquée'
         if re.search('non masquée|not hidden|no ocultada', agent_log()):
             return 'refusée par Windows'        # certaines mises à jour imposées ne se masquent pas : loco ne les installe pas pour autant
-        with sqlite3.connect(db_path) as conn:
-            blocked, inventory = conn.execute('SELECT blocked_updates, inventory FROM devices WHERE id=?', (dev,)).fetchone()
-        current = json.loads(inventory or '{}').get('updates') or []
-        return 'plus en attente' if blocked and not any(u.get('id') == target['id'] for u in current) else None
+        last_scan, current = latest_inventory()
+        return 'plus en attente' if last_scan != scan_before and not any(u.get('id') == target['id'] for u in current) else None
 
 
     try:
@@ -317,6 +324,7 @@ if pending:
     except SystemExit:
         print('Fichier des blocages :', blocks_state())
         print('Journal de l\'agent :', agent_log()[-3000:])
+        print('Dernier inventaire (avant le blocage :', scan_before, ') :', latest_inventory())
         raise
     print('Masquage :', outcome)
     assert outcome != 'masquée' or target['id'] in hidden_ids(), 'Mise à jour bloquée non masquée dans Windows Update'
