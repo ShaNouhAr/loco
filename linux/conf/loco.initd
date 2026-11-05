@@ -14,7 +14,8 @@ depend() {
 }
 
 start_pre() {
-    # /run est en mémoire : dossier de nginx recréé à chaque démarrage.
+    # /run est en mémoire : dossiers de nginx et de squid recréés à chaque démarrage.
     checkpath -d -m 0755 -o nginx:nginx /run/nginx
+    checkpath -d -m 0755 /run/squid
     checkpath -d -m 0755 /var/log/loco
 }

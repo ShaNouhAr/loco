@@ -1,10 +1,12 @@
 """Validation réseau avant l'effacement du disque et la reconfiguration de l'appliance."""
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
 
-LIB = Path(__file__).resolve().parents[1] / 'linux/lib/appliance.sh'
+ROOT = Path(__file__).resolve().parents[1]
+LIB = ROOT / 'linux/lib/appliance.sh'
 
 
 class TestNetworkAnswers(unittest.TestCase):
@@ -51,3 +53,11 @@ class TestSSHAnswers(unittest.TestCase):
                                      'ssh-test', str(LIB), root], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(list(Path(root).iterdir()), [])
+
+
+class TestBootService(unittest.TestCase):
+    def test_runtime_directories_survive_a_reboot(self):
+        # /run est en mémoire : ce qu'install.sh y crée disparaît au premier redémarrage.
+        pidfile = re.search(r'^pid_filename (\S+)', (ROOT / 'conf/squid-wu.conf').read_text(encoding='utf-8'), re.M)[1]
+        initd = (ROOT / 'linux/conf/loco.initd').read_text(encoding='utf-8')
+        self.assertRegex(initd, r'checkpath -d .*' + re.escape(str(Path(pidfile).parent)) + r'\n')

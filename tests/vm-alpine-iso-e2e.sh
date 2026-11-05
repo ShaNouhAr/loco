@@ -156,6 +156,8 @@ PY
     boot_disk
     wait_health
     [ "$(access 'sha256sum /etc/loco/tls/ca.crt')" = "$ca" ]
+    # /run est en mémoire : tous les services repartent au deuxième démarrage, pas seulement le portail.
+    access 'set -eu; for try in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do netstat -ltn | grep -q ":3128 " && break; sleep 2; done; netstat -ltn | grep -q ":3128 "; ! supervisorctl -c /etc/supervisor/loco.conf status | grep -vw RUNNING'
     access 'set -eu; grep -qx BACKUP_KEEP=5 /etc/loco/loco.conf; poweroff'
     wait "$pid"; pid=""
     echo "$mode : installation, premier démarrage, GUI/CLI et deuxième démarrage OK"

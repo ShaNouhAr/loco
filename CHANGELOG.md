@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.137.1 — 2026-11-05
+
+- **Appliance : le proxy Windows Update repart après un redémarrage.** Son dossier dans `/run` n'était créé qu'à l'installation : à chaque redémarrage, le service restait en échec et le port 3128 fermé. Le cache par DNS et le reste du portail n'étaient pas concernés. La mise à jour suffit.
+- **Installation de l'appliance** : le test complet vérifie désormais tous les services au deuxième démarrage, et plus seulement le portail.
+
 ## 2.137.0 — 2026-11-04
 
 - **Bloquer une mise à jour** : nouvel onglet *Blocages* dans Mon parc, ou *Bloquer* sur la ligne d'une mise à jour dans la fiche d'un poste. Un paquet (Linux) ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe de machines, avec une raison.
