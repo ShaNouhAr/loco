@@ -8,6 +8,8 @@
   <path d="M8 9V7a4 4 0 0 1 8 0v2c0 2 3 4 3 8 0 2-3 3-7 3s-7-1-7-3c0-4 3-6 3-8Z"/><path d="M9 12c-2 4-1 6 3 6s5-2 3-6M9 20l-4 1-1-2m11 1 4 1 1-2M10 9l2 2 2-2-2-1Z"/><path d="M10 6.5h.01M14 6.5h.01" stroke-width="2.5"/>
 {% elif name == 'windows' %}
   <path d="m3 5 8-1v7H3Zm10-1.3L21 2v9h-8ZM3 13h8v7l-8-1Zm10 0h8v9l-8-1.7Z" fill="currentColor" stroke="none"/>
+{% elif name == 'android' %}
+  <path d="M6 11a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 17Z"/><path d="M7 10a5 5 0 0 1 10 0M9.5 5.5 8 3.5m6.5 2L16 3.5"/><path d="M3.5 12v4m17-4v4M10 18.5v2m4-2v2"/><path d="M10 7.5h.01M14 7.5h.01" stroke-width="2.2"/>
 {% elif name == 'chevron' %}
   <path d="m8 10 4 4 4-4"/>
 {% elif name == 'package' %}
@@ -67,6 +69,10 @@
 {%- elif name == 'dice' %}<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01" stroke-width="2.6"/>
 {%- elif name == 'refresh' %}<path d="M20 7v5h-5M4 17v-5h5M5.1 8a8 8 0 0 1 13-3L20 8M4 16l1.9 3a8 8 0 0 0 13-3"/>
 {%- elif name == 'unplug' %}<path d="m4 20 3-3m10-10 3-3M9 15l-2 2 3 3 2-2M15 9l2-2-3-3-2 2M8.5 8.5l7 7"/>
+{%- elif name == 'nav-back' %}<path d="M15 6l-6 6 6 6"/>
+{%- elif name == 'nav-home' %}<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/>
+{%- elif name == 'nav-recents' %}<rect x="6" y="6" width="12" height="12" rx="2"/>
+{%- elif name == 'nav-notifications' %}<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>
 {%- elif name == 'chevron' %}<path d="M9 6l6 6-6 6"/>
 {%- elif name == 'check-circle' %}<circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.4 2.4 4.6-4.9"/>
 {%- elif name == 'power' %}<path d="M12 3.5v8"/><path d="M6.6 6.8a7.6 7.6 0 1 0 10.8 0"/>

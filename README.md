@@ -443,6 +443,10 @@ Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session
 Terminal, bureau noVNC et gestionnaire de fichiers d’un poste, pilotés par l’agent via un relais HTTPS
 sortant — aucun port entrant, serveur VNC ou compte SSH sur le poste.
 
+**Expérimental — Android** : les mêmes écran, terminal et fichiers sont disponibles sur vos propres appareils
+Android, via une application à installer (sans QR code), derrière *Fonctionnalités › Expérimental*. Pas de
+mises à jour ni de catalogue ; chaque accès s’accorde sur l’appareil. Voir [docs/android.md](docs/android.md).
+
 <details>
 <summary><b>Lire le détail</b></summary>
 

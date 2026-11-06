@@ -1,13 +1,14 @@
 {% extends "console_base.html" if detached else "base.html" %}
-{% block title %}{{ 'Terminal' if remote.kind == 'terminal' else _('Console noVNC') }} · {{ remote.hostname }}{% endblock %}
+{% block title %}{{ 'Terminal' if remote.kind == 'terminal' else (_('Écran') if remote.os_family == 'android' else _('Console noVNC')) }} · {{ remote.hostname }}{% endblock %}
 {% block content %}
+{% set android = remote.os_family == 'android' %}
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_macros.html' import term_help %}
-<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}">
+<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind == 'terminal' else _("écran de l'appareil") }}"{% endif %}>
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
-      <h1>{{ 'Terminal' if remote.kind == 'terminal' else _('Console noVNC') }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
-      <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else _('Shell · root')) if remote.kind == 'terminal' else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris'))) }}</p>
+      <h1>{{ 'Terminal' if remote.kind == 'terminal' else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
+      <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}</p>
     </div>
     <div class="actions">
       {% if remote.kind == 'terminal' %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
@@ -15,7 +16,7 @@
         <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>{% endif %}
       {% if remote.kind == 'desktop' %}<div class="remote-display" role="group" aria-label="{{ _('Affichage du bureau') }}">
-        <label class="remote-field" title="{{ _('« Adaptée » change la résolution Windows pour remplir la fenêtre, sans ascenseurs ; « Résolution du poste » garde celle d\'origine.') }}"><span>{{ _("Résolution") }}</span><select id="remote-resolution-mode" aria-label="{{ _('Résolution du bureau') }}"><option value="adapt">{{ _("Adaptée à la fenêtre") }}</option><option value="native">{{ _("Résolution du poste") }}</option></select></label>
+        <label class="remote-field"{% if android %} hidden{% endif %} title="{{ _('« Adaptée » change la résolution Windows pour remplir la fenêtre, sans ascenseurs ; « Résolution du poste » garde celle d\'origine.') }}"><span>{{ _("Résolution") }}</span><select id="remote-resolution-mode" aria-label="{{ _('Résolution du bureau') }}"><option value="adapt">{{ _("Adaptée à la fenêtre") }}</option><option value="native">{{ _("Résolution du poste") }}</option></select></label>
         <label class="remote-field" title="{{ _('Taille de l\'affichage. En résolution adaptée, un zoom agrandit l\'interface du poste sans faire défiler ; en résolution du poste, il agrandit l\'image.') }}"><span>{{ _("Zoom") }}</span><select id="remote-zoom" aria-label="{{ _('Zoom de l\'affichage') }}"><option value="fit" selected>{{ _("Ajuster") }}</option><option value="50">50 %</option><option value="75">75 %</option><option value="100">100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
         <span id="remote-readout" class="remote-readout mono" aria-live="polite" title="{{ _('Résolution du bureau et taille d\'affichage (100 %% : un pixel du poste par pixel de l\'écran). La résolution initiale est rétablie à la fermeture de la session.') }}"></span>
       </div>{% endif %}
@@ -37,6 +38,12 @@
   {% if remote.kind == 'desktop' %}
   {% set win = remote.os_family == 'windows' %}
   <div class="remote-toolbar" id="remote-toolbar" role="toolbar" aria-label="{{ _('Commandes envoyées au poste') }}">
+    {% if android %}
+    {% for keys, icon, label in [('back', 'nav-back', _('Retour')), ('home', 'nav-home', _('Accueil')), ('recents', 'nav-recents', _('Applications récentes')), ('notifications', 'nav-notifications', _('Notifications'))] %}
+    <button type="button" class="btn sm" data-keys="{{ keys }}">{{ ui_icon(icon) }}<span>{{ label }}</span></button>
+    {% endfor %}
+    <span class="toolbar-sep" aria-hidden="true"></span>
+    {% else %}
     <button type="button" class="btn sm" data-keys="ctrl alt delete" title="{{ _('Sécurité Windows : verrouiller, changer d’utilisateur, gestionnaire des tâches') if win else 'Ctrl+Alt+Suppr' }}">{{ ui_icon('shield') }}<span>{{ _("Ctrl+Alt+Suppr") }}</span></button>
     <details class="menu">
       <summary class="btn sm">{{ ui_icon('keyboard') }}<span>{{ _("Raccourcis") }}</span></summary>
@@ -54,6 +61,7 @@
       {% endfor %}
     </span>
     <span class="toolbar-sep" aria-hidden="true"></span>
+    {% endif %}
     <details class="menu send-text">
       <summary class="btn sm">{{ ui_icon('type') }}<span>{{ _("Envoyer du texte") }}</span></summary>
       <div class="menu-list">
@@ -68,8 +76,8 @@
       <summary class="btn sm">{{ ui_icon('clipboard') }}<span>{{ _("Presse-papiers") }}</span></summary>
       <div class="menu-list">
         <form class="menu-form" id="remote-clipboard">
-          <label class="f"><span>{{ _("Presse-papiers partagé avec le poste") }}</span><textarea rows="3" maxlength="100000" spellcheck="false" placeholder="Le texte copié sur le poste s’affiche ici ; tapez ou collez ici ce que vous voulez envoyer au poste…"></textarea></label>
-          <span class="hint" id="remote-clipboard-hint">{{ _("Le texte copié sur le poste apparaît ici et dans votre presse-papiers. « Envoyer au poste » le place dans le presse-papiers du poste ; collez-y ensuite avec Ctrl+V. Rien n’est conservé par loco.") }}</span>
+          <label class="f"><span>{{ _("Presse-papiers de l'appareil") if android else _("Presse-papiers partagé avec le poste") }}</span><textarea rows="3" maxlength="100000" spellcheck="false" placeholder="Le texte copié sur le poste s’affiche ici ; tapez ou collez ici ce que vous voulez envoyer au poste…"></textarea></label>
+          <span class="hint" id="remote-clipboard-hint">{% if android %}{{ _("« Envoyer au poste » place ce texte dans le presse-papiers de l'appareil ; collez-le ensuite par un appui long ou Ctrl+V dans un champ. Android ne laisse pas lire son presse-papiers à distance. Rien n’est conservé par loco.") }}{% else %}{{ _("Le texte copié sur le poste apparaît ici et dans votre presse-papiers. « Envoyer au poste » le place dans le presse-papiers du poste ; collez-y ensuite avec Ctrl+V. Rien n’est conservé par loco.") }}{% endif %}</span>
           <label class="check"><input type="checkbox" id="remote-clipboard-auto"> <span>{{ _("Envoyer automatiquement mon presse-papiers au poste quand je clique sur le bureau") }}</span></label>
           <div class="clipboard-actions">
             <button type="button" class="btn sm" id="remote-clipboard-read">{{ _("Lire le presse-papiers local") }}</button>
@@ -110,7 +118,7 @@
   {% if remote.kind == 'terminal' %}
   {{ term_help(_("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.")) }}
   {% else %}
-  <p class="small muted remote-footnote">{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+  <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
   {% endif %}
 </div>
 {% endblock %}

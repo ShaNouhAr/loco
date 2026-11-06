@@ -22,10 +22,12 @@ def enrollment():
     if group:
         key = fleet.group_key(group["id"])          # MSI, paquets et commandes : le poste rejoint ce groupe
     msi, msi_state = fleet.agent_msi() if key else (None, "")
+    apk, apk_state = fleet.agent_apk() if key and features.enabled("android") else (None, "")
     return render_template("enrollment.html", key=key, commands=fleet._commands(key) if key else {},
                            device_groups=device_groups, group=group, whole_fleet=scope.whole(), no_group=no_group,
                            ca_sha256=fleet._ca_fingerprint() if key else "", version=config.VERSION,
                            msi_sha256=msi_state if msi else "", msi_ready=bool(msi),
+                           apk_sha256=apk_state if apk else "", apk_ready=bool(apk),
                            proxy_host=config.HOST, proxy_port=config.WU_PROXY_PORT, proxy_available=config.WU_PROXY,
                            packages={kind: {"name": name(config.VERSION), "full": name(config.VERSION, True),
                                             "repos": fleet.repos_available(kind)}

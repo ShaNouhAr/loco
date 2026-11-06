@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">loco</string>
+
+    <!-- Service (notification permanente) -->
+    <string name="svc_connecting">Connexion à loco…</string>
+    <string name="svc_connected">Connecté · %1$s</string>
+    <string name="svc_server_error">Erreur du serveur (%1$d)</string>
+    <string name="svc_offline">Hors ligne · nouvel essai</string>
+    <string name="svc_channel_desc">Garde le contact avec votre serveur loco.</string>
+    <string name="svc_screen_on">Écran partagé avec loco</string>
+
+    <!-- Accessibilité -->
+    <string name="a11y_desc">Permet à loco de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : toucher, faire défiler, revenir, et saisir du texte dans le champ actif. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail.</string>
+
+    <!-- État -->
+    <string name="state_enrolled">Inscrit sur %1$s</string>
+    <string name="state_connected">Connecté · dernier contact à %1$s</string>
+    <string name="state_connecting">Connexion en cours…</string>
+    <string name="state_offline">Hors ligne · nouvel essai automatique</string>
+    <string name="action_leave">Se retirer de loco</string>
+    <string name="leave_explain">L\'appareil sera retiré de ce serveur et l\'agent s\'arrêtera. Vous pourrez l\'inscrire à nouveau plus tard.</string>
+    <string name="cancel">Annuler</string>
+
+    <!-- Inscription -->
+    <string name="enroll_intro">Inscrivez cet appareil sur votre serveur loco. Saisissez l\'adresse et la clé affichées dans la page Enrôlement du portail.</string>
+    <string name="field_server">Adresse du serveur</string>
+    <string name="field_key">Clé d\'inscription</string>
+    <string name="field_key_hint">clé affichée par le portail</string>
+    <string name="action_connect">Se connecter</string>
+    <string name="enroll_need_fields">Indiquez une adresse https et une clé.</string>
+    <string name="enroll_unreachable">Serveur injoignable. Vérifiez l\'adresse et le réseau.</string>
+    <string name="enroll_bad_key">Clé d\'inscription refusée.</string>
+    <string name="enroll_failed">Inscription refusée (%1$d).</string>
+    <string name="please_wait">Patientez…</string>
+
+    <!-- Confirmation de l'autorité -->
+    <string name="ca_title">Vérifiez l\'autorité du serveur</string>
+    <string name="ca_explain">Comparez cette empreinte à celle affichée par le portail loco. Ne confirmez que si elle correspond.</string>
+    <string name="ca_confirm">Elle correspond</string>
+
+    <!-- Écran distant -->
+    <string name="screen_title">Écran distant</string>
+    <string name="screen_hint">loco montre cet écran pendant une session ouverte depuis le portail. Android affiche l\'indicateur de partage tant qu\'il est actif.</string>
+    <string name="screen_on">Activer l\'écran distant</string>
+    <string name="screen_off">Arrêter le partage</string>
+    <string name="screen_state_on">Partagé</string>
+    <string name="screen_state_off">Non partagé</string>
+
+    <!-- Contrôle -->
+    <string name="control_title">Contrôle</string>
+    <string name="control_hint">Permet de toucher, faire défiler, revenir et écrire depuis le portail. Sans lui, l\'écran reste seulement visible.</string>
+    <string name="control_on">Ouvrir les réglages d\'accessibilité</string>
+    <string name="control_state_on">Activé</string>
+    <string name="control_state_off">À activer</string>
+
+    <!-- Fichiers -->
+    <string name="files_title">Fichiers</string>
+    <string name="files_hint">Permet de parcourir, télécharger et déposer vos fichiers depuis le portail.</string>
+    <string name="files_on">Autoriser l\'accès aux fichiers</string>
+    <string name="files_state_on">Autorisés</string>
+    <string name="files_state_off">À autoriser</string>
+    <string name="files_internal">Stockage interne</string>
+    <string name="files_name_taken">Un élément porte déjà ce nom.</string>
+    <string name="files_name_taken_dest">Un élément porte déjà ce nom à destination.</string>
+    <string name="files_copy_failed">Copie impossible.</string>
+    <string name="files_delete_failed">Copie faite, mais l\'original n\'a pas pu être supprimé.</string>
+    <string name="files_upload_no_start">Téléversement sans début.</string>
+    <string name="files_need_access">Accès aux fichiers non autorisé sur l\'appareil : dans l\'appli loco, touchez « Autoriser l\'accès aux fichiers ».</string>
+    <string name="files_denied">Accès refusé.</string>
+    <string name="files_not_found">Introuvable.</string>
+    <string name="files_not_empty">Dossier non vide.</string>
+    <string name="files_no_space">Espace insuffisant sur l\'appareil.</string>
+
+    <!-- Arrière-plan (optimisation batterie) -->
+    <string name="battery_title">Fonctionnement en arrière-plan</string>
+    <string name="battery_hint">Autorisez loco à rester actif en arrière-plan : sinon l\'appareil peut le mettre en veille et le contact se perd quand l\'écran est éteint.</string>
+    <string name="battery_on">Autoriser l\'arrière-plan</string>
+    <string name="battery_state_off">À autoriser</string>
+
+    <!-- Sessions distantes -->
+    <string name="remote_no_screen">Écran distant non activé sur l\'appareil : dans l\'appli loco, touchez « Activer l\'écran distant ».</string>
+    <string name="remote_unsupported">Type de session non pris en charge sur Android.</string>
+</resources>

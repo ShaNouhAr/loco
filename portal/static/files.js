@@ -192,7 +192,8 @@ function renderList(entries, truncated) {
       ? '<button type="button" class="files-name link" data-open-dir>' + icon('dir', e.link) + '<span>' + esc(e.name) + '</span></button>'
       : '<span class="files-name">' + icon(type, e.link) + '<span>' + esc(e.name) + '</span></span>';
     const canEdit = type === 'file' && isText(String(e.name)) && Number(e.size) <= EDIT_MAX;
-    const windows = Number(root.dataset.windows) === 1;
+    // Droits Unix : sans objet sous Windows et sur le stockage partagé d'Android.
+    const chmod = root.dataset.chmod ? root.dataset.chmod === '1' : Number(root.dataset.windows) !== 1;
     const menu =
       '<details class="menu files-menu"><summary class="btn icon sm" aria-label="' + esc(tr('Actions')) + '"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>' +
       '<div class="menu-list" role="menu">' +
@@ -201,7 +202,7 @@ function renderList(entries, truncated) {
       '<button type="button" class="menu-item" data-act="rename">' + esc(tr('Renommer')) + '</button>' +
       '<button type="button" class="menu-item" data-act="copy">' + esc(tr('Copier')) + '</button>' +
       '<button type="button" class="menu-item" data-act="cut">' + esc(tr('Déplacer…')) + '</button>' +
-      (windows ? '' : '<button type="button" class="menu-item" data-act="chmod">' + esc(tr('Droits…')) + '</button>') +
+      (chmod ? '<button type="button" class="menu-item" data-act="chmod">' + esc(tr('Droits…')) + '</button>' : '') +
       '<button type="button" class="menu-item danger" data-act="delete">' + esc(tr('Supprimer')) + '</button>' +
       '</div></details>';
     return '<tr data-name="' + esc(e.name) + '" data-type="' + type + '">' +
@@ -446,7 +447,7 @@ async function openSession() {
   document.body.dataset.noReload = '1';
   try {
     const body = new URLSearchParams({ csrf: root.dataset.csrf, kind: 'files' });
-    const response = await fetch(root.dataset.open, { method: 'POST', body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+    const response = await fetch(root.dataset.sessionUrl, { method: 'POST', body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
     if (!response.ok) throw new Error(response.status === 409 ? tr('Agent trop ancien ou trop de sessions ouvertes.') : tr('Ouverture refusée (%(status)s).', { status: response.status }));
     const d = await response.json();
     io = d.io; running = true; failures = 0;

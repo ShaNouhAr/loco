@@ -41,7 +41,7 @@ STALE_DAYS = 1                  # sans contact depuis : orange
 SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
-FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat")}
+FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil")}
@@ -995,6 +995,51 @@ def agent_msi(fetch=False):
         return _msi_cache(), expected
 
 
+# Agent Android : APK joint à la release GitHub de cette version (android/client/), ou déposé à côté du portail
+# (serveur hors ligne, essais). Générique : l'application demande l'adresse, la clé et l'empreinte à la personne.
+_APK_LOCK = threading.Lock()
+
+
+def _apk_cache():
+    return os.path.join(config.DATA, "agents", f"loco-agent-{config.VERSION}.apk")
+
+
+def agent_apk(fetch=False):
+    """(chemin, sha256) de l'APK de l'agent Android de cette version, ou (None, raison)."""
+    for path in (os.path.join(AGENT_DIR, "loco-agent.apk"), _apk_cache()):
+        if os.path.isfile(path):
+            return path, _file_sha256(path)
+    if not fetch:
+        return None, "absent"
+    with _APK_LOCK:
+        if os.path.isfile(_apk_cache()):
+            return _apk_cache(), _file_sha256(_apk_cache())
+        name = f"loco-agent-{config.VERSION}.apk"
+        try:
+            sums = _get_url(f"{RELEASES}/v{config.VERSION}/SHA256SUMS", 65536).decode()
+            expected = next((line.split()[0].lower() for line in sums.splitlines()
+                             if len(line.split()) == 2 and line.split()[1].lstrip("*") == name), "")
+            if not re.fullmatch(r"[0-9a-f]{64}", expected):
+                return None, f"{name} absent de la version publiée {config.VERSION}"
+            data = _get_url(f"{RELEASES}/v{config.VERSION}/{name}", 64 * 1024 * 1024)
+        except OSError as e:
+            return None, f"téléchargement depuis GitHub impossible : {e}"
+        if hashlib.sha256(data).hexdigest() != expected:
+            return None, "empreinte SHA-256 de l'APK incorrecte"
+        os.makedirs(os.path.dirname(_apk_cache()), exist_ok=True)
+        fd, tmp = tempfile.mkstemp(prefix=".apk-", dir=os.path.dirname(_apk_cache()))
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(data)
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, _apk_cache())
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+        _SHA.pop(_apk_cache(), None)
+        return _apk_cache(), expected
+
+
 # Emplacements gravés dans le MSI (mêmes chaînes et longueurs que windows/client/loco-client.wxs).
 _MSI_FIELDS = (
     (b"@LOCO_PROVISION_SERVER@" + b"." * 137, "server"),
@@ -1150,7 +1195,30 @@ def agent_file(name):
                             status=503, mimetype="text/plain", headers={"Retry-After": "30"})
         return Response(data, mimetype="application/x-msi",
                         headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
+    if name == "loco-agent.apk":
+        if not features.enabled("android"):
+            abort(404)
+        path, reason = agent_apk(fetch=True)
+        if path is None:
+            current_app.logger.warning("APK de l'agent %s indisponible : %s", config.VERSION, reason)
+            return Response(f"loco-agent.apk {config.VERSION} indisponible : {reason}. Reessayez dans un instant.\n",
+                            status=503, mimetype="text/plain", headers={"Retry-After": "30"})
+        with open(path, "rb") as f:
+            data = f.read()
+        return Response(data, mimetype="application/vnd.android.package-archive",
+                        headers={"Content-Disposition": "attachment; filename=loco-agent.apk"})
     abort(404)
+
+
+@app.route("/agent/ca.pem")
+def agent_ca():
+    """Autorité (CA) de loco, publique : l'application Android la récupère à l'inscription, puis en fait confirmer
+    l'empreinte par la personne avant de l'épingler. Un certificat d'autorité n'est pas un secret."""
+    pem = trust_pem()
+    if not pem:
+        abort(404)
+    return Response(pem, mimetype="application/x-pem-file",
+                    headers={"Content-Disposition": "attachment; filename=loco-ca.pem"})
 
 
 @app.route("/agent/windows/enroll.msi")

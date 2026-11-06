@@ -14,7 +14,7 @@
 {%- endmacro %}
 {% macro flatpak_step(ns) -%}
 <section class="panel">
-  {{ step(ns, _("Applications Flatpak"), "facultatif") }}
+  {{ step(ns, _("Applications Flatpak"), _("facultatif")) }}
   <div class="panel-b">
     <p class="muted">{{ _("Flathub via le cache de loco") }}{% if not windows %}{{ _(", et dépôt local « loco » des applications internes") }}{% endif %}.</p>
     {{ cmd('enroll-flatpak-' ~ ns.n, 'curl -fsSL ' ~ client_url ~ '/flatpak/setup.sh | sudo sh') }}
@@ -76,7 +76,8 @@
 {% set wu = can('wu.view') and feature('wu') %}
 {% set winapps = can('windows.view') and feature('windows_apps') %}
 {% set tabs = [('windows', 'Windows', 'windows', key or wu or winapps), ('debian', _('Debian, Ubuntu'), 'linux', key or apt or flat),
-               ('redhat', _('Rocky, AlmaLinux, RHEL'), 'linux', key or rpm or flat)]|selectattr(3)|list %}
+               ('redhat', _('Rocky, AlmaLinux, RHEL'), 'linux', key or rpm or flat),
+               ('android', 'Android', 'android', key and feature('android'))]|selectattr(3)|list %}
 <div class="head">
   <div>
     <h1>{{ _("Enrôlement") }}</h1>
@@ -110,7 +111,7 @@
     {% if key %}
     {{ composer(ns, 'windows') }}
     <section class="panel">
-      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
+      {{ step(ns, _("Autres méthodes d'installation"), _("facultatif")) }}
       <div class="panel-b">
         {{ download('windows', 'loco-client.msi', _("Service Windows · s'installe et inscrit le poste d'un double-clic · version %(version)s", version=version), url_for('agent_enroll_msi', groupe=group.id if group else None), _('Télécharger le MSI'), 'btn primary') }}
         <span class="hint">{{ _("L'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans le MSI.") }}</span>
@@ -137,7 +138,7 @@
     {% endif %}
     {% if winapps %}
     <section class="panel">
-      {{ step(ns, _("Logiciels du catalogue"), "facultatif") }}
+      {{ step(ns, _("Logiciels du catalogue"), _("facultatif")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Installer un logiciel du catalogue local, dans PowerShell administrateur (plusieurs : <code>7-zip,vlc</code>).") }}</p>
         {{ cmd('enroll-win-apps', "irm '" ~ client_url ~ "/win/i/<logiciel>' | iex", 'PS>') }}
@@ -152,7 +153,7 @@
     {% if key %}
     {{ composer(ns, 'deb') }}
     <section class="panel">
-      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
+      {{ step(ns, _("Autres méthodes d'installation"), _("facultatif")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Pour un poste hors ligne : téléchargez le paquet ici, copiez-le sur le poste, puis installez-le.") }}</p>
         {% if packages.deb.repos %}{{ download('package', packages.deb.full, _('Agent, dépôt et cache · version %(version)s', version=version), commands.deb_full_path, _('Télécharger')) }}{% endif %}
@@ -181,7 +182,7 @@
     {% if key %}
     {{ composer(ns, 'rpm') }}
     <section class="panel">
-      {{ step(ns, _("Autres méthodes d'installation"), "facultatif") }}
+      {{ step(ns, _("Autres méthodes d'installation"), _("facultatif")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Pour un poste hors ligne : téléchargez le paquet ici, copiez-le sur le poste, puis installez-le.") }}</p>
         {% if packages.rpm.repos %}{{ download('package', packages.rpm.full, _('Agent, dépôt et cache · version %(version)s', version=version), commands.rpm_full_path, _('Télécharger')) }}{% endif %}
@@ -203,6 +204,36 @@
     </section>
     {% endif %}
     {% if flat %}{{ flatpak_step(ns) }}{% endif %}
+  </div>
+
+  {% set ns = namespace(n=0) %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'android' }}" data-panel="android">
+    {% if key and feature('android') %}
+    <section class="panel">
+      {{ step(ns, _("Installer l'application loco"), _("expérimental")) }}
+      <div class="panel-b">
+        <p class="muted">{{ _("Sur l'appareil Android, téléchargez puis ouvrez l'application. Android demandera d'autoriser l'installation depuis cette source ; aucun compte Google n'est nécessaire.") }}</p>
+        {% if apk_ready %}{{ download('android', 'loco-agent.apk', _("Application Android · version %(version)s", version=version), url_for('agent_file', name='loco-agent.apk'), _('Télécharger l’APK'), 'btn primary') }}
+        {% else %}<p class="note">{{ _("L'APK de cette version n'est pas encore présent sur ce serveur : il se télécharge tout seul depuis la version publiée. Réessayez dans un instant.") }}</p>{% endif %}
+        <span class="hint">{{ _("Lien direct depuis le navigateur de l'appareil :") }} <a href="{{ client_url }}/agent/files/loco-agent.apk" class="mono">{{ client_url }}/agent/files/loco-agent.apk</a>{% if http_url %} {{ _("ou, autorité pas encore importée,") }} <a href="{{ http_url }}/agent/files/loco-agent.apk" class="mono">{{ http_url }}/agent/files/loco-agent.apk</a>{% endif %}.</span>
+      </div>
+    </section>
+    <section class="panel">
+      {{ step(ns, _("Connecter l'appareil")) }}
+      <div class="panel-b">
+        <p class="muted">{{ _("Ouvrez l'application loco et saisissez l'adresse du serveur et la clé d'inscription :") }}</p>
+        <div class="stack-sm">
+          <span class="cmd-label">{{ _("Adresse du serveur") }}</span>
+          {{ cmd('enroll-android-server', https_url) }}
+          <span class="cmd-label">{{ _("Clé d'inscription") }}</span>
+          {{ cmd('enroll-android-key', key) }}
+        </div>
+        {% if ca_sha256 %}<span class="hint">{{ _("L'application affichera l'empreinte de l'autorité de loco : vérifiez qu'elle correspond à") }} <code class="mono">{{ ca_sha256 }}</code> {{ _("avant de confirmer.") }}</span>
+        {% else %}<span class="hint">{{ _("Le certificat de ce serveur est reconnu publiquement : l'application se connecte sans empreinte à confirmer.") }}</span>{% endif %}
+        <span class="hint">{{ _("L'appareil rejoint <a href=\"%(v)s\">Mon parc</a> dès qu'il est connecté. L'écran distant, les fichiers et le terminal ne s'activent qu'avec votre accord, depuis l'application, sur l'appareil.", v=url_for('fleet')) }}</span>
+      </div>
+    </section>
+    {% endif %}
   </div>
 </div>
 {% if key and group %}<div class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription du groupe « %(name)s » : ne les partagez qu'avec les personnes qui installent ses postes.", name=group.name) }}{% if can('fleet.settings') %}

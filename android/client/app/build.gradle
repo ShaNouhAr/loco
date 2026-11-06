@@ -1,0 +1,60 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'org.loco.agent'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'org.loco.agent'
+        minSdk 26
+        targetSdk 34
+        // Version alignée sur loco : l'agent Android fait partie de loco et évolue avec lui. Injectée au build
+        // (-PappVersion) ; le serveur s'appuie dessus pour les seuils de capacités (bureau, fichiers, accord).
+        def appVersion = (project.findProperty('appVersion') ?: '0.0.1').toString()
+        def parts = (appVersion.replaceAll('[^0-9.].*$', '').split('\\.') + ['0', '0', '0'])
+        versionCode parts[0].toInteger() * 1000000 + parts[1].toInteger() * 1000 + parts[2].toInteger()
+        versionName appVersion
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    // Signature de release : clé stable hors dépôt (LOCO_KEYSTORE_DIR, par défaut ~/android-keystore).
+    // Mots de passe lus dans des fichiers 0600, jamais écrits dans le dépôt ni en clair ici.
+    def ksDir = System.getenv('LOCO_KEYSTORE_DIR') ?: "${System.getProperty('user.home')}/android-keystore"
+    def ksProps = new File(ksDir, 'keystore.properties')
+    def ksSigned = ksProps.exists()
+    if (ksSigned) {
+        signingConfigs {
+            release {
+                def props = new Properties()
+                ksProps.withInputStream { props.load(it) }
+                def pw = new File(ksDir, 'pw.store').text.trim()
+                storeFile file(props.getProperty('storeFile'))
+                keyAlias props.getProperty('keyAlias')
+                storePassword pw
+                keyPassword pw
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ksSigned) signingConfig signingConfigs.release
+        }
+    }
+}
+
+dependencies {
+}

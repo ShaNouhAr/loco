@@ -494,7 +494,9 @@ if (root.dataset.kind === 'terminal') {
   const KEYS = {ctrl: [0xffe3, 'ControlLeft'], alt: [0xffe9, 'AltLeft'], shift: [0xffe1, 'ShiftLeft'], super: [0xffeb, 'MetaLeft'],
                 delete: [0xffff, 'Delete'], escape: [0xff1b, 'Escape'], tab: [0xff09, 'Tab'], f4: [0xffc1, 'F4'],
                 print: [0xff61, 'PrintScreen'], menu: [0xff67, 'ContextMenu'], enter: [0xff0d, 'Enter'],
-                r: [0x72, 'KeyR'], e: [0x65, 'KeyE'], d: [0x64, 'KeyD'], l: [0x6c, 'KeyL']};
+                r: [0x72, 'KeyR'], e: [0x65, 'KeyE'], d: [0x64, 'KeyD'], l: [0x6c, 'KeyL'],
+                // Navigation Android (keysyms XF86, traduits par l'agent en actions du système).
+                back: [0x1008ff26, null], home: [0x1008ff18, null], recents: [0x1008ff7f, null], notifications: [0x1008ff65, null]};
   const held = new Set();
   function combo(names) {
     const keys = names.split(' ').map(n => KEYS[n]).filter(Boolean);

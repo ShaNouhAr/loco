@@ -329,7 +329,8 @@ def _partial(raw, nonce, windows):
 @tool("terminal_run", "remote", "Run a terminal command", L_("Commandes dans le terminal"),
       L_("Lancer des commandes dans le terminal root (Linux) ou PowerShell SYSTEM (Windows) d'un poste et lire leur sortie, en direct."),
       ("fleet.view", "remote.terminal"),
-      "Run a command in the device's live terminal — root bash on Linux, Windows PowerShell as SYSTEM on Windows — and "
+      "Run a command in the device's live terminal — root bash on Linux, Windows PowerShell as SYSTEM on Windows, or the "
+      "agent's own shell on Android (unprivileged, no root) — and "
       "return its output and exit code within seconds (no agent check-in wait). Each call is independent: no working "
       "directory or variable is kept between calls. The command must not wait for keyboard input (use terminal_interact "
       "for interactive programs); it is interrupted after the timeout. For tasks longer than a few minutes, start them in "
@@ -444,7 +445,8 @@ def close_role(token_id, dev_id, kind, role, reason):
 @tool("terminal_interact", "remote", "Use the interactive terminal", L_("Terminal interactif"),
       L_("Programmes interactifs (vim, top, invites oui/non, PowerShell) : le LLM tape, appuie sur des touches et lit l'écran du terminal."),
       ("fleet.view", "remote.terminal"),
-      "Drive the device's interactive terminal like a person (root bash on Linux, PowerShell as SYSTEM on Windows): "
+      "Drive the device's interactive terminal like a person (root bash on Linux, PowerShell as SYSTEM on Windows, the "
+      "agent's own shell on Android): "
       "type input, with keys in braces such as {enter}, {tab}, {escape}, {up}, {f2}, {ctrl+c}, {ctrl+d}, {alt+x} "
       "({{ for a literal brace; \\n also presses Enter), then read the terminal screen (120x40). Use it for interactive "
       "programs: editors (vim, nano), top, prompts and installers. The session keeps its state between calls (working "
@@ -666,6 +668,9 @@ KEYS = {"enter": 0xff0d, "return": 0xff0d, "tab": 0xff09, "escape": 0xff1b, "esc
         "pagedown": 0xff56, "left": 0xff51, "up": 0xff52, "right": 0xff53, "down": 0xff54, "space": 0x20,
         "ctrl": 0xffe3, "control": 0xffe3, "shift": 0xffe1, "alt": 0xffe9, "altgr": 0xfe03, "super": 0xffeb,
         "win": 0xffeb, "windows": 0xffeb, "meta": 0xffeb, "cmd": 0xffeb, "menu": 0xff67, "printscreen": 0xff61,
+        # Navigation Android (keysyms XF86 interprétés par l'agent) ; sans effet sur un poste Linux ou Windows.
+        "back": 0x1008ff26, "homescreen": 0x1008ff18, "recents": 0x1008ff7f, "overview": 0x1008ff7f,
+        "notifications": 0x1008ff65,
         **{f"f{n}": 0xffbd + n for n in range(1, 13)}}
 BUTTONS = {"left": 1, "middle": 2, "right": 4}
 
@@ -984,7 +989,8 @@ def _desktop_type(args):
 @tool("desktop_key", "remote", "Press keys on the desktop", L_("Appuyer sur des touches"),
       L_("Touche ou raccourci clavier (Entrée, Échap, Ctrl+C, Alt+F4, Ctrl+Alt+Suppr…)."), DESKTOP,
       "Press a key or a shortcut on the device, such as enter, escape, tab, ctrl+c, alt+f4, super, ctrl+alt+delete, "
-      "f5, up. Keys are joined with +. Returns a screenshot afterwards unless screenshot=false.",
+      "f5, up. Keys are joined with +. On an Android device, use back, homescreen, recents or notifications to navigate. "
+      "Returns a screenshot afterwards unless screenshot=false.",
       {"device": DEVICE, "keys": {"type": "string", "minLength": 1, "maxLength": 60, "description": "Key or shortcut, e.g. ctrl+alt+t."},
        "screenshot": SHOT, "wait_ms": WAIT}, ("device", "keys"), read_only=False, destructive=True, idempotent=False)
 def _desktop_key(args):

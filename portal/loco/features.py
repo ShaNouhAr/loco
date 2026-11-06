@@ -25,7 +25,12 @@ FEATURES = {
     "directories": (L_("Annuaires LDAP et RADIUS"), L_("Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles."), (), ""),
     "alerts": (L_("Alertes et notifications"), L_("Notifications par e-mail et webhook sur l'état du serveur et du parc."), (), ""),
     "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
+    "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers et assistant IA. Pas de mises à jour ni de catalogue de logiciels."), ("fleet",), ""),
 }
+
+# Fonctionnalités expérimentales : désactivées par défaut, activables seulement par le compte « admin ».
+EXPERIMENTAL = {"android"}
+EXPERIMENTAL_SETTING = "features_experimental"
 
 # Module de la page -> fonctionnalités nécessaires ; quelques pages partagées sont précisées par leur nom.
 MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("flatpak",), "loco.wupdate": ("wu",),
@@ -48,7 +53,16 @@ PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu"
                "mcp": ("mcp",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                   "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs"}
+                   "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca"}
+
+
+def _experimental_on(conn=None):
+    """Fonctionnalités expérimentales explicitement activées par le compte « admin »."""
+    row = (conn or db()).execute("SELECT value FROM settings WHERE key=?", (EXPERIMENTAL_SETTING,)).fetchone()
+    try:
+        return {k for k in json.loads(row[0]) if k in EXPERIMENTAL} if row else set()
+    except (TypeError, ValueError):
+        return set()
 
 
 def disabled(conn=None):
@@ -66,6 +80,8 @@ def disabled(conn=None):
         off.add("flatpak")
     if not config.WU_PROXY:
         off.add("wu_proxy")              # Squid absent : ne jamais pousser un proxy inexistant aux postes
+    # Expérimental : coupé tant que le compte « admin » ne l'a pas explicitement activé.
+    off |= EXPERIMENTAL - _experimental_on(conn)
     # Une fonctionnalité dont un prérequis est coupé l'est aussi.
     off |= {k for k, f in FEATURES.items() if set(f[2]) & off}
     if conn is None:
@@ -131,14 +147,16 @@ def features():
             manual = set(json.loads(row[0]))
         except (TypeError, ValueError):
             pass
-    items = []
+    exp_on = _experimental_on(db())
+    items, experimental = [], []
     for key, (label, description, depends, switch) in FEATURES.items():
         install_off = (key == "rpm" and not config.RPM_ENABLED) or (key == "flatpak" and not config.FLATPAK_ENABLED)
-        items.append({"key": key, "label": label, "description": description, "on": key not in off,
-                      "chosen": key not in manual, "install_off": install_off,
-                      "depends": [FEATURES[d][0] for d in depends], "blocked_by": [FEATURES[d][0] for d in depends if d in off],
-                      "service": bool(switch) and config.APPLIANCE})
-    return render_template("features.html", items=items, appliance=config.APPLIANCE)
+        (experimental if key in EXPERIMENTAL else items).append(
+            {"key": key, "label": label, "description": description, "on": key not in off,
+             "chosen": key in exp_on if key in EXPERIMENTAL else key not in manual, "install_off": install_off,
+             "depends": [FEATURES[d][0] for d in depends], "blocked_by": [FEATURES[d][0] for d in depends if d in off],
+             "service": bool(switch) and config.APPLIANCE})
+    return render_template("features.html", items=items, experimental=experimental, appliance=config.APPLIANCE)
 
 
 @app.route("/administration/features", methods=["POST"])
@@ -146,11 +164,14 @@ def features():
 def features_save():
     if not is_super_admin():
         abort(403, _("Réservé au compte « admin » de l'installation."))
-    wanted_off = sorted(k for k in FEATURES if request.form.get(k) != "1")
+    wanted_off = sorted(k for k in FEATURES if k not in EXPERIMENTAL and request.form.get(k) != "1")
+    wanted_exp = sorted(k for k in EXPERIMENTAL if request.form.get(k) == "1")
     conn = db()
     previous = disabled(conn)
     conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                  (SETTING, json.dumps(wanted_off)))
+    conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 (EXPERIMENTAL_SETTING, json.dumps(wanted_exp)))
     now = disabled(conn)
     changes = [f"{FEATURES[k][0]} {'désactivé' if k in now else 'activé'}" for k in FEATURES if (k in now) != (k in previous)]
     if changes:

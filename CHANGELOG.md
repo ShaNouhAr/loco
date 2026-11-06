@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.138.0 — 2026-11-06
+
+- **Appareils Android** (expérimental, coupé par défaut) : gérer vos propres téléphones et tablettes Android depuis loco, **sans QR code** à l'installation.
+  - **Activer** dans *Administration › Fonctionnalités*, section *Expérimental* : *Appareils Android*. Réservé au compte `admin` créé à l'installation.
+  - **Installer et connecter** : onglet *Android* de l'enrôlement, télécharger l'application (`loco-agent.apk`), saisir l'adresse du serveur et la clé d'inscription, puis confirmer l'empreinte de l'autorité. Aucun compte Google.
+  - **Écran, terminal, fichiers** comme pour un poste : voir et piloter l'écran (toucher, clavier, souris ; boutons *Retour*, *Accueil*, *Applications récentes*, *Notifications*), un terminal avec les droits de l'application (sans root), et le gestionnaire de fichiers. Les assistants IA (MCP) disposent des mêmes actions.
+  - **Avec votre accord, sur l'appareil** : l'application reste visible et chaque capacité (écran, contrôle, fichiers, arrière-plan) s'active à la main. Rien n'est capturé en dehors d'une session ouverte depuis le portail.
+  - **Pas de mises à jour système ni de catalogue de logiciels** sur Android. Détails : [docs/android.md](docs/android.md).
+
 ## 2.137.1 — 2026-11-05
 
 - **Appliance : le proxy Windows Update repart après un redémarrage.** Son dossier dans `/run` n'était créé qu'à l'installation : à chaque redémarrage, le service restait en échec et le port 3128 fermé. Le cache par DNS et le reste du portail n'étaient pas concernés. La mise à jour suffit.
