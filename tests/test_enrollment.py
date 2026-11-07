@@ -58,7 +58,7 @@ class TestAgentPackages(unittest.TestCase):
         self.addCleanup(os.unlink, path)
         fields = debpkg.deb_fields(path)                                     # relu par le lecteur des dépôts APT
         self.assertEqual((fields["Package"], fields["Version"], fields["Architecture"], fields["Depends"]),
-                         ("loco-client", "2.21.0", "all", "python3, systemd"))
+                         ("loco-client", "2.21.0", "all", "python3, systemd, grim"))
         self.assertIn("https://loco.test:8443", fields["Description"])
         members = deb_members(data)
         self.assertEqual(list(members), ["debian-binary", "control.tar.gz", "data.tar.gz"])

@@ -1,3 +1,6 @@
 {% macro software_logo(package_id, name, size='') -%}
 <span class="app-logo-box {{ size }}" aria-hidden="true"><span class="app-logo-initial">{{ name[:1]|upper }}</span>{% if package_id %}<img data-app-logo src="{{ url_for('software_icon', package_id=package_id) }}" loading="lazy" decoding="async" alt="">{% endif %}</span>
 {%- endmacro %}
+{% macro android_logo(source_id, package, name, size='') -%}
+<span class="app-logo-box {{ size }}" aria-hidden="true"><span class="app-logo-initial">{{ name[:1]|upper }}</span>{% if source_id %}<img data-app-logo src="{{ url_for('android_icon', source_id=source_id, package=package) }}" loading="lazy" decoding="async" alt="">{% endif %}</span>
+{%- endmacro %}

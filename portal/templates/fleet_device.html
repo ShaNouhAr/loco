@@ -36,11 +36,24 @@
     {% if can('remote.' ~ kind) %}
     <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split" rel="noopener">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
-      <button class="btn" {% if not remote_ready %}disabled title="{{ _('Agent 2.4.0 requis') }}"{% else %}title="{{ _('%(v)s, session journalisée', v=_('PowerShell (SYSTEM)') if windows and kind == 'terminal' else (_('Session noVNC') if kind == 'desktop' else _('Shell root'))) }}"{% endif %}>{{ label }}</button>
+      <button class="btn" {% if not remote_ready %}disabled title="{{ _('Agent 2.4.0 requis') }}"{% else %}title="{{ _('%(v)s, session journalisée', v=_('PowerShell (SYSTEM)') if windows and kind == 'terminal' else (_('Session noVNC') if kind == 'desktop' else (_("Shell de l'application, sans root") if android else _('Shell root')))) }}"{% endif %}>{{ label }}</button>
       <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('%(label)s dans un nouvel onglet', label=label) }}" title="{{ _('Ouvrir dans un nouvel onglet') }}" {% if not remote_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
     </form>
     {% endif %}
     {% endfor %}
+    {% endif %}
+    {% if active and adb_view %}
+    {% if adb_view.configured and adb_view.state in ('ready', 'idle') %}
+    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="adb">
+      <button class="btn" title="{{ _('Shell adb (utilisateur shell d’Android), session journalisée') }}">{{ _("Terminal adb") }}</button>
+      <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('Terminal adb dans un nouvel onglet') }}" title="{{ _('Ouvrir dans un nouvel onglet') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+    </form>
+    <button type="button" class="btn" data-open="#adb-unlock" title="{{ _('Réveiller l’écran et déverrouiller (schéma, PIN ou mot de passe)') }}">{{ _("Déverrouiller") }}</button>
+    <button type="button" class="btn" data-open="#adb-screen" title="{{ _('Voir et piloter l’écran déverrouillé, par adb') }}">{{ _("Contrôler l'écran") }}</button>
+    {% else %}
+    <button type="button" class="btn" data-open="#adb-setup" title="{{ adb_view.text|capitalize }}">{{ _("Terminal adb") }}</button>
+    {% endif %}
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
@@ -58,6 +71,8 @@
         {% if can('fleet.update') and can('fleet.reboot') and not android %}{{ action('update', _('Mettre à jour puis redémarrer si nécessaire'), reboot=True) }}{% endif %}
         {% if can('fleet.scan') and not android %}{{ action('scan', _('Refaire l\'inventaire')) }}{% endif %}
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
+        {% if android_view and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose_android', device=dev.id) }}">{{ _("Installer des applications…") }}</a>{% endif %}
+        {% if adb_view %}<button type="button" class="menu-item" data-open="#adb-setup">{{ _("Débogage adb…") }}</button>{% endif %}
         {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=dev.hostname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer')) }}{% endif %}
         {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=dev.hostname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
         {% elif can('fleet.remove') %}
@@ -85,6 +100,7 @@
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
   </div>{% endif %}
   {% if inv.error %}<p class="note err">{{ inv.error }}</p>{% endif %}
+  {% if android_view and android_view.ready and android_view.can_install == false %}<p class="note warn">{{ _("L'application loco n'a pas encore le droit d'installer des applications sur cet appareil : touchez « Autoriser les installations » dans l'application loco. Sans lui, Android le demande à la première installation.") }}</p>{% endif %}
   {% if inv.warning %}<p class="note warn">{{ inv.warning }}</p>{% endif %}
 
   {% if not android %}
@@ -293,8 +309,27 @@
     <div class="tab-panel{{ ' on' if android }}" data-panel="logiciels">
       <div class="panel-h sub"><h2>{{ _("Applications installées") if android else _("Logiciels installés sur le poste") }}</h2>
         <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#installed tbody tr" aria-label="{{ _('Filtrer les logiciels') }}"></div></div>
+      {% if android_view and android_view.catalog %}
+      <div class="table-wrap"><table class="table-cards">
+        <thead><tr><th>{{ _("Catalogue loco") }}</th><th>{{ _("Installée") }}</th><th>{{ _("Disponible") }}</th><th></th></tr></thead>
+        <tbody>
+        {% for c in android_view.catalog %}{% set a = c.row %}
+          <tr><td>{{ a.name }}<span class="sub">{{ 'Google Play' if a.store == 'play' else a.source_name }}</span></td>
+            <td class="nowrap" data-label="{{ _('Installée') }}"><span class="mono">{{ c.current.version if c.current else '—' }}</span>{% if c.current and c.current.installer %}<span class="sub sans">{{ android_installer(c.current.installer) }}</span>{% endif %}</td>
+            <td class="nowrap" data-label="{{ _('Disponible') }}">{% if a.store == 'play' %}<span class="faint">Google Play</span>{% else %}<span class="mono">{{ c.choice.name if c.choice else '—' }}</span>{% endif %}</td>
+            <td class="right nowrap card-action">
+              {% if c.state == 'update' %}<span class="st warn">{{ _("mise à jour disponible") }}</span>
+              {% elif c.state in ('ok', 'installed') %}<span class="st ok">{{ _("à jour") if c.state == 'ok' else _("installée") }}</span>
+              {% elif c.state == 'other' %}<span class="faint small">{{ _("mise à jour par %(store)s", store=android_installer(c.current.installer) or _('une autre boutique')) }}</span>
+              {% elif c.state == 'unavailable' %}<span class="faint small">{{ _("aucune version compatible") }}</span>{% endif %}
+              {% if c.state in ('absent', 'update') and active and can('fleet.install') and android_view.ready %} <a class="small" href="{{ url_for('deployment_compose_android', app=a.id, device=dev.id) }}">{{ _("Mettre à jour") if c.state == 'update' else _("Installer") }}</a>{% endif %}
+            </td></tr>
+        {% endfor %}
+        </tbody></table></div>
+      <div class="panel-h sub"><h2>{{ _("Toutes les applications") }}</h2></div>
+      {% endif %}
       <div class="table-wrap"><table id="installed"><tbody>
-      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}</span></td><td class="mono muted right">{{ s.version }}</td></tr>{% endfor %}
+      {% for s in inv.apps|sort(attribute='name') %}<tr><td>{{ s.name }}<span class="sub">{{ s.publisher }}{% if android and s.installer %} · {{ android_installer(s.installer) }}{% endif %}</span></td><td class="mono muted right">{{ s.version }}</td></tr>{% endfor %}
       </tbody></table></div>
     </div>
     {% endif %}
@@ -500,8 +535,142 @@
     </div>
   </section>
 </div>
+{% if adb_view %}{% set seen = adb_view.report %}
+<dialog id="adb-setup" class="app-dialog">
+  <div class="dlg-h">
+    <div><h2>{{ _("Terminal adb") }}</h2><p>{{ _("loco se connecte à l'appareil comme un ordinateur de développement, sur le réseau local, et ouvre adb shell : l'utilisateur « shell » d'Android (applications, réglages, journaux), plus large que le terminal de l'application loco.") }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="dlg-b">
+    <section class="dlg-sec"><p><span class="st {{ 'ok' if adb_view.state == 'ready' else 'err' if adb_view.state == 'missing' else 'warn' }}">{{ adb_view.text|capitalize }}</span>{% if adb_view.paired_at %} <span class="small muted">· {{ _("appairé le %(date)s", date=adb_view.paired_at|date_fr) }}</span>{% endif %}</p></section>
+    {% if not adb_view.available %}
+    <p class="note warn">{{ _("Installez adb sur le serveur loco : il est inclus dans l'appliance à partir de cette version (après la mise à jour) ; sous Debian ou Ubuntu, %(cmd)s.", cmd='<code>sudo apt install adb</code>'|safe) }}</p>
+    {% else %}
+    <section class="dlg-sec">
+      <h3>{{ _("Débogage sans fil (Android 11 et plus)") }}</h3>
+      <ol class="small stack-sm">
+        <li>{{ _("Options pour les développeurs : dans Paramètres › À propos, touchez sept fois « Numéro de build ».") }}</li>
+        <li>{{ _("Options pour les développeurs › Débogage sans fil : activez-le, sur le même réseau Wi-Fi que loco.") }}</li>
+        <li>{{ _("« Associer l'appareil avec un code d'association » : saisissez ci-dessous le port et le code affichés.") }}</li>
+      </ol>
+      {% if adb_view.pair %}
+      <form method="post" action="{{ url_for('fleet_adb_pair', dev_id=dev.id) }}" data-ajax class="grid2">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="f wide"><span>{{ _("Adresse de l'appareil") }}</span><input type="text" name="host" value="{{ adb_view.host }}" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span>{{ _("Port d'association") }}</span><input type="text" name="port" inputmode="numeric" required placeholder="37851" autocomplete="off"></label>
+        <label class="f"><span>{{ _("Code d'association") }}</span><input type="text" name="code" inputmode="numeric" required pattern="[0-9]{6}" maxlength="6" placeholder="123456" autocomplete="off"></label>
+        <div class="wide"><button class="btn primary"><span class="spin"></span>{{ _("Appairer") }}</button></div>
+      </form>
+      {% if seen %}<p class="hint">{{ _("Vu par l'application loco : options pour les développeurs %(dev)s, débogage sans fil %(wireless)s.", dev=_('activées') if seen.developer else _('désactivées'), wireless=(_('actif sur le port %(port)s', port=seen.port) if seen.port else _('actif')) if seen.wireless else _('inactif')) }}</p>{% endif %}
+      <p class="hint">{{ _("Le port de connexion change à chaque activation du débogage sans fil : l'application loco l'indique à loco. Android coupe le débogage sans fil au redémarrage ou en changeant de réseau : réactivez-le, sans nouvel appairage.") }}</p>
+      {% else %}
+      <p class="note warn">{{ _("La version d'adb de ce serveur est trop ancienne pour l'appairage sans fil (30 ou plus requise) : utilisez un port adb classique ci-dessous.") }}</p>
+      {% endif %}
+    </section>
+    <details class="dlg-adv"{% if adb_view.mode == 'tcp' %} open{% endif %}>
+      <summary>{{ _("Port adb classique") }}<small>{{ _("adb tcpip, Android TV, machine virtuelle") }}</small></summary>
+      <div class="adv-b">
+        <form method="post" action="{{ url_for('fleet_adb_connect', dev_id=dev.id) }}" data-ajax class="grid2">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label class="f"><span>{{ _("Adresse de l'appareil") }}</span><input type="text" name="host" value="{{ adb_view.host }}" spellcheck="false" autocomplete="off"></label>
+          <label class="f"><span>{{ _("Port") }}</span><input type="text" name="port" inputmode="numeric" value="{{ adb_view.port if adb_view.mode == 'tcp' and adb_view.port else 5555 }}" autocomplete="off"></label>
+          <div class="wide"><button class="btn"><span class="spin"></span>{{ _("Se connecter") }}</button></div>
+        </form>
+        <p class="hint">{{ _("Pour un appareil dont adb écoute déjà sur le réseau. La première fois, l'appareil demande d'autoriser le débogage depuis loco.") }}</p>
+      </div>
+    </details>
+    {% endif %}
+  </div>
+  <div class="dlg-f">
+    {% if adb_view.configured %}<form method="post" action="{{ url_for('fleet_adb_forget', dev_id=dev.id) }}" data-ajax data-confirm="{{ _('Oublier le débogage adb de %(name)s ?', name=dev.hostname) }}" data-confirm-text="{{ _('Les terminaux adb ouverts sont fermés. Sur l’appareil, retirez aussi loco de la liste des appareils associés.') }}" data-confirm-ok="{{ _('Oublier') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ _("Oublier") }}</button></form>{% endif %}
+    <button type="button" class="btn" data-close>{{ _("Fermer") }}</button>
+  </div>
+</dialog>
+
+<dialog id="adb-unlock" class="app-dialog" data-adb
+        data-url-unlock="{{ url_for('fleet_adb_unlock', dev_id=dev.id) }}"
+        data-url-wake="{{ url_for('fleet_adb_wake', dev_id=dev.id) }}"
+        data-url-calibrate="{{ url_for('fleet_adb_calibrate', dev_id=dev.id) }}"
+        data-csrf="{{ csrf }}"
+        data-msg-unlocked="{{ _('Déverrouillé.') }}" data-msg-locked="{{ _('Toujours verrouillé.') }}"
+        data-msg-wake="{{ _('Écran réveillé.') }}" data-msg-draw="{{ _('Tracez d’abord votre schéma.') }}"
+        data-msg-sending="{{ _('Envoi…') }}" data-msg-saved="{{ _('Calage enregistré.') }}"
+        data-msg-empty="{{ _('Saisissez le code.') }}">
+  <div class="dlg-h">
+    <div><h2>{{ _("Déverrouiller l'écran") }}</h2><p>{{ _("loco réveille l'appareil et rejoue le schéma, le PIN ou le mot de passe par adb, sans y toucher. L'écran de verrouillage ne peut pas s'afficher (surface sécurisée d'Android) : vous saisissez vous-même le secret, et loco l'injecte.") }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="dlg-b">
+    <div class="split"><button type="button" class="btn" data-adb-wake><span class="spin"></span>{{ _("Réveiller l'écran") }}</button><span class="small muted" data-adb-status aria-live="polite"></span></div>
+    <div class="seg" role="tablist" data-adb-methods>
+      <button type="button" class="seg-btn on" role="tab" data-adb-method="pattern">{{ _("Schéma") }}</button>
+      <button type="button" class="seg-btn" role="tab" data-adb-method="pin">{{ _("PIN") }}</button>
+      <button type="button" class="seg-btn" role="tab" data-adb-method="password">{{ _("Mot de passe") }}</button>
+    </div>
+    <section data-adb-pane="pattern">
+      <div class="pattern-pad" data-adb-pad role="group" aria-label="{{ _('Pavé de schéma 3 × 3') }}">
+        <svg class="pattern-trace" viewBox="0 0 300 300" aria-hidden="true"><polyline data-adb-trace fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        {% for i in range(1, 10) %}<button type="button" class="pattern-dot" data-dot="{{ i }}" aria-label="{{ i }}"><i></i></button>{% endfor %}
+      </div>
+      <div class="split"><button type="button" class="btn" data-adb-clear>{{ _("Effacer") }}</button><button type="button" class="btn primary" data-adb-unlock="pattern"><span class="spin"></span>{{ _("Déverrouiller") }}</button></div>
+      <details class="dlg-adv"{% if adb_view.calibrated %} open{% endif %}>
+        <summary>{{ _("Calage de la grille") }}<small>{{ _("si le schéma ne passe pas sur cet appareil") }}</small></summary>
+        <div class="adv-b">
+          <p class="hint">{{ _("L'écran verrouillé étant invisible, les 9 points sont calculés. Choisissez la marque de l'appareil, ou ajustez le centre et l'écart (en fractions de l'écran), puis testez avec votre schéma.") }}</p>
+          <label class="f wide"><span>{{ _("Modèle de départ") }}</span><select data-adb-preset>{% for p in adb_view.presets %}<option value="{{ p.cx }},{{ p.cy }},{{ p.dx }},{{ p.dy }}">{{ p.label }}</option>{% endfor %}</select></label>
+          <div class="grid2">
+            <label class="f"><span>{{ _("Centre horizontal") }}</span><input type="number" step="0.005" min="0.1" max="0.9" data-geo="cx" value="{{ '%.3f'|format(adb_view.geometry.cx) }}"></label>
+            <label class="f"><span>{{ _("Centre vertical") }}</span><input type="number" step="0.005" min="0.1" max="0.95" data-geo="cy" value="{{ '%.3f'|format(adb_view.geometry.cy) }}"></label>
+            <label class="f"><span>{{ _("Écart horizontal") }}</span><input type="number" step="0.005" min="0.1" max="0.4" data-geo="dx" value="{{ '%.3f'|format(adb_view.geometry.dx) }}"></label>
+            <label class="f"><span>{{ _("Écart vertical") }}</span><input type="number" step="0.005" min="0.05" max="0.3" data-geo="dy" value="{{ '%.3f'|format(adb_view.geometry.dy) }}"></label>
+          </div>
+          <div class="split"><button type="button" class="btn" data-adb-geo-reset>{{ _("Défaut") }}</button><button type="button" class="btn" data-adb-geo-save><span class="spin"></span>{{ _("Enregistrer le calage") }}</button></div>
+        </div>
+      </details>
+    </section>
+    <section data-adb-pane="pin" hidden>
+      <label class="f wide"><span>{{ _("Code PIN") }}</span><input type="password" inputmode="numeric" autocomplete="off" spellcheck="false" data-adb-code="pin" placeholder="••••"></label>
+      <div class="wide"><button type="button" class="btn primary" data-adb-unlock="pin"><span class="spin"></span>{{ _("Déverrouiller") }}</button></div>
+    </section>
+    <section data-adb-pane="password" hidden>
+      <label class="f wide"><span>{{ _("Mot de passe") }}</span><input type="password" autocomplete="off" spellcheck="false" data-adb-code="password"></label>
+      <div class="wide"><button type="button" class="btn primary" data-adb-unlock="password"><span class="spin"></span>{{ _("Déverrouiller") }}</button></div>
+    </section>
+  </div>
+  <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Fermer") }}</button></div>
+</dialog>
+
+<dialog id="adb-screen" class="app-dialog adb-screen-dlg" data-adb-screen
+        data-url-stream="{{ url_for('fleet_adb_stream', dev_id=dev.id) }}"
+        data-url-screen="{{ url_for('fleet_adb_screen', dev_id=dev.id) }}"
+        data-url-input="{{ url_for('fleet_adb_input', dev_id=dev.id) }}" data-csrf="{{ csrf }}"
+        data-msg-err="{{ _('Écran indisponible : vérifiez que l’appareil est déverrouillé, le débogage adb et ffmpeg sur le serveur.') }}">
+  <div class="dlg-h">
+    <div><h2>{{ _("Contrôler l'écran") }}</h2><p>{{ _("Écran de l'appareil déverrouillé, diffusé par adb (sans dialogue MediaProjection). Cliquez pour toucher, glissez pour balayer. L'écran de verrouillage, lui, ne peut pas s'afficher.") }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="dlg-b">
+    <div class="adb-screen-wrap" data-adb-screen-wrap>
+      <canvas data-adb-screen-canvas hidden aria-label="{{ _('Écran de l’appareil') }}"></canvas>
+      <img data-adb-screen-img hidden alt="{{ _('Écran de l’appareil') }}">
+      <span class="adb-screen-msg" data-adb-screen-msg>{{ _("Connexion à l'écran…") }}</span>
+    </div>
+    <div class="adb-screen-bar">
+      <button type="button" class="btn icon" data-key="back" aria-label="{{ _('Retour') }}" title="{{ _('Retour') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <button type="button" class="btn icon" data-key="home" aria-label="{{ _('Accueil') }}" title="{{ _('Accueil') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg></button>
+      <button type="button" class="btn icon" data-key="recents" aria-label="{{ _('Applications récentes') }}" title="{{ _('Applications récentes') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+      <button type="button" class="btn icon" data-key="power" aria-label="{{ _('Marche / veille') }}" title="{{ _('Marche / veille') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0"/></svg></button>
+      <input type="text" class="adb-screen-text" data-adb-screen-text autocomplete="off" spellcheck="false" placeholder="{{ _('Taper du texte…') }}">
+      <button type="button" class="btn" data-adb-screen-send>{{ _("Envoyer") }}</button>
+    </div>
+  </div>
+  <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Fermer") }}</button></div>
+</dialog>
+{% endif %}
 {% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels du catalogue déjà installés.', name=dev.hostname)) }}{% endif %}
 {% endblock %}
 {% block scripts %}
 {% if files_ready and dev.state == 'active' %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endif %}
+{% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='adb_unlock.js') }}?v={{ asset_v }}"></script>{% endif %}
+{% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='adb_screen.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% endblock %}

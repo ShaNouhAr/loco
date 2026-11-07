@@ -547,6 +547,62 @@ MIGRATIONS = [
     ALTER TABLE devices ADD COLUMN remote_consent INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE remote_sessions ADD COLUMN consent TEXT NOT NULL DEFAULT '';
     """,
+    # 39 : applications Android. Sources : dépôts F-Droid et empreinte confirmée de leur clé ; index_timestamp = dernière
+    # entrée signée vérifiée (une plus ancienne est refusée). Catalogue : applications d'une source, ou fiches Google Play.
+    # F-Droid et IzzyOnDroid sont proposés d'office (empreintes vérifiées le 2026-11-06, voir android_apps.KNOWN).
+    """
+    CREATE TABLE android_sources (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL UNIQUE,
+        fingerprint TEXT NOT NULL,
+        known TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        position INTEGER NOT NULL DEFAULT 0,
+        added_at TEXT NOT NULL,
+        added_by TEXT NOT NULL DEFAULT '',
+        index_timestamp INTEGER NOT NULL DEFAULT 0,
+        synced_at TEXT NOT NULL DEFAULT '',
+        checked_at TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT '',
+        apps INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE android_apps (
+        id INTEGER PRIMARY KEY,
+        package TEXT NOT NULL UNIQUE,
+        store TEXT NOT NULL,
+        source_id INTEGER REFERENCES android_sources(id),
+        name TEXT NOT NULL,
+        added_at TEXT NOT NULL,
+        added_by TEXT NOT NULL DEFAULT ''
+    );
+    INSERT INTO android_sources (name, url, fingerprint, known, position, added_at) VALUES
+        ('F-Droid', 'https://f-droid.org/repo', '43238d512c1e5eb2d6569f4a3afbf5523418b82e0a3ed1552770abb9a9c9ccab', 'fdroid', 0,
+         strftime('%Y-%m-%d %H:%M', 'now', 'localtime')),
+        ('IzzyOnDroid', 'https://apt.izzysoft.de/fdroid/repo', '3bf0d6abfeae2f401707b6d966be743bf0eee49c2561b9ba39073711f628937a',
+         'izzy', 1, strftime('%Y-%m-%d %H:%M', 'now', 'localtime'));
+    """,
+    # 40 : terminal adb des appareils Android. mode : wireless (appairé par le débogage sans fil, port annoncé par
+    # l'application) ou tcp (port classique choisi) ; report : ce que l'application loco voit (débogage, port, adresse).
+    """
+    CREATE TABLE android_adb (
+        device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+        host TEXT NOT NULL DEFAULT '',
+        port INTEGER NOT NULL DEFAULT 0,
+        mode TEXT NOT NULL DEFAULT 'wireless',
+        paired_at TEXT NOT NULL DEFAULT '',
+        paired_by TEXT NOT NULL DEFAULT '',
+        connected_at TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT '',
+        report TEXT NOT NULL DEFAULT ''
+    );
+    """,
+
+    # 41 : déverrouillage à distance d'un appareil Android (adb). unlock : JSON du calage de la grille de schéma propre
+    # à l'appareil quand la géométrie automatique ne tombe pas juste (centre et pas des 9 points, en fractions de l'écran).
+    """
+    ALTER TABLE android_adb ADD COLUMN unlock TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

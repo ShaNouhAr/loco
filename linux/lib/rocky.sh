@@ -35,6 +35,14 @@ rocky_packages() {
         tail -20 "$LOG" >&2
         die "installation DNF impossible (journal : $LOG)." "DNF installation failed (log: $LOG)." "instalación DNF fallida (registro: $LOG)."
     fi
+    # adb (terminal adb des appareils Android, paquet android-tools d'EPEL) : facultatif, jamais bloquant.
+    if ! rpm -q android-tools >/dev/null 2>&1; then
+        if dnf install -y android-tools >> "$LOG" 2>&1; then
+            grep -qx android-tools "$PACKAGE_RECORD" || echo android-tools >> "$PACKAGE_RECORD"
+        else
+            warn "adb non installé : terminal adb indisponible." "adb not installed: adb terminal unavailable." "adb no instalado: terminal adb no disponible."
+        fi
+    fi
     # Runtime isolé : les comptes/sauvegardes scrypt restent compatibles entre distributions.
     local runtime=/usr/local/lib/loco/venv
     local interpreter=python3

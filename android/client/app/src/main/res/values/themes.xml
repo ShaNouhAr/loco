@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mode clair de l'appareil : thème clair du portail ; accent neutre (couleur du texte), comme l'apparence Brume. -->
+    <style name="LocoTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/loco_canvas</item>
+        <item name="android:statusBarColor">@color/loco_canvas</item>
+        <item name="android:navigationBarColor">@color/loco_canvas</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:colorAccent">@color/loco_text</item>
+        <item name="android:colorControlActivated">@color/loco_text</item>
+        <item name="android:textColorHighlight">@color/loco_line2</item>
+    </style>
+</resources>

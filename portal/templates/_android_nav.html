@@ -1,0 +1,5 @@
+<nav class="tabs subnav" aria-label="{{ _('Applications Android') }}">
+  <a href="{{ url_for('android_apps') }}" class="{{ 'on' if request.endpoint == 'android_apps' }}">{{ _("Catalogue") }}</a>
+  <a href="{{ url_for('android_store') }}" class="{{ 'on' if request.endpoint.startswith('android_store') }}">{{ _("Dépôts F-Droid") }}</a>
+  <a href="{{ url_for('android_sources') }}" class="{{ 'on' if request.endpoint.startswith('android_source') }}">{{ _("Sources") }}</a>
+</nav>

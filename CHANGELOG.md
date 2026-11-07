@@ -1,5 +1,44 @@
 # Journal des versions
 
+## 2.139.0 — 2026-11-06
+
+- **Applications Android** (fonctionnalité expérimentale *Appareils Android*) : un catalogue d'applications à installer sur vos appareils depuis loco, avec un nouveau menu *Android* (*Catalogue*, *Dépôts F-Droid*, *Sources*).
+  - **Dépôts F-Droid vérifiés** : F-Droid et IzzyOnDroid sont proposés d'office. Neuf autres dépôts d'éditeurs s'ajoutent en un clic : Guardian Project, Bitwarden, Brave, Molly, Session, Threema Libre, KDE, NewPipe et microG. Leur clé a été contrôlée : celle qui signe l'index est la même que celle que publie l'éditeur.
+  - **Un autre dépôt F-Droid** peut être ajouté à la main : loco lit sa clé et demande d'en confirmer l'empreinte avant de l'ajouter.
+  - **Chaque index est signé** : loco vérifie la signature avec la clé de la source et refuse un index plus ancien que le dernier vérifié. Les index sont relus chaque jour.
+  - **Recherche** par nom, sélection *À découvrir* et catégories. La fiche d'une application indique la version, l'Android minimum, les processeurs, la taille, la licence, la clé de signature, et les avertissements de F-Droid (publicité, pistage…).
+  - **Google Play** : Google ne permet à aucun outil tiers d'installer ses applications. Une application Play s'ajoute au catalogue par son lien ou son nom de paquet ; au déploiement, l'appareil ouvre sa fiche dans le Play Store et vous touchez *Installer*. Google Play se charge ensuite des mises à jour.
+  - **Déploiement** depuis le catalogue, la fiche d'un appareil (*Plus › Installer des applications…*) ou *Mon parc › Déploiements* (nouveau type *Applications Android*), avec groupes de machines et vagues comme pour les autres déploiements.
+  - **Installation** : chaque appareil reçoit la version compatible avec son Android et son processeur. loco télécharge l'APK depuis la source et vérifie son empreinte, inscrite dans l'index signé ; l'appareil la vérifie aussi, avec la clé de signature, avant de le confier à Android.
+  - **Confirmation** : une première installation se confirme sur l'appareil, dans la fenêtre *Installer* d'Android, ouverte par l'application loco ou par sa notification. Sur Android 12 ou plus récent, les mises à jour des applications que loco a installées se font sans rien demander.
+  - **Suivi** : la fiche d'un appareil montre, pour chaque application du catalogue, la version installée, la boutique qui l'a installée et la version disponible. Le catalogue indique les appareils à mettre à jour.
+  - **Nouveaux droits** : *Consulter les applications Android* et *Gérer les applications et les sources Android*. Installer reste le droit *Déployer un logiciel*.
+- **APK prêt à inscrire**, dans *Mon parc › Enrôlement*, onglet *Android* : comme le MSI Windows, l'adresse du serveur, la clé d'inscription et l'empreinte de l'autorité sont **gravées dans l'APK**. Ouverte sur l'appareil, l'application s'inscrit **toute seule**, sans rien saisir ni confirmer. Avec un groupe de machines, l'appareil le rejoint.
+  - La configuration est posée dans le *bloc de signature* de l'APK : **sa signature reste valable** (aucune re-signature), et l'application peut se mettre à jour comme avant. Si l'empreinte reçue ne correspond pas à celle gravée, l'inscription automatique est refusée et l'application repasse à la saisie manuelle.
+  - L'**APK générique** (adresse et clé à saisir à la main) reste proposé, replié sous *APK générique et saisie manuelle*.
+- **Application Android 2.139.0** : nouvelle carte *Installations*, pour autoriser loco à installer des applications ; l'application s'appelle désormais **« Agent loco »** (« loco Agent », « Agente loco »), pour la distinguer comme l'agent des autres systèmes.
+  - **Nouvelle présentation**, à l'image du portail : mêmes couleurs, même police (Bricolage Grotesque, et IBM Plex Mono pour les adresses, empreintes et versions), mêmes panneaux, boutons et pastilles d'état. L'apparence par défaut est *Brume* ; en mode sombre, l'application passe au thème « sombre doux ». L'écran d'inscription et la liste des accès sur l'appareil ont été refaits.
+  - Elle **se met à jour seule** depuis loco aux versions suivantes, hors session distante en cours ; après une mise à jour, l'écran distant est à réactiver.
+  - Elle **repart d'elle-même** après un redémarrage de l'appareil ou une mise à jour.
+  - **À installer une fois à la main** depuis l'enrôlement, par-dessus la 2.138.0 : la 2.138.0 ne savait pas se mettre à jour.
+- **Retirer l'agent** depuis la fiche d'un appareil Android le retire maintenant de loco ; l'application reste installée.
+- **Terminal adb** pour les appareils Android : un vrai terminal `adb shell`, avec les droits de l'utilisateur « shell » d'Android (`pm`, `am`, `settings`, `input`, `logcat`, `dumpsys`…), bien plus larges que ceux du terminal de l'application.
+  - **Ouvrir** : bouton *Terminal adb* sur la fiche de l'appareil, ou *Plus › Débogage adb…*.
+  - **Connexion** : loco se connecte lui-même à l'appareil, sur le réseau local, comme un ordinateur de développement.
+  - **Débogage sans fil** (Android 11 et plus) : on saisit dans loco le port et le code d'association affichés par l'appareil, une seule fois. L'application loco indique ensuite à loco le port de connexion, qui change à chaque activation.
+  - **Port adb classique** : connexion directe pour un appareil qui écoute déjà (5555).
+  - **Assistants IA** : nouvel outil MCP `adb_shell`.
+  - **Droits et sécurité** : nouveau droit *Ouvrir un terminal adb*. Sessions, appairages et commandes sont journalisés. loco garde sa propre clé adb et son serveur adb n'écoute sur aucun port réseau.
+  - **adb sur le serveur** : inclus dans l'appliance, installé par loco quand la distribution le fournit (paquet `adb`, ou `android-tools` sur Rocky avec EPEL). Pas de terminal adb sur un serveur Windows.
+- **Déverrouiller un appareil Android à distance** (bouton *Déverrouiller* sur la fiche d'un appareil appairé en adb, et outil pour assistants IA) : loco réveille l'écran et rejoue le **schéma**, le **PIN** ou le **mot de passe** que vous saisissez — par adb, sans toucher l'appareil.
+  - **Schéma** : vous le tracez sur un pavé 3×3 dans le portail. L'écran de verrouillage ne pouvant pas s'afficher (surface sécurisée d'Android), les 9 points sont calculés depuis la résolution ; un **profil par constructeur** (Pixel/AOSP, Samsung, Xiaomi, OnePlus…) sert de départ, et un **calage** par appareil l'ajuste si le schéma ne passe pas. **PIN** et **mot de passe** ne demandent aucun calage.
+  - **Assistants IA** : nouvel outil MCP `adb_unlock` (schéma, PIN ou mot de passe).
+  - **Sécurité** : droit *Ouvrir un terminal adb* requis (l'accès adb permettait déjà d'injecter ces gestes). Le secret saisi n'est jamais journalisé. S'appuie sur le débogage sans fil déjà autorisé sur l'appareil.
+- **Contrôler l'écran d'un appareil Android par adb** (bouton *Contrôler l'écran*, une fois l'appareil déverrouillé) : loco diffuse l'écran et injecte les gestes — cliquer pour toucher, glisser pour balayer, touches *Retour*, *Accueil*, *Récentes*, *Marche/veille*, et saisie de texte. **Sans dialogue MediaProjection.** L'écran de verrouillage, surface sécurisée, ne peut pas s'afficher (d'où le déverrouillage à l'aveugle ci-dessus).
+  - **Flux basse latence** : loco lance scrcpy-server (vidéo seule) sur l'appareil et relaie le **H.264 brut** ; le navigateur le décode avec **WebCodecs** (décodage matériel, rien à transcoder sur le serveur). **Repli automatique** sur un flux MJPEG (`screenrecord` + ffmpeg) pour les navigateurs sans WebCodecs ou si scrcpy échoue. scrcpy-server (Apache 2.0) est inclus ; ffmpeg n'est nécessaire que pour le repli MJPEG.
+  - **Garde-fou visible** : tant que loco pilote l'écran, l'appareil affiche une notification **« Contrôle à distance en cours »**, et contacte loco plus souvent pour la faire apparaître et disparaître vite.
+- **Le paquet `.deb` de l'agent Linux installe grim** : grim était seulement recommandé, il devient une dépendance. Le bureau distant d'un compositeur Wayland comme Sway ou Hyprland fonctionne donc dès l'installation, même avec `--no-install-recommends`. Pour un agent déjà en place, installez grim à la main au besoin.
+
 ## 2.138.0 — 2026-11-06
 
 - **Appareils Android** (expérimental, coupé par défaut) : gérer vos propres téléphones et tablettes Android depuis loco, **sans QR code** à l'installation.

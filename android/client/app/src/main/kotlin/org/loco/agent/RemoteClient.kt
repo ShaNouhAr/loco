@@ -17,6 +17,9 @@ import java.util.TreeMap
 class RemoteClient(private val context: Context, private val store: Store, private val screen: () -> FrameSource?) {
     private val sessions = HashMap<String, Session>()
     @Volatile private var running = true
+    /** Vrai tant qu'une session (écran, terminal, fichiers) est ouverte : pas de mise à jour de l'application pendant ce temps. */
+    @Volatile var inUse = false
+        private set
     private var lastActivity = 0L
 
     private inner class Session(val id: String, val kind: String) {
@@ -125,6 +128,7 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         }
         // La poignée de main et le flux sont interactifs : rester rapide tant qu'il y a de l'activité récente,
         // ralentir seulement après un vrai silence (onglet caché, écran figé sans demande du navigateur).
+        inUse = sessions.isNotEmpty()
         val now = System.currentTimeMillis()
         if (busy || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
         if (sessions.isEmpty()) return 3000

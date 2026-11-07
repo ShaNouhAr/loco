@@ -30,6 +30,7 @@ GROUPS = [
         ("remote.terminal", L_("Ouvrir un terminal distant"), L_("Shell root ou PowerShell SYSTEM : contrôle privilégié du poste."), ("fleet.view",), True),
         ("remote.desktop", L_("Ouvrir le bureau noVNC"), L_("Contrôler le bureau, y compris l’UAC et l’écran verrouillé sous Windows (SYSTEM)."), ("fleet.view",), True),
         ("remote.consent", L_("Régler l'accord avant le bureau distant"), L_("Exiger ou non que la personne devant le poste accepte chaque ouverture du bureau distant."), ("fleet.view",), True),
+        ("remote.adb", L_("Ouvrir un terminal adb"), L_("Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage."), ("fleet.view",), True),
         ("remote.files", L_("Gérer les fichiers du poste"), L_("Parcourir, téléverser, modifier et supprimer les fichiers du poste (accès complet, en root ou SYSTEM)."), ("fleet.view",), True),
     ]),
     (L_("Paquets APT"), [
@@ -60,6 +61,11 @@ GROUPS = [
         ("store.view", L_("Parcourir le centre de logiciels"), L_("Rechercher et consulter les fiches publiques WinGet."), (), False),
         ("store.refresh", L_("Actualiser l'index du centre de logiciels"), L_("Télécharger à nouveau l'index WinGet."), ("store.view",), False),
         ("store.import", L_("Importer depuis le centre de logiciels"), L_("Ajouter un installeur vérifié au catalogue local."), ("store.view", "windows.add"), True),
+    ]),
+    (L_("Applications Android"), [
+        ("android.view", L_("Consulter les applications Android"), L_("Catalogue, dépôts F-Droid et sources des applications Android."), (), False),
+        ("android.manage", L_("Gérer les applications et les sources Android"),
+         L_("Ajouter ou retirer des applications du catalogue et des dépôts F-Droid (une source est une clé de confiance)."), ("android.view",), True),
     ]),
     (L_("Cache Windows Update"), [
         ("wu.view", L_("Consulter le cache Windows Update"), L_("Statistiques, domaines et commandes DNS."), (), False),
@@ -102,7 +108,8 @@ GROUPS = [
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],
                         "requires": item[3], "sensitive": item[4]}
                for _, items in GROUPS for item in items}
-VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view", "deployments.view"}
+VIEWER = {"dashboard.view", "fleet.view", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view", "deployments.view",
+          "android.view"}
 DEFAULTS = {
     "pending": (N_("Sans accès"), N_("Aucun droit. Les nouvelles identités d'annuaire attendent une approbation administrative."), set()),
     "admin": (N_("Administrateur"), N_("Accès complet, y compris aux futurs droits. Profil protégé."), set(PERMISSIONS)),
@@ -110,7 +117,7 @@ DEFAULTS = {
     "operator": (N_("Opérateur"), N_("Inventaire, mises à jour individuelles et déploiement. Sans terminal, bureau ni redémarrage."),
                  VIEWER | {"fleet.scan", "fleet.update", "fleet.install", "fleet.wake"}),
     "repository_manager": (N_("Gestionnaire des dépôts"), N_("Gestion des paquets et installeurs. Aucun déploiement sur les postes."),
-                           {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store"}} | {"dashboard.view"}),
+                           {k for k in PERMISSIONS if k.split('.')[0] in {"linux", "rpm", "flatpak", "windows", "store", "android"}} | {"dashboard.view"}),
     "auditor": (N_("Auditeur"), N_("Consultation, journal et son export, comptes et profils. Aucune modification."),
                 VIEWER | {"store.view", "system.view", "users.view", "roles.view", "audit.view", "audit.export", "alerts.view"}),
 }
@@ -120,7 +127,7 @@ DEFAULTS = {
 ENDPOINTS = {
     "index": "dashboard.view", "api_status": "dashboard.view", "api_network": "dashboard.view",
     "enrollment": ("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view"),
-    "agent_enroll_msi": "fleet.enroll",
+    "agent_enroll_msi": "fleet.enroll", "agent_enroll_apk": "fleet.enroll",
     "linux": "linux.view", "linux_repository_create": "linux.create", "linux_upload": "linux.upload",
     "linux_copy": "linux.copy", "linux_delete": "linux.delete",
     "rpm": "rpm.view", "rpm_repository_create": "rpm.create", "rpm_upload": "rpm.upload", "rpm_delete": "rpm.delete",
@@ -139,6 +146,16 @@ ENDPOINTS = {
     "deployments": ("deployments.view", "fleet.install"), "deployment_detail": ("deployments.view", "fleet.install"),
     "deployment_compose": "fleet.install", "deployment_preview": "fleet.install",
     "deployment_compose_linux": "fleet.install", "deployment_preview_linux": "fleet.install",
+    "deployment_compose_android": "fleet.install", "deployment_preview_android": "fleet.install",
+    "android_apps": "android.view", "android_store": "android.view", "android_store_detail": "android.view",
+    "android_icon": "android.view", "android_sources": "android.view",
+    "android_source_add_known": "android.manage", "android_source_check": "android.manage", "android_source_add": "android.manage",
+    "android_source_toggle": "android.manage", "android_source_delete": "android.manage", "android_sources_refresh": "android.manage",
+    "android_app_add": "android.manage", "android_app_delete": "android.manage",
+    "fleet_adb_pair": "remote.adb", "fleet_adb_connect": "remote.adb", "fleet_adb_forget": "remote.adb",
+    "fleet_adb_wake": "remote.adb", "fleet_adb_lockstate": "remote.adb", "fleet_adb_unlock": "remote.adb",
+    "fleet_adb_calibrate": "remote.adb", "fleet_adb_screen": "remote.adb", "fleet_adb_input": "remote.adb",
+    "fleet_adb_stream": "remote.adb",
     "deployment_confirm": "fleet.install", "deployment_cancel": ("fleet.install", "fleet.bulk_update"),
     "deployment_next_wave": ("fleet.install", "fleet.bulk_update"),
     "deployments_legacy": ("deployments.view", "fleet.install"),
@@ -158,9 +175,9 @@ ENDPOINTS = {
     "fleet_update_all": "fleet.bulk_update", "fleet_update_selected": "fleet.update",
     "fleet_rotate_key": "fleet.settings", "fleet_group_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",
     "fleet_server_address": "fleet.settings", "fleet_settings": "fleet.settings",
-    "remote_open": ("remote.terminal", "remote.desktop", "remote.files"),
-    "remote_session": ("remote.terminal", "remote.desktop", "remote.files"),
-    "remote_io": ("remote.terminal", "remote.desktop", "remote.files"),
+    "remote_open": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb"),
+    "remote_session": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb"),
+    "remote_io": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb"),
     "fleet_remote_consent": "remote.consent", "fleet_remote_consent_selected": "remote.consent",
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",
@@ -206,7 +223,8 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "appearance_background", "sso_start", "sso_callback"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
-                      "wake": "fleet.wake", "wake-relay": "fleet.wake"}
+                      "wake": "fleet.wake", "wake-relay": "fleet.wake",
+                      "install-apk": "fleet.install"}
 
 
 def expand(values):

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_software_logo.html" import android_logo %}
+{% block title %}{{ _("%(name)s · Dépôts F-Droid", name=info.name) }}{% endblock %}
+{% block content %}
+{% include '_android_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('android_store') }}">{{ _("← Dépôts F-Droid") }}</a></p>
+<div class="head">
+  <div class="store-card-top">{{ android_logo(source.id if info.icon else none, info.package, info.name, 'large') }}
+    <div><h1>{{ info.name }}</h1>
+      <p>{{ info.author or source.name }} · <span class="mono">{{ info.version }}</span> · <span class="mono faint">{{ info.package }}</span></p></div>
+  </div>
+  <div class="actions">
+    {% if known %}
+      <a class="btn" href="{{ url_for('android_apps') }}">{{ _("Voir dans le catalogue") }}</a>
+      {% if can('fleet.install') %}<a class="btn primary" href="{{ url_for('deployment_compose_android', app=known.id) }}">{{ _("Déployer sur des appareils") }}</a>{% endif %}
+    {% elif can('android.manage') %}
+      <form method="post" action="{{ url_for('android_app_add') }}" data-ajax>
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="store" value="fdroid">
+        <input type="hidden" name="source" value="{{ source.id }}"><input type="hidden" name="package" value="{{ info.package }}"><input type="hidden" name="retour" value="android_store_detail">
+        <button class="btn primary"><span class="spin"></span>{{ _("Ajouter au catalogue") }}</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="stack">
+  {% if known and known.source_id != source.id %}<p class="note warn">{{ _("Le catalogue propose déjà cette application depuis %(name)s. Une autre source la signe avec une autre clé : Android refuserait de mettre à jour l'une avec l'autre.", name=known_from) }}</p>
+  {% elif known %}<p class="note">{{ _("Dans le catalogue, prête à être déployée.") }}</p>{% endif %}
+  {% if info.anti %}<p class="note warn">{{ _("F-Droid signale : %(list)s.", list=info.anti|map('android_anti')|join(', ')) }}</p>{% endif %}
+
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Description") }}</h2>
+        <div class="aside">{% if info.website %}<a href="{{ info.website }}" target="_blank" rel="noopener noreferrer">{{ _("Site") }}</a>{% endif %}{% if info.source_code %}{% if info.website %} · {% endif %}<a href="{{ info.source_code }}" target="_blank" rel="noopener noreferrer">{{ _("Code source") }}</a>{% endif %}</div></div>
+      <div class="panel-b">
+        {% if info.summary %}<p><strong>{{ info.summary }}</strong></p>{% endif %}
+        {% set desc = info.description or '' %}{% set cut = desc.rfind('\n', 0, 800) if desc|length > 1100 else -1 %}
+        {% if cut > 200 %}
+        <p class="store-description">{{ desc[:cut] }}</p>
+        <details><summary>{{ _("Lire la suite") }}</summary><p class="store-description">{{ desc[cut + 1:] }}</p></details>
+        {% else %}<p class="store-description">{{ desc or _('Aucune description fournie par le dépôt.') }}</p>{% endif %}
+      </div>
+    </section>
+
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Installation") }}</h2></div>
+        <div class="panel-b"><dl class="kv">
+          <dt>{{ _("Version") }}</dt><dd class="mono">{{ info.version }}</dd>
+          <dt>{{ _("Source") }}</dt><dd>{{ source.name }}</dd>
+          {% if latest %}{% set v = latest[0] %}
+          <dt>{{ _("Android") }}</dt><dd>{{ _("%(release)s ou plus récent", release=android_release(latest|map(attribute='min_sdk')|min)) }}</dd>
+          <dt>{{ _("Processeurs") }}</dt><dd>{{ latest|map(attribute='abis')|sum(start=[])|unique|join(', ') or _('tous') }}</dd>
+          <dt>{{ _("Taille") }}</dt><dd>{{ v.size|human }}</dd>
+          {% if v.signer %}<dt>{{ _("Clé de signature") }}</dt><dd class="mono break">{{ v.signer }}</dd>{% endif %}
+          {% endif %}
+          <dt>{{ _("Licence") }}</dt><dd>{{ info.license or _('non renseignée') }}</dd>
+          {% if info.categories %}<dt>{{ _("Catégories") }}</dt><dd>{{ info.categories|join(', ') }}</dd>{% endif %}
+        </dl></div>
+      </section>
+      {% if others %}
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Aussi dans") }}</h2></div>
+        <div class="panel-b">{% for s in others %}<a href="{{ url_for('android_store_detail', source_id=s.id, package=info.package) }}">{{ s.name }}</a>{{ ', ' if not loop.last }}{% endfor %}
+          <p class="hint">{{ _("Choisissez une seule source par application : chaque dépôt signe ses APK avec sa propre clé.") }}</p></div>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="hint">{{ _("Au déploiement, loco télécharge l'APK depuis la source et vérifie son empreinte SHA-256, inscrite dans l'index signé ; l'appareil la vérifie aussi, avec la clé de signature, avant d'installer.") }}</p>
+</div>
+{% endblock %}

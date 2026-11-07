@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Sources des applications Android") }}{% endblock %}
+{% macro fp(value) -%}<span class="mono break" title="SHA-256">{{ value|upper|batch(2)|map('join')|join(':') }}</span>{%- endmacro %}
+{% block content %}
+{% include '_android_nav.html' %}
+<div class="head">
+  <div>
+    <h1>{{ _("Sources") }}</h1>
+    <p>{{ _("Dépôts F-Droid dont loco lit l'index, chaque jour. Un index est signé : loco vérifie la signature avec la clé de la source, dont l'empreinte est confirmée à l'ajout, et refuse un index plus ancien que le dernier vérifié.") }}</p>
+  </div>
+  {% if can('android.manage') and sources %}
+  <div class="actions">
+    <form method="post" action="{{ url_for('android_sources_refresh') }}" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn"{% if busy %} disabled{% endif %}><span class="spin"></span>{{ _("Actualiser les index") }}</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="stack"{% if signature %} data-poll="{{ url_for('android_sources') }}" data-poll-kind="reload" data-poll-every="{{ 4000 if busy else 60000 }}" data-signature="{{ signature }}"{% endif %}>
+  {% if check %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Confirmer la clé de %(name)s", name=check.name) }}</h2></div>
+    <form class="panel-b stack-sm" method="post" action="{{ url_for('android_source_add') }}" data-ajax>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="url" value="{{ check.url }}"><input type="hidden" name="fingerprint" value="{{ check.fingerprint }}">
+      <div class="note warn">
+        <p>{{ _("L'index de %(url)s est signé par la clé dont voici l'empreinte SHA-256. Comparez-la à celle que publie l'éditeur du dépôt, sur son site : si elle diffère, n'ajoutez pas cette source.", url=check.url) }}</p>
+        <p>{{ fp(check.fingerprint) }}</p>
+      </div>
+      {% if check.known %}<p class="note">{{ _("C'est la clé de %(name)s, déjà vérifiée par loco.", name=known[check.known][0]) }}</p>{% endif %}
+      <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="name" maxlength="60" value="{{ check.name }}"></label>
+      <label class="check"><input type="checkbox" name="confirmed" value="1" required> {{ _("J'ai comparé cette empreinte à celle publiée par l'éditeur du dépôt.") }}</label>
+      <div class="row"><button class="btn primary"><span class="spin"></span>{{ _("Ajouter cette source") }}</button><a class="btn" href="{{ url_for('android_sources') }}">{{ _("Annuler") }}</a></div>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Sources") }} <span class="h-count">{{ sources|length }}</span></h2></div>
+    {% if sources %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>{{ _("Source") }}</th><th class="hide-sm">{{ _("Clé (SHA-256)") }}</th><th>{{ _("Index") }}</th><th></th></tr></thead>
+        <tbody>
+        {% for s in sources %}
+          <tr>
+            <td><strong>{{ s.name }}</strong>{% if not s.enabled %} <span class="os-tag">{{ _("désactivée") }}</span>{% endif %}<span class="sub mono">{{ s.url }}</span></td>
+            <td class="hide-sm small">{{ fp(s.fingerprint) }}</td>
+            <td>
+              {% if s.id in busy %}<span class="st warn">{{ _("actualisation en cours") }}</span>
+              {% elif s.error %}<span class="st err">{{ _("erreur") }}</span><span class="sub sans">{{ s.error }}</span>
+              {% elif s.synced_at %}<span class="st ok">{{ ngettext("%(num)s application", "%(num)s applications", s.apps) }}</span><span class="sub sans">{{ _("vérifié le %(date)s", date=s.checked_at|date_fr) }}</span>
+              {% elif s.enabled %}<span class="st">{{ _("en attente") }}</span>{% else %}<span class="faint">—</span>{% endif %}
+            </td>
+            <td class="right nowrap">{% if can('android.manage') %}<div class="row-acts row-links">
+              <form method="post" action="{{ url_for('android_source_toggle', source_id=s.id) }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Désactiver") if s.enabled else _("Activer") }}</button></form>
+              <form method="post" action="{{ url_for('android_source_delete', source_id=s.id) }}" data-ajax data-confirm="{{ _('Retirer %(name)s ?', name=s.name) }}" data-confirm-text="{{ _('Ses applications disparaissent de la recherche. Rien n’est désinstallé des appareils.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn"{% if used.get(s.id) %} disabled title="{{ _('Utilisée par le catalogue') }}"{% endif %}>{{ _("Retirer") }}</button></form>
+            </div>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">{{ _("Aucune source : ajoutez F-Droid ci-dessous.") }}</div>
+    {% endif %}
+  </section>
+
+  {% if can('android.manage') %}
+  <div class="cols">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Sources vérifiées par loco") }}</h2></div>
+      {% if missing %}
+      <div class="table-wrap"><table><tbody>
+        {% for key, k in missing %}
+        <tr><td><strong>{{ k[0] }}</strong><span class="sub sans">{{ k[3] }}</span></td>
+          <td class="right"><form method="post" action="{{ url_for('android_source_add_known') }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="known" value="{{ key }}"><button class="btn sm"><span class="spin"></span>{{ _("Ajouter") }}</button></form></td></tr>
+        {% endfor %}
+      </tbody></table></div>
+      {% else %}<div class="empty">{{ _("Toutes les sources vérifiées sont déjà dans loco.") }}</div>{% endif %}
+      <div class="panel-f">{{ _("Empreintes contrôlées par loco : celle de la clé qui signe l'index est identique à celle que publie l'éditeur.") }}</div>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("Autre dépôt F-Droid") }}</h2></div>
+      <form class="panel-b stack-sm" method="post" action="{{ url_for('android_source_check') }}" data-ajax>
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="f"><span>{{ _("Adresse du dépôt") }}</span><input type="url" name="url" required placeholder="https://exemple.org/fdroid/repo" spellcheck="false"></label>
+        <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="name" maxlength="60" placeholder="{{ _('facultatif') }}"></label>
+        <div><button class="btn"><span class="spin"></span>{{ _("Lire sa clé") }}</button></div>
+        <p class="hint">{{ _("loco lit la clé qui signe l'index et vous demande de confirmer son empreinte avant d'ajouter la source. Une source est une clé de confiance : n'ajoutez que des dépôts dont vous connaissez l'éditeur.") }}</p>
+      </form>
+    </section>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

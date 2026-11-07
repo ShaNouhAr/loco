@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_software_logo.html" import android_logo %}
+{% block title %}{{ _("Applications Android") }}{% endblock %}
+{% block content %}
+{% include '_android_nav.html' %}
+<div class="head">
+  <div>
+    <h1>{{ _("Applications Android") }}</h1>
+    <p>{{ _("Applications que loco propose à vos appareils Android : depuis un dépôt F-Droid, l'APK est vérifié puis installé par l'application loco ; depuis Google Play, loco ouvre sa fiche sur l'appareil.") }}</p>
+  </div>
+  <div class="actions">
+    {% if can('android.manage') %}<button type="button" class="btn" data-open="#add-play">{{ _("Ajouter depuis Google Play") }}</button>{% endif %}
+    <a class="btn primary" href="{{ url_for('android_store') }}">{{ _("Parcourir les dépôts F-Droid") }}</a>
+  </div>
+</div>
+
+<div class="stack">
+  {% if devices and not ready %}<p class="note warn">{{ _("Aucun appareil ne peut encore recevoir d'application : installez l'application loco %(version)s ou plus récente sur vos appareils, depuis <a href=\"%(v)s\">l'enrôlement</a>. Elle se met ensuite à jour seule.", version='2.139.0', v=url_for('enrollment') ~ '#android') }}</p>{% endif %}
+
+  <section class="panel">
+    {% if apps %}
+    <div class="panel-h"><h2>{{ _("Catalogue") }} <span class="h-count">{{ apps|length }}</span></h2>
+      <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Rechercher une application') }}" data-filter="#android-apps tbody tr" aria-label="{{ _('Rechercher une application') }}"></div></div>
+    <div class="table-wrap">
+      <table id="android-apps" class="table-cards">
+        <thead><tr><th>{{ _("Application") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Sur les appareils") }}</th><th></th></tr></thead>
+        <tbody>
+        {% for i in apps %}{% set a = i.row %}
+          <tr data-search="{{ a.name }} {{ a.package }}">
+            <td><div class="store-card-top">{{ android_logo(a.source_id if i.info and i.info.icon else none, a.package, a.name, 'small') }}<div>
+              {% if i.info %}<a href="{{ url_for('android_store_detail', source_id=a.source_id, package=a.package) }}">{{ a.name }}</a>{% else %}<strong>{{ a.name }}</strong>{% endif %}
+              <span class="sub sans">{{ 'Google Play' if a.store == 'play' else a.source_name or _('source retirée') }} · <span class="mono">{{ a.package }}</span></span></div></div></td>
+            <td class="nowrap" data-label="{{ _('Version') }}">{% if a.store == 'play' %}<span class="faint">{{ _("gérée par Google Play") }}</span>{% elif i.problem %}<span class="st warn">{{ i.problem }}</span>{% else %}<span class="mono">{{ i.info.version }}</span>{% endif %}</td>
+            <td class="hide-sm nowrap">
+              {% if i.installed %}{{ ngettext("%(num)s appareil", "%(num)s appareils", i.installed|length) }}{% else %}<span class="faint">{{ _("aucun appareil") }}</span>{% endif %}
+              {% if i.updates %}<span class="sub sans warn-text">{{ ngettext("%(num)s à mettre à jour", "%(num)s à mettre à jour", i.updates|length) }}{% if can('fleet.install') %} · <a href="{{ url_for('deployment_compose_android', app=a.id, device=i.updates) }}">{{ _("mettre à jour") }}</a>{% endif %}</span>{% endif %}
+            </td>
+            <td class="right nowrap card-action"><div class="row-acts row-links">
+              {% if can('fleet.install') and not i.problem %}<a href="{{ url_for('deployment_compose_android', app=a.id) }}">{{ _("Déployer") }}</a>{% endif %}
+              {% if can('android.manage') %}<form method="post" action="{{ url_for('android_app_delete', app_id=a.id) }}" data-ajax data-confirm="{{ _('Retirer %(name)s du catalogue ?', name=a.name) }}" data-confirm-text="{{ _('Rien n’est désinstallé des appareils, et les installations déjà confirmées se poursuivent.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Retirer") }}</button></form>{% endif %}
+            </div></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">{{ _("Catalogue vide : choisissez des applications dans <a href=\"%(store)s\">les dépôts F-Droid</a>, ou ajoutez une fiche Google Play.", store=url_for('android_store')) }}</div>
+    {% endif %}
+  </section>
+
+  <p class="hint">{{ _("Une première installation se confirme sur l'appareil : Android affiche sa fenêtre « Installer », que vous pouvez aussi toucher depuis l'écran distant. Ensuite, sur Android 12 ou plus récent, l'application loco met à jour sans rien demander les applications qu'elle a installées. Une application installée par Google Play ou une autre boutique reste mise à jour par elle.") }}</p>
+</div>
+
+{% if can('android.manage') %}<dialog id="add-play" class="app-dialog">
+  <form method="post" action="{{ url_for('android_app_add') }}" data-ajax>
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="store" value="play">
+    <div class="dlg-h">
+      <div><h2>{{ _("Ajouter depuis Google Play") }}</h2><p>{{ _("Google Play ne permet pas à un autre outil d'installer ses applications : au déploiement, l'appareil ouvre la fiche dans le Play Store et vous touchez « Installer ». Google Play se charge ensuite des mises à jour.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="dlg-b">
+      <section class="dlg-sec">
+        <label class="f"><span>{{ _("Lien Google Play ou nom du paquet") }}</span><input type="text" name="package" required placeholder="https://play.google.com/store/apps/details?id=com.exemple.app" spellcheck="false" autocomplete="off"></label>
+        <label class="f"><span>{{ _("Nom affiché") }}</span><input type="text" name="name" maxlength="100" placeholder="{{ _('facultatif : le nom du paquet par défaut') }}"></label>
+        <p class="hint">{{ _("Le lien se copie depuis la page de l'application sur play.google.com (bouton Partager dans le Play Store). loco ne télécharge rien depuis Google Play.") }}</p>
+      </section>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Ajouter au catalogue") }}</button>
+    </div>
+  </form>
+</dialog>{% endif %}
+{% endblock %}

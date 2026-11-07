@@ -32,6 +32,14 @@ alpine_packages() {
         tail -15 "$LOG" >&2
         die "installation des paquets impossible (journal complet : $LOG)." "package installation failed (full log: $LOG)." "no se pudieron instalar los paquetes (registro completo: $LOG)."
     fi
+    # adb (terminal adb des appareils Android) : facultatif, une mise à jour hors ligne ne doit pas échouer pour lui.
+    if ! apk info -e android-tools >/dev/null 2>&1; then
+        if apk add --no-progress android-tools >> "$LOG" 2>&1; then
+            grep -qx android-tools "$PACKAGE_RECORD" || echo android-tools >> "$PACKAGE_RECORD"
+        else
+            warn "adb non installé (dépôt Alpine injoignable) : terminal adb indisponible." "adb not installed (Alpine repository unreachable): adb terminal unavailable." "adb no instalado (repositorio Alpine inaccesible): terminal adb no disponible."
+        fi
+    fi
     # nginx et le portail sont lancés par supervisord : le service nginx d'Alpine resterait en conflit.
     rc-update del nginx default >/dev/null 2>&1 || true
     rc-service nginx stop >/dev/null 2>&1 || true

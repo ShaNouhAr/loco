@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Couleurs du portail loco, thème clair (portal/static/style.css, [data-theme="light"]). -->
+<resources>
+    <color name="loco_canvas">#F4F5F7</color>
+    <color name="loco_bg">#FFFFFF</color>
+    <color name="loco_bg2">#F6F6F8</color>
+    <color name="loco_bg3">#ECECEF</color>
+    <color name="loco_field">#FFFFFF</color>
+    <color name="loco_line">#E6E6E9</color>
+    <color name="loco_line2">#D4D4D9</color>
+    <color name="loco_text">#18181B</color>
+    <color name="loco_text2">#52525B</color>
+    <color name="loco_text3">#6E6E77</color>
+    <color name="loco_ok">#15803D</color>
+    <color name="loco_warn">#A15C07</color>
+    <color name="loco_err">#C42B2B</color>
+</resources>

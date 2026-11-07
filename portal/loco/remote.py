@@ -175,10 +175,22 @@ def _browser_session(sid):
 def remote_open(dev_id):
     dev = fleet._get(dev_id)
     kind = request.form.get("kind")
-    if kind not in ("terminal", "desktop", "files") or dev["state"] != "active":
+    if kind not in ("terminal", "desktop", "files", "adb") or dev["state"] != "active":
         abort(400)
     require("remote." + kind)
-    minimum = (2, 23) if kind == "files" else (2, 4)
+    serial = ""
+    if kind == "adb":
+        # Terminal adb : loco se connecte lui-même à l'appareil (réseau local) ; l'application loco n'y prend pas part.
+        from . import adb, features
+        if dev["os_family"] != "android":
+            abort(400)
+        if not features.enabled("android"):
+            abort(403)
+        try:
+            serial = adb.ensure(dev)
+        except ValueError as e:
+            abort(409, str(e))
+    minimum = (0,) if kind == "adb" else (2, 23) if kind == "files" else (2, 4)
     if fleet.version_key(dev["agent_version"]) < minimum:
         abort(409, _("L'agent doit être mis à jour vers la version %(v)s.0.", v='.'.join(map(str, minimum))))
     consent = asks_consent(dev, kind, request.form.get("consent") == "1")
@@ -201,6 +213,9 @@ def remote_open(dev_id):
                                                 int(kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal")),
                                                 "pending" if consent else ""))
     audit("parc.session.ouverture", f"{dev['hostname']} : {kind}, {sid}{', accord demandé' if consent else ''}")
+    if kind == "adb":
+        from . import adb
+        adb.start(sid, serial)
     if kind == "files":                       # onglet intégré à la fiche du poste : pas de page dédiée (audit a validé)
         return {"sid": sid, "io": url_for("remote_io", sid=sid)}
     return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
@@ -258,7 +273,7 @@ def remote_agent():
         if not isinstance(update, dict) or not isinstance(update.get("id"), str):
             abort(400)
         sid = update["id"]
-        row = conn.execute("SELECT * FROM remote_sessions WHERE id=? AND device_id=?", (sid, dev["id"])).fetchone()
+        row = conn.execute("SELECT * FROM remote_sessions WHERE id=? AND device_id=? AND kind!='adb'", (sid, dev["id"])).fetchone()
         if row is None:
             continue
         requested.append(sid)
@@ -283,11 +298,12 @@ def remote_agent():
             finished.append(f"{dev['hostname']} : {row['kind']}, {sid} ({error})")
     # Une session active absente de la mémoire de l'agent ne peut pas reprendre un flux PTY/RFB à mi-parcours.
     # Cela arrive après un redémarrage du service ou une mise à jour de l'agent.
-    for row in conn.execute("SELECT id FROM remote_sessions WHERE device_id=? AND state='active'", (dev["id"],)).fetchall():
+    for row in conn.execute("SELECT id FROM remote_sessions WHERE device_id=? AND state='active' AND kind!='adb'", (dev["id"],)).fetchall():
         if row["id"] not in requested:
             _close(row["id"], "Agent redémarré : ouvrez une nouvelle session.")
     output = []
-    for row in conn.execute("SELECT * FROM remote_sessions WHERE device_id=?", (dev["id"],)).fetchall():
+    # Terminal adb : relayé par loco lui-même, jamais par l'application de l'appareil.
+    for row in conn.execute("SELECT * FROM remote_sessions WHERE device_id=? AND kind!='adb'", (dev["id"],)).fetchall():
         if row["state"] not in OPEN and row["id"] not in requested:
             continue
         packets = _read(row, "in", acks.get(row["id"], 0)) if row["state"] in OPEN else []

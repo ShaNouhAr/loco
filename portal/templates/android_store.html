@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "_software_logo.html" import android_logo %}
+{% block title %}{{ _("Dépôts F-Droid") }}{% endblock %}
+{% block content %}
+{% include '_android_nav.html' %}
+<div class="head">
+  <div>
+    <h1>{{ _("Dépôts F-Droid") }}</h1>
+    <p>{{ _("Applications des dépôts activés dans Sources, lues dans leur index signé. Ajoutez une application au catalogue pour la déployer sur vos appareils : son APK est vérifié par son empreinte.") }}</p>
+  </div>
+</div>
+
+<div class="stack"{% if busy %} data-poll="{{ request.full_path }}" data-poll-kind="reload" data-poll-every="5000" data-signature="{{ busy|length }}-{{ total }}"{% endif %}>
+  <div class="store-filters">
+    <form method="get" action="{{ url_for('android_store') }}" class="store-search" role="search">
+      <input type="search" name="q" value="{{ query }}" placeholder="{{ _('Rechercher une application : Nextcloud, VLC, Tailscale…') }}" aria-label="{{ _('Rechercher dans les dépôts F-Droid') }}">
+      <button class="btn primary">{{ _("Rechercher") }}</button>
+    </form>
+    <nav class="chips" aria-label="{{ _('Catégories d’applications') }}">
+      {% for key, cat in categories.items() %}
+      <a href="{{ url_for('android_store', category=key) }}" class="chip {{ 'on' if key == category and not query }}" {% if key == category and not query %}aria-current="page"{% endif %}>{{ cat[0] }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% if busy %}<p class="note">{{ _("Téléchargement et vérification des index en cours : la page se met à jour toute seule.") }}</p>
+  {% elif not sources|selectattr('enabled')|list %}<p class="note warn">{{ _("Aucune source activée : activez F-Droid ou un autre dépôt dans <a href=\"%(v)s\">Sources</a>.", v=url_for('android_sources')) }}</p>
+  {% elif sources|selectattr('error')|list %}<p class="note warn">{{ _("Une source n'a pas pu être lue : voir <a href=\"%(v)s\">Sources</a>.", v=url_for('android_sources')) }}</p>{% endif %}
+
+  <div class="store-heading">
+    <h2>{{ _('Résultats pour « ') ~ query ~ ' »' if query else categories[category][0] }} <span class="h-count">{{ ngettext("%(num)s application", "%(num)s applications", total) }}</span></h2>
+    {% if query %}<a href="{{ url_for('android_store') }}" class="small">{{ _("Effacer la recherche") }}</a>{% endif %}
+  </div>
+
+  {% if results %}
+  <div class="store-grid">
+    {% for r in results %}{% set k = known.get(r.package) %}
+    <article class="store-item">
+      {{ android_logo(r.source_id if r.icon else none, r.package, r.name) }}
+      <div class="store-item-text">
+        <a class="store-item-link" href="{{ url_for('android_store_detail', source_id=r.source_id, package=r.package) }}">{{ r.name }}</a>
+        <span class="store-item-version"><span title="{{ r.version }}">{{ r.version|truncate(16, True, '…', 0) }}</span> · {{ r.source }}{% if 'Ads' in r.anti or 'Tracking' in r.anti %} · <span class="warn-text">{{ _("pub ou pistage") }}</span>{% endif %}</span>
+      </div>
+      <div class="store-item-action">
+        {% if k %}<a class="st ok" href="{{ url_for('android_apps') }}">{{ _("dans loco") }}</a>
+        {% elif can('android.manage') %}
+        <form method="post" action="{{ url_for('android_app_add') }}" data-ajax>
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="store" value="fdroid">
+          <input type="hidden" name="source" value="{{ r.source_id }}"><input type="hidden" name="package" value="{{ r.package }}"><input type="hidden" name="retour" value="android_store">
+          {% if query %}<input type="hidden" name="q" value="{{ query }}">{% else %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+          {% if page > 1 %}<input type="hidden" name="page" value="{{ page }}">{% endif %}
+          <button class="btn sm" title="{{ _('Ajouter %(name)s au catalogue', name=r.name) }}"><span class="spin"></span>{{ _("Ajouter") }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% elif not busy %}
+  <div class="panel"><div class="empty">{{ _("Aucune application ne correspond. Essayez un autre nom ou <a href=\"%(v)s\">parcourez tout le catalogue</a>.", v=url_for('android_store', category='all')) }}</div></div>
+  {% endif %}
+
+  {% if pages > 1 %}
+  <nav class="row store-pagination" aria-label="{{ _('Pages des dépôts F-Droid') }}">
+    {% if page > 1 %}<a class="btn sm" href="{{ url_for('android_store', q=query or None, category=None if query else category, page=page-1) }}">{{ _("Précédente") }}</a>{% endif %}
+    <span class="muted small">{{ _("Page %(page)s sur %(pages)s", page=page, pages=pages) }}</span>
+    {% if page < pages %}<a class="btn sm" href="{{ url_for('android_store', q=query or None, category=None if query else category, page=page+1) }}">{{ _("Suivante") }}</a>{% endif %}
+  </nav>
+  {% endif %}
+
+  <p class="hint">{{ _("Une application présente dans plusieurs sources est proposée depuis la première, dans l'ordre de la page Sources. Les catégories regroupent celles de F-Droid ; « À découvrir » est une sélection. Rien n'est installé sans un déploiement confirmé.") }}</p>
+</div>
+{% endblock %}

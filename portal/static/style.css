@@ -272,6 +272,10 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .nav-panel strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 500; }
 .nav-panel small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--text-3); }
 .nav-short { display: none; }
+/* Une entrée de plus (Android) : « Vue d'ensemble » se réduit à son icône, comme le logo qui mène à la même page. */
+.nav-dense .nav-home > span { display: none; }
+/* Noms longs (compte d'annuaire, nom d'hôte) : coupés plutôt que de pousser la barre hors de l'écran. */
+.user-chip .user-name, .brand span { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 @keyframes nav-reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 .top-r { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 
@@ -1769,6 +1773,7 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 }
 @media (max-width: 520px) {
   .nav { gap: 0; }
+  .nav-dense .nav-android > span { display: none; }   /* une entrée de plus : Android en icône, comme l'accueil */
   .nav > a, .nav-group > summary { gap: 4px; padding: 0 3px; font-size: 12.5px; }
   .nav .nav-icon { width: 16px; height: 16px; }
   .nav .nav-chevron { width: 10px; height: 10px; }
@@ -2365,3 +2370,18 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
   .fleet-table .res-row { grid-template-columns: 34px 1fr 34px; gap: 6px; }
   .fleet-table .row-acts { flex-direction: column; align-items: flex-end; }
 }
+
+/* Déverrouillage Android par schéma (fiche appareil › Déverrouiller) : pavé 3×3 abstrait, l'écran verrouillé ne pouvant pas être affiché. */
+.pattern-pad { position: relative; width: 240px; max-width: 100%; aspect-ratio: 1; margin: 14px auto 4px; touch-action: none; display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; }
+.pattern-trace { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; stroke: var(--text); opacity: .5; }
+.pattern-dot { width: 100%; height: 100%; display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer; }
+.pattern-dot > i { width: 15px; height: 15px; border-radius: 50%; background: var(--bg-3); border: 1.5px solid var(--line-2); transition: transform .08s ease, background .08s ease, border-color .08s ease; }
+.pattern-dot:hover > i { border-color: var(--text-2); }
+.pattern-dot.on > i { background: var(--text); border-color: var(--text); transform: scale(1.5); }
+
+/* Contrôle de l'écran Android par adb (fiche appareil › Contrôler l'écran) */
+.adb-screen-wrap { position: relative; display: flex; justify-content: center; align-items: center; min-height: 200px; background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.adb-screen-wrap img, .adb-screen-wrap canvas { max-width: 100%; max-height: 62vh; display: block; touch-action: none; cursor: crosshair; background: #000; }
+.adb-screen-msg { position: absolute; color: var(--text-2); font-size: 13.5px; padding: 0 16px; text-align: center; }
+.adb-screen-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.adb-screen-text { flex: 1 1 auto; min-width: 0; }

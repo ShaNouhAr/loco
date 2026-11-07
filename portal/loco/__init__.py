@@ -44,7 +44,7 @@ app.config.update(
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(message)s")
 app.logger.setLevel(logging.INFO)
 
-STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js", "logo.svg")
+STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js", "adb_unlock.js", "adb_screen.js", "logo.svg")
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))
 
 # Politique de contenu stricte : aucun script ni style en ligne.
@@ -56,7 +56,7 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     "healthz", "metrics", "static",
                     # Agent des postes (loco-client) : authentifié par sa clé d'inscription puis son jeton.
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_ca",
+                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_ca", "agent_android_apk",
                     # Logo et fond de l'entreprise : affichés aussi sur la page de connexion (avant authentification).
                     "appearance_logo", "appearance_company",
                     # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).
@@ -155,11 +155,11 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, ha, logforward, update_blocks  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, ha, logforward, update_blocks, android_apps, adb  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
-                 mcp_remote, ha, logforward, update_blocks)
+                 mcp_remote, ha, logforward, update_blocks, android_apps, adb)
 
 
 def startup():

@@ -286,6 +286,14 @@ if ! { apt-get update -q -o APT::Update::Error-Mode=any && apt-get install -y -q
     tail -15 "$LOG" >&2
     die "installation des paquets impossible (journal complet : $LOG)." "package installation failed (full log: $LOG)." "no se pudieron instalar los paquetes (registro completo: $LOG)."
 fi
+# adb (terminal adb des appareils Android) : facultatif, jamais bloquant.
+if ! dpkg-query -W -f='${Status}' adb 2>/dev/null | grep -q "install ok installed"; then
+    if apt-get install -y -q --no-install-recommends adb >> "$LOG" 2>&1; then
+        grep -qx adb "$PACKAGE_RECORD" || echo adb >> "$PACKAGE_RECORD"
+    else
+        warn "adb non installé : terminal adb indisponible." "adb not installed: adb terminal unavailable." "adb no instalado: terminal adb no disponible."
+    fi
+fi
 fi
 fi
 

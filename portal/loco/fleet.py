@@ -28,7 +28,7 @@ import zipfile
 
 from flask import Response, abort, current_app, flash, g, redirect, render_template, request, url_for
 
-from . import addresses, agentpkg, app, config, features, permissions, scope, wake
+from . import addresses, agentpkg, app, apksign, config, features, permissions, scope, wake
 from .i18n import L_, _, n_
 from .auth import audit, can, login_required, require
 from .db import db
@@ -44,7 +44,7 @@ UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
-           "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil")}
+           "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -305,8 +305,8 @@ def action_label(cmd):
     if params.get("slug"):
         row = db().execute("SELECT name FROM win_apps WHERE slug=?", (params["slug"],)).fetchone()
         label = _("%(action)s : %(name)s", action=label, name=row["name"] if row else params["slug"])
-    if params.get("app_snapshots"):
-        names = [a.get("name", a.get("slug", "")) for a in params["app_snapshots"]]
+    if params.get("app_snapshots") or cmd["action"] == "install-apk" and params.get("apps"):
+        names = [a.get("name", a.get("slug", "")) for a in params.get("app_snapshots") or params["apps"]]
         label = _("%(action)s : %(name)s", action=label, name=", ".join(names[:3]) + ("…" if len(names) > 3 else ""))
     only = params.get("only") if isinstance(params.get("only"), dict) else None
     if only:
@@ -485,7 +485,10 @@ def _store_inventory(dev, inv):
                      **({"id": _text(u.get("id"), 64)} if UPDATE_ID_RE.fullmatch(str(u.get("id") or "")) else {})}
                     for u in updates],
         "apps": [{"name": _text(a.get("name")), "version": _text(a.get("version"), 80),
-                  "publisher": _text(a.get("publisher"), 120)} for a in apps],
+                  "publisher": _text(a.get("publisher"), 120),
+                  # Android : numéro de version et application qui l'a installée (mises à jour proposées par loco).
+                  **({"code": a["code"]} if isinstance(a.get("code"), int) and not isinstance(a.get("code"), bool) and a["code"] >= 0 else {}),
+                  **({"installer": _text(a.get("installer"), 120)} if a.get("installer") else {})} for a in apps],
         "flatpak": int(inv.get("flatpak") or 0) if str(inv.get("flatpak") or 0).isdigit() else 0,
         "error": _text(inv.get("error"), 500),
         "warning": _text(inv.get("warning"), 500),
@@ -519,6 +522,10 @@ def _store_software(dev, inv):
             "cores": _int(system.get("cores")), "memory": _int(system.get("memory")),
             "memory_available": _int(system.get("memory_available")), "disk": _int(system.get("disk")),
             "disk_free": _int(system.get("disk_free")), "boot": _int(system.get("boot")),
+            # Android : niveau d'API, processeurs pris en charge, et si loco a le droit d'installer des applications.
+            **({"sdk": _int(system.get("sdk")),
+                "abis": [_text(a, 20) for a in system.get("abis") or [] if isinstance(a, str)][:8],
+                "can_install": bool(system.get("can_install"))} if system.get("sdk") else {}),
         },
     }
     db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "
@@ -542,6 +549,9 @@ def expire_commands(conn, dev_id=None):
                  "WHERE state IN ('sent', 'running') AND action != 'wake' AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
                  (_now(), limit, *([dev_id] if dev_id else [])))
     wake.expire(conn, dev_id)
+
+
+WAIT = object()        # commande pas encore prête (fichier en cours de téléchargement sur loco) : elle attend
 
 
 def _payload(dev, cmd):
@@ -575,6 +585,22 @@ def _payload(dev, cmd):
         if a is None:
             return None
         out["apps"] = [app_payload(a)]
+    if cmd["action"] == "install-apk":
+        if dev["os_family"] != "android":
+            return None
+        from . import android_apps
+        out["apps"] = []
+        for item in params.get("apps") or []:
+            if item.get("store") == "fdroid":
+                state = android_apps.apk_state(item)
+                if state == "pending":
+                    return WAIT             # loco télécharge et vérifie l'APK : la commande partira au contact suivant
+                if state != "ready":
+                    return state
+                item = {k: item[k] for k in ("store", "package", "name", "version", "code", "sha256", "size", "signer")}
+                item["url"] = f"/agent/android/apk/{item['sha256']}"
+            out["apps"].append(item)
+        return out
     if cmd["action"] == "install-package":
         if dev["os_family"] not in ("debian", "rhel"):
             return None
@@ -609,6 +635,9 @@ def agent_checkin():
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
         from . import monitoring
         monitoring.record(conn, dev["id"], data["metrics"])
+    if dev["os_family"] == "android" and isinstance(data.get("adb"), dict):    # application 2.139.0 et plus
+        from . import adb
+        adb.record_report(conn, dev, data["adb"])
     expire_commands(db(), dev["id"])
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     from . import schedules
@@ -618,7 +647,8 @@ def agent_checkin():
     for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
                           "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
         if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
-                or c["action"] == "run-script" and "scripts" in features.disabled(conn)):
+                or c["action"] == "run-script" and "scripts" in features.disabled(conn)
+                or c["action"] == "install-apk" and "android" in features.disabled(conn)):
             continue                # fonctionnalité coupée : la commande attend sa réactivation
         actor = conn.execute("SELECT role,disabled,must_change,pending FROM users WHERE username=?", (c["created_by"],)).fetchone()
         grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["pending"] and not actor["must_change"] else frozenset()
@@ -634,9 +664,12 @@ def agent_checkin():
         if c["action"] == "update" and version_key(dev["agent_version"]) < update_blocks.AGENT_VERSION and update_blocks.for_device(conn, dev):
             continue                # agent trop ancien pour respecter un blocage : il se met à jour seul, la commande l'attend
         payload = _payload(dev, c)
-        if payload is None:
+        if payload is WAIT:
+            continue
+        if payload is None or isinstance(payload, str):
             conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE id=?",
-                         (_now(), "Script indisponible ou incompatible avec ce système." if c["action"] == "run-script"
+                         (_now(), payload if isinstance(payload, str) else
+                          "Script indisponible ou incompatible avec ce système." if c["action"] == "run-script"
                           else "Logiciel absent du catalogue.", c["id"]))
             continue
         conn.execute("UPDATE device_commands SET state='sent', sent_at=? WHERE id=?", (_now(), c["id"]))
@@ -661,6 +694,20 @@ def agent_checkin():
     answer["update_blocks"] = {"patterns": update_blocks.patterns_for(conn, dev)}   # agents 2.137.0 et plus
     color, reason = status(dev)
     answer["indicator"] = {"color": color, "reason": reason}
+    if dev["os_family"] == "android":
+        # Garde-fou : tant que l'écran est piloté par adb, l'agent l'affiche et contacte loco souvent pour suivre.
+        from . import adb
+        if adb.under_control(dev["id"]):
+            answer["control"] = True
+            answer["interval"] = min(answer["interval"], 3)
+        else:
+            answer["control"] = False
+    if dev["os_family"] == "android" and features.enabled("android") and version_key(dev["agent_version"]) < version_key(config.VERSION):
+        path, sha = agent_apk()
+        if path:                    # applications 2.139.0 et plus : se mettent à jour seules depuis loco
+            answer["agent_apk"] = {"version": config.VERSION, "sha256": sha}
+        else:
+            prefetch_apk()
     if dev["os_family"] == "windows":
         answer["wu_proxy"] = wu_proxy_directive()
         answer["windows_update"] = {"blocked": bool(dev["block_windows_update"])}
@@ -677,7 +724,7 @@ def agent_checkin():
 
 PROGRESS_STEPS = {"download": L_("Téléchargement"), "verify": L_("Vérification de l'empreinte"), "install": L_("Installation"),
                   "windows_update": L_("Mises à jour Windows"), "updates": L_("Mises à jour du système"),
-                  "flatpak": L_("Applications Flatpak")}
+                  "flatpak": L_("Applications Flatpak"), "confirm": L_("En attente de confirmation sur l'appareil")}
 # Phases d'une mise à jour du système (étape « updates ») : préparation, téléchargement puis installation.
 UPDATE_PHASES = {"prepare": L_("Préparation"), "download": L_("Téléchargement"), "install": L_("Installation")}
 
@@ -728,9 +775,13 @@ def progress_view(raw):
         return {"label": label, "percent": max(1, min(99, percent)), "step": p["step"], "app": p.get("app", ""),
                 "phase": phase, **extra}
     # Part de chaque logiciel : téléchargement 0-60 %, vérification 60-70 %, installation 70-100 %.
-    within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "windows_update": 0.0}[p["step"]]
+    within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "confirm": 0.8,
+              "windows_update": 0.0}[p["step"]]
     overall = round(100 * ((index - 1) + within) / total)
-    label = PROGRESS_STEPS[p["step"]] + (f" de {p['app']}" if p.get("app") else "")
+    if p["step"] == "confirm":
+        label = str(PROGRESS_STEPS["confirm"]) + (f" · {p['app']}" if p.get("app") else "")
+    else:
+        label = PROGRESS_STEPS[p["step"]] + (f" de {p['app']}" if p.get("app") else "")
     if p["step"] == "download" and "percent" in p:
         label += f" · {p['percent']} %"
     if total > 1 and p["step"] != "windows_update":
@@ -1004,6 +1055,17 @@ def _apk_cache():
     return os.path.join(config.DATA, "agents", f"loco-agent-{config.VERSION}.apk")
 
 
+_APK_PREFETCH = {"last": 0.0}
+
+
+def prefetch_apk():
+    """Télécharge en arrière-plan l'APK de cette version (au plus une tentative toutes les dix minutes)."""
+    if time.time() - _APK_PREFETCH["last"] < 600:
+        return
+    _APK_PREFETCH["last"] = time.time()
+    threading.Thread(target=agent_apk, kwargs={"fetch": True}, name="loco-apk", daemon=True).start()
+
+
 def agent_apk(fetch=False):
     """(chemin, sha256) de l'APK de l'agent Android de cette version, ou (None, raison)."""
     for path in (os.path.join(AGENT_DIR, "loco-agent.apk"), _apk_cache()):
@@ -1238,6 +1300,35 @@ def agent_enroll_msi():
                           ca=_ca_fingerprint())
     return Response(data, mimetype="application/x-msi",
                     headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
+
+
+@app.route("/agent/android/enroll.apk")
+@login_required
+def agent_enroll_apk():
+    """APK prêt pour ce serveur : une fois installé et ouvert, il inscrit l'appareil tout seul, sans rien saisir.
+    L'adresse, la clé d'inscription et l'empreinte de l'autorité sont gravées dans le bloc de signature de l'APK
+    (voir apksign) — sa signature reste valable, aucune re-signature. Réservé aux comptes autorisés à enrôler (voir
+    permissions.ENDPOINTS) ; avec « groupe », la clé de ce groupe. L'empreinte étant transmise ici, l'appareil
+    épingle l'autorité sans demander de confirmation ; l'APK générique (saisie manuelle) reste proposé à côté."""
+    if not features.enabled("android"):
+        abort(404)
+    group = enrollment_group(request.args.get("groupe", ""))
+    path, reason = agent_apk(fetch=True)
+    if path is None:
+        current_app.logger.warning("APK de l'agent %s indisponible : %s", config.VERSION, reason)
+        return Response(f"loco-agent.apk {config.VERSION} indisponible : {reason}. Reessayez dans un instant.\n",
+                        status=503, mimetype="text/plain", headers={"Retry-After": "30"})
+    cfg = json.dumps({"server": config.HTTPS_URL, "key": group_key(group["id"]) if group else enroll_key(),
+                      "ca": _ca_fingerprint()}, separators=(",", ":")).encode()
+    try:
+        with open(path, "rb") as f:
+            data = apksign.stamp(f.read(), cfg)
+    except apksign.ApkError as e:
+        current_app.logger.warning("APK de l'agent non tamponnable (%s) : %s", config.VERSION, e)
+        return Response(f"loco-agent.apk {config.VERSION} non preconfigurable : {e}.\n",
+                        status=503, mimetype="text/plain", headers={"Retry-After": "30"})
+    return Response(data, mimetype="application/vnd.android.package-archive",
+                    headers={"Content-Disposition": "attachment; filename=loco-agent.apk"})
 
 
 def enrollment_groups():
@@ -1585,7 +1676,14 @@ def fleet_device(dev_id):
     from . import groups, schedules
     from . import monitoring
     mon = monitoring.view(db(), dev, request.args.get("periode", "24h"))
-    return render_template("fleet_device.html", address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
+    android_view = adb_view = None
+    if dev["os_family"] == "android" and features.enabled("android") and can("android.view"):
+        from . import android_apps
+        android_view = android_apps.device_view(dev)
+    if dev["os_family"] == "android" and features.enabled("android") and features.enabled("remote") and can("remote.adb"):
+        from . import adb
+        adb_view = adb.view(dev)
+    return render_template("fleet_device.html", android_view=android_view, adb_view=adb_view, address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev), wake_controls=wake.controls(dev),
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,

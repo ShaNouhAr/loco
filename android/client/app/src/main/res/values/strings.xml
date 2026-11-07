@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">loco</string>
+    <string name="app_name">Agent loco</string>
 
     <!-- Service (notification permanente) -->
     <string name="svc_connecting">Connexion à loco…</string>
@@ -8,22 +8,21 @@
     <string name="svc_server_error">Erreur du serveur (%1$d)</string>
     <string name="svc_offline">Hors ligne · nouvel essai</string>
     <string name="svc_channel_desc">Garde le contact avec votre serveur loco.</string>
+    <string name="control_channel">Contrôle à distance</string>
+    <string name="control_title">Contrôle à distance en cours</string>
+    <string name="control_text">Un administrateur voit et pilote l\'écran de cet appareil.</string>
     <string name="svc_screen_on">Écran partagé avec loco</string>
 
     <!-- Accessibilité -->
     <string name="a11y_desc">Permet à loco de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : toucher, faire défiler, revenir, et saisir du texte dans le champ actif. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail.</string>
 
     <!-- État -->
-    <string name="state_enrolled">Inscrit sur %1$s</string>
-    <string name="state_connected">Connecté · dernier contact à %1$s</string>
-    <string name="state_connecting">Connexion en cours…</string>
-    <string name="state_offline">Hors ligne · nouvel essai automatique</string>
     <string name="action_leave">Se retirer de loco</string>
     <string name="leave_explain">L\'appareil sera retiré de ce serveur et l\'agent s\'arrêtera. Vous pourrez l\'inscrire à nouveau plus tard.</string>
     <string name="cancel">Annuler</string>
 
     <!-- Inscription -->
-    <string name="enroll_intro">Inscrivez cet appareil sur votre serveur loco. Saisissez l\'adresse et la clé affichées dans la page Enrôlement du portail.</string>
+    <string name="enroll_intro">Saisissez l\'adresse du serveur et la clé d\'inscription affichées par le portail, dans Mon parc › Enrôlement, onglet Android.</string>
     <string name="field_server">Adresse du serveur</string>
     <string name="field_key">Clé d\'inscription</string>
     <string name="field_key_hint">clé affichée par le portail</string>
@@ -48,7 +47,6 @@
     <string name="screen_state_off">Non partagé</string>
 
     <!-- Contrôle -->
-    <string name="control_title">Contrôle</string>
     <string name="control_hint">Permet de toucher, faire défiler, revenir et écrire depuis le portail. Sans lui, l\'écran reste seulement visible.</string>
     <string name="control_on">Ouvrir les réglages d\'accessibilité</string>
     <string name="control_state_on">Activé</string>
@@ -81,4 +79,49 @@
     <!-- Sessions distantes -->
     <string name="remote_no_screen">Écran distant non activé sur l\'appareil : dans l\'appli loco, touchez « Activer l\'écran distant ».</string>
     <string name="remote_unsupported">Type de session non pris en charge sur Android.</string>
+
+    <!-- Installations -->
+    <string name="install_title">Installations</string>
+    <string name="install_hint">Permet à loco d\'installer les applications que vous déployez depuis le portail. Android demande votre confirmation pour chaque nouvelle application.</string>
+    <string name="install_on">Autoriser les installations</string>
+    <string name="install_state_on">Autorisées</string>
+    <string name="install_state_off">À autoriser</string>
+    <string name="channel_installs">Installations</string>
+    <string name="channel_installs_desc">Confirmations des installations demandées depuis loco.</string>
+    <string name="apps_confirm_title">Installer %1$s ?</string>
+    <string name="apps_confirm_text">Demandé depuis loco : touchez pour confirmer l\'installation.</string>
+    <string name="apps_play_title">%1$s sur Google Play</string>
+    <string name="apps_play_text">Demandé depuis loco : touchez « Installer » dans le Play Store.</string>
+    <string name="apps_installed">%1$s %2$s : installée.</string>
+    <string name="apps_failed">%1$s : échec, %2$s.</string>
+    <string name="apps_play_opened">%1$s : fiche Google Play ouverte sur l\'appareil, à installer depuis le Play Store.</string>
+    <string name="apps_store_opened">%1$s : fiche ouverte dans la boutique de l\'appareil (pas de Google Play).</string>
+    <string name="apps_play_web">%1$s : aucune boutique sur l\'appareil, fiche Google Play ouverte dans le navigateur.</string>
+    <string name="apps_bad_hash">empreinte SHA-256 incorrecte, APK refusé</string>
+    <string name="apps_bad_apk">APK illisible</string>
+    <string name="apps_bad_package">l\'APK ne correspond pas à l\'application demandée</string>
+    <string name="apps_bad_signer">clé de signature différente de celle annoncée par le dépôt</string>
+    <string name="apps_other_signer">déjà installée avec une autre signature (%1$s) : désinstallez-la d\'abord</string>
+    <string name="apps_not_confirmed">installation non confirmée sur l\'appareil</string>
+    <string name="apps_aborted">installation refusée sur l\'appareil</string>
+    <string name="apps_blocked">installation bloquée par l\'appareil</string>
+    <string name="apps_conflict">en conflit avec la version installée</string>
+    <string name="apps_incompatible">incompatible avec cet appareil</string>
+    <string name="apps_invalid">APK refusé par Android</string>
+    <string name="apps_storage">espace de stockage insuffisant</string>
+    <string name="apps_error">refusée par Android (%1$s)</string>
+    <string name="apps_unsupported">Action non prise en charge par l\'application Android.</string>
+    <string name="apps_left">Appareil retiré de loco ; l\'application reste installée.</string>
+    <string name="apps_allow_title">Autoriser loco à installer</string>
+    <string name="apps_allow_text">loco doit pouvoir installer des applications pour installer %1$s : activez « Autoriser cette source ».</string>
+    <string name="apps_not_allowed">autorisation d\'installer non accordée sur l\'appareil</string>
+    <string name="pending_title">Installation demandée par loco</string>
+    <string name="pending_state">À confirmer</string>
+    <string name="pending_hint">%1$s attend votre confirmation dans la fenêtre d\'installation d\'Android.</string>
+    <string name="pending_action">Confirmer l\'installation</string>
+    <string name="enroll_title">Inscrire cet appareil</string>
+    <string name="auto_title">Inscription de l\'appareil</string>
+    <string name="auto_hint">L\'appareil s\'inscrit sur loco avec la configuration fournie dans l\'application. Un instant…</string>
+    <string name="auto_ca_mismatch">L\'empreinte de l\'autorité ne correspond pas à celle prévue par l\'application : inscription automatique annulée. Vérifiez l\'adresse, puis réessayez à la main.</string>
+    <string name="access_title">Accès sur cet appareil</string>
 </resources>

@@ -7,7 +7,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Déploiements") }}</h1>
-    <p>{{ _("Installations de logiciels Windows et de paquets Linux demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.") }}</p>
+    <p>{{ _("Installations de logiciels Windows, de paquets Linux et d'applications Android demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.") if feature('android') else _("Installations de logiciels Windows et de paquets Linux demandées aux agents, avec l'avancement poste par poste. Rien ne part avant la confirmation d'une préparation.") }}</p>
   </div>
   {% if can('fleet.install') %}<div class="actions">
     <details class="menu">
@@ -15,6 +15,7 @@
       <div class="menu-list" role="menu">
         <a class="menu-item" role="menuitem" href="{{ url_for('deployment_compose') }}">{{ _("Logiciels Windows") }}</a>
         <a class="menu-item" role="menuitem" href="{{ url_for('deployment_compose_linux') }}">{{ _("Paquets Linux") }}</a>
+        {% if feature('android') and can('android.view') %}<a class="menu-item" role="menuitem" href="{{ url_for('deployment_compose_android') }}">{{ _("Applications Android") }}</a>{% endif %}
       </div>
     </details>
   </div>{% endif %}
@@ -40,7 +41,7 @@
           <tr>
             <td><a href="{{ url_for('deployment_detail', deployment_id=item.row.id) }}" class="strong-link">{{ item.row.title }}</a>
               <span class="sub sans">{{ item.row.created_at|date_fr }} · {{ item.row.created_by }}</span></td>
-            <td class="hide-sm"><span class="os-tag">{{ _("Mises à jour") if item.kind == 'update' else _("Linux") if item.kind == 'linux' else _("Windows") }}</span> <span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
+            <td class="hide-sm"><span class="os-tag">{{ _("Mises à jour") if item.kind == 'update' else _("Linux") if item.kind == 'linux' else 'Android' if item.kind == 'android' else _("Windows") }}</span> <span title="{{ item.names|join(', ') }}">{{ item.names[:2]|join(', ') }}{% if item.apps > 2 %} <span class="faint">+{{ item.apps - 2 }}</span>{% endif %}</span></td>
             <td class="deploy-progress">
               {% if item.state in ('draft', 'expired') %}<span class="faint small">{{ _("%(devices)s poste%(v)s prévu%(v)s", devices=item.devices, v='s' if item.devices > 1) }}</span>
               {% else %}

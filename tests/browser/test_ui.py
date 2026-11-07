@@ -724,5 +724,71 @@ class TestPageTools(BrowserTest):
             conn.execute("DELETE FROM settings WHERE key='appearance_policy'")
 
 
+class AndroidAppsPages(BrowserTest):
+    """Pages des applications Android (fonctionnalité expérimentale) : barre de navigation avec l'entrée de plus,
+    pages sans ascenseur horizontal ni erreur, sur ordinateur et téléphone. Index local fabriqué : pas d'Internet."""
+
+    def setUp(self):
+        super().setUp()
+        from loco import android_apps, features
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.EXPERIMENTAL_SETTING, '["android"]'))
+            conn.execute("DELETE FROM android_apps")
+            conn.execute("UPDATE android_sources SET enabled=0")
+            source = conn.execute("INSERT INTO android_sources (name, url, fingerprint, position, added_at, apps, synced_at, checked_at) "
+                                  "VALUES ('Dépôt de démonstration', 'https://demo.test/fdroid/repo', ?, 40, ?, 1, ?, ?)",
+                                  ("c" * 64, stamp(), stamp()[:16], stamp()[:16])).lastrowid
+            conn.execute("INSERT INTO android_apps (package, store, source_id, name, added_at) VALUES "
+                         "('org.example.notes', 'fdroid', ?, 'Carnet de notes très utile au quotidien', ?), "
+                         "('com.example.game', 'play', NULL, 'Jeu', ?)", (source, stamp(), stamp()))
+        version = {"added": 1, "file": {"name": "/org.example.notes_3.apk", "sha256": "d" * 64, "size": 123456},
+                   "manifest": {"versionName": "1.3.0-beta-très-longue-version-123456", "versionCode": 3,
+                                "usesSdk": {"minSdkVersion": 26, "targetSdkVersion": 34}, "signer": {"sha256": ["e" * 64]}}}
+        row = android_apps.project("org.example.notes", {"metadata": {"name": {"en-US": "Carnet de notes très utile au quotidien"},
+                                   "summary": {"en-US": "Prendre des notes"}, "categories": ["Writing"], "description": {"en-US": "Texte. " * 400}},
+                                   "versions": {"a": version}})
+        with android_apps._index() as idx:
+            idx.execute("DELETE FROM apps")
+            idx.execute("DELETE FROM sources")
+            idx.execute("INSERT INTO apps (source_id, " + ", ".join(android_apps.COLUMNS) + ") VALUES (?" + ", ?" * len(android_apps.COLUMNS) + ")",
+                        (source, *(row[c] for c in android_apps.COLUMNS)))
+            idx.execute("INSERT INTO sources (source_id, url, fingerprint, timestamp) VALUES (?, 'https://demo.test/fdroid/repo', ?, 1)",
+                        (source, "c" * 64))
+        self.source = source
+        self.addCleanup(self.restore)
+
+    def restore(self):
+        from loco import features
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
+            conn.execute("DELETE FROM android_apps")
+            conn.execute("DELETE FROM android_sources WHERE known=''")
+            conn.execute("UPDATE android_sources SET enabled=1")
+
+    def check_pages(self):
+        for path in ("/android/apps", "/android/store?category=all", f"/android/store/{self.source}/org.example.notes",
+                     "/android/sources", "/fleet/deployments/new-android"):
+            self.page.goto(path)
+            self.assertLessEqual(self.overflow(), 0, path)
+            bar = self.page.evaluate("(() => { const b = document.querySelector('.top-in'); return b.scrollWidth - b.clientWidth })()")
+            self.assertLessEqual(bar, 0, f"{path} : la barre du haut déborde")
+
+
+class TestAndroidAppsDesktop(AndroidAppsPages):
+    def test_pages_fit_on_a_computer(self):
+        self.check_pages()
+        self.page.goto("/android/apps")
+        expect(self.page.locator(".nav a.on")).to_have_text("Android")
+        self.page.locator("[data-open='#add-play']").click()
+        expect(self.page.locator("#add-play")).to_be_visible()
+
+
+class TestAndroidAppsPhone(AndroidAppsPages):
+    viewport = PHONE
+
+    def test_pages_fit_on_a_phone(self):
+        self.check_pages()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

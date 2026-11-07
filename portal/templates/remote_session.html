@@ -1,17 +1,17 @@
 {% extends "console_base.html" if detached else "base.html" %}
-{% block title %}{{ 'Terminal' if remote.kind == 'terminal' else (_('Écran') if remote.os_family == 'android' else _('Console noVNC')) }} · {{ remote.hostname }}{% endblock %}
+{% block title %}{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind == 'terminal' else (_('Écran') if remote.os_family == 'android' else _('Console noVNC')) }} · {{ remote.hostname }}{% endblock %}
 {% block content %}
 {% set android = remote.os_family == 'android' %}
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_macros.html' import term_help %}
-<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind == 'terminal' else _("écran de l'appareil") }}"{% endif %}>
+<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
-      <h1>{{ 'Terminal' if remote.kind == 'terminal' else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
-      <p class="small muted remote-description">{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}</p>
+      <h1>{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind == 'terminal' else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
+      <p class="small muted remote-description">{% if remote.kind == 'adb' %}{{ _("Shell adb · utilisateur shell d'Android · via le serveur loco") }}{% else %}{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}{% endif %}</p>
     </div>
     <div class="actions">
-      {% if remote.kind == 'terminal' %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
+      {% if remote.kind in ('terminal', 'adb') %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
         <button type="button" class="btn sm" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
         <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>{% endif %}
@@ -115,7 +115,7 @@
     </div>
     {% endif %}
   </div>
-  {% if remote.kind == 'terminal' %}
+  {% if remote.kind in ('terminal', 'adb') %}
   {{ term_help(_("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.")) }}
   {% else %}
   <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
@@ -123,7 +123,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-{% if remote.kind == 'terminal' %}
+{% if remote.kind in ('terminal', 'adb') %}
 {% include '_xterm_assets.html' %}
 {% endif %}
 <script type="module" src="{{ url_for('static', filename='remote.js') }}?v={{ asset_v }}"></script>

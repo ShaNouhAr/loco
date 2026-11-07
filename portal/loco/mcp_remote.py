@@ -41,7 +41,7 @@ FILE_READ_MAX = 1024 * 1024
 FILE_CHUNK = 256 * 1024
 SCREEN_WIDTH = 1440                     # au-delà, la capture est réduite d'un facteur entier (lisible par l'assistant)
 POLL = 0.05
-MIN_AGENT = {"terminal": (2, 4), "desktop": (2, 4), "files": (2, 23)}
+MIN_AGENT = {"terminal": (2, 4), "desktop": (2, 4), "files": (2, 23), "adb": (0,)}
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[P^_][^\x1b]*\x1b\\|\x1b[@-Z\\-_]|[\x00-\x08\x0b-\x1d\x7f]")
 B64_RE = re.compile(r"[^A-Za-z0-9+/=]")
 
@@ -100,6 +100,13 @@ class Channel:
         dev = self.dev
         if fleet.version_key(dev["agent_version"]) < MIN_AGENT[self.kind]:
             raise ToolError(f"The agent of {dev['hostname']} must be updated to {'.'.join(map(str, MIN_AGENT[self.kind]))}.0 or later.")
+        serial = ""
+        if self.kind == "adb":                              # loco se connecte lui-même à l'appareil, hors transaction
+            from . import adb
+            try:
+                serial = adb.ensure(dev)
+            except ValueError as e:
+                raise ToolError(f"adb is not ready on {dev['hostname']}: {e}") from e
         conn = db()
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -130,7 +137,7 @@ class Channel:
                                     f"{'.'.join(map(str, remote.CONSENT_VERSION))}.0 to ask for it.")
                 self.sid, now = secrets.token_hex(16), time.time()
                 cols, rows = ((TTY_COLS, TTY_ROWS) if self.role == "tty" else (TERMINAL_COLS, TERMINAL_ROWS)
-                              if self.kind == "terminal" else (100, 30))
+                              if self.kind in ("terminal", "adb") else (100, 30))
                 conn.execute("INSERT INTO remote_sessions (id,device_id,user_id,owner,pw_version,kind,created,browser_seen,"
                              "expires,terminal_fallback,cols,rows,consent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                              (self.sid, dev["id"], g.user["id"], owner(self.role), g.user["pw_version"], self.kind, now, now, now + 3600,
@@ -142,6 +149,9 @@ class Channel:
                 self.sid = row["id"]
                 conn.execute("UPDATE remote_sessions SET browser_seen=? WHERE id=?", (time.time(), self.sid))
             conn.commit()
+            if self.kind == "adb":
+                from . import adb
+                adb.start(self.sid, serial)                 # relais adb shell de cette session (sans effet s'il tourne)
             if self.persistent:
                 self.state = _STATE.setdefault(self.sid, {})
                 self.buffer = self.state.setdefault("rest", bytearray())
@@ -342,18 +352,76 @@ def _partial(raw, nonce, windows):
 def _terminal_run(args):
     dev = _device(args["device"])
     _active(dev)
-    windows = dev["os_family"] == "windows"
+    return _run(dev, "terminal", args)
+
+
+@tool("adb_shell", "remote", "Run an adb shell command (Android)", L_("Commandes adb (Android)"),
+      L_("Lancer des commandes dans le shell adb d'un appareil Android appairé avec loco (utilisateur shell : pm, am, settings, input, dumpsys, logcat) et lire leur sortie."),
+      ("fleet.view", "remote.adb"),
+      "Run a command in the adb shell of an Android device that has been paired with loco (Wireless debugging or a "
+      "classic adb port, set up from the device page). It runs as Android's \"shell\" user, with far more rights than "
+      "terminal_run on Android: pm (install, list, grant, uninstall), am/cmd (start activities, force-stop), settings, "
+      "input (tap x y, swipe, text, keyevent), screencap, dumpsys, logcat -d, getprop. Returns the output and exit code. "
+      "Each call is independent (no working directory or variable kept). It must not wait for keyboard input; it is "
+      "interrupted after the timeout. Output limited to the last 60 KB.",
+      {"device": DEVICE,
+       "command": {"type": "string", "minLength": 1, "maxLength": COMMAND_MAX, "description": "Shell command or script (Android sh)."},
+       "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait (default 30)."}},
+      ("device", "command"), read_only=False, destructive=True, idempotent=False)
+def _adb_shell(args):
+    dev = _device(args["device"])
+    _active(dev)
+    if dev["os_family"] != "android":
+        raise ToolError(f"{dev['hostname']} is not an Android device: use terminal_run.")
+    return _run(dev, "adb", args)
+
+
+@tool("adb_unlock", "remote", "Unlock an Android device (pattern, PIN or password)", L_("Déverrouiller un appareil Android"),
+      L_("Réveiller et déverrouiller un appareil Android appairé en adb : schéma (séquence des points 1..9), PIN ou mot de passe. L'écran de verrouillage ne se voit pas (surface sécurisée) ; le déverrouillage est injecté à l'aveugle."),
+      ("fleet.view", "remote.adb"),
+      "Wake and unlock an Android device paired over adb, by replaying its screen lock: a PATTERN (the dots in order, "
+      "numbered 1..9 left-to-right then top-to-bottom, e.g. [1,4,5,9]), a PIN (digits), or a PASSWORD (text). The lock "
+      "screen is a secure surface that cannot be captured, so the unlock is injected blind: the pattern uses a "
+      "per-manufacturer grid geometry (tune it on the device page if a pattern keeps failing; PIN and password need no "
+      "geometry). Returns whether the device ended up unlocked. The secret is never logged.",
+      {"device": DEVICE,
+       "method": {"type": "string", "enum": ["pattern", "pin", "password"], "description": "Kind of screen lock."},
+       "pattern": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 9}, "minItems": 2, "maxItems": 9,
+                   "description": "For method=pattern: the dots in order, 1..9 (1=top-left, 5=center, 9=bottom-right), e.g. [1,4,5,9]."},
+       "code": {"type": "string", "maxLength": 64, "description": "For method=pin (digits) or method=password (text)."}},
+      ("device", "method"), read_only=False, destructive=False, idempotent=True)
+def _adb_unlock(args):
+    dev = _device(args["device"])
+    if dev["os_family"] != "android":                 # pas de _active : on déverrouille justement un appareil endormi
+        raise ToolError(f"{dev['hostname']} is not an Android device.")
+    from . import adb
+    try:
+        serial = adb.ensure(dev)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+    method = args["method"]
+    value = args.get("pattern") or [] if method == "pattern" else args.get("code", "")
+    error = adb.unlock(serial, dev, method, value)
+    audit("parc.adb.unlock", f"{dev['hostname']} ({method})")                 # jamais le secret
+    if error:
+        raise ToolError(error)
+    return {"device_id": dev["id"], "hostname": dev["hostname"], "method": method, "unlocked": True}
+
+
+def _run(dev, kind, args):
+    """Une commande dans un terminal du poste (agent) ou dans le shell adb (loco), avec ses marqueurs de début et de fin."""
+    windows = dev["os_family"] == "windows" and kind == "terminal"
     command = args["command"].replace("\r\n", "\n")
     if len(command.encode()) > COMMAND_MAX:
         raise ToolError(f"Scripts are limited to {COMMAND_MAX // 1000} KB here: use run_command for longer ones.")
     nonce = secrets.token_hex(6)
     timeout = args.get("timeout", 30)
-    with Channel(dev, "terminal") as chan:
+    with Channel(dev, kind) as chan:
         if chan.fresh:
             _ready(chan, windows)
         for line in (_powershell_lines(command, nonce) if windows else [_bash_line(command, nonce)]):
             chan.send(line.encode("utf-8") + b"\r")
-        audit("parc.session.commande", f"{dev['hostname']} : {command[:300]}{_via()}")
+        audit("parc.session.commande", f"{dev['hostname']} : {'adb shell : ' if kind == 'adb' else ''}{command[:300]}{_via()}")
         parse = powershell_result if windows else bash_result
         found = []
 

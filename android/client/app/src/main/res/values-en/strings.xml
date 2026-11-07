@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">loco Agent</string>
     <string name="svc_connecting">Connecting to loco…</string>
     <string name="svc_connected">Connected · %1$s</string>
     <string name="svc_server_error">Server error (%1$d)</string>
     <string name="svc_offline">Offline · retrying</string>
     <string name="svc_channel_desc">Keeps in touch with your loco server.</string>
+    <string name="control_channel">Remote control</string>
+    <string name="control_title">Remote control in progress</string>
+    <string name="control_text">An administrator is viewing and controlling this device\'s screen.</string>
     <string name="svc_screen_on">Screen shared with loco</string>
     <string name="a11y_desc">Lets loco control the device when you open the remote screen from the portal: tap, scroll, go back, and type text into the focused field. Nothing is read or sent outside a session you opened from the portal.</string>
-    <string name="state_enrolled">Enrolled on %1$s</string>
-    <string name="state_connected">Connected · last contact at %1$s</string>
-    <string name="state_connecting">Connecting…</string>
-    <string name="state_offline">Offline · retrying automatically</string>
     <string name="action_leave">Leave loco</string>
     <string name="leave_explain">The device will be removed from this server and the agent will stop. You can enroll it again later.</string>
     <string name="cancel">Cancel</string>
-    <string name="enroll_intro">Enroll this device on your loco server. Enter the address and key shown on the portal\'s Enrollment page.</string>
+    <string name="enroll_intro">Enter the server address and the enrollment key shown by the portal, in My fleet › Enrollment, Android tab.</string>
     <string name="field_server">Server address</string>
     <string name="field_key">Enrollment key</string>
     <string name="field_key_hint">key shown by the portal</string>
@@ -33,7 +33,6 @@
     <string name="screen_off">Stop sharing</string>
     <string name="screen_state_on">Shared</string>
     <string name="screen_state_off">Not shared</string>
-    <string name="control_title">Control</string>
     <string name="control_hint">Lets the portal tap, scroll, go back and type. Without it, the screen stays visible only.</string>
     <string name="control_on">Open accessibility settings</string>
     <string name="control_state_on">On</string>
@@ -60,4 +59,49 @@
     <string name="battery_hint">Allow loco to keep running in the background: otherwise the device may put it to sleep and the connection is lost when the screen is off.</string>
     <string name="battery_on">Allow background</string>
     <string name="battery_state_off">To allow</string>
+
+    <!-- Installs -->
+    <string name="install_title">Installs</string>
+    <string name="install_hint">Lets loco install the apps you deploy from the portal. Android asks you to confirm each new app.</string>
+    <string name="install_on">Allow installs</string>
+    <string name="install_state_on">Allowed</string>
+    <string name="install_state_off">To allow</string>
+    <string name="channel_installs">Installs</string>
+    <string name="channel_installs_desc">Confirmations for installs requested from loco.</string>
+    <string name="apps_confirm_title">Install %1$s?</string>
+    <string name="apps_confirm_text">Requested from loco: tap to confirm the install.</string>
+    <string name="apps_play_title">%1$s on Google Play</string>
+    <string name="apps_play_text">Requested from loco: tap “Install” in the Play Store.</string>
+    <string name="apps_installed">%1$s %2$s: installed.</string>
+    <string name="apps_failed">%1$s: failed, %2$s.</string>
+    <string name="apps_play_opened">%1$s: Google Play page opened on the device, install it from the Play Store.</string>
+    <string name="apps_store_opened">%1$s: page opened in the device\'s store (no Google Play).</string>
+    <string name="apps_play_web">%1$s: no store on the device, Google Play page opened in the browser.</string>
+    <string name="apps_bad_hash">wrong SHA-256 fingerprint, APK refused</string>
+    <string name="apps_bad_apk">unreadable APK</string>
+    <string name="apps_bad_package">the APK does not match the requested app</string>
+    <string name="apps_bad_signer">signing key differs from the one announced by the repository</string>
+    <string name="apps_other_signer">already installed with another signature (%1$s): uninstall it first</string>
+    <string name="apps_not_confirmed">install not confirmed on the device</string>
+    <string name="apps_aborted">install declined on the device</string>
+    <string name="apps_blocked">install blocked by the device</string>
+    <string name="apps_conflict">conflicts with the installed version</string>
+    <string name="apps_incompatible">incompatible with this device</string>
+    <string name="apps_invalid">APK refused by Android</string>
+    <string name="apps_storage">not enough storage</string>
+    <string name="apps_error">refused by Android (%1$s)</string>
+    <string name="apps_unsupported">Action not supported by the Android app.</string>
+    <string name="apps_left">Device removed from loco; the app stays installed.</string>
+    <string name="apps_allow_title">Allow loco to install</string>
+    <string name="apps_allow_text">loco must be allowed to install apps to install %1$s: turn on “Allow from this source”.</string>
+    <string name="apps_not_allowed">permission to install not granted on the device</string>
+    <string name="pending_title">Install requested by loco</string>
+    <string name="pending_state">To confirm</string>
+    <string name="pending_hint">%1$s is waiting for your confirmation in Android\'s install window.</string>
+    <string name="pending_action">Confirm the install</string>
+    <string name="enroll_title">Enroll this device</string>
+    <string name="auto_title">Enrolling this device</string>
+    <string name="auto_hint">The device is enrolling on loco with the settings bundled in the app. One moment…</string>
+    <string name="auto_ca_mismatch">The authority fingerprint does not match the one expected by the app: automatic enrollment cancelled. Check the address, then try again manually.</string>
+    <string name="access_title">Access on this device</string>
 </resources>

@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{{ _("Préparer un déploiement Android") }}{% endblock %}
+{% macro app_item(i) -%}{% set a = i.row %}
+<label class="selection-item" data-search="{{ a.name }} {{ a.package }}"><input type="checkbox" name="app" value="{{ a.id }}" {{ 'checked' if a.id in selected.apps }} {{ 'disabled' if i.problem }}>
+  <span><strong>{{ a.name }}</strong> <span class="os-tag">{{ 'Google Play' if a.store == 'play' else a.source_name or _('source retirée') }}</span><small>{{ a.package }}{% if i.problem %} · {{ i.problem }}{% endif %}</small></span></label>
+{%- endmacro %}
+{% macro device_item(device) -%}
+{% set usable = device.os_family == 'android' and device.state == 'active' and ready(device) %}
+<label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
+  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'android' %} {{ _("· non compatible (applications Android)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% elif not ready(device) %} {{ _("· application loco à mettre à jour") }}{% endif %}</small></span></label>
+{%- endmacro %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+<p class="small back-link"><a href="{{ url_for('deployments') }}">{{ _("← Déploiements") }}</a></p>
+<div class="head">
+  <div>
+    <h1>{{ _("Préparer un déploiement Android") }}</h1>
+    <p>{{ _("Installez les applications du catalogue Android sur vos appareils. Chaque appareil reçoit la version compatible avec son Android et son processeur ; une application déjà à jour est ignorée.") }}</p>
+  </div>
+</div>
+<form method="post" action="{{ url_for('deployment_preview_android') }}" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="cols deployment-columns">
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("1 · Applications") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=app]">0</span></span></div></div>
+      <div class="panel-b stack-sm">
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Catalogue Android") }}</h3>{% if apps %}<input class="search-sm" type="search" placeholder="{{ _('Rechercher') }}" data-filter="#deploy-apps .selection-item" aria-label="{{ _('Rechercher une application') }}">{% endif %}</div>
+          <div class="selection-list" id="deploy-apps">
+            {% for i in apps if i.row.id in selected.apps %}{{ app_item(i) }}{% endfor %}
+            {% for i in apps if i.row.id not in selected.apps %}{{ app_item(i) }}{% endfor %}
+            {% if not apps %}<p class="small muted pad">{{ _("Catalogue vide : ajoutez des applications depuis <a href=\"%(v)s\">les dépôts F-Droid</a> ou Google Play.", v=url_for('android_store')) }}</p>{% endif %}
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" name="force" value="1"> {{ _("Réinstaller même si la version est déjà présente") }}</label>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-h"><h2>{{ _("2 · Appareils") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
+      <div class="panel-b stack-sm">
+        {% if device_groups %}
+        <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>
+          <div class="selection-list short">{% for group in device_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}" {{ 'checked' if group.id in selected.device_groups }} {{ 'disabled' if not can('fleet.bulk_install') }}><span><strong>{{ group.name }}</strong><small>{{ _("%(members)s appareil%(v)s", members=group.members, v='s' if group.members != 1) }}</small></span></label>{% endfor %}</div>
+          {% if not can('fleet.bulk_install') %}<p class="hint">{{ _("Le droit de déploiement sur plusieurs postes est requis pour cibler un groupe.") }}</p>{% endif %}
+        </div>
+        {% endif %}
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Appareils") }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#deploy-devices .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
+          <div class="selection-list" id="deploy-devices">
+            {% for device in devices if device.id in selected.devices %}{{ device_item(device) }}{% endfor %}
+            {% for device in devices if device.id not in selected.devices and device.os_family == 'android' %}{{ device_item(device) }}{% endfor %}
+            {% for device in devices if device.id not in selected.devices and device.os_family != 'android' %}{{ device_item(device) }}{% endfor %}
+            {% if not devices %}<p class="small muted pad">{{ _("Aucun appareil inscrit : installez l'agent depuis <a href=\"%(v)s\">Mon parc</a>.", v=url_for('fleet')) }}</p>{% endif %}
+          </div>
+        </div>
+        <p class="hint">{{ _("Une première installation se confirme sur l'appareil, dans la fenêtre « Installer » d'Android. Une fiche Google Play s'ouvre sur l'appareil : touchez « Installer » dans le Play Store.") }}</p>
+      </div>
+    </section>
+  </div>
+  <section class="panel sticky-actions compose-bar">
+    <div class="panel-b compose-bar-in">
+      <label class="f compose-title"><span>{{ _("Nom du déploiement") }}</span><input type="text" name="title" maxlength="100" placeholder="{{ _('facultatif, par exemple Applications de la tablette') }}"></label>
+      <button class="btn primary"><span class="spin"></span>{{ _("Vérifier avant de déployer") }}</button>
+    </div>
+  </section>
+</form>
+{% endblock %}

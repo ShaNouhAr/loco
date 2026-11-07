@@ -7,8 +7,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.NetworkInterface
 
-/** Ce que l'appareil déclare à loco : identité et inventaire des applications. Android ne gère ni mises à jour
- *  système ni catalogue de logiciels côté loco, donc « updates » reste vide. */
+/** Ce que l'appareil déclare à loco : identité, applications (version, boutique d'origine) et système (niveau
+ *  d'API, processeurs) pour choisir l'APK compatible. Pas de mises à jour système : « updates » reste vide. */
 object Inventory {
     fun identity(context: Context): JSONObject = JSONObject().apply {
         put("hostname", deviceName(context))
@@ -18,9 +18,14 @@ object Inventory {
     }
 
     fun full(context: Context): JSONObject = identity(context).apply {
+        put("adb", AdbProbe.snapshot(context))
         put("inventory", JSONObject()
             .put("updates", JSONArray())
-            .put("apps", apps(context)))
+            .put("apps", apps(context))
+            .put("system", JSONObject()
+                .put("sdk", Build.VERSION.SDK_INT)
+                .put("abis", JSONArray(Build.SUPPORTED_ABIS.toList()))
+                .put("can_install", context.packageManager.canRequestPackageInstalls())))
     }
 
     fun deviceName(context: Context): String {
@@ -45,6 +50,14 @@ object Inventory {
         return out.distinct().take(16)
     }
 
+    /** Application qui a installé le paquet (Google Play, F-Droid, loco…) : loco ne met à jour que les siennes. */
+    private fun installer(pm: android.content.pm.PackageManager, pkg: String): String? = try {
+        if (Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(pkg).installingPackageName
+        else @Suppress("DEPRECATION") pm.getInstallerPackageName(pkg)
+    } catch (_: Exception) {
+        null
+    }
+
     private fun apps(context: Context): JSONArray {
         val pm = context.packageManager
         val arr = JSONArray()
@@ -54,7 +67,10 @@ object Inventory {
             } catch (_: Exception) {
                 p.packageName
             }
-            arr.put(JSONObject().put("name", label).put("version", p.versionName ?: "").put("publisher", p.packageName))
+            val app = JSONObject().put("name", label).put("version", p.versionName ?: "").put("publisher", p.packageName)
+                .put("code", Apps.code(p))
+            installer(pm, p.packageName)?.let { app.put("installer", it) }
+            arr.put(app)
             if (arr.length() >= 2000) break
         }
         return arr

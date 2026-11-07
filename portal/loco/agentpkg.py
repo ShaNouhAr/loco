@@ -113,10 +113,11 @@ def build_deb(script, version, server, mtime=None, repos=None, ca=""):
     mtime = int(time.time() if mtime is None else mtime)
     files, install, remove, description = _contents(script, repos, ca, "deb")
     size = sum(len(data) for _, data, _ in files if data)
-    depends = "python3, systemd" + (", ca-certificates, curl | wget" if repos else "")
+    # grim : capture d'écran du bureau distant sous Wayland (Sway, Hyprland…), installé d'office avec l'agent.
+    depends = "python3, systemd, grim" + (", ca-certificates, curl | wget" if repos else "")
     control = (f"Package: loco-client\nVersion: {version}{'+' + FLAVOR if repos else ''}\nArchitecture: all\n"
                f"Maintainer: loco <loco@{_host(server)}>\nInstalled-Size: {max(1, -(-size // 1024))}\n"
-               f"Depends: {depends}\nRecommends: grim\nSection: admin\nPriority: optional\n"
+               f"Depends: {depends}\nSection: admin\nPriority: optional\n"
                "Homepage: https://github.com/ShaNouhAr/loco\n"
                f"Description: {SUMMARY} ({server})\n"
                + "".join(f" {line}\n" for line in textwrap.wrap(description.format(server=server), 76)))

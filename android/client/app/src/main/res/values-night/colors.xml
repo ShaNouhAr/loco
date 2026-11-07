@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Couleurs du portail loco, thème « sombre doux » de l'apparence Brume (style.css, [data-theme="dim"]). -->
+<resources>
+    <color name="loco_canvas">#121214</color>
+    <color name="loco_bg">#19191C</color>
+    <color name="loco_bg2">#1F1F23</color>
+    <color name="loco_bg3">#29292E</color>
+    <color name="loco_field">#1C1C1F</color>
+    <color name="loco_line">#2A2A2F</color>
+    <color name="loco_line2">#3A3A40</color>
+    <color name="loco_text">#ECECEF</color>
+    <color name="loco_text2">#A9A9B2</color>
+    <color name="loco_text3">#8A8A93</color>
+    <color name="loco_ok">#55C583</color>
+    <color name="loco_warn">#E1AD4F</color>
+    <color name="loco_err">#F3756D</color>
+</resources>

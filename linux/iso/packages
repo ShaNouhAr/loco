@@ -37,3 +37,4 @@ chrony
 keepalived
 acpid
 qemu-guest-agent
+android-tools

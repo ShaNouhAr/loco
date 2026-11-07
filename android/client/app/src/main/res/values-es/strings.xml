@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Agente loco</string>
     <string name="svc_connecting">Conectando con loco…</string>
     <string name="svc_connected">Conectado · %1$s</string>
     <string name="svc_server_error">Error del servidor (%1$d)</string>
     <string name="svc_offline">Sin conexión · reintentando</string>
     <string name="svc_channel_desc">Mantiene el contacto con su servidor loco.</string>
+    <string name="control_channel">Control remoto</string>
+    <string name="control_title">Control remoto en curso</string>
+    <string name="control_text">Un administrador ve y controla la pantalla de este dispositivo.</string>
     <string name="svc_screen_on">Pantalla compartida con loco</string>
     <string name="a11y_desc">Permite a loco controlar el dispositivo cuando abre la pantalla remota desde el portal: tocar, desplazar, volver y escribir en el campo activo. No se lee ni se envía nada fuera de una sesión abierta desde el portal.</string>
-    <string name="state_enrolled">Inscrito en %1$s</string>
-    <string name="state_connected">Conectado · último contacto a las %1$s</string>
-    <string name="state_connecting">Conectando…</string>
-    <string name="state_offline">Sin conexión · reintentando automáticamente</string>
     <string name="action_leave">Salir de loco</string>
     <string name="leave_explain">El dispositivo se quitará de este servidor y el agente se detendrá. Podrá inscribirlo de nuevo más tarde.</string>
     <string name="cancel">Cancelar</string>
-    <string name="enroll_intro">Inscriba este dispositivo en su servidor loco. Introduzca la dirección y la clave que aparecen en la página de Inscripción del portal.</string>
+    <string name="enroll_intro">Introduzca la dirección del servidor y la clave de inscripción que muestra el portal, en Mi parque › Inscripción, pestaña Android.</string>
     <string name="field_server">Dirección del servidor</string>
     <string name="field_key">Clave de inscripción</string>
     <string name="field_key_hint">clave mostrada por el portal</string>
@@ -33,7 +33,6 @@
     <string name="screen_off">Dejar de compartir</string>
     <string name="screen_state_on">Compartida</string>
     <string name="screen_state_off">No compartida</string>
-    <string name="control_title">Control</string>
     <string name="control_hint">Permite al portal tocar, desplazar, volver y escribir. Sin esto, la pantalla solo se ve.</string>
     <string name="control_on">Abrir los ajustes de accesibilidad</string>
     <string name="control_state_on">Activado</string>
@@ -60,4 +59,49 @@
     <string name="battery_hint">Permita que loco siga activo en segundo plano: de lo contrario, el dispositivo puede suspenderlo y se pierde el contacto con la pantalla apagada.</string>
     <string name="battery_on">Permitir segundo plano</string>
     <string name="battery_state_off">Por permitir</string>
+
+    <!-- Instalaciones -->
+    <string name="install_title">Instalaciones</string>
+    <string name="install_hint">Permite a loco instalar las aplicaciones que despliega desde el portal. Android pide su confirmación para cada aplicación nueva.</string>
+    <string name="install_on">Permitir las instalaciones</string>
+    <string name="install_state_on">Permitidas</string>
+    <string name="install_state_off">Por permitir</string>
+    <string name="channel_installs">Instalaciones</string>
+    <string name="channel_installs_desc">Confirmaciones de las instalaciones pedidas desde loco.</string>
+    <string name="apps_confirm_title">¿Instalar %1$s?</string>
+    <string name="apps_confirm_text">Pedido desde loco: toque para confirmar la instalación.</string>
+    <string name="apps_play_title">%1$s en Google Play</string>
+    <string name="apps_play_text">Pedido desde loco: toque «Instalar» en Play Store.</string>
+    <string name="apps_installed">%1$s %2$s: instalada.</string>
+    <string name="apps_failed">%1$s: error, %2$s.</string>
+    <string name="apps_play_opened">%1$s: ficha de Google Play abierta en el dispositivo, instálela desde Play Store.</string>
+    <string name="apps_store_opened">%1$s: ficha abierta en la tienda del dispositivo (sin Google Play).</string>
+    <string name="apps_play_web">%1$s: ninguna tienda en el dispositivo, ficha de Google Play abierta en el navegador.</string>
+    <string name="apps_bad_hash">huella SHA-256 incorrecta, APK rechazado</string>
+    <string name="apps_bad_apk">APK ilegible</string>
+    <string name="apps_bad_package">el APK no corresponde a la aplicación pedida</string>
+    <string name="apps_bad_signer">clave de firma distinta de la anunciada por el repositorio</string>
+    <string name="apps_other_signer">ya instalada con otra firma (%1$s): desinstálela primero</string>
+    <string name="apps_not_confirmed">instalación no confirmada en el dispositivo</string>
+    <string name="apps_aborted">instalación rechazada en el dispositivo</string>
+    <string name="apps_blocked">instalación bloqueada por el dispositivo</string>
+    <string name="apps_conflict">en conflicto con la versión instalada</string>
+    <string name="apps_incompatible">incompatible con este dispositivo</string>
+    <string name="apps_invalid">APK rechazado por Android</string>
+    <string name="apps_storage">espacio de almacenamiento insuficiente</string>
+    <string name="apps_error">rechazada por Android (%1$s)</string>
+    <string name="apps_unsupported">Acción no admitida por la aplicación Android.</string>
+    <string name="apps_left">Dispositivo retirado de loco; la aplicación sigue instalada.</string>
+    <string name="apps_allow_title">Permitir a loco instalar</string>
+    <string name="apps_allow_text">loco debe poder instalar aplicaciones para instalar %1$s: active «Permitir de esta fuente».</string>
+    <string name="apps_not_allowed">permiso para instalar no concedido en el dispositivo</string>
+    <string name="pending_title">Instalación pedida por loco</string>
+    <string name="pending_state">Por confirmar</string>
+    <string name="pending_hint">%1$s espera su confirmación en la ventana de instalación de Android.</string>
+    <string name="pending_action">Confirmar la instalación</string>
+    <string name="enroll_title">Inscribir este dispositivo</string>
+    <string name="auto_title">Inscribiendo el dispositivo</string>
+    <string name="auto_hint">El dispositivo se está inscribiendo en loco con la configuración incluida en la aplicación. Un momento…</string>
+    <string name="auto_ca_mismatch">La huella de la autoridad no coincide con la prevista por la aplicación: inscripción automática cancelada. Compruebe la dirección y vuelva a intentarlo manualmente.</string>
+    <string name="access_title">Accesos en este dispositivo</string>
 </resources>

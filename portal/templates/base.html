@@ -23,8 +23,9 @@
 <header class="top">
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
-    <nav class="nav" aria-label="{{ _('Navigation principale') }}">
-      {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
+    {% set android_nav = feature('android') and can('android.view') %}
+    <nav class="nav{{ ' nav-dense' if android_nav }}" aria-label="{{ _('Navigation principale') }}">
+      {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" title="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
       {% set fleet_on = ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment' %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
@@ -50,6 +51,7 @@
         </div>
       </details>
       {% endif %}
+      {% if android_nav %}<a href="{{ url_for('android_apps') }}" class="nav-android {{ 'on' if ep.startswith('android_') }}" aria-label="Android" {% if ep.startswith('android_') %}aria-current="page"{% endif %}>{{ nav_icon('android') }}<span>Android</span></a>{% endif %}
       {% set admin_items = [
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
         ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),
@@ -159,6 +161,11 @@
   {% endif %}
   {% if can('store.view') %}<a href="{{ url_for('software_store') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Centre de logiciels") }}</a>{% endif %}
   {% if can('windows.view') %}<a href="{{ url_for('software_groups') }}" data-group="{{ _('Logiciels Windows') }}">{{ _("Groupes de logiciels") }}</a>{% endif %}
+  {% if feature('android') and can('android.view') %}
+  <a href="{{ url_for('android_apps') }}" data-group="Android">{{ _("Applications Android") }}</a>
+  <a href="{{ url_for('android_store') }}" data-group="Android">{{ _("Dépôts F-Droid") }}</a>
+  <a href="{{ url_for('android_sources') }}" data-group="Android">{{ _("Sources des applications Android") }}</a>
+  {% endif %}
 </template>
 {{ appearance_dialog() }}
 {% endif %}

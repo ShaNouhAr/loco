@@ -14,7 +14,7 @@ import zipfile
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from . import app, config, fleet, groups, scope, winget
+from . import android_apps, app, config, fleet, groups, scope, winget
 from .i18n import L_, _, n_
 from .auth import audit, can, lock_access, login_required, require
 from .db import db
@@ -256,6 +256,140 @@ def _confirm_linux(conn, deployment_id, plan, rollout):
     return queued, len(ready)
 
 
+# --------------------------------------------------------------------------- applications Android (catalogue loco)
+
+def _selection_android(values):
+    apps = list(dict.fromkeys(values.getlist('app')))
+    if len(apps) > MAX_APPS or any(not a.isdigit() for a in apps):
+        abort(400, _('Sélection d’applications invalide.'))
+    return {'apps': [int(a) for a in apps], 'devices': groups.identifiers(values.getlist('device')),
+            'device_groups': groups.identifiers(values.getlist('device_group'))}
+
+
+def _devices_of(selection):
+    devices, origins = {}, {'software': [], 'devices': []}
+    for dev_id in selection['devices']:
+        row = fleet._get(dev_id)
+        devices[row['id']] = row
+    for gid in selection['device_groups']:
+        group = groups._group('device', gid)
+        origins['devices'].append(group['name'])
+        members = db().execute("SELECT d.* FROM devices d JOIN device_group_members m ON m.device_id=d.id "
+                               "WHERE m.group_id=? AND d.state!='removed'" + scope.sql("d.id") + " ORDER BY d.hostname",
+                               (gid,)).fetchall()
+        if not members:
+            abort(400, _('Le groupe de machines « %(group)s » est vide.', group=group['name']))
+        devices.update((row['id'], row) for row in members)
+    if len(devices) > MAX_DEVICES:
+        abort(400, _('Ce déploiement est trop volumineux : répartissez-le en plusieurs groupes.'))
+    return list(devices.values()), origins
+
+
+def _target_reason_android(device):
+    if device['os_family'] != 'android':
+        return _('Applications Android : système non compatible')
+    if device['state'] != 'active':
+        return _('Agent en cours de retrait')
+    if not android_apps.ready_agent(device):
+        return _('Application loco à mettre à jour sur l’appareil (%(version)s ou plus récente)', version='2.139.0')
+    return ''
+
+
+@app.route('/fleet/deployments/new-android')
+@login_required
+def deployment_compose_android():
+    selected = _selection_android(request.args)
+    view = []
+    for row in android_apps.catalog_rows():
+        problem = ''
+        if row['store'] == 'fdroid':
+            problem = android_apps.snapshot(row)[1]
+        view.append({'row': row, 'problem': problem})
+    return render_template('deployment_compose_android.html', selected=selected, apps=view,
+                           device_groups=groups.listing('device'), families=fleet.FAMILIES,
+                           devices=db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
+                                                + " ORDER BY hostname COLLATE NOCASE").fetchall(),
+                           ready=android_apps.ready_agent)
+
+
+@app.route('/fleet/deployments/prepare-android', methods=['POST'])
+@login_required
+def deployment_preview_android():
+    selected = _selection_android(request.form)
+    snapshots = []
+    for app_id in selected['apps']:
+        row = db().execute('SELECT * FROM android_apps WHERE id=?', (app_id,)).fetchone()
+        if row is None:
+            abort(400, _('Une application sélectionnée a été retirée du catalogue.'))
+        snap, problem = android_apps.snapshot(row)
+        if problem:
+            abort(400, _('%(name)s : %(problem)s', name=row['name'], problem=problem))
+        snapshots.append(snap)
+    if not snapshots:
+        abort(400, _('Sélectionnez au moins une application.'))
+    devices, origins = _devices_of(selected)
+    if not devices or not any(not _target_reason_android(d) for d in devices):
+        abort(400, _('Sélectionnez au moins un appareil Android compatible.'))
+    bulk = bool(selected['device_groups']) or len(devices) > 1
+    if bulk:
+        require('fleet.bulk_install')
+    conn = lock_access('fleet.install')
+    if bulk:
+        require('fleet.bulk_install')
+    targets = []
+    for d in devices:
+        reason = _target_reason_android(d)
+        if not reason and not any(android_apps.item_for(d, s, True)[0] for s in snapshots):
+            reason = _('Aucune version compatible avec cet appareil')
+        targets.append({'id': d['id'], 'uid': d['uid'], 'hostname': d['hostname'], 'os_family': d['os_family'], 'reason': reason})
+    title = request.form.get('title', '').strip()[:100] or ('Applications Android · ' + ', '.join(s['name'] for s in snapshots))[:100]
+    plan = {'kind': 'android', 'apps': snapshots, 'devices': targets, 'groups': origins, 'bulk': bulk,
+            'force': request.form.get('force') == '1'}
+    deployment_id = secrets.token_hex(16)
+    conn.execute('INSERT INTO deployments(id,title,user_id,created_by,pw_version,owner,created_at,expires,plan) '
+                 'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, title, g.user['id'], g.user['username'], g.user['pw_version'],
+                 _owner(), fleet._now(), time.time() + 3600, json.dumps(plan)))
+    audit('deploiement.preparation', f"{title} : {counted(len(snapshots), 'application')}, {counted(len(devices), 'cible')}", commit=False)
+    conn.commit()
+    return back('deployment_detail', deployment_id=deployment_id)
+
+
+def _confirm_android(conn, deployment_id, plan, rollout):
+    """Une commande install-apk par appareil : la version compatible de chaque application, déjà installée = ignorée."""
+    queued, entries, fetch = 0, [], {}
+    for target in plan['devices']:
+        if target['reason']:
+            conn.execute('INSERT INTO deployment_targets(deployment_id,device_id,device_uid,hostname,os_family,command_id,apps,skipped,reason) '
+                         'VALUES (?,?,?,?,?,?,?,?,?)', (deployment_id, None, target['uid'], target['hostname'],
+                         target['os_family'], None, '[]', '[]', target['reason']))
+            continue
+        dev = conn.execute('SELECT * FROM devices WHERE id=?', (target['id'],)).fetchone()
+        if dev is None or dev['uid'] != target['uid'] or _target_reason_android(dev) or not scope.allows(dev['id']):
+            abort(409, _('Une cible a été retirée ou modifiée : préparez à nouveau le déploiement.'))
+        waiting = {a.get('package') for c in fleet.pending(dev['id']) if c['action'] == 'install-apk'
+                   for a in json.loads(c['params']).get('apps', [])}
+        items, skipped = [], []
+        for snap in plan['apps']:
+            item, why = android_apps.item_for(dev, snap, plan['force'])
+            if item is None:
+                skipped.append({'name': snap['name'], 'reason': why})
+            elif item['package'] in waiting:
+                skipped.append({'name': snap['name'], 'reason': 'Déjà en attente sur cet appareil'})
+            else:
+                items.append(item)
+                if item['store'] == 'fdroid':
+                    fetch[item['sha256']] = item
+        params = None
+        if items:
+            params = {'apps': items, 'deployment_id': deployment_id, 'bulk_install': plan['bulk'], 'kind': 'android'}
+            queued += 1
+        entries.append({'target': target, 'dev': dev, 'action': 'install-apk', 'params': params, 'apps': items, 'skipped': skipped})
+    _add_targets(conn, deployment_id, entries, rollout, g.user['username'])
+    for item in fetch.values():
+        android_apps.apk_state(item)            # loco télécharge et vérifie les APK sans attendre le premier appareil
+    return queued, len(plan['apps'])
+
+
 @app.route('/fleet/deployments/new')
 @login_required
 def deployment_compose():
@@ -426,7 +560,7 @@ def deployment_detail(deployment_id):
     kind = plan.get('kind', 'windows')
     apps = []
     for snapshot in plan['apps']:
-        if kind == 'linux':
+        if kind in ('linux', 'android'):
             current, problem = None, ''
         else:
             current, problem = _current(snapshot) if row['state'] == 'draft' else (None, '')
@@ -448,6 +582,9 @@ def deployment_detail(deployment_id):
         return {'signature': signature}
     if kind == 'update':
         recompose = url_for('fleet')
+    elif kind == 'android':
+        recompose = url_for("deployment_compose_android", app=[a['id'] for a in plan['apps']],
+                            device=[d['id'] for d in plan['devices']])
     elif kind == 'linux':
         recompose = url_for("deployment_compose_linux", package=[f"{a['kind']}:{a['name']}" for a in plan['apps']],
                             device=[d['id'] for d in plan['devices']])
@@ -566,6 +703,19 @@ def deployment_confirm(deployment_id):
         rollout = _rollout_options(request.form)
     except ValueError as e:
         flash(str(e), 'error')
+        return back('deployment_detail', deployment_id=deployment_id)
+    if plan.get('kind') == 'android':
+        try:
+            queued_count, ready_n = _confirm_android(conn, deployment_id, plan, rollout)
+        except (OSError, ValueError) as e:
+            conn.rollback()
+            flash(_('Déploiement non lancé : %(e)s', e=e), 'error')
+            return back('deployment_detail', deployment_id=deployment_id)
+        conn.execute("UPDATE deployments SET state='queued',confirmed_at=?,waves=? WHERE id=?", (fleet._now(), json.dumps(rollout) if rollout else '', deployment_id))
+        audit('deploiement.confirmation', f"{row['title']} : {counted(queued_count, 'appareil')}, {counted(ready_n, 'application')}, {deployment_id}", commit=False)
+        conn.commit()
+        flash(n_("Déploiement confirmé sur %(num)s appareil. L'application loco l'installe à son prochain contact ; Android demande une confirmation sur l'appareil pour une première installation.",
+                 "Déploiement confirmé sur %(num)s appareils. L'application loco les installe à son prochain contact ; Android demande une confirmation sur l'appareil pour une première installation.", queued_count), 'ok')
         return back('deployment_detail', deployment_id=deployment_id)
     if plan.get('kind') == 'linux':
         try:

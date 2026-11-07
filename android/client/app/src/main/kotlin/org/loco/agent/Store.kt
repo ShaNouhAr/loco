@@ -31,6 +31,14 @@ class Store(context: Context) {
             return u
         }
 
+    /** Dernière mise à jour de l'application tentée (empreinte, instant) : pas de nouvel essai avant un jour. */
+    var updateTried: String
+        get() = prefs.getString("update_sha", "") ?: ""
+        set(v) = prefs.edit().putString("update_sha", v).apply()
+    var updateTriedAt: Long
+        get() = prefs.getLong("update_at", 0L)
+        set(v) = prefs.edit().putLong("update_at", v).apply()
+
     val enrolled: Boolean get() = token.isNotEmpty() && server.isNotEmpty() && caPem.isNotEmpty()
 
     fun clear() {

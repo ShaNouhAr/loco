@@ -25,7 +25,7 @@ FEATURES = {
     "directories": (L_("Annuaires LDAP et RADIUS"), L_("Connexion avec un compte d'annuaire ; comptes locaux toujours disponibles."), (), ""),
     "alerts": (L_("Alertes et notifications"), L_("Notifications par e-mail et webhook sur l'état du serveur et du parc."), (), ""),
     "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
-    "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers et assistant IA. Pas de mises à jour ni de catalogue de logiciels."), ("fleet",), ""),
+    "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
 }
 
 # Fonctionnalités expérimentales : désactivées par défaut, activables seulement par le compte « admin ».
@@ -36,7 +36,8 @@ EXPERIMENTAL_SETTING = "features_experimental"
 MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("flatpak",), "loco.wupdate": ("wu",),
            "loco.winapps": ("windows_apps",), "loco.winget": ("windows_apps",), "loco.deployments": ("windows_apps", "fleet"),
            "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"), "loco.schedules": ("fleet",),
-           "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",)}
+           "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",),
+           "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android")}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -45,15 +46,16 @@ ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_reposito
              "update_blocks": ("fleet",), "update_block_add": ("fleet",), "update_block_remove": ("fleet",),
              "software_groups": ("windows_apps",), "software_group_editor": ("windows_apps",),
              "software_group_save": ("windows_apps",), "software_group_delete": ("windows_apps",),
-             "software_group_attach": ("windows_apps",), "store_group_attach": ("windows_apps",)}
+             "software_group_attach": ("windows_apps",), "store_group_attach": ("windows_apps",),
+             "deployment_compose_android": ("fleet", "android"), "deployment_preview_android": ("fleet", "android")}
 # Droits rattachés à une fonctionnalité : coupée, elle rend ces droits inopérants (navigation, boutons, pages).
 PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu": ("wu",), "windows": ("windows_apps",),
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
                "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",),
-               "mcp": ("mcp",)}
+               "mcp": ("mcp",), "android": ("fleet", "android")}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                   "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca"}
+                   "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca", "agent_android_apk"}
 
 
 def _experimental_on(conn=None):
