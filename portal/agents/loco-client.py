@@ -2162,6 +2162,22 @@ def _gnome_session(uid):
     return False
 
 
+def _kde_session(uid):
+    """La session Wayland de cet utilisateur est-elle servie par KWin (KDE Plasma) ?"""
+    for name in os.listdir("/proc"):
+        if not name.isdigit():
+            continue
+        try:
+            if os.stat("/proc/" + name).st_uid != uid:
+                continue
+            with open("/proc/" + name + "/comm") as f:
+                if f.read().strip() == "kwin_wayland":
+                    return True
+        except OSError:
+            continue
+    return False
+
+
 def _login_screen(uid):
     """Session de l'écran de connexion de GDM (aucun utilisateur connecté) ?"""
     import pwd
@@ -2830,6 +2846,233 @@ class MutterBackend:
                 pass
 
 
+class KdePortalBackend:
+    """Bureau Wayland via xdg-desktop-portal : capture par le portail ScreenCast (flux PipeWire, comme GNOME) et saisie
+    par périphérique d'entrée virtuel (/dev/uinput, comme les compositeurs wlroots). Couvre KDE Plasma (KWin). Le portail
+    demande un accord de partage d'écran la première fois, puis un jeton mémorisé le rend silencieux ; la saisie ne passe
+    pas par le portail (qui ne sait pas la mémoriser sur KDE), donc elle ne redemande jamais d'accord."""
+    interval = 0.04
+    PORTAL, PATH = "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop"
+    SC = "org.freedesktop.portal.ScreenCast"
+    SESSION_IFACE, REQUEST_IFACE = "org.freedesktop.portal.Session", "org.freedesktop.portal.Request"
+    MONITOR, CURSOR_EMBEDDED, PERSIST = 1, 2, 2                   # source écran ; curseur incrusté ; mémoriser l'accord
+
+    MISSING = ("Composants manquants pour le bureau distant KDE : installez python3-gi, gir1.2-gstreamer-1.0, gstreamer1.0-pipewire et xdg-desktop-portal-kde.",
+               "Missing components for the KDE remote desktop: install python3-gi, gir1.2-gstreamer-1.0, gstreamer1.0-pipewire and xdg-desktop-portal-kde.",
+               "Faltan componentes para el escritorio remoto KDE: instale python3-gi, gir1.2-gstreamer-1.0, gstreamer1.0-pipewire y xdg-desktop-portal-kde.")
+
+    def __init__(self, env):
+        self._session = self._pipe = self._bus = self._uinput = None
+        self._closed, self._relock, self._seq = False, False, 0
+        import importlib.util
+        if importlib.util.find_spec("gi") is None:
+            raise RuntimeError(t(*self.MISSING))
+        # uinput ouvert en root AVANT de quitter root : le fd reste utilisable après le changement d'utilisateur (le
+        # portail n'accepte que l'utilisateur de la session ; uinput exige root — on sépare donc les deux accès).
+        self._uinput = UInput(1, 1)
+        self._relock = _unlock_session(env["uid"])                # le portail refuse une session verrouillée
+        _become_session_user(env)
+        # Après le setuid, le noyau rend le processus non dumpable : son /proc/<pid>/root devient inaccessible et le
+        # portail, qui le lit pour identifier l'appelant, refuse (AccessDenied). On rétablit l'état dumpable.
+        try:
+            import ctypes
+            ctypes.CDLL(None, use_errno=True).prctl(4, 1, 0, 0, 0)  # PR_SET_DUMPABLE = 1
+        except Exception:
+            pass
+        config = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.environ["HOME"], ".config")
+        self._token_file = os.path.join(config, "loco", "portal-token")
+        import gi
+        from gi.repository import Gio, GLib
+        self._Gio, self._GLib = Gio, GLib
+        try:
+            gi.require_version("Gst", "1.0")
+            from gi.repository import Gst
+        except (ImportError, ValueError):
+            raise RuntimeError(t(*self.MISSING))
+        self._Gst = Gst
+        self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        self._ctx = GLib.MainContext.default()
+        self._sender = self._bus.get_unique_name()[1:].replace(".", "_")
+        try:
+            self._open()
+        except GLib.Error as e:
+            self.close()
+            raise RuntimeError(t("Bureau à distance KDE indisponible : %s", "KDE remote desktop unavailable: %s",
+                                 "Escritorio remoto KDE no disponible: %s") % (e.message or e))
+        except Exception:
+            self.close()
+            raise
+        self._uinput.width, self._uinput.height = self.width, self.height   # mise à l'échelle du pointeur
+        self._keys = keyboard_for(system_layout(), lambda code, down: self._uinput.key(code, down))
+
+    def _request(self, iface, method, signature, build, timeout=20):
+        """Appel du portail avec le motif Request/Response : renvoie le dict de résultats, lève si refus ou délai.
+        On s'abonne au signal Response AVANT l'appel (le chemin de la requête est prévisible) pour éviter la course."""
+        GLib, Gio = self._GLib, self._Gio
+        self._seq += 1
+        token = "loco_%d_%d" % (os.getpid(), self._seq)
+        req_path = "%s/request/%s/%s" % (self.PATH, self._sender, token)
+        state = {}
+        sub = self._bus.signal_subscribe(self.PORTAL, self.REQUEST_IFACE, "Response", req_path, None,
+                                         Gio.DBusSignalFlags.NONE,
+                                         lambda *a: state.update(code=a[5].unpack()[0], results=a[5].unpack()[1]))
+        try:
+            self._bus.call_sync(self.PORTAL, self.PATH, iface, method, GLib.Variant(signature, build(token)),
+                                GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 15000, None)
+            deadline = time.monotonic() + timeout
+            while "code" not in state and time.monotonic() < deadline:
+                self._ctx.iteration(False)
+                time.sleep(0.01)
+        finally:
+            self._bus.signal_unsubscribe(sub)
+        if "code" not in state:
+            raise RuntimeError(t("Le poste n'a pas répondu à la demande de partage d'écran à temps.",
+                                 "The machine did not answer the screen-sharing request in time.",
+                                 "El equipo no respondio a la solicitud de compartir pantalla a tiempo."))
+        if state["code"] != 0:                                    # 1 = refusé par l'utilisateur, 2 = autre erreur
+            raise RuntimeError(t("Le partage d'écran a été refusé sur le poste.", "Screen sharing was refused on the machine.",
+                                 "Se rechazo compartir la pantalla en el equipo."))
+        return state["results"]
+
+    def _open(self):
+        v = self._GLib.Variant
+        restore = {"restore_token": v("s", self._load_token())} if self._load_token() else {}
+        res = self._request(self.SC, "CreateSession", "(a{sv})",
+                            lambda tok: ({"handle_token": v("s", tok), "session_handle_token": v("s", tok)},))
+        self._session = res["session_handle"]
+        self._bus.signal_subscribe(self.PORTAL, self.SESSION_IFACE, "Closed", self._session, None,
+                                   self._Gio.DBusSignalFlags.NONE, lambda *a: setattr(self, "_closed", True))
+        self._request(self.SC, "SelectSources", "(oa{sv})",
+                      lambda tok: (self._session, dict({"handle_token": v("s", tok), "types": v("u", self.MONITOR),
+                                                        "cursor_mode": v("u", self.CURSOR_EMBEDDED),
+                                                        "persist_mode": v("u", self.PERSIST)}, **restore)))
+        res = self._request(self.SC, "Start", "(osa{sv})",
+                            lambda tok: (self._session, "", {"handle_token": v("s", tok)}), timeout=120)
+        if res.get("restore_token"):
+            self._save_token(res["restore_token"])
+        streams = res.get("streams") or []
+        if not streams:
+            raise RuntimeError(t("Le poste n'a partagé aucun écran.", "The machine shared no screen.",
+                                 "El equipo no compartio ninguna pantalla."))
+        self._node = streams[0][0]
+        fd = self._open_pipewire()
+        self._Gst.init(None)
+        if self._Gst.ElementFactory.find("pipewiresrc") is None:
+            raise RuntimeError(t(*self.MISSING))
+        self._pipe = self._Gst.parse_launch(
+            "pipewiresrc fd=%d path=%d do-timestamp=true keepalive-time=1000 always-copy=true ! videoconvert ! "
+            "video/x-raw,format=BGRx ! appsink name=sink max-buffers=1 drop=true sync=false" % (fd, self._node))
+        self._sink = self._pipe.get_by_name("sink")
+        self._pipe.set_state(self._Gst.State.PLAYING)
+        first = self._pull(10)
+        if first is None or not 1 <= first[0] <= 4096 or not 1 <= first[1] <= 2160:
+            raise RuntimeError(t("Aucune image exploitable reçue du poste (écran absent ou supérieur à 4096 × 2160).",
+                                 "No usable image received from the machine (no screen, or larger than 4096 x 2160).",
+                                 "Ninguna imagen utilizable recibida del equipo (sin pantalla o superior a 4096 x 2160)."))
+        self.width, self.height, self._last = first
+
+    def _open_pipewire(self):
+        result, fds = self._bus.call_with_unix_fd_list_sync(
+            self.PORTAL, self.PATH, self.SC, "OpenPipeWireRemote", self._GLib.Variant("(oa{sv})", (self._session, {})),
+            self._GLib.VariantType("(h)"), self._Gio.DBusCallFlags.NONE, 10000, None, None)
+        return fds.get(result.unpack()[0])
+
+    def _load_token(self):
+        try:
+            with open(self._token_file) as f:
+                return f.read().strip() or None
+        except OSError:
+            return None
+
+    def _save_token(self, token):
+        try:
+            os.makedirs(os.path.dirname(self._token_file), mode=0o700, exist_ok=True)
+            with os.fdopen(os.open(self._token_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+                f.write(token)
+        except OSError:
+            pass
+
+    def _pull(self, timeout):
+        sample = self._sink.emit("try-pull-sample", int(timeout * self._Gst.SECOND))
+        if sample is None:
+            return None
+        caps = sample.get_caps().get_structure(0)
+        width, height = caps.get_value("width"), caps.get_value("height")
+        buffer = sample.get_buffer()
+        data = buffer.extract_dup(0, buffer.get_size())
+        stride = len(data) // height if height else 0
+        if stride != width * 4:                                  # lignes rembourrées : BGRX contigu pour rfb_frame
+            data = b"".join(data[y * stride:y * stride + width * 4] for y in range(height))
+        return width, height, data
+
+    def grab(self):
+        self._ctx.iteration(False)
+        if self._closed:
+            raise RuntimeError(t("Le partage d'écran a été arrêté depuis le poste.", "Screen sharing was stopped on the machine.",
+                                 "El uso compartido de pantalla se detuvo desde el equipo."))
+        frame = self._pull(0)
+        if frame is not None:
+            self._last = _fit_frame(frame[2], frame[0], frame[1], self.width, self.height)
+        return self._last
+
+    def key(self, sym, down):
+        keys = getattr(self, "_keys", None)
+        if keys and keys.key(sym, down):
+            return True
+        code = EVDEV_KEYS.get(sym)
+        if code is None:
+            return False
+        self._uinput.key(code, down)
+        return True
+
+    def keycode(self, code, down):
+        self._uinput.key(code, down)
+
+    def motion(self, x, y):
+        self._uinput.motion(x, y)
+
+    def button(self, number, down):
+        if number in (4, 5):                                     # molette : une encoche par clic signalé
+            if down:
+                self._uinput.wheel(1 if number == 4 else -1)
+        else:
+            self._uinput.button(number, down)
+
+    def set_cursor(self, enabled):
+        pass                                                     # curseur incrusté dans l'image
+
+    def cursor(self):
+        return None
+
+    def flush(self):
+        pass
+
+    def close(self):
+        if self._session and self._bus is not None:
+            try:
+                self._bus.call_sync(self.PORTAL, self._session, self.SESSION_IFACE, "Close", None, None,
+                                    self._Gio.DBusCallFlags.NONE, 5000, None)
+            except Exception:
+                pass
+            self._session = None
+        if self._pipe is not None:
+            self._pipe.set_state(self._Gst.State.NULL)
+            self._pipe = None
+        if self._uinput is not None:
+            try:
+                self._uinput.close()
+            except Exception:
+                pass
+            self._uinput = None
+        if self._relock and self._bus is not None:               # ne jamais laisser déverrouillé un poste qui l'était
+            self._relock = False
+            try:
+                self._bus.call_sync("org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver",
+                                    "org.freedesktop.ScreenSaver", "Lock", None, None, self._Gio.DBusCallFlags.NONE, 5000, None)
+            except Exception:
+                pass
+
+
 # Extension « QEMU Extended Key Event » (noVNC) : le navigateur joint au keysym le scancode XT de la touche physique ;
 # les touches étendues (préfixe 0xE0) arrivent avec le bit 7 levé. La disposition du poste distant s'applique alors
 # telle quelle (touches mortes, AltGr, touche < > des claviers ISO…).
@@ -3086,8 +3329,11 @@ def linux_desktop(terminal_fallback=False, consent=None):
                 raise RuntimeError(t("Personne n'est connecté sur ce poste (écran de connexion) : le bureau distant s'ouvre sur une session ouverte. Le droit Terminal distant permet d'ouvrir la console texte.",
                                      "Nobody is logged in on this machine (login screen): the remote desktop opens on a logged-in session. The Remote terminal permission allows opening the text console.",
                                      "Nadie ha iniciado sesión en este equipo (pantalla de inicio de sesión): el escritorio remoto se abre en una sesión iniciada. El permiso Terminal remoto permite abrir la consola de texto."))
-            # GNOME : API du bureau à distance de Mutter ; compositeurs wlroots : grim + périphérique d'entrée virtuel.
-            return _rfb_serve(MutterBackend(env) if _gnome_session(env["uid"]) else WaylandBackend(env))
+            # GNOME : API du bureau à distance de Mutter ; KDE Plasma : portail xdg-desktop-portal (ScreenCast +
+            # RemoteDesktop) ; compositeurs wlroots : grim + périphérique d'entrée virtuel.
+            return _rfb_serve(MutterBackend(env) if _gnome_session(env["uid"])
+                              else KdePortalBackend(env) if _kde_session(env["uid"])
+                              else WaylandBackend(env))
         if not terminal_fallback:
             raise RuntimeError(t("Aucun bureau X11. Le droit Terminal distant est requis pour ouvrir la console texte noVNC.", "No X11 desktop. The Remote terminal permission is required to open the noVNC text console.", "Ningún escritorio X11. Se requiere el permiso Terminal remoto para abrir la consola de texto noVNC."))
         return text_console()

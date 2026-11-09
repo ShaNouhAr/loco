@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.143.0 — 2026-11-09
+
+- **Bureau distant sur KDE Plasma en Wayland** : le bureau distant des postes KDE sous Wayland fonctionne désormais, sans avoir à ouvrir une session X11. L'agent capture l'écran par le portail standard `xdg-desktop-portal` (ScreenCast, flux PipeWire) et injecte la saisie par périphérique d'entrée virtuel. La première ouverture demande un accord de partage d'écran sur le poste (fenêtre KDE « Partage d'écran ») ; en cochant « Autoriser la restauration pour les sessions futures », les ouvertures suivantes ne redemandent plus rien. (GNOME et les compositeurs wlroots comme Sway ou Hyprland étaient déjà pris en charge ; les autres compositeurs Wayland ne le sont toujours pas.)
+
 ## 2.142.0 — 2026-11-09
 
 - **Contacts des agents plus réactifs** : quand une action est en attente sur un poste (ou qu'une vient de s'exécuter), l'agent Linux recontacte loco toutes les ~10 secondes au lieu d'attendre jusqu'à deux minutes, puis revient à sa cadence de repos (deux minutes) une fois le calme revenu. Les actions et leurs enchaînements (mise à jour puis redémarrage, actions successives) partent donc presque tout de suite quand vous travaillez sur un poste, sans alourdir les contacts au repos. L'agent Android, qui suivait déjà la cadence annoncée par loco, en profite aussi.
