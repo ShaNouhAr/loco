@@ -28,6 +28,7 @@ from loco import auth, config, util  # noqa: E402
 from loco.db import transaction as connect  # noqa: E402
 
 loco.startup()
+loco.fleet._APK_PREFETCH["last"] = float("inf")    # jamais de téléchargement de l'APK depuis GitHub pendant les tests
 ADMIN_PW = "Admin-Password-2026"
 with connect() as conn:
     auth.create_user(conn, "admin", ADMIN_PW, "admin", must_change=False)

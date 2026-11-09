@@ -213,7 +213,8 @@
       {{ step(ns, _("Installer l'application loco"), _("expérimental")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Sur l'appareil Android, téléchargez puis ouvrez l'application. Android demandera d'autoriser l'installation depuis cette source ; aucun compte Google n'est nécessaire.") }}</p>
-        {% if apk_ready %}{{ download('android', 'loco-agent.apk', _("Application Android · s'installe et inscrit l'appareil · version %(version)s", version=version), url_for('agent_enroll_apk', groupe=group.id if group else None), _('Télécharger l’APK'), 'btn primary') }}
+        {{ download('android', 'loco-agent.apk', _("Application Android · s'installe et inscrit l'appareil · version %(version)s", version=version), url_for('agent_enroll_apk', groupe=group.id if group else None), _('Télécharger l’APK'), 'btn primary') }}
+        {% if not apk_ready %}<p class="note">{{ _("L'APK de cette version n'est pas encore présent sur ce serveur : il se télécharge tout seul depuis la version publiée. Réessayez dans un instant.") }}</p>{% endif %}
         <span class="hint">{{ _("L'adresse de loco, la clé d'inscription et l'empreinte de l'autorité sont déjà dans l'APK : ouverte sur l'appareil, l'application s'inscrit toute seule.") }}</span>
         <details class="hint"><summary>{{ _("APK générique et saisie manuelle") }}</summary>
           <div class="stack-sm">
@@ -227,7 +228,6 @@
             <span class="hint">{{ _("APK générique, à télécharger depuis le navigateur de l'appareil :") }} <a href="{{ client_url }}/agent/files/loco-agent.apk" class="mono">{{ client_url }}/agent/files/loco-agent.apk</a>{% if http_url %} {{ _("ou, autorité pas encore importée,") }} <a href="{{ http_url }}/agent/files/loco-agent.apk" class="mono">{{ http_url }}/agent/files/loco-agent.apk</a>{% endif %}.</span>
           </div>
         </details>
-        {% else %}<p class="note">{{ _("L'APK de cette version n'est pas encore présent sur ce serveur : il se télécharge tout seul depuis la version publiée. Réessayez dans un instant.") }}</p>{% endif %}
       </div>
     </section>
     <section class="panel">

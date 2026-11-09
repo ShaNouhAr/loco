@@ -272,7 +272,8 @@ class AppsTest(FleetTest):
         with transaction() as conn:
             return conn.execute("SELECT * FROM android_sources WHERE id=?", (self.source,)).fetchone()
 
-    def android(self, version="2.139.0", sdk=33, abis=("x86_64",), apps=(), uid=None):
+    def android(self, version=None, sdk=33, abis=("x86_64",), apps=(), uid=None):
+        version = config.VERSION if version is None else version       # « courant » suit la version, pas un numéro figé
         ident = dict(ANDROID, agent_version=version)
         a = Agent(ident, "192.168.43.71", uid=uid or ("%032x" % abs(hash((version, sdk, tuple(abis), len(apps)))))[:32])
         self.assertEqual(a.enroll().status_code, 200)
@@ -519,6 +520,15 @@ class TestEnrollApk(AppsTest):
         self.assertIn('data-panel="android"', page)
         self.assertIn("/agent/android/enroll.apk", page)
         self.assertIn("s'inscrit toute seule", page)
+
+    def test_button_stays_and_prefetch_runs_when_apk_absent(self):
+        # APK pas encore en cache : le bouton reste proposé, la note le signale et le téléchargement de fond est lancé.
+        with mock.patch("loco.fleet.agent_apk", return_value=(None, "absent")), \
+             mock.patch.object(fleet, "prefetch_apk") as prefetch:
+            page = self.admin.c.get("/enrollment").get_data(as_text=True)
+        self.assertIn("/agent/android/enroll.apk", page)
+        self.assertIn("pas encore présent", page)
+        prefetch.assert_called_once()
 
     def test_download_stamps_server_key_and_ca(self):
         key = Agent.key()

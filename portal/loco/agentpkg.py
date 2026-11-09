@@ -107,14 +107,30 @@ def _ar(members, mtime):
     return b"".join(out)
 
 
+GRIM_ARCHES = ("amd64", "arm64")                     # architectures pour lesquelles grim est embarqué
+
+
+def _grim_files():
+    """Binaires grim embarqués dans le paquet (un par architecture), installés sous /usr/share/loco-client. grim
+    capture l'écran des compositeurs Wayland wlroots ; l'embarquer fait marcher le bureau distant même sur un poste
+    sans accès à un dépôt qui fournit « grim » (installation hors-ligne). L'agent choisit le bon à l'exécution."""
+    vendor = os.path.join(os.path.dirname(__file__), "grim")
+    files = []
+    for arch in GRIM_ARCHES:
+        with open(os.path.join(vendor, f"grim-{arch}"), "rb") as f:
+            files.append((f"{DIRECTORY}/grim-{arch}", f.read(), 0o755))
+    return files
+
+
 def build_deb(script, version, server, mtime=None, repos=None, ca=""):
     """Paquet Debian/Ubuntu (Architecture: all) qui exécute le script d'installation à la configuration ;
     avec `repos` (setup.sh rendu pour ce serveur), configure aussi les dépôts et le cache APT."""
     mtime = int(time.time() if mtime is None else mtime)
     files, install, remove, description = _contents(script, repos, ca, "deb")
+    files = files + _grim_files()               # grim embarqué : bureau distant Wayland wlroots même hors-ligne
     size = sum(len(data) for _, data, _ in files if data)
-    # grim : capture d'écran du bureau distant sous Wayland (Sway, Hyprland…), installé d'office avec l'agent.
-    depends = "python3, systemd, grim" + (", ca-certificates, curl | wget" if repos else "")
+    # grim n'est donc pas une dépendance (il serait introuvable sur un poste hors-ligne) : il est dans le paquet.
+    depends = "python3, systemd" + (", ca-certificates, curl | wget" if repos else "")
     control = (f"Package: loco-client\nVersion: {version}{'+' + FLAVOR if repos else ''}\nArchitecture: all\n"
                f"Maintainer: loco <loco@{_host(server)}>\nInstalled-Size: {max(1, -(-size // 1024))}\n"
                f"Depends: {depends}\nSection: admin\nPriority: optional\n"

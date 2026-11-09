@@ -58,7 +58,7 @@ class TestAgentPackages(unittest.TestCase):
         self.addCleanup(os.unlink, path)
         fields = debpkg.deb_fields(path)                                     # relu par le lecteur des dépôts APT
         self.assertEqual((fields["Package"], fields["Version"], fields["Architecture"], fields["Depends"]),
-                         ("loco-client", "2.21.0", "all", "python3, systemd, grim"))
+                         ("loco-client", "2.21.0", "all", "python3, systemd"))       # grim n'est plus réclamé : embarqué
         self.assertIn("https://loco.test:8443", fields["Description"])
         members = deb_members(data)
         self.assertEqual(list(members), ["debian-binary", "control.tar.gz", "data.tar.gz"])
@@ -74,7 +74,11 @@ class TestAgentPackages(unittest.TestCase):
         with tarfile.open(fileobj=io.BytesIO(members["data.tar.gz"])) as tar:
             script = tar.extractfile("./usr/share/loco-client/install.sh").read()
             self.assertEqual({m.uname for m in tar.getmembers()}, {"root"})
+            grim = tar.extractfile("./usr/share/loco-client/grim-amd64").read()       # grim embarqué pour le hors-ligne
+            grim_modes = {a: tar.getmember(f"./usr/share/loco-client/grim-{a}").mode for a in ("amd64", "arm64")}
         self.assertEqual(script.decode(), SCRIPT)
+        self.assertEqual(set(grim_modes.values()), {0o755})                           # binaires grim exécutables
+        self.assertTrue(grim.startswith(b"\x7fELF"))                                  # un vrai binaire, pas une dépendance
         self.assertIn(hashlib.md5(script).hexdigest() + "  usr/share/loco-client/install.sh", md5sums)
 
     def test_rpm_headers_digests_and_payload_are_consistent(self):

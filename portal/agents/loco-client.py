@@ -2508,6 +2508,17 @@ class X11Backend:
         self._close(self._d)
 
 
+def _grim_bin():
+    """grim : celui du système s'il est installé, sinon le binaire embarqué par le paquet loco sous
+    /usr/share/loco-client (poste hors-ligne). « grim » en dernier recours → le message d'absence habituel."""
+    found = shutil.which("grim")
+    if found:
+        return found
+    arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(platform.machine(), "")
+    embedded = f"/usr/share/loco-client/grim-{arch}" if arch else ""
+    return embedded if embedded and os.access(embedded, os.X_OK) else "grim"
+
+
 class WaylandBackend:
     """Bureau Wayland d'un compositeur wlroots (Sway, Hyprland, Wayfire, river…) : capture par grim, saisie par
     périphérique d'entrée virtuel (/dev/uinput). GNOME passe par MutterBackend."""
@@ -2516,6 +2527,7 @@ class WaylandBackend:
     def __init__(self, env):
         self._env = dict(os.environ)
         self._env["XDG_RUNTIME_DIR"], self._env["WAYLAND_DISPLAY"] = env["XDG_RUNTIME_DIR"], env["WAYLAND_DISPLAY"]
+        self._grim = _grim_bin()                                 # système, sinon binaire embarqué dans le paquet
         width, height, _ = self._grab_grim()
         if not 1 <= width <= 4096 or not 1 <= height <= 2160:
             raise RuntimeError(t("Résolution Wayland supérieure à 4096 × 2160.", "Wayland resolution larger than 4096 × 2160.", "Resolución Wayland superior a 4096 × 2160."))
@@ -2525,7 +2537,7 @@ class WaylandBackend:
 
     def _grab_grim(self):
         try:
-            proc = subprocess.run(["grim", "-t", "ppm", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env, timeout=10)
+            proc = subprocess.run([self._grim, "-t", "ppm", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env, timeout=10)
         except FileNotFoundError:
             raise RuntimeError(t("grim est requis pour le bureau distant de ce compositeur Wayland (installez le paquet « grim » sur ce poste).",
                                  "grim is required for the remote desktop of this Wayland compositor (install the \"grim\" package on this machine).",

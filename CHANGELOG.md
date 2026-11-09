@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.140.0 — 2026-11-09
+
+- **Bureau distant Wayland installable hors-ligne** : le paquet `.deb` de l'agent Linux **embarque désormais `grim`** (la capture d'écran des bureaux Wayland wlroots — Sway, Hyprland, Wayfire, river). Sur un poste **sans accès à un dépôt** qui fournit « grim », l'agent s'installe quand même et le bureau distant de ces compositeurs fonctionne. `grim` n'est plus une dépendance du paquet : l'agent utilise celui du système s'il est présent, sinon le binaire embarqué correspondant à son architecture (amd64 ou arm64).
+- **APK de l'agent Android toujours proposé à l'enrôlement** : dans *Mon parc › Enrôlement*, onglet *Android*, le bouton de téléchargement de l'APK préconfiguré est **toujours affiché**. Si l'APK de la version n'est pas encore présent sur le serveur — juste après une mise à jour —, il se **télécharge tout seul en arrière-plan** dès l'ouverture de la page, et le message d'attente disparaît dès qu'il est là.
+
 ## 2.139.0 — 2026-11-06
 
 - **Applications Android** (fonctionnalité expérimentale *Appareils Android*) : un catalogue d'applications à installer sur vos appareils depuis loco, avec un nouveau menu *Android* (*Catalogue*, *Dépôts F-Droid*, *Sources*).

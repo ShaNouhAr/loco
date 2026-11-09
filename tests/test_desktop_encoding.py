@@ -313,6 +313,19 @@ class TestWaylandDesktop(unittest.TestCase):
             finally:
                 a.UInput, os.environ["PATH"] = saved_uinput, saved_path
 
+    def test_grim_binary_prefers_the_system_one_then_the_embedded_one(self):
+        a = self.agent
+        with mock.patch.object(a.shutil, "which", return_value="/usr/bin/grim"):
+            self.assertEqual(a._grim_bin(), "/usr/bin/grim")                           # grim du système si présent
+        with mock.patch.object(a.shutil, "which", return_value=None), \
+             mock.patch.object(a.platform, "machine", return_value="x86_64"), \
+             mock.patch.object(a.os, "access", return_value=True):
+            self.assertEqual(a._grim_bin(), "/usr/share/loco-client/grim-amd64")       # sinon l'embarqué de l'architecture
+        with mock.patch.object(a.shutil, "which", return_value=None), \
+             mock.patch.object(a.platform, "machine", return_value="aarch64"), \
+             mock.patch.object(a.os, "access", return_value=False):
+            self.assertEqual(a._grim_bin(), "grim")                                    # aucun : « grim » → message d'absence
+
     @unittest.skipUnless(os.path.exists('/dev/uinput') and os.access('/dev/uinput', os.W_OK), '/dev/uinput accessible (root)')
     def test_uinput_device_creates_and_emits_against_the_real_kernel(self):
         dev = self.agent.UInput(1920, 1080)
