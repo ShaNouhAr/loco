@@ -325,11 +325,13 @@ une partie du parc n'inscrit que dans les groupes attribués à son profil (jama
 son parc). *Changer la clé de ce groupe* (droit *Configurer le parc*) rend caducs ses fichiers et commandes déjà
 distribués ; supprimer le groupe aussi.
 
-- L'agent contacte loco toutes les deux minutes et envoie l'inventaire des mises à jour (Windows Update avec les
-  correctifs de sécurité, APT, DNF, Flatpak). L'inventaire des logiciels installés est aussi remonté, sous Windows
-  (logiciels installés) comme sous Linux (paquets APT/RPM avec version, architecture et taille, applications Flatpak,
-  et caractéristiques du poste : processeur, mémoire, disque, noyau, virtualisation) ; il s'affiche sur la fiche du
-  poste dans Mon parc.
+- L'agent contacte loco toutes les deux minutes au repos — et toutes les dix secondes tant qu'une action est en
+  attente ou vient de s'exécuter, pour qu'elle parte presque tout de suite — et envoie l'inventaire des mises à jour
+  (Windows Update avec les correctifs de sécurité, APT, DNF, Flatpak). L'inventaire des logiciels installés est aussi
+  remonté, sous Windows (logiciels installés) comme sous Linux (paquets APT/RPM avec version, architecture et taille,
+  applications Flatpak, et caractéristiques du poste : processeur, mémoire, disque, noyau, virtualisation) ; il
+  s'affiche sur la fiche du poste dans Mon parc. À l'inscription d'un poste Linux, ses logiciels et caractéristiques
+  s'affichent dès le premier contact, le décompte des mises à jour suivant une fois le premier scan réseau terminé.
 - **Voyants** : vert, aucune mise à jour ; orange, 1 à 9 mises à jour ; rouge, 10 mises à jour ou plus.
   Le total additionne système, Flatpak et logiciels du catalogue. Le seuil rouge est réglable dans Mon parc.
   Un inventaire manquant, incomplet ou un poste sans contact récent est gris, sans fausser le comptage.

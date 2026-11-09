@@ -55,6 +55,8 @@ CA = os.path.join(ETC, "ca.crt")
 STATE = "/var/lib/loco-client/state.json"
 LOCK = "/run/loco-client.lock"
 PROGRAM = "/usr/local/lib/loco-client/loco-client.py"
+CHECKIN = 120                   # cadence de contact au repos (secondes) ; le serveur peut demander plus court
+ACTIVE_MAX = 600                # durée max d'une fenêtre de contacts rapprochés avant de rendre la main à la minuterie
 UNITS = ("/etc/systemd/system/loco-client.service", "/etc/systemd/system/loco-client.timer",
          "/etc/systemd/system/loco-client-remote.service")
 OUTPUT_LIMIT = 60000
@@ -943,10 +945,9 @@ def apt_update():
     return code, out
 
 
-def scan(state=None):
-    """Mises à jour disponibles (nom, version, sécurité), Flatpak et redémarrage nécessaire ; paquets et applications
-    installés, caractéristiques du poste."""
-    inv = {"updates": [], "flatpak": 0, "reboot_required": False, "error": "", "warning": ""}
+def scan_updates(state=None):
+    """Partie « mises à jour » de l'inventaire (réseau) : apt-get update / check-update, simulation, et Flatpak."""
+    inv = {"updates": [], "flatpak": 0, "error": "", "warning": ""}
     fam = family()
     if fam == "debian":
         code, out = apt_update()
@@ -992,11 +993,20 @@ def scan(state=None):
     else:
         inv["error"] = t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
     inv["flatpak"] = flatpak_updates()
-    inv["reboot_required"] = reboot_required()
-    inv["packages"] = installed_packages(fam)
-    inv["flatpaks"] = installed_flatpaks()
-    inv["system"] = system_info()
     return inv
+
+
+def scan_local(fam=None):
+    """Partie locale de l'inventaire (sans réseau) : paquets et applications installés, redémarrage, caractéristiques.
+    Collectée en premier à l'arrivée d'un poste pour peupler sa fiche tout de suite, avant le comptage des mises à jour."""
+    fam = fam or family()
+    return {"reboot_required": reboot_required(), "packages": installed_packages(fam),
+            "flatpaks": installed_flatpaks(), "system": system_info()}
+
+
+def scan(state=None, local=None):
+    """Inventaire complet : mises à jour (réseau) et partie locale. `local` réutilise une collecte locale déjà faite."""
+    return {**scan_updates(state), **(local if local is not None else scan_local())}
 
 
 BLOCK_RE = re.compile(r"[A-Za-z0-9*][A-Za-z0-9+._:*-]{0,127}")
@@ -1348,53 +1358,16 @@ def forward_logs(conf, settings, state):
             return
 
 
-def service():
-    conf = load(CONFIG)
-    if not conf.get("token"):
-        log(t("poste non inscrit : relancez la commande d'installation de l'agent.", "machine not enrolled: run the agent install command again.", "equipo no inscrito: vuelva a ejecutar el comando de instalación del agente."))
-        return 1
-    lock = open(LOCK, "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return 0
-    ensure_remote_service()
-    state = load(STATE)
-    reapply_wake(state)
-    data = identity()
-    data["wake_error"] = state.get("wake_error", "")
-    data["metrics"] = metrics(state)
-    last = state.get("last_scan", 0)
-    # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
-    # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).
-    if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
-            or state.get("inventory_version") != VERSION):
-        data["inventory"] = scan(state)
-        state.update(last_scan=time.time(), rescan=_apt_lock_busy(data["inventory"].get("error") or ""), inventory_version=VERSION)
-    try:
-        answer = checkin(conf, data)
-    except urllib.error.HTTPError as e:
-        if e.code == 401:
-            log(t("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire.", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it.", "token rechazado por el servidor (¿equipo retirado del parque?): reinstale el agente para volver a inscribirlo."))
-        else:
-            log(t(f"serveur : HTTP {e.code}", f"server: HTTP {e.code}", f"servidor: HTTP {e.code}"))
-        save(STATE, state)
-        return 1
-    except (OSError, ValueError) as e:
-        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
-        # Inventaire non transmis : à refaire au prochain contact.
-        if "inventory" in data:
-            state["rescan"] = True
-        save(STATE, state)
-        return 1
+def _apply_answer(answer, state):
+    """Directives communes du serveur à chaque contact : intervalle de scan, autorités, réveil, blocages."""
     state["scan_hours"] = answer.get("scan_hours", 6)
     apply_trust(answer)
     apply_wake(answer, state)
     apply_blocks(answer, state)
-    try:
-        forward_logs(conf, answer.get("syslog"), state)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        pass                                    # serveur syslog absent, 503 : on réessaie au prochain contact, sans bruit
+
+
+def _run_commands(conf, answer, state):
+    """Exécute les commandes reçues du serveur. Renvoie True si l'agent doit s'arrêter là (redémarrage ou retrait)."""
     for cmd in answer.get("commands", []):
         action = cmd.get("action")
         log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))
@@ -1414,7 +1387,7 @@ def service():
             if reboot:
                 save(STATE, state)
                 subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage après mise à jour", "loco: reboot after update", "loco: reinicio tras la actualización")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                return 0
+                return True
         elif action == "install-package":
             code, out = install_package(cmd)
             inv = scan(state)
@@ -1430,16 +1403,99 @@ def service():
             report(conf, cmd["id"], "success", t("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."), 0)
             save(STATE, state)
             subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage demandé", "loco: reboot requested", "loco: reinicio solicitado")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return 0
+            return True
         elif action == "uninstall":
             report(conf, cmd["id"], "success", t("Agent retiré du poste.", "Agent removed from the machine.", "Agente retirado del equipo."), 0)
             remove_local()
             log(t("agent retiré à la demande du serveur.", "agent removed at the server's request.", "agente retirado a petición del servidor."))
-            return 0
+            return True
         else:
             report(conf, cmd["id"], "failed", t(f"Action non prise en charge sur Linux : {action}", f"Action not supported on Linux: {action}", f"Acción no admitida en Linux: {action}"), 1)
+    return False
+
+
+def service():
+    conf = load(CONFIG)
+    if not conf.get("token"):
+        log(t("poste non inscrit : relancez la commande d'installation de l'agent.", "machine not enrolled: run the agent install command again.", "equipo no inscrito: vuelva a ejecutar el comando de instalación del agente."))
+        return 1
+    lock = open(LOCK, "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return 0
+    ensure_remote_service()
+    state = load(STATE)
+    reapply_wake(state)
+    # Premier contact d'un poste : peupler sa fiche tout de suite avec la partie locale (paquets, caractéristiques —
+    # sans réseau) ; le comptage des mises à jour suit avec l'inventaire complet ci-dessous.
+    local = None
+    if state.get("last_scan", 0) == 0 and family() in ("debian", "rhel"):
+        try:
+            local = scan_local()
+            first = identity()
+            first["wake_error"] = state.get("wake_error", "")
+            first["metrics"] = metrics(state)
+            checkin(conf, dict(first, inventory=dict(local, partial=True)))
+        except Exception:
+            local = None            # contact partiel best-effort : s'il échoue, l'inventaire complet suit quand même
+    data = identity()
+    data["wake_error"] = state.get("wake_error", "")
+    data["metrics"] = metrics(state)
+    last = state.get("last_scan", 0)
+    # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
+    # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).
+    if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
+            or state.get("inventory_version") != VERSION):
+        data["inventory"] = scan(state, local=local)
+        state.update(last_scan=time.time(), rescan=_apt_lock_busy(data["inventory"].get("error") or ""), inventory_version=VERSION)
+    try:
+        answer = checkin(conf, data)
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            log(t("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire.", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it.", "token rechazado por el servidor (¿equipo retirado del parque?): reinstale el agente para volver a inscribirlo."))
+        else:
+            log(t(f"serveur : HTTP {e.code}", f"server: HTTP {e.code}", f"servidor: HTTP {e.code}"))
+        save(STATE, state)
+        return 1
+    except (OSError, ValueError) as e:
+        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
+        # Inventaire non transmis : à refaire au prochain contact.
+        if "inventory" in data:
+            state["rescan"] = True
+        save(STATE, state)
+        return 1
+    _apply_answer(answer, state)
+    try:
+        forward_logs(conf, answer.get("syslog"), state)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass                                    # serveur syslog absent, 503 : on réessaie au prochain contact, sans bruit
+    if _run_commands(conf, answer, state):
+        return 0
     save(STATE, state)
     self_update(conf, answer.get("agent_version"))
+    # Contacts adaptatifs : tant que le serveur demande un intervalle court (action en attente, enchaînement d'une
+    # commande), recontacter vite SANS refaire l'inventaire, jusqu'au retour au repos ou à la fin de la fenêtre active.
+    # Ensuite l'agent rend la main et la minuterie systemd reprend la cadence de repos.
+    deadline = time.monotonic() + ACTIVE_MAX
+    while 0 < answer.get("interval", CHECKIN) < CHECKIN and time.monotonic() < deadline:
+        time.sleep(answer["interval"])
+        data = identity()
+        data["wake_error"] = state.get("wake_error", "")
+        data["metrics"] = metrics(state)
+        try:
+            answer = checkin(conf, data)
+        except (urllib.error.HTTPError, OSError, ValueError):
+            break
+        _apply_answer(answer, state)
+        try:
+            forward_logs(conf, answer.get("syslog"), state)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        if _run_commands(conf, answer, state):
+            return 0
+        save(STATE, state)
+        self_update(conf, answer.get("agent_version"))
     return 0
 
 

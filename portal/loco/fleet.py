@@ -34,7 +34,9 @@ from .auth import audit, can, login_required, require
 from .db import db
 from .util import back, date_fr, safe_next, counted
 
-CHECKIN = 120                   # secondes entre deux contacts de l'agent
+CHECKIN = 120                   # secondes entre deux contacts de l'agent, au repos
+ACTIVE_INTERVAL = 10            # fenêtre active : l'agent qui honore l'intervalle revient vite (action en attente, inventaire en cours)
+ACTIVE_GRACE = 90               # reste vif ce délai après une commande terminée, pour enchaîner sans attendre
 ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles avant de déclarer le poste hors ligne
 SCAN_HOURS = 6                  # inventaire complet des mises à jour (et après chaque action)
 STALE_DAYS = 1                  # sans contact depuis : orange
@@ -371,6 +373,22 @@ def pending(dev_id):
                         "ORDER BY id", (dev_id,)).fetchall()
 
 
+def _active_window(conn, dev, commands):
+    """Fenêtre « active » : l'agent qui honore l'intervalle revient vite (ACTIVE_INTERVAL) au lieu d'attendre CHECKIN.
+    Vrai si on vient de lui transmettre des commandes, s'il en reste à exécuter, ou si une commande s'est terminée
+    tout récemment (pour enchaîner les suivantes). Sinon : repos (CHECKIN). L'inventaire d'un poste qui arrive, lui,
+    est rendu instantané par le double contact (partiel puis complet), pas par cet intervalle."""
+    if commands:
+        return True
+    if conn.execute("SELECT 1 FROM device_commands WHERE device_id=? AND state IN ('queued', 'sent', 'running') "
+                    "LIMIT 1", (dev["id"],)).fetchone():
+        return True
+    recent = conn.execute("SELECT MAX(finished_at) FROM device_commands WHERE device_id=? AND finished_at <> ''",
+                          (dev["id"],)).fetchone()[0]
+    ago = _ago(recent) if recent else None
+    return ago is not None and datetime.timedelta(0) <= ago < datetime.timedelta(seconds=ACTIVE_GRACE)
+
+
 def queue(dev, action, params=None, user=None, run_after=""):
     """Ajoute une action (sans doublon d'une action identique déjà en attente) ; renvoie True si ajoutée.
     run_after non vide = commande transmise seulement à partir de cet instant (planification ponctuelle)."""
@@ -477,6 +495,11 @@ def agent_enroll():
 
 
 def _store_inventory(dev, inv):
+    if inv.get("partial"):
+        # Premier contact d'un poste : peupler tout de suite la fiche (paquets, caractéristiques) sans fixer last_scan
+        # ni le comptage — le voyant reste « inventaire en cours » jusqu'à l'inventaire complet qui suit.
+        _store_software(dev, inv)
+        return
     updates = [u for u in (inv.get("updates") or []) if isinstance(u, dict)][:500]
     apps = [a for a in (inv.get("apps") or []) if isinstance(a, dict)][:2000]
     clean = {
@@ -632,6 +655,11 @@ def agent_checkin():
         conn.execute("UPDATE devices SET trust_sha256=? WHERE id=?", (reported_trust[:64].lower(), dev["id"]))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
+        if data["inventory"].get("partial"):
+            # Premier contact : la fiche est peuplée (paquets, caractéristiques). L'agent refait tout de suite un contact
+            # complet qui prendra les commandes ; on n'en envoie pas ici (il ignore cette réponse) et on reste vif.
+            conn.commit()
+            return {"interval": ACTIVE_INTERVAL, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": []}
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
         from . import monitoring
         monitoring.record(conn, dev["id"], data["metrics"])
@@ -679,6 +707,8 @@ def agent_checkin():
     conn.commit()
     answer = {"interval": CHECKIN, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": commands,
               "servers": addresses.servers(conn)}
+    if _active_window(conn, dev, commands):
+        answer["interval"] = min(answer["interval"], ACTIVE_INTERVAL)   # contacts adaptatifs : vif tant qu'il se passe quelque chose
     bundle = trust_pem()
     if bundle:
         # Faisceau d'autorités (loco + autorité d'entreprise éventuelle) livré par ce canal déjà épinglé, seulement à

@@ -232,8 +232,10 @@ class TestEnablingOnAgent(Agents):
         self.assertEqual(self.writes, [])
 
     def test_the_contact_applies_it_before_announcing_the_cards(self):
-        source = (ROOT / "portal/agents/loco-client.py").read_text(encoding="utf-8")
-        self.assertLess(source.index("    reapply_wake(state)\n    data = identity()"), source.index('    apply_wake(answer, state)'))
+        body = (ROOT / "portal/agents/loco-client.py").read_text(encoding="utf-8")
+        body = body[body.index("def service():"):]
+        # Au début d'un contact, le réveil est ré-appliqué aux cartes AVANT qu'on collecte l'identité (qui les annonce).
+        self.assertLess(body.index("reapply_wake(state)"), body.index("identity()"))
 
     def test_without_a_request_the_agent_touches_nothing(self):
         self.enabled = 0

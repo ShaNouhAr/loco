@@ -1207,5 +1207,36 @@ class TestRename(FleetTest):
         self.assertIn("srv-07", self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True))
 
 
+class TestAdaptiveContact(FleetTest):
+    def test_interval_is_short_when_active_and_calm_at_rest(self):
+        a = Agent(dict(LINUX), "192.168.43.62")
+        a.enroll()
+        rest = a.checkin({"updates": [], "packages": [], "flatpaks": [], "system": {}}).get_json()
+        self.assertEqual(rest["interval"], fleet.CHECKIN)                 # inventaire complet posé, rien à faire → repos
+        dev = device(a.uid)
+        self.admin.post(f"/fleet/{dev['id']}/action", {"action": "scan"}, page=f"/fleet/{dev['id']}")
+        active = a.checkin().get_json()
+        self.assertEqual(active["interval"], fleet.ACTIVE_INTERVAL)       # commande transmise → contacts rapprochés
+        self.assertTrue(active["commands"])
+
+    def test_partial_inventory_populates_without_counting_and_keeps_commands(self):
+        a = Agent(dict(LINUX), "192.168.43.65")
+        a.enroll()
+        dev = device(a.uid)
+        self.admin.post(f"/fleet/{dev['id']}/action", {"action": "scan"}, page=f"/fleet/{dev['id']}")
+        ans = a.checkin({"partial": True, "packages": [{"name": "vim", "version": "2:9", "arch": "amd64", "manual": True, "size": 0}],
+                         "system": {"cpu": "x86"}}).get_json()
+        self.assertEqual(ans["commands"], [])                            # inventaire partiel : aucune commande consommée
+        self.assertFalse(device(a.uid)["last_scan"])                     # voyant encore « inventaire en cours »
+        self.assertEqual(status_of(a.uid)[0], "grey")
+        with transaction() as conn:
+            soft = json.loads(conn.execute("SELECT data FROM device_software WHERE device_id=?", (dev["id"],)).fetchone()["data"])
+            self.assertEqual(soft["packages"][0]["name"], "vim")         # fiche peuplée tout de suite
+            self.assertEqual(conn.execute("SELECT state FROM device_commands WHERE device_id=?", (dev["id"],)).fetchone()[0], "queued")
+        full = a.checkin({"updates": [], "packages": [], "flatpaks": [], "system": {}}).get_json()
+        self.assertTrue(full["commands"])                               # contact complet : la commande part
+        self.assertTrue(device(a.uid)["last_scan"])                     # et le comptage est posé
+
+
 if __name__ == "__main__":
     unittest.main()

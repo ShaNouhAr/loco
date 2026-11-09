@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.142.0 — 2026-11-09
+
+- **Contacts des agents plus réactifs** : quand une action est en attente sur un poste (ou qu'une vient de s'exécuter), l'agent Linux recontacte loco toutes les ~10 secondes au lieu d'attendre jusqu'à deux minutes, puis revient à sa cadence de repos (deux minutes) une fois le calme revenu. Les actions et leurs enchaînements (mise à jour puis redémarrage, actions successives) partent donc presque tout de suite quand vous travaillez sur un poste, sans alourdir les contacts au repos. L'agent Android, qui suivait déjà la cadence annoncée par loco, en profite aussi.
+- **Inventaire d'un poste Linux affiché dès l'inscription** : un poste Debian, Ubuntu ou RHEL qui s'inscrit montre **tout de suite** ses logiciels installés et ses caractéristiques (processeur, mémoire, disque…), sans attendre la fin du premier `apt-get update` ; le nombre de mises à jour s'affiche juste après. Auparavant, la fiche restait « inventaire en cours » jusqu'à la fin du scan réseau.
+
 ## 2.141.0 — 2026-11-09
 
 - **Nom personnalisé d'un poste** : dans *Mon parc*, vous pouvez donner à un appareil un nom plus parlant que son nom d'hôte. Sur la fiche du poste, *Plus › Nom personnalisé…* ouvre une petite fenêtre ; le nom saisi s'affiche à la place du nom d'hôte dans la liste, la fiche et la recherche, **tout en gardant le nom d'hôte visible** juste en dessous. Laisser le champ vide revient au nom d'hôte. Nouveau droit **Nommer les appareils**, accordé d'office à l'Administrateur et à l'Opérateur.

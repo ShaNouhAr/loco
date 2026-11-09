@@ -318,3 +318,62 @@ class TestAptUpdateLockRetry(unittest.TestCase):
         with mock.patch.object(agent, "run", run), mock.patch.object(agent.time, "sleep", lambda *_: None):
             code, _ = agent.apt_update()
         self.assertEqual((code, len(calls)), (100, 1))             # pas de reprise inutile
+
+
+class TestServiceLoop(unittest.TestCase):
+    """Boucle de contact : premier contact en deux temps (partiel puis complet), puis contacts rapprochés tant que le
+    serveur demande un intervalle court, et arrêt au retour au repos — sans refaire l'inventaire."""
+
+    def _run(self, answers, state):
+        calls, seq = [], iter(answers)
+        def fake_checkin(conf, data):
+            calls.append(data)
+            return next(seq)
+        loads = iter([{"token": "t"}, dict(state)])
+        with mock.patch.object(agent, "load", lambda path: next(loads)), \
+             mock.patch.object(agent, "save", lambda *a: None), \
+             mock.patch.object(agent, "ensure_remote_service", lambda: None), \
+             mock.patch.object(agent, "reapply_wake", lambda s: None), \
+             mock.patch.object(agent, "identity", lambda: {"hostname": "h"}), \
+             mock.patch.object(agent, "metrics", lambda s: {}), \
+             mock.patch.object(agent, "family", lambda: "debian"), \
+             mock.patch.object(agent, "scan_local", lambda fam=None: {"packages": [{"name": "vim"}]}), \
+             mock.patch.object(agent, "scan", lambda state=None, local=None: dict({"updates": [], "error": ""}, **(local or {}))), \
+             mock.patch.object(agent, "checkin", fake_checkin), \
+             mock.patch.object(agent, "_apply_answer", lambda a, s: None), \
+             mock.patch.object(agent, "forward_logs", lambda *a: None), \
+             mock.patch.object(agent, "_run_commands", lambda *a: False), \
+             mock.patch.object(agent, "self_update", lambda *a: None), \
+             mock.patch.object(agent, "_apt_lock_busy", lambda o: False), \
+             mock.patch.object(agent, "booted_since", lambda last: False), \
+             mock.patch.object(agent.time, "sleep", lambda s: None), \
+             mock.patch.object(agent.fcntl, "flock", lambda *a: None), \
+             mock.patch("builtins.open", mock.mock_open()):
+            rc = agent.service()
+        return rc, calls
+
+    def test_first_contact_sends_partial_then_full(self):
+        rc, calls = self._run([{"interval": 120, "commands": []}, {"interval": 120, "commands": []}], state={})
+        self.assertEqual((rc, len(calls)), (0, 2))                   # partiel + complet
+        self.assertTrue(calls[0]["inventory"]["partial"])            # 1er contact : partiel (fiche tout de suite)
+        self.assertNotIn("partial", calls[1]["inventory"])          # 2e : inventaire complet (comptage)
+
+    def test_active_window_repeats_fast_until_rest_without_rescanning(self):
+        rc, calls = self._run([{"interval": 120, "commands": []},    # partiel (réponse ignorée)
+                               {"interval": 10, "commands": []},     # complet → entre en fenêtre active
+                               {"interval": 10, "commands": []},     # tour 1
+                               {"interval": 120, "commands": []}],   # tour 2 → repos : on s'arrête
+                              state={})
+        self.assertEqual(len(calls), 4)
+        self.assertNotIn("inventory", calls[2])                     # la boucle active ne refait pas l'inventaire
+        self.assertNotIn("inventory", calls[3])
+
+    def test_known_device_at_rest_contacts_once_without_partial_or_loop(self):
+        rc, calls = self._run([{"interval": 120, "commands": []}],
+                              state={"last_scan": agent.time.time(), "inventory_version": agent.VERSION})
+        self.assertEqual((rc, len(calls)), (0, 1))                   # ni partiel (déjà connu) ni boucle
+        self.assertNotIn("inventory", calls[0])                     # inventaire récent : pas refait
+
+
+if __name__ == "__main__":
+    unittest.main()
