@@ -31,7 +31,7 @@ from flask import Response, abort, current_app, flash, g, redirect, render_templ
 from . import addresses, agentpkg, app, apksign, config, features, permissions, scope, wake
 from .i18n import L_, _, n_
 from .auth import audit, can, login_required, require
-from .db import db
+from .db import db, durable, relax
 from .util import back, date_fr, safe_next, counted
 
 CHECKIN = 120                   # secondes entre deux contacts de l'agent, au repos
@@ -438,6 +438,21 @@ def _device():
     return dev
 
 
+def enroll_proof(token_hash, uid, key):
+    """Preuve qu'un agent qui se réinscrit détient le jeton actuel du poste, sans le présenter : HMAC de l'empreinte du
+    jeton (ce que le serveur garde) sur l'identifiant et la clé d'inscription. Elle ne vaut donc que pour ce serveur, et
+    jusqu'à la réinscription suivante, qui change le jeton."""
+    return hmac.new(token_hash.encode(), f"loco-enroll-v1\n{uid}\n{key}".encode(), hashlib.sha256).hexdigest()
+
+
+def _holds(row, uid, data):
+    """Vrai si c'est bien l'agent de ce poste qui se réinscrit (agents 2.144.0 et plus). Un poste retiré n'a plus de
+    jeton : personne ne reprend sa fiche."""
+    proof = data.get("proof")
+    return (bool(row["token_hash"]) and isinstance(proof, str)
+            and hmac.compare_digest(enroll_proof(row["token_hash"], uid, str(data.get("key", ""))).encode(), proof.encode()))
+
+
 def _client_ip():
     ip = request.remote_addr or ""
     try:
@@ -468,9 +483,16 @@ def agent_enroll():
         abort(400)
     token = secrets.token_urlsafe(32)
     conn = db()
-    row = conn.execute("SELECT id FROM devices WHERE uid=?", (uid,)).fetchone()
+    row = conn.execute("SELECT id, hostname, token_hash FROM devices WHERE uid=?", (uid,)).fetchone()
+    taken = ""
+    if row and not _holds(row, uid, data):
+        # Identifiant d'un poste déjà inscrit, présenté sans la preuve que l'agent détient son jeton (disque restauré,
+        # clone, poste retiré… ou tentative d'en prendre la place) : la fiche et le jeton du poste restent intacts ;
+        # celui qui s'inscrit reçoit une identité neuve, comme un nouveau poste. La clé d'inscription seule ne permet
+        # donc jamais de reprendre un poste.
+        taken, row, uid = row["hostname"] or uid[:8], None, secrets.token_hex(16)
     if row:
-        # Réinscription (agent réinstallé) : nouveau jeton, historique conservé.
+        # Réinscription (agent réinstallé, qui prouve qu'il détient le jeton du poste) : nouveau jeton, historique conservé.
         conn.execute("UPDATE devices SET token_hash=?, state='active', last_seen=?, ip=?, hostname=?, os_family=?, "
                      "os_name=?, agent_version=?, addresses=? WHERE id=?",
                      (_hash(token), _now(), _client_ip(), ident["hostname"], ident["os_family"], ident["os_name"],
@@ -490,8 +512,10 @@ def agent_enroll():
         conn.execute("INSERT OR IGNORE INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, dev_id))
         joined = ", groupe " + conn.execute("SELECT name FROM device_groups WHERE id=?", (group,)).fetchone()[0]
     conn.commit()
-    audit("parc.inscription", f"{ident['hostname']} ({FAMILIES[ident['os_family']]}, {_client_ip()}{joined})", username="")
-    return {"token": f"{uid}.{token}", "interval": CHECKIN}
+    renewed = f" ; identifiant de {taken} présenté sans son jeton : inscrit comme un nouveau poste" if taken else ""
+    audit("parc.inscription", f"{ident['hostname']} ({FAMILIES[ident['os_family']]}, {_client_ip()}{joined}){renewed}", username="")
+    # uid : l'identité retenue par le serveur (agents 2.144.0 et plus : ils la gardent). Le jeton la porte déjà.
+    return {"token": f"{uid}.{token}", "uid": uid, "interval": CHECKIN}
 
 
 def _store_inventory(dev, inv):
@@ -640,6 +664,10 @@ def agent_checkin():
     data = _json()
     ident = _identity(data)
     conn = db()
+    if not isinstance(data.get("inventory"), dict):
+        # Contact simple (présence, adresse, mesures) : l'agent renvoie tout cela au contact suivant, la validation
+        # n'attend donc pas le disque. Un inventaire, lui, ne revient que toutes les quelques heures : il l'attend.
+        relax(conn)
     # Le poste a pu changer d'adresse : elle est simplement mise à jour.
     conn.execute("UPDATE devices SET last_seen=?, ip=?, hostname=COALESCE(NULLIF(?, ''), hostname), "
                  "os_name=COALESCE(NULLIF(?, ''), os_name), agent_version=?, addresses=? WHERE id=?",
@@ -667,6 +695,11 @@ def agent_checkin():
         from . import adb
         adb.record_report(conn, dev, data["adb"])
     expire_commands(db(), dev["id"])
+    # Ce qui suit engage : une commande notée « transmise » doit être sur le disque avant de partir dans la réponse (un
+    # arrêt brutal ne doit ni la perdre ni la faire exécuter deux fois). Sans commande ni planification due, rien n'est
+    # écrit et cette seconde validation ne coûte rien.
+    conn.commit()
+    durable(conn)
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     from . import schedules
     schedules.materialize(conn)       # planifications dues : commandes créées, occurrence suivante

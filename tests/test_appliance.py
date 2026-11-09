@@ -177,6 +177,44 @@ class TestUpdateLoco(TempAgent):
             self.assertFalse(locoadmin.update_loco(log=lambda _: None))
         self.assertEqual(len(calls), 2)
 
+    def test_rollback_stops_the_portal_before_rewriting_the_database(self):
+        """Le portail tient la base ouverte : elle n'est jamais réécrite sous lui, sur aucun système."""
+        import sqlite3
+        os.makedirs(locoadmin.STATE)
+        db = os.path.join(locoadmin.STATE, "portal.db")
+        with contextlib.closing(sqlite3.connect(db)) as conn:
+            conn.execute("CREATE TABLE original(value)")
+            conn.commit()
+        for alpine, stop, restart in ((False, ["systemctl", "stop", "loco-portal"], [["systemctl", "start", "loco-portal"]]),
+                                      (True, ["rc-service", "loco", "stop"], [])):
+            with self.subTest(alpine=alpine):
+                events = []
+
+                def install(source, args, log):
+                    events.append("install")
+                    if events.count("install") == 1:
+                        with contextlib.closing(sqlite3.connect(db)) as conn:
+                            conn.execute("CREATE TABLE IF NOT EXISTS essai(value)")     # la base a changé depuis l'instantané
+                            conn.commit()
+                    return 1                                    # l'installation échoue, le retour arrière aussi
+
+                def run(cmd, log, **kwargs):
+                    with contextlib.closing(sqlite3.connect(db)) as conn:
+                        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}
+                    events.append((cmd, "essai" in tables))     # la base était-elle encore celle d'avant le retour ?
+                    return 0
+
+                p1, p2, p3 = self.release(_archive("2.1.0"))
+                with p1, p2, p3, mock.patch.object(locoadmin, "_install", install), mock.patch.object(locoadmin, "_run", run), \
+                        mock.patch.object(locoadmin, "ALPINE", alpine):
+                    self.assertFalse(locoadmin.update_loco(log=lambda _: None))
+                self.assertEqual(events[0], "install")
+                self.assertEqual(events[1], (stop, True))       # portail arrêté d'abord, base pas encore réécrite
+                self.assertEqual(events[2], "install")
+                self.assertEqual([e[0] for e in events[3:]], restart)       # systemd : portail remis en service
+                with contextlib.closing(sqlite3.connect(db)) as conn:
+                    self.assertNotIn("essai", {r[0] for r in conn.execute("SELECT name FROM sqlite_master")})
+
     def test_archives_with_links_or_escaping_paths_are_refused(self):
         link = tarfile.TarInfo("loco-2.1.0/linux/evil")
         link.type, link.linkname = tarfile.SYMTYPE, "/etc/shadow"

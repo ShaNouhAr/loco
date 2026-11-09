@@ -228,10 +228,7 @@ def packages_page(family, selected):
         devices = rpmrepo._devices_on(current)
     for p in packages:
         p["added"] = datetime.datetime.fromtimestamp(p["mtime"]).strftime("%Y-%m-%d %H:%M") if p["mtime"] else ""
-    linux_devices = None
-    if _fleet_visible():
-        with transaction() as conn:
-            linux_devices = conn.execute("SELECT COUNT(*) FROM devices WHERE state='active' AND os_family='linux'").fetchone()[0]
+    linux_devices = len(fleet_names("debian", "rhel")) if _fleet_visible() else None
     own = sum(r["count"] for r in apt_repos) + legacy_count + sum(r["count"] for r in rpm_repos)
     from . import caches
     return render_template("packages.html", family=family, selected=selected, current=current, label=label,
@@ -248,13 +245,20 @@ def _fleet_visible():
     return features.enabled("fleet") and can("fleet.view")
 
 
+def fleet_names(*families):
+    """Système annoncé par chaque poste actif de ces familles (« debian », « rhel »), dans le parc du compte."""
+    from . import scope
+    marks = ",".join("?" * len(families))
+    with transaction() as conn:
+        return [r["os_name"].lower() for r in conn.execute(
+            f"SELECT os_name FROM devices WHERE state='active' AND os_family IN ({marks})" + scope.sql(), families)]
+
+
 def _devices_on(repo):
     """Postes Linux du parc sur cette distribution et version (d'après le système annoncé par l'agent)."""
     if not repo or not _fleet_visible():
         return None
-    with transaction() as conn:
-        names = [r["os_name"].lower() for r in conn.execute(
-            "SELECT os_name FROM devices WHERE state='active' AND os_family='linux'")]
+    names = fleet_names("debian")
     suite, version, dist = repo["suite"].lower(), (repo["version"] or "").lower(), repo["distribution"].lower()
     return sum(1 for n in names if f"({suite})" in n or (dist in n and version and f" {version}" in n))
 

@@ -363,7 +363,10 @@ distribués ; supprimer le groupe aussi.
   relu) ; une action encore en file s'annule depuis la fiche du poste. Droits : ceux de l'action planifiée (mettre à
   jour, tout le parc, redémarrer, exécuter des scripts), revérifiés à l'envoi aux postes.
 - **Identité** : chaque poste a un identifiant et un jeton propres, indépendants de son adresse. Un poste qui change
-  d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache.
+  d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache. Réinstaller
+  l'agent garde la fiche du poste : l'agent prouve qu'il détient son jeton, sans le présenter. La clé d'inscription
+  seule ne permet donc pas de reprendre un poste : qui présente l'identifiant d'un poste déjà inscrit sans cette preuve
+  (disque restauré, clone, poste retiré) est inscrit comme un nouveau poste, et le journal le note.
 - **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de
   certificats du poste ; installeurs vérifiés par SHA-256 ; jetons stockés hachés côté serveur.
 - **Paquets .deb et .rpm** : produits par loco pour ce serveur (adresse, autorité épinglée et clé incluses), ils

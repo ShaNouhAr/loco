@@ -314,11 +314,15 @@ def _deliver(cfg, channel, subject, body, severity):
 
 # --------------------------------------------------------------------------- aiguilleur (fil de fond)
 
-def dispatch(conn):
-    """Évalue les règles, met en file les alertes dues (hors délai de répétition), puis vide la file d'envoi."""
+CLAIM_SECONDS = 300             # envoi en cours : l'entrée reste réservée ce temps-là, puis redevient due (arrêt brutal)
+MAX_ATTEMPTS = 12
+
+
+def enqueue(conn):
+    """Évalue les règles et met en file les alertes dues (hors délai de répétition). N'envoie rien."""
     cfg = load(conn)
     if not configured(cfg) or "alerts" in features.disabled(conn):
-        return
+        return False
     now = time.time()
     for alert in evaluate(conn, cfg):
         targets = _targets(cfg, alert["severity"])
@@ -334,13 +338,43 @@ def dispatch(conn):
                      "VALUES (?, ?, ?, ?, ?, '0')",
                      (datetime.datetime.now().isoformat(timespec="seconds"), alert["severity"],
                       "[loco] " + alert["subject"], alert["body"], json.dumps(targets)))
-    _drain(conn, cfg)
+    return True
 
 
-def _drain(conn, cfg):
+def _claim(entry):
+    """Réserve une entrée due avant de l'envoyer ; None si elle ne l'est pas (ou plus). Un autre passage ne l'enverra
+    pas pendant ce temps, et une réservation laissée par un arrêt brutal expire d'elle-même."""
     now = time.time()
-    for row in conn.execute("SELECT * FROM alert_outbox ORDER BY id").fetchall():
-        if row["next_try"] and float(row["next_try"]) > now:
+    with transaction() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM alert_outbox WHERE id=?", (entry,)).fetchone()
+        if row is None or (row["next_try"] and float(row["next_try"]) > now):
+            return None
+        conn.execute("UPDATE alert_outbox SET next_try=? WHERE id=?", (str(now + CLAIM_SECONDS), entry))
+        return row
+
+
+def _settle(row, remaining, error):
+    """Solde une entrée après l'envoi : retirée si tout est parti (ou après trop d'essais), sinon reprogrammée."""
+    with transaction() as conn:
+        if not remaining or row["attempts"] + 1 >= MAX_ATTEMPTS:
+            conn.execute("DELETE FROM alert_outbox WHERE id=?", (row["id"],))
+        else:
+            backoff = min(60 * 2 ** row["attempts"], 3600)
+            conn.execute("UPDATE alert_outbox SET channels=?, attempts=attempts+1, next_try=?, last_error=? WHERE id=?",
+                         (json.dumps(remaining), str(time.time() + backoff), error, row["id"]))
+
+
+def drain():
+    """Envoie ce qui attend dans la file. Le réseau (SMTP, webhook : jusqu'à 20 s par canal) reste hors de toute
+    transaction : un serveur de messagerie qui ne répond pas ne doit jamais retenir la base, donc les contacts des agents
+    et les actions du portail. Chaque entrée est réservée, envoyée, puis soldée, dans deux transactions courtes."""
+    with transaction() as conn:
+        cfg = load(conn)
+        entries = [r["id"] for r in conn.execute("SELECT id FROM alert_outbox ORDER BY id")]
+    for entry in entries:
+        row = _claim(entry)
+        if row is None:
             continue
         remaining, error = [], ""
         for channel in json.loads(row["channels"]):
@@ -349,14 +383,15 @@ def _drain(conn, cfg):
             except Exception as e:              # réseau, SMTP, DNS… : on retentera
                 remaining.append(channel)
                 error = f"{channel}: {e}"[:300]
-        if not remaining:
-            conn.execute("DELETE FROM alert_outbox WHERE id=?", (row["id"],))
-        elif row["attempts"] + 1 >= 12:
-            conn.execute("DELETE FROM alert_outbox WHERE id=?", (row["id"],))
-        else:
-            backoff = min(60 * 2 ** row["attempts"], 3600)
-            conn.execute("UPDATE alert_outbox SET channels=?, attempts=attempts+1, next_try=?, last_error=? WHERE id=?",
-                         (json.dumps(remaining), str(now + backoff), error, row["id"]))
+        _settle(row, remaining, error)
+
+
+def dispatch():
+    """Un passage de l'aiguilleur : alertes dues mises en file (validées), puis file envoyée hors transaction."""
+    with transaction() as conn:
+        ready = enqueue(conn)
+    if ready:
+        drain()
 
 
 _started = False
@@ -368,8 +403,7 @@ def _tick():
     with transaction() as conn:
         expire_commands(conn)
         advance_rollouts(conn)
-    with transaction() as conn:
-        dispatch(conn)
+    dispatch()
 
 
 def start_dispatcher():

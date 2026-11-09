@@ -20,6 +20,7 @@ namespace Loco
         readonly Thread worker;
         // Signalé dès qu'une session a des octets à envoyer : l'échange suivant part sans attendre la fin du délai.
         internal static readonly AutoResetEvent Activity = new AutoResetEvent(false);
+        internal static readonly AutoResetEvent Checkin = new AutoResetEvent(false);   // le serveur demande un contact principal tout de suite (action en attente)
         public RemoteControl(WaitHandle stopping)
         {
             this.stopping = stopping;
@@ -61,6 +62,9 @@ namespace Loco
                         if (live) payload["metrics"] = Agent.LiveMetrics(sampler);
                         var answer = Agent.RemoteExchange(payload);
                         lastOk.Restart();
+                        object doCheckin;
+                        if (answer.TryGetValue("checkin", out doCheckin) && doCheckin != null && Convert.ToBoolean(doCheckin))
+                            Checkin.Set();                          // réveille la boucle principale pour un contact immédiat
                         object wanted;
                         bool liveNow = answer.TryGetValue("live", out wanted) && wanted != null && Convert.ToDouble(wanted) > 0;
                         if (!liveNow) sampler.Reset();                  // prochain direct : repartir d'un relevé frais

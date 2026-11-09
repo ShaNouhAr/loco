@@ -92,9 +92,11 @@ namespace Loco
 
         void Loop()
         {
-            // Premier contact peu après le démarrage (réseau prêt), puis à l'intervalle donné par le serveur.
+            // Premier contact peu après le démarrage (réseau prêt), puis à l'intervalle donné par le serveur — ou tout
+            // de suite si le canal distant signale une action en attente (réveil). 0 = arrêt du service → sortir.
             int delay = 15000;
-            while (!stopping.WaitOne(delay))
+            var waits = new WaitHandle[] { stopping, RemoteControl.Checkin };
+            while (WaitHandle.WaitAny(waits, delay) != 0)
             {
                 try { DesktopIndicator.StartSessions(); Agent.RunOnce(stopping); }
                 catch (Exception e) { Agent.Log(Lang.T("erreur : ", "error: ", "error: ") + e.Message); }
@@ -419,6 +421,9 @@ namespace Loco
             data["key"] = key;
             data["uid"] = uid;
             var answer = Post(server, "/agent/api/enroll", data, null);
+            // Identité retenue par le serveur (loco 2.144.0 et plus) : il en attribue une neuve si l'identifiant
+            // présenté est déjà celui d'un poste inscrit dont on n'a pas le jeton.
+            if (Str(answer, "uid") != "") uid = Str(answer, "uid");
             conf = new Dictionary<string, object> {
                 { "server", server }, { "uid", uid }, { "token", Str(answer, "token") }, { "enrolled", DateTime.Now.ToString("s") } };
             SaveJson(ConfigPath, conf);

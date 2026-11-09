@@ -327,6 +327,12 @@ def remote_agent():
     answer = {"sessions": output, "interval": 0.025 if output else (monitoring.LIVE_INTERVAL if live else 5)}
     if live:
         answer["live"] = monitoring.LIVE_INTERVAL
+    # Une action attend ce poste : par ce canal déjà ouvert (toutes les 5 s), on lui demande un contact principal tout
+    # de suite, au lieu d'attendre la minuterie de deux minutes — l'action part ainsi en quelques secondes, sans pour
+    # autant multiplier les contacts au repos.
+    if conn.execute("SELECT 1 FROM device_commands WHERE device_id=? AND state='queued' AND (run_after='' OR run_after<=?) "
+                    "LIMIT 1", (dev["id"], fleet._now())).fetchone():
+        answer["checkin"] = True
     return answer, 200, {"Cache-Control": "no-store"}
 
 

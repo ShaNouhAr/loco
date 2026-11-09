@@ -3,6 +3,7 @@
 import base64
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -36,10 +37,24 @@ class Agent:
             headers["Authorization"] = f"Bearer {token}"
         return self.c.post(path, json=data, headers=headers)
 
-    def enroll(self, key=None):
-        r = self.post("/agent/api/enroll", dict(self.ident, uid=self.uid, key=key or self.key()))
+    def proof(self, key, uid=None):
+        """Preuve calculée comme le fait l'agent : HMAC de l'empreinte de son jeton sur l'identifiant et la clé."""
+        secret = (self.token or "").partition(".")[2]
+        return hmac.new(hashlib.sha256(secret.encode()).hexdigest().encode(),
+                        f"loco-enroll-v1\n{uid or self.uid}\n{key}".encode(), hashlib.sha256).hexdigest()
+
+    def enroll(self, key=None, **extra):
+        """Comme l'agent : une réinscription prouve qu'il détient le jeton du poste, et l'identité retenue par le serveur
+        est gardée. extra : champs imposés (proof=… pour une preuve fabriquée)."""
+        key = key or self.key()
+        data = dict(self.ident, uid=self.uid, key=key)
+        if (self.token or "").partition(".")[2]:
+            data["proof"] = self.proof(key)
+        data.update(extra)
+        r = self.post("/agent/api/enroll", data)
         if r.status_code == 200:
             self.token = r.get_json()["token"]
+            self.uid = r.get_json().get("uid", self.uid)
         return r
 
     def checkin(self, inventory=None):
@@ -164,6 +179,91 @@ class TestEnrollment(FleetTest):
         b.token = old
         self.assertEqual(b.checkin().status_code, 401)
         self.assertEqual(a.checkin().status_code, 200)
+
+    def test_the_enrollment_key_alone_never_takes_over_a_device(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        original = device(a.uid)
+        intruder = Agent(dict(LINUX, hostname="intrus"), "10.9.9.9", uid=a.uid)     # même identifiant, clé valide, pas le jeton
+        r = intruder.enroll()
+        self.assertEqual(r.status_code, 200)
+        fresh = r.get_json()["uid"]
+        self.assertNotEqual(fresh, a.uid)                                           # identité neuve, pas celle du poste
+        self.assertRegex(fresh, r"^[0-9a-f]{32}$")
+        self.assertTrue(intruder.token.startswith(fresh + "."))
+        self.assertEqual(a.checkin().status_code, 200)                              # le poste garde son jeton…
+        kept = device(a.uid)
+        self.assertEqual((kept["id"], kept["hostname"], kept["ip"], kept["token_hash"]),
+                         (original["id"], "srv-web", "192.168.43.60", original["token_hash"]))      # … et sa fiche
+        self.assertEqual(intruder.checkin().status_code, 200)
+        self.assertEqual((device(fresh)["hostname"], device(fresh)["ip"]), ("intrus", "10.9.9.9"))
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM devices").fetchone()[0], 2)
+            detail = conn.execute("SELECT detail FROM audit WHERE action='parc.inscription' ORDER BY id DESC").fetchone()[0]
+        self.assertIn("identifiant de srv-web présenté sans son jeton", detail)
+
+    def test_only_the_token_of_the_device_proves_it_is_the_device(self):
+        a, b = Agent(LINUX, "192.168.43.60"), Agent(WINDOWS, "192.168.43.50")
+        a.enroll()
+        b.enroll()
+        key = Agent.key()
+        b_as_a = Agent(WINDOWS, "192.168.43.50", uid=a.uid)
+        b_as_a.token = b.token                                                      # un autre poste, avec son propre jeton
+        for forged in ("", "0" * 64, 1234, None, ["x"], b_as_a.proof(key), a.proof("une-autre-cle"),
+                       a.proof(key, uid=b.uid), a.token.partition(".")[2], a.proof(key).upper() + " "):
+            intruder = Agent(dict(LINUX, hostname="intrus"), "10.9.9.9", uid=a.uid)
+            r = intruder.enroll(proof=forged)
+            self.assertEqual(r.status_code, 200, forged)
+            self.assertNotEqual(r.get_json()["uid"], a.uid, forged)
+        self.assertEqual(a.checkin().status_code, 200)
+        self.assertEqual(b.checkin().status_code, 200)
+
+    def test_a_proof_is_worth_nothing_once_it_has_been_used(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        seen = a.proof(Agent.key())                                                 # preuve vue passer (journal, écoute…)
+        self.assertEqual(a.enroll().status_code, 200)                               # la réinscription qu'elle a servie
+        dev = device(a.uid)
+        replay = Agent(dict(LINUX, hostname="intrus"), "10.9.9.9", uid=a.uid)
+        r = replay.enroll(proof=seen)
+        self.assertNotEqual(r.get_json()["uid"], a.uid)                             # le jeton a changé : preuve périmée
+        self.assertEqual((device(a.uid)["id"], device(a.uid)["token_hash"]), (dev["id"], dev["token_hash"]))
+        self.assertEqual(a.checkin().status_code, 200)
+
+    def test_a_removed_device_never_gets_its_record_back(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        old, removed = a.token, device(a.uid)
+        with transaction() as conn:
+            group = conn.execute("INSERT INTO device_groups (name, updated_at) VALUES ('Atelier', '')").lastrowid
+            conn.execute("INSERT INTO device_group_members VALUES (?,?)", (group, removed["id"]))
+            conn.execute("UPDATE devices SET state='removed', token_hash='' WHERE id=?", (removed["id"],))   # agent retiré
+        self.addCleanup(lambda: self.forget_group(group))
+        back = Agent(LINUX, "192.168.43.60", uid=removed["uid"])
+        back.token = old                                                            # disque restauré : ancien jeton
+        r = back.enroll()
+        self.assertEqual(r.status_code, 200)
+        self.assertNotEqual(back.uid, removed["uid"])
+        self.assertEqual(device(removed["uid"])["state"], "removed")                # l'ancienne fiche reste retirée
+        with transaction() as conn:
+            members = [r[0] for r in conn.execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group,))]
+        self.assertEqual(members, [removed["id"]])                                  # ses groupes ne sont pas hérités
+
+    @staticmethod
+    def forget_group(group):
+        with transaction() as conn:
+            conn.execute("DELETE FROM device_groups WHERE id=?", (group,))
+            conn.execute("DELETE FROM device_group_members WHERE group_id=?", (group,))
+
+    def test_the_agent_itself_cancels_its_pending_removal_by_reenrolling(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        dev = device(a.uid)
+        self.admin.post(f"/fleet/{dev['id']}/action", {"action": "uninstall"}, page=f"/fleet/{dev['id']}")
+        self.assertEqual(device(a.uid)["state"], "removing")
+        self.assertEqual(a.enroll().status_code, 200)                               # réinstallé : il présente son jeton
+        self.assertEqual((device(a.uid)["id"], device(a.uid)["state"]), (dev["id"], "active"))
+        self.assertEqual(a.checkin().get_json()["commands"], [])                    # le retrait est annulé
 
     def test_rotating_the_key_keeps_enrolled_devices(self):
         a = Agent(WINDOWS, "192.168.43.50")

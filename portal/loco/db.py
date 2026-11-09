@@ -1,11 +1,14 @@
-"""Base SQLite : connexion par requête et migrations versionnées."""
+"""Base SQLite : connexion par requête, connexion tenue ouverte par le portail en service, migrations versionnées."""
 
+import atexit
 import json
+import logging
 import os
 import secrets
 import sqlite3
+import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from flask import g
 
@@ -658,7 +661,165 @@ def db():
 def close_db(_exc=None):
     conn = g.pop("db", None)
     if conn is not None:
+        wrote = conn.total_changes
         conn.close()
+        if wrote and _keeper is not None:
+            _keeper.dirty.set()                 # écritures peut-être validées sans attendre le disque : synchroniser
+
+
+# --------------------------------------------------------------------------- base tenue ouverte par le portail en service
+
+SYNC_SECONDS = 1.0              # écritures validées sans attendre le disque : synchronisées au plus tard dans ce délai
+SYNC_KEY = "db_sync"            # réglage réécrit en mode sûr pour forcer cette synchronisation (instant de la dernière)
+WATCH_SECONDS = 30              # ronde au repos : base remplacée sous le portail ? journal devenu trop gros ?
+RETRY_SECONDS = 5               # connexion permanente en défaut : nouvel essai
+WAL_LIMIT = 64 * 1024 * 1024    # journal au-delà : recopié en entier et remis à zéro (SQLite ne le raccourcit jamais seul)
+
+
+def _db_file():
+    """La base telle qu'elle est sur le disque à cet instant : change si le fichier est remplacé."""
+    st = os.stat(config.DB_PATH)
+    return config.DB_PATH, st.st_dev, st.st_ino
+
+
+class _Keeper:
+    """Connexion tenue ouverte tant que le portail sert.
+
+    Sans elle, chaque requête ouvre puis ferme la seule connexion du processus, et à chaque fermeture SQLite recopie son
+    journal (WAL) dans la base puis synchronise le disque : c'est l'essentiel du coût d'un contact d'agent. Avec elle, ce
+    travail revient au point de contrôle automatique de SQLite, et une validation ne coûte plus qu'une écriture du journal.
+
+    Elle sert aussi de filet aux écritures validées sans attendre le disque (relax, relais des sessions distantes) : une
+    seconde au plus après, une ligne validée ici en mode sûr synchronise le journal, donc tout ce qui la précède."""
+
+    def __init__(self):
+        self.pid = os.getpid()
+        self.healthy = False
+        self.held = None                        # fichier tenu (chemin, périphérique, inode)
+        self._warned = 0.0
+        self.ready, self.dirty, self.halt = threading.Event(), threading.Event(), threading.Event()
+        self.thread = threading.Thread(target=self._run, name="loco-db", daemon=True)
+
+    def alive(self):
+        return self.pid == os.getpid() and self.thread.is_alive()       # un fil ne survit pas à un fork
+
+    def _run(self):
+        conn = None
+        while not self.halt.is_set():
+            try:
+                if conn is not None and _db_file() != self.held:        # base remplacée : lâcher l'ancienne, tenir la nouvelle
+                    conn.close()
+                    conn = None
+                if conn is None:
+                    self.held = _db_file()
+                    conn = sqlite3.connect(config.DB_PATH, timeout=30)
+                    conn.execute("PRAGMA synchronous = FULL")
+                    conn.execute("SELECT COUNT(*) FROM sqlite_master").fetchall()      # ouvre vraiment la base et son journal
+                if not self.dirty.is_set():
+                    self.healthy = True                                 # après un défaut : seulement une fois rattrapé
+                self.ready.set()
+                if self.dirty.wait(WATCH_SECONDS) and not self.halt.is_set():
+                    if self.healthy:
+                        self.halt.wait(SYNC_SECONDS)                    # regrouper : une synchronisation par seconde au plus
+                    self.dirty.clear()
+                    self._sync(conn)
+                    self.healthy = True
+                self._trim(conn)
+            except (sqlite3.Error, OSError) as e:
+                # Disque plein, base retenue trop longtemps, fichier absent… : relax() refuse tant que cela dure (chaque
+                # validation attend de nouveau le disque) et on réessaie.
+                if self.healthy or time.monotonic() - self._warned > 600:       # une ligne au début, puis toutes les 10 min
+                    self._warned = time.monotonic()
+                    logging.getLogger(__name__).warning("base : connexion permanente en défaut (%s) ; les validations "
+                                                        "attendent de nouveau le disque, nouvel essai toutes les %s s", e, RETRY_SECONDS)
+                self.healthy = False
+                self.dirty.set()
+                if conn is not None:
+                    with suppress(sqlite3.Error):
+                        conn.close()
+                    conn = None
+                self.ready.set()
+                self.halt.wait(RETRY_SECONDS)
+        self.healthy = False
+        if conn is not None:
+            with suppress(sqlite3.Error):
+                if self.dirty.is_set():
+                    self._sync(conn)
+            with suppress(sqlite3.Error):
+                conn.close()                    # dernière connexion du processus : SQLite recopie son journal et le range
+
+    @staticmethod
+    def _sync(conn):
+        with conn:
+            conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (SYNC_KEY, str(int(time.time()))))
+
+    @staticmethod
+    def _trim(conn):
+        """Journal devenu gros (base réécrite d'un bloc par la réplication, lecteurs toujours présents aux points de
+        contrôle automatiques) : le recopier en entier dans la base et le remettre à zéro. Les écritures attendent le
+        temps de cette recopie ; si la base est occupée, ce sera pour la ronde suivante."""
+        try:
+            large = os.path.getsize(config.DB_PATH + "-wal") > WAL_LIMIT
+        except OSError:
+            return
+        if large:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+
+
+_keeper = None
+_keeper_lock = threading.Lock()
+_release_at_exit = False
+
+
+def keep_open():
+    """Tient la base ouverte : à appeler par le processus qui sert le portail (app.py), après les migrations ; jamais par
+    un outil en ligne de commande, qui ouvre et referme la base comme avant. Renvoie vrai si la base est tenue."""
+    global _keeper, _release_at_exit
+    with _keeper_lock:
+        if _keeper is None or not _keeper.alive():
+            if not _release_at_exit:
+                atexit.register(release)        # arrêt du service : journal recopié et rangé, comme à chaque fermeture avant
+                _release_at_exit = True
+            keeper = _Keeper()
+            try:
+                keeper.thread.start()
+            except RuntimeError as e:           # plus de fil disponible : le portail sert quand même, comme avant
+                logging.getLogger(__name__).warning("base : connexion permanente impossible (%s)", e)
+                return False
+            _keeper = keeper
+        keeper = _keeper
+    keeper.ready.wait(35)
+    return keeper.healthy
+
+
+def release():
+    """Rend la base : dernière synchronisation puis fermeture de la connexion permanente (arrêt du service, tests)."""
+    global _keeper
+    with _keeper_lock:
+        keeper, _keeper = _keeper, None
+    if keeper is not None and keeper.alive():
+        keeper.halt.set()
+        keeper.dirty.set()
+        keeper.thread.join(40)
+
+
+def relax(conn=None):
+    """Écritures que l'agent renvoie de lui-même au contact suivant (présence, adresse, mesures) : validées sans attendre
+    le disque, puis synchronisées dans la seconde par la connexion permanente. Sans cette connexion (ligne de commande,
+    tests), tant qu'elle est en défaut, ou si une transaction est déjà ouverte (SQLite ne change pas de mode en cours de
+    route), rien ne change : la validation attend le disque. Renvoie vrai si le relâchement est en place."""
+    keeper, conn = _keeper, conn or db()
+    if keeper is None or not keeper.healthy or not keeper.alive() or conn.in_transaction:
+        return False
+    conn.execute("PRAGMA synchronous = NORMAL")
+    return True
+
+
+def durable(conn=None):
+    """Fin du relâchement sur cette connexion (hors transaction) : la prochaine validation attend le disque, et met du même
+    coup à l'abri tout ce qui a été validé avant elle."""
+    (conn or db()).execute("PRAGMA synchronous = FULL")
 
 
 def migrate():

@@ -1,4 +1,5 @@
-"""Petits défauts : commandes sans réponse, filtres hors ligne et redémarrage, infobulle, pluriels, processeur, cache vide."""
+"""Petits défauts : commandes sans réponse, filtres hors ligne et redémarrage, infobulle, pluriels, processeur, cache vide,
+postes Linux comptés sur la page des paquets."""
 import datetime
 import re
 from unittest import mock
@@ -8,7 +9,8 @@ import test_i18n
 import test_portal as fixture
 from test_fleet import FleetTest, Agent, LINUX, status_of
 from test_fleet_pages import add_devices, hosts
-from loco import alerts, dashboard, fleet, schedules, util
+from test_scope import ScopeTest
+from loco import alerts, dashboard, fleet, linux, rpmrepo, schedules, util
 from loco.db import transaction
 
 G = 1024 ** 3
@@ -209,3 +211,54 @@ class TestNewInstallStorage(FleetTest):
 
     def test_load_uses_the_same_decimal_as_the_live_refresh(self):
         self.assertIn('<span data-bind="cpu.load1">0,31</span>', self.page({}))
+
+
+class TestLinuxFleetCounters(ScopeTest):
+    """Page Paquets Linux : les postes Debian/Ubuntu (famille « debian ») et Red Hat (« rhel ») du parc sont comptés,
+    dans le parc du compte."""
+
+    def setUp(self):
+        super().setUp()                 # pc-bat-b-01 et pc-compta sous Windows ; pc-bat-b-02 et srv-web sous Debian 13
+        for name, ip, family, system in (("srv-rocky", "192.168.43.61", "rhel", "Rocky Linux 9.4 (Blue Onyx)"),
+                                         ("srv-ubuntu", "192.168.43.62", "debian", "Ubuntu 24.04.1 LTS (noble)")):
+            Agent(dict(LINUX, hostname=name, os={"family": family, "name": system}), ip).enroll()
+        with transaction() as conn:
+            conn.execute("DELETE FROM apt_repositories")
+            conn.execute("INSERT INTO apt_repositories (distribution, suite, version, created_at) VALUES ('debian', 'trixie', '13', '')")
+        self.addCleanup(self.forget_repositories)
+
+    @staticmethod
+    def forget_repositories():
+        with transaction() as conn:
+            conn.execute("DELETE FROM apt_repositories")
+
+    @staticmethod
+    def linux_devices(page):
+        return int(re.search(r"Postes Linux du parc</(?:dt><dd|div><div class=\"v\")>(\d+)", page).group(1))
+
+    def test_linux_devices_of_the_fleet_are_counted(self):
+        page = self.admin.c.get("/linux?repository=debian/trixie").get_data(as_text=True)
+        self.assertEqual(self.linux_devices(page), 4)
+        self.assertIn("· 2 postes du parc sur cette version", page)       # les deux Debian 13, pas l'Ubuntu ni le Rocky
+
+    def test_a_removed_or_windows_device_is_not_counted(self):
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET state='removed' WHERE hostname='srv-web'")
+        page = self.admin.c.get("/linux?repository=debian/trixie").get_data(as_text=True)
+        self.assertEqual(self.linux_devices(page), 3)
+        self.assertIn("· 1 poste du parc sur cette version", page)
+
+    def test_red_hat_devices_are_counted_by_major_version(self):
+        with fixture.loco.app.test_request_context():
+            from flask import g
+            with transaction() as conn:
+                g.user = conn.execute("SELECT * FROM users WHERE username='admin'").fetchone()
+            self.assertEqual(rpmrepo._devices_on({"name": "el9", "major": "9"}), 1)
+            self.assertEqual(rpmrepo._devices_on({"name": "el8", "major": "8"}), 0)
+            self.assertEqual(linux._devices_on({"distribution": "ubuntu", "suite": "noble", "version": "24.04"}), 1)
+
+    def test_a_limited_profile_only_counts_its_own_fleet(self):
+        role_id, tech = self.technician(extra={"linux.view"})             # bâtiment B (b1 Windows, b2 Debian) + srv-web
+        page = tech.c.get("/linux?repository=debian/trixie").get_data(as_text=True)
+        self.assertEqual(self.linux_devices(page), 2)
+        self.assertIn("· 2 postes du parc sur cette version", page)

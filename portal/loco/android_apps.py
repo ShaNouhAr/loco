@@ -1140,6 +1140,7 @@ def android_source_check():
 @login_required
 def android_source_add():
     conn = lock_access("android.manage")
+    conn.rollback()                 # droits vérifiés ; le dépôt se relit sans retenir la base (réseau, jusqu'à 60 s)
     try:
         url = _clean_url(request.form.get("url", ""))
         fingerprint = _clean_fingerprint(request.form.get("fingerprint", ""))
@@ -1149,6 +1150,9 @@ def android_source_add():
         if conn.execute("SELECT 1 FROM android_sources WHERE url=?", (url,)).fetchone():
             raise ValueError(_("Cette source est déjà dans loco."))
         read_entry(_fetch(url + "/entry.jar", MAX_ENTRY), fingerprint)        # la clé n'a pas changé depuis la lecture
+        conn = lock_access("android.manage")
+        if conn.execute("SELECT 1 FROM android_sources WHERE url=?", (url,)).fetchone():   # ajoutée entre-temps
+            raise ValueError(_("Cette source est déjà dans loco."))
     except (OSError, ValueError, zipfile.BadZipFile) as e:
         conn.rollback()
         flash(_("Source non ajoutée : %(e)s", e=e), "error")

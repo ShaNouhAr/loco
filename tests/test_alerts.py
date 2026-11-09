@@ -1,11 +1,14 @@
-"""Alertes : chiffrement des secrets, évaluation des règles, anti-répétition et canaux d'envoi."""
+"""Alertes : chiffrement des secrets, évaluation des règles, anti-répétition, canaux d'envoi, et envoi qui ne retient
+jamais la base."""
 import datetime
+import sqlite3
+import time
 import unittest
 from unittest import mock
 
 from test_portal import Browser, ADMIN_PW
 import loco
-from loco import alerts
+from loco import alerts, config
 from loco.db import transaction
 
 
@@ -83,42 +86,109 @@ class TestEvaluate(AlertsTest):
 
 
 class TestDispatch(AlertsTest):
-    def test_enqueue_send_and_cooldown(self):
+    def failing_login(self, channel="webhook"):
+        """Une alerte « échecs de connexion » due, et son canal d'envoi activé."""
         cfg = only(alerts.defaults(), "login_failures", count=1)
-        cfg["email"].update(enabled=True, host="smtp.test", recipients="a@b", min_severity="info")
+        if channel == "email":
+            cfg["email"].update(enabled=True, host="smtp.test", recipients="a@b", min_severity="info")
+        else:
+            cfg["webhook"].update(enabled=True, url="https://hook.test", min_severity="info")
         with transaction() as conn:
             alerts.save(cfg, conn)
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with transaction() as conn:
             conn.execute("INSERT INTO audit(at,username,ip,action,detail) VALUES (?,?,?,?,?)",
-                         (now, "x", "1.2.3.4", "connexion.echec", ""))
+                         (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "x", "1.2.3.4", "connexion.echec", ""))
+
+    def outbox(self):
+        with transaction() as conn:
+            return conn.execute("SELECT * FROM alert_outbox ORDER BY id").fetchall()
+
+    def test_enqueue_send_and_cooldown(self):
+        self.failing_login("email")
         with mock.patch("loco.alerts.send_email") as sent:
-            with self.ctx(), transaction() as conn:
-                alerts.dispatch(conn)
+            with self.ctx():
+                alerts.dispatch()
             self.assertEqual(sent.call_count, 1)
-            with transaction() as conn:
-                self.assertEqual(conn.execute("SELECT COUNT(*) FROM alert_outbox").fetchone()[0], 0)  # vidée
-            with self.ctx(), transaction() as conn:                                                   # 2e passage : anti-répétition
-                alerts.dispatch(conn)
+            self.assertEqual(self.outbox(), [])                # vidée
+            with self.ctx():                                   # 2e passage : anti-répétition
+                alerts.dispatch()
             self.assertEqual(sent.call_count, 1)
 
     def test_failed_send_is_retried_not_lost(self):
-        cfg = only(alerts.defaults(), "login_failures", count=1)
-        cfg["webhook"].update(enabled=True, url="https://hook.test", min_severity="info")
-        with transaction() as conn:
-            alerts.save(cfg, conn)
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with transaction() as conn:
-            conn.execute("INSERT INTO audit(at,username,ip,action,detail) VALUES (?,?,?,?,?)",
-                         (now, "x", "1.2.3.4", "connexion.echec", ""))
+        self.failing_login()
         with mock.patch("loco.alerts.send_webhook", side_effect=OSError("boom")):
-            with self.ctx(), transaction() as conn:
-                alerts.dispatch(conn)
-            with transaction() as conn:
-                row = conn.execute("SELECT attempts, last_error FROM alert_outbox").fetchone()
-            self.assertIsNotNone(row)                          # gardée pour réémission
+            with self.ctx():
+                alerts.dispatch()
+            row = self.outbox()[0]                             # gardée pour réémission
             self.assertEqual(row["attempts"], 1)
             self.assertIn("boom", row["last_error"])
+            self.assertGreater(float(row["next_try"]), time.time() + 30)   # reprogrammée, pas au passage suivant
+
+    def test_sending_never_holds_the_database(self):
+        """Un serveur de messagerie ou un webhook qui tarde ne doit retenir aucune écriture du portail."""
+        self.failing_login()
+        seen = {}
+
+        def slow(cfg, subject, body, severity):
+            other = sqlite3.connect(config.DB_PATH, timeout=0.2)          # une écriture d'ailleurs : contact d'un agent…
+            try:
+                other.execute("BEGIN IMMEDIATE")                          # « database is locked » si l'envoi tenait la base
+                seen["reserved"] = float(other.execute("SELECT next_try FROM alert_outbox").fetchone()[0]) > time.time()
+                other.rollback()
+            finally:
+                other.close()
+
+        with mock.patch("loco.alerts.send_webhook", side_effect=slow) as sent:
+            with self.ctx():
+                alerts.dispatch()
+        self.assertEqual(sent.call_count, 1)
+        self.assertEqual(seen, {"reserved": True})
+        self.assertEqual(self.outbox(), [])
+
+    def test_an_entry_being_sent_is_not_sent_twice(self):
+        self.failing_login()
+        subjects = []
+
+        def reentrant(cfg, subject, body, severity):
+            subjects.append(subject)
+            if len(subjects) == 1:
+                alerts.drain()                                 # un autre passage pendant l'envoi : entrée réservée
+
+        with mock.patch("loco.alerts.send_webhook", side_effect=reentrant):
+            with self.ctx():
+                alerts.dispatch()
+        self.assertEqual(len(subjects), 1)
+        self.assertEqual(self.outbox(), [])
+
+    def test_a_reservation_left_by_a_sudden_stop_expires(self):
+        self.failing_login()
+        with self.ctx(), transaction() as conn:
+            self.assertTrue(alerts.enqueue(conn))
+        entry = self.outbox()[0]["id"]
+        self.assertIsNotNone(alerts._claim(entry))             # envoi commencé… puis arrêt brutal : jamais soldée
+        with mock.patch("loco.alerts.send_webhook") as sent:
+            alerts.drain()
+            self.assertEqual(sent.call_count, 0)               # encore réservée
+            with transaction() as conn:
+                conn.execute("UPDATE alert_outbox SET next_try=?", (str(time.time() - 1),))
+            alerts.drain()
+            self.assertEqual(sent.call_count, 1)               # réservation expirée : renvoyée
+        self.assertEqual(self.outbox(), [])
+
+    def test_an_entry_is_given_up_after_too_many_attempts(self):
+        self.failing_login()
+        with self.ctx(), transaction() as conn:
+            alerts.enqueue(conn)
+        with transaction() as conn:
+            conn.execute("UPDATE alert_outbox SET attempts=?", (alerts.MAX_ATTEMPTS - 1,))
+        with mock.patch("loco.alerts.send_webhook", side_effect=OSError("boom")):
+            alerts.drain()
+        self.assertEqual(self.outbox(), [])
+
+    def test_nothing_is_sent_without_a_channel(self):
+        with mock.patch("loco.alerts.send_webhook") as sent, mock.patch("loco.alerts.send_email") as mailed:
+            with self.ctx():
+                alerts.dispatch()
+        self.assertEqual((sent.call_count, mailed.call_count), (0, 0))
 
 
 class TestRoutes(AlertsTest):

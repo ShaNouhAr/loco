@@ -21,8 +21,9 @@ class Store(context: Context) {
         get() = prefs.getString("ca", "") ?: ""
         set(v) = prefs.edit().putString("ca", v).apply()
 
-    /** Identifiant stable de cet appareil (32 hex), généré une fois. */
-    val uid: String
+    /** Identifiant stable de cet appareil (32 hex), généré une fois ; le serveur peut en attribuer un autre à
+     *  l'inscription (identifiant déjà pris par une fiche dont on n'a pas le jeton). */
+    var uid: String
         get() {
             prefs.getString("uid", null)?.let { return it }
             val b = ByteArray(16); SecureRandom().nextBytes(b)
@@ -30,6 +31,11 @@ class Store(context: Context) {
             prefs.edit().putString("uid", u).apply()
             return u
         }
+        set(v) = prefs.edit().putString("uid", v).apply()
+
+    /** Empreinte (SHA-256) du dernier jeton reçu, gardée quand l'appareil quitte loco : s'il s'y réinscrit, elle lui
+     *  permet de prouver que c'est bien lui, et il retrouve sa fiche. Elle ne permet pas de contacter le serveur. */
+    val proof: String get() = prefs.getString("proof", "") ?: ""
 
     /** Dernière mise à jour de l'application tentée (empreinte, instant) : pas de nouvel essai avant un jour. */
     var updateTried: String
@@ -42,6 +48,9 @@ class Store(context: Context) {
     val enrolled: Boolean get() = token.isNotEmpty() && server.isNotEmpty() && caPem.isNotEmpty()
 
     fun clear() {
-        prefs.edit().remove("server").remove("token").remove("ca").apply()
+        val edit = prefs.edit()
+        val secret = token.substringAfter('.', "")
+        if (secret.isNotEmpty()) edit.putString("proof", Apps.sha256(secret.toByteArray()))
+        edit.remove("server").remove("token").remove("ca").apply()
     }
 }

@@ -51,6 +51,13 @@ class TestRemote(FleetTest):
             self.assertEqual(self.exchange().status_code, 200)
         self.assertEqual(device(self.agent.uid)['last_seen'], seen)
 
+    def test_a_queued_action_asks_the_agent_to_check_in_now(self):
+        self.assertNotIn('checkin', self.exchange().get_json())              # rien en attente : pas de réveil
+        self.admin.post(f'/fleet/{self.dev_id}/action', {'action': 'scan'}, page=f'/fleet/{self.dev_id}')
+        self.assertTrue(self.exchange().get_json().get('checkin'))           # action en file → réveil demandé par le canal distant
+        self.agent.checkin()                                                 # le contact principal prend la commande (passe en « envoyé »)
+        self.assertNotIn('checkin', self.exchange().get_json())              # plus rien en attente : plus de réveil
+
     def test_terminal_and_desktop_relay_binary_bytes_without_replaying_input(self):
         for kind in ('terminal', 'desktop'):
             sid = self.open(kind)

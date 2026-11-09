@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import unittest
 import warnings
@@ -369,6 +370,31 @@ class TestPages(AppsTest):
                 row = conn.execute("SELECT * FROM android_sources WHERE url=?", (REPO,)).fetchone()
                 self.source = row["id"]
         self.assertEqual((row["name"], row["fingerprint"]), ("Maison", FINGERPRINT))
+
+    def test_reading_the_repository_never_holds_the_database(self):
+        """Ajout d'une source : le dépôt est relu par le réseau sans retenir la base (contacts des agents, actions)."""
+        with transaction() as conn:
+            conn.execute("DELETE FROM android_sources WHERE id=?", (self.source,))
+        real, free = android_apps._fetch, []
+
+        def fetch(url, limit, timeout=60):
+            other = sqlite3.connect(config.DB_PATH, timeout=0.2)          # une écriture d'ailleurs, pendant la lecture
+            try:
+                other.execute("BEGIN IMMEDIATE")                          # « database is locked » si la base était tenue
+                other.rollback()
+                free.append(url)
+            finally:
+                other.close()
+            return real(url, limit, timeout)
+
+        with Repo(), mock.patch("loco.android_apps.refresh_in_background"), mock.patch("loco.android_apps._fetch", side_effect=fetch):
+            self.admin.post("/android/sources/add", {"url": REPO, "fingerprint": FINGERPRINT, "confirmed": "1"},
+                            page="/android/sources")
+        self.assertEqual(free, [REPO + "/entry.jar"])
+        with transaction() as conn:
+            row = conn.execute("SELECT * FROM android_sources WHERE url=?", (REPO,)).fetchone()
+        self.assertEqual(row["fingerprint"], FINGERPRINT)
+        self.source = row["id"]
 
     def test_a_source_used_by_the_catalog_cannot_be_removed(self):
         self.sync()

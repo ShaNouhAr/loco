@@ -881,8 +881,9 @@ def _snapshot():
 def _rollback(work, source, log):
     """Relance les sources précédentes avec la configuration et la base antérieures."""
     log(t("Échec : restauration de la configuration et de la version précédentes.", "Failed: restoring the previous configuration and version.", "Error: restaurando la configuración y la versión anteriores."))
-    if ALPINE:
-        _run(["rc-service", "loco", "stop"], log)
+    # Le portail tient la base ouverte : l'arrêter avant de la réécrire, quel que soit le système (l'installation qui
+    # suit le relance).
+    _run(["rc-service", "loco", "stop"] if ALPINE else ["systemctl", "stop", "loco-portal"], log)
     shutil.copy2(os.path.join(work, "loco.conf"), CONF)
     snapshot_db = os.path.join(work, "portal.db")
     if os.path.isfile(snapshot_db):
@@ -892,6 +893,8 @@ def _rollback(work, source, log):
                 os.unlink(db + suffix)
         shutil.copyfile(snapshot_db, db)
     rc = _install(source, [], log)
+    if rc != 0 and not ALPINE:
+        _run(["systemctl", "start", "loco-portal"], log)      # installation en échec avant sa relance : portail remis en service
     log(t("Version précédente rétablie.", "Previous version restored.", "Versión anterior restablecida.") if rc == 0 else t("Retour arrière en échec : intervention nécessaire sur la console.", "Rollback failed: action needed on the console.", "Error en la reversión: se requiere intervención en la consola."))
     return rc == 0
 

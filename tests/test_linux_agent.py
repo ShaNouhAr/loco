@@ -344,6 +344,7 @@ class TestServiceLoop(unittest.TestCase):
              mock.patch.object(agent, "forward_logs", lambda *a: None), \
              mock.patch.object(agent, "_run_commands", lambda *a: False), \
              mock.patch.object(agent, "self_update", lambda *a: None), \
+             mock.patch.object(agent, "ensure_desktop_backend", lambda s: None), \
              mock.patch.object(agent, "_apt_lock_busy", lambda o: False), \
              mock.patch.object(agent, "booted_since", lambda last: False), \
              mock.patch.object(agent.time, "sleep", lambda s: None), \
@@ -373,6 +374,123 @@ class TestServiceLoop(unittest.TestCase):
                               state={"last_scan": agent.time.time(), "inventory_version": agent.VERSION})
         self.assertEqual((rc, len(calls)), (0, 1))                   # ni partiel (déjà connu) ni boucle
         self.assertNotIn("inventory", calls[0])                     # inventaire récent : pas refait
+
+
+class TestDesktopDeps(unittest.TestCase):
+    """Un poste KDE/GNOME en Wayland se voit installer tout seul, une fois, les composants du bureau distant."""
+
+    def _run(self, dpkg_out):
+        calls = []
+        def run(cmd, timeout=7200):
+            calls.append(cmd)
+            return (0, dpkg_out) if cmd[0] == "dpkg-query" else (0, "")
+        return calls, run
+
+    def _ensure(self, state, kde, gnome, dpkg_out):
+        calls, run = self._run(dpkg_out)
+        with mock.patch.object(agent, "family", lambda: "debian"), \
+             mock.patch.object(agent.shutil, "which", lambda n: "/usr/bin/apt-get"), \
+             mock.patch.object(agent, "wayland_environment", lambda: {"uid": 1000}), \
+             mock.patch.object(agent, "_kde_session", lambda uid: kde), \
+             mock.patch.object(agent, "_gnome_session", lambda uid: gnome), \
+             mock.patch.object(agent, "run", run), mock.patch.object(agent, "log", lambda *a: None):
+            agent.ensure_desktop_backend(state)
+        return [c for c in calls if c and c[0] == "apt-get"], calls
+
+    def test_installs_only_the_missing_kde_components(self):
+        state = {}
+        install, _ = self._ensure(state, kde=True, gnome=False, dpkg_out="python3-gi install ok installed\n")
+        self.assertEqual(len(install), 1)
+        for p in ("gir1.2-gstreamer-1.0", "gstreamer1.0-pipewire", "xdg-desktop-portal-kde"):
+            self.assertIn(p, install[0])
+        self.assertNotIn("python3-gi", install[0])                       # déjà présent
+        self.assertTrue(state.get("desktop_deps_at"))
+
+    def test_gnome_does_not_pull_the_kde_portal(self):
+        install, _ = self._ensure({}, kde=False, gnome=True, dpkg_out="")
+        self.assertNotIn("xdg-desktop-portal-kde", install[0])
+        self.assertIn("python3-gi", install[0])
+
+    def test_nothing_when_all_present(self):
+        out = "".join("%s install ok installed\n" % p for p in
+                      ("python3-gi", "gir1.2-gstreamer-1.0", "gstreamer1.0-pipewire", "xdg-desktop-portal-kde"))
+        install, _ = self._ensure({}, kde=True, gnome=False, dpkg_out=out)
+        self.assertEqual(install, [])
+
+    def test_skips_non_desktop_and_wlroots(self):
+        install, calls = self._ensure({}, kde=False, gnome=False, dpkg_out="")
+        self.assertEqual((install, calls), ([], []))                     # pas même le dpkg-query
+
+    def test_does_not_hammer_apt_after_a_recent_attempt(self):
+        install, _ = self._ensure({"desktop_deps_at": agent.time.time()}, kde=True, gnome=False, dpkg_out="")
+        self.assertEqual(install, [])
+
+
+class TestEnrollment(unittest.TestCase):
+    """Réinscription : l'agent prouve au serveur qu'il détient le jeton du poste, sans jamais le présenter, et garde
+    l'identité que le serveur retient."""
+
+    KEY = "cle-d-inscription"
+
+    def enroll(self, conf, server="https://loco.test:8443", answer=None):
+        calls, saved = [], {}
+
+        def call(target, path, data, token=None, timeout=60):
+            calls.append({"server": target, "path": path, "data": dict(data), "token": token})
+            return answer or {"token": data["uid"] + ".nouveau", "uid": data["uid"], "interval": 120}
+
+        with mock.patch.object(agent, "load", lambda path, default=None: dict(conf) if path == agent.CONFIG else {}), \
+             mock.patch.object(agent, "save", lambda path, data, mode=0o600: saved.__setitem__(path, data)), \
+             mock.patch.object(agent.os, "makedirs", lambda *a, **k: None), \
+             mock.patch.object(agent, "identity", lambda: {"hostname": "srv", "os": {"family": "debian", "name": "Debian"}}), \
+             mock.patch.object(agent, "call", call), mock.patch.object(agent, "log", lambda *a: None):
+            code = agent.enroll(server, self.KEY)
+        return code, calls[0], saved.get(agent.CONFIG)
+
+    def expected(self, uid, secret):
+        import hashlib
+        import hmac
+        return hmac.new(hashlib.sha256(secret.encode()).hexdigest().encode(),
+                        f"loco-enroll-v1\n{uid}\n{self.KEY}".encode(), hashlib.sha256).hexdigest()
+
+    def test_first_enrollment_has_nothing_to_prove(self):
+        code, sent, conf = self.enroll({})
+        self.assertEqual(code, 0)
+        self.assertNotIn("proof", sent["data"])
+        self.assertEqual((sent["path"], sent["token"]), ("/agent/api/enroll", None))
+        self.assertEqual((conf["uid"], conf["token"]), (sent["data"]["uid"], sent["data"]["uid"] + ".nouveau"))
+
+    def test_reenrollment_proves_it_holds_the_token_without_showing_it(self):
+        uid = "ab" * 16
+        old = {"server": "https://loco.test:8443", "uid": uid, "token": uid + ".secret-du-poste"}
+        code, sent, conf = self.enroll(old)
+        self.assertEqual(sent["data"]["uid"], uid)
+        self.assertEqual(sent["data"]["proof"], self.expected(uid, "secret-du-poste"))
+        self.assertIsNone(sent["token"])                                 # jamais d'en-tête Authorization à l'inscription
+        self.assertNotIn("secret-du-poste", repr(sent))
+        self.assertEqual((conf["uid"], conf["token"]), (uid, uid + ".nouveau"))
+
+    def test_the_proof_also_goes_to_a_new_address_of_the_server(self):
+        """Adresse du serveur changée pendant que le poste était éteint : la commande d'installation le réinscrit sous
+        la même identité. La preuve ne révèle rien à un autre serveur."""
+        uid = "ab" * 16
+        code, sent, conf = self.enroll({"server": "https://ancienne.test:8443", "uid": uid, "token": uid + ".secret-du-poste"},
+                                       server="https://nouvelle.test:8443")
+        self.assertEqual(sent["data"]["proof"], self.expected(uid, "secret-du-poste"))
+        self.assertEqual(conf["server"], "https://nouvelle.test:8443")
+
+    def test_the_identity_chosen_by_the_server_is_kept(self):
+        uid, fresh = "ab" * 16, "cd" * 16
+        code, sent, conf = self.enroll({"server": "https://loco.test:8443", "uid": uid},
+                                       answer={"token": fresh + ".nouveau", "uid": fresh, "interval": 120})
+        self.assertNotIn("proof", sent["data"])                          # plus de jeton : rien à prouver
+        self.assertEqual((conf["uid"], conf["token"]), (fresh, fresh + ".nouveau"))
+
+    def test_an_older_server_without_uid_in_its_answer_keeps_the_local_one(self):
+        uid = "ab" * 16
+        code, sent, conf = self.enroll({"server": "https://loco.test:8443", "uid": uid},
+                                       answer={"token": uid + ".nouveau", "interval": 120})
+        self.assertEqual(conf["uid"], uid)
 
 
 if __name__ == "__main__":

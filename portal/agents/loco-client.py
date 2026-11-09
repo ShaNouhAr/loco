@@ -19,6 +19,7 @@ import errno
 import fcntl
 import glob
 import hashlib
+import hmac
 import http.client
 import ipaddress
 import json
@@ -1474,6 +1475,8 @@ def service():
         return 0
     save(STATE, state)
     self_update(conf, answer.get("agent_version"))
+    ensure_desktop_backend(state)                               # poste KDE/GNOME Wayland : composants du bureau distant prêts
+    save(STATE, state)
     # Contacts adaptatifs : tant que le serveur demande un intervalle court (action en attente, enchaînement d'une
     # commande), recontacter vite SANS refaire l'inventaire, jusqu'au retour au repos ou à la fin de la fenêtre active.
     # Ensuite l'agent rend la main et la minuterie systemd reprend la cadence de repos.
@@ -1508,6 +1511,13 @@ def enroll(server, key):
         log(t("système non pris en charge (APT ou DNF requis).", "unsupported system (APT or DNF required).", "sistema no admitido (se requiere APT o DNF)."))
         return 1
     data.update(key=key, uid=uid)
+    secret = str(conf.get("token") or "").partition(".")[2]
+    if secret:
+        # Réinscription : preuve que ce poste détient son jeton actuel (HMAC de son empreinte, jamais le jeton lui-même :
+        # elle ne sert à rien à un autre serveur). Le serveur garde alors la fiche du poste ; sans elle, il attribue
+        # une identité neuve.
+        data["proof"] = hmac.new(hashlib.sha256(secret.encode()).hexdigest().encode(),
+                                 f"loco-enroll-v1\n{uid}\n{key}".encode(), hashlib.sha256).hexdigest()
     try:
         answer = call(server, "/agent/api/enroll", data)
     except urllib.error.HTTPError as e:
@@ -1516,7 +1526,7 @@ def enroll(server, key):
     except (OSError, ValueError) as e:
         log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
         return 1
-    save(CONFIG, {"server": server.rstrip("/"), "uid": uid, "token": answer["token"],
+    save(CONFIG, {"server": server.rstrip("/"), "uid": answer.get("uid") or uid, "token": answer["token"],
                   "enrolled": datetime.datetime.now().isoformat(timespec="seconds")})
     save(STATE, {"rescan": True})
     log(t(f"poste inscrit auprès de {server}.", f"machine enrolled with {server}.", f"equipo inscrito en {server}."))
@@ -1558,6 +1568,31 @@ KillMode=control-group
 [Install]
 WantedBy=multi-user.target
 """
+
+
+def ensure_desktop_backend(state):
+    """Sur un poste KDE ou GNOME en Wayland, installe une seule fois les composants du bureau distant (PyGObject,
+    GStreamer PipeWire, et le portail pour KDE) afin d'éviter l'erreur « composants manquants » quand un administrateur
+    prend la main. Rien n'est installé sur un poste sans bureau, ni sous wlroots (grim + /dev/uinput), ni sous X11."""
+    if family() != "debian" or shutil.which("apt-get") is None:
+        return
+    try:
+        uid = wayland_environment()["uid"]
+    except RuntimeError:
+        return                                                   # aucune session Wayland ouverte : rien à préparer
+    kde = _kde_session(uid)
+    if not kde and not _gnome_session(uid):
+        return                                                   # wlroots ou autre : ces composants sont inutiles
+    want = ["python3-gi", "gir1.2-gstreamer-1.0", "gstreamer1.0-pipewire"] + (["xdg-desktop-portal-kde"] if kde else [])
+    _, out = run(["dpkg-query", "-W", "-f", "${Package} ${Status}\n"] + want, timeout=30)
+    installed = {line.split(" ", 1)[0] for line in out.splitlines() if line.endswith("install ok installed")}
+    missing = [p for p in want if p not in installed]
+    if not missing or time.time() - state.get("desktop_deps_at", 0) < 6 * 3600:
+        return                                                   # déjà présents, ou tentative récente (ne pas marteler apt)
+    state["desktop_deps_at"] = time.time()
+    log(t("bureau distant : installation des composants Wayland (%s).", "remote desktop: installing Wayland components (%s).",
+          "escritorio remoto: instalando componentes Wayland (%s).") % ", ".join(missing))
+    run(["apt-get", "install", "-y", "-q", "-o", "DPkg::Lock::Timeout=120", "--no-install-recommends"] + missing, timeout=600)
 
 
 def ensure_remote_service():
@@ -1791,7 +1826,7 @@ def remote_service():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return 0
-        sessions, last_ok, last_activity = {}, time.monotonic(), time.monotonic()
+        sessions, last_ok, last_activity, last_checkin = {}, time.monotonic(), time.monotonic(), 0.0
         transport = RemoteTransport()
         live, sampler = False, LiveSampler()
         loaded = os.stat(PROGRAM)
@@ -1812,6 +1847,12 @@ def remote_service():
                         payload["metrics"] = sampler.sample()
                     answer = transport.exchange(conf["server"], payload, conf["token"])
                     last_ok = time.monotonic()
+                    if answer.get("checkin") and time.monotonic() - last_checkin > 4:
+                        # Le serveur signale une action en attente : déclencher tout de suite le contact principal
+                        # (sans attendre la minuterie) ; systemd relance le service oneshot, idempotent s'il tourne déjà.
+                        last_checkin = time.monotonic()
+                        subprocess.run(["systemctl", "start", "--no-block", "loco-client.service"],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     if not answer.get("live"):
                         sampler.previous = None                # prochain direct : repartir d'un relevé frais
                     live = bool(answer.get("live"))

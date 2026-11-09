@@ -197,11 +197,10 @@ def _devices_on(repo):
     """Postes du parc de la famille Red Hat sur cette version majeure (d'après le système annoncé par l'agent)."""
     from . import features
     from .auth import can
+    from .linux import fleet_names
     if not repo or not features.enabled("fleet") or not can("fleet.view"):
         return None
-    with transaction() as conn:
-        names = [r["os_name"].lower() for r in conn.execute(
-            "SELECT os_name FROM devices WHERE state='active' AND os_family='linux'")]
+    names = fleet_names("rhel")
     major = re.compile(rf"(?<![\d.]){re.escape(repo['major'])}(\.\d+)*(?![\d.])")
     return sum(1 for n in names if any(f in n for f in RED_HAT_FAMILY) and major.search(n))
 
