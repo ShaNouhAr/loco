@@ -1443,7 +1443,7 @@ def _group_names():
 
 
 def _urgency(row):
-    return SEVERITY.get(row["color"], 9), (row["d"]["hostname"] or "").lower()
+    return SEVERITY.get(row["color"], 9), (row["d"]["label"] or row["d"]["hostname"] or "").lower()
 
 
 def _enrich(rows, names=None):
@@ -1482,7 +1482,7 @@ def _search(rows, query, names):
     found = []
     for r in rows:
         d = r["d"]
-        text = _fold(" ".join([d["hostname"] or "", d["os_name"] or "", d["addresses"] or "", d["ip"] or ""]
+        text = _fold(" ".join([d["label"] or "", d["hostname"] or "", d["os_name"] or "", d["addresses"] or "", d["ip"] or ""]
                               + [g["name"] for g in names.get(d["id"], [])]))
         if all(term in text for term in terms):
             found.append(r)
@@ -1782,6 +1782,20 @@ def fleet_action(dev_id):
         flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
+    return _back_to_origin(dev_id)
+
+
+@app.route("/fleet/<int:dev_id>/rename", methods=["POST"])
+@login_required
+def fleet_rename(dev_id):
+    dev = _get(dev_id)
+    label = " ".join(request.form.get("label", "").split())[:80]     # un nom sur une ligne, espaces normalisés
+    if label != dev["label"]:
+        db().execute("UPDATE devices SET label=? WHERE id=?", (label, dev_id))
+        db().commit()
+        base = dev["hostname"] or dev["uid"][:8]
+        audit("parc.renommage", f"{base} → {label}" if label else f"{base} : nom personnalisé retiré")
+    flash(_("Nom personnalisé enregistré.") if label else _("Nom personnalisé retiré."), "ok")
     return _back_to_origin(dev_id)
 
 

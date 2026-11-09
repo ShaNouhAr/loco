@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.141.0 — 2026-11-09
+
+- **Nom personnalisé d'un poste** : dans *Mon parc*, vous pouvez donner à un appareil un nom plus parlant que son nom d'hôte. Sur la fiche du poste, *Plus › Nom personnalisé…* ouvre une petite fenêtre ; le nom saisi s'affiche à la place du nom d'hôte dans la liste, la fiche et la recherche, **tout en gardant le nom d'hôte visible** juste en dessous. Laisser le champ vide revient au nom d'hôte. Nouveau droit **Nommer les appareils**, accordé d'office à l'Administrateur et à l'Opérateur.
+
 ## 2.140.0 — 2026-11-09
 
 - **Bureau distant Wayland installable hors-ligne** : le paquet `.deb` de l'agent Linux **embarque désormais `grim`** (la capture d'écran des bureaux Wayland wlroots — Sway, Hyprland, Wayfire, river). Sur un poste **sans accès à un dépôt** qui fournit « grim », l'agent s'installe quand même et le bureau distant de ces compositeurs fonctionne. `grim` n'est plus une dépendance du paquet : l'agent utilise celui du système s'il est présent, sinon le binaire embarqué correspondant à son architecture (amd64 ou arm64).

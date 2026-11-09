@@ -1188,5 +1188,24 @@ class TestUpdateSelected(FleetTest):
         self.assertEqual(self.admin.post("/fleet/update-selected", {}, page="/fleet").status_code, 400)
 
 
+class TestRename(FleetTest):
+    def test_custom_name_is_shown_set_cleared_and_searchable(self):
+        a = Agent(dict(LINUX, hostname="srv-07"), "192.168.43.61")
+        a.enroll()
+        dev_id = device(a.uid)["id"]
+        self.admin.post(f"/fleet/{dev_id}/rename", {"label": "  Poste de Nina  "}, page=f"/fleet/{dev_id}")
+        self.assertEqual(device(a.uid)["label"], "Poste de Nina")           # espaces normalisés
+        card = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("Poste de Nina", card)                                # nom personnalisé en titre
+        self.assertIn("srv-07", card)                                       # nom d'hôte toujours visible
+        listing = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Poste de Nina", listing)
+        found = self.admin.c.get("/fleet?q=nina").get_data(as_text=True)    # cherchable par le nom personnalisé
+        self.assertIn(f"/fleet/{dev_id}", found)
+        self.admin.post(f"/fleet/{dev_id}/rename", {"label": "   "}, page=f"/fleet/{dev_id}")
+        self.assertEqual(device(a.uid)["label"], "")                        # vidé → retour au nom d'hôte
+        self.assertIn("srv-07", self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()

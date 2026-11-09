@@ -603,6 +603,10 @@ MIGRATIONS = [
     """
     ALTER TABLE android_adb ADD COLUMN unlock TEXT NOT NULL DEFAULT '';
     """,
+    # 42 : nom personnalisé d'un appareil (« friendly name »), affiché à la place du nom d'hôte dans Mon parc.
+    """
+    ALTER TABLE devices ADD COLUMN label TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

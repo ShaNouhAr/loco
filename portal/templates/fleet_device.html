@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ dev.hostname }}{% endblock %}
+{% block title %}{{ dev.label or dev.hostname or dev.uid[:8] }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% from "_charts.html" import line_chart, legend %}
 {% from "_macros.html" import pkg_progress with context %}
@@ -15,11 +15,13 @@
 {% set windows = dev.os_family == 'windows' %}
 {% set android = dev.os_family == 'android' %}
 {% set active = dev.state == 'active' %}
+{% set devname = dev.label or dev.hostname or dev.uid[:8] %}
 
 <div class="device-head">
   <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">{{ _("Mon parc") }}</a></p>
-    <h1><span>{{ dev.hostname or dev.uid[:8] }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
+    <h1><span>{{ devname }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
+    {% if dev.label and dev.hostname and dev.label != dev.hostname %}<p class="small muted mono device-hostname">{{ dev.hostname }}</p>{% endif %}
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
       <span class="mono">{{ address or '—' }}</span>
@@ -57,10 +59,11 @@
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
-    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop') %}
+    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
       <div class="menu-list" role="menu">
+        {% if can('fleet.rename') %}<button type="button" class="menu-item" data-open="#rename">{{ _("Nom personnalisé…") }}</button>{% endif %}
         {% if active %}
         {% if can('remote.desktop') and consent_ready and not dev.remote_consent %}
         <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}">
@@ -73,10 +76,10 @@
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
         {% if android_view and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose_android', device=dev.id) }}">{{ _("Installer des applications…") }}</a>{% endif %}
         {% if adb_view %}<button type="button" class="menu-item" data-open="#adb-setup">{{ _("Débogage adb…") }}</button>{% endif %}
-        {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=dev.hostname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer')) }}{% endif %}
-        {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=dev.hostname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
+        {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer')) }}{% endif %}
+        {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=devname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
         {% elif can('fleet.remove') %}
-        {{ action('forget', _('Oublier ce poste…'), 'menu-item danger', confirm=_('Oublier %(name)s ?', name=dev.hostname), text=_('Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n\'existe plus.'), ok=_('Oublier')) }}
+        {{ action('forget', _('Oublier ce poste…'), 'menu-item danger', confirm=_('Oublier %(name)s ?', name=devname), text=_('Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n\'existe plus.'), ok=_('Oublier')) }}
         {% endif %}
       </div>
     </details>
@@ -487,7 +490,7 @@
       <div class="wake-policy">
         {% if wake_controls.disable %}<span class="muted small">{{ _("L’agent maintient le réveil activé, y compris après un redémarrage.") }}</span>{% endif %}
         {% if net.wake_error and wake_offer.ok %}<span class="st warn small">{{ _("L’agent n’a pas pu activer le réveil partout : %(e)s", e=net.wake_error) }}</span>{% endif %}
-        <form method="post" action="{{ url_for('fleet_wake_policy', dev_id=dev.id) }}"{% if wake_controls.enable %} data-confirm="{{ _('Activer le réveil sur %(name)s ?', name=dev.hostname) }}" data-confirm-text="{{ _('L’agent active le réveil sur ses cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}"{% endif %}>
+        <form method="post" action="{{ url_for('fleet_wake_policy', dev_id=dev.id) }}"{% if wake_controls.enable %} data-confirm="{{ _('Activer le réveil sur %(name)s ?', name=devname) }}" data-confirm-text="{{ _('L’agent active le réveil sur ses cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}"{% endif %}>
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="enabled" value="{{ '1' if wake_controls.enable else '0' }}">
           <button class="btn sm"><span class="spin"></span>{{ _("Activer le réveil") if wake_controls.enable else _("Ne plus l’activer") }}</button>
         </form>
@@ -582,7 +585,7 @@
     {% endif %}
   </div>
   <div class="dlg-f">
-    {% if adb_view.configured %}<form method="post" action="{{ url_for('fleet_adb_forget', dev_id=dev.id) }}" data-ajax data-confirm="{{ _('Oublier le débogage adb de %(name)s ?', name=dev.hostname) }}" data-confirm-text="{{ _('Les terminaux adb ouverts sont fermés. Sur l’appareil, retirez aussi loco de la liste des appareils associés.') }}" data-confirm-ok="{{ _('Oublier') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ _("Oublier") }}</button></form>{% endif %}
+    {% if adb_view.configured %}<form method="post" action="{{ url_for('fleet_adb_forget', dev_id=dev.id) }}" data-ajax data-confirm="{{ _('Oublier le débogage adb de %(name)s ?', name=devname) }}" data-confirm-text="{{ _('Les terminaux adb ouverts sont fermés. Sur l’appareil, retirez aussi loco de la liste des appareils associés.') }}" data-confirm-ok="{{ _('Oublier') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn">{{ _("Oublier") }}</button></form>{% endif %}
     <button type="button" class="btn" data-close>{{ _("Fermer") }}</button>
   </div>
 </dialog>
@@ -667,7 +670,23 @@
   <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Fermer") }}</button></div>
 </dialog>
 {% endif %}
-{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels du catalogue déjà installés.', name=dev.hostname)) }}{% endif %}
+{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels du catalogue déjà installés.', name=devname)) }}{% endif %}
+{% if can('fleet.rename') %}
+<dialog id="rename" class="app-dialog">
+  <div class="dlg-h">
+    <div><h2>{{ _("Nom personnalisé") }}</h2><p>{{ _("Un nom plus parlant pour ce poste, affiché à sa place dans Mon parc. Son nom d'hôte reste visible.") }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <form method="post" action="{{ url_for('fleet_rename', dev_id=dev.id) }}">
+    <div class="dlg-b">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>{{ _("Nom personnalisé") }}</span><input type="text" name="label" value="{{ dev.label }}" maxlength="80" autocomplete="off" spellcheck="false" placeholder="{{ dev.hostname or dev.uid[:8] }}" autofocus></label>
+      <p class="small muted">{{ _("Laissez vide pour revenir au nom d'hôte (%(host)s).", host=dev.hostname or dev.uid[:8]) }}</p>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary">{{ _("Enregistrer") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {% if files_ready and dev.state == 'active' %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endif %}

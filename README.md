@@ -336,6 +336,9 @@ distribués ; supprimer le groupe aussi.
 - **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
   facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
   Ces actions utilisent une liste fermée ; les administrateurs disposent aussi du terminal interactif décrit ci-dessous.
+- **Nom personnalisé** : la fiche d'un poste (menu *Plus → Nom personnalisé…*) permet de lui donner un nom plus
+  parlant, affiché à la place de son nom d'hôte dans Mon parc et dans la recherche ; le nom d'hôte reste visible.
+  Droit *Nommer les appareils* (Administrateur et Opérateur).
 - **Mises à jour une par une, en direct** : sur la fiche d'un poste, l'onglet *Mises à jour* permet de cocher
   certaines mises à jour du système (paquets APT/RPM, applications Flatpak, ou mises à jour Windows) et de lancer
   *Mettre à jour la sélection* ; *Mettre à jour* fait toujours tout. Pendant l'exécution, la fiche suit l'avancement

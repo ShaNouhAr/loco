@@ -4315,5 +4315,14 @@
  "Commandes adb (Android)": "Comandos adb (Android)",
  "Lancer des commandes dans le shell adb d'un appareil Android appairé avec loco (utilisateur shell : pm, am, settings, input, dumpsys, logcat) et lire leur sortie.": "Ejecutar comandos en el shell adb de un dispositivo Android emparejado con loco (usuario shell: pm, am, settings, input, dumpsys, logcat) y leer su salida.",
  "Ouvrir un terminal adb": "Abrir un terminal adb",
- "Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage.": "Shell adb de un dispositivo Android (usuario «shell» de Android: aplicaciones, ajustes, registros) y su emparejamiento."
+ "Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage.": "Shell adb de un dispositivo Android (usuario «shell» de Android: aplicaciones, ajustes, registros) y su emparejamiento.",
+ "Nom d’hôte": "Nombre de host",
+ "Nom personnalisé…": "Nombre personalizado…",
+ "Nom personnalisé": "Nombre personalizado",
+ "Un nom plus parlant pour ce poste, affiché à sa place dans Mon parc. Son nom d'hôte reste visible.": "Un nombre más claro para este equipo, mostrado en su lugar en Mi parque. Su nombre de host sigue visible.",
+ "Laissez vide pour revenir au nom d'hôte (%(host)s).": "Deje vacío para volver al nombre de host (%(host)s).",
+ "Nom personnalisé enregistré.": "Nombre personalizado guardado.",
+ "Nom personnalisé retiré.": "Nombre personalizado eliminado.",
+ "Nommer les appareils": "Nombrar los dispositivos",
+ "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Dar un nombre personalizado a un dispositivo, mostrado en lugar de su nombre de host."
 }

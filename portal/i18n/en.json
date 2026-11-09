@@ -4315,5 +4315,14 @@
  "Commandes adb (Android)": "adb commands (Android)",
  "Lancer des commandes dans le shell adb d'un appareil Android appairé avec loco (utilisateur shell : pm, am, settings, input, dumpsys, logcat) et lire leur sortie.": "Run commands in the adb shell of an Android device paired with loco (shell user: pm, am, settings, input, dumpsys, logcat) and read their output.",
  "Ouvrir un terminal adb": "Open an adb terminal",
- "Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage.": "adb shell of an Android device (Android's “shell” user: apps, settings, logs) and its pairing."
+ "Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage.": "adb shell of an Android device (Android's “shell” user: apps, settings, logs) and its pairing.",
+ "Nom d’hôte": "Hostname",
+ "Nom personnalisé…": "Custom name…",
+ "Nom personnalisé": "Custom name",
+ "Un nom plus parlant pour ce poste, affiché à sa place dans Mon parc. Son nom d'hôte reste visible.": "A friendlier name for this device, shown in its place in My fleet. Its hostname stays visible.",
+ "Laissez vide pour revenir au nom d'hôte (%(host)s).": "Leave empty to go back to the hostname (%(host)s).",
+ "Nom personnalisé enregistré.": "Custom name saved.",
+ "Nom personnalisé retiré.": "Custom name removed.",
+ "Nommer les appareils": "Name devices",
+ "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Give a device a custom name, shown instead of its hostname."
 }

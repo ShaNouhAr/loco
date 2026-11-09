@@ -84,11 +84,12 @@
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
         <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner sur cette page') }}" title="{{ _('Tout sélectionner sur cette page') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
         <tbody>
-        {% for r in rows %}{% set d = r.d %}
+        {% for r in rows %}{% set d = r.d %}{% set devname = d.label or d.hostname or d.uid[:8] %}
           <tr>
-            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=d.hostname or d.uid[:8]) }}"></label></td>{% endif %}
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=devname) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
-              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ d.hostname or d.uid[:8] }}</a></span>
+              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ devname }}</a></span>
+              {% if d.label and d.hostname and d.label != d.hostname %}<span class="sub mono" title="{{ _('Nom d’hôte') }}">{{ d.hostname }}</span>{% endif %}
               <span class="sub" title="{{ d.os_name }}">{{ r.os_short }}</span>
               {% if r.groups %}<span class="fleet-groups">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a>{% endfor %}</span>{% endif %}</td>
             <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="{{ _('Adresse par laquelle loco voit le poste (routeur ou NAT)') }}">{{ _("via %(via)s", via=r.via) }}</span>{% endif %}<span class="sub" title="{{ d.last_seen }}">{{ _("vu %(seen)s", seen=r.seen) }}</span></td>
