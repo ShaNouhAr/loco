@@ -615,6 +615,33 @@ MIGRATIONS = [
     """
     ALTER TABLE android_adb ADD COLUMN prepared TEXT NOT NULL DEFAULT '';
     """,
+    # 44 : clés d'accès (passkeys, WebAuthn) des comptes locaux. passkey_handle : identifiant opaque du compte pour les
+    # appareils ; passkeys : clé publique (DER, base64) et compteur de chaque clé ; passkey_challenges : défis à usage
+    # unique en cours (éphémères).
+    """
+    ALTER TABLE users ADD COLUMN passkey_handle TEXT NOT NULL DEFAULT '';
+    CREATE TABLE passkeys (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        credential_id TEXT UNIQUE NOT NULL,
+        alg INTEGER NOT NULL,
+        public_key TEXT NOT NULL,
+        sign_count INTEGER NOT NULL DEFAULT 0,
+        name TEXT NOT NULL DEFAULT '',
+        synced INTEGER NOT NULL DEFAULT 0,
+        transports TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        last_used TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX passkeys_user ON passkeys(user_id);
+    CREATE TABLE passkey_challenges (
+        id TEXT PRIMARY KEY,
+        challenge TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        user_id INTEGER,
+        created REAL NOT NULL
+    );
+    """,
 ]
 
 

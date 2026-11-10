@@ -13,12 +13,14 @@
   </label>
   <button class="btn primary"><span class="spin"></span>{{ _("Se connecter") }}</button>
 </form>
-{% if login_sso %}
-<div class="auth-or" role="separator"><span>{{ _("ou") }}</span></div>
-<div class="auth-sso-btns">
+{% if login_sso or passkey_login %}
+<div class="auth-or" role="separator"{% if not login_sso %} hidden data-passkey-shown{% endif %}><span>{{ _("ou") }}</span></div>
+<div class="auth-sso-btns"{% if not login_sso %} hidden data-passkey-shown{% endif %}>
+  {% if passkey_login %}<button type="button" class="btn sso-btn" hidden data-passkey-shown data-passkey-login data-options="{{ url_for('login_passkey_options') }}" data-verify="{{ url_for('login_passkey') }}" data-csrf="{{ csrf }}" data-next="{{ request.args.get('next') or '' }}" data-failed="{{ _("La connexion par clé d'accès n'a pas abouti. Réessayez, ou utilisez votre mot de passe.") }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m14 9 2 2"/></svg><span class="spin"></span><span>{{ _("Se connecter avec une clé d'accès") }}</span></button>{% endif %}
   {% for d in login_sso %}<a class="btn sso-btn" href="{{ url_for('sso_start', directory_id=d.id, next=request.args.get('next') or None) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg><span>{{ _("Se connecter avec %(label)s", label=d.label) }}</span></a>{% endfor %}
 </div>
 {% endif %}
+{% if passkey_login %}<p class="note err" role="alert" hidden data-passkey-error></p>{% endif %}
 {% if login_directories or login_sso %}
 <div class="auth-sso">
   {% if login_directories %}<p><span class="auth-sso-k">SSO</span>{{ login_directories|join(', ') }}</p>{% endif %}
@@ -26,3 +28,4 @@
 </div>
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if passkey_login %}<script src="{{ url_for('static', filename='passkeys.js') }}?v={{ asset_v }}"></script>{% endif %}{% endblock %}

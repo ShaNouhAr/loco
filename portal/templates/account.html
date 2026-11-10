@@ -68,6 +68,42 @@
     </div>
   </section>
   {% endif %}
+  <section class="panel" id="cles-acces">
+    <div class="panel-h"><h2>{{ _("Clés d'accès") }} <span class="h-count">{{ passkeys|length }}</span></h2>
+      <div class="aside">{% if passkeys %}<span class="st ok">{{ _("connexion sans mot de passe") }}</span>{% else %}<span class="st">{{ _("aucune") }}</span>{% endif %}</div>
+    </div>
+    <div class="panel-b stack-sm">
+      <p class="muted small">{{ _("Une clé d'accès (passkey) vous connecte sans mot de passe : votre téléphone, votre ordinateur ou une clé de sécurité vous reconnaît par l'empreinte, le visage ou son code, et le prouve à loco. Rien de secret n'est gardé par loco, et elle vaut mot de passe et second facteur.") }}</p>
+      {% if passkey_state == 'address' %}
+      <p class="note warn">{{ _("Les clés d'accès demandent que loco soit ouvert par un nom, en HTTPS, avec un certificat reconnu par le navigateur : une adresse IP ne convient pas. Un administrateur peut déclarer ce nom dans Système › Réseau › Adresse du portail.") }}</p>
+      {% elif passkey_state == 'name' %}
+      <p class="note warn">{{ _("Pour ajouter ou utiliser une clé d'accès, ouvrez loco par l'adresse du portail : %(url)s.", url=passkey_origin) }}</p>
+      {% endif %}
+    </div>
+    {% if passkeys %}
+    <div class="table-wrap"><table>
+      <thead><tr><th>{{ _("Nom") }}</th><th class="hide-sm">{{ _("Ajoutée le") }}</th><th>{{ _("Dernière connexion") }}</th><th class="right">{{ _("Actions") }}</th></tr></thead>
+      <tbody>{% for k in passkeys %}
+        <tr><td>{{ k.name }}{% if k.synced %}<span class="sub sans">{{ _("synchronisée entre vos appareils") }}</span>{% endif %}</td>
+          <td class="muted nowrap hide-sm">{{ k.created_at|date_fr }}</td>
+          <td class="muted nowrap">{{ k.last_used|date_fr if k.last_used else _("jamais") }}</td>
+          <td class="right"><form method="post" action="{{ url_for('account_passkey_delete', key_id=k.id) }}" data-confirm="{{ _('Retirer la clé d’accès « %(name)s » ?', name=k.name) }}" data-confirm-text="{{ _('Elle ne permettra plus de se connecter à loco. Supprimez-la aussi de l’appareil ou du gestionnaire de mots de passe.') }}" data-confirm-ok="{{ _('Retirer') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Retirer") }}</button></form></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+    {% if passkey_state == 'ok' and not current_user.must_change and passkeys|length < passkey_max %}
+    <form class="panel-b row passkey-add" hidden data-passkey-add data-options="{{ url_for('account_passkey_options') }}" data-verify="{{ url_for('account_passkey_add') }}" data-failed="{{ _("La clé d'accès n'a pas été créée. Réessayez.") }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <span class="row inline-mfa">
+        <input type="text" name="name" maxlength="60" placeholder="{{ _('nom (ex. Téléphone)') }}" aria-label="{{ _('Nom de la clé d’accès') }}" autocomplete="off">
+        <input type="password" name="password" required autocomplete="current-password" placeholder="{{ _('mot de passe actuel') }}" aria-label="{{ _('Mot de passe actuel') }}">
+        <span class="small st err" role="alert" hidden data-passkey-error></span>
+      </span>
+      <button class="btn primary"><span class="spin"></span>{{ _("Ajouter une clé d'accès") }}</button>
+    </form>
+    <div class="panel-b" hidden data-passkey-unsupported><p class="note warn">{{ _("Ce navigateur ne propose pas les clés d'accès ici : il faut un navigateur récent et un certificat qu'il reconnaît.") }}</p></div>
+    {% endif %}
+  </section>
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Double authentification") }}</h2>
       <div class="aside">{% if current_user.mfa_enabled %}<span class="st ok">{{ _("activée") }}</span>{% else %}<span class="st warn">{{ _("désactivée") }}</span>{% endif %}</div>
@@ -153,3 +189,4 @@
   </section>
 </div>
 {% endblock %}
+{% block scripts %}{% if passkey_state == 'ok' %}<script src="{{ url_for('static', filename='passkeys.js') }}?v={{ asset_v }}"></script>{% endif %}{% endblock %}

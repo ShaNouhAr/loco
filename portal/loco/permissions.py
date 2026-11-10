@@ -206,7 +206,7 @@ ENDPOINTS = {
     "users_approve": "users.approve",
     "sso_settings": "sso.manage", "directory_add": "sso.manage", "directory_update": "sso.manage", "directory_toggle": "sso.manage",
     "directory_delete": "sso.manage", "directory_move": "sso.manage", "directory_move_down": "sso.manage", "directory_test": "sso.manage", "directory_check": "sso.manage", "directory_authentik": "sso.manage", "sso_link": "sso.manage", "sso_unlink": "sso.manage",
-    "users_reset": "users.reset", "users_mfa_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
+    "users_reset": "users.reset", "users_mfa_reset": "users.reset", "users_passkeys_reset": "users.reset", "users_delete": "users.delete", "journal": "audit.view",
     "journal_export": "audit.export", "journal_retention": "audit.configure",
     "scripts": "scripts.view", "script_editor": "scripts.view", "script_save": "scripts.edit", "script_delete": "scripts.edit",
     "script_compose": "scripts.run", "script_run_start": "scripts.run", "script_run": "scripts.view",
@@ -222,7 +222,9 @@ ENDPOINTS = {
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery",
                      "account_appearance", "account_appearance_background", "account_appearance_background_delete",
-                     "appearance_background", "sso_start", "sso_callback"}
+                     "appearance_background", "sso_start", "sso_callback",
+                     "login_passkey_options", "login_passkey", "account_passkey_options", "account_passkey_add",
+                     "account_passkey_rename", "account_passkey_delete"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
                       "wake": "fleet.wake", "wake-relay": "fleet.wake",

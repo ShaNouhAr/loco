@@ -215,8 +215,8 @@ def _record_failure(ip, username):
     db().commit()
 
 
-def _complete_login(row, ip, directory=None):
-    """Ouvre la session après validation complète (mot de passe, et 2FA le cas échéant)."""
+def _complete_login(row, ip, directory=None, passkey=None):
+    """Ouvre la session après validation complète (mot de passe et 2FA le cas échéant, ou clé d'accès)."""
     session.clear()
     session.permanent = True
     session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
@@ -227,7 +227,10 @@ def _complete_login(row, ip, directory=None):
                  (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ip, row["id"]))
     db().commit()
     g.user = row
-    audit("sso.connexion" if directory else "connexion")
+    if passkey:
+        audit("connexion.cle", passkey)
+    else:
+        audit("sso.connexion" if directory else "connexion")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -488,8 +491,10 @@ def users():
                         "ORDER BY u.pending DESC,u.username").fetchall()
     issued = session.pop("issued_password", None)
     from .directories import proposed_role
+    from .passkeys import counts as passkey_counts
     proposals = {r["id"]: proposed_role(r) for r in rows if r["pending"]}
     return render_template("users.html", users=rows, issued=issued, can_manage_user=can_manage_user, min_password=config.MIN_PASSWORD, proposals=proposals,
+                           passkey_counts=passkey_counts(),
                            assignable_roles={k: v for k, v in permissions.role_labels(db()).items() if can_assign(k)},
                            role_choices=[r for r in permissions.role_details(db()) if can_assign(r["id"])],
                            draft=session.pop("new_account_draft", None))
@@ -550,8 +555,10 @@ def users_reset(user_id):
     set_password(conn, row["id"], password, must_change=True)
     if row["auth_source"] == "sso":
         conn.execute("UPDATE users SET auth_source='local' WHERE id=?", (row["id"],))
+    from . import passkeys                      # l'accès repart de zéro : les clés d'accès du compte sont retirées aussi
+    removed = passkeys.remove_all(conn, row["id"])
     session["issued_password"] = {"username": row["username"], "password": password, "must_change": True}
-    audit("comptes.reinitialisation", row["username"], commit=False)
+    audit("comptes.reinitialisation", row["username"] + (f" (clés d'accès retirées : {removed})" if removed else ""), commit=False)
     conn.commit()
     return back("users")
 

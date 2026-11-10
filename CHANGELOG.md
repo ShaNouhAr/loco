@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.146.0 — 2026-11-10
+
+- **Connexion par clé d'accès (passkey)** : un compte local peut désormais se connecter **sans mot de passe**, avec son téléphone, son ordinateur ou une clé de sécurité. La clé s'ajoute dans *Mon compte › Sécurité › Clés d'accès* (le mot de passe actuel est redemandé, dix clés au plus par compte), puis la page de connexion propose **Se connecter avec une clé d'accès**. L'appareil vérifie la personne à chaque usage (empreinte, visage ou code) : la clé vaut mot de passe et second facteur, et loco n'en garde que la partie publique. Le mot de passe reste utilisable, rien ne change pour qui n'ajoute pas de clé.
+- **Deux conditions, imposées par les navigateurs** : loco doit être ouvert par un **nom** — celui de *Système › Réseau › Adresse du portail*, jamais une adresse IP — et son **certificat** doit être reconnu par le navigateur (autorité de loco installée sur l'appareil, ou certificat de votre autorité). Ailleurs, *Mon compte* explique par quelle adresse ouvrir loco et la page de connexion ne propose pas le bouton.
+- **Appareil perdu** : la personne retire sa clé dans *Mon compte* ; un administrateur peut retirer celles d'un compte depuis *Comptes* (**Retirer les clés d'accès**) ou par `loco-user passkeys-reset NOM`, et réinitialiser un mot de passe retire aussi les clés du compte. Chaque ajout, retrait et connexion par clé est noté au journal. Les comptes d'annuaire et SSO gardent les règles de leur fournisseur.
+
 ## 2.145.0 — 2026-11-10
 
 - **Écran distant Android sans repasser par l'application** : il suffisait jusqu'ici de redémarrer l'application loco, ou l'appareil, pour devoir y retourner toucher « Activer l'écran distant ». Désormais, **une seule autorisation suffit** : une fois le contrôle à distance (service d'accessibilité) activé sur l'appareil, loco montre l'écran à chaque session — après une mise à jour de l'application ou un redémarrage de l'appareil aussi — sans rien refaire. Android limite cette lecture à trois images par seconde environ ; le partage d'écran, plus fluide, reste proposé. Pendant toute session d'écran, l'appareil affiche la notification « Contrôle à distance en cours ».

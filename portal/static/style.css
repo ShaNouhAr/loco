@@ -1844,6 +1844,8 @@ a.metric-link:hover { text-decoration: none; border-color: var(--line-2); backgr
 .account-notes li::before { content: ""; position: absolute; left: 0; top: 15px; width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
 [data-panel="securite"] .stack > section.panel > .panel-b { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
 [data-panel="securite"] .stack > section.panel > .panel-b > p { max-width: 640px; margin: 0; }
+.passkey-add > .row { flex: 1 1 320px; min-width: 0; }   /* nom et mot de passe côte à côte à gauche, le bouton à droite */
+.passkey-add > .row > input, .passkey-add > .row > .password-field { flex: 0 1 240px; width: auto; min-width: 0; }
 @media (max-width: 900px) {
   [data-panel="securite"] .password-form { grid-template-columns: minmax(0, 1fr); }
   [data-panel="securite"] .password-form > .password-rules { grid-column: 1; grid-row: auto; }

@@ -17,6 +17,7 @@
   user set-password NOM     définit le mot de passe depuis $LOCO_PASSWORD
   user enable|disable NOM   active / désactive un compte
   user mfa-reset NOM        retire la double authentification (téléphone perdu)
+  user passkeys-reset NOM   retire les clés d'accès du compte (appareil perdu)
   fleet servers             adresses du serveur transmises aux agents, et postes prévenus
   fleet announce URL        annonce une future adresse (https://hôte:port) avant de changer celle du serveur
   fleet forget URL          retire une adresse annoncée
@@ -85,6 +86,7 @@ def user_command(args):
             password = auth.generate_password()
             auth.set_password(conn, row["id"], password, must_change=True)
             conn.execute("UPDATE users SET disabled=0 WHERE id=?", (row["id"],))
+            conn.execute("DELETE FROM passkeys WHERE user_id=?", (row["id"],))      # l'accès repart de zéro
             _audit(conn, "comptes.reinitialisation", row["username"])
             print(f"Mot de passe temporaire de {row['username']} : {password}")
         elif cmd == "set-password":
@@ -108,6 +110,11 @@ def user_command(args):
             conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (row["id"],))
             _audit(conn, "comptes.2fa.reinitialisation", row["username"])
             print(f"Double authentification retirée pour {row['username']}.")
+        elif cmd == "passkeys-reset":
+            row = _user(conn, name)
+            removed = conn.execute("DELETE FROM passkeys WHERE user_id=?", (row["id"],)).rowcount
+            _audit(conn, "comptes.cles.reinitialisation", f"{row['username']} : {removed}")
+            print(f"Clés d'accès retirées pour {row['username']} : {removed}.")
         else:
             sys.exit(__doc__)
 
