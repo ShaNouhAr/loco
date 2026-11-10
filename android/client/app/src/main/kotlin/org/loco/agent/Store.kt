@@ -50,6 +50,14 @@ class Store(context: Context) {
         get() = prefs.getBoolean("keep_adb", false)
         set(v) = prefs.edit().putBoolean("keep_adb", v).apply()
 
+    /** Réseaux où l'agent est actif, au choix de la personne : partout, hors données mobiles, ou Wi-Fi nommés (voir Networks). */
+    var netMode: String
+        get() = prefs.getString("net_mode", Networks.ALL) ?: Networks.ALL
+        set(v) = prefs.edit().putString("net_mode", v).apply()
+    var trustedWifi: Set<String>
+        get() = HashSet(prefs.getStringSet("trusted_wifi", emptySet()) ?: emptySet())
+        set(v) = prefs.edit().putStringSet("trusted_wifi", HashSet(v)).apply()
+
     val enrolled: Boolean get() = token.isNotEmpty() && server.isNotEmpty() && caPem.isNotEmpty()
 
     fun clear() {

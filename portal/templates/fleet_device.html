@@ -27,6 +27,8 @@
       <span class="mono">{{ address or '—' }}</span>
       <span title="{{ dev.last_seen }}">{{ _("vu %(seen)s", seen=summary.seen) }}</span>
       <span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>
+      {% if agent_outdated and active %}<span class="tag" title="{{ _('Ce serveur est en %(v)s : l’agent se met à jour seul à son prochain contact, ou tout de suite par Plus › Mettre à jour l’agent.', v=server_version) }}">{{ _("agent à mettre à jour") }}</span>{% endif %}
+      {% if net_policy %}<span class="tag" title="{{ _('Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.') }}">{{ net_policy }}</span>{% endif %}
       {% if dev.remote_consent %}<span class="tag">{{ _("accord exigé pour le bureau") }}</span>{% endif %}
     </p>
     {% if memberships %}<p class="device-groups">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a>{% endfor %}</p>{% endif %}
@@ -73,6 +75,7 @@
         {% endif %}
         {% if can('fleet.update') and can('fleet.reboot') and not android %}{{ action('update', _('Mettre à jour puis redémarrer si nécessaire'), reboot=True) }}{% endif %}
         {% if can('fleet.scan') and not android %}{{ action('scan', _('Refaire l\'inventaire')) }}{% endif %}
+        {% if can('fleet.update') and agent_outdated %}{{ action('agent-update', _("Mettre à jour l'agent (%(old)s → %(new)s)", old=dev.agent_version or '?', new=server_version)) }}{% endif %}
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
         {% if android_view and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose_android', device=dev.id) }}">{{ _("Installer des applications…") }}</a>{% endif %}
         {% if adb_view %}<button type="button" class="menu-item" data-open="#adb-setup">{{ _("Débogage adb…") }}</button>{% endif %}
@@ -461,7 +464,8 @@
         <dt>{{ _("Vu par loco depuis") }}</dt><dd><span class="mono">{{ dev.ip or '—' }}</span>{% if dev.ip and dev.ip not in (dev.addresses or '').split() %} <span class="muted small">{{ _("(routeur ou NAT entre le poste et loco)") }}</span>{% endif %}</dd>
         <dt>{{ _("Dernier contact") }}</dt><dd>{{ summary.seen }} <span class="faint small">· {{ dev.last_seen|date_fr }}</span></dd>
         <dt>{{ _("Dernier inventaire") }}</dt><dd>{{ summary.scanned }}{% if dev.last_scan %} <span class="faint small">· {{ dev.last_scan|date_fr }}</span>{% endif %}</dd>
-        <dt>{{ _("Agent") }}</dt><dd class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</dd>
+        <dt>{{ _("Agent") }}</dt><dd><span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>{% if agent_outdated %} <span class="muted small">{{ _("· ce serveur est en %(v)s", v=server_version) }}</span>{% else %} <span class="muted small">{{ _("· à jour") }}</span>{% endif %}</dd>
+        {% if android %}<dt>{{ _("Réseaux de confiance") }}</dt><dd>{{ net_policy or _("actif partout") }} <span class="muted small">{{ _("· réglé sur l’appareil") }}</span></dd>{% endif %}
         <dt>{{ _("Adresses du serveur connues") }}</dt><dd class="mono small">{{ dev.servers or '—' }}</dd>
         <dt>{{ _("Inscrit") }}</dt><dd>{{ summary.enrolled }} <span class="faint small">· {{ dev.enrolled_at|date_fr }}</span></dd>
         <dt>{{ _("Identifiant") }}</dt><dd class="mono small break">{{ dev.uid }}</dd>

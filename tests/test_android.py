@@ -108,5 +108,62 @@ class AndroidTest(FleetTest):
         self.assertIn("Clic droit : Retour", page)          # aide souris → navigation
 
 
+class TestTrustedNetworks(FleetTest):
+    """Réseaux de confiance choisis sur l'appareil : loco n'en reçoit que le mode, pour dire pourquoi il le voit par
+    intermittence. Le nom des Wi-Fi reste sur l'appareil."""
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(AndroidTest.reset_experimental, self)
+        AndroidTest.enable_android(self)
+        self.agent = Agent(ANDROID, "192.168.43.70")
+        self.agent.enroll()
+        self.dev = device(self.agent.uid)["id"]
+
+    def announce(self, networks):
+        data = dict(self.agent.ident)
+        if networks is not None:
+            data["networks"] = networks
+        self.assertEqual(self.agent.post("/agent/api/checkin", data, self.agent.token).status_code, 200)
+        return device(self.agent.uid)["net_policy"]
+
+    def card(self):
+        import html
+        return html.unescape(self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True))
+
+    def test_the_card_tells_where_the_device_stays_in_touch(self):
+        self.assertEqual(self.announce({"mode": "all", "count": 0}), "")
+        page = self.card()
+        self.assertIn("Réseaux de confiance", page)
+        self.assertIn("actif partout", page)
+        self.assertEqual(self.announce({"mode": "wifi", "count": 0}), "wifi")
+        self.assertEqual(self.card().count("actif hors données mobiles seulement"), 2)       # en-tête et détails
+        self.assertEqual(self.announce({"mode": "trusted", "count": 2}), "trusted:2")
+        self.assertIn("actif sur 2 Wi-Fi approuvés seulement", self.card())
+        self.assertEqual(self.announce({"mode": "trusted", "count": 1}), "trusted:1")
+        self.assertIn("actif sur 1 Wi-Fi approuvé seulement", self.card())
+        self.assertEqual(self.announce({"mode": "trusted", "count": 0}), "trusted:0")
+        self.assertIn("en pause : aucun Wi-Fi approuvé", self.card())
+        self.assertEqual(self.announce({"mode": "all"}), "")                               # revenu à « partout »
+        self.assertNotIn("seulement", self.card())
+
+    def test_an_older_app_or_a_malformed_announcement_changes_nothing(self):
+        self.assertEqual(self.announce({"mode": "wifi"}), "wifi")
+        self.assertEqual(self.announce(None), "wifi")                                      # application d'avant : rien d'annoncé
+        self.assertEqual(self.announce("wifi"), "wifi")
+        self.assertEqual(self.announce({"mode": "n'importe quoi", "count": "x"}), "")
+        self.assertEqual(self.announce({"mode": "trusted", "count": -3}), "trusted:0")
+        self.assertEqual(self.announce({"mode": "trusted", "count": True}), "trusted:0")
+        self.assertEqual(self.announce({"mode": "trusted", "count": 10 ** 9}), "trusted:0")
+
+    def test_only_android_devices_announce_it(self):
+        from test_fleet import LINUX
+        linux = Agent(LINUX, "192.168.43.60")
+        linux.enroll()
+        linux.post("/agent/api/checkin", dict(linux.ident, networks={"mode": "wifi"}), linux.token)
+        self.assertEqual(device(linux.uid)["net_policy"], "")
+        self.assertNotIn("Réseaux de confiance", self.admin.c.get(f"/fleet/{device(linux.uid)['id']}").get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()

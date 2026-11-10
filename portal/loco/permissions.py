@@ -228,7 +228,7 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
                       "wake": "fleet.wake", "wake-relay": "fleet.wake",
-                      "install-apk": "fleet.install"}
+                      "install-apk": "fleet.install", "agent-update": "fleet.update"}
 
 
 def expand(values):

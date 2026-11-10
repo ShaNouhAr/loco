@@ -43,12 +43,14 @@ STALE_DAYS = 1                  # sans contact depuis : orange
 SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_ATTEMPTS = 3                # transmissions d'une action que le poste n'a jamais démarrée, avant de la dire en échec
 REBOOT_HOLD = 300               # redémarrage annoncé par l'agent : rien d'autre ne lui est transmis avant son retour, ou ce délai
+AGENT_UPDATE_MINUTES = 15       # mise à jour de l'agent demandée : échec si, prévenu, il n'annonce pas la version du serveur dans ce délai
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
-           "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application")}
+           "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
+           "agent-update": L_("Mise à jour de l'agent")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -595,9 +597,72 @@ def expire_commands(conn, dev_id=None):
     """Commandes envoyées restées sans réponse. Le fil de fond s'en charge aussi : un poste mort ne reviendrait jamais les solder."""
     limit = (datetime.datetime.now() - datetime.timedelta(hours=SENT_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output='Pas de réponse du poste.' "
-                 "WHERE state IN ('sent', 'running') AND action != 'wake' AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
+                 "WHERE state IN ('sent', 'running') AND action NOT IN ('wake', 'agent-update') AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
                  (_now(), limit, *([dev_id] if dev_id else [])))
     wake.expire(conn, dev_id)
+    expire_agent_updates(conn, dev_id)
+
+
+def net_policy(data):
+    """Réseaux de confiance annoncés par l'application Android : « wifi », « trusted:N », ou vide (actif partout)."""
+    networks = data.get("networks")
+    if not isinstance(networks, dict):
+        return None                 # application d'avant : rien n'est annoncé, rien ne change
+    count = networks.get("count")
+    count = count if isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= 1000 else 0
+    return {"wifi": "wifi", "trusted": f"trusted:{count}"}.get(networks.get("mode"), "")
+
+
+def net_policy_text(dev):
+    """Où l'appareil reste en contact, dit comme sur sa fiche ; vide s'il est actif partout."""
+    policy = dev["net_policy"] or ""
+    if policy == "wifi":
+        return _("actif hors données mobiles seulement")
+    if policy.startswith("trusted:"):
+        count = int(policy[8:]) if policy[8:].isdigit() else 0
+        return (_("actif sur 1 Wi-Fi approuvé seulement") if count == 1 else
+                _("actif sur %(n)s Wi-Fi approuvés seulement", n=count) if count else _("en pause : aucun Wi-Fi approuvé"))
+    return ""
+
+
+def agent_outdated(dev):
+    """L'agent du poste est-il plus ancien que ce serveur ?"""
+    return version_key(dev["agent_version"]) < version_key(config.VERSION)
+
+
+# Où regarder sur le poste quand son agent ne se met pas à jour.
+AGENT_UPDATE_HINTS = {
+    "windows": "Sur le poste : journal de l'agent et update.log dans %ProgramData%\\loco-client.",
+    "android": "L'application attend peut-être une confirmation sur l'appareil pour s'installer, ou la fonctionnalité « Appareils Android » est coupée.",
+}
+
+
+def settle_agent_updates(conn, dev, reported):
+    """« Mettre à jour l'agent » demandé depuis la fiche d'un poste. Un agent se met à jour seul dès qu'il lit la
+    version du serveur dans la réponse à son contact : la demande n'est donc pas une commande pour lui (un agent ancien
+    la dirait « non prise en charge »), loco la suit ici. Au contact du poste elle passe « en cours », et elle est
+    soldée quand l'agent annonce la version du serveur."""
+    for c in conn.execute("SELECT id, state, params FROM device_commands WHERE device_id=? AND action='agent-update' "
+                          "AND state IN ('queued', 'running')", (dev["id"],)).fetchall():
+        before = json.loads(c["params"] or "{}").get("from") or ""
+        if version_key(reported) >= version_key(config.VERSION):
+            conn.execute("UPDATE device_commands SET state='success', finished_at=?, output=?, exit_code=0 WHERE id=?",
+                         (_now(), f"Agent mis à jour : {before} → {reported}." if before and before != reported else f"Agent à jour ({reported}).", c["id"]))
+        elif c["state"] == "queued":
+            conn.execute("UPDATE device_commands SET state='running', sent_at=?, params=? WHERE id=?",
+                         (_now(), json.dumps({"from": reported}, sort_keys=True), c["id"]))
+
+
+def expire_agent_updates(conn, dev_id=None):
+    """Agent prévenu qui n'annonce toujours pas la version du serveur : l'échec dit où regarder."""
+    limit = (datetime.datetime.now() - datetime.timedelta(minutes=AGENT_UPDATE_MINUTES)).strftime("%Y-%m-%d %H:%M:%S")
+    for c in conn.execute("SELECT c.id, d.os_family, d.agent_version FROM device_commands c JOIN devices d ON d.id=c.device_id "
+                          "WHERE c.action='agent-update' AND c.state='running' AND c.sent_at < ?" + (" AND c.device_id=?" if dev_id else ""),
+                          (limit, *([dev_id] if dev_id else []))).fetchall():
+        hint = AGENT_UPDATE_HINTS.get(c["os_family"], "Sur le poste : journalctl -u loco-client.")
+        conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE id=?",
+                     (_now(), f"L'agent est resté en {c['agent_version'] or '?'} ({AGENT_UPDATE_MINUTES} min après avoir été prévenu de la "
+                              f"version {config.VERSION}). {hint}", c["id"]))
 
 
 def settle_lost(conn, dev, holding):
@@ -607,7 +672,7 @@ def settle_lost(conn, dev, holding):
     a été interrompue : elle est soldée sans attendre. Un résultat qui arriverait quand même reste pris en compte."""
     held = {h for h in holding[:500] if isinstance(h, int) and not isinstance(h, bool)}
     for c in conn.execute("SELECT id, state, attempts FROM device_commands WHERE device_id=? AND state IN ('sent', 'running') "
-                          "AND action != 'wake'", (dev["id"],)).fetchall():
+                          "AND action NOT IN ('wake', 'agent-update')", (dev["id"],)).fetchall():
         if c["id"] in held:
             continue
         if c["state"] == "sent" and c["attempts"] < MAX_ATTEMPTS:
@@ -723,6 +788,7 @@ def agent_checkin():
     if ident["net_info"] is not None:   # agents 2.134.0 et plus : cartes et réseaux, pour le réveil à distance
         conn.execute("UPDATE devices SET net_info=? WHERE id=?", (ident["net_info"], dev["id"]))
     wake.arrived(conn, dev["id"])
+    settle_agent_updates(conn, dev, ident["agent_version"])
     if "servers" in data:           # agents 2.9.0 et plus : adresses du serveur qu'ils connaissent
         conn.execute("UPDATE devices SET servers=? WHERE id=?", (addresses.reported(data["servers"]), dev["id"]))
     reported_trust = data.get("trust") if isinstance(data.get("trust"), str) else None
@@ -738,6 +804,10 @@ def agent_checkin():
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
         from . import monitoring
         monitoring.record(conn, dev["id"], data["metrics"])
+    if dev["os_family"] == "android":
+        policy = net_policy(data)       # application 2.147.0 et plus : réseaux de confiance choisis sur l'appareil
+        if policy is not None and policy != dev["net_policy"]:
+            conn.execute("UPDATE devices SET net_policy=? WHERE id=?", (policy, dev["id"]))
     if dev["os_family"] == "android" and isinstance(data.get("adb"), dict):    # application 2.139.0 et plus
         from . import adb
         adb.record_report(conn, dev, data["adb"])
@@ -760,8 +830,10 @@ def agent_checkin():
     from . import update_blocks
     commands = []
     # Poste qui redémarre (action en cours ou redémarrage annoncé) : ses autres actions attendent son retour.
-    for c in [] if not deliverable(conn, dev, boot) else conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
-                                          "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
+    # (La mise à jour de l'agent n'est pas une commande pour lui : voir settle_agent_updates.)
+    for c in [] if not deliverable(conn, dev, boot) else conn.execute(
+            "SELECT * FROM device_commands WHERE device_id=? AND state='queued' AND action != 'agent-update' "
+            "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
         if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
                 or c["action"] == "run-script" and "scripts" in features.disabled(conn)
                 or c["action"] == "install-apk" and "android" in features.disabled(conn)):
@@ -1814,7 +1886,8 @@ def fleet_device(dev_id):
                            consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
-                           action_label=action_label,
+                           action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,
+                           net_policy=net_policy_text(dev),
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
@@ -1889,6 +1962,17 @@ def fleet_action(dev_id):
         result = wake.wake([dev])
         _report_wake(result)
         audit("parc.wake", dev["hostname"] + (f" ({result['skipped'][0][1]})" if result["skipped"] else ""))
+        return _back_to_origin(dev_id)
+    if action == "agent-update":
+        # L'agent se met à jour seul à son prochain contact ; cette demande le fait venir tout de suite et suit le résultat.
+        if not agent_outdated(dev):
+            flash(_("L'agent de %(dev)s est déjà à jour (%(v)s).", dev=dev["hostname"], v=dev["agent_version"]), "ok")
+        elif queue(dev, action, {"from": dev["agent_version"]}):
+            db().commit()
+            audit("parc.agent-update", f"{dev['hostname']} : {dev['agent_version'] or '?'} → {config.VERSION}")
+            flash(_("Mise à jour de l'agent demandée sur %(dev)s : il passe en %(v)s à son prochain contact.", dev=dev["hostname"], v=config.VERSION), "ok")
+        else:
+            flash(_('Action déjà en attente sur ce poste.'), "error")
         return _back_to_origin(dev_id)
     params = {}
     if action == "update":

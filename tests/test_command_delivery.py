@@ -5,7 +5,7 @@ import json
 import unittest
 
 from test_fleet import Agent, FleetTest, LINUX, WINDOWS, device
-from loco import fleet
+from loco import config, fleet
 from loco.db import transaction
 
 
@@ -211,6 +211,125 @@ class TestLostCommands(DeliveryTest):
         data = dict(pc.ident, holding=[])
         self.assertEqual([c["id"] for c in pc.post("/agent/api/checkin", data, pc.token).get_json()["commands"]], [scan])
         self.assertEqual([c["id"] for c in pc.post("/agent/api/checkin", data, pc.token).get_json()["commands"]], [scan])
+
+
+class TestAgentUpdate(DeliveryTest):
+    """« Mettre à jour l'agent » depuis la fiche d'un poste : l'agent se met à jour seul en lisant la version du serveur ;
+    loco le fait venir tout de suite et suit le résultat, sans rien lui transmettre comme commande."""
+    OLD = "2.144.0"
+
+    def setUp(self):
+        super().setUp()
+        self.agent.ident["agent_version"] = self.OLD
+        self.checkin()
+        self.page = f"/fleet/{self.dev}"
+
+    def ask(self, browser=None):
+        return (browser or self.admin).post(f"{self.page}/action", {"action": "agent-update"}, page=self.page)
+
+    def html(self, browser=None):
+        import html
+        return html.unescape((browser or self.admin).c.get(self.page).get_data(as_text=True))
+
+    def test_the_card_tells_the_agent_is_behind_and_offers_the_update(self):
+        page = self.html()
+        self.assertIn("agent à mettre à jour", page)
+        self.assertIn(f"Mettre à jour l'agent ({self.OLD} → {config.VERSION})", page)
+        self.assertIn(f"· ce serveur est en {config.VERSION}", page)
+        self.agent.ident["agent_version"] = config.VERSION
+        self.checkin()
+        page = self.html()
+        self.assertNotIn("agent à mettre à jour", page)
+        self.assertNotIn("Mettre à jour l'agent", page)
+        self.assertIn("· à jour", page)
+
+    def test_the_request_is_followed_until_the_agent_announces_the_server_version(self):
+        self.assertEqual(self.ask().status_code, 302)
+        command = list(self.commands().values())[-1]
+        self.assertEqual((command["action"], command["state"], json.loads(command["params"])), ("agent-update", "queued", {"from": self.OLD}))
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT detail FROM audit WHERE action='parc.agent-update' ORDER BY id DESC").fetchone()[0],
+                             f"srv-web : {self.OLD} → {config.VERSION}")
+        self.assertIn("Mise à jour de l'agent", self.html())                 # visible dans les actions en attente
+        poll = self.agent.post("/agent/api/remote", {"sessions": []}, self.agent.token).get_json()
+        self.assertTrue(poll.get("checkin"))                               # l'agent est appelé tout de suite par le canal distant
+        answer = self.checkin()
+        self.assertEqual(answer["commands"], [])                           # jamais transmise comme commande à l'agent
+        self.assertEqual(answer["agent_version"], config.VERSION)          # c'est cette version qui le fait se mettre à jour
+        self.assertEqual(answer["interval"], fleet.ACTIVE_INTERVAL)        # et il revient vite l'annoncer
+        self.assertEqual(self.states()[-1], "running")
+        self.assertEqual(self.checkin()["commands"], [])                   # contacts suivants, encore l'ancienne version
+        self.assertEqual(self.states()[-1], "running")                     # ni rejouée ni soldée par « holding »
+        self.agent.ident["agent_version"] = config.VERSION
+        self.checkin()
+        command = list(self.commands().values())[-1]
+        self.assertEqual((command["state"], command["output"]), ("success", f"Agent mis à jour : {self.OLD} → {config.VERSION}."))
+        self.assertTrue(command["finished_at"])
+
+    def test_asking_twice_or_for_an_agent_already_current_changes_nothing(self):
+        self.ask()
+        self.ask()
+        self.assertEqual([c["action"] for c in self.commands().values()], ["agent-update"])
+        with transaction() as conn:
+            conn.execute("DELETE FROM device_commands")
+        self.agent.ident["agent_version"] = config.VERSION
+        self.checkin()
+        self.ask()
+        self.assertEqual(self.commands(), {})
+        self.assertIn("déjà à jour", self.html())
+
+    def test_an_agent_updated_before_its_next_contact_settles_the_request(self):
+        self.ask()
+        self.agent.ident["agent_version"] = config.VERSION                  # il s'était mis à jour seul entre-temps
+        self.checkin()
+        command = list(self.commands().values())[-1]
+        self.assertEqual((command["state"], command["output"]), ("success", f"Agent mis à jour : {self.OLD} → {config.VERSION}."))
+
+    def test_an_agent_that_does_not_follow_fails_with_where_to_look(self):
+        for family, ident, hint in (("debian", LINUX, "journalctl -u loco-client"), ("windows", WINDOWS, "update.log")):
+            with self.subTest(family):
+                agent = Agent(ident, "192.168.43.77", uid=("%032x" % hash(family))[-32:].replace("-", "0"))
+                agent.ident["agent_version"] = self.OLD
+                agent.enroll()
+                dev = device(agent.uid)["id"]
+                self.admin.post(f"/fleet/{dev}/action", {"action": "agent-update"}, page=f"/fleet/{dev}")
+                agent.post("/agent/api/checkin", dict(agent.ident, holding=[]), agent.token)
+                self.age("sent_at", fleet.AGENT_UPDATE_MINUTES * 60 - 30)
+                agent.post("/agent/api/checkin", dict(agent.ident, holding=[]), agent.token)
+                with transaction() as conn:
+                    command = conn.execute("SELECT state, output FROM device_commands WHERE device_id=? ORDER BY id DESC", (dev,)).fetchone()
+                self.assertEqual(command["state"], "running")
+                self.age("sent_at", 60)
+                agent.post("/agent/api/checkin", dict(agent.ident, holding=[]), agent.token)
+                with transaction() as conn:
+                    command = conn.execute("SELECT state, output FROM device_commands WHERE device_id=? ORDER BY id DESC", (dev,)).fetchone()
+                self.assertEqual(command["state"], "failed")
+                self.assertIn(f"resté en {self.OLD}", command["output"])
+                self.assertIn(hint, command["output"])
+
+    def test_a_device_that_never_comes_back_is_settled_by_the_background_pass(self):
+        self.ask()
+        self.checkin()
+        self.age("sent_at", fleet.AGENT_UPDATE_MINUTES * 60 + 60)
+        with transaction() as conn:
+            fleet.expire_commands(conn)                                     # passe de fond, sans contact du poste
+        self.assertEqual(self.states()[-1], "failed")
+
+    def test_it_never_blocks_nor_replaces_the_other_actions(self):
+        self.ask()
+        scan = self.queue("scan")
+        self.assertEqual([c["id"] for c in self.checkin()["commands"]], [scan])
+        self.agent.result(scan, "success")
+        self.assertEqual(self.states(), ["running", "success"])
+
+    def test_the_right_to_update_devices_is_required(self):
+        from test_permissions import TestPermissions
+        self.addCleanup(TestPermissions.cleanup_accounts, self)
+        viewer = TestPermissions.browser(self, "lecture-agent", "viewer")
+        self.assertNotIn("Mettre à jour l'agent", self.html(viewer))
+        self.assertIn("agent à mettre à jour", self.html(viewer))            # l'état reste visible
+        self.assertEqual(viewer.post(f"{self.page}/action", {"action": "agent-update"}, page="/account").status_code, 403)
+        self.assertEqual(self.commands(), {})
 
 
 if __name__ == "__main__":

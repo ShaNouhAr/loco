@@ -4364,5 +4364,22 @@
  "Terminal root du serveur loco lui-même, dans le navigateur. Réservé aux comptes au profil Administrateur ; chaque activation, ouverture et fermeture est journalisée.": "Root terminal of the loco server itself, in the browser. Reserved for accounts with the Administrator profile; every activation, opening and closing is logged.",
  "Toute personne connectée avec un compte au profil Administrateur pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.": "Anyone signed in with an account that has the Administrator profile will be able to run root commands on this server from the browser. The shell will be available after the next restart.",
  "Votre mot de passe": "Your password",
- "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Enabling the root shell requires the password of a local account with the Administrator profile."
+ "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Enabling the root shell requires the password of a local account with the Administrator profile.",
+ "Ce serveur est en %(v)s : l’agent se met à jour seul à son prochain contact, ou tout de suite par Plus › Mettre à jour l’agent.": "This server runs %(v)s: the agent updates itself at its next contact, or right away with More › Update the agent.",
+ "agent à mettre à jour": "agent to update",
+ "Mettre à jour l'agent (%(old)s → %(new)s)": "Update the agent (%(old)s → %(new)s)",
+ "· ce serveur est en %(v)s": "· this server runs %(v)s",
+ "· à jour": "· up to date",
+ "Mise à jour de l'agent": "Agent update",
+ "L'agent de %(dev)s est déjà à jour (%(v)s).": "The agent of %(dev)s is already up to date (%(v)s).",
+ "Mise à jour de l'agent demandée sur %(dev)s : il passe en %(v)s à son prochain contact.": "Agent update requested on %(dev)s: it moves to %(v)s at its next contact.",
+ "Mise à jour de l'agent demandée": "Agent update requested",
+ "actif hors données mobiles seulement": "active off mobile data only",
+ "actif sur 1 Wi-Fi approuvé seulement": "active on 1 approved Wi-Fi only",
+ "actif sur %(n)s Wi-Fi approuvés seulement": "active on %(n)s approved Wi-Fi networks only",
+ "en pause : aucun Wi-Fi approuvé": "paused: no approved Wi-Fi",
+ "Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.": "Set on the device, in the app: elsewhere it is paused and loco no longer sees it.",
+ "Réseaux de confiance": "Trusted networks",
+ "actif partout": "active everywhere",
+ "· réglé sur l’appareil": "· set on the device"
 }

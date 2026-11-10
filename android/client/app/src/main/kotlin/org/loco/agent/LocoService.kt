@@ -11,6 +11,9 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -32,6 +35,8 @@ class LocoService : Service() {
     @Volatile private var capture: ScreenCapture? = null
     private val work = Executors.newSingleThreadExecutor()     // installations demandées par loco, une à la fois
     private val updating = AtomicBoolean(false)
+    @Volatile private var wake = false                         // réseau ou réglage changé : réévaluer sans attendre
+    private var netWatch: ConnectivityManager.NetworkCallback? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -42,8 +47,10 @@ class LocoService : Service() {
         } else {
             startForeground(NOTIF_ID, notification(getString(R.string.svc_connecting)))
         }
-        remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady) { on -> watched = on; showControl() }
-        if (agent.store.keepAdb) AdbProbe.keep(this)          // après un redémarrage, sans attendre le premier contact
+        remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady, ::onTrustedNetwork) { on -> watched = on; showControl() }
+        // Après un redémarrage, sans attendre le premier contact — jamais hors d'un réseau de confiance.
+        if (agent.store.keepAdb && onTrustedNetwork()) AdbProbe.keep(this)
+        watchNetwork()
         Thread({ remote?.run() }, "loco-remote").apply { isDaemon = true }.start()
     }
 
@@ -51,6 +58,7 @@ class LocoService : Service() {
         when (intent?.action) {
             ACTION_SCREEN_ON -> startCapture(intent)
             ACTION_SCREEN_OFF -> stopCapture()
+            ACTION_NETWORKS -> { Networks.invalidate(); wake = true }      // réglage changé dans l'application
         }
         if (!checking && agent.store.enrolled) {
             checking = true
@@ -63,7 +71,16 @@ class LocoService : Service() {
         var fails = 0
         while (checking) {
             var wait = 120
-            try {
+            wake = false
+            val net = Networks.current(this, agent.store)
+            if (!net.active) {
+                // Hors réseau de confiance : aucun contact. Le service reste visible et dit pourquoi ; il reprend dès
+                // que le réseau change (watchNetwork) ou que la personne change son réglage.
+                paused = pauseText(net); offline = false; fails = 0
+                refresh()
+                wait = 30                   // la localisation rallumée ne prévient pas : relire de temps en temps
+            } else try {
+                paused = null
                 val answer = agent.checkin()
                 wait = answer.optInt("interval", 120)
                 lastContact = System.currentTimeMillis(); offline = false; fails = 0
@@ -81,11 +98,45 @@ class LocoService : Service() {
             // retrouver le serveur sans attendre l'intervalle complet ni marteler le réseau.
             if (fails > 0) wait = minOf(wait, 5 * (1 shl minOf(fails - 1, 4)), 60)
             var slept = 0
-            while (checking && slept < wait) {
+            while (checking && slept < wait && !wake) {
                 try { Thread.sleep(1000) } catch (_: InterruptedException) {}
                 slept++
+                // Réseaux de confiance : l'état peut basculer sans que le réseau change (application qui quitte
+                // l'écran sans l'autorisation « toujours », localisation coupée) — le relire toutes les cinq secondes.
+                if (slept % 5 == 0 && agent.store.netMode != Networks.ALL && onTrustedNetwork() != (paused == null)) break
             }
         }
+    }
+
+    // --- Réseaux de confiance ----------------------------------------------
+    private fun onTrustedNetwork() = Networks.current(this, agent.store).active
+
+    private fun pauseText(net: Networks.Status) = when (net.why) {
+        Networks.Why.OTHER_WIFI -> getString(R.string.svc_paused_wifi, net.wifi ?: "")
+        Networks.Why.UNNAMED -> getString(R.string.svc_paused_unnamed)
+        Networks.Why.WIRED -> getString(R.string.svc_paused_wired)
+        else -> getString(R.string.svc_paused_mobile)
+    }
+
+    /** Changement de réseau : l'agent se met en pause ou reprend tout de suite, sans attendre son prochain contact. */
+    private fun watchNetwork() {
+        val watch = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = changed()
+            override fun onLost(network: Network) = changed()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = changed()
+        }
+        try {
+            (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).registerDefaultNetworkCallback(watch)
+            netWatch = watch
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun changed() {
+        if (agent.store.netMode == Networks.ALL) return
+        Networks.invalidate()
+        // Ne réveiller la boucle que si l'état bascule : ces événements arrivent aussi pour un simple changement de signal.
+        if (Networks.current(this, agent.store).active != (paused == null)) wake = true
     }
 
     /** Commandes reçues (installations, retrait) et mise à jour de l'application proposée par le serveur. */
@@ -225,7 +276,7 @@ class LocoService : Service() {
     }
 
     private fun refresh(text: String? = null) {
-        val base = text ?: if (capture != null) getString(R.string.svc_screen_on)
+        val base = text ?: paused ?: if (capture != null) getString(R.string.svc_screen_on)
         else getString(R.string.svc_connected, clock())
         manager().notify(NOTIF_ID, notification(base))
     }
@@ -259,6 +310,8 @@ class LocoService : Service() {
 
     override fun onDestroy() {
         checking = false
+        paused = null
+        netWatch?.let { try { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it) } catch (_: Exception) {} }
         remote?.stop()
         controlNotice(false)
         stopCapture()
@@ -280,11 +333,16 @@ class LocoService : Service() {
         @Volatile var offline = false
             private set
 
+        /** Texte de la pause quand l'appareil est hors de ses réseaux de confiance ; null quand l'agent est actif. */
+        @Volatile var paused: String? = null
+            private set
+
         /** Vrai tant que l'écran est réellement partagé (reflète la capture, pas un drapeau persistant). */
         @Volatile var sharing = false
             private set
         const val ACTION_SCREEN_ON = "org.loco.agent.SCREEN_ON"
         const val ACTION_SCREEN_OFF = "org.loco.agent.SCREEN_OFF"
+        const val ACTION_NETWORKS = "org.loco.agent.NETWORKS"
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
 
@@ -301,6 +359,12 @@ class LocoService : Service() {
 
         fun stopScreen(context: Context) {
             context.startService(Intent(context, LocoService::class.java).setAction(ACTION_SCREEN_OFF))
+        }
+
+        /** Réseaux de confiance changés dans l'application : le service réévalue tout de suite. */
+        fun networksChanged(context: Context) {
+            Networks.invalidate()
+            try { context.startService(Intent(context, LocoService::class.java).setAction(ACTION_NETWORKS)) } catch (_: Exception) {}
         }
 
         fun stop(context: Context) = context.stopService(Intent(context, LocoService::class.java))

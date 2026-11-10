@@ -4364,5 +4364,22 @@
  "Terminal root du serveur loco lui-même, dans le navigateur. Réservé aux comptes au profil Administrateur ; chaque activation, ouverture et fermeture est journalisée.": "Terminal root del propio servidor loco, en el navegador. Reservado a las cuentas con el perfil Administrador; cada activación, apertura y cierre queda registrado.",
  "Toute personne connectée avec un compte au profil Administrateur pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.": "Cualquier persona conectada con una cuenta con el perfil Administrador podrá ejecutar comandos root en este servidor desde el navegador. El shell estará disponible tras el próximo reinicio.",
  "Votre mot de passe": "Su contraseña",
- "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Activar el shell root requiere la contraseña de una cuenta local con el perfil Administrador."
+ "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Activar el shell root requiere la contraseña de una cuenta local con el perfil Administrador.",
+ "Ce serveur est en %(v)s : l’agent se met à jour seul à son prochain contact, ou tout de suite par Plus › Mettre à jour l’agent.": "Este servidor está en %(v)s: el agente se actualiza solo en su próximo contacto, o de inmediato con Más › Actualizar el agente.",
+ "agent à mettre à jour": "agente por actualizar",
+ "Mettre à jour l'agent (%(old)s → %(new)s)": "Actualizar el agente (%(old)s → %(new)s)",
+ "· ce serveur est en %(v)s": "· este servidor está en %(v)s",
+ "· à jour": "· al día",
+ "Mise à jour de l'agent": "Actualización del agente",
+ "L'agent de %(dev)s est déjà à jour (%(v)s).": "El agente de %(dev)s ya está al día (%(v)s).",
+ "Mise à jour de l'agent demandée sur %(dev)s : il passe en %(v)s à son prochain contact.": "Actualización del agente solicitada en %(dev)s: pasa a %(v)s en su próximo contacto.",
+ "Mise à jour de l'agent demandée": "Actualización del agente solicitada",
+ "actif hors données mobiles seulement": "activo solo sin datos móviles",
+ "actif sur 1 Wi-Fi approuvé seulement": "activo solo en 1 Wi-Fi aprobada",
+ "actif sur %(n)s Wi-Fi approuvés seulement": "activo solo en %(n)s Wi-Fi aprobadas",
+ "en pause : aucun Wi-Fi approuvé": "en pausa: ninguna Wi-Fi aprobada",
+ "Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.": "Ajustado en el dispositivo, en la aplicación: en otro lugar está en pausa y loco ya no lo ve.",
+ "Réseaux de confiance": "Redes de confianza",
+ "actif partout": "activo en todas partes",
+ "· réglé sur l’appareil": "· ajustado en el dispositivo"
 }

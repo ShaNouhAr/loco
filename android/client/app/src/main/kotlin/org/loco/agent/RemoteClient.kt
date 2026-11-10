@@ -15,7 +15,8 @@ import java.util.TreeMap
  * numérotés et acquittés (jamais de rejeu après une coupure). Aucune connexion entrante : l'appareil sort en HTTPS.
  */
 class RemoteClient(private val context: Context, private val store: Store, private val screen: () -> FrameSource?,
-                   private val screenReady: () -> Boolean, private val onWatching: (Boolean) -> Unit) {
+                   private val screenReady: () -> Boolean, private val allowed: () -> Boolean,
+                   private val onWatching: (Boolean) -> Unit) {
     private val sessions = HashMap<String, Session>()
     @Volatile private var running = true
     /** Vrai tant qu'une session (écran, terminal, fichiers) est ouverte : pas de mise à jour de l'application pendant ce temps. */
@@ -146,6 +147,12 @@ class RemoteClient(private val context: Context, private val store: Store, priva
 
     fun run() {
         while (running) {
+            if (!allowed()) {
+                // Hors réseau de confiance : les sessions ouvertes se ferment, et rien n'est demandé à loco.
+                if (sessions.isNotEmpty() || watching) pause()
+                try { Thread.sleep(2000) } catch (_: InterruptedException) {}
+                continue
+            }
             val delay = try {
                 exchange()
             } catch (e: Net.HttpError) {
@@ -162,8 +169,13 @@ class RemoteClient(private val context: Context, private val store: Store, priva
 
     fun stop() {
         running = false
+        pause()
+    }
+
+    private fun pause() {
         for (s in sessions.values) s.close()
         sessions.clear()
+        inUse = false
         if (watching) { watching = false; onWatching(false) }
     }
 

@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var ui: Ui
     private lateinit var root: LinearLayout
     private val REQ_SCREEN = 7
+    private val REQ_LOCATION = 8
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -135,6 +136,7 @@ class MainActivity : Activity() {
                 getString(R.string.battery_hint), getString(R.string.battery_on)) { requestBattery() }
         }
         root.addView(access, ui.spaced(12))
+        root.addView(networksPanel(), ui.spaced(12))
 
         root.addView(ui.button(getString(R.string.action_leave), Ui.Kind.DANGER) { confirmLeave() },
             ui.spaced(20, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL })
@@ -157,6 +159,7 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ui.dp(10); marginEnd = ui.dp(10) })
         val contact = LocoService.lastContact
         addView(when {
+            LocoService.paused != null -> ui.pill(getString(R.string.svc_paused), Ui.Tone.WARN)
             LocoService.offline -> ui.pill(getString(R.string.svc_offline), Ui.Tone.WARN)
             contact > 0 -> ui.pill(getString(R.string.svc_connected,
                 java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(contact))), Ui.Tone.OK)
@@ -181,6 +184,141 @@ class MainActivity : Activity() {
                 addView(ui.button(action) { onAction() }, ui.spaced(12, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
         })
+    }
+
+    // --- Réseaux de confiance ----------------------------------------------
+    private var askedAlways = false
+    private var wifiDraft = ""
+
+    /** Où l'agent est actif : partout, hors données mobiles, ou seulement sur les Wi-Fi nommés par la personne. */
+    private fun networksPanel(): LinearLayout {
+        val panel = ui.panel()
+        val mode = store.netMode
+        val now = Networks.status(this, store)
+        panel.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ui.dp(18), ui.dp(14), ui.dp(18), ui.dp(14))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(ui.text(getString(R.string.net_title), 15f, 600), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(ui.status(getString(if (now.active) R.string.net_here_on else R.string.net_here_off), if (now.active) Ui.Tone.OK else Ui.Tone.WARN))
+            })
+            addView(ui.text(getString(R.string.net_hint), 13.5f, 400, ui.text2), ui.spaced(5))
+        })
+        choice(panel, Networks.ALL, mode, R.string.net_all, R.string.net_all_hint)
+        choice(panel, Networks.WIFI, mode, R.string.net_wifi, R.string.net_wifi_hint)
+        choice(panel, Networks.TRUSTED, mode, R.string.net_trusted, R.string.net_trusted_hint)
+        if (mode == Networks.TRUSTED) trustedWifi(panel)
+        return panel
+    }
+
+    /** Un mode au choix : titre et explication, « Choisi » ou le bouton pour le choisir. */
+    private fun choice(panel: LinearLayout, value: String, mode: String, title: Int, hint: Int) {
+        val chosen = mode == value || (value == Networks.ALL && mode != Networks.WIFI && mode != Networks.TRUSTED)
+        panel.addView(ui.divider())
+        panel.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(ui.dp(18), ui.dp(12), ui.dp(14), ui.dp(12))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(ui.text(getString(title), 14.5f, if (chosen) 600 else 500))
+                addView(ui.text(getString(hint), 13f, 400, ui.text2), ui.spaced(2))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = ui.dp(12) })
+            if (chosen) addView(ui.status(getString(R.string.net_chosen), Ui.Tone.OK))
+            else addView(ui.button(getString(R.string.net_choose)) { setNetMode(value) })
+        })
+    }
+
+    private fun setNetMode(value: String) {
+        store.netMode = value
+        LocoService.networksChanged(this)
+        render()
+    }
+
+    /** Mode « Wi-Fi choisis » : ce qu'Android exige pour lire le nom du Wi-Fi, le Wi-Fi du moment, et la liste. */
+    private fun trustedWifi(panel: LinearLayout) {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ui.dp(18), ui.dp(14), ui.dp(18), ui.dp(16))
+        }
+        panel.addView(ui.divider())
+        panel.addView(box)
+        // 1. L'autorisation, pas à pas : sans elle le nom du Wi-Fi est illisible et l'agent reste en pause.
+        val need: Triple<Int, Int, () -> Unit>? = when {
+            !Networks.fineGranted(this) -> Triple(R.string.net_perm_text, R.string.net_perm_on) {
+                requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQ_LOCATION)
+            }
+            !Networks.alwaysGranted(this) -> Triple(R.string.net_always_text, R.string.net_always_on) {
+                // Une demande, puis les réglages de l'application si Android ne la présente plus.
+                if (Build.VERSION.SDK_INT >= 29 && !askedAlways) {
+                    askedAlways = true
+                    requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), REQ_LOCATION)
+                } else {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }
+            }
+            !Networks.locationOn(this) -> Triple(R.string.net_location_text, R.string.net_location_on) {
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
+            else -> null
+        }
+        if (need != null) {
+            box.addView(ui.note(getString(need.first), Ui.Tone.WARN))
+            box.addView(ui.button(getString(need.second), Ui.Kind.PRIMARY) { need.third() }, ui.spaced(10, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        // 2. Le Wi-Fi du moment, à ajouter d'un geste.
+        val trusted = store.trustedWifi
+        val name = Networks.wifiName(this)
+        val line = when {
+            name != null -> getString(R.string.net_current, name)
+            Networks.onWifi(this) -> getString(R.string.net_current_unknown)
+            else -> getString(R.string.net_current_none)
+        }
+        box.addView(ui.text(line, 13.5f, 400, ui.text2), ui.spaced(if (need != null) 14 else 0))
+        if (name != null && name !in trusted) {
+            box.addView(ui.button(getString(R.string.net_add_current), Ui.Kind.PRIMARY) { trust(name) }, ui.spaced(10, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        // 3. Les réseaux approuvés, et l'ajout par son nom d'un Wi-Fi où l'on n'est pas.
+        box.addView(ui.label(getString(R.string.net_list_title)), ui.spaced(18))
+        if (trusted.isEmpty()) box.addView(ui.note(getString(R.string.net_empty), Ui.Tone.WARN))
+        for (wifi in trusted.sorted()) {
+            box.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(ui.text(wifi, 14f, 500).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = ui.dp(10) })
+                if (wifi == name) addView(ui.status(getString(R.string.net_here), Ui.Tone.OK),
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = ui.dp(10) })
+                addView(ui.button(getString(R.string.net_remove)) { store.trustedWifi = store.trustedWifi - wifi; LocoService.networksChanged(this@MainActivity); render() })
+            }, ui.spaced(8))
+        }
+        val field = ui.field(getString(R.string.net_field_hint)).apply {
+            setText(wifiDraft)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            filters = arrayOf(android.text.InputFilter.LengthFilter(32))
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(s: android.text.Editable?) { wifiDraft = s?.toString() ?: "" }
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            })
+        }
+        box.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(field, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = ui.dp(8) })
+            addView(ui.button(getString(R.string.net_add)) { trust(field.text.toString()) })
+        }, ui.spaced(12))
+    }
+
+    private fun trust(name: String) {
+        val wifi = name.trim()
+        if (wifi.isEmpty()) return
+        store.trustedWifi = store.trustedWifi + wifi
+        wifiDraft = ""
+        LocoService.networksChanged(this)
+        render()
     }
 
     /** Ce qui attend la personne (installation à confirmer), comme une note « à traiter » du portail. */
@@ -209,7 +347,15 @@ class MainActivity : Activity() {
     private var shown = ""
     private fun signature() = listOf(LocoService.lastContact / 60000, LocoService.offline, LocoService.sharing,
         controlEnabled(), StorageAccess.granted(this), batteryExempt(), packageManager.canRequestPackageInstalls(),
-        Installs.pending.keys.sorted(), Installs.waitingPermission).joinToString()
+        Installs.pending.keys.sorted(), Installs.waitingPermission, LocoService.paused, networkSignature()).joinToString()
+
+    /** Ce qui change l'affichage des réseaux de confiance (rien n'est relu hors du mode par nom de Wi-Fi). */
+    private fun networkSignature(): String {
+        val mode = store.netMode
+        if (mode != Networks.TRUSTED) return mode + Networks.status(this, store).active
+        return listOf(mode, Networks.wifiName(this), Networks.onWifi(this), Networks.fineGranted(this), Networks.alwaysGranted(this),
+            Networks.locationOn(this)).joinToString()
+    }
 
     override fun onPause() {
         root.removeCallbacks(watcher)
@@ -234,6 +380,7 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_LOCATION) LocoService.networksChanged(this)       // le nom du Wi-Fi devient lisible
         if (store.enrolled) render()
     }
 
@@ -275,6 +422,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Autorisation ou localisation changée dans les réglages d'Android : le service relit le réseau tout de suite.
+        if (store.enrolled && store.netMode != Networks.ALL) LocoService.networksChanged(this)
         if (store.enrolled) render()
         root.removeCallbacks(watcher)
         root.postDelayed(watcher, 1500)

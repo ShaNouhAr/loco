@@ -19,6 +19,9 @@ object Inventory {
 
     fun full(context: Context): JSONObject = identity(context).apply {
         put("adb", AdbProbe.snapshot(context))
+        // Réseaux de confiance choisis sur l'appareil : loco sait ainsi pourquoi il le voit par intermittence. Le nom
+        // des Wi-Fi reste sur l'appareil.
+        Store(context).let { put("networks", JSONObject().put("mode", it.netMode).put("count", it.trustedWifi.size)) }
         put("inventory", JSONObject()
             .put("updates", JSONArray())
             .put("apps", apps(context))

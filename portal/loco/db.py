@@ -651,6 +651,11 @@ MIGRATIONS = [
     ALTER TABLE devices ADD COLUMN boot INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE devices ADD COLUMN reboot_pending TEXT NOT NULL DEFAULT '';
     """,
+    # 46 — Réseaux de confiance choisis sur un appareil Android (application 2.147.0 et plus) : « wifi » (hors données
+    # mobiles) ou « trusted:N » (N Wi-Fi approuvés) ; vide : actif partout. Le nom des Wi-Fi reste sur l'appareil.
+    """
+    ALTER TABLE devices ADD COLUMN net_policy TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

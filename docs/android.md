@@ -93,6 +93,30 @@ n'est montré en dehors d'une session ouverte depuis le portail.
 L'application reste visible (notification permanente) et rien n'est lu ou envoyé en dehors d'une session
 ouverte depuis le portail.
 
+## Réseaux de confiance
+
+Dans l'application, le panneau **Réseaux de confiance** règle où l'appareil reste en contact avec loco. Ailleurs
+l'agent est **en pause** : aucun contact avec le serveur, les sessions ouvertes se ferment, le débogage sans fil n'est
+pas rallumé ; la notification de l'application dit pourquoi (« En pause · données mobiles »…), et il reprend seul dès
+que l'appareil retrouve un réseau approuvé.
+
+| Mode | L'agent est actif… |
+|---|---|
+| **Partout** (par défaut) | sur tout réseau, données mobiles comprises |
+| **Hors données mobiles** | sur tout Wi-Fi ou réseau filaire, jamais sur le réseau mobile |
+| **Wi-Fi choisis seulement** | uniquement sur les Wi-Fi approuvés par leur nom |
+
+Le mode **Wi-Fi choisis** demande l'autorisation de **localisation**, réglée sur « Toujours autoriser », et la
+localisation de l'appareil allumée : Android ne donne le nom d'un Wi-Fi qu'à cette condition (« toujours » parce
+que l'agent tourne en arrière-plan). loco **ne lit jamais la position** ; l'autorisation n'est demandée que si vous
+choisissez ce mode, et l'application vous guide pas à pas. Sans elle le nom du Wi-Fi est illisible et l'agent reste
+en pause : il n'est jamais actif par défaut sur un réseau qu'il ne sait pas nommer. Un Wi-Fi s'approuve d'un bouton
+quand l'appareil y est relié, ou par son nom ; la liste reste sur l'appareil.
+
+Côté portail, la fiche de l'appareil indique seulement le réglage (« actif hors données mobiles seulement »,
+« actif sur 2 Wi-Fi approuvés seulement ») : c'est ce qui explique qu'il apparaisse hors ligne par moments. Le
+réglage appartient à la personne qui tient l'appareil ; il ne se change pas depuis le portail.
+
 ## Terminal adb
 
 Le terminal de l'application a les droits de l'application loco. Le **terminal adb** est celui d'un

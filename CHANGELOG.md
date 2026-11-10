@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.147.0 — 2026-11-10
+
+- **Réseaux de confiance sur Android** : dans l'application, un nouveau panneau règle où l'appareil reste en contact avec loco — **partout** (comme avant, par défaut), **hors données mobiles**, ou **seulement sur les Wi-Fi que vous approuvez par leur nom**. Ailleurs l'agent est en pause : aucun contact avec le serveur, les sessions s'arrêtent, le débogage sans fil n'est pas rallumé ; la notification dit pourquoi, et il reprend seul au retour sur un réseau approuvé. Un Wi-Fi s'approuve d'un bouton quand l'appareil y est relié, ou par son nom.
+- **Ce qu'Android exige pour le mode par nom de Wi-Fi** : l'autorisation de localisation réglée sur « Toujours autoriser », et la localisation de l'appareil allumée — Android ne donne le nom d'un Wi-Fi qu'à cette condition. loco ne lit jamais la position ; l'autorisation n'est demandée que si vous choisissez ce mode, et l'application guide pas à pas. Sans elle, l'agent reste en pause plutôt que d'être actif sur un réseau qu'il ne sait pas nommer.
+- **La fiche d'un appareil Android dit où il est actif** : « actif hors données mobiles seulement », « actif sur 2 Wi-Fi approuvés seulement »… On comprend ainsi pourquoi il apparaît hors ligne par moments. Le nom des Wi-Fi reste sur l'appareil, et le réglage ne se change que sur l'appareil.
+- **Mettre à jour l'agent depuis la fiche d'un poste** : quand l'agent d'un poste est plus ancien que le serveur, sa fiche l'indique (« agent à mettre à jour ») et le menu *Plus* propose **Mettre à jour l'agent**. L'agent est appelé tout de suite au lieu d'attendre son prochain contact, et l'action se suit comme les autres : réussie quand il annonce la nouvelle version, en échec au bout d'un quart d'heure avec l'endroit où regarder sur le poste. Elle fonctionne avec les agents déjà installés (Linux, Windows, Android).
+
 ## 2.146.2 — 2026-11-10
 
 - **Une action ne reste plus « transmise à l'agent » sans jamais s'exécuter** : un redémarrage et une mise à jour demandés à la suite partaient dans la même réponse ; l'agent redémarrait le poste et abandonnait la mise à jour, qui restait « transmise » six heures avant d'échouer. Désormais, rien d'autre ne part avec un redémarrage (ni avec une mise à jour qui redémarre, ni avec le retrait de l'agent) : la suite attend le retour du poste, puis s'exécute.
