@@ -1,4 +1,4 @@
-"""Shell root du serveur : désactivé par défaut, actif seulement après un redémarrage, réservé au compte admin."""
+"""Shell root du serveur : désactivé par défaut, actif seulement après un redémarrage, réservé aux administrateurs."""
 import base64
 import os
 import re
@@ -7,6 +7,7 @@ import time
 import unittest
 from unittest import mock
 
+import test_portal as fixture
 from test_portal import Browser, ADMIN_PW
 from loco import auth
 from loco.db import transaction
@@ -154,16 +155,46 @@ class ShellPortalTest(unittest.TestCase):
         with transaction() as conn:
             conn.execute("DELETE FROM users WHERE username='shell-ops'")
 
-    def test_other_admins_are_refused(self):
+    def account(self, role):
         with transaction() as conn:
             conn.execute("DELETE FROM users WHERE username='shell-ops'")
-            auth.create_user(conn, "shell-ops", "Shell-Ops-Test-2026", "admin", must_change=False)
+            auth.create_user(conn, "shell-ops", "Shell-Ops-Test-2026", role, must_change=False)
         self.addCleanup(self._drop_ops)
         ops = Browser()
         ops.login("shell-ops", "Shell-Ops-Test-2026")
-        self.assertEqual(self.post("/system/shell/enable", {"password": "Shell-Ops-Test-2026"}, ops).status_code, 403)
-        self.assertNotIn('href="/system/shell"', ops.c.get("/system").get_data(as_text=True))
-        self.assertEqual(ops.c.get("/system/shell").status_code, 403)
+        return ops
+
+    def test_every_administrator_reaches_the_shell_with_their_own_password(self):
+        ops = self.account("admin")                                    # un autre administrateur que « admin »
+        self.assertIn('href="/system/shell"', ops.c.get("/system").get_data(as_text=True))
+        self.assertIn("Activer le shell root", ops.c.get("/system/shell").get_data(as_text=True))
+        self.post("/system/shell/enable", {"password": ADMIN_PW}, ops)            # le mot de passe d'un autre compte ne vaut rien
+        self.request.assert_not_called()
+        self.post("/system/shell/enable", {"password": "Shell-Ops-Test-2026"}, ops)
+        self.request.assert_called_once_with("set-shell", {"enabled": "1"}, user="shell-ops")
+
+    def test_an_account_without_local_password_cannot_enable_it(self):
+        self.account("admin")
+        with transaction() as conn:                                   # compte d'entreprise : son mot de passe vit ailleurs
+            conn.execute("UPDATE users SET auth_source='sso' WHERE username='shell-ops'")
+        from flask import g
+        from loco import servershell
+        with fixture.loco.app.test_request_context("/system/shell/enable", method="POST", data={"password": "Shell-Ops-Test-2026"}):
+            with transaction() as conn:
+                g.user = conn.execute("SELECT * FROM users WHERE username='shell-ops'").fetchone()
+            with mock.patch.object(servershell, "audit"), mock.patch.object(servershell, "back", return_value="retour"):
+                self.assertEqual(servershell.system_shell_enable.__wrapped__(), "retour")
+        self.request.assert_not_called()
+
+    def test_other_profiles_are_refused(self):
+        for role in ("operator", "viewer"):
+            with self.subTest(role):
+                ops = self.account(role)
+                self.assertEqual(ops.post("/system/shell/enable", {"password": "Shell-Ops-Test-2026"}, page="/account").status_code, 403)
+                self.assertNotIn('href="/system/shell"', ops.c.get("/").get_data(as_text=True))
+                self.assertEqual(ops.c.get("/system/shell").status_code, 403)
+                self.assertEqual(ops.post("/system/shell/" + "a" * 32 + "/io", {"ack": "0"}, page="/account").status_code, 403)
+        self.request.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Fonctionnalités désactivables par le seul compte « admin » : masquées, pages/API refusées, agents tenus à l'écart."""
+"""Fonctionnalités désactivables par les administrateurs : masquées, pages/API refusées, agents tenus à l'écart."""
 import html
 import json
 import unittest
@@ -24,15 +24,32 @@ class TestFeatures(FleetTest):
         form = {k: "1" for k in features.FEATURES if k not in off}
         return self.admin.post("/administration/features", form, page="/administration/features")
 
-    def test_only_the_installation_admin_account_manages_features(self):
+    def test_every_administrator_manages_features_and_nobody_else(self):
         page = self.admin.c.get("/administration/features").get_data(as_text=True)
         self.assertIn("Fonctionnalités", page)
         self.assertIn('name="remote"', page)
         self.assertIn("/administration/features", self.admin.c.get("/").get_data(as_text=True))   # navigation
-        other = test_permissions.TestPermissions.browser(self, "second-admin", "admin")        # autre administrateur
-        self.assertEqual(other.c.get("/administration/features").status_code, 403)
-        self.assertEqual(other.post("/administration/features", {}, page="/account").status_code, 403)
-        self.assertNotIn("/administration/features", other.c.get("/").get_data(as_text=True))
+        other = test_permissions.TestPermissions.browser(self, "second-admin", "admin")        # un autre administrateur, pas « admin »
+        self.assertIn('name="remote"', other.c.get("/administration/features").get_data(as_text=True))
+        self.assertIn("/administration/features", other.c.get("/").get_data(as_text=True))
+        form = {k: "1" for k in features.FEATURES if k != "wu"}
+        self.assertEqual(other.post("/administration/features", form, page="/administration/features").status_code, 302)
+        with transaction() as conn:
+            self.assertEqual(json.loads(conn.execute("SELECT value FROM settings WHERE key=?", (features.SETTING,)).fetchone()[0]), ["wu"])
+            self.assertEqual(conn.execute("SELECT username FROM audit WHERE action='systeme.fonctionnalites' ORDER BY id DESC").fetchone()[0],
+                             "perm-second-admin")
+        self.assertEqual(self.admin.c.get("/windows-update").status_code, 403)                  # coupé pour tous, « admin » compris
+        self.assertEqual(other.post("/administration/features", dict(form, wu="1"), page="/administration/features").status_code, 302)
+        self.assertEqual(self.admin.c.get("/windows-update").status_code, 200)
+        for role in ("operator", "viewer"):                                                     # les autres profils : jamais
+            with self.subTest(role):
+                lesser = test_permissions.TestPermissions.browser(self, "pas-admin-" + role, role)
+                self.assertEqual(lesser.c.get("/administration/features").status_code, 403)
+                self.assertEqual(lesser.post("/administration/features", {}, page="/account").status_code, 403)
+                self.assertNotIn("/administration/features", lesser.c.get("/").get_data(as_text=True))
+        with transaction() as conn:
+            conn.execute("UPDATE users SET disabled=1 WHERE username='perm-second-admin'")       # administrateur désactivé : plus rien
+        self.assertNotEqual(other.c.get("/administration/features").status_code, 200)
 
     def test_disabled_feature_is_hidden_and_refused_everywhere(self):
         self.switch("wu")

@@ -4358,5 +4358,11 @@
  "Ce compte a déjà %(n)s clés d'accès : retirez-en une d'abord.": "Esta cuenta ya tiene %(n)s claves de acceso: quite una primero.",
  "Cette clé d'accès est déjà enregistrée.": "Esta clave de acceso ya está registrada.",
  "Cette clé d'accès n'a pas été acceptée.": "Esta clave de acceso no ha sido aceptada.",
- "Cette clé d'accès n'a pas pu être enregistrée.": "Esta clave de acceso no se ha podido registrar."
+ "Cette clé d'accès n'a pas pu être enregistrée.": "Esta clave de acceso no se ha podido registrar.",
+ "Réservé aux comptes au profil Administrateur.": "Reservado a las cuentas con el perfil Administrador.",
+ "réservé au profil Administrateur": "reservado al perfil Administrador",
+ "Terminal root du serveur loco lui-même, dans le navigateur. Réservé aux comptes au profil Administrateur ; chaque activation, ouverture et fermeture est journalisée.": "Terminal root del propio servidor loco, en el navegador. Reservado a las cuentas con el perfil Administrador; cada activación, apertura y cierre queda registrado.",
+ "Toute personne connectée avec un compte au profil Administrateur pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.": "Cualquier persona conectada con una cuenta con el perfil Administrador podrá ejecutar comandos root en este servidor desde el navegador. El shell estará disponible tras el próximo reinicio.",
+ "Votre mot de passe": "Su contraseña",
+ "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Activar el shell root requiere la contraseña de una cuenta local con el perfil Administrador."
 }

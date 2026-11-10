@@ -1,7 +1,7 @@
 """Shell root du serveur loco dans le navigateur (Système).
 
-Désactivé par défaut ; activé, il ne devient disponible qu'après un redémarrage du serveur. Réservé au compte
-« admin » de l'installation. Le terminal (remote.js) parle au broker de l'agent root par un socket Unix.
+Désactivé par défaut ; activé, il ne devient disponible qu'après un redémarrage du serveur. Réservé aux comptes au
+profil Administrateur. Le terminal (remote.js) parle au broker de l'agent root par un socket Unix.
 """
 import secrets
 import time
@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash
 from . import app, config
 from .i18n import _
 from .auth import audit, login_required
-from .features import is_super_admin
+from .features import is_administrator
 from .util import back
 
 if config.SERVER_UPDATES and not config.WINDOWS:
@@ -34,8 +34,8 @@ def status():
 def _guard():
     if not available():
         abort(404)
-    if not is_super_admin():
-        abort(403, _("Réservé au compte « admin » de l'installation."))
+    if not is_administrator():
+        abort(403, _("Réservé aux comptes au profil Administrateur."))
 
 
 def _owned(sid):
@@ -56,9 +56,9 @@ def _request(enabled):
 
 @app.context_processor
 def _shell_globals():
-    """État pour la navigation (menu Administration, icône de la barre) : seulement pour le compte admin."""
+    """État pour la navigation (menu Administration, icône de la barre) : seulement pour les administrateurs."""
     try:
-        state = status() if available() and g.get("user") is not None and is_super_admin() else None
+        state = status() if available() and g.get("user") is not None and is_administrator() else None
     except OSError:
         state = None
     return {"server_shell": state}
@@ -86,6 +86,10 @@ def system_shell_home():
 @login_required
 def system_shell_enable():
     _guard()
+    if g.user["auth_source"] != "local":         # pas de mot de passe à redemander : un compte local doit l'activer
+        audit("systeme.shell.refus", "compte sans mot de passe local")
+        flash(_("L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur."), "error")
+        return back("system_shell_home")
     if not check_password_hash(g.user["password_hash"], request.form.get("password", "")):
         audit("systeme.shell.refus", "mot de passe incorrect")
         flash(_("Mot de passe incorrect : shell root non activé."), "error")

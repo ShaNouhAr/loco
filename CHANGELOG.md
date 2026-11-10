@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.146.1 — 2026-11-10
+
+- **Plus rien n'est réservé au compte « admin » de l'installation** : *Administration › Fonctionnalités* (activer ou couper des pans entiers de loco, partie expérimentale comprise) et le **Shell root** du serveur sont désormais ouverts à **tout compte actif au profil Administrateur**, quel que soit son nom ou son origine (local, annuaire, SSO). Les autres profils n'y ont toujours pas accès.
+- **Activation du shell root** : elle demande le mot de passe du compte connecté, et non plus celui du compte « admin ». Un compte d'annuaire ou SSO, qui n'a pas de mot de passe local, ne peut pas l'activer lui-même — la page le lui explique — mais l'utilise une fois activé par un compte local.
+
 ## 2.146.0 — 2026-11-10
 
 - **Connexion par clé d'accès (passkey)** : un compte local peut désormais se connecter **sans mot de passe**, avec son téléphone, son ordinateur ou une clé de sécurité. La clé s'ajoute dans *Mon compte › Sécurité › Clés d'accès* (le mot de passe actuel est redemandé, dix clés au plus par compte), puis la page de connexion propose **Se connecter avec une clé d'accès**. L'appareil vérifie la personne à chaque usage (empreinte, visage ou code) : la clé vaut mot de passe et second facteur, et loco n'en garde que la partie publique. Le mot de passe reste utilisable, rien ne change pour qui n'ajoute pas de clé.

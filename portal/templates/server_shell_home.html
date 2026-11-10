@@ -6,7 +6,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Shell root") }} <span class="muted">{{ host }}</span></h1>
-    <p>{{ _("Terminal root du serveur loco lui-même, dans le navigateur. Réservé au compte « admin » de l'installation ; chaque activation, ouverture et fermeture est journalisée.") }}</p>
+    <p>{{ _("Terminal root du serveur loco lui-même, dans le navigateur. Réservé aux comptes au profil Administrateur ; chaque activation, ouverture et fermeture est journalisée.") }}</p>
   </div>
   <div class="actions">
     <span class="st {{ 'ok' if state == 'active' else 'warn' if state in ('pending', 'disabling') else '' }}">{{ {'off': _('désactivé'), 'pending': _('redémarrage requis'), 'active': _('actif'), 'disabling': _('désactivation en cours')}[state] }}</span>
@@ -23,10 +23,12 @@
         <span class="step-n">{{ '✓' if step > 1 else '1' }}</span>
         <div class="step-b">
           <h3>{{ _("Activer") }}</h3>
-          {% if state == 'off' %}
-          <form method="post" action="{{ url_for('system_shell_enable') }}" class="stack-sm" data-confirm="{{ _('Activer le shell root ?') }}" data-confirm-text="{{ _('Toute personne connectée avec le compte admin pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.') }}" data-confirm-ok="{{ _('Activer') }}">
+          {% if state == 'off' and current_user.auth_source != 'local' %}
+          <p class="note warn">{{ _("L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.") }}</p>
+          {% elif state == 'off' %}
+          <form method="post" action="{{ url_for('system_shell_enable') }}" class="stack-sm" data-confirm="{{ _('Activer le shell root ?') }}" data-confirm-text="{{ _('Toute personne connectée avec un compte au profil Administrateur pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.') }}" data-confirm-ok="{{ _('Activer') }}">
             <input type="hidden" name="csrf" value="{{ csrf }}">
-            <label class="f"><span>{{ _("Mot de passe du compte admin") }}</span><input type="password" name="password" required autocomplete="current-password"></label>
+            <label class="f"><span>{{ _("Votre mot de passe") }}</span><input type="password" name="password" required autocomplete="current-password"></label>
             <div><button class="btn primary"><span class="spin"></span>{{ _("Activer le shell root") }}</button></div>
           </form>
           {% elif state == 'pending' %}<p class="muted small">{{ _("Activation enregistrée.") }}</p>{% endif %}

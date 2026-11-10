@@ -64,7 +64,7 @@
       {% else %}
       <details class="set-help wu-proxy-help">
         <summary>{{ _("Réglage manuel et dépannage du proxy") }}</summary>
-        <p class="hint">{{ _("Activé par défaut ; se coupe") }} {% if is_super_admin() %}{{ _("dans") }} <a href="{{ url_for('features') }}">{{ _("Administration › Fonctionnalités") }}</a>{% else %}{{ _("dans Administration › Fonctionnalités") }}{% endif %} {{ _("(« Proxy Windows Update »).") }}{% if proxy_on and not proxy_active %} {{ _("Le service proxy (squid) n'est pas actif") }}{% if can('system.view') %} {{ _("— voir") }} <a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}.{% endif %} {{ _("Les postes doivent pouvoir joindre <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span>.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
+        <p class="hint">{{ _("Activé par défaut ; se coupe") }} {% if is_administrator() %}{{ _("dans") }} <a href="{{ url_for('features') }}">{{ _("Administration › Fonctionnalités") }}</a>{% else %}{{ _("dans Administration › Fonctionnalités") }}{% endif %} {{ _("(« Proxy Windows Update »).") }}{% if proxy_on and not proxy_active %} {{ _("Le service proxy (squid) n'est pas actif") }}{% if can('system.view') %} {{ _("— voir") }} <a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}.{% endif %} {{ _("Les postes doivent pouvoir joindre <span class=\"mono\">%(proxy_host)s:%(proxy_port)s</span>.", proxy_host=proxy_host, proxy_port=proxy_port) }}</p>
         <p class="small muted">{{ _("Manuellement sur un poste (PowerShell administrateur) :") }}</p>
         {{ cmd('wu-proxy', 'netsh winhttp set proxy proxy-server="' ~ proxy_host ~ ':' ~ proxy_port ~ '" bypass-list="<local>"', 'PS>') }}
       </details>

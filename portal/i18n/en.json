@@ -4358,5 +4358,11 @@
  "Ce compte a déjà %(n)s clés d'accès : retirez-en une d'abord.": "This account already has %(n)s passkeys: remove one first.",
  "Cette clé d'accès est déjà enregistrée.": "This passkey is already registered.",
  "Cette clé d'accès n'a pas été acceptée.": "This passkey was not accepted.",
- "Cette clé d'accès n'a pas pu être enregistrée.": "This passkey could not be registered."
+ "Cette clé d'accès n'a pas pu être enregistrée.": "This passkey could not be registered.",
+ "Réservé aux comptes au profil Administrateur.": "Reserved for accounts with the Administrator profile.",
+ "réservé au profil Administrateur": "reserved for the Administrator profile",
+ "Terminal root du serveur loco lui-même, dans le navigateur. Réservé aux comptes au profil Administrateur ; chaque activation, ouverture et fermeture est journalisée.": "Root terminal of the loco server itself, in the browser. Reserved for accounts with the Administrator profile; every activation, opening and closing is logged.",
+ "Toute personne connectée avec un compte au profil Administrateur pourra exécuter des commandes root sur ce serveur depuis le navigateur. Le shell sera disponible après le prochain redémarrage.": "Anyone signed in with an account that has the Administrator profile will be able to run root commands on this server from the browser. The shell will be available after the next restart.",
+ "Votre mot de passe": "Your password",
+ "L'activation du shell root demande le mot de passe d'un compte local au profil Administrateur.": "Enabling the root shell requires the password of a local account with the Administrator profile."
 }

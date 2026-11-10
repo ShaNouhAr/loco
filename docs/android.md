@@ -12,8 +12,8 @@ fichiers, installations) s'active sur l'appareil, à la main.
 
 ## Activer la fonctionnalité
 
-Dans **Administration › Fonctionnalités**, section *Expérimental*, activer **Appareils Android**. Seul le
-compte `admin` créé à l'installation peut le faire. Tant qu'elle est coupée, l'onglet Android de
+Dans **Administration › Fonctionnalités**, section *Expérimental*, activer **Appareils Android**. Tout
+compte au profil Administrateur peut le faire. Tant qu'elle est coupée, l'onglet Android de
 l'enrôlement et le téléchargement de l'application n'existent pas.
 
 ## Installer l'application

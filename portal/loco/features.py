@@ -1,4 +1,4 @@
-"""Fonctionnalités générales activables : masquées et bloquées (pages, API, agents) quand le compte « admin » les coupe."""
+"""Fonctionnalités générales activables : masquées et bloquées (pages, API, agents) quand un administrateur les coupe."""
 import json
 
 from flask import abort, flash, g, render_template, request, session
@@ -28,7 +28,7 @@ FEATURES = {
     "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
 }
 
-# Fonctionnalités expérimentales : désactivées par défaut, activables seulement par le compte « admin ».
+# Fonctionnalités expérimentales : désactivées par défaut, activables par un administrateur.
 EXPERIMENTAL = {"android"}
 EXPERIMENTAL_SETTING = "features_experimental"
 
@@ -59,7 +59,7 @@ AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux
 
 
 def _experimental_on(conn=None):
-    """Fonctionnalités expérimentales explicitement activées par le compte « admin »."""
+    """Fonctionnalités expérimentales explicitement activées par un administrateur."""
     row = (conn or db()).execute("SELECT value FROM settings WHERE key=?", (EXPERIMENTAL_SETTING,)).fetchone()
     try:
         return {k for k in json.loads(row[0]) if k in EXPERIMENTAL} if row else set()
@@ -68,7 +68,7 @@ def _experimental_on(conn=None):
 
 
 def disabled(conn=None):
-    """Fonctionnalités coupées : par le compte « admin », ou dès l'installation (RPM, Flatpak)."""
+    """Fonctionnalités coupées : par un administrateur, ou dès l'installation (RPM, Flatpak)."""
     if conn is None and "features_off" in g:
         return g.features_off
     row = (conn or db()).execute("SELECT value FROM settings WHERE key=?", (SETTING,)).fetchone()
@@ -82,7 +82,7 @@ def disabled(conn=None):
         off.add("flatpak")
     if not config.WU_PROXY:
         off.add("wu_proxy")              # Squid absent : ne jamais pousser un proxy inexistant aux postes
-    # Expérimental : coupé tant que le compte « admin » ne l'a pas explicitement activé.
+    # Expérimental : coupé tant qu'un administrateur ne l'a pas explicitement activé.
     off |= EXPERIMENTAL - _experimental_on(conn)
     # Une fonctionnalité dont un prérequis est coupé l'est aussi.
     off |= {k for k, f in FEATURES.items() if set(f[2]) & off}
@@ -108,11 +108,11 @@ def required(endpoint):
     return MODULES.get(getattr(view, "__module__", ""), ())
 
 
-def is_super_admin(user=None):
-    """Compte « admin » local créé à l'installation : seul à pouvoir couper ou rétablir une fonctionnalité."""
+def is_administrator(user=None):
+    """Compte actif au profil Administrateur, quel que soit son nom ou son origine (local, annuaire, SSO) : il peut couper
+    ou rétablir une fonctionnalité et ouvrir le shell du serveur. Ce n'est plus réservé au compte « admin » de l'installation."""
     user = user if user is not None else g.get("user")
-    return bool(user and user["username"].lower() == "admin" and user["auth_source"] == "local"
-                and user["role"] == "admin" and not user["disabled"])
+    return bool(user and user["role"] == "admin" and not user["disabled"])
 
 
 @app.before_request
@@ -133,14 +133,14 @@ def block_disabled_features():
 
 app.before_request_funcs[None].remove(block_disabled_features)
 app.before_request_funcs[None].insert(0, block_disabled_features)
-app.jinja_env.globals.update(feature=enabled, is_super_admin=is_super_admin)
+app.jinja_env.globals.update(feature=enabled, is_administrator=is_administrator)
 
 
 @app.route("/administration/features")
 @login_required
 def features():
-    if not is_super_admin():
-        abort(403, _("Réservé au compte « admin » de l'installation."))
+    if not is_administrator():
+        abort(403, _("Réservé aux comptes au profil Administrateur."))
     off = disabled()
     manual = set()
     row = db().execute("SELECT value FROM settings WHERE key=?", (SETTING,)).fetchone()
@@ -164,8 +164,8 @@ def features():
 @app.route("/administration/features", methods=["POST"])
 @login_required
 def features_save():
-    if not is_super_admin():
-        abort(403, _("Réservé au compte « admin » de l'installation."))
+    if not is_administrator():
+        abort(403, _("Réservé aux comptes au profil Administrateur."))
     wanted_off = sorted(k for k in FEATURES if k not in EXPERIMENTAL and request.form.get(k) != "1")
     wanted_exp = sorted(k for k in EXPERIMENTAL if request.form.get(k) == "1")
     conn = db()

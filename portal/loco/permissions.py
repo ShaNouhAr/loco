@@ -212,7 +212,7 @@ ENDPOINTS = {
     "script_compose": "scripts.run", "script_run_start": "scripts.run", "script_run": "scripts.view",
     "script_run_cancel": "scripts.run", "script_runs_cancel_all": "scripts.run", "script_history_clear": "scripts.edit",
     "script_run_delete": "scripts.edit",
-    # Réservé en plus au compte « admin » de l'installation (vérifié par la page).
+    # Réservé en plus au profil Administrateur (vérifié par la page).
     "features": "system.view", "features_save": "system.view",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
