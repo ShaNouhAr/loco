@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.147.1 — 2026-11-10
+
+- **Bureau à distance en plein écran : des commandes qui ne cachent plus le poste** : le panneau latéral occupait toute la hauteur de l'écran sur une large bande opaque. C'est maintenant un petit panneau flottant, quatre fois moins encombrant, **translucide** — on devine le bureau dessous, et il se densifie dès qu'on s'en sert. L'état de la session et les actions (quitter le plein écran, nouvel onglet, fermer la session) tiennent sur une ligne, en icônes avec leur nom en infobulle ; replié, il ne reste qu'une poignée discrète sur le bord.
+
 ## 2.147.0 — 2026-11-10
 
 - **Réseaux de confiance sur Android** : dans l'application, un nouveau panneau règle où l'appareil reste en contact avec loco — **partout** (comme avant, par défaut), **hors données mobiles**, ou **seulement sur les Wi-Fi que vous approuvez par leur nom**. Ailleurs l'agent est en pause : aucun contact avec le serveur, les sessions s'arrêtent, le débogage sans fil n'est pas rallumé ; la notification dit pourquoi, et il reprend seul au retour sur un réseau approuvé. Un Wi-Fi s'approuve d'un bouton quand l'appareil y est relié, ou par son nom.

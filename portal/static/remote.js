@@ -135,6 +135,8 @@ fullscreenButton.addEventListener('click', () => {
 document.addEventListener('fullscreenchange', () => {
   const full = document.fullscreenElement === root;
   fullscreenButton.querySelector('span').textContent = full ? t('Quitter le plein écran') : t('Plein écran');
+  // En plein écran le bouton n'est plus qu'une icône du panneau de commandes : son infobulle dit ce qu'il fait.
+  fullscreenButton.title = full ? t('Quitter le plein écran') : fullscreenButton.dataset.title;
   fullscreenButton.setAttribute('aria-pressed', String(full));
   root.classList.toggle('is-fullscreen', full);
 });

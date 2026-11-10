@@ -1471,28 +1471,41 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .remote-session[data-kind="desktop"].is-fullscreen .remote-stage { position: absolute; inset: 0; height: auto; min-height: 0; border: 0; border-radius: 0; }
 
 /* Rail latéral gauche rétractable (plein écran bureau) : posé sur l'image, poignée toujours saisissable. */
-.remote-rail { display: none; }
+/* Commandes du plein écran : un petit panneau flottant et translucide plutôt qu'une colonne sur toute la hauteur. Il
+   laisse deviner le bureau dessous, se densifie quand on s'en sert (survol, saisie), et se replie d'un clic. */
+.remote-rail { display: none; --rail-w: min(236px, 80vw); --rail-edge: 10px; }
 .remote-session[data-kind="desktop"].is-fullscreen .remote-rail { display: block; position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; }
-.remote-rail-body { position: absolute; left: 0; top: 0; bottom: 0; width: min(310px, 84vw); overflow: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 16px; background: color-mix(in srgb, var(--bg) 93%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-right: 1px solid var(--line-2); box-shadow: 8px 0 24px rgb(0 0 0 / .25); transform: translateX(-105%); transition: transform .22s ease; }
-.remote-rail.open .remote-rail-body { transform: none; }
-.remote-rail-handle { position: absolute; top: 16px; left: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 48px; padding: 0; border: 1px solid var(--line-2); border-left: 0; border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--bg-2) 90%, transparent); color: var(--text); cursor: pointer; opacity: .75; transition: left .22s ease, opacity .15s; }
-.remote-rail-handle:hover, .remote-rail.open .remote-rail-handle { opacity: 1; }
-.remote-rail.open .remote-rail-handle { left: min(310px, 84vw); }
-.remote-rail-handle .chev { width: 18px; height: 18px; transition: transform .22s ease; }
+.remote-rail-body { position: absolute; left: var(--rail-edge); top: var(--rail-edge); width: var(--rail-w); max-height: calc(100% - 2 * var(--rail-edge)); overflow: hidden auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); box-shadow: 0 8px 28px rgb(0 0 0 / .28); transform: translateX(calc(-100% - 2 * var(--rail-edge))); opacity: 0; visibility: hidden; transition: transform .22s ease, opacity .18s ease, visibility .22s, background-color .15s; }
+.remote-rail.open .remote-rail-body { transform: none; opacity: 1; visibility: visible; }
+.remote-rail-body:hover, .remote-rail-body:focus-within { background: color-mix(in srgb, var(--bg) 86%, transparent); }
+.remote-rail-handle { position: absolute; top: calc(var(--rail-edge) + 8px); left: 0; display: flex; align-items: center; justify-content: center; width: 22px; height: 40px; padding: 0; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-left: 0; border-radius: 0 9px 9px 0; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--text); cursor: pointer; opacity: .55; transition: left .22s ease, opacity .15s; }
+.remote-rail-handle:hover, .remote-rail-handle:focus-visible { opacity: 1; }
+.remote-rail.open .remote-rail-handle { left: calc(var(--rail-edge) + var(--rail-w)); opacity: .8; }
+.remote-rail-handle .chev { width: 16px; height: 16px; transition: transform .22s ease; }
 .remote-rail.open .remote-rail-handle .chev { transform: scaleX(-1); }
-.remote-rail .remote-pill { align-self: flex-start; margin: 0; }
-.remote-rail .actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-.remote-rail .remote-display { flex-direction: column; align-items: stretch; gap: 8px; margin: 0 0 4px; padding: 0 0 12px; border: 0; border-bottom: 1px solid var(--line); }
-.remote-rail .remote-field { justify-content: space-between; }
-.remote-rail .remote-field select { max-width: 170px; }
-.remote-rail .remote-readout { align-self: flex-end; min-width: 0; }
-.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
-.remote-rail #remote-toolbar .toolbar-sep { flex-basis: 100%; width: auto; height: 0; margin: 2px 0; background: none; }
+/* En-tête du panneau : l'état de la session à gauche, les actions en icônes à droite (leur nom en infobulle). */
+.remote-rail .remote-pill { position: absolute; top: 13px; left: 12px; max-width: calc(100% - 140px); overflow: hidden; margin: 0; background: color-mix(in srgb, var(--bg-3) 70%, transparent); }
+.remote-rail .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.remote-rail .actions > form { width: auto; }
+.remote-rail .actions .btn { width: 30px; height: 30px; padding: 0; }
+.remote-rail .actions .btn > span:not(.spin) { display: none; }
+.remote-rail .remote-display { order: 2; flex: 1 0 100%; flex-direction: column; align-items: stretch; gap: 6px; margin: 2px 0 0; padding: 0; border: 0; }
+.remote-rail .remote-field { justify-content: space-between; font-size: 12.5px; }
+.remote-rail .remote-field select { max-width: 148px; height: 28px; font-size: 12.5px; }
+.remote-rail .remote-readout { align-self: flex-end; min-width: 0; font-size: 11.5px; }
+.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent); }
+.remote-rail #remote-toolbar .toolbar-sep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
+.remote-rail #remote-toolbar .btn.sm { height: 28px; padding: 0 8px; font-size: 12.5px; }
+.remote-rail .remote-hold { flex-wrap: wrap; gap: 4px; }
+.remote-rail .remote-hold > .small { margin-right: 1px; font-size: 11.5px; }
+.remote-rail .keycap { min-width: 28px; height: 26px; padding: 0 4px; font-size: 11.5px; }
+.remote-rail .btn:not(.primary), .remote-rail select, .remote-rail .keycap:not([aria-pressed="true"]) { background-color: color-mix(in srgb, var(--bg) 50%, transparent); border-color: color-mix(in srgb, var(--line-2) 75%, transparent); box-shadow: none; }
+.remote-rail .btn:not(.primary):hover { background-color: color-mix(in srgb, var(--bg-2) 85%, transparent); }
+.remote-rail .remote-field span, .remote-rail .remote-hold > .small, .remote-rail .remote-readout { color: var(--text); opacity: .82; }
 .remote-rail .menu-list { position: static; width: 100%; min-width: 0 !important; margin-top: 6px; box-shadow: none; border-color: var(--line); }
 .remote-rail details.menu[open] { flex-basis: 100%; }
-.remote-rail .menu-form { min-width: 0; padding: 4px; }
-.remote-rail form { width: 100%; }
-.remote-rail .actions .btn { width: 100%; justify-content: center; }
+.remote-rail .menu-form { width: 100%; min-width: 0; padding: 4px; }
+@media (prefers-reduced-motion: reduce) { .remote-rail-body, .remote-rail-handle, .remote-rail-handle .chev { transition: none; } }
 
 /* Console ouverte dans son propre onglet : toute la surface appartient au poste. */
 .remote-session .head { align-items: center; }
@@ -1530,7 +1543,7 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .remote-toolbar .menu-form label.check { margin: 0; font-size: 13px; color: var(--text-2); }
 .clipboard-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .clipboard-actions .btn { justify-self: unset; }
-@media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn > span { display: inline; } }
+@media (max-width: 1100px) { .remote-session .actions .btn > span { display: none; } .remote-session .actions .btn { padding: 0 9px; } .remote-rail .actions .btn { padding: 0; } }
 @media (max-width: 720px) { .remote-session .head { flex-wrap: wrap; } .remote-field span { display: none; } .remote-display { border: 0; padding: 0; } }
 
 /* ------------------------------------------------------------------ planification */
