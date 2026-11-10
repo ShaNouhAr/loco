@@ -429,6 +429,13 @@ retour arrière automatique de la configuration et de la base. Les mises à jour
 système suivent `apk upgrade` dans la branche Alpine installée.
 
 Le cache APT passe par nginx ; OpenRC et supervisord remplacent systemd.
+Ce cache (appliance et serveur Windows) sort vers les dépôts en HTTP ou en HTTPS : les dépôts connus pour répondre
+en HTTPS (Debian, Ubuntu, PPA Launchpad, Zorin, Raspberry Pi) sont joints ainsi d'abord, les autres en HTTP, et
+l'autre voie est essayée quand la première ne répond pas — un réseau qui ne laisse sortir que le HTTPS convient
+donc. Un index (`InRelease`, `Packages`) n'est jamais resservi périmé quand le dépôt ne répond plus : le poste
+reçoit un échec net (504), garde ses listes et met à jour le reste. Un dépôt hors de cette liste, joint en HTTP
+derrière un pare-feu qui avale le HTTP sans répondre, coûte cinq secondes par fichier avant le repli : ouvrez alors
+le HTTP vers ce dépôt.
 Minimum : 2 Go de RAM, disque de 8 Gio, BIOS ou UEFI sans Secure Boot.
 Les détails, le fichier de réponses, la construction et les tests BIOS/UEFI
 sont dans le [guide de l'appliance](../linux/iso/README.md).

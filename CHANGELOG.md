@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.146.2 — 2026-11-10
+
+- **Une action ne reste plus « transmise à l'agent » sans jamais s'exécuter** : un redémarrage et une mise à jour demandés à la suite partaient dans la même réponse ; l'agent redémarrait le poste et abandonnait la mise à jour, qui restait « transmise » six heures avant d'échouer. Désormais, rien d'autre ne part avec un redémarrage (ni avec une mise à jour qui redémarre, ni avec le retrait de l'agent) : la suite attend le retour du poste, puis s'exécute.
+- **Les actions perdues repartent toutes seules** : quand un poste n'a jamais reçu ou jamais démarré une action (réponse perdue, poste éteint, agent relancé), loco la transmet de nouveau dès le contact suivant — trois fois au plus — au lieu de la déclarer en échec après six heures. Une action interrompue en cours de route (poste éteint pendant l'action) est signalée tout de suite, avec sa cause.
+- **Cache APT de l'appliance et du serveur Windows : sortie en HTTPS** : dans un réseau qui ne laisse plus sortir le HTTP, le cache ne joignait plus les dépôts. Il joint maintenant en HTTPS les dépôts connus pour y répondre (Debian, Ubuntu, PPA Launchpad, Zorin, Raspberry Pi), les autres en HTTP, et essaie l'autre voie quand la première ne répond pas ; le certificat du dépôt est vérifié.
+- **Plus de « Release file … is expired » à cause du cache** : quand un dépôt ne répondait plus, le cache resservait indéfiniment son ancien index ; une fois la date de validité passée (sept jours pour les mises à jour de Debian), tout l'inventaire du poste échouait et ses mises à jour étaient bloquées. Un index n'est plus jamais resservi périmé : le poste garde ses listes et met à jour le reste.
+- **Un dépôt en défaut ne bloque plus les autres** (agent Linux) : un index périmé ou un dépôt non signé parmi des dépôts lisibles n'empêche plus l'inventaire ni la mise à jour ; il est signalé à part. L'avertissement de la fiche du poste donne maintenant la cause de chaque dépôt inutilisable, et dit quand l'erreur vient du cache APT de loco plutôt que du poste.
+- **Mise à jour automatique de l'agent Linux** : après s'être mis à jour, l'agent lance aussitôt la nouvelle version. Il se retéléchargeait jusque-là à chaque contact tant que duraient les contacts rapprochés, en annonçant toujours l'ancienne version.
+
 ## 2.146.1 — 2026-11-10
 
 - **Plus rien n'est réservé au compte « admin » de l'installation** : *Administration › Fonctionnalités* (activer ou couper des pans entiers de loco, partie expérimentale comprise) et le **Shell root** du serveur sont désormais ouverts à **tout compte actif au profil Administrateur**, quel que soit son nom ou son origine (local, annuaire, SSO). Les autres profils n'y ont toujours pas accès.

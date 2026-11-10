@@ -1332,6 +1332,10 @@ namespace Loco
                 double now = (DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
                 var data = Identity();
                 data["metrics"] = Metrics();
+                // Actions reçues que l'agent traite encore : aucune. Il exécute toutes les actions d'une réponse avant le
+                // contact suivant (runLock). Le serveur sait ainsi qu'une action notée « transmise » n'a jamais démarré
+                // (réponse perdue, service ou poste arrêté avant de la lire) et la transmet de nouveau.
+                data["holding"] = new ArrayList();
                 if (rescan || firstRun || now - lastScan > scanHours * 3600)
                 {
                     data["inventory"] = Inventory();

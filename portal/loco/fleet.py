@@ -41,6 +41,8 @@ ONLINE_SECONDS = 3 * CHECKIN     # disponibilité : laisser passer trois cycles 
 SCAN_HOURS = 6                  # inventaire complet des mises à jour (et après chaque action)
 STALE_DAYS = 1                  # sans contact depuis : orange
 SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
+MAX_ATTEMPTS = 3                # transmissions d'une action que le poste n'a jamais démarrée, avant de la dire en échec
+REBOOT_HOLD = 300               # redémarrage annoncé par l'agent : rien d'autre ne lui est transmis avant son retour, ou ce délai
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
@@ -598,6 +600,51 @@ def expire_commands(conn, dev_id=None):
     wake.expire(conn, dev_id)
 
 
+def settle_lost(conn, dev, holding):
+    """Les agents 2.146.2 et plus annoncent à chaque contact les actions reçues qu'ils traitent encore. Toute autre
+    action « transmise » n'a jamais démarré (réponse perdue, agent arrêté ou poste redémarré avant de la lire) : elle
+    repart tout de suite au lieu d'échouer après SENT_TIMEOUT_HOURS. Une action « en cours » que l'agent ne tient plus
+    a été interrompue : elle est soldée sans attendre. Un résultat qui arriverait quand même reste pris en compte."""
+    held = {h for h in holding[:500] if isinstance(h, int) and not isinstance(h, bool)}
+    for c in conn.execute("SELECT id, state, attempts FROM device_commands WHERE device_id=? AND state IN ('sent', 'running') "
+                          "AND action != 'wake'", (dev["id"],)).fetchall():
+        if c["id"] in held:
+            continue
+        if c["state"] == "sent" and c["attempts"] < MAX_ATTEMPTS:
+            conn.execute("UPDATE device_commands SET state='queued', sent_at='' WHERE id=?", (c["id"],))
+        else:
+            conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE id=?",
+                         (_now(), f"Le poste a reçu cette action {c['attempts']} fois sans jamais la démarrer." if c["state"] == "sent" else
+                          "Action interrompue : le poste a repris contact sans en rendre le résultat (poste ou agent "
+                          "arrêté ou redémarré pendant l'action).", c["id"]))
+
+
+def reboot_held(dev, boot=0):
+    """Vrai tant qu'un redémarrage annoncé par l'agent n'a pas eu lieu : il reste une minute avant l'arrêt du poste, et
+    une action lancée dans cet intervalle serait coupée en plein travail. Levé dès que l'agent annonce un autre instant
+    de démarrage (agents 2.146.2 et plus), sinon après REBOOT_HOLD."""
+    stamp, _sep, before = (dev["reboot_pending"] or "").partition("|")
+    ago = _ago(stamp) if stamp else None
+    if ago is None or not datetime.timedelta(0) <= ago < datetime.timedelta(seconds=REBOOT_HOLD):
+        return False
+    return not (boot and before.isdigit() and int(before) and abs(boot - int(before)) > 30)
+
+
+def deliverable(conn, dev, boot=0):
+    """Peut-on transmettre des actions à ce poste maintenant ? Non tant qu'il a annoncé un redémarrage qui n'a pas eu
+    lieu, ni tant qu'une action qui arrête l'agent ou redémarre le poste est chez lui sans résultat."""
+    if reboot_held(dev, boot):
+        return False
+    return not any(_ends_batch(c) for c in conn.execute(
+        "SELECT action, params FROM device_commands WHERE device_id=? AND state IN ('sent', 'running')", (dev["id"],)).fetchall())
+
+
+def _ends_batch(cmd):
+    """Action après laquelle rien d'autre ne part dans la même réponse : l'agent s'arrête là (retrait) ou redémarre le
+    poste, et abandonnerait la suite sans rien en dire. Le reste part au contact suivant."""
+    return cmd["action"] in ("uninstall", "reboot") or cmd["action"] == "update" and bool(json.loads(cmd["params"] or "{}").get("reboot"))
+
+
 WAIT = object()        # commande pas encore prête (fichier en cours de téléchargement sur loco) : elle attend
 
 
@@ -695,6 +742,13 @@ def agent_checkin():
         from . import adb
         adb.record_report(conn, dev, data["adb"])
     expire_commands(db(), dev["id"])
+    if isinstance(data.get("holding"), list):
+        settle_lost(conn, dev, data["holding"])
+    boot = data.get("boot") if isinstance(data.get("boot"), int) and not isinstance(data.get("boot"), bool) and 0 < data.get("boot") < 1 << 40 else 0
+    if boot and boot != dev["boot"]:    # agents 2.146.2 et plus : instant de démarrage du poste
+        conn.execute("UPDATE devices SET boot=? WHERE id=?", (boot, dev["id"]))
+    if dev["reboot_pending"] and not reboot_held(dev, boot):
+        conn.execute("UPDATE devices SET reboot_pending='' WHERE id=?", (dev["id"],))
     # Ce qui suit engage : une commande notée « transmise » doit être sur le disque avant de partir dans la réponse (un
     # arrêt brutal ne doit ni la perdre ni la faire exécuter deux fois). Sans commande ni planification due, rien n'est
     # écrit et cette seconde validation ne coûte rien.
@@ -705,8 +759,9 @@ def agent_checkin():
     schedules.materialize(conn)       # planifications dues : commandes créées, occurrence suivante
     from . import update_blocks
     commands = []
-    for c in conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
-                          "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
+    # Poste qui redémarre (action en cours ou redémarrage annoncé) : ses autres actions attendent son retour.
+    for c in [] if not deliverable(conn, dev, boot) else conn.execute("SELECT * FROM device_commands WHERE device_id=? AND state='queued' "
+                                          "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
         if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
                 or c["action"] == "run-script" and "scripts" in features.disabled(conn)
                 or c["action"] == "install-apk" and "android" in features.disabled(conn)):
@@ -733,10 +788,10 @@ def agent_checkin():
                           "Script indisponible ou incompatible avec ce système." if c["action"] == "run-script"
                           else "Logiciel absent du catalogue.", c["id"]))
             continue
-        conn.execute("UPDATE device_commands SET state='sent', sent_at=? WHERE id=?", (_now(), c["id"]))
+        conn.execute("UPDATE device_commands SET state='sent', sent_at=?, attempts=attempts+1 WHERE id=?", (_now(), c["id"]))
         commands.append(payload)
-        if c["action"] == "uninstall":
-            break                   # rien après le retrait de l'agent
+        if _ends_batch(c):
+            break                   # rien après le retrait de l'agent ni après un redémarrage : la suite au contact suivant
     conn.commit()
     answer = {"interval": CHECKIN, "scan_hours": SCAN_HOURS, "agent_version": config.VERSION, "commands": commands,
               "servers": addresses.servers(conn)}
@@ -1001,6 +1056,10 @@ def agent_result():
                      (state, _now(), output, code, cmd_id))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
+    if state == "success" and (cmd["action"] == "reboot" or cmd["action"] == "update" and json.loads(cmd["params"] or "{}").get("reboot")
+                               and isinstance(data.get("inventory"), dict) and data["inventory"].get("reboot_required")):
+        # L'agent redémarre le poste dans une minute (même condition que la sienne) : ses autres actions l'attendent.
+        conn.execute("UPDATE devices SET reboot_pending=? WHERE id=?", (f"{_now()}|{dev['boot']}", dev["id"]))
     if cmd["action"] == "uninstall" and state == "success":
         conn.execute("UPDATE devices SET state='removed', token_hash='' WHERE id=?", (dev["id"],))
     if state in ("success", "failed"):

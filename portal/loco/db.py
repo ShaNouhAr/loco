@@ -642,6 +642,15 @@ MIGRATIONS = [
         created REAL NOT NULL
     );
     """,
+    # 45 — Actions transmises jamais démarrées : attempts compte les transmissions d'une action (elle repart quand
+    # l'agent annonce ne pas la tenir, trois fois au plus). Redémarrage annoncé par l'agent : reboot_pending
+    # (« instant|démarrage d'avant ») retient les actions suivantes jusqu'au retour du poste, boot étant l'instant de
+    # démarrage que l'agent annonce à chaque contact.
+    """
+    ALTER TABLE device_commands ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN boot INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE devices ADD COLUMN reboot_pending TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

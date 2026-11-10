@@ -4,6 +4,7 @@ On charge loco-client.py comme un module et on simule « run » (les commandes l
 de leurs sorties, sans rien installer ni appeler le réseau."""
 
 import importlib.util
+import os
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -210,6 +211,26 @@ W: Failed to fetch http://ppa.example.org/abandoned/dists/noble/InRelease  Tempo
 W: Some index files failed to download. They have been ignored, or old ones used instead.
 """
 APT_FINE = "Hit:1 http://deb.debian.org/debian trixie InRelease\nReading package lists...\n"
+# Sortie réelle (Debian 13, code de retour 100) : un index périmé parmi des dépôts lus, et un dépôt injoignable.
+APT_EXPIRED = """Ign:1 http://nexiste-pas.invalid/debian trixie InRelease
+Get:2 http://deb.debian.org/debian trixie InRelease [140 kB]
+Get:3 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+Err:1 http://nexiste-pas.invalid/debian trixie InRelease
+  Could not resolve 'nexiste-pas.invalid'
+Reading package lists...
+E: Release file for http://deb.debian.org/debian/dists/trixie-updates/InRelease is expired (invalid since 9h 58min 20s). Updates for this repository will not be applied.
+"""
+APT_ONLY_EXPIRED = """Get:1 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Reading package lists...
+E: Release file for http://deb.debian.org/debian/dists/trixie-updates/InRelease is expired (invalid since 9h 58min 20s). Updates for this repository will not be applied.
+"""
+APT_UNSIGNED = """Hit:1 http://deb.debian.org/debian trixie InRelease
+Get:2 http://depot.example.org/apt stable InRelease [3 kB]
+Reading package lists...
+W: GPG error: http://depot.example.org/apt stable InRelease: The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 0123456789ABCDEF
+E: The repository 'http://depot.example.org/apt stable InRelease' is not signed.
+"""
 UPGRADE = "Inst curl [8.0] (8.1 Debian:13/stable [amd64])\n"
 
 
@@ -245,6 +266,75 @@ class TestAptRepositoriesDown(unittest.TestCase):
         with mock.patch.object(agent, "run", self.apt("E: Malformed entry\n", code=100)):
             self.assertEqual(agent.apt_update(), (100, "E: Malformed entry\n"))
 
+    def test_an_expired_index_among_readable_repositories_is_not_a_failure(self):
+        """Index périmé (copie trop ancienne servie par un cache) : apt rend 100, mais les autres dépôts se mettent à jour."""
+        with mock.patch.object(agent, "run", self.apt(APT_EXPIRED, code=100)):
+            self.assertEqual(agent.apt_update(), (0, APT_EXPIRED))
+        self.assertEqual(agent.apt_unreachable(APT_EXPIRED),
+                         {"http://nexiste-pas.invalid/debian trixie": "Could not resolve 'nexiste-pas.invalid'",
+                          "http://deb.debian.org/debian trixie-updates": "Release file is expired (invalid since 9h 58min 20s)"})
+        inv = self.inventory(APT_EXPIRED, code=100)
+        self.assertEqual(inv["error"], "")
+        self.assertRegex(inv["warning"], r"^2 (dépôts inutilisables|repositories unusable)")
+        self.assertIn("http://deb.debian.org/debian trixie-updates (Release file is expired (invalid since 9h 58min 20s))", inv["warning"])
+        self.assertIn("(Could not resolve 'nexiste-pas.invalid')", inv["warning"])
+        self.assertEqual([u["name"] for u in inv["updates"]], ["curl"])
+
+    def test_an_unsigned_repository_among_others_is_named_too(self):
+        with mock.patch.object(agent, "run", self.apt(APT_UNSIGNED, code=100)):
+            self.assertEqual(agent.apt_update()[0], 0)
+        self.assertEqual(agent.apt_unreachable(APT_UNSIGNED), {"http://depot.example.org/apt stable": "repository is not signed"})
+
+    def test_when_every_repository_is_refused_it_stays_a_failure_that_names_it(self):
+        with mock.patch.object(agent, "run", self.apt(APT_ONLY_EXPIRED, code=100)):
+            code, out = agent.apt_update()
+        self.assertEqual(code, 100)
+        inv = self.inventory(APT_ONLY_EXPIRED, code=100)
+        self.assertIn("is expired", inv["error"])
+
+    def test_other_errors_are_never_excused(self):
+        for output in ("Hit:1 http://deb.debian.org/debian trixie InRelease\nE: Malformed entry 3 in list file /etc/apt/sources.list\n",
+                       APT_EXPIRED + "E: Could not get lock /var/lib/apt/lists/lock. It is held by process 1 (apt)\n",
+                       "Get:1 http://deb.debian.org/debian trixie InRelease\nE: Release file for http://deb.debian.org/debian/dists/trixie/InRelease "
+                       "is not valid yet (invalid for another 3h). Updates for this repository will not be applied.\n"):
+            with mock.patch.object(agent, "run", self.apt(output, code=100)), mock.patch.object(agent.time, "sleep", lambda s: None), \
+                    mock.patch.object(agent.time, "monotonic", side_effect=[0, 100, 200, 300]):
+                self.assertEqual(agent.apt_update()[0], 100, output[-60:])
+
+    def test_update_goes_on_with_an_expired_index(self):
+        streamed = []
+
+        def stream(cmd, _on_line, timeout=7200):
+            streamed.append(cmd)
+            return 0, ""
+        with mock.patch.object(agent, "run", self.apt(APT_EXPIRED, code=100)), mock.patch.object(agent, "run_stream", stream), \
+                mock.patch.object(agent, "family", return_value="debian"), mock.patch.object(agent.shutil, "which", return_value=None):
+            code, _log = agent.update()
+        self.assertEqual((code, bool(streamed)), (0, True))
+
+    def test_an_error_of_the_apt_cache_is_told_as_such(self):
+        """Sortie réelle (Debian 13 derrière le cache APT de loco, dépôt injoignable depuis le serveur)."""
+        out = ("Err:1 http://nexiste-pas.invalid/debian trixie InRelease\n  502  Bad Gateway [IP: 172.21.0.2 3142]\n"
+               "Err:8 http://192.0.2.10/debian trixie InRelease\n  504  Gateway Time-out [IP: 172.21.0.2 3142]\n"
+               "Err:9 http://miroir.example/debian trixie InRelease\n  503  Service Unavailable [IP: 203.0.113.7 80]\n")
+        with mock.patch.object(agent, "apt_proxy_ports", return_value={"3142"}):
+            failed = agent.apt_unreachable(out)
+        self.assertRegex(failed["http://nexiste-pas.invalid/debian trixie"], r"172\.21\.0\.2:3142 .*\(502\)$")
+        self.assertRegex(failed["http://192.0.2.10/debian trixie"], r"(cache APT|APT cache) 172\.21\.0\.2:3142 .*\(504\)$")
+        self.assertEqual(failed["http://miroir.example/debian trixie"], "503  Service Unavailable [IP: 203.0.113.7 80]")   # le dépôt lui-même
+        with mock.patch.object(agent, "apt_proxy_ports", return_value=set()):                   # poste sans proxy : rien n'est réécrit
+            self.assertEqual(agent.apt_unreachable(out)["http://192.0.2.10/debian trixie"], "504  Gateway Time-out [IP: 172.21.0.2 3142]")
+
+    def test_proxy_ports_are_read_from_the_apt_configuration(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            with open(os.path.join(folder, "01loco-proxy"), "w") as f:
+                f.write('Acquire::http::Proxy "http://192.168.10.18:3142";\nAcquire::https::Proxy "DIRECT";\n')
+            with open(os.path.join(folder, "02autre"), "w") as f:
+                f.write('// Acquire::http::Proxy "http://ancien:9999";\nacquire::HTTP::proxy "http://proxy.lan:8080/";\n')
+            with mock.patch.object(agent.glob, "glob", return_value=[os.path.join(folder, n) for n in ("01loco-proxy", "02autre", "absent")]):
+                self.assertEqual(agent.apt_proxy_ports(), {"3142", "8080"})
+
     def test_cause_does_not_end_with_a_colon(self):
         self.assertEqual(agent.apt_unreachable("Err:1 http://a.example/x y InRelease\n  Unable to connect to a:3142:\n"),
                          {"http://a.example/x y": "Unable to connect to a:3142"})
@@ -253,8 +343,8 @@ class TestAptRepositoriesDown(unittest.TestCase):
         out = "Err:1 http://a.example/x y InRelease\n  down\nErr:2 http://a.example/x y Release\n  down\n"
         self.assertEqual(agent.apt_unreachable(out), {"http://a.example/x y": "down"})
 
-    def inventory(self, output):
-        with mock.patch.object(agent, "run", self.apt(output)), mock.patch.object(agent, "family", return_value="debian"), \
+    def inventory(self, output, code=0):
+        with mock.patch.object(agent, "run", self.apt(output, code)), mock.patch.object(agent, "family", return_value="debian"), \
                 mock.patch.object(agent, "flatpak_updates", return_value=[], create=True), mock.patch.object(agent.shutil, "which", return_value=None):
             return agent.scan()
 
@@ -324,8 +414,9 @@ class TestServiceLoop(unittest.TestCase):
     """Boucle de contact : premier contact en deux temps (partiel puis complet), puis contacts rapprochés tant que le
     serveur demande un intervalle court, et arrêt au retour au repos — sans refaire l'inventaire."""
 
-    def _run(self, answers, state):
+    def _run(self, answers, state, relaunched=None):
         calls, seq = [], iter(answers)
+        relaunched = [] if relaunched is None else relaunched
         def fake_checkin(conf, data):
             calls.append(data)
             return next(seq)
@@ -343,7 +434,8 @@ class TestServiceLoop(unittest.TestCase):
              mock.patch.object(agent, "_apply_answer", lambda a, s: None), \
              mock.patch.object(agent, "forward_logs", lambda *a: None), \
              mock.patch.object(agent, "_run_commands", lambda *a: False), \
-             mock.patch.object(agent, "self_update", lambda *a: None), \
+             mock.patch.multiple(agent, self_update=lambda conf, wanted: bool(wanted) and wanted != agent.VERSION,
+                                 relaunch=lambda: relaunched.append(len(calls)) or 0), \
              mock.patch.object(agent, "ensure_desktop_backend", lambda s: None), \
              mock.patch.object(agent, "_apt_lock_busy", lambda o: False), \
              mock.patch.object(agent, "booted_since", lambda last: False), \
@@ -374,6 +466,74 @@ class TestServiceLoop(unittest.TestCase):
                               state={"last_scan": agent.time.time(), "inventory_version": agent.VERSION})
         self.assertEqual((rc, len(calls)), (0, 1))                   # ni partiel (déjà connu) ni boucle
         self.assertNotIn("inventory", calls[0])                     # inventaire récent : pas refait
+
+
+class TestSelfUpdate(unittest.TestCase):
+    """Mise à jour automatique : le nouveau programme prend la place de l'ancien tout de suite. Constat d'une instance :
+    le processus en cours, resté sur l'ancien code, se retéléchargeait à chaque contact de la fenêtre active (9 fois)."""
+    known = {"last_scan": agent.time.time(), "inventory_version": agent.VERSION}
+
+    def test_the_new_program_takes_over_instead_of_looping(self):
+        relaunched = []
+        answers = [{"interval": 10, "commands": [], "agent_version": "99.0.0"}] + [{"interval": 10, "commands": []}] * 5
+        rc, calls = TestServiceLoop._run(self, answers, dict(self.known), relaunched)
+        self.assertEqual((rc, len(calls), relaunched), (0, 1, [1]))          # un seul contact, puis le nouveau code
+
+    def test_it_also_takes_over_from_the_active_window(self):
+        relaunched = []
+        answers = [{"interval": 10, "commands": []}, {"interval": 10, "commands": [], "agent_version": "99.0.0"},
+                   {"interval": 10, "commands": []}]
+        rc, calls = TestServiceLoop._run(self, answers, dict(self.known), relaunched)
+        self.assertEqual((len(calls), relaunched), (2, [2]))
+
+    def test_nothing_is_relaunched_without_a_new_version(self):
+        relaunched = []
+        TestServiceLoop._run(self, [{"interval": 120, "commands": [], "agent_version": agent.VERSION}], dict(self.known), relaunched)
+        self.assertEqual(relaunched, [])
+
+    def test_self_update_tells_whether_the_program_was_replaced(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            program = os.path.join(folder, "loco-client.py")
+            new = 'VERSION = "99.0.0"\nprint("nouveau")\n'
+            with mock.patch.object(agent, "PROGRAM", program), mock.patch.object(agent, "log", lambda *a: None):
+                with mock.patch.object(agent, "download", return_value=new.encode()):
+                    self.assertFalse(agent.self_update({"server": "https://loco"}, agent.VERSION))     # déjà à jour
+                    self.assertFalse(agent.self_update({"server": "https://loco"}, ""))
+                    self.assertFalse(os.path.exists(program))
+                    self.assertFalse(agent.self_update({"server": "https://loco"}, "98.0.0"))          # pas la version annoncée
+                    self.assertTrue(agent.self_update({"server": "https://loco"}, "99.0.0"))
+                with open(program) as f:
+                    self.assertEqual(f.read(), new)
+                with mock.patch.object(agent, "download", side_effect=OSError("réseau")):
+                    self.assertFalse(agent.self_update({"server": "https://loco"}, "100.0.0"))
+                with mock.patch.object(agent, "download", return_value=b"def (:"):
+                    self.assertFalse(agent.self_update({"server": "https://loco"}, "100.0.0"))
+
+    def test_relaunch_runs_the_installed_program_with_the_same_arguments(self):
+        with mock.patch.object(agent.os, "execv") as execv, mock.patch.object(agent.sys, "argv", ["/x/loco-client.py", "service"]):
+            agent.relaunch()
+        execv.assert_called_once_with(agent.PROGRAM, [agent.PROGRAM, "service"])
+        with mock.patch.object(agent.os, "execv", side_effect=OSError("absent")), mock.patch.object(agent, "log", lambda *a: None):
+            self.assertEqual(agent.relaunch(), 0)                          # la minuterie lancera le nouveau code
+
+
+class TestWhatEachContactAnnounces(unittest.TestCase):
+    def test_boot_time_and_held_commands(self):
+        self.assertGreater(agent.boot_time(), 1_000_000_000)                # lu du noyau
+        self.assertEqual(agent.identity()["boot"], agent.boot_time())
+        sent = []
+
+        def call(server, path, data, token=None, timeout=60):
+            sent.append(data)
+            return {"commands": []}
+        with mock.patch.object(agent, "call", call), mock.patch.object(agent, "known_servers", return_value=["https://loco"]):
+            agent.checkin({"server": "https://loco", "token": "t"}, {"hostname": "h"})
+        self.assertEqual(sent[0]["holding"], [])                            # rien en cours entre deux contacts
+
+    def test_boot_time_survives_an_unreadable_kernel_file(self):
+        with mock.patch("builtins.open", side_effect=OSError):
+            self.assertEqual(agent.boot_time(), 0)
 
 
 class TestDesktopDeps(unittest.TestCase):

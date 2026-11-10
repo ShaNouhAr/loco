@@ -216,6 +216,10 @@ def checkin(conf, data):
     """Contact du serveur. Si son adresse habituelle ne répond plus (réseau, certificat), les adresses annoncées
     sont essayées ; la première qui répond avec un certificat de l'autorité loco épinglée devient l'adresse du poste."""
     data["servers"] = known_servers(conf)
+    # Actions reçues que l'agent traite encore : aucune. Il exécute toutes les actions d'une réponse avant le contact
+    # suivant, et un seul agent tourne à la fois (verrou). Le serveur sait ainsi qu'une action notée « transmise » n'a
+    # jamais démarré (réponse perdue, agent ou poste arrêté avant de la lire) et la transmet de nouveau.
+    data["holding"] = []
     failure = None
     for server in data["servers"]:
         try:
@@ -424,8 +428,22 @@ def identity():
     rel = os_release()
     networks = local_networks()
     return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(), "trust": trust_sha(), "cards": network_cards(networks),
+            "boot": boot_time(),
             "networks": [a for nic, values in networks.items() if not VIRTUAL_NIC.match(nic) and not VPN_NIC.match(nic) for a in values][:16],
             "os": {"family": family(), "name": rel.get("PRETTY_NAME") or platform.platform()}}
+
+
+def boot_time():
+    """Instant de démarrage du poste (secondes Unix, lu du noyau) : le serveur voit ainsi qu'un redémarrage annoncé a eu
+    lieu, et transmet alors les actions qui l'attendaient."""
+    try:
+        with open("/proc/stat") as f:
+            for line in f:
+                if line.startswith("btime "):
+                    return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        pass
+    return 0
 
 
 def trust_sha():
@@ -917,14 +935,90 @@ def _apt_lock_busy(out):
     return any(s in out for s in ("Unable to lock", "Could not get lock", "held by process", "Could not open lock file"))
 
 
+# Erreurs d'apt-get update qui ne concernent qu'un dépôt (il rend alors 100, alors que les autres dépôts sont lus) :
+# index périmé (Valid-Until dépassé, souvent une copie trop ancienne servie par un cache), dépôt sans Release ou non signé.
+APT_REPO_ERRORS = (
+    re.compile(r"^E: Release file for (?P<url>\S+) (?P<cause>is expired \([^)]*\))"),
+    re.compile(r"^E: The repository '(?P<source>[^']+)' (?P<cause>does not have a Release file|no longer has a Release file|"
+               r"is not signed|is no longer signed)"),
+    re.compile(r"^E: Failed to fetch (?P<url>\S+)\s+(?P<cause>.*)"),
+)
+APT_REPO_SUMMARY = "E: Some index files failed to download"
+APT_DISTS = re.compile(r"^(?P<base>.+?)/dists/(?P<suite>.+?)/(?:InRelease|Release(?:\.gpg)?|[^/]+/.+)$")
+
+
+def _apt_source(match):
+    """Dépôt d'une erreur d'apt, sous la forme de ses lignes d'avancement : « adresse suite »."""
+    if match.groupdict().get("source"):
+        return re.sub(r" (?:In)?Release$", "", match.group("source"))
+    found = APT_DISTS.match(match.group("url"))
+    return f"{found.group('base')} {found.group('suite')}" if found else match.group("url")
+
+
+APT_PROXY_ERROR = re.compile(r"^(?P<code>50[234])\s.*\[IP: (?P<ip>\S+) (?P<port>\d+)\]$")
+APT_PROXY_SETTING = re.compile(r'^\s*Acquire::http::Proxy\s+"https?://[^"/]*?:(\d+)/?"', re.M | re.I)
+
+
+def apt_proxy_ports():
+    """Ports des proxys HTTP déclarés à APT (le cache APT de loco, posé par setup.sh, en fait partie)."""
+    ports = set()
+    for path in ["/etc/apt/apt.conf", *sorted(glob.glob("/etc/apt/apt.conf.d/*"))]:
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                ports.update(APT_PROXY_SETTING.findall(f.read()))
+        except OSError:
+            pass
+    return ports
+
+
+def _apt_cause(cause, proxies):
+    """Cause lisible : une erreur 502/503/504 rendue par le proxy d'APT vient du cache, pas du poste ni du dépôt."""
+    found = APT_PROXY_ERROR.match(cause)
+    if found and found.group("port") in proxies:
+        where, code = f"{found.group('ip')}:{found.group('port')}", found.group("code")
+        return t(f"le cache APT {where} n'a pas pu joindre ce dépôt ({code})", f"the APT cache {where} could not reach this repository ({code})",
+                 f"la caché APT {where} no pudo alcanzar este repositorio ({code})")
+    return cause
+
+
 def apt_unreachable(out):
-    """Dépôts que apt-get update n'a pas pu lire : {source: cause}. Il rend 0 même si aucun ne répond."""
-    lines, found = out.splitlines(), {}
+    """Dépôts que apt-get update n'a pas pu lire ou a refusés : {source: cause}. Injoignable, il rend quand même 0 ;
+    périmé ou non signé, il rend 100 alors que les autres dépôts sont lus."""
+    lines, found, proxies = out.splitlines(), {}, None
     for i, line in enumerate(lines):
         if line.startswith("Err:"):
             cause = lines[i + 1].strip().rstrip(":") if i + 1 < len(lines) and lines[i + 1].startswith(" ") else ""
+            if APT_PROXY_ERROR.match(cause):
+                proxies = apt_proxy_ports() if proxies is None else proxies
+                cause = _apt_cause(cause, proxies)
             found.setdefault(" ".join(line.split()[1:3]), cause)
+        elif line.startswith("E: "):
+            for pattern in APT_REPO_ERRORS:
+                match = pattern.match(line)
+                if match:
+                    cause = match.group("cause").strip()
+                    subject = "Release file " if cause.startswith("is expired") else "repository " if match.groupdict().get("source") else ""
+                    found.setdefault(_apt_source(match), subject + cause)
+                    break
     return found
+
+
+def _apt_only_repository_errors(out):
+    """Vrai si chaque erreur d'apt-get update ne vise qu'un dépôt : les autres restent utilisables."""
+    errors = [line for line in out.splitlines() if line.startswith("E: ")]
+    return bool(errors) and all(line.startswith(APT_REPO_SUMMARY) or any(p.match(line) for p in APT_REPO_ERRORS) for line in errors)
+
+
+def _apt_readable(out, failed):
+    """Dépôts lus par apt-get update (lignes Hit et Get), hors ceux qu'il a ensuite refusés."""
+    read = {" ".join(line.split()[1:3]) for line in out.splitlines() if line.startswith(("Hit:", "Get:"))}
+    return read - set(failed)
+
+
+def apt_causes(failed, limit=3):
+    """Dépôts en panne avec leur cause, pour le message de l'inventaire : « source (cause), … »."""
+    shown = [f"{source} ({cause[:100]})" if cause else source for source, cause in list(failed.items())[:limit]]
+    return ", ".join(shown) + (" …" if len(failed) > limit else "")
 
 
 def apt_update():
@@ -939,9 +1033,14 @@ def apt_update():
             break
         time.sleep(5)
     failed = apt_unreachable(out)
-    if code == 0 and failed and not re.search(r"^(Hit|Get):", out, re.M):
+    readable = _apt_readable(out, failed)
+    if code != 0 and failed and readable and _apt_only_repository_errors(out):
+        code = 0                # un dépôt périmé ou non signé parmi d'autres : le reste se met à jour, il est signalé à part
+    if code == 0 and failed and not readable:
         source, cause = next(iter(failed.items()))
         reason = cause or source
+        if not any(line.startswith("Err:") for line in out.splitlines()):
+            reason = f"{source} ({cause})" if cause else source     # dépôt refusé (périmé, non signé) : le nommer
         return 100, out.rstrip("\n") + "\n" + t(f"Aucun dépôt joignable : {reason}", f"No repository reachable: {reason}", f"Ningún repositorio accesible: {reason}") + "\n"
     return code, out
 
@@ -955,12 +1054,12 @@ def scan_updates(state=None):
         if code != 0:
             inv["error"] = "apt-get update : " + out.strip().splitlines()[-1][:300] if out.strip() else "apt-get update"
         else:
-            failed = list(apt_unreachable(out))
-            sources = ", ".join(failed[:3]) + (" …" if len(failed) > 3 else "")
+            failed = apt_unreachable(out)
+            sources = apt_causes(failed)
             if len(failed) == 1:
-                inv["warning"] = t(f"Dépôt injoignable, ses mises à jour ne sont pas comptées : {sources}", f"Repository unreachable, its updates are not counted: {sources}", f"Repositorio inaccesible, sus actualizaciones no se cuentan: {sources}")
+                inv["warning"] = t(f"Dépôt inutilisable, ses mises à jour ne sont pas comptées : {sources}", f"Repository unusable, its updates are not counted: {sources}", f"Repositorio inutilizable, sus actualizaciones no se cuentan: {sources}")
             elif failed:
-                inv["warning"] = t(f"{len(failed)} dépôts injoignables, leurs mises à jour ne sont pas comptées : {sources}", f"{len(failed)} repositories unreachable, their updates are not counted: {sources}", f"{len(failed)} repositorios inaccesibles, sus actualizaciones no se cuentan: {sources}")
+                inv["warning"] = t(f"{len(failed)} dépôts inutilisables, leurs mises à jour ne sont pas comptées : {sources}", f"{len(failed)} repositories unusable, their updates are not counted: {sources}", f"{len(failed)} repositorios inutilizables, sus actualizaciones no se cuentan: {sources}")
         inv["updates"] = apt_simulation()
         # Paquets retenus par loco : absents de la simulation, mais le portail doit les voir pour les signaler bloqués.
         patterns = (state or {}).get("blocks") or []
@@ -1211,25 +1310,38 @@ def run_script(cmd):
 
 
 def self_update(conf, wanted):
-    """Nouvelle version de loco sur le serveur : l'agent se met à jour (code servi par le serveur épinglé)."""
+    """Nouvelle version de loco sur le serveur : l'agent se met à jour (code servi par le serveur épinglé). Renvoie True
+    si le programme a été remplacé : ce processus, qui garde l'ancien code en mémoire, doit alors céder la place."""
     def key(v):
         return tuple(int(x) for x in re.findall(r"\d+", v or ""))
     if not wanted or key(wanted) <= key(VERSION):
-        return
+        return False
     try:
         code = download(conf["server"], "/agent/files/loco-client.py").decode()
         compile(code, PROGRAM, "exec")
     except (OSError, ValueError, SyntaxError) as e:
         log(t(f"mise à jour de l'agent impossible : {e}", f"agent update failed: {e}", f"no se pudo actualizar el agente: {e}"))
-        return
+        return False
     if f'VERSION = "{wanted}"' not in code:
-        return
+        return False
     tmp = PROGRAM + ".new"
     with open(tmp, "w") as f:
         f.write(code)
     os.chmod(tmp, 0o755)
     os.replace(tmp, PROGRAM)
     log(t(f"agent mis à jour : {VERSION} -> {wanted}", f"agent updated: {VERSION} -> {wanted}", f"agente actualizado: {VERSION} -> {wanted}"))
+    return True
+
+
+def relaunch():
+    """Lance tout de suite le programme qui vient d'être installé, à la place de ce processus. Sans cela, l'ancien code
+    resterait en mémoire jusqu'à la fin de la fenêtre de contacts rapprochés : il annoncerait l'ancienne version à
+    chaque contact et se retéléchargerait à chaque fois. Le verrou est rendu au passage et repris par le nouveau code."""
+    try:
+        os.execv(PROGRAM, [PROGRAM, *sys.argv[1:]])
+    except OSError as e:
+        log(t(f"relance de l'agent impossible : {e}", f"agent relaunch failed: {e}", f"no se pudo relanzar el agente: {e}"))
+    return 0                    # relance impossible : la minuterie lancera le nouveau code au prochain passage
 
 
 def remove_local():
@@ -1474,7 +1586,8 @@ def service():
     if _run_commands(conf, answer, state):
         return 0
     save(STATE, state)
-    self_update(conf, answer.get("agent_version"))
+    if self_update(conf, answer.get("agent_version")):
+        return relaunch()
     ensure_desktop_backend(state)                               # poste KDE/GNOME Wayland : composants du bureau distant prêts
     save(STATE, state)
     # Contacts adaptatifs : tant que le serveur demande un intervalle court (action en attente, enchaînement d'une
@@ -1498,7 +1611,8 @@ def service():
         if _run_commands(conf, answer, state):
             return 0
         save(STATE, state)
-        self_update(conf, answer.get("agent_version"))
+        if self_update(conf, answer.get("agent_version")):
+            return relaunch()
     return 0
 
 
