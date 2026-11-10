@@ -56,6 +56,10 @@ Depuis la fiche de l'appareil, comme pour un poste :
 - **Écran** — voir l'écran en direct et le piloter (toucher, faire défiler, clavier et souris). Les boutons
   *Retour*, *Accueil*, *Applications récentes* et *Notifications* sont dans la barre d'outils ; un clic
   droit fait *Retour*, un clic du milieu *Accueil*, la molette fait défiler.
+  Le doigt suit la souris en direct : maintenez le bouton pour un appui long, glissez pour faire défiler ou
+  déplacer, l'écran bouge pendant le geste. Ce qui bouge est transmis en JPEG, léger, puis l'image redevient
+  nette dès que l'écran se pose. Pour une image fluide, il faut le **partage d'écran** (voir plus bas) : le
+  contrôle à distance seul reste limité par Android à trois images par seconde environ.
 - **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
   l'autre ; les variables d'environnement, non.
 - **Fichiers** — parcourir, téléverser, télécharger, renommer et supprimer dans le stockage de l'appareil.

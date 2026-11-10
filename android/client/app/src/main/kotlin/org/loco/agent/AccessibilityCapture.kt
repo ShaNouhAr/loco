@@ -85,20 +85,15 @@ class AccessibilityCapture(private val service: AccessibilityService) : FrameSou
         val w = width
         val h = height
         val scaled = if (w != soft.width || h != soft.height) Bitmap.createScaledBitmap(soft, w, h, true).also { soft.recycle() } else soft
-        val argb = IntArray(w * h)
-        scaled.getPixels(argb, 0, w, 0, 0, w, h)
+        // ARGB_8888 est rangé en mémoire R, V, B, A : c'est le format de l'encodeur, copié d'un bloc.
+        val out = ByteArray(w * h * 4)
+        scaled.copyPixelsToBuffer(java.nio.ByteBuffer.wrap(out))
         scaled.recycle()
-        val out = ByteArray(w * h * 4)                      // BGRX, attendu par l'encodeur
-        var o = 0
-        for (c in argb) {
-            out[o] = c.toByte(); out[o + 1] = (c shr 8).toByte(); out[o + 2] = (c shr 16).toByte()
-            o += 4
-        }
         return Frame(out, w, h)
     }
 
     private companion object {
-        const val MAX_SIDE = 1600          // même plafond que le partage d'écran
+        const val MAX_SIDE = 1280          // même plafond que le partage d'écran
         const val INTERVAL = 350L          // Android refuse plus d'une lecture toutes les 333 ms
         const val STALE = 3000L
         const val FIRST = 1500L

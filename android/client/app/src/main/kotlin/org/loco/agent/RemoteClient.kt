@@ -24,6 +24,8 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         private set
     private var watching = false     // une session d'écran est ouverte : l'appareil l'affiche (notification)
     private var lastActivity = 0L
+    private var failures = 0
+    private val stats = Rfb.Stats("échanges")
 
     private inner class Session(val id: String, val kind: String) {
         val toAgent = Pipe()         // navigateur -> agent (messages RFB, frappes, requêtes de fichiers)
@@ -89,8 +91,10 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         for (s in sessions.values) arr.put(s.payload())
         payload.put("sessions", arr)
 
-        val resp = JSONObject(Net.postJson("${store.server}/agent/api/remote", payload.toString(),
-            store.caPem, store.token, timeoutMs = 20000))
+        val started = System.currentTimeMillis()
+        val body = payload.toString()
+        val resp = JSONObject(Net.postJson("${store.server}/agent/api/remote", body, store.caPem, store.token, timeoutMs = 20000))
+        if (sessions.isNotEmpty()) stats.add(body.length, System.currentTimeMillis() - started)
         val descriptors = resp.optJSONArray("sessions") ?: JSONArray()
         val seen = HashMap<String, JSONObject>()
         for (i in 0 until descriptors.length()) {
@@ -137,9 +141,11 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         val now = System.currentTimeMillis()
         if (busy || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
         if (sessions.isEmpty()) return 3000
+        // Des octets attendent encore (image plus grosse qu'un envoi) : enchaîner sans pause.
+        if (sessions.values.any { it.toBrowser.available() > 0 }) return 0
         val idle = now - lastActivity
         return when {
-            idle < 4000 -> 25
+            idle < 4000 -> 10
             idle < 15000 -> 250
             else -> 1200
         }
@@ -161,8 +167,11 @@ class RemoteClient(private val context: Context, private val store: Store, priva
                 2000
             } catch (e: Exception) {
                 android.util.Log.e("loco-remote", "échange", e)
-                3000
+                // Une connexion gardée a pu être fermée par le serveur : un nouvel essai tout de suite la remplace
+                // (rien n'est rejoué, les paquets sont numérotés). Ensuite seulement, espacer.
+                if (++failures <= 2) 150 else 3000
             }
+            if (delay < 150) failures = 0
             try { Thread.sleep(delay) } catch (_: InterruptedException) {}
         }
     }

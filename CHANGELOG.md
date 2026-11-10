@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.148.0 — 2026-11-10
+
+- **Bureau à distance Android bien plus rapide** : l'écran d'un appareil Android arrivait par à-coups, avec plus d'une seconde entre un clic et son effet. L'application refaisait une connexion sécurisée complète à chacun de ses échanges avec loco (une trentaine par seconde) : elle garde maintenant la connexion ouverte. Ce qui bouge à l'écran part en JPEG, deux fois plus léger, puis l'image redevient nette dès que l'écran se pose ; et l'application envoie les images sans attendre que le navigateur les redemande une à une, en se réglant sur ce qu'il a réellement affiché. Sur l'appareil d'essai : environ dix images par seconde au lieu d'une et demie, et un tiers de seconde entre un clic et l'image au lieu d'une seconde et demie.
+- **Le doigt suit la souris en direct** : glisser pour faire défiler ou déplacer agit pendant le geste, au lieu d'être rejoué une fois le bouton relâché ; maintenir le bouton fait un appui long.
+- **Pour une image fluide, le partage d'écran** : le contrôle à distance (accessibilité) seul reste limité par Android à trois images par seconde environ. Activez l'écran distant dans l'application, ou appairez l'appareil une fois par adb pour qu'il le reprenne seul.
+- L'assistant IA, qui ne lit pas le JPEG, reçoit toujours l'écran sans perte, comme avant.
+
 ## 2.147.2 — 2026-11-10
 
 - **Bureau à distance : une page rangée** : hors plein écran, les réglages d'affichage, les boutons de la session et les commandes se partageaient trois rangées sans ordre. Le titre et l'état de la session sont maintenant à gauche, **Plein écran**, **Nouvel onglet** et **Fermer la session** à droite sur la même ligne. L'écran du poste tient dans un seul cadre : au-dessus, la barre des commandes envoyées au poste (Ctrl+Alt+Suppr, raccourcis, touches à maintenir, texte, presse-papiers) ; dessous, une barre d'état avec la résolution, le zoom et la note de session. La page tient dans la fenêtre, sans ascenseur.

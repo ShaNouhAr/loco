@@ -12,6 +12,7 @@ import java.security.cert.X509Certificate
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManager
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
@@ -62,11 +63,21 @@ object Net {
         return ctx
     }
 
+    /** Fabrique de connexions pour l'autorité épinglée, gardée d'un appel à l'autre. Une fabrique neuve à chaque requête
+     *  empêchait Android de réutiliser la connexion : chaque échange du bureau distant (des dizaines par seconde)
+     *  refaisait une poignée de main TLS complète, ce qui coûte cher sur un vrai réseau. */
+    @Volatile private var pinned: Pair<String, SSLSocketFactory>? = null
+
+    private fun factoryFor(caPem: String): SSLSocketFactory {
+        pinned?.let { if (it.first == caPem) return it.second }
+        return contextFor(caPem).socketFactory.also { pinned = caPem to it }
+    }
+
     /** Télécharge url dans dest (autorité épinglée), sans dépasser la taille attendue ; renvoie l'empreinte SHA-256.
      *  expected < 0 : taille inconnue, plafonnée à MAX_DOWNLOAD. */
     fun download(url: String, dest: File, caPem: String, bearer: String?, expected: Long, onProgress: (Long) -> Unit = {}): String {
         val conn = URL(url).openConnection() as HttpsURLConnection
-        conn.sslSocketFactory = contextFor(caPem).socketFactory
+        conn.sslSocketFactory = factoryFor(caPem)
         bearer?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
         conn.connectTimeout = 30000; conn.readTimeout = 120000
         try {
@@ -99,18 +110,26 @@ object Net {
 
     fun postJson(url: String, body: String, caPem: String, bearer: String? = null, timeoutMs: Int = 30000): String {
         val conn = URL(url).openConnection() as HttpsURLConnection
-        conn.sslSocketFactory = contextFor(caPem).socketFactory
+        conn.sslSocketFactory = factoryFor(caPem)
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
         bearer?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
         conn.doOutput = true
         conn.connectTimeout = timeoutMs; conn.readTimeout = timeoutMs
-        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        val code = conn.responseCode
-        val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
+        val payload = body.toByteArray(Charsets.UTF_8)
+        conn.setFixedLengthStreamingMode(payload.size)         // envoi direct, sans copie tampon du corps
         val out = ByteArrayOutputStream()
-        stream.use { it.copyTo(out) }
-        conn.disconnect()
+        val code: Int
+        try {
+            conn.outputStream.use { it.write(payload) }
+            code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else (conn.errorStream ?: conn.inputStream)
+            // Réponse lue jusqu'au bout puis fermée : la connexion retourne dans la réserve et sert à l'échange suivant.
+            stream.use { it.copyTo(out) }
+        } catch (e: IOException) {
+            conn.disconnect()                                   // connexion en mauvais état : ne pas la réutiliser
+            throw e
+        }
         val text = out.toString("UTF-8")
         if (code !in 200..299) throw HttpError(code, text)
         return text

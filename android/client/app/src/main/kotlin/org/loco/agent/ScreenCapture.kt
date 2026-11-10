@@ -67,6 +67,7 @@ class ScreenCapture(context: Context, private val projection: MediaProjection) :
     private var scheduled = false
     private var lastRead = 0L
     @Volatile private var released = false
+    private val stats = Rfb.Stats("capture")
 
     private val listener = object : DisplayManager.DisplayListener {
         override fun onDisplayAdded(id: Int) {}
@@ -226,21 +227,12 @@ class ScreenCapture(context: Context, private val projection: MediaProjection) :
         buf.clear()
         GLES20.glReadPixels(0, 0, w, h, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buf)
 
-        // RGBA relu de bas en haut -> BGRX de haut en bas, attendu par l'encodeur.
-        val rowBytes = w * 4
-        val row = ByteArray(rowBytes)
-        val out = ByteArray(rowBytes * h)
-        for (y in 0 until h) {
-            buf.position((h - 1 - y) * rowBytes)
-            buf.get(row)
-            var p = 0
-            var o = y * rowBytes
-            while (p < rowBytes) {
-                out[o] = row[p + 2]; out[o + 1] = row[p + 1]; out[o + 2] = row[p]; out[o + 3] = 0
-                p += 4; o += 4
-            }
-        }
+        // L'image est dessinée tête en bas (QUAD), donc relue de haut en bas : une seule copie, sans boucle par pixel.
+        val out = ByteArray(w * 4 * h)
+        buf.position(0)
+        buf.get(out)
         synchronized(lock) { latest = out }
+        stats.add(out.size, SystemClock.uptimeMillis() - lastRead)
         if (dirty) schedule()          // une image est arrivée pendant la lecture
     }
 
@@ -288,8 +280,8 @@ class ScreenCapture(context: Context, private val projection: MediaProjection) :
     }
 
     private companion object {
-        const val MAX_SIDE = 1600          // plafond du plus grand côté capturé (au-delà, mis à l'échelle)
-        const val MIN_INTERVAL = 50L       // au plus ~20 relectures par seconde
+        const val MAX_SIDE = 1280          // plafond du plus grand côté capturé (au-delà, mis à l'échelle)
+        const val MIN_INTERVAL = 33L       // au plus ~30 relectures par seconde
 
         const val VERTEX = """
             attribute vec4 aPos;
@@ -306,7 +298,8 @@ class ScreenCapture(context: Context, private val projection: MediaProjection) :
             void main() { gl_FragColor = texture2D(sTex, vTex); }
         """
 
-        val QUAD: FloatBuffer = floats(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
+        // Sommets renversés de haut en bas : glReadPixels rend alors les lignes dans l'ordre de l'écran.
+        val QUAD: FloatBuffer = floats(-1f, 1f, 1f, 1f, -1f, -1f, 1f, -1f)
         val TEXCOORDS: FloatBuffer = floats(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)
 
         fun floats(vararg v: Float): FloatBuffer =

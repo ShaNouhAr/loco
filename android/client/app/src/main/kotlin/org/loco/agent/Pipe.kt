@@ -74,6 +74,14 @@ class Pipe {
     }
 
     fun available(): Int = synchronized(lock) { size }
+
+    /** Attend au plus [ms] millisecondes qu'il y ait quelque chose à lire ; EOFException si le tampon est fermé et vide. */
+    fun await(ms: Long) {
+        synchronized(lock) {
+            if (size == 0 && !closed) lock.wait(ms)
+            if (size == 0 && closed) throw EOFException()
+        }
+    }
     val isClosed: Boolean get() = synchronized(lock) { closed }
 
     fun close() {

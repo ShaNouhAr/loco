@@ -24,8 +24,6 @@ import android.view.accessibility.AccessibilityNodeInfo
 class InputService : AccessibilityService(), InputSink {
     private val main = Handler(Looper.getMainLooper())
     private var prevButtons = 0
-    private var downAt = 0L
-    private val path = ArrayList<FloatArray>()
     private var wheel = 0
     private var wheelX = 0f
     private var wheelY = 0f
@@ -54,37 +52,67 @@ class InputService : AccessibilityService(), InputSink {
         if (pressed and 8 != 0) scroll(-1, fx, fy)                            // molette vers le haut
         if (pressed and 16 != 0) scroll(1, fx, fy)                            // molette vers le bas
 
+        // Clic gauche : le doigt se pose, suit la souris et se lève en même temps qu'elle (toucher, appui long, glisser).
         val left = buttons and 1 != 0
         val wasLeft = prevButtons and 1 != 0
-        if (left && !wasLeft) {
-            path.clear(); path.add(floatArrayOf(fx, fy)); downAt = System.currentTimeMillis()
-        } else if (left) {
-            val last = path.last()
-            if (Math.hypot((fx - last[0]).toDouble(), (fy - last[1]).toDouble()) >= 6 && path.size < 60) path.add(floatArrayOf(fx, fy))
-        } else if (wasLeft) {
-            if (path.isEmpty() || Math.hypot((fx - path.last()[0]).toDouble(), (fy - path.last()[1]).toDouble()) >= 2) path.add(floatArrayOf(fx, fy))
-            gesture(System.currentTimeMillis() - downAt)
-        }
         prevButtons = buttons
+        if (left || wasLeft) main.post { finger(left, fx.coerceAtLeast(0f), fy.coerceAtLeast(0f)) }
     }
 
-    /** Toucher, appui long ou glisser, selon la distance parcourue et la durée d'appui. */
-    private fun gesture(heldMs: Long) {
-        if (path.isEmpty()) return
-        val start = path.first()
-        val end = path.last()
-        val moved = Math.hypot((end[0] - start[0]).toDouble(), (end[1] - start[1]).toDouble())
-        val p = Path()
-        p.moveTo(start[0].coerceAtLeast(0f), start[1].coerceAtLeast(0f))
-        val duration: Long
-        if (moved < 10) {
-            p.lineTo(start[0] + 1f, start[1] + 1f)
-            duration = if (heldMs >= 500) heldMs.coerceAtMost(3000) else 40      // appui long ou toucher
-        } else {
-            for (i in 1 until path.size) p.lineTo(path[i][0].coerceAtLeast(0f), path[i][1].coerceAtLeast(0f))
-            duration = heldMs.coerceIn(80L, 3000L)
+    // --- Doigt suivi en direct -----------------------------------------------
+    // Le geste est envoyé à Android par petits segments enchaînés (continueStroke) : l'écran défile pendant que la
+    // souris glisse, au lieu de rejouer tout le trajet une fois le bouton relâché. Tout se passe sur le fil principal.
+    private var stroke: GestureDescription.StrokeDescription? = null   // segment en cours, à prolonger
+    private var sending = false                                        // Android exécute un segment
+    private var down = false                                           // bouton encore enfoncé
+    private var atX = 0f; private var atY = 0f                         // fin du dernier segment envoyé
+    private var toX = 0f; private var toY = 0f                         // position de la souris
+
+    private fun finger(pressed: Boolean, x: Float, y: Float) {
+        toX = x; toY = y; down = pressed
+        if (!sending) advance()
+    }
+
+    private fun advance() {
+        if (stroke == null) {
+            if (!down) return                                           // rien en cours, bouton relâché
+            atX = toX; atY = toY                                        // nouveau doigt, posé là où est la souris
         }
-        dispatch(p, duration)
+        segment()
+    }
+
+    /** Envoie le segment suivant : de la fin du précédent à la souris, en gardant le doigt posé tant que le bouton l'est. */
+    private fun segment() {
+        val previous = stroke
+        if (previous == null && !down) return                           // rien en cours
+        val p = Path()
+        p.moveTo(atX, atY)
+        p.lineTo(toX, toY)
+        val moved = Math.hypot((toX - atX).toDouble(), (toY - atY).toDouble())
+        // Doigt posé et souris immobile : rien à envoyer, Android le garde posé (appui long). Un segment sans mouvement
+        // ni lever ne produit aucun événement, et Android le refuserait en lâchant le geste.
+        if (previous != null && down && moved < 1) return
+        // Court pour suivre la main ; un peu plus long quand elle va vite, pour un glissement régulier.
+        val duration = (SEGMENT_MOVE + moved / 40).toLong().coerceAtMost(60)
+        val next = try {
+            if (previous == null) GestureDescription.StrokeDescription(p, 0, duration, down)
+            else previous.continueStroke(p, 0, duration, down)
+        } catch (_: Exception) {
+            stroke = null; down = false; return
+        }
+        atX = toX; atY = toY
+        stroke = if (down) next else null
+        sending = true
+        val accepted = try {
+            dispatchGesture(GestureDescription.Builder().addStroke(next).build(), object : GestureResultCallback() {
+                override fun onCompleted(gesture: GestureDescription?) { sending = false; advance() }
+                // Geste coupé par Android (un vrai doigt sur l'écran, par exemple) : on repart de zéro au prochain clic.
+                override fun onCancelled(gesture: GestureDescription?) { sending = false; stroke = null; down = false }
+            }, main)
+        } catch (_: Exception) {
+            false
+        }
+        if (!accepted) { sending = false; stroke = null; down = false }
     }
 
     /** Molette : les crans proches sont regroupés en un seul glissement. */
@@ -103,7 +131,7 @@ class InputService : AccessibilityService(), InputSink {
             p.lineTo(wheelX, endY)
             wheel = 0
             dispatch(p, 220)
-        }, 70)
+        }, 40)
     }
 
     private fun dispatch(p: Path, durationMs: Long) {
@@ -216,6 +244,9 @@ class InputService : AccessibilityService(), InputSink {
     companion object {
         @Volatile
         var instance: InputService? = null
+
+        // Durée de base d'un segment du doigt suivi en direct (allongée avec la distance parcourue).
+        const val SEGMENT_MOVE = 16L
 
         // Touches de navigation Android envoyées par le portail (keysyms XF86).
         const val XF86_BACK = 0x1008ff26L
