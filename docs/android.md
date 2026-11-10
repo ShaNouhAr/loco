@@ -68,10 +68,22 @@ Depuis la fiche de l'appareil, comme pour un poste :
 
 Chaque capacité s'active depuis l'application, sur l'appareil, et se voit :
 
-- **Écran distant** : *Activer l'écran distant* lance la capture (Android affiche son indicateur de partage
-  tant qu'elle est active). Sans elle, l'écran reste invisible.
 - **Contrôle** : *Ouvrir les réglages d'accessibilité* pour autoriser loco à toucher, faire défiler, revenir
-  et écrire. Sans lui, l'écran est seulement visible.
+  et écrire. **Une fois ce service activé, il n'y a plus rien à refaire sur l'appareil** : loco montre aussi
+  l'écran par lui à chaque session (Android 11 et plus), même après un redémarrage, sans rouvrir l'application.
+  Android limite cette lecture à trois images par seconde environ. Si Android répond « accès refusé » (Android 13
+  et plus, application installée depuis un fichier) : *Paramètres › Applications › Agent loco*, menu ⋮,
+  *Autoriser les paramètres restreints*, puis recommencez.
+- **Écran distant** : *Activer l'écran distant* lance le partage d'écran d'Android, plus fluide (Android affiche
+  son indicateur de partage tant qu'il est actif). Android le redemande après chaque redémarrage de
+  l'application ; ce bouton est donc facultatif dès que le contrôle est activé.
+- **Tout autoriser une seule fois, par adb** : appairez l'appareil avec loco (voir *Terminal adb* plus bas). loco
+  autorise alors lui-même le partage d'écran sans fenêtre d'accord, active le contrôle, lève le blocage des
+  paramètres restreints, et l'application rallume seule le débogage sans fil quand Android le coupe.
+
+Pendant toute session d'écran, l'appareil affiche la notification **« Contrôle à distance en cours »** : rien
+n'est montré en dehors d'une session ouverte depuis le portail.
+
 - **Fichiers** : *Autoriser l'accès aux fichiers* (accès à tous les fichiers).
 - **Installations** : *Autoriser les installations*, pour que loco installe les applications que vous
   déployez. Android demande quand même votre confirmation pour chaque nouvelle application.
@@ -115,7 +127,14 @@ Sur la fiche de l'appareil, **Terminal adb** (ou *Plus › Débogage adb…*) ou
 
 L'appairage se fait une seule fois. Le port de connexion change à chaque activation du débogage sans fil :
 l'application loco le découvre sur l'appareil et l'indique à loco. Android coupe le débogage sans fil au
-redémarrage ou quand l'appareil change de réseau : réactivez-le, sans nouvel appairage.
+redémarrage ou quand l'appareil change de réseau : l'application loco (2.145.0 et plus) le rallume seule, avec
+le droit que loco lui donne par adb à l'appairage. Sur un réseau Wi-Fi nouveau, Android demande encore de
+confirmer sur l'appareil.
+
+Au premier contact qui suit l'appairage, loco pose une fois pour toutes, par adb, ce qui évite tout geste
+ensuite : partage d'écran sans fenêtre d'accord, contrôle (accessibilité) activé, paramètres restreints levés,
+application dispensée de mise en veille. Le *Journal* le note (« parc.adb.autorisations »), et *Oublier* le
+débogage adb arrête de garder le débogage sans fil allumé.
 
 ### Port adb classique
 

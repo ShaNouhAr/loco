@@ -40,6 +40,11 @@ case "$1" in
                  *"getprop ro.product.brand"*) echo google ;;
                  *"input motionevent"*) echo false > {state}.lk ;;
                  *"input keyevent 66"*) echo false > {state}.lk ;;
+                 *"pm grant"*) if [ -e {state}.oldapp ]; then
+                       echo "Exception occurred while executing 'grant': java.lang.SecurityException: Package org.loco.agent has not requested permission android.permission.WRITE_SECURE_SETTINGS"; exit 255; fi ;;
+                 *"appops set"*"ACCESS_RESTRICTED_SETTINGS"*) if [ -e {state}.android12 ]; then echo "Error: Unknown operation string: ACCESS_RESTRICTED_SETTINGS"; exit 255; fi ;;
+                 *"settings get secure enabled_accessibility_services"*) cat {state}.a11y 2>/dev/null || echo null ;;
+                 *"settings put secure enabled_accessibility_services"*) echo "$5" > {state}.a11y ;;
                esac
                exit 0 ;;
       esac ;;
@@ -76,8 +81,8 @@ class AdbTest(FleetTest):
         with transaction() as conn:
             conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
 
-    def phone(self, report=None):
-        a = Agent(dict(ANDROID, agent_version="2.139.0"), "192.168.43.71", uid="d" * 32)
+    def phone(self, report=None, version="2.139.0"):
+        a = Agent(dict(ANDROID, agent_version=version), "192.168.43.71", uid="d" * 32)
         a.enroll()
         data = dict(a.ident, adb=report if report is not None else {"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"})
         a.post("/agent/api/checkin", data, a.token)
@@ -170,6 +175,94 @@ class TestSetup(AdbTest):
             conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
         r = self.admin.post(f"/fleet/{dev['id']}/session", {"kind": "adb"}, page=f"/fleet/{dev['id']}")
         self.assertEqual(r.status_code, 403)
+
+
+class TestPermanentScreen(AdbTest):
+    """Appairage adb = autorisation donnée une fois : loco pose sur l'application loco de quoi montrer et piloter
+    l'écran sans geste, et lui demande de garder le débogage sans fil joignable."""
+
+    def ensure(self, dev):
+        with fixture.loco.app.test_request_context():
+            return adb.ensure(device(dev["uid"]))
+
+    def prepared(self, dev):
+        return json.loads(self.link(dev)["prepared"] or "{}")
+
+    def test_pairing_then_connecting_grants_everything_once(self):
+        with open(self.state + ".a11y", "w") as f:
+            f.write("com.exemple/.Lecteur\n")                             # un service déjà activé par la personne
+        _a, dev = self.phone(version="2.145.0")
+        self.pair(dev)
+        self.assertEqual(self.prepared(dev), {})                           # rien tant que loco n'a pas joint l'appareil
+        self.assertEqual(self.ensure(dev), "192.168.43.71:41235")
+        done = self.prepared(dev)
+        self.assertEqual(done["done"], ["screen", "launch", "adb", "restricted", "battery", "control"])
+        self.assertEqual(done["agent"], "2.145.0")
+        log = self.args()
+        for command in ("appops set org.loco.agent PROJECT_MEDIA allow", "appops set org.loco.agent SYSTEM_ALERT_WINDOW allow",
+                        "pm grant org.loco.agent android.permission.WRITE_SECURE_SETTINGS",
+                        "appops set org.loco.agent ACCESS_RESTRICTED_SETTINGS allow", "dumpsys deviceidle whitelist +org.loco.agent",
+                        "settings put secure enabled_accessibility_services com.exemple/.Lecteur:org.loco.agent/org.loco.agent.InputService",
+                        "settings put secure accessibility_enabled 1"):
+            self.assertIn("-s 192.168.43.71:41235 shell " + command, log)
+        with transaction() as conn:
+            detail = conn.execute("SELECT detail FROM audit WHERE action='parc.adb.autorisations'").fetchone()[0]
+        self.assertIn("screen, launch, adb, restricted, battery, control", detail)
+        self.assertIn("Écran distant autorisé une fois pour toutes", self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True))
+        self.ensure(dev)                                                   # déjà fait : rien n'est reposé
+        self.assertEqual(self.args().count("PROJECT_MEDIA"), 1)
+
+    def test_what_android_or_the_app_refuses_is_not_claimed(self):
+        open(self.state + ".android12", "w").close()                       # pas de réglages restreints avant Android 13
+        open(self.state + ".oldapp", "w").close()
+        _a, dev = self.phone(version="2.145.0")
+        self.pair(dev)
+        self.ensure(dev)
+        self.assertEqual(self.prepared(dev)["done"], ["screen", "launch", "battery", "control"])
+
+    def test_an_older_app_is_prepared_once_it_is_updated(self):
+        a, dev = self.phone()                                              # 2.139.0 : ne saurait rien en faire
+        self.pair(dev)
+        self.ensure(dev)
+        self.assertEqual(self.prepared(dev), {})
+        self.assertNotIn("PROJECT_MEDIA", self.args())
+        a.ident["agent_version"] = "2.145.0"                               # l'application s'est mise à jour
+        a.post("/agent/api/checkin", dict(a.ident, adb={"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"}), a.token)
+        self.ensure(dev)
+        self.assertIn("screen", self.prepared(dev)["done"])
+
+    def test_a_contact_of_a_paired_device_prepares_it_in_the_background(self):
+        a, dev = self.phone(version="2.145.0")
+        self.pair(dev)
+        adb._PREPARING.clear()
+        answer = a.post("/agent/api/checkin", dict(a.ident, adb={"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"}),
+                        a.token).get_json()
+        self.assertEqual(answer["adb"], {"keep": True})                    # garder le débogage sans fil joignable
+        for _ in range(100):
+            if self.prepared(dev):
+                break
+            time.sleep(0.05)
+        self.assertIn("screen", self.prepared(dev).get("done", []))
+        count = self.args().count("PROJECT_MEDIA")
+        a.post("/agent/api/checkin", dict(a.ident, adb={"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"}), a.token)
+        time.sleep(0.2)
+        self.assertEqual(self.args().count("PROJECT_MEDIA"), count)        # une fois suffit
+
+    def test_keeping_adb_reachable_is_only_asked_while_paired(self):
+        a, dev = self.phone(version="2.145.0")
+        contact = lambda: a.post("/agent/api/checkin", dict(a.ident, adb={"developer": True, "wireless": False, "port": 0, "ip": ""}),  # noqa: E731
+                                 a.token).get_json()["adb"]
+        self.assertEqual(contact(), {"keep": False})
+        self.pair(dev)
+        self.assertEqual(contact(), {"keep": True})
+        self.ensure_prepared_then_forget(dev)
+        self.assertEqual(contact(), {"keep": False})
+        self.assertEqual(self.prepared(dev), {})
+
+    def ensure_prepared_then_forget(self, dev):
+        with transaction() as conn:
+            conn.execute("UPDATE android_adb SET prepared=? WHERE device_id=?", ('{"at": "2026-11-10 10:00", "agent": "2.145.0", "done": ["screen"]}', dev["id"]))
+        self.admin.post(f"/fleet/{dev['id']}/adb/forget", page=f"/fleet/{dev['id']}")
 
 
 class TestTerminal(AdbTest):

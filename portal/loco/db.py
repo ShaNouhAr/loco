@@ -610,6 +610,11 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN label TEXT NOT NULL DEFAULT '';
     """,
+    # 43 : autorisations posées une fois par adb sur l'application loco d'un appareil Android appairé (écran distant et
+    # contrôle sans geste) : JSON {at, agent, done}.
+    """
+    ALTER TABLE android_adb ADD COLUMN prepared TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

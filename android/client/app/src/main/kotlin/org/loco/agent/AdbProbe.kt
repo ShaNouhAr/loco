@@ -1,6 +1,9 @@
 package org.loco.agent
 
 import android.content.Context
+import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.provider.Settings
@@ -9,8 +12,8 @@ import java.net.Inet4Address
 import java.net.NetworkInterface
 
 /** Ce que loco doit savoir pour ouvrir un terminal adb : options pour les développeurs, débogage sans fil, et le port
- *  de connexion que l'appareil annonce sur le réseau local (il change à chaque activation). Rien n'est modifié ici :
- *  c'est la personne qui active le débogage et qui appaire loco, sur l'appareil. */
+ *  de connexion que l'appareil annonce sur le réseau local (il change à chaque activation). C'est la personne qui
+ *  active le débogage et qui appaire loco, sur l'appareil ; ensuite seulement, [keep] le rallume quand il se coupe. */
 object AdbProbe {
     private const val SERVICE = "_adb-tls-connect._tcp"
     @Volatile private var port = 0
@@ -24,6 +27,27 @@ object AdbProbe {
         if (wireless) start(context) else stop(context)
         return JSONObject().put("developer", developer).put("wireless", wireless)
             .put("port", if (wireless) port else 0).put("ip", if (wireless) host else "")
+    }
+
+    /** Rallume le débogage sans fil coupé par Android (redémarrage, Wi-Fi perdu puis retrouvé), pour que loco garde
+     *  l'accès que la personne lui a donné en l'appairant. Possible seulement avec le droit que loco reçoit par adb à
+     *  l'appairage (WRITE_SECURE_SETTINGS), en Wi-Fi, et tant que les options pour les développeurs restent activées.
+     *  Sur un réseau Wi-Fi nouveau, Android demande encore de confirmer sur l'appareil. */
+    fun keep(context: Context) {
+        try {
+            if (context.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") != PackageManager.PERMISSION_GRANTED) return
+            val cr = context.contentResolver
+            if (Settings.Global.getInt(cr, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 1) return
+            if (Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1 || !onWifi(context)) return
+            Settings.Global.putInt(cr, "adb_wifi_enabled", 1)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun onWifi(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     @Synchronized private fun start(context: Context) {

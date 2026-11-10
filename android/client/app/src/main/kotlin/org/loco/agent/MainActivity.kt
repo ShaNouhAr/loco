@@ -100,15 +100,18 @@ class MainActivity : Activity() {
         })
 
         val sharing = LocoService.sharing
-        row(access, getString(R.string.screen_title), sharing,
-            getString(if (sharing) R.string.screen_state_on else R.string.screen_state_off),
+        // Sans partage en cours, l'écran reste disponible à chaque session dès que loco peut le montrer seul.
+        val ready = sharing || ProjectionActivity.silent(this) || InputService.instance?.screen != null
+        row(access, getString(R.string.screen_title), ready,
+            getString(if (sharing) R.string.screen_state_on else if (ready) R.string.screen_state_ready else R.string.screen_state_off),
             getString(R.string.screen_hint),
             getString(if (sharing) R.string.screen_off else R.string.screen_on)) { if (sharing) stopScreen() else requestScreen() }
 
         val control = controlEnabled()
         row(access, getString(R.string.control_title), control,
             getString(if (control) R.string.control_state_on else R.string.control_state_off),
-            getString(R.string.control_hint),
+            // Android 13 et plus bloque l'accessibilité d'une application installée depuis un fichier : dire comment la permettre.
+            getString(R.string.control_hint) + if (!control && Build.VERSION.SDK_INT >= 33) " " + getString(R.string.control_restricted) else "",
             if (control) null else getString(R.string.control_on)) {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }

@@ -14,12 +14,14 @@ import java.util.TreeMap
  * Relais du bureau/terminal/fichiers : interroge /agent/api/remote, relaie l'écran encodé et les entrées par paquets
  * numérotés et acquittés (jamais de rejeu après une coupure). Aucune connexion entrante : l'appareil sort en HTTPS.
  */
-class RemoteClient(private val context: Context, private val store: Store, private val screen: () -> FrameSource?) {
+class RemoteClient(private val context: Context, private val store: Store, private val screen: () -> FrameSource?,
+                   private val screenReady: () -> Boolean, private val onWatching: (Boolean) -> Unit) {
     private val sessions = HashMap<String, Session>()
     @Volatile private var running = true
     /** Vrai tant qu'une session (écran, terminal, fichiers) est ouverte : pas de mise à jour de l'application pendant ce temps. */
     @Volatile var inUse = false
         private set
+    private var watching = false     // une session d'écran est ouverte : l'appareil l'affiche (notification)
     private var lastActivity = 0L
 
     private inner class Session(val id: String, val kind: String) {
@@ -122,13 +124,15 @@ class RemoteClient(private val context: Context, private val store: Store, priva
             }
             if (d.optLong("ack") == s.seq) s.pending = ByteArray(0)
             // Accord : sur son propre appareil, l'autorisation de capture d'écran vaut accord.
-            if (d.has("consent") && s.consent.isEmpty()) s.consent = if (screen() != null) "given" else "nobody"
+            if (d.has("consent") && s.consent.isEmpty()) s.consent = if (screenReady()) "given" else "nobody"
             d.optJSONArray("packets")?.let { if (it.length() > 0) { s.ingest(it); busy = true } }
             if (s.toBrowser.available() > 0 || s.pending.isNotEmpty()) busy = true
         }
         // La poignée de main et le flux sont interactifs : rester rapide tant qu'il y a de l'activité récente,
         // ralentir seulement après un vrai silence (onglet caché, écran figé sans demande du navigateur).
         inUse = sessions.isNotEmpty()
+        val seenNow = sessions.values.any { it.kind == "desktop" && it.state == "active" }
+        if (seenNow != watching) { watching = seenNow; onWatching(seenNow) }
         val now = System.currentTimeMillis()
         if (busy || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
         if (sessions.isEmpty()) return 3000
@@ -160,6 +164,7 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         running = false
         for (s in sessions.values) s.close()
         sessions.clear()
+        if (watching) { watching = false; onWatching(false) }
     }
 
     /** Entrées vers le service d'accessibilité, recalées sur la taille réelle de l'écran. Le service est cherché à

@@ -545,7 +545,8 @@
     <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
   <div class="dlg-b">
-    <section class="dlg-sec"><p><span class="st {{ 'ok' if adb_view.state == 'ready' else 'err' if adb_view.state == 'missing' else 'warn' }}">{{ adb_view.text|capitalize }}</span>{% if adb_view.paired_at %} <span class="small muted">· {{ _("appairé le %(date)s", date=adb_view.paired_at|date_fr) }}</span>{% endif %}</p></section>
+    <section class="dlg-sec"><p><span class="st {{ 'ok' if adb_view.state == 'ready' else 'err' if adb_view.state == 'missing' else 'warn' }}">{{ adb_view.text|capitalize }}</span>{% if adb_view.paired_at %} <span class="small muted">· {{ _("appairé le %(date)s", date=adb_view.paired_at|date_fr) }}</span>{% endif %}</p>
+      {% if adb_view.prepared.done %}<p class="hint">{{ _("Écran distant autorisé une fois pour toutes sur l'appareil le %(date)s : il ne demande plus aucun geste, et l'application loco rallume seule le débogage sans fil.", date=adb_view.prepared.at|date_fr) }}</p>{% endif %}</section>
     {% if not adb_view.available %}
     <p class="note warn">{{ _("Installez adb sur le serveur loco : il est inclus dans l'appliance à partir de cette version (après la mise à jour) ; sous Debian ou Ubuntu, %(cmd)s.", cmd='<code>sudo apt install adb</code>'|safe) }}</p>
     {% else %}
@@ -565,7 +566,7 @@
         <div class="wide"><button class="btn primary"><span class="spin"></span>{{ _("Appairer") }}</button></div>
       </form>
       {% if seen %}<p class="hint">{{ _("Vu par l'application loco : options pour les développeurs %(dev)s, débogage sans fil %(wireless)s.", dev=_('activées') if seen.developer else _('désactivées'), wireless=(_('actif sur le port %(port)s', port=seen.port) if seen.port else _('actif')) if seen.wireless else _('inactif')) }}</p>{% endif %}
-      <p class="hint">{{ _("Le port de connexion change à chaque activation du débogage sans fil : l'application loco l'indique à loco. Android coupe le débogage sans fil au redémarrage ou en changeant de réseau : réactivez-le, sans nouvel appairage.") }}</p>
+      <p class="hint">{{ _("L'appairage se fait une seule fois. loco autorise alors l'application loco de l'appareil à montrer l'écran sans redemander le partage, à être pilotée, et à rallumer seule le débogage sans fil quand Android le coupe (redémarrage, retour du Wi-Fi). Sur un réseau Wi-Fi nouveau, Android demande encore une confirmation sur l'appareil.") }}</p>
       {% else %}
       <p class="note warn">{{ _("La version d'adb de ce serveur est trop ancienne pour l'appairage sans fil (30 ou plus requise) : utilisez un port adb classique ci-dessous.") }}</p>
       {% endif %}

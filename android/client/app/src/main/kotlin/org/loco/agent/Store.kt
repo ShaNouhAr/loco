@@ -45,12 +45,17 @@ class Store(context: Context) {
         get() = prefs.getLong("update_at", 0L)
         set(v) = prefs.edit().putLong("update_at", v).apply()
 
+    /** loco a appairé cet appareil par adb et demande de garder son débogage sans fil joignable (dernière consigne reçue). */
+    var keepAdb: Boolean
+        get() = prefs.getBoolean("keep_adb", false)
+        set(v) = prefs.edit().putBoolean("keep_adb", v).apply()
+
     val enrolled: Boolean get() = token.isNotEmpty() && server.isNotEmpty() && caPem.isNotEmpty()
 
     fun clear() {
         val edit = prefs.edit()
         val secret = token.substringAfter('.', "")
         if (secret.isNotEmpty()) edit.putString("proof", Apps.sha256(secret.toByteArray()))
-        edit.remove("server").remove("token").remove("ca").apply()
+        edit.remove("server").remove("token").remove("ca").remove("keep_adb").apply()
     }
 }

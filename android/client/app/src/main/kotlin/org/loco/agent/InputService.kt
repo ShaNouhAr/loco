@@ -31,6 +31,9 @@ class InputService : AccessibilityService(), InputSink {
     private var wheelY = 0f
     private var ctrl = false
 
+    /** Écran lu par ce service (Android 11 et plus) : disponible dès qu'il est activé, sans fenêtre de partage. */
+    val screen: FrameSource? by lazy { if (Build.VERSION.SDK_INT >= 30) AccessibilityCapture(this) else null }
+
     override fun onServiceConnected() { instance = this }
 
     override fun onDestroy() {

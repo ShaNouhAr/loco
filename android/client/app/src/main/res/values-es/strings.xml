@@ -10,7 +10,7 @@
     <string name="control_title">Control remoto en curso</string>
     <string name="control_text">Un administrador ve y controla la pantalla de este dispositivo.</string>
     <string name="svc_screen_on">Pantalla compartida con loco</string>
-    <string name="a11y_desc">Permite a loco controlar el dispositivo cuando abre la pantalla remota desde el portal: tocar, desplazar, volver y escribir en el campo activo. No se lee ni se envía nada fuera de una sesión abierta desde el portal.</string>
+    <string name="a11y_desc">Permite a loco mostrar y controlar el dispositivo cuando abre la pantalla remota desde el portal: ver la pantalla sin volver a pedir compartirla cada vez, tocar, desplazar, volver y escribir en el campo activo. No se lee ni se envía nada fuera de una sesión abierta desde el portal, y el dispositivo muestra entonces \u00ab Control remoto en curso \u00bb.</string>
     <string name="action_leave">Salir de loco</string>
     <string name="leave_explain">El dispositivo se quitará de este servidor y el agente se detendrá. Podrá inscribirlo de nuevo más tarde.</string>
     <string name="cancel">Cancelar</string>
@@ -28,12 +28,14 @@
     <string name="ca_explain">Compare esta huella con la que muestra el portal loco. Confirme solo si coincide.</string>
     <string name="ca_confirm">Coincide</string>
     <string name="screen_title">Pantalla remota</string>
-    <string name="screen_hint">loco muestra esta pantalla durante una sesión abierta desde el portal. Android muestra el indicador de uso compartido mientras está activa.</string>
+    <string name="screen_hint">loco muestra esta pantalla durante una sesión abierta desde el portal, y el dispositivo lo indica. Una vez activado el control remoto más abajo, no hay nada más que hacer aquí; este botón solo sirve para obtener una imagen más fluida.</string>
     <string name="screen_on">Activar la pantalla remota</string>
     <string name="screen_off">Dejar de compartir</string>
     <string name="screen_state_on">Compartida</string>
     <string name="screen_state_off">No compartida</string>
-    <string name="control_hint">Permite al portal tocar, desplazar, volver y escribir. Sin esto, la pantalla solo se ve.</string>
+    <string name="screen_state_ready">Disponible en cada sesión</string>
+    <string name="control_hint">Permite ver la pantalla en cada sesión sin volver a esta aplicación, y tocar, desplazar, volver y escribir desde el portal.</string>
+    <string name="control_restricted">Si Android responde \u00ab acceso denegado \u00bb: abra Ajustes › Aplicaciones › Agente loco, el menú ⋮ arriba a la derecha, \u00ab Permitir ajustes restringidos \u00bb, y vuelva aquí.</string>
     <string name="control_on">Abrir los ajustes de accesibilidad</string>
     <string name="control_state_on">Activado</string>
     <string name="control_state_off">Por activar</string>
@@ -53,7 +55,7 @@
     <string name="files_not_found">No encontrado.</string>
     <string name="files_not_empty">La carpeta no está vacía.</string>
     <string name="files_no_space">Espacio insuficiente en el dispositivo.</string>
-    <string name="remote_no_screen">Pantalla remota no activada: en la aplicación loco, toque \u00ab Activar la pantalla remota \u00bb.</string>
+    <string name="remote_no_screen">Pantalla remota no autorizada en el dispositivo: en la aplicación loco, active una vez el control remoto (accesibilidad), o toque \u00ab Activar la pantalla remota \u00bb.</string>
     <string name="remote_unsupported">Tipo de sesión no admitido en Android.</string>
     <string name="battery_title">Funcionamiento en segundo plano</string>
     <string name="battery_hint">Permita que loco siga activo en segundo plano: de lo contrario, el dispositivo puede suspenderlo y se pierde el contacto con la pantalla apagada.</string>

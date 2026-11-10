@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.145.0 — 2026-11-10
+
+- **Écran distant Android sans repasser par l'application** : il suffisait jusqu'ici de redémarrer l'application loco, ou l'appareil, pour devoir y retourner toucher « Activer l'écran distant ». Désormais, **une seule autorisation suffit** : une fois le contrôle à distance (service d'accessibilité) activé sur l'appareil, loco montre l'écran à chaque session — après une mise à jour de l'application ou un redémarrage de l'appareil aussi — sans rien refaire. Android limite cette lecture à trois images par seconde environ ; le partage d'écran, plus fluide, reste proposé. Pendant toute session d'écran, l'appareil affiche la notification « Contrôle à distance en cours ».
+- **Tout autoriser en appairant l'appareil une fois** : quand un appareil Android est appairé avec loco par adb (*Plus › Débogage adb…*), loco lui donne lui-même, une fois pour toutes, ce qu'il faut pour un écran distant fluide et sans geste : partage d'écran sans fenêtre d'accord, contrôle activé, blocage des « paramètres restreints » levé, application dispensée de mise en veille. L'application rallume aussi seule le débogage sans fil quand Android le coupe (redémarrage, retour du Wi-Fi). Le *Journal* note ces autorisations ; *Oublier* le débogage adb y met fin.
+- **« Accès refusé » à l'activation du contrôle** : sur Android 13 et plus, Android bloque le service d'accessibilité d'une application installée depuis un fichier. L'application indique maintenant comment le permettre (*Paramètres › Applications › Agent loco*, menu ⋮, *Autoriser les paramètres restreints*).
+
 ## 2.144.0 — 2026-11-10
 
 - **Contacts des agents bien plus légers** : le portail garde désormais sa base ouverte tant qu'il sert, au lieu de la ranger sur le disque à la fin de chaque requête. Un contact simple d'un agent coûte environ dix fois moins au serveur, et les sessions distantes en profitent aussi. Rien ne change pour ce qui engage : inscriptions, inventaires, commandes transmises, résultats, réglages et comptes sont toujours écrits sur le disque avant la réponse ; seules la présence et les mesures d'un contact simple — que l'agent renvoie de lui-même au contact suivant — y sont mises dans la seconde qui suit.

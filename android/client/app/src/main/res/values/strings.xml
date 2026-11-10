@@ -14,7 +14,7 @@
     <string name="svc_screen_on">Écran partagé avec loco</string>
 
     <!-- Accessibilité -->
-    <string name="a11y_desc">Permet à loco de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : toucher, faire défiler, revenir, et saisir du texte dans le champ actif. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail.</string>
+    <string name="a11y_desc">Permet à loco de montrer et de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : voir l\'écran sans redemander le partage à chaque fois, toucher, faire défiler, revenir, et saisir du texte dans le champ actif. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail, et l\'appareil affiche alors « Contrôle à distance en cours ».</string>
 
     <!-- État -->
     <string name="action_leave">Se retirer de loco</string>
@@ -40,14 +40,16 @@
 
     <!-- Écran distant -->
     <string name="screen_title">Écran distant</string>
-    <string name="screen_hint">loco montre cet écran pendant une session ouverte depuis le portail. Android affiche l\'indicateur de partage tant qu\'il est actif.</string>
+    <string name="screen_hint">loco montre cet écran pendant une session ouverte depuis le portail, et l\'appareil l\'affiche alors. Une fois le contrôle à distance activé ci-dessous, il n\'y a plus rien à refaire ici ; ce bouton ne sert qu\'à obtenir une image plus fluide.</string>
     <string name="screen_on">Activer l\'écran distant</string>
     <string name="screen_off">Arrêter le partage</string>
     <string name="screen_state_on">Partagé</string>
     <string name="screen_state_off">Non partagé</string>
+    <string name="screen_state_ready">Disponible à chaque session</string>
 
     <!-- Contrôle -->
-    <string name="control_hint">Permet de toucher, faire défiler, revenir et écrire depuis le portail. Sans lui, l\'écran reste seulement visible.</string>
+    <string name="control_hint">Permet de voir l\'écran à chaque session sans revenir dans cette application, et de toucher, faire défiler, revenir et écrire depuis le portail.</string>
+    <string name="control_restricted">Si Android répond « accès refusé » : ouvrez Paramètres › Applications › Agent loco, menu ⋮ en haut à droite, « Autoriser les paramètres restreints », puis revenez ici.</string>
     <string name="control_on">Ouvrir les réglages d\'accessibilité</string>
     <string name="control_state_on">Activé</string>
     <string name="control_state_off">À activer</string>
@@ -77,7 +79,7 @@
     <string name="battery_state_off">À autoriser</string>
 
     <!-- Sessions distantes -->
-    <string name="remote_no_screen">Écran distant non activé sur l\'appareil : dans l\'appli loco, touchez « Activer l\'écran distant ».</string>
+    <string name="remote_no_screen">Écran distant non autorisé sur l\'appareil : dans l\'appli loco, activez une fois le contrôle à distance (accessibilité), ou touchez « Activer l\'écran distant ».</string>
     <string name="remote_unsupported">Type de session non pris en charge sur Android.</string>
 
     <!-- Installations -->

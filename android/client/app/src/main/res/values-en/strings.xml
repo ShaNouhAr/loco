@@ -10,7 +10,7 @@
     <string name="control_title">Remote control in progress</string>
     <string name="control_text">An administrator is viewing and controlling this device\'s screen.</string>
     <string name="svc_screen_on">Screen shared with loco</string>
-    <string name="a11y_desc">Lets loco control the device when you open the remote screen from the portal: tap, scroll, go back, and type text into the focused field. Nothing is read or sent outside a session you opened from the portal.</string>
+    <string name="a11y_desc">Lets loco show and control the device when you open the remote screen from the portal: see the screen without asking to share it each time, tap, scroll, go back, and type text into the focused field. Nothing is read or sent outside a session you opened from the portal, and the device then shows \u00ab Remote control in progress \u00bb.</string>
     <string name="action_leave">Leave loco</string>
     <string name="leave_explain">The device will be removed from this server and the agent will stop. You can enroll it again later.</string>
     <string name="cancel">Cancel</string>
@@ -28,12 +28,14 @@
     <string name="ca_explain">Compare this fingerprint with the one shown by the loco portal. Confirm only if it matches.</string>
     <string name="ca_confirm">It matches</string>
     <string name="screen_title">Remote screen</string>
-    <string name="screen_hint">loco shows this screen during a session opened from the portal. Android displays the sharing indicator while it is active.</string>
+    <string name="screen_hint">loco shows this screen during a session opened from the portal, and the device says so. Once remote control is turned on below, there is nothing left to do here; this button only gives a smoother picture.</string>
     <string name="screen_on">Turn on the remote screen</string>
     <string name="screen_off">Stop sharing</string>
     <string name="screen_state_on">Shared</string>
     <string name="screen_state_off">Not shared</string>
-    <string name="control_hint">Lets the portal tap, scroll, go back and type. Without it, the screen stays visible only.</string>
+    <string name="screen_state_ready">Available at every session</string>
+    <string name="control_hint">Lets you see the screen at every session without coming back to this app, and tap, scroll, go back and type from the portal.</string>
+    <string name="control_restricted">If Android answers \u00ab access denied \u00bb: open Settings › Apps › loco Agent, the ⋮ menu at the top right, \u00ab Allow restricted settings \u00bb, then come back here.</string>
     <string name="control_on">Open accessibility settings</string>
     <string name="control_state_on">On</string>
     <string name="control_state_off">To turn on</string>
@@ -53,7 +55,7 @@
     <string name="files_not_found">Not found.</string>
     <string name="files_not_empty">Folder not empty.</string>
     <string name="files_no_space">Not enough space on the device.</string>
-    <string name="remote_no_screen">Remote screen not turned on: in the loco app, tap \u00ab Turn on the remote screen \u00bb.</string>
+    <string name="remote_no_screen">Remote screen not allowed on the device: in the loco app, turn on remote control once (accessibility), or tap \u00ab Turn on the remote screen \u00bb.</string>
     <string name="remote_unsupported">Session type not supported on Android.</string>
     <string name="battery_title">Background operation</string>
     <string name="battery_hint">Allow loco to keep running in the background: otherwise the device may put it to sleep and the connection is lost when the screen is off.</string>

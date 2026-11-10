@@ -4279,7 +4279,6 @@
  "Port d'association": "Pairing port",
  "Code d'association": "Pairing code",
  "Appairer": "Pair",
- "Le port de connexion change à chaque activation du débogage sans fil : l'application loco l'indique à loco. Android coupe le débogage sans fil au redémarrage ou en changeant de réseau : réactivez-le, sans nouvel appairage.": "The connection port changes each time wireless debugging is turned on: the loco app tells loco. Android turns wireless debugging off on restart or when changing network: turn it back on, no new pairing needed.",
  "La version d'adb de ce serveur est trop ancienne pour l'appairage sans fil (30 ou plus requise) : utilisez un port adb classique ci-dessous.": "The adb version of this server is too old for wireless pairing (30 or later required): use a classic adb port below.",
  "Port adb classique": "Classic adb port",
  "adb tcpip, Android TV, machine virtuelle": "adb tcpip, Android TV, virtual machine",
@@ -4324,5 +4323,7 @@
  "Nom personnalisé enregistré.": "Custom name saved.",
  "Nom personnalisé retiré.": "Custom name removed.",
  "Nommer les appareils": "Name devices",
- "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Give a device a custom name, shown instead of its hostname."
+ "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Give a device a custom name, shown instead of its hostname.",
+ "Écran distant autorisé une fois pour toutes sur l'appareil le %(date)s : il ne demande plus aucun geste, et l'application loco rallume seule le débogage sans fil.": "Remote screen allowed once and for all on the device on %(date)s: it no longer needs any action there, and the loco app turns wireless debugging back on by itself.",
+ "L'appairage se fait une seule fois. loco autorise alors l'application loco de l'appareil à montrer l'écran sans redemander le partage, à être pilotée, et à rallumer seule le débogage sans fil quand Android le coupe (redémarrage, retour du Wi-Fi). Sur un réseau Wi-Fi nouveau, Android demande encore une confirmation sur l'appareil.": "Pairing is done only once. loco then allows the device's loco app to show the screen without asking to share it again, to be controlled, and to turn wireless debugging back on by itself when Android switches it off (restart, Wi-Fi coming back). On a new Wi-Fi network, Android still asks for a confirmation on the device."
 }

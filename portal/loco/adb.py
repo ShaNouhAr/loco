@@ -16,6 +16,7 @@ import select
 import shutil
 import signal
 import socket
+import sqlite3
 import struct
 import subprocess
 import threading
@@ -167,7 +168,7 @@ def record_report(conn, dev, value):
              "port": value["port"] if isinstance(value.get("port"), int) and 0 < value["port"] < 65536 else 0,
              "ip": value["ip"] if isinstance(value.get("ip"), str) and HOST_RE.match(value["ip"]) else ""}
     text = json.dumps(clean, sort_keys=True)
-    row = conn.execute("SELECT report FROM android_adb WHERE device_id=?", (dev["id"],)).fetchone()
+    row = conn.execute("SELECT * FROM android_adb WHERE device_id=?", (dev["id"],)).fetchone()
     if row is None:
         conn.execute("INSERT INTO android_adb (device_id, report) VALUES (?, ?)", (dev["id"], text))
     elif row["report"] != text:
@@ -214,10 +215,114 @@ def view(dev):
                ("Xiaomi / Redmi / Poco", PATTERN_PROFILES["xiaomi"]), ("OnePlus / Oppo / Realme", PATTERN_PROFILES["oneplus"]),
                ("Vivo", PATTERN_PROFILES["vivo"]), ("Motorola", PATTERN_PROFILES["motorola"])]
     return {"state": state, "text": text, "available": available(), "pair": can_pair(), "report": seen,
+            "prepared": prepared(row),
             "configured": bool(row and (row["paired_at"] or row["mode"] == "tcp")), "mode": row["mode"] if row else "",
             "paired_at": row["paired_at"] if row else "", "host": host, "port": port, "error": row["error"] if row else "",
             "calibrated": bool(row and row["unlock"]), "geometry": geometry(dev),
             "presets": [dict(label=label, **geo) for label, geo in presets]}
+
+
+# --------------------------------------------------------------------------- autorisations données une fois à l'application
+
+AGENT = "org.loco.agent"
+INPUT_SERVICE = AGENT + "/" + AGENT + ".InputService"
+AGENT_PREPARED = (2, 145)       # application loco qui sait s'en servir (et déclare le droit de rallumer le débogage)
+# Ce que l'appairage adb donne une fois pour toutes à l'application loco de l'appareil, pour que l'écran distant ne
+# demande plus aucun geste : (clé, commande du shell adb). L'ordre va du plus utile au plus accessoire.
+PREPARE = (
+    ("screen", ("appops", "set", AGENT, "PROJECT_MEDIA", "allow")),              # partage d'écran sans fenêtre d'accord
+    ("launch", ("appops", "set", AGENT, "SYSTEM_ALERT_WINDOW", "allow")),        # … demandé depuis l'arrière-plan
+    ("adb", ("pm", "grant", AGENT, "android.permission.WRITE_SECURE_SETTINGS")),  # rallumer le débogage sans fil coupé
+    ("restricted", ("appops", "set", AGENT, "ACCESS_RESTRICTED_SETTINGS", "allow")),   # Android 13+ : accessibilité permise
+    ("battery", ("dumpsys", "deviceidle", "whitelist", "+" + AGENT)),            # pas de mise en veille de l'application
+)
+_PREPARING = {}                 # appareil -> instant du dernier essai en arrière-plan (un à la fois, pas en rafale)
+PREPARE_EVERY = 600
+
+
+def _sh(serial, *command, timeout=20):
+    return run(["-s", serial, "shell", *command], timeout=timeout)
+
+
+def prepare(serial):
+    """Pose sur l'appareil, par adb, les autorisations de l'application loco. Renvoie les clés posées : « control » en
+    plus quand son service d'accessibilité (écran et contrôle à chaque session) est activé."""
+    done = []
+    for key, command in PREPARE:
+        rc, out = _sh(serial, *command)
+        if rc == 0 and not re.search(r"(?i)\b(error|exception|unknown|not requested|no such)\b", out):
+            done.append(key)
+    rc, out = _sh(serial, "settings", "get", "secure", "enabled_accessibility_services")
+    if rc == 0:
+        services = [v for v in out.strip().splitlines()[-1].strip().split(":") if v and v != "null"] if out.strip() else []
+        if INPUT_SERVICE not in services and AGENT + "/.InputService" not in services:
+            _sh(serial, "settings", "put", "secure", "enabled_accessibility_services", ":".join(services + [INPUT_SERVICE]))
+            _sh(serial, "settings", "put", "secure", "accessibility_enabled", "1")
+            rc, out = _sh(serial, "settings", "get", "secure", "enabled_accessibility_services")
+            services = out.strip().split(":") if rc == 0 else []
+        if INPUT_SERVICE in services or AGENT + "/.InputService" in services:
+            done.append("control")
+    return done
+
+
+def prepared(row):
+    """Autorisations déjà posées sur l'appareil : {at, agent, done} ou {}."""
+    try:
+        value = json.loads(row["prepared"]) if row and row["prepared"] else {}
+        return value if isinstance(value, dict) else {}
+    except ValueError:
+        return {}
+
+
+def _prepare_due(dev, row):
+    """À (re)faire : jamais fait, ou fait pour une application d'avant ces autorisations, mise à jour depuis."""
+    from .fleet import version_key
+    if row is None or not (row["paired_at"] or row["mode"] == "tcp") or version_key(dev["agent_version"]) < AGENT_PREPARED:
+        return False
+    return version_key(prepared(row).get("agent", "")) < AGENT_PREPARED
+
+
+def _prepare(dev, serial):
+    """Après une connexion adb réussie : autorisations posées une fois, notées et journalisées."""
+    row = link(dev)
+    if not _prepare_due(dev, row):
+        return
+    done = prepare(serial)
+    with connect() as conn:
+        conn.execute("UPDATE android_adb SET prepared=? WHERE device_id=?",
+                     (json.dumps({"at": time.strftime("%Y-%m-%d %H:%M"), "agent": dev["agent_version"], "done": done}), dev["id"]))
+        conn.execute("INSERT INTO audit (at, username, ip, action, detail) VALUES (?, ?, '', 'parc.adb.autorisations', ?)",
+                     (time.strftime("%Y-%m-%d %H:%M:%S"), row["paired_by"] or "loco",
+                      f"{dev['hostname']} : {', '.join(done) or 'aucune'}"))
+
+
+def prepare_soon(dev, row):
+    """Contact de l'application : si l'appareil est appairé, joignable et pas encore préparé, le faire en arrière-plan
+    (sans faire attendre le contact), au plus une fois toutes les dix minutes par appareil."""
+    seen = report(dev)
+    if not _prepare_due(dev, row) or not (row["mode"] == "tcp" or seen.get("wireless") and seen.get("port")):
+        return
+    now = time.time()
+    with _GUARD:
+        if now - _PREPARING.get(dev["id"], 0) < PREPARE_EVERY:
+            return
+        _PREPARING[dev["id"]] = now
+    dev_id = dev["id"]
+
+    def work():
+        with app.app_context():
+            try:
+                ensure(db().execute("SELECT * FROM devices WHERE id=?", (dev_id,)).fetchone())
+            except (ValueError, TypeError, sqlite3.Error):
+                pass
+
+    threading.Thread(target=work, name="loco-adb-prepare", daemon=True).start()
+
+
+def directive(dev, row=None):
+    """Consigne à l'application à chaque contact : garder le débogage sans fil joignable tant que l'appareil est appairé."""
+    row = row or link(dev)
+    return {"keep": bool(row and row["paired_at"] and row["mode"] != "tcp")}
 
 
 def ensure(dev):
@@ -239,6 +344,7 @@ def ensure(dev):
                          (error, "" if error else time.strftime("%Y-%m-%d %H:%M"), dev["id"]))
         if error:
             raise ValueError(_("Connexion adb impossible : %(e)s.", e=error))
+    _prepare(dev, serial)
     return serial
 
 
@@ -484,7 +590,7 @@ def fleet_adb_forget(dev_id):
         if host and port:
             disconnect(f"{host}:{port}")
         conn.execute("UPDATE android_adb SET host='', port=0, mode='wireless', paired_at='', paired_by='', error='', "
-                     "connected_at='' WHERE device_id=?", (dev["id"],))
+                     "connected_at='', prepared='' WHERE device_id=?", (dev["id"],))
         conn.execute("UPDATE remote_sessions SET state='closed', error=? WHERE device_id=? AND kind='adb' AND state IN ('waiting','active')",
                      ("Débogage adb oublié pour cet appareil.", dev["id"]))
     audit("parc.adb.oubli", dev["hostname"], commit=False)

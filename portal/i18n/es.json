@@ -4279,7 +4279,6 @@
  "Port d'association": "Puerto de vinculación",
  "Code d'association": "Código de vinculación",
  "Appairer": "Emparejar",
- "Le port de connexion change à chaque activation du débogage sans fil : l'application loco l'indique à loco. Android coupe le débogage sans fil au redémarrage ou en changeant de réseau : réactivez-le, sans nouvel appairage.": "El puerto de conexión cambia cada vez que se activa la depuración inalámbrica: la aplicación loco se lo indica a loco. Android desactiva la depuración inalámbrica al reiniciar o al cambiar de red: vuelva a activarla, sin nuevo emparejamiento.",
  "La version d'adb de ce serveur est trop ancienne pour l'appairage sans fil (30 ou plus requise) : utilisez un port adb classique ci-dessous.": "La versión de adb de este servidor es demasiado antigua para el emparejamiento inalámbrico (se requiere 30 o posterior): use un puerto adb clásico abajo.",
  "Port adb classique": "Puerto adb clásico",
  "adb tcpip, Android TV, machine virtuelle": "adb tcpip, Android TV, máquina virtual",
@@ -4324,5 +4323,7 @@
  "Nom personnalisé enregistré.": "Nombre personalizado guardado.",
  "Nom personnalisé retiré.": "Nombre personalizado eliminado.",
  "Nommer les appareils": "Nombrar los dispositivos",
- "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Dar un nombre personalizado a un dispositivo, mostrado en lugar de su nombre de host."
+ "Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte.": "Dar un nombre personalizado a un dispositivo, mostrado en lugar de su nombre de host.",
+ "Écran distant autorisé une fois pour toutes sur l'appareil le %(date)s : il ne demande plus aucun geste, et l'application loco rallume seule le débogage sans fil.": "Pantalla remota autorizada de una vez por todas en el dispositivo el %(date)s: ya no requiere ninguna acción en él, y la aplicación loco reactiva sola la depuración inalámbrica.",
+ "L'appairage se fait une seule fois. loco autorise alors l'application loco de l'appareil à montrer l'écran sans redemander le partage, à être pilotée, et à rallumer seule le débogage sans fil quand Android le coupe (redémarrage, retour du Wi-Fi). Sur un réseau Wi-Fi nouveau, Android demande encore une confirmation sur l'appareil.": "El emparejamiento se hace una sola vez. loco autoriza entonces a la aplicación loco del dispositivo a mostrar la pantalla sin volver a pedir compartirla, a ser controlada y a reactivar sola la depuración inalámbrica cuando Android la corta (reinicio, vuelta del Wi-Fi). En una red Wi-Fi nueva, Android sigue pidiendo una confirmación en el dispositivo."
 }

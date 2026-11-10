@@ -1,5 +1,6 @@
 package org.loco.agent
 
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -14,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -40,7 +42,8 @@ class LocoService : Service() {
         } else {
             startForeground(NOTIF_ID, notification(getString(R.string.svc_connecting)))
         }
-        remote = RemoteClient(this, agent.store) { capture }
+        remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady) { on -> watched = on; showControl() }
+        if (agent.store.keepAdb) AdbProbe.keep(this)          // après un redémarrage, sans attendre le premier contact
         Thread({ remote?.run() }, "loco-remote").apply { isDaemon = true }.start()
     }
 
@@ -87,7 +90,12 @@ class LocoService : Service() {
 
     /** Commandes reçues (installations, retrait) et mise à jour de l'application proposée par le serveur. */
     private fun handle(answer: JSONObject) {
-        controlNotice(answer.optBoolean("control", false))
+        piloted = answer.optBoolean("control", false)
+        showControl()
+        // loco a appairé cet appareil par adb : garder son débogage sans fil joignable tant que c'est le cas.
+        val keep = answer.optJSONObject("adb")?.optBoolean("keep", false) ?: false
+        if (keep != agent.store.keepAdb) agent.store.keepAdb = keep
+        if (keep) AdbProbe.keep(this)
         val commands = answer.optJSONArray("commands") ?: JSONArray()
         for (i in 0 until commands.length()) {
             val cmd = commands.getJSONObject(i)
@@ -111,6 +119,61 @@ class LocoService : Service() {
         checking = false
         agent.store.clear()
         stopSelf()
+    }
+
+    // --- Écran d'une session -----------------------------------------------
+    /** Écran à montrer à la session qui s'ouvre, ou null si rien n'est autorisé sur l'appareil. */
+    private fun screenSource(): FrameSource? = if (screenReady()) LiveScreen() else null
+
+    private fun screenReady() = capture != null || ProjectionActivity.silent(this) || InputService.instance?.screen != null
+
+    /**
+     * Écran d'une session, obtenu sans geste sur l'appareil : le partage d'écran s'il est en cours ou si Android l'a
+     * autorisé une fois pour toutes (il est alors repris, sans fenêtre), sinon la lecture par le service d'accessibilité,
+     * plus lente. La source est choisie à chaque image : si Android coupe le partage (verrouillage de l'appareil),
+     * l'accessibilité prend le relais, et le partage est redemandé une fois l'appareil déverrouillé.
+     */
+    private inner class LiveScreen : FrameSource {
+        private var asked = 0L
+
+        init {
+            if (capture == null && askProjection()) {
+                val limit = SystemClock.uptimeMillis() + 4000
+                while (capture == null && SystemClock.uptimeMillis() < limit) pause(100)
+            }
+            val limit = SystemClock.uptimeMillis() + 1500          // première image prête : pas d'écran noir à l'ouverture
+            while (frame() == null && SystemClock.uptimeMillis() < limit) pause(50)
+        }
+
+        private fun pause(ms: Long) { try { Thread.sleep(ms) } catch (_: InterruptedException) {} }
+
+        private fun askProjection(): Boolean {
+            val now = SystemClock.uptimeMillis()
+            if (now - asked < 5000 || !ProjectionActivity.silent(this@LocoService)) return false
+            if ((getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) return false
+            asked = now
+            return try { ProjectionActivity.request(this@LocoService); true } catch (_: Exception) { false }
+        }
+
+        private var fresh = 0L          // dernière image venue du partage
+        private var last: Frame? = null
+
+        override fun frame(): Frame? {
+            val now = SystemClock.uptimeMillis()
+            val shared = capture
+            var f = shared?.frame()
+            if (shared == null) askProjection()
+            // Partage absent, ou repris à l'instant et encore muet : l'accessibilité fournit l'image en attendant.
+            if (f != null) fresh = now else if (shared == null || now - fresh > 2000) f = InputService.instance?.screen?.frame()
+            if (f != null) last = f
+            return f ?: last            // jamais d'écran noir au passage d'une source à l'autre
+        }
+
+        private fun known(): FrameSource? = capture ?: InputService.instance?.screen
+        override val width get() = known()?.width ?: 0
+        override val height get() = known()?.height ?: 0
+        override val screenWidth get() = known()?.screenWidth ?: 0
+        override val screenHeight get() = known()?.screenHeight ?: 0
     }
 
     // --- Capture d'écran (MediaProjection) ---------------------------------
@@ -167,7 +230,13 @@ class LocoService : Service() {
         manager().notify(NOTIF_ID, notification(base))
     }
 
-    /** Garde-fou : tant que loco pilote l'écran par adb (sans dialogue système), l'appareil l'affiche, bien en vue. */
+    @Volatile private var piloted = false      // loco pilote l'écran par adb (annoncé à chaque contact)
+    @Volatile private var watched = false      // une session d'écran est ouverte par l'agent
+
+    private fun showControl() = Handler(Looper.getMainLooper()).post { controlNotice(piloted || watched) }
+
+    /** Garde-fou : tant qu'un administrateur voit ou pilote l'écran (session de l'agent, ou adb sans dialogue système),
+     *  l'appareil l'affiche, bien en vue. */
     private fun controlNotice(on: Boolean) {
         val nm = manager()
         if (!on) { nm.cancel(CONTROL_NOTIF); return }

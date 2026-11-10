@@ -765,6 +765,9 @@ def agent_checkin():
             answer["interval"] = min(answer["interval"], 3)
         else:
             answer["control"] = False
+        link = adb.link(dev, conn)
+        answer["adb"] = adb.directive(dev, link)        # applications 2.145.0 et plus : garder adb joignable si appairé
+        adb.prepare_soon(dev, link)
     if dev["os_family"] == "android" and features.enabled("android") and version_key(dev["agent_version"]) < version_key(config.VERSION):
         path, sha = agent_apk()
         if path:                    # applications 2.139.0 et plus : se mettent à jour seules depuis loco
