@@ -1393,7 +1393,12 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 
 .remote-session [hidden] { display: none !important; }
 /* Scène : cadre de l'image du poste. Le bureau (ou le terminal) l'occupe entièrement ; la superposition et le rail s'y posent. */
-.remote-stage { position: relative; height: max(420px, calc(100dvh - 285px)); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.remote-stage { position: relative; height: max(420px, calc(100dvh - var(--remote-chrome, 290px))); min-height: 420px; background: #080808; border: 1px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+/* Bureau : un seul cadre — les commandes envoyées au poste au-dessus de l'écran, l'affichage et la note de session dessous. */
+.remote-session[data-kind="desktop"] { --remote-chrome: 356px; }
+.remote-session[data-kind="desktop"] .remote-stage { border-radius: 0; }
+.remote-statusbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 20px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--line-2); border-top: 0; border-radius: 0 0 var(--r) var(--r); background: var(--bg-2); }
+.remote-statusbar .remote-footnote { margin: 0; font-size: 12.5px; color: var(--text-3); text-align: right; }
 /* Terminal : fond accordé au thème choisi (pas de liseré autour de la marge), coins arrondis nets. */
 .remote-session[data-kind="terminal"] .remote-stage, .remote-screen.terminal { background: var(--term-bg, #0a0a0b); }
 .remote-screen.terminal { position: absolute; inset: 0; padding: 14px 16px; }
@@ -1449,6 +1454,7 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .remote-session .head p.small a { color: var(--text-2); text-decoration: none; }
 .remote-session .head p.small a:hover { color: var(--text); }
 .remote-footnote { margin-top: 10px; }
+.remote-session .head { margin-bottom: 18px; }
 
 /* Pastille d'état de session (dans le titre, ou en tête du rail en plein écran). */
 .remote-pill { display: inline-flex; align-items: center; gap: 7px; margin-left: 6px; height: 24px; padding: 0 10px 0 9px; border-radius: 999px; background: var(--bg-3); color: var(--text-2); font-size: 12.5px; font-weight: 500; letter-spacing: 0; line-height: 1.4; vertical-align: middle; white-space: nowrap; }
@@ -1467,7 +1473,7 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 /* Bureau : vrai plein écran, sans en-tête ; les commandes passent dans le rail latéral rétractable. */
 .remote-session[data-kind="desktop"].is-fullscreen { display: block; padding: 0; gap: 0; background: #000; }
 .remote-session[data-kind="desktop"].is-fullscreen .head,
-.remote-session[data-kind="desktop"].is-fullscreen > .remote-footnote { display: none; }
+.remote-session[data-kind="desktop"].is-fullscreen > .remote-statusbar { display: none; }
 .remote-session[data-kind="desktop"].is-fullscreen .remote-stage { position: absolute; inset: 0; height: auto; min-height: 0; border: 0; border-radius: 0; }
 
 /* Rail latéral gauche rétractable (plein écran bureau) : posé sur l'image, poignée toujours saisissable. */
@@ -1489,11 +1495,11 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .remote-rail .actions > form { width: auto; }
 .remote-rail .actions .btn { width: 30px; height: 30px; padding: 0; }
 .remote-rail .actions .btn > span:not(.spin) { display: none; }
-.remote-rail .remote-display { order: 2; flex: 1 0 100%; flex-direction: column; align-items: stretch; gap: 6px; margin: 2px 0 0; padding: 0; border: 0; }
+.remote-rail .remote-display { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: -2px 0 0; padding: 0; border: 0; }
 .remote-rail .remote-field { justify-content: space-between; font-size: 12.5px; }
 .remote-rail .remote-field select { max-width: 148px; height: 28px; font-size: 12.5px; }
 .remote-rail .remote-readout { align-self: flex-end; min-width: 0; font-size: 11.5px; }
-.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent); }
+.remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 10px 0 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent); border-radius: 0; background: none; }
 .remote-rail #remote-toolbar .toolbar-sep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
 .remote-rail #remote-toolbar .btn.sm { height: 28px; padding: 0 8px; font-size: 12.5px; }
 .remote-rail .remote-hold { flex-wrap: wrap; gap: 4px; }
@@ -1510,11 +1516,11 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 /* Console ouverte dans son propre onglet : toute la surface appartient au poste. */
 .remote-session .head { align-items: center; }
 .remote-session .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.remote-display { display: inline-flex; align-items: center; gap: 10px; margin-right: 2px; padding-right: 12px; border-right: 1px solid var(--line); }
+.remote-display { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .remote-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .remote-field span { color: var(--text-2); }
 .remote-field select { width: auto; max-width: 200px; height: 30px; font-size: 13px; }
-.remote-readout { min-width: 9.5em; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.remote-readout { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .ui-icon { flex: none; width: 15px; height: 15px; }
 .remote-detached { overflow: hidden; }
 .remote-detached .remote-console { max-width: none; margin: 0; padding: 0; height: 100dvh; }
@@ -1522,13 +1528,14 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .remote-detached .remote-session .head { flex: 0 0 auto; padding: 10px 16px; margin: 0; border-bottom: 1px solid var(--line); gap: 12px; }
 .remote-detached .remote-session h1 { font-size: 15px; }
 .remote-detached .remote-description, .remote-detached .remote-footnote, .remote-detached .head > div > p { display: none; }
-.remote-detached .remote-toolbar { flex: 0 0 auto; margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.remote-detached .remote-toolbar { flex: 0 0 auto; margin: 0; padding: 8px 16px; border-width: 0 0 1px; border-color: var(--line); border-radius: 0; }
+.remote-detached .remote-statusbar { flex: 0 0 auto; min-height: 0; padding: 6px 16px; border-width: 1px 0 0; border-color: var(--line); border-radius: 0; }
 .remote-detached .remote-stage { flex: 1 1 auto; height: auto; min-height: 0; border: 0; border-radius: 0; }
 .remote-detached .remote-screen.terminal { padding: 10px 12px; }
 .remote-detached #remote-new-tab { display: none; }
 
 /* Commandes de la console */
-.remote-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.remote-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 8px 10px; border: 1px solid var(--line-2); border-bottom: 0; border-radius: var(--r) var(--r) 0 0; background: var(--bg-2); }
 .remote-toolbar .btn.sm { gap: 6px; }
 .remote-toolbar .btn.sm .ui-icon { width: 14px; height: 14px; color: var(--text-2); }
 .remote-toolbar .toolbar-sep { width: 1px; height: 20px; margin: 0 4px; background: var(--line-2); }
@@ -1728,8 +1735,10 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 /* ------------------------------------------------------------------ petits écrans */
 
 @media (max-width: 1180px) { .cmdk-open kbd { display: none; } .cmdk-open { padding: 0 9px; } }
+/* Entre 980 et 1060 px, la barre du haut débordait de la fenêtre quand le menu Android est affiché : l'adresse du serveur cède la place. */
+@media (max-width: 1060px) { .brand span { display: none; } }
 @media (max-width: 980px) {
-  .top-in { gap: 20px; }
+  .top-in { gap: 16px; }
   .brand span { display: none; }
   .cols, .cols.w21, .cols.w12 { grid-template-columns: minmax(0, 1fr); }
   .metrics { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }

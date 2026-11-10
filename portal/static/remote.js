@@ -468,18 +468,21 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   const railToggle = document.getElementById('remote-rail-toggle');
   const actions = root.querySelector('.actions');
   const railBar = document.getElementById('remote-toolbar');
-  const home = {s: [status.parentNode, status.nextSibling], a: [actions.parentNode, actions.nextSibling], t: [railBar.parentNode, railBar.nextSibling]};
+  const display = root.querySelector('.remote-display');
+  const home = {s: [status.parentNode, status.nextSibling], a: [actions.parentNode, actions.nextSibling], t: [railBar.parentNode, railBar.nextSibling],
+                d: [display.parentNode, display.nextSibling]};
   const setRail = open => { rail.classList.toggle('open', open); railToggle.setAttribute('aria-expanded', String(open)); };
   railToggle.addEventListener('click', () => setRail(!rail.classList.contains('open')));
   const cursorCanvas = () => rfb._cursor && rfb._cursor._canvas;
   function fullscreen(on) {
     const cc = cursorCanvas();
     if (on) {
-      railBody.append(status, actions, railBar);
+      railBody.append(status, actions, display, railBar);
       rail.hidden = false; setRail(true);
       if (cc && cc.parentNode === document.body) root.appendChild(cc);
     } else {
       home.s[0].insertBefore(status, home.s[1]); home.a[0].insertBefore(actions, home.a[1]); home.t[0].insertBefore(railBar, home.t[1]);
+      home.d[0].insertBefore(display, home.d[1]);
       setRail(false); rail.hidden = true;
       if (cc && cc.parentNode === root) document.body.appendChild(cc);
     }

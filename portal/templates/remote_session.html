@@ -12,13 +12,8 @@
     </div>
     <div class="actions">
       {% if remote.kind in ('terminal', 'adb') %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
-        <button type="button" class="btn sm" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
-        <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
-      </div>{% endif %}
-      {% if remote.kind == 'desktop' %}<div class="remote-display" role="group" aria-label="{{ _('Affichage du bureau') }}">
-        <label class="remote-field"{% if android %} hidden{% endif %} title="{{ _('« Adaptée » change la résolution Windows pour remplir la fenêtre, sans ascenseurs ; « Résolution du poste » garde celle d\'origine.') }}"><span>{{ _("Résolution") }}</span><select id="remote-resolution-mode" aria-label="{{ _('Résolution du bureau') }}"><option value="adapt">{{ _("Adaptée à la fenêtre") }}</option><option value="native">{{ _("Résolution du poste") }}</option></select></label>
-        <label class="remote-field" title="{{ _('Taille de l\'affichage. En résolution adaptée, un zoom agrandit l\'interface du poste sans faire défiler ; en résolution du poste, il agrandit l\'image.') }}"><span>{{ _("Zoom") }}</span><select id="remote-zoom" aria-label="{{ _('Zoom de l\'affichage') }}"><option value="fit" selected>{{ _("Ajuster") }}</option><option value="50">50 %</option><option value="75">75 %</option><option value="100">100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
-        <span id="remote-readout" class="remote-readout mono" aria-live="polite" title="{{ _('Résolution du bureau et taille d\'affichage (100 %% : un pixel du poste par pixel de l\'écran). La résolution initiale est rétablie à la fermeture de la session.') }}"></span>
+        <button type="button" class="btn" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
+        <button type="button" class="btn" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>{% endif %}
       {% if detached %}<a class="btn" href="{{ url_for('fleet_device', dev_id=remote.device_id) }}" target="_blank" rel="noopener" title="{{ _('Fiche du poste') }}">{{ ui_icon('external') }}<span>{{ _("Fiche du poste") }}</span></a>{% endif %}
       <button class="btn" id="remote-fullscreen" aria-pressed="false" title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}" data-title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
@@ -118,7 +113,14 @@
   {% if remote.kind in ('terminal', 'adb') %}
   {{ term_help(_("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.")) }}
   {% else %}
-  <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+  <div class="remote-statusbar" id="remote-statusbar">
+    <div class="remote-display" role="group" aria-label="{{ _('Affichage du bureau') }}">
+      <label class="remote-field"{% if android %} hidden{% endif %} title="{{ _('« Adaptée » change la résolution Windows pour remplir la fenêtre, sans ascenseurs ; « Résolution du poste » garde celle d\'origine.') }}"><span>{{ _("Résolution") }}</span><select id="remote-resolution-mode" aria-label="{{ _('Résolution du bureau') }}"><option value="adapt">{{ _("Adaptée à la fenêtre") }}</option><option value="native">{{ _("Résolution du poste") }}</option></select></label>
+      <label class="remote-field" title="{{ _('Taille de l\'affichage. En résolution adaptée, un zoom agrandit l\'interface du poste sans faire défiler ; en résolution du poste, il agrandit l\'image.') }}"><span>{{ _("Zoom") }}</span><select id="remote-zoom" aria-label="{{ _('Zoom de l\'affichage') }}"><option value="fit" selected>{{ _("Ajuster") }}</option><option value="50">50 %</option><option value="75">75 %</option><option value="100">100 %</option><option value="125">125 %</option><option value="150">150 %</option><option value="200">200 %</option></select></label>
+      <span id="remote-readout" class="remote-readout mono" aria-live="polite" title="{{ _('Résolution du bureau et taille d\'affichage (100 %% : un pixel du poste par pixel de l\'écran). La résolution initiale est rétablie à la fermeture de la session.') }}"></span>
+    </div>
+    <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+  </div>
   {% endif %}
 </div>
 {% endblock %}

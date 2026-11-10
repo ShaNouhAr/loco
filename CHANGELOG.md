@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.147.2 — 2026-11-10
+
+- **Bureau à distance : une page rangée** : hors plein écran, les réglages d'affichage, les boutons de la session et les commandes se partageaient trois rangées sans ordre. Le titre et l'état de la session sont maintenant à gauche, **Plein écran**, **Nouvel onglet** et **Fermer la session** à droite sur la même ligne. L'écran du poste tient dans un seul cadre : au-dessus, la barre des commandes envoyées au poste (Ctrl+Alt+Suppr, raccourcis, touches à maintenir, texte, presse-papiers) ; dessous, une barre d'état avec la résolution, le zoom et la note de session. La page tient dans la fenêtre, sans ascenseur.
+- **Barre du haut du portail** : entre 980 et 1060 pixels de large, elle débordait de la fenêtre quand le menu Android est affiché, ce qui faisait apparaître un ascenseur horizontal sur toutes les pages. Corrigé.
+
 ## 2.147.1 — 2026-11-10
 
 - **Bureau à distance en plein écran : des commandes qui ne cachent plus le poste** : le panneau latéral occupait toute la hauteur de l'écran sur une large bande opaque. C'est maintenant un petit panneau flottant, quatre fois moins encombrant, **translucide** — on devine le bureau dessous, et il se densifie dès qu'on s'en sert. L'état de la session et les actions (quitter le plein écran, nouvel onglet, fermer la session) tiennent sur une ligne, en icônes avec leur nom en infobulle ; replié, il ne reste qu'une poignée discrète sur le bord.
