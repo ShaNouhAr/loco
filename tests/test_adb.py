@@ -9,6 +9,7 @@ import shutil
 import stat
 import struct
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -235,6 +236,59 @@ class TestPairingFromTheDevice(AdbTest):
         with transaction() as conn:
             conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
         self.assertEqual(self.ask(a, code="123456", port=37851).status_code, 503)    # fonctionnalité Android coupée
+
+
+class TestUpdateThroughAdb(AdbTest):
+    """Appareil appairé : la mise à jour de l'application passe par adb (sans Play Protect sur l'appareil) ; sinon,
+    ou si adb échoue, l'application se met à jour seule comme avant."""
+
+    def setUp(self):
+        super().setUp()
+        adb._UPDATING.clear()
+        self.apk = os.path.join(self.folder, "loco-agent.apk")
+        with open(self.apk, "wb") as f:
+            f.write(b"apk")
+        patch = mock.patch("loco.fleet.agent_apk", return_value=(self.apk, "a" * 64))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def contact(self, agent):
+        return agent.post("/agent/api/checkin", dict(agent.ident, adb={"developer": True, "wireless": True, "port": 41235,
+                                                                        "ip": "192.168.43.71"}), agent.token).get_json()
+
+    def wait(self):
+        for _ in range(100):
+            if not any(t.name == "loco-adb-update" for t in threading.enumerate()):
+                return
+            time.sleep(0.05)
+
+    def test_a_paired_device_is_updated_through_adb_and_the_app_is_not_asked(self):
+        a, dev = self.phone(version="2.150.0")
+        self.pair(dev)
+        answer = self.contact(a)
+        self.assertNotIn("agent_apk", answer)                            # l'application ne la tente pas elle-même
+        self.wait()
+        self.assertIn(f"install -r {self.apk}", self.args())
+        with transaction() as conn:
+            event = conn.execute("SELECT * FROM audit WHERE action LIKE 'parc.agent.adb%' ORDER BY id DESC").fetchone()
+        self.assertEqual(event["action"], "parc.agent.adb.echec")      # le faux adb ne sait pas installer
+        self.assertIn("agent_apk", self.contact(a))                     # après un échec, l'application reprend la main
+
+    def test_an_unpaired_device_updates_itself_as_before(self):
+        a, _dev = self.phone(version="2.150.0")
+        self.assertIn("agent_apk", self.contact(a))
+        self.wait()
+        self.assertNotIn("install", self.args() if os.path.exists(self.log) else "")
+
+    def test_never_during_a_remote_session(self):
+        a, dev = self.phone(version="2.150.0")
+        self.pair(dev)
+        with transaction() as conn:
+            conn.execute("INSERT INTO remote_sessions (id, device_id, user_id, owner, pw_version, kind, state, created, browser_seen, expires) "
+                         "VALUES ('s1', ?, (SELECT id FROM users WHERE username='admin'), 'o', 1, 'desktop', 'active', 0, 0, 0)", (dev["id"],))
+        self.contact(a)
+        self.wait()
+        self.assertNotIn("install", self.args())
 
 
 class TestPermanentScreen(AdbTest):

@@ -1039,7 +1039,12 @@ def agent_checkin():
         adb.prepare_soon(dev, link)
     if dev["os_family"] == "android" and features.enabled("android") and version_key(dev["agent_version"]) < version_key(config.VERSION):
         path, sha = agent_apk()
-        if path:                    # applications 2.139.0 et plus : se mettent à jour seules depuis loco
+        from . import adb
+        if path and adb.can_update(dev, adb.link(dev, conn)):
+            # Appareil appairé : loco installe la mise à jour par adb, sans confirmation ni analyse Play Protect sur
+            # l'appareil. L'application ne la tente pas elle-même pendant ce temps ; si adb échoue, elle reprend la main.
+            adb.update_soon(dev, adb.link(dev, conn), path)
+        elif path:                  # applications 2.139.0 et plus : se mettent à jour seules depuis loco
             answer["agent_apk"] = {"version": config.VERSION, "sha256": sha}
         else:
             prefetch_apk()

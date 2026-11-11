@@ -35,6 +35,16 @@ fi
 
 cd "$HERE"
 echo "version de l'agent Android : $VERSION ($MODE)"
+# Enregistrement auprès de Google (vérification des développeurs Android) : le jeton donné par l'Android Developer
+# Console pour prouver la possession de la clé est embarqué dans l'APK, dans assets/adi-registration.properties. Il
+# accompagne la clé de signature (même dossier) : présent, il entre dans chaque APK de release ; absent, rien ne change.
+ADI="$HERE/app/src/main/assets/adi-registration.properties"
+rm -f "$ADI"
+if [ "$MODE" = release ] && [ -f "$LOCO_KEYSTORE_DIR/adi-registration.properties" ]; then
+    cp "$LOCO_KEYSTORE_DIR/adi-registration.properties" "$ADI"
+    trap 'rm -f "$ADI"' EXIT
+    echo "jeton d'enregistrement Google embarqué (assets/adi-registration.properties)"
+fi
 mkdir -p "$OUT"
 if [ "$MODE" = release ]; then
     "$GRADLE_HOME/bin/gradle" --no-daemon --console=plain -PappVersion="$VERSION" assembleRelease

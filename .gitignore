@@ -13,3 +13,6 @@ __pycache__/
 /out/
 /linux/iso/out/
 portal/agents/loco-client.msi
+
+# Jeton d'enregistrement Google de l'application Android : copié par android/client/build.sh depuis le dossier de la clé.
+android/client/app/src/main/assets/adi-registration.properties

@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.155.0 — 2026-11-12
+
+- **Android : les mises à jour de l'application sans Play Protect, par adb** : sur un appareil appairé en adb et joignable, loco installe lui-même la nouvelle version de l'application, comme depuis un ordinateur — ni fenêtre de confirmation, ni analyse proposée par Play Protect sur l'appareil. Si l'installation par adb échoue (appareil hors du réseau, débogage sans fil coupé), l'application reprend la main et se met à jour seule, comme avant. Jamais pendant une session distante ouverte ; chaque installation est inscrite au journal.
+- **Préparer l'enregistrement de l'application auprès de Google** : Android exige peu à peu qu'une application installée hors du Play Store vienne d'un développeur enregistré. L'enregistrement se fait une fois, par le détenteur de la clé de signature de l'application, et vaut pour toutes les instances de loco. La construction de l'APK embarque désormais le jeton de preuve donné par l'Android Developer Console, s'il est posé à côté de la clé ; la documentation Android décrit la marche à suivre.
+- Les autorisations posées par adb après l'appairage ne le sont plus deux fois quand deux connexions arrivent en même temps.
+
 ## 2.154.0 — 2026-11-11
 
 - **Android : une image fluide à chaque session, à configurer depuis le téléphone** : sans appairage adb, Android limite l'écran distant à environ trois images par seconde. Le nouveau panneau *Image fluide à chaque session* de l'application fait l'appairage sans passer par le portail : **Configurer** ouvre *Débogage sans fil* ; activez-le, touchez *Associer l'appareil avec un code d'association*, puis tapez le code à six chiffres dans la notification de loco, sans fermer cette fenêtre. L'application trouve seule le port et transmet le code à loco. Ensuite, chaque session s'ouvre avec une image fluide, sans fenêtre « Projeter » (une trentaine d'images par seconde mesurées sur un OnePlus 12).

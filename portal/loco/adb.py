@@ -282,8 +282,17 @@ def _prepare_due(dev, row):
     return version_key(prepared(row).get("agent", "")) < AGENT_PREPARED
 
 
+_PREP_LOCK = threading.Lock()
+
+
 def _prepare(dev, serial):
-    """Après une connexion adb réussie : autorisations posées une fois, notées et journalisées."""
+    """Après une connexion adb réussie : autorisations posées une fois, notées et journalisées. Sous verrou : la
+    préparation et la mise à jour par adb peuvent se connecter en même temps, une seule pose les autorisations."""
+    with _PREP_LOCK:
+        _prepare_locked(dev, serial)
+
+
+def _prepare_locked(dev, serial):
     row = link(dev)
     if not _prepare_due(dev, row):
         return
@@ -317,6 +326,63 @@ def prepare_soon(dev, row):
                 pass
 
     threading.Thread(target=work, name="loco-adb-prepare", daemon=True).start()
+
+
+# --------------------------------------------------------------------------- mise à jour de l'application par adb
+
+UPDATE_RETRY = 1800                 # après un échec, l'application reprend la main (sa propre mise à jour) pendant 30 min
+_UPDATING = {}                      # appareil -> (version visée, instant du dernier essai, échec)
+
+
+def can_update(dev, row):
+    """L'application de cet appareil peut-elle être mise à jour par adb ? Appareil appairé et joignable (débogage sans fil
+    annoncé, ou port classique), et pas d'échec récent pour cette version : sinon l'application se met à jour seule."""
+    if not available() or row is None or not (row["paired_at"] or row["mode"] == "tcp"):
+        return False
+    seen = report(dev)
+    if not (row["mode"] == "tcp" or seen.get("wireless") and seen.get("port")):
+        return False
+    last = _UPDATING.get(dev["id"])
+    return not (last and last[0] == config.VERSION and last[2] and time.time() - last[1] < UPDATE_RETRY)
+
+
+def update_soon(dev, row, path):
+    """Installe par adb la version de l'application que sert ce serveur, en arrière-plan, au plus une fois par
+    tranche de dix minutes et jamais pendant une session distante (l'installation redémarre l'application). Par adb,
+    Android installe comme depuis un ordinateur : sans la fenêtre de confirmation ni l'analyse proposée par Play
+    Protect pour une application installée depuis un fichier sur l'appareil."""
+    now = time.time()
+    with _GUARD:
+        last = _UPDATING.get(dev["id"])
+        if last and last[0] == config.VERSION and now - last[1] < PREPARE_EVERY:
+            return
+        _UPDATING[dev["id"]] = (config.VERSION, now, False)
+    if db().execute("SELECT 1 FROM remote_sessions WHERE device_id=? AND state IN ('waiting','active')", (dev["id"],)).fetchone():
+        with _GUARD:
+            _UPDATING.pop(dev["id"], None)      # session en cours : on réessaiera au contact suivant
+        return
+    dev_id, version = dev["id"], config.VERSION
+
+    def work():
+        with app.app_context():
+            ok, detail = False, ""
+            try:
+                current = db().execute("SELECT * FROM devices WHERE id=?", (dev_id,)).fetchone()
+                serial = ensure(current)
+                rc, out = run(["-s", serial, "install", "-r", path], timeout=300)
+                ok = rc == 0 and "Success" in out
+                detail = "" if ok else _clean(out)
+            except (ValueError, TypeError, sqlite3.Error) as e:
+                detail, current = str(e), None
+            with _GUARD:
+                _UPDATING[dev_id] = (version, time.time(), not ok)
+            if current is not None:
+                with connect() as conn:
+                    conn.execute("INSERT INTO audit (at, username, ip, action, detail) VALUES (?, 'loco', '', ?, ?)",
+                                 (time.strftime("%Y-%m-%d %H:%M:%S"), "parc.agent.adb" if ok else "parc.agent.adb.echec",
+                                  f"{current['hostname']} : {current['agent_version']} → {version}" + ("" if ok else f" ({detail[:200]})")))
+
+    threading.Thread(target=work, name="loco-adb-update", daemon=True).start()
 
 
 def directive(dev, row=None):

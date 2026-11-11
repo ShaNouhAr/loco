@@ -307,6 +307,29 @@ réactiver : Android ne garde pas l'autorisation de capture. Elle **repart d'ell
 de l'appareil ou une mise à jour. La 2.138.0 ne savait pas se mettre à jour : installez la 2.139.0 une fois à
 la main, depuis l'enrôlement, par-dessus l'ancienne.
 
+**Sur un appareil appairé en adb** (loco 2.155.0 et plus), loco installe lui-même la mise à jour par adb, comme
+depuis un ordinateur : ni fenêtre de confirmation, ni analyse proposée par Play Protect sur l'appareil.
+L'application ne la tente pas elle-même pendant ce temps. Si l'installation par adb échoue (appareil hors du
+réseau, débogage sans fil coupé), l'application reprend la main au contact suivant et se met à jour seule, comme
+sur un appareil non appairé. Jamais pendant une session distante ouverte ; chaque installation est inscrite au
+journal (« Mise à jour de l'application par adb »).
+
+### Enregistrer l'application auprès de Google
+
+Android exige peu à peu qu'une application installée hors du Play Store vienne d'un développeur enregistré
+auprès de Google (vérification des développeurs Android : quelques pays dès septembre 2026, le monde entier en
+2027). L'application loco est signée par la clé du projet : l'enregistrement se fait **une seule fois, par le
+détenteur de cette clé**, et vaut pour toutes les instances de loco — aucune n'a de compte Google à relier.
+
+1. Sur l'[Android Developer Console](https://developer.android.com/developer-verification/guides/android-developer-console),
+   créez le compte (distribution limitée ou complète) et faites-le vérifier.
+2. Dans *Packages*, enregistrez le nom de paquet `org.loco.agent` et l'empreinte SHA-256 du certificat de
+   signature : `95:68:93:B5:58:F2:E1:69:D7:27:88:C8:96:50:39:57:E4:03:80:2C:5C:56:4C:B1:A7:C0:E3:FF:0F:99:44:4B`.
+3. La console donne un jeton de preuve : enregistrez-le dans `adi-registration.properties`, **à côté de la clé de
+   signature** (dossier `LOCO_KEYSTORE_DIR`, par défaut `~/android-keystore`). `android/client/build.sh` l'embarque
+   alors dans l'APK de release (`assets/adi-registration.properties`) ; envoyez cet APK à la console pour prouver
+   la possession de la clé.
+
 La mise à jour peut aussi **s'installer depuis l'application**, sans attendre : dès que loco en propose une,
 l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton
 **Installer la mise à jour**. Ouvrir l'application interroge loco tout de suite. Si l'autorisation d'installer
