@@ -139,4 +139,17 @@
     <string name="net_remove">Remove</string>
     <string name="net_field_hint">Name of another Wi-Fi</string>
     <string name="net_add">Add</string>
+    <string name="update_title">App update</string>
+    <string name="update_state">Available</string>
+    <string name="update_text">Version %1$s is available (this device has %2$s). It also installs by itself; this button installs it now.</string>
+    <string name="update_action">Install the update</string>
+    <string name="update_working">Installing…</string>
+    <string name="update_need_permission">First allow loco to install apps.</string>
+    <string name="update_failed_download">Download failed: check that the device reaches loco, then try again.</string>
+    <string name="update_failed_invalid">The file received is not the expected update: nothing was installed.</string>
+    <string name="update_failed">Update not installed: %1$s.</string>
+    <string name="update_done_title">App updated</string>
+    <string name="update_done_text">loco %1$s is installed.</string>
+    <string name="version_current">up to date</string>
+    <string name="version_available">%1$s available</string>
 </resources>

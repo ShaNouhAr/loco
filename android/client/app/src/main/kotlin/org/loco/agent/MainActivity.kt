@@ -80,6 +80,21 @@ class MainActivity : Activity() {
         root.gravity = Gravity.TOP
         root.addView(header())
 
+        // Mise à jour de l'application : elle s'installe aussi seule, mais on peut la lancer d'ici sans attendre.
+        val update = LocoService.offered
+        if (update != null && LocoService.paused == null && Installs.pending.values.none { it.first == "loco" }) {
+            val allowed = packageManager.canRequestPackageInstalls()
+            val busy = LocoService.installing
+            val text = getString(R.string.update_text, update.optString("version"), BuildConfig.VERSION_NAME) +
+                (if (!allowed) "\n" + getString(R.string.update_need_permission) else "") +
+                (LocoService.updateProblem?.let { "\n" + it } ?: "")
+            root.addView(notice(getString(R.string.update_title), text,
+                getString(if (!allowed) R.string.install_on else if (busy) R.string.update_working else R.string.update_action),
+                getString(R.string.update_state)) {
+                if (!allowed) openInstallSettings() else if (!busy) { LocoService.installUpdate(this); root.postDelayed({ render() }, 300) }
+            }, ui.spaced(12))
+        }
+
         // Installations demandées depuis loco qui attendent la personne : proposées ici, au premier plan, en plus de
         // la notification (un groupe de notifications replié ouvre l'application plutôt que la fenêtre d'Android).
         for ((name, intent) in Installs.pending.values.toList()) {
@@ -140,7 +155,12 @@ class MainActivity : Activity() {
 
         root.addView(ui.button(getString(R.string.action_leave), Ui.Kind.DANGER) { confirmLeave() },
             ui.spaced(20, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL })
-        root.addView(ui.text("loco " + BuildConfig.VERSION_NAME, 12f, 400, ui.text3, mono = true).apply { gravity = Gravity.CENTER },
+        val version = "loco " + BuildConfig.VERSION_NAME + when {
+            update != null -> " · " + getString(R.string.version_available, update.optString("version"))
+            LocoService.lastContact > 0 && LocoService.paused == null && !LocoService.offline -> " · " + getString(R.string.version_current)
+            else -> ""
+        }
+        root.addView(ui.text(version, 12f, 400, ui.text3, mono = true).apply { gravity = Gravity.CENTER },
             ui.spaced(12))
     }
 
@@ -322,7 +342,8 @@ class MainActivity : Activity() {
     }
 
     /** Ce qui attend la personne (installation à confirmer), comme une note « à traiter » du portail. */
-    private fun notice(title: String, message: String, action: String, onAction: () -> Unit): LinearLayout =
+    private fun notice(title: String, message: String, action: String, state: String = getString(R.string.pending_state),
+                       onAction: () -> Unit): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = ui.rounded(ui.mix(ui.warn, ui.bg, 0.10f), 14, ui.mix(ui.warn, ui.line, 0.45f))
@@ -331,7 +352,7 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 addView(ui.text(title, 15f, 600), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(ui.status(getString(R.string.pending_state), Ui.Tone.WARN))
+                addView(ui.status(state, Ui.Tone.WARN))
             })
             addView(ui.text(message, 13.5f, 400, ui.text), ui.spaced(5))
             addView(ui.button(action, Ui.Kind.PRIMARY) { onAction() }, ui.spaced(12, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -347,7 +368,8 @@ class MainActivity : Activity() {
     private var shown = ""
     private fun signature() = listOf(LocoService.lastContact / 60000, LocoService.offline, LocoService.sharing,
         controlEnabled(), StorageAccess.granted(this), batteryExempt(), packageManager.canRequestPackageInstalls(),
-        Installs.pending.keys.sorted(), Installs.waitingPermission, LocoService.paused, networkSignature()).joinToString()
+        Installs.pending.keys.sorted(), Installs.waitingPermission, LocoService.paused, networkSignature(),
+        LocoService.offered?.optString("version"), LocoService.installing, LocoService.updateProblem).joinToString()
 
     /** Ce qui change l'affichage des réseaux de confiance (rien n'est relu hors du mode par nom de Wi-Fi). */
     private fun networkSignature(): String {
@@ -424,6 +446,8 @@ class MainActivity : Activity() {
         super.onResume()
         // Autorisation ou localisation changée dans les réglages d'Android : le service relit le réseau tout de suite.
         if (store.enrolled && store.netMode != Networks.ALL) LocoService.networksChanged(this)
+        if (store.enrolled) LocoService.checkNow(this)
+        Installs.cancel(this, "update", 0)          // « Application mise à jour » : vue, puisque l'application est ouverte
         if (store.enrolled) render()
         root.removeCallbacks(watcher)
         root.postDelayed(watcher, 1500)

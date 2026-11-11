@@ -152,19 +152,26 @@ class Apps(private val context: Context, private val store: Store) {
         return line
     }
 
-    /** Mise à jour de l'application loco elle-même, proposée par le serveur : version plus récente, même clé. */
-    fun selfUpdate(info: JSONObject) {
+    /** Mise à jour de l'application loco elle-même, proposée par le serveur : version plus récente, même clé.
+     *  Seule, elle n'est tentée qu'une fois par jour pour une même version. [asked] : la personne l'a demandée dans
+     *  l'application — elle part tout de suite, et ce qui l'empêche est renvoyé (null : rien à dire, ou installée). */
+    fun selfUpdate(info: JSONObject, asked: Boolean = false): String? {
         val sha = info.optString("sha256").lowercase()
-        if (sha.length != 64 || !newer(info.optString("version"), BuildConfig.VERSION_NAME)) return
-        if (store.updateTried == sha && System.currentTimeMillis() - store.updateTriedAt < 86_400_000L) return
+        if (sha.length != 64 || !newer(info.optString("version"), BuildConfig.VERSION_NAME)) return null
+        if (!asked && store.updateTried == sha && System.currentTimeMillis() - store.updateTriedAt < 86_400_000L) return null
         store.updateTried = sha
         store.updateTriedAt = System.currentTimeMillis()
         val file = File(File(context.cacheDir, "apk").apply { mkdirs() }, "loco-$sha.apk")
         try {
-            val got = Net.download("${store.server}/agent/files/loco-agent.apk", file, store.caPem, null, -1)
-            val archive = archiveInfo(file) ?: return
+            val got = try {
+                Net.download("${store.server}/agent/files/loco-agent.apk", file, store.caPem, null, -1)
+            } catch (e: Exception) {
+                return if (asked) context.getString(R.string.update_failed_download) else null
+            }
+            val archive = archiveInfo(file)
             val self = context.packageManager.getPackageInfo(context.packageName, 0)
-            if (got != sha || archive.packageName != context.packageName || code(archive) <= code(self)) return
+            if (archive == null || got != sha || archive.packageName != context.packageName || code(archive) <= code(self))
+                return if (asked) context.getString(R.string.update_failed_invalid) else null
             // Pas d'attente : Android arrête l'application pour la remplacer ; elle repart seule (MY_PACKAGE_REPLACED).
             val installer = context.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
@@ -172,14 +179,27 @@ class Apps(private val context: Context, private val store: Store) {
             params.setSize(file.length())
             if (Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
             val session = installer.createSession(params)
-            Installs.name(session, "loco")
+            // Demandée par la personne : la réponse d'Android est attendue, pour lui dire un refus ou une annulation.
+            val answer = if (asked) Installs.expect(session, "loco") {} else null
+            if (answer == null) Installs.name(session, "loco")
+            if (asked) store.updateAsked = true
             installer.openSession(session).use { s ->
                 file.inputStream().use { input ->
                     s.openWrite("base.apk", 0, file.length()).use { out -> input.copyTo(out, 1 shl 16); s.fsync(out) }
                 }
                 s.commit(InstallReceiver.sender(context, session))
             }
-        } catch (_: Exception) {
+            if (answer == null) return null
+            // Installée, l'application est remplacée et ce fil s'arrête là ; il ne revient ici que sur un échec, ou si la
+            // fenêtre d'Android reste sans réponse (elle reste alors proposée dans l'application).
+            val result = try { answer.get(180, TimeUnit.SECONDS) } catch (_: Exception) { return null }
+            Installs.forget(context, session)
+            store.updateAsked = false
+            return if (result.status == PackageInstaller.STATUS_SUCCESS) null
+                else context.getString(R.string.update_failed, Installs.describe(context, result))
+        } catch (e: Exception) {
+            if (asked) store.updateAsked = false
+            return if (asked) context.getString(R.string.update_failed, context.getString(R.string.apps_error, e.message ?: e.javaClass.simpleName)) else null
         } finally {
             file.delete()
         }

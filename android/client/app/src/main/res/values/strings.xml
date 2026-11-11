@@ -159,4 +159,17 @@
     <string name="net_remove">Retirer</string>
     <string name="net_field_hint">Nom d\'un autre Wi-Fi</string>
     <string name="net_add">Ajouter</string>
+    <string name="update_title">Mise à jour de l\'application</string>
+    <string name="update_state">Disponible</string>
+    <string name="update_text">La version %1$s est disponible (cet appareil a la %2$s). Elle s\'installe aussi d\'elle-même ; ce bouton l\'installe maintenant.</string>
+    <string name="update_action">Installer la mise à jour</string>
+    <string name="update_working">Installation en cours…</string>
+    <string name="update_need_permission">Autorisez d\'abord loco à installer des applications.</string>
+    <string name="update_failed_download">Téléchargement impossible : vérifiez que l\'appareil joint loco, puis réessayez.</string>
+    <string name="update_failed_invalid">Le fichier reçu n\'est pas la mise à jour attendue : rien n\'a été installé.</string>
+    <string name="update_failed">Mise à jour non installée : %1$s.</string>
+    <string name="update_done_title">Application mise à jour</string>
+    <string name="update_done_text">loco %1$s est installé.</string>
+    <string name="version_current">à jour</string>
+    <string name="version_available">%1$s disponible</string>
 </resources>

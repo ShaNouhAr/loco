@@ -139,4 +139,17 @@
     <string name="net_remove">Quitar</string>
     <string name="net_field_hint">Nombre de otra Wi-Fi</string>
     <string name="net_add">Añadir</string>
+    <string name="update_title">Actualización de la aplicación</string>
+    <string name="update_state">Disponible</string>
+    <string name="update_text">La versión %1$s está disponible (este dispositivo tiene la %2$s). También se instala sola; este botón la instala ahora.</string>
+    <string name="update_action">Instalar la actualización</string>
+    <string name="update_working">Instalando…</string>
+    <string name="update_need_permission">Primero permita que loco instale aplicaciones.</string>
+    <string name="update_failed_download">Descarga imposible: compruebe que el dispositivo alcanza loco y vuelva a intentarlo.</string>
+    <string name="update_failed_invalid">El archivo recibido no es la actualización esperada: no se ha instalado nada.</string>
+    <string name="update_failed">Actualización no instalada: %1$s.</string>
+    <string name="update_done_title">Aplicación actualizada</string>
+    <string name="update_done_text">loco %1$s está instalado.</string>
+    <string name="version_current">al día</string>
+    <string name="version_available">%1$s disponible</string>
 </resources>

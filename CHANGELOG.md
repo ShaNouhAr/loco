@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.149.0 — 2026-11-11
+
+- **Mettre à jour l'agent Android depuis l'application** : quand loco propose une version plus récente, l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton **Installer la mise à jour**. L'application se met toujours à jour seule ; ce bouton l'installe tout de suite, sans attendre. Ouvrir l'application interroge loco aussitôt.
+- **On sait où en est l'appareil** : en bas de l'écran, la ligne de version indique « à jour » ou la version disponible. Si l'autorisation d'installer des applications manque, le bouton y conduit d'abord ; et ce qui empêche une installation (loco injoignable, fichier inattendu, refus sur l'appareil) est écrit sous le bouton.
+- **Après l'installation** : Android ferme l'application pour la remplacer. Elle repart seule, une notification *Application mise à jour* le confirme, et son écran se rouvre quand Android le permet.
+- Hors de ses réseaux de confiance, l'appareil ne contacte pas loco : le bouton n'y est pas proposé.
+
 ## 2.148.0 — 2026-11-10
 
 - **Bureau à distance Android bien plus rapide** : l'écran d'un appareil Android arrivait par à-coups, avec plus d'une seconde entre un clic et son effet. L'application refaisait une connexion sécurisée complète à chacun de ses échanges avec loco (une trentaine par seconde) : elle garde maintenant la connexion ouverte. Ce qui bouge à l'écran part en JPEG, deux fois plus léger, puis l'image redevient nette dès que l'écran se pose ; et l'application envoie les images sans attendre que le navigateur les redemande une à une, en se réglant sur ce qu'il a réellement affiché. Sur l'appareil d'essai : environ dix images par seconde au lieu d'une et demie, et un tiers de seconde entre un clic et l'image au lieu d'une seconde et demie.

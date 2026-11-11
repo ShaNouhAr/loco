@@ -44,6 +44,11 @@ class Store(context: Context) {
     var updateTriedAt: Long
         get() = prefs.getLong("update_at", 0L)
         set(v) = prefs.edit().putLong("update_at", v).apply()
+    /** La mise à jour en cours a été demandée dans l'application : une fois installée, l'application le dit.
+     *  Écrit tout de suite : Android arrête l'application pour la remplacer. */
+    var updateAsked: Boolean
+        get() = prefs.getBoolean("update_asked", false)
+        set(v) { prefs.edit().putBoolean("update_asked", v).commit() }
 
     /** loco a appairé cet appareil par adb et demande de garder son débogage sans fil joignable (dernière consigne reçue). */
     var keepAdb: Boolean

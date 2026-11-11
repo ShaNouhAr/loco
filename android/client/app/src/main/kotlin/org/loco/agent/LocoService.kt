@@ -59,6 +59,8 @@ class LocoService : Service() {
             ACTION_SCREEN_ON -> startCapture(intent)
             ACTION_SCREEN_OFF -> stopCapture()
             ACTION_NETWORKS -> { Networks.invalidate(); wake = true }      // réglage changé dans l'application
+            ACTION_CHECKIN -> wake = true                                 // application ouverte : contact tout de suite
+            ACTION_UPDATE -> installOffered()
         }
         if (!checking && agent.store.enrolled) {
             checking = true
@@ -156,11 +158,29 @@ class LocoService : Service() {
                 else -> work.execute { Apps(this, agent.store).unsupported(cmd) }
             }
         }
-        val update = answer.optJSONObject("agent_apk")
+        // Mise à jour de l'application proposée par le serveur : gardée pour l'écran de l'application, qui permet de
+        // l'installer tout de suite ; et tentée seule, hors session, une fois par jour.
+        val update = answer.optJSONObject("agent_apk")?.takeIf {
+            it.optString("sha256").length == 64 && Apps.newer(it.optString("version"), BuildConfig.VERSION_NAME)
+        }
+        offered = update
+        if (update == null) updateProblem = null
         if (update != null && remote?.inUse != true && updating.compareAndSet(false, true)) {
             work.execute {
                 try { Apps(this, agent.store).selfUpdate(update) } finally { updating.set(false) }
             }
+        }
+    }
+
+    /** « Installer la mise à jour », touché dans l'application : téléchargement puis fenêtre d'installation d'Android. */
+    private fun installOffered() {
+        val update = offered ?: return
+        if (paused != null) return                                  // hors des réseaux de confiance : aucun échange avec loco
+        if (!updating.compareAndSet(false, true)) return           // déjà en cours
+        updateProblem = null
+        installing = true
+        work.execute {
+            try { updateProblem = Apps(this, agent.store).selfUpdate(update, asked = true) } finally { installing = false; updating.set(false) }
         }
     }
 
@@ -333,6 +353,15 @@ class LocoService : Service() {
         @Volatile var offline = false
             private set
 
+        /** Mise à jour de l'application proposée par le serveur à son dernier contact (version, sha256), ou null. */
+        @Volatile var offered: JSONObject? = null
+            private set
+        /** Une installation demandée dans l'application est en cours ; et ce qui a empêché la dernière, ou null. */
+        @Volatile var installing = false
+            private set
+        @Volatile var updateProblem: String? = null
+            private set
+
         /** Texte de la pause quand l'appareil est hors de ses réseaux de confiance ; null quand l'agent est actif. */
         @Volatile var paused: String? = null
             private set
@@ -343,6 +372,8 @@ class LocoService : Service() {
         const val ACTION_SCREEN_ON = "org.loco.agent.SCREEN_ON"
         const val ACTION_SCREEN_OFF = "org.loco.agent.SCREEN_OFF"
         const val ACTION_NETWORKS = "org.loco.agent.NETWORKS"
+        const val ACTION_CHECKIN = "org.loco.agent.CHECKIN"
+        const val ACTION_UPDATE = "org.loco.agent.UPDATE"
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
 
@@ -359,6 +390,16 @@ class LocoService : Service() {
 
         fun stopScreen(context: Context) {
             context.startService(Intent(context, LocoService::class.java).setAction(ACTION_SCREEN_OFF))
+        }
+
+        /** Application ouverte : un contact tout de suite, pour savoir sans attendre si une mise à jour est proposée. */
+        fun checkNow(context: Context) {
+            try { context.startService(Intent(context, LocoService::class.java).setAction(ACTION_CHECKIN)) } catch (_: Exception) {}
+        }
+
+        /** Installe maintenant la mise à jour proposée (voir [offered]). */
+        fun installUpdate(context: Context) {
+            try { context.startService(Intent(context, LocoService::class.java).setAction(ACTION_UPDATE)) } catch (_: Exception) {}
         }
 
         /** Réseaux de confiance changés dans l'application : le service réévalue tout de suite. */

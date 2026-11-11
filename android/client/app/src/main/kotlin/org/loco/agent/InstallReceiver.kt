@@ -135,6 +135,16 @@ object Installs {
 class StartReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-        if (Store(context).enrolled) LocoService.start(context)
+        val store = Store(context)
+        if (store.enrolled) LocoService.start(context)
+        // Mise à jour demandée dans l'application : Android l'a fermée pour la remplacer. On le dit, et on la rouvre
+        // quand Android le permet (il ne le permet à une application en arrière-plan que dans quelques cas).
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED && store.updateAsked) {
+            store.updateAsked = false
+            val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Installs.notify(context, 0, context.getString(R.string.update_done_title),
+                context.getString(R.string.update_done_text, BuildConfig.VERSION_NAME), open, "update")
+            try { context.startActivity(open) } catch (_: Exception) {}
+        }
     }
 }

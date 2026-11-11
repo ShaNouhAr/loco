@@ -295,6 +295,15 @@ réactiver : Android ne garde pas l'autorisation de capture. Elle **repart d'ell
 de l'appareil ou une mise à jour. La 2.138.0 ne savait pas se mettre à jour : installez la 2.139.0 une fois à
 la main, depuis l'enrôlement, par-dessus l'ancienne.
 
+La mise à jour peut aussi **s'installer depuis l'application**, sans attendre : dès que loco en propose une,
+l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton
+**Installer la mise à jour**. Ouvrir l'application interroge loco tout de suite. Si l'autorisation d'installer
+des applications manque, le bouton y conduit d'abord. Android ferme l'application pour la remplacer ; elle
+repart seule, une notification *Application mise à jour* le confirme, et l'écran se rouvre quand Android le
+permet. Ce qui a empêché l'installation (loco injoignable, refus sur l'appareil…) est écrit sous le bouton.
+En bas de l'écran, la ligne de version indique *à jour* ou la version disponible. Hors de ses réseaux de
+confiance, l'appareil ne contacte pas loco et le bouton n'est pas proposé.
+
 ## Retirer un appareil
 
 Dans l'application, *Se retirer de loco* : l'appareil est retiré du serveur et l'agent s'arrête. On peut
