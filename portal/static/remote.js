@@ -327,7 +327,8 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   const resolutionMode = document.getElementById('remote-resolution-mode');
   const zoom = document.getElementById('remote-zoom');
   const readout = document.getElementById('remote-readout');
-  let nativeSize, resizeTimer, connected = false, lastSize = '';
+  const limit = document.getElementById('remote-limit');
+  let nativeSize, resizeTimer, connected = false, lastSize = '', asked = null;
   const dpr = () => window.devicePixelRatio || 1;
 
   // Curseur du poste à la même échelle que le bureau affiché : net à 100 %, proportionné en « Ajuster » ou en zoom.
@@ -396,12 +397,31 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
       const key = `${target.width}x${target.height}`;
       if (key === lastSize) return;
       lastSize = key;
+      asked = resolutionMode.value === 'adapt' ? {width: target.width, height: target.height, at: Date.now()} : null;
       send(resizePacket(target.width, target.height));
     }, 350);
   }
+  // Le pilote d'affichage du poste n'offre pas toujours la taille demandée (carte de base d'une machine virtuelle : un
+  // seul mode). Le dire, plutôt que de laisser croire que « Adaptée à la fenêtre » n'a rien fait.
+  function updateLimit() {
+    const canvas = screen.querySelector('canvas');
+    let off = false;
+    // Un appareil Android n'a pas ce réglage (liste masquée) : son écran ne change jamais de taille.
+    if (connected && asked && resolutionMode.value === 'adapt' && !resolutionMode.closest('.remote-field').hidden && canvas && canvas.width && Date.now() - asked.at > 2500) {
+      const scale = Math.min(asked.width / canvas.width, asked.height / canvas.height);
+      const fill = scale * scale * canvas.width * canvas.height / (asked.width * asked.height);
+      off = fill < 0.97 || Math.abs(scale - 1) > 0.12;
+    }
+    if (off) {
+      limit.textContent = t('Le poste n’offre pas cette résolution');
+      limit.title = t('Demandé pour remplir la fenêtre : %(asked)s. L’affichage du poste n’offre pas cette taille et reste en %(got)s ; l’image est ajustée à la fenêtre. Sur une machine virtuelle, une carte et un pilote graphiques complets (VirtIO-GPU, QXL…) offrent d’autres résolutions.',
+                      {asked: `${asked.width} × ${asked.height}`, got: `${canvas.width} × ${canvas.height}`});
+    }
+    limit.hidden = !off;
+  }
   const capabilityTimer = setInterval(() => {
     if (!running) { clearInterval(capabilityTimer); clearTimeout(resizeTimer); return; }
-    requestResolution();
+    requestResolution(); updateLimit();
   }, 1000);
   function updateReadout() {
     const canvas = screen.querySelector('canvas');
@@ -411,7 +431,7 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
     readout.textContent = `${canvas.width} × ${canvas.height} · ${percent} %`;
   }
   function displayChanged() { savePrefs(); applyDisplay(); requestResolution(); if (connected) rfb.focus(); }
-  resolutionMode.addEventListener('change', () => { lastSize = ''; displayChanged(); });
+  resolutionMode.addEventListener('change', () => { lastSize = ''; asked = null; displayChanged(); updateLimit(); });
   zoom.addEventListener('change', displayChanged);
   new ResizeObserver(() => { updateReadout(); requestResolution(); }).observe(viewport);
   new MutationObserver(() => { updateReadout(); if (!fitting()) rfb._updateScale(); })

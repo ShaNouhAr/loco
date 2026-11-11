@@ -36,6 +36,49 @@ class TestInjector(unittest.TestCase):
         self.assertEqual(self.events[-1], (42, False))
 
 
+class TestKeypad(unittest.TestCase):
+    """Pavé numérique : le chiffre tapé dans le navigateur arrive tel quel, quel que soit Verr. num. sur le poste."""
+    def test_keypad_keysyms_become_their_main_block_equivalent(self):
+        k = agent.KEYPAD_KEYS
+        self.assertEqual([k[0xffb0 + n] for n in range(10)], [ord(str(n)) for n in range(10)])
+        self.assertEqual([k[s] for s in (0xffaa, 0xffab, 0xffac, 0xffad, 0xffae, 0xffaf, 0xffbd)], [ord(c) for c in "*+,-./="])
+        self.assertEqual((k[0xff8d], k[0xff95], k[0xff96], k[0xff9f]), (0xff0d, 0xff50, 0xff51, 0xffff))   # Entrée, Origine, gauche, Suppr
+        self.assertNotIn(0xff7f, k)                              # Verr. num. reste lui-même
+
+    def serve(self, messages, keycodes):
+        """Session RFB complète sur un faux poste : renvoie les frappes reçues par le moteur."""
+        import io
+        import struct
+        from unittest import mock
+        events = []
+
+        class Backend:
+            width, height, interval = 4, 4, 0
+            def key(self, sym, down): events.append(("sym", sym, bool(down))); return True
+            def set_cursor(self, enabled): pass
+            def flush(self): pass
+            def close(self): pass
+        if keycodes:
+            Backend.keycode = lambda self, code, down: events.append(("code", code, bool(down)))
+        hello = b"RFB 003.008\n" + b"\x01" + b"\x01"
+        encodings = struct.pack(">BxHi", 2, 1, agent.QEMU_EXT_KEYS)
+        fake = mock.Mock(buffer=io.BytesIO(hello + encodings + b"".join(messages)))
+        with mock.patch.object(agent.sys, "stdin", fake), mock.patch.object(agent.sys, "stdout", mock.Mock(buffer=io.BytesIO())):
+            agent._rfb_serve(Backend())
+        return events
+
+    def test_keypad_digit_is_typed_as_its_character_even_with_physical_keycodes(self):
+        import struct
+        plain = lambda sym, down: struct.pack(">BBxxI", 4, down, sym)
+        qemu = lambda sym, code, down: struct.pack(">BBHII", 255, 0, down, sym, code)
+        # Sans touches physiques (X11) : KP_7 puis KP_Enter deviennent « 7 » et Entrée.
+        self.assertEqual(self.serve([plain(0xffb7, 1), plain(0xffb7, 0), plain(0xff8d, 1), plain(0xff8d, 0)], False),
+                         [("sym", 0x37, True), ("sym", 0x37, False), ("sym", 0xff0d, True), ("sym", 0xff0d, False)])
+        # Avec touches physiques (Wayland) : le pavé passe par son caractère, une lettre garde sa touche (a = 30).
+        self.assertEqual(self.serve([qemu(0xffb7, 0x47, 1), qemu(0xffb7, 0x47, 0), qemu(0x61, 0x1e, 1), qemu(0x61, 0x1e, 0)], True),
+                         [("sym", 0x37, True), ("sym", 0x37, False), ("code", 30, True), ("code", 30, False)])
+
+
 @unittest.skipUnless(XKB, "libxkbcommon absente")
 class TestRealLayouts(unittest.TestCase):
     def plan(self, layout, char):

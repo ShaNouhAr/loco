@@ -4381,5 +4381,7 @@
  "Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.": "Set on the device, in the app: elsewhere it is paused and loco no longer sees it.",
  "Réseaux de confiance": "Trusted networks",
  "actif partout": "active everywhere",
- "· réglé sur l’appareil": "· set on the device"
+ "· réglé sur l’appareil": "· set on the device",
+ "Le poste n’offre pas cette résolution": "The machine does not offer this resolution",
+ "Demandé pour remplir la fenêtre : %(asked)s. L’affichage du poste n’offre pas cette taille et reste en %(got)s ; l’image est ajustée à la fenêtre. Sur une machine virtuelle, une carte et un pilote graphiques complets (VirtIO-GPU, QXL…) offrent d’autres résolutions.": "Requested to fill the window: %(asked)s. The machine's display does not offer this size and stays at %(got)s; the picture is fitted to the window. On a virtual machine, a full graphics card and driver (VirtIO-GPU, QXL…) offer other resolutions."
 }

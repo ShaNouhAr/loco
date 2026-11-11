@@ -249,6 +249,27 @@ class Pick {
         self.assertEqual(out, ['1868x772=2560x1080',     # fenêtre très large : 21:9 plutôt que 16:9 avec des bandes
                                '1280x800=1280x800', '1920x1080=1920x1080', '1400x800=1280x720'])
 
+    def test_keypad_keysyms_map_to_windows_keys_never_to_unicode_glyphs(self):
+        """Pavé numérique : VK_NUMPAD0-9 et opérateurs ; navigation sans drapeau étendu ; Entrée et « / » étendues."""
+        harness = r'''
+using System; using Loco;
+class Pad {
+ static void Main(string[] args) {
+  foreach (var arg in args) {
+   bool extended; ushort vk = DesktopKeys.Keypad(Convert.ToUInt32(arg, 16), out extended);
+   Console.WriteLine(arg + "=" + vk + (extended ? "e" : ""));
+  }
+ }
+}'''
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory); (path / 'Pad.cs').write_text(harness)
+            subprocess.run(['mcs', '-warnaserror+', '-sdk:4.6.2', '-out:' + str(path / 'Pad.exe'),
+                            str(ROOT / 'windows/client/DesktopKeys.cs'), str(path / 'Pad.cs')], check=True, capture_output=True)
+            out = subprocess.run(['mono', str(path / 'Pad.exe'), 'ffb0', 'ffb9', 'ffaa', 'ffab', 'ffad', 'ffae', 'ffac', 'ffaf', 'ff8d',
+                                  'ff95', 'ff9f', 'ff0d', '61', 'ffbe'], check=True, capture_output=True, text=True).stdout.split()
+        self.assertEqual(out, ['ffb0=96', 'ffb9=105', 'ffaa=106', 'ffab=107', 'ffad=109', 'ffae=110', 'ffac=110', 'ffaf=111e', 'ff8d=13e',
+                               'ff95=36', 'ff9f=46', 'ff0d=0', '61=0', 'ffbe=0'])       # hors pavé : 0, la suite du code décide
+
 
 @unittest.skipUnless(os.name == 'posix', 'Agent Linux')
 class TestWaylandDesktop(unittest.TestCase):

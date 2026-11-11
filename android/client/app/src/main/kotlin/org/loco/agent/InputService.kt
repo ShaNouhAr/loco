@@ -154,9 +154,23 @@ class InputService : AccessibilityService(), InputSink {
             XF86_MENUKB -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             0xff08L -> if (!deleteBack()) performGlobalAction(GLOBAL_ACTION_BACK) // Retour arrière
             0xff0dL, 0xff8dL -> enter()                                         // Entrée
-            0xff09L -> insert("\t")
-            else -> character(keysym)?.let { insert(it) }
+            0xff09L, 0xff89L -> insert("\t")
+            else -> (keypad(keysym) ?: character(keysym))?.let { insert(it) }
         }
+    }
+
+    /** Pavé numérique (XK_KP_*) : le caractère de la touche. */
+    private fun keypad(keysym: Long): String? = when (keysym) {
+        in 0xffb0L..0xffb9L -> ('0' + (keysym - 0xffb0L).toInt()).toString()
+        0xff80L -> " "
+        0xffaaL -> "*"
+        0xffabL -> "+"
+        0xffacL -> ","
+        0xffadL -> "-"
+        0xffaeL -> "."
+        0xffafL -> "/"
+        0xffbdL -> "="
+        else -> null
     }
 
     /** Caractère d'une touche : Latin-1 (0x20-0xff) ou Unicode (0x01000000 + point de code). */
@@ -182,6 +196,9 @@ class InputService : AccessibilityService(), InputSink {
 
     private fun focusedEditable(): AccessibilityNodeInfo? {
         val n = rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return null
+        // Le cache d'accessibilité rend parfois le champ d'avant la dernière frappe : le relire, sinon la frappe suivante
+        // réécrit l'ancien texte et efface le caractère qu'on venait de taper.
+        if (!n.refresh()) return null
         return if (n.isEditable) n else null
     }
 

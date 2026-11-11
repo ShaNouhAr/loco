@@ -33,6 +33,13 @@ KEYS = {0xff08: b"\x7f", 0xff09: b"\t", 0xfe20: b"\x1b[Z", 0xff0d: b"\r", 0xff1b
         0xffc3: b"\x1b[17~", 0xffc4: b"\x1b[18~", 0xffc5: b"\x1b[19~", 0xffc6: b"\x1b[20~",
         0xffc7: b"\x1b[21~", 0xffc8: b"\x1b[23~", 0xffc9: b"\x1b[24~"}
 
+# Pavé numérique (XK_KP_*) : le caractère ou la touche équivalente du bloc principal.
+KEYPAD = {0xffb0 + n: 0x30 + n for n in range(10)}
+KEYPAD.update({0xff80: 0x20, 0xff89: 0xff09, 0xff8d: 0xff0d, 0xff95: 0xff50, 0xff96: 0xff51, 0xff97: 0xff52,
+               0xff98: 0xff53, 0xff99: 0xff54, 0xff9a: 0xff55, 0xff9b: 0xff56, 0xff9c: 0xff57, 0xff9e: 0xff63,
+               0xff9f: 0xffff, 0xffaa: 0x2a, 0xffab: 0x2b, 0xffac: 0x2c, 0xffad: 0x2d, 0xffae: 0x2e, 0xffaf: 0x2f,
+               0xffbd: 0x3d})
+
 
 def tolerant(screen):
     """pyte passe private=True (ESC [ ? …) à des gestionnaires qui ne l'acceptent pas : vim envoie ESC [ ? 4 m
@@ -107,6 +114,7 @@ class TextScreen(pyte.Screen):
 
 
 def key_bytes(sym, modifiers):
+    sym = KEYPAD.get(sym, sym)
     if sym in KEYS:
         value = KEYS[sym]
     else:

@@ -2160,6 +2160,14 @@ def _build_evdev_keys():
 
 EVDEV_KEYS = _build_evdev_keys()
 
+# Pavé numérique : keysyms XK_KP_* ramenés à la touche équivalente du bloc principal. Le chiffre tapé dans le navigateur
+# est celui qui arrive, quel que soit l'état de Verr. num. du poste (la touche physique du pavé y donnerait une flèche).
+KEYPAD_KEYS = {0xffb0 + n: 0x30 + n for n in range(10)}
+KEYPAD_KEYS.update({0xff80: 0x20, 0xff89: 0xff09, 0xff8d: 0xff0d, 0xff95: 0xff50, 0xff96: 0xff51, 0xff97: 0xff52,
+                    0xff98: 0xff53, 0xff99: 0xff54, 0xff9a: 0xff55, 0xff9b: 0xff56, 0xff9c: 0xff57, 0xff9e: 0xff63,
+                    0xff9f: 0xffff, 0xffaa: 0x2a, 0xffab: 0x2b, 0xffac: 0x2c, 0xffad: 0x2d, 0xffae: 0x2e, 0xffaf: 0x2f,
+                    0xffbd: 0x3d})
+
 
 def _parse_ppm(buf):
     """En-tête PPM binaire (P6) de grim : largeur, hauteur, puis pixels RGB 8 bits."""
@@ -3303,6 +3311,7 @@ def _rfb_serve(backend):
                 last_frame = time.monotonic()
             elif kind == 4:
                 down, sym = struct.unpack(">BxxI", read(7))
+                sym = KEYPAD_KEYS.get(sym, sym)
                 if backend.key(sym, down):
                     (pressed.add if down else pressed.discard)(sym)
             elif kind == 5:
@@ -3320,7 +3329,9 @@ def _rfb_serve(backend):
                 if read(1)[0] != 0:
                     raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message", "Mensaje RFB no admitido"))
                 down, sym, code = struct.unpack(">HII", read(10))
-                evdev = _xt_to_evdev(code) if keycodes else 0
+                keypad = KEYPAD_KEYS.get(sym)                    # pavé numérique : par son caractère, pas sa touche physique
+                sym = keypad or sym
+                evdev = _xt_to_evdev(code) if keycodes and keypad is None else 0
                 if evdev:
                     backend.keycode(evdev, bool(down))
                     (codes.add if down else codes.discard)(evdev)

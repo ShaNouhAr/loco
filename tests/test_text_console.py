@@ -41,6 +41,9 @@ class TestTextConsole(unittest.TestCase):
         self.assertEqual(console_rfb.key_bytes(ord('c'), {0xffe3}), b'\x03')
         self.assertEqual(console_rfb.key_bytes(0xff52, set()), b'\x1b[A')
         self.assertEqual(console_rfb.key_bytes(0x010000e9, set()), 'é'.encode())
+        # Pavé numérique : chiffres, opérateurs, Entrée et navigation, comme le bloc principal.
+        self.assertEqual(b''.join(console_rfb.key_bytes(sym, set()) for sym in (0xffb4, 0xffb2, 0xffae, 0xffab, 0xff8d)), b'42.+\r')
+        self.assertEqual(console_rfb.key_bytes(0xff97, set()), b'\x1b[A')
         # Séquences privées (vim : ESC [ ? 4 m) : ignorées, l'analyseur pyte ne meurt plus d'un TypeError.
         stream.feed(b'\x1b[?4m\x1b[?1r\x1b[?2A\x1b[5;1Hsuite')
         self.assertEqual(screen.display[4][:5], 'suite')

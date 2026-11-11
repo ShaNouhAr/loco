@@ -505,10 +505,15 @@ namespace Loco
             if (special.ContainsKey(sym)) vk = special[sym];
             else if (sym >= 0xffbe && sym <= 0xffd5) vk = (ushort)(112 + sym - 0xffbe);
             input = new Input { Type = 1 };
-            if (vk != 0) { input.Data.Keyboard.Key = vk; if (vk >= 33 && vk <= 46 || vk == 163 || vk == 165 || vk == 91 || vk == 92) input.Data.Keyboard.Flags = 1; }
+            bool keypadExtended; ushort keypad = DesktopKeys.Keypad(sym, out keypadExtended);
+            // Pavé numérique : ses touches de navigation ne portent pas le drapeau « étendue », à l'inverse du bloc de flèches.
+            if (keypad != 0) { input.Data.Keyboard.Key = keypad; if (keypadExtended) input.Data.Keyboard.Flags = 1; }
+            else if (vk != 0) { input.Data.Keyboard.Key = vk; if (vk >= 33 && vk <= 46 || vk == 163 || vk == 165 || vk == 91 || vk == 92) input.Data.Keyboard.Flags = 1; }
             else
             {
-                uint scalar = sym >= 0x01000000 ? sym - 0x01000000 : sym;
+                uint typed = sym == 0xffbd ? 0x3d : sym;                 // « = » d'un pavé numérique
+                if (typed >= 0xff00 && typed <= 0xffff) return;          // touche de fonction inconnue : jamais un caractère
+                uint scalar = typed >= 0x01000000 ? typed - 0x01000000 : typed;
                 if (scalar < 32 || scalar > 0xffff) return;
                 if (pressed.ContainsKey(0xffe3) || pressed.ContainsKey(0xffe4) || pressed.ContainsKey(0xffe9) || pressed.ContainsKey(0xffea) ||
                     pressed.ContainsKey(0xffeb) || pressed.ContainsKey(0xffec))

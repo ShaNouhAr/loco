@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.150.0 — 2026-11-11
+
+- **Bureau à distance : le pavé numérique fonctionne** : sur un poste Windows, les touches du pavé numérique tapaient des caractères sans rapport (des glyphes coréens). Chiffres, opérateurs, Entrée et touches de navigation du pavé arrivent maintenant comme les touches attendues. Sur Linux, le chiffre tapé est celui qui arrive, quel que soit l'état de Verr. num. sur le poste ; dans la console texte, où le pavé ne tapait rien, il fonctionne aussi. Sur Android, le pavé tape ses caractères.
+- **Android : plus de frappes perdues** : en tapant au clavier dans un champ d'un appareil Android, un caractère sur deux environ pouvait disparaître. Corrigé.
+- **« Adaptée à la fenêtre » dit quand le poste ne peut pas suivre** : certains postes n'offrent pas la résolution demandée — une machine virtuelle Windows avec la carte graphique de base n'en propose souvent qu'une seule. L'image est alors ajustée à la fenêtre, et la session l'indique désormais : *Le poste n'offre pas cette résolution*, avec en infobulle la taille demandée, celle que le poste a gardée, et le remède (une carte et un pilote graphiques complets, VirtIO-GPU ou QXL).
+
 ## 2.149.1 — 2026-11-11
 
 - **Bureau à distance en plein écran : un panneau centré et lisible** : le panneau des commandes reste sur le bord gauche, mais au milieu de la hauteur de l'écran au lieu du coin supérieur. Plus rien n'y est coupé : l'état de la session a sa propre ligne et s'affiche en entier, et les listes *Résolution* et *Zoom* prennent toute la largeur.

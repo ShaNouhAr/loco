@@ -4381,5 +4381,7 @@
  "Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.": "Ajustado en el dispositivo, en la aplicación: en otro lugar está en pausa y loco ya no lo ve.",
  "Réseaux de confiance": "Redes de confianza",
  "actif partout": "activo en todas partes",
- "· réglé sur l’appareil": "· ajustado en el dispositivo"
+ "· réglé sur l’appareil": "· ajustado en el dispositivo",
+ "Le poste n’offre pas cette résolution": "El equipo no ofrece esta resolución",
+ "Demandé pour remplir la fenêtre : %(asked)s. L’affichage du poste n’offre pas cette taille et reste en %(got)s ; l’image est ajustée à la fenêtre. Sur une machine virtuelle, une carte et un pilote graphiques complets (VirtIO-GPU, QXL…) offrent d’autres résolutions.": "Solicitado para llenar la ventana: %(asked)s. La pantalla del equipo no ofrece ese tamaño y se queda en %(got)s; la imagen se ajusta a la ventana. En una máquina virtual, una tarjeta y un controlador gráficos completos (VirtIO-GPU, QXL…) ofrecen otras resoluciones."
 }
