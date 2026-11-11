@@ -682,6 +682,11 @@ MIGRATIONS = [
     CREATE INDEX device_commands_active ON device_commands(device_id) WHERE state IN ('queued', 'sent', 'running');
     CREATE INDEX device_commands_recent ON device_commands(device_id);
     """,
+    # 49 — Type d'un appareil Android annoncé par l'application (2.153.0 et plus) : « phone », « tablet » ou « tv » ;
+    # vide tant qu'elle ne l'a pas dit (ancienne application), l'appareil est alors montré comme un téléphone.
+    """
+    ALTER TABLE devices ADD COLUMN form TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

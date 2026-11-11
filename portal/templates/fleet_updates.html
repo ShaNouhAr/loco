@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}{{ _("Mises à jour") }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import device_icon %}
 {% macro device(r) -%}
-<div class="upd-host"><a class="host" href="{{ url_for('fleet_device', dev_id=r.dev_id) }}">{{ r.hostname }}</a><span class="sub" title="{{ r.os_short }}">{{ r.os_short }}</span></div>
+<div class="upd-host">{{ device_icon(r) }}<a class="host" href="{{ url_for('fleet_device', dev_id=r.dev_id) }}">{{ r.hostname }}</a><span class="sub" title="{{ r.os_short }}">{{ r.os_short }}</span></div>
 <div class="upd-action">{{ r.label }}</div>
 {%- endmacro %}
 {% macro when(r) -%}

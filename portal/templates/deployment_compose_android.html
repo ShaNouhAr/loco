@@ -4,10 +4,11 @@
 <label class="selection-item" data-search="{{ a.name }} {{ a.package }}"><input type="checkbox" name="app" value="{{ a.id }}" {{ 'checked' if a.id in selected.apps }} {{ 'disabled' if i.problem }}>
   <span><strong>{{ a.name }}</strong> <span class="os-tag">{{ 'Google Play' if a.store == 'play' else a.source_name or _('source retirée') }}</span><small>{{ a.package }}{% if i.problem %} · {{ i.problem }}{% endif %}</small></span></label>
 {%- endmacro %}
+{% from "_nav_icons.html" import device_icon %}
 {% macro device_item(device) -%}
 {% set usable = device.os_family == 'android' and device.state == 'active' and ready(device) %}
 <label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
-  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'android' %} {{ _("· non compatible (applications Android)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% elif not ready(device) %} {{ _("· application loco à mettre à jour") }}{% endif %}</small></span></label>
+  <span><strong>{{ device_icon(device) }}{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'android' %} {{ _("· non compatible (applications Android)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% elif not ready(device) %} {{ _("· application loco à mettre à jour") }}{% endif %}</small></span></label>
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}

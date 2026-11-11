@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Mon parc") }}{% endblock %}
-{% from "_nav_icons.html" import ui_icon %}
+{% from "_nav_icons.html" import ui_icon, device_icon %}
 {% macro filter_url(statut=None, os=None, q=None, voir=None, page=None) -%}
 {{ url_for('fleet', group=selected_group.id if selected_group else None,
            statut=(statut or None) if statut is not none else (state or None),
@@ -88,7 +88,7 @@
           <tr>
             {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=devname) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
-              <a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ devname }}</a></span>
+              {{ device_icon(d) }}<a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ devname }}</a></span>
               {% if d.label and d.hostname and d.label != d.hostname %}<span class="sub mono" title="{{ _('Nom d’hôte') }}">{{ d.hostname }}</span>{% endif %}
               <span class="sub" title="{{ d.os_name }}">{{ r.os_short }}</span>
               {% if r.groups %}<span class="fleet-groups">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a>{% endfor %}</span>{% endif %}</td>

@@ -5,10 +5,11 @@
 <label class="selection-item" data-search="{{ software.name }}"><input type="checkbox" name="app" value="{{ software.slug }}" {{ 'checked' if software.slug in selected.apps }}>
   {{ software_logo(software.winget_id, software.name, 'small') }}<span><strong>{{ software.name }}</strong><small>{{ software.version or '—' }} · {% if software.status == 'ready' %}{{ _("prêt") }}{% elif software.status == 'error' %}<span class="err-text">{{ _("erreur de téléchargement") }}</span>{% else %}{{ _("téléchargement en cours") }}{% endif %}</small></span></label>
 {%- endmacro %}
+{% from "_nav_icons.html" import device_icon %}
 {% macro device_item(device) -%}
 {% set usable = device.os_family == 'windows' and device.state == 'active' %}
 <label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
-  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} {{ _("· non compatible (logiciels Windows)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% endif %}</small></span></label>
+  <span><strong>{{ device_icon(device) }}{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family != 'windows' %} {{ _("· non compatible (logiciels Windows)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% endif %}</small></span></label>
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}

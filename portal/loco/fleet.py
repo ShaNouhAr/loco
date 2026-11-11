@@ -48,6 +48,8 @@ AGENT_UPDATE_MINUTES = 15       # mise à jour de l'agent demandée : échec si,
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
+# Type d'un appareil Android, annoncé par l'application d'après son écran et son système.
+FORMS = {"phone": L_("Téléphone"), "tablet": L_("Tablette"), "tv": L_("Téléviseur")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
@@ -71,6 +73,33 @@ def _ago(text):
 
 def _hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def device_form(data):
+    """Type annoncé par l'application Android (2.153.0 et plus) : téléphone, tablette ou téléviseur ; None sinon."""
+    value = data.get("form")
+    return value if isinstance(value, str) and value in FORMS else None
+
+
+def device_kind(dev):
+    """Icône d'un poste dans les listes : « pc » pour un ordinateur ; pour un appareil Android, son type — un
+    téléphone tant que l'application ne l'a pas annoncé. Accepte une ligne de la base comme un dictionnaire partiel."""
+    def field(name):
+        try:
+            return dev[name] or ""
+        except (KeyError, IndexError, TypeError):
+            return ""
+    if field("os_family") != "android":
+        return "pc"
+    form = field("form")
+    return form if form in FORMS else "phone"
+
+
+def device_kind_label(kind):
+    return str(FORMS[kind]) if kind in FORMS else _("Ordinateur")
+
+
+app.jinja_env.globals.update(device_kind=device_kind, device_kind_label=device_kind_label)
 
 
 # --------------------------------------------------------------------------- réglages
@@ -619,6 +648,8 @@ def agent_enroll():
                                ident["os_name"], ident["agent_version"], ident["addresses"])).lastrowid
     if ident["net_info"] is not None:
         conn.execute("UPDATE devices SET net_info=? WHERE id=?", (ident["net_info"], dev_id))
+    if ident["os_family"] == "android" and device_form(data) is not None:
+        conn.execute("UPDATE devices SET form=? WHERE id=?", (device_form(data), dev_id))
     joined = ""
     if group:                                   # clé d'un groupe : le poste le rejoint (ses autres groupes restent)
         conn.execute("INSERT OR IGNORE INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, dev_id))
@@ -916,6 +947,9 @@ def agent_checkin():
         policy = net_policy(data)       # application 2.147.0 et plus : réseaux de confiance choisis sur l'appareil
         if policy is not None and policy != dev["net_policy"]:
             conn.execute("UPDATE devices SET net_policy=? WHERE id=?", (policy, dev["id"]))
+        form = device_form(data)        # application 2.153.0 et plus : téléphone, tablette ou téléviseur
+        if form is not None and form != dev["form"]:
+            conn.execute("UPDATE devices SET form=? WHERE id=?", (form, dev["id"]))
     if dev["os_family"] == "android" and isinstance(data.get("adb"), dict):    # application 2.139.0 et plus
         from . import adb
         adb.record_report(conn, dev, data["adb"])
@@ -1100,7 +1134,7 @@ FAILURE_LINE_RE = re.compile(r"^\s*(E:|Err:|dpkg: error|error\b|Error\b|ÉCHEC|F
 
 def _activity_rows():
     """Commandes suivies par le déroulé, dans le parc du compte : (actives, terminées des dernières 24 h)."""
-    base = ("SELECT c.*, d.hostname, d.os_family, d.os_name, d.state AS device_state, d.last_seen "
+    base = ("SELECT c.*, d.hostname, d.os_family, d.os_name, d.form, d.state AS device_state, d.last_seen "
             "FROM device_commands c JOIN devices d ON d.id = c.device_id "
             "WHERE c.action IN ('update', 'reboot') AND d.state != 'removed'" + scope.sql("d.id"))
     since = (datetime.datetime.now() - datetime.timedelta(hours=ACTIVITY_FINISHED_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
@@ -1151,7 +1185,7 @@ def update_activity(active, finished):
 
     def line(c):
         return {"id": c["id"], "dev_id": c["device_id"], "hostname": c["hostname"] or str(c["device_id"]),
-                "os_short": short_os(c["os_name"]), "action": c["action"], "label": action_label(c), "state": c["state"],
+                "os_short": short_os(c["os_name"]), "os_family": c["os_family"], "form": c["form"], "action": c["action"], "label": action_label(c), "state": c["state"],
                 "by": c["created_by"]}
     for c in active:
         item, online = line(c), _command_online(c)

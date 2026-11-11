@@ -4,10 +4,11 @@
 <label class="selection-item" data-search="{{ p.name }} {{ p.desc }}"><input type="checkbox" name="package" value="{{ p.id }}" {{ 'checked' if p.id in selected.packages }}>
   <span><strong>{{ p.name }}</strong> <span class="os-tag">{{ _("Debian / Ubuntu") if p.family == 'debian' else _("Red Hat") }}</span><small>{{ p.version }}{% if p.archs %} · {{ p.archs|join(', ') }}{% endif %}{% if p.desc %} · {{ p.desc }}{% endif %}</small></span></label>
 {%- endmacro %}
+{% from "_nav_icons.html" import device_icon %}
 {% macro device_item(device) -%}
 {% set usable = device.os_family in ('debian', 'rhel') and device.state == 'active' %}
 <label class="selection-item" data-search="{{ device.hostname }} {{ device.os_name }}"><input type="{{ 'checkbox' if can('fleet.bulk_install') else 'radio' }}" name="device" value="{{ device.id }}" {{ 'checked' if device.id in selected.devices }} {{ 'disabled' if not usable }}>
-  <span><strong>{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family not in ('debian', 'rhel') %} {{ _("· non compatible (paquets Linux)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% endif %}</small></span></label>
+  <span><strong>{{ device_icon(device) }}{{ device.hostname or device.uid[:8] }}</strong><small>{{ device.os_name }}{% if device.os_family not in ('debian', 'rhel') %} {{ _("· non compatible (paquets Linux)") }}{% elif device.state != 'active' %} {{ _("· agent en cours de retrait") }}{% endif %}</small></span></label>
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}

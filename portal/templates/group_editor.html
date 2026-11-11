@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% from "_software_logo.html" import software_logo %}
+{% from "_nav_icons.html" import device_icon %}
 {% set software = kind == 'software' %}
 {% set editable = can('windows.groups' if software else 'fleet.groups') %}
 {% set can_deploy = group and selected and can('fleet.install') and (software or can('fleet.bulk_install')) %}
@@ -59,7 +60,7 @@
             <td class="mono nowrap">{{ r.version or '—' }}</td>
             <td class="nowrap">{% if r.status == 'ready' %}<span class="st ok">{{ _("prêt") }}</span>{% elif r.status == 'error' %}<span class="st err">{{ _("erreur") }}</span>{% else %}<span class="st warn">{{ _("téléchargement") }}</span>{% endif %}</td>
             {% else %}
-            <td><a href="{{ url_for('fleet_device', dev_id=r.id) }}" >{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
+            <td>{{ device_icon(r) }}<a href="{{ url_for('fleet_device', dev_id=r.id) }}" >{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
             <td>{{ r.os_name or families.get(r.os_family, '') }}</td>
             <td class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(i.color, '') }}" title="{{ i.reason }}">{{ i.label }}</span></td>
             {% endif %}

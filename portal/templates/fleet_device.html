@@ -2,6 +2,7 @@
 {% block title %}{{ dev.label or dev.hostname or dev.uid[:8] }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% from "_charts.html" import line_chart, legend %}
+{% from "_nav_icons.html" import device_icon %}
 {% from "_macros.html" import pkg_progress with context %}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False) -%}
 <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
@@ -20,7 +21,7 @@
 <div class="device-head">
   <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">{{ _("Mon parc") }}</a></p>
-    <h1><span>{{ devname }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
+    <h1><span class="device-name">{{ device_icon(dev) }}{{ devname }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
     {% if dev.label and dev.hostname and dev.label != dev.hostname %}<p class="small muted mono device-hostname">{{ dev.hostname }}</p>{% endif %}
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
@@ -460,6 +461,7 @@
     <div class="tab-panel" data-panel="details">
       <dl class="kv">
         <dt>{{ _("Système") }}</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
+        {% if android %}<dt>{{ _("Type d’appareil") }}</dt><dd>{{ device_kind_label(device_kind(dev)) }}{% if not dev.form %} <span class="muted small">{{ _("(supposé : l’application de cet appareil ne l’annonce pas encore)") }}</span>{% endif %}</dd>{% endif %}
         <dt>{{ _("Adresses du poste") }}</dt><dd class="mono">{{ dev.addresses or '—' }}</dd>
         <dt>{{ _("Vu par loco depuis") }}</dt><dd><span class="mono">{{ dev.ip or '—' }}</span>{% if dev.ip and dev.ip not in (dev.addresses or '').split() %} <span class="muted small">{{ _("(routeur ou NAT entre le poste et loco)") }}</span>{% endif %}</dd>
         <dt>{{ _("Dernier contact") }}</dt><dd>{{ summary.seen }} <span class="faint small">· {{ dev.last_seen|date_fr }}</span></dd>

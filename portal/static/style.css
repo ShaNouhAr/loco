@@ -1134,6 +1134,9 @@ a.fleet-state:hover { background: var(--bg-2); color: var(--text); }
 .fleet-table td { vertical-align: top; }
 .fleet-table td:first-child .st { margin-right: 4px; }
 .fleet-table .host { font-weight: 500; color: var(--text); }
+/* Type du poste devant son nom : ordinateur, téléphone, tablette, téléviseur. */
+.device-icon { flex: none; width: 16px; height: 16px; margin-right: 5px; color: var(--text-3); vertical-align: -3px; }
+.device-head h1 .device-icon { width: 21px; height: 21px; margin-right: 9px; vertical-align: -3px; color: var(--text-2); }
 .fleet-update-state { display: inline-flex; align-items: flex-start; gap: 8px; }
 .fleet-update-state > .st { margin-top: 5px; }
 .fleet-updates { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; min-width: 0; }

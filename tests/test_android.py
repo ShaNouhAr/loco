@@ -165,5 +165,62 @@ class TestTrustedNetworks(FleetTest):
         self.assertNotIn("Réseaux de confiance", self.admin.c.get(f"/fleet/{device(linux.uid)['id']}").get_data(as_text=True))
 
 
+class TestDeviceKind(FleetTest):
+    """Icône du type de poste : ordinateur ; pour Android, téléphone, tablette ou téléviseur annoncé par l'application."""
+
+    def setUp(self):
+        super().setUp()
+        self.addCleanup(AndroidTest.reset_experimental, self)
+        AndroidTest.enable_android(self)
+        self.agent = Agent(ANDROID, "192.168.43.70")
+        self.agent.enroll()
+        self.dev = device(self.agent.uid)["id"]
+
+    def announce(self, form):
+        data = dict(self.agent.ident)
+        if form is not None:
+            data["form"] = form
+        self.assertEqual(self.agent.post("/agent/api/checkin", data, self.agent.token).status_code, 200)
+        return device(self.agent.uid)["form"]
+
+    def test_an_android_device_is_a_phone_until_its_app_says_otherwise(self):
+        from loco import fleet
+        self.assertEqual(device(self.agent.uid)["form"], "")                      # application d'avant : rien d'annoncé
+        self.assertEqual(fleet.device_kind(device(self.agent.uid)), "phone")
+        card = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+        self.assertIn('aria-label="Téléphone"', card)
+        self.assertIn("supposé", card)
+        self.assertEqual(self.announce("tablet"), "tablet")
+        card = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+        self.assertIn('aria-label="Tablette"', card)
+        self.assertIn("<dd>Tablette</dd>", card)
+        self.assertNotIn("supposé", card)
+        self.assertEqual(self.announce("tv"), "tv")
+        self.assertIn('aria-label="Téléviseur"', self.admin.c.get("/fleet").get_data(as_text=True))
+        self.assertEqual(self.announce(None), "tv")                              # contact sans l'information : gardée
+        for bad in ("watch", "", 3, ["tablet"], {"form": "tv"}):
+            self.assertEqual(self.announce(bad), "tv", bad)                      # valeur inconnue : ignorée
+
+    def test_the_type_is_taken_at_enrollment_too(self):
+        tablet = Agent(dict(ANDROID, hostname="tablette-accueil", form="tablet"), "192.168.43.71")
+        tablet.enroll()
+        self.assertEqual(device(tablet.uid)["form"], "tablet")
+
+    def test_computers_get_the_computer_icon_whatever_they_announce(self):
+        from loco import fleet
+        from test_fleet import LINUX, WINDOWS
+        linux, windows = Agent(LINUX, "192.168.43.60"), Agent(WINDOWS, "192.168.43.50")
+        for agent in (linux, windows):
+            agent.enroll()
+            agent.post("/agent/api/checkin", dict(agent.ident, form="tv"), agent.token)
+            self.assertEqual(device(agent.uid)["form"], "")
+            self.assertEqual(fleet.device_kind(device(agent.uid)), "pc")
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertEqual(page.count('aria-label="Ordinateur"'), 2)
+        self.assertEqual(page.count('class="device-icon"'), 3)                   # un par poste de la liste
+        self.assertEqual(fleet.device_kind({"os_family": "android"}), "phone")   # ligne partielle, sans la colonne
+        self.assertEqual(fleet.device_kind({}), "pc")
+
+
 if __name__ == "__main__":
     unittest.main()

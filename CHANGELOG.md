@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.153.0 — 2026-11-11
+
+- **Une icône dit de quel type de poste il s'agit** : un petit écran devant le nom des ordinateurs (Debian, Ubuntu, Red Hat, Windows), et pour les appareils Android un téléphone, une tablette ou un téléviseur. On la voit dans Mon parc, dans le titre de la fiche d'un poste, dans le déroulé des mises à jour, dans les groupes de machines et dans le choix des postes d'un déploiement.
+- **Android : téléphone, tablette ou téléviseur, reconnu par l'application** : l'application annonce le type de l'appareil — téléviseur sous Android TV, tablette quand l'écran fait au moins 600 dp de large (le seuil d'Android), téléphone sinon. La fiche de l'appareil l'indique dans *Détails › Type d'appareil*. Un appareil dont l'application est plus ancienne est montré comme un téléphone, et sa fiche le précise, jusqu'à ce que l'application se mette à jour. Un téléphone pliable ouvert est vu comme une tablette.
+
 ## 2.152.0 — 2026-11-11
 
 - **Mon parc bien plus rapide** : la page interroge le serveur toutes les deux secondes pour se tenir à jour, et chaque interrogation recalculait l'état de tous les postes. Le plus coûteux était la comparaison des logiciels installés sur chaque poste Windows avec le catalogue, refaite plusieurs fois par poste. Ce que la liste tire de l'inventaire d'un poste est maintenant gardé en mémoire et n'est recalculé que lorsque cet inventaire ou le catalogue change. Sur un parc simulé avec un catalogue de 30 logiciels : 5,5 ms au lieu de 528 ms pour 100 postes, 34 ms au lieu de 5 secondes pour 1 000 postes. La première interrogation après un redémarrage du portail reste plus longue (0,6 seconde pour 1 000 postes).

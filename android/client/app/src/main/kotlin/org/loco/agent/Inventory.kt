@@ -1,6 +1,9 @@
 package org.loco.agent
 
+import android.app.UiModeManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.provider.Settings
 import org.json.JSONArray
@@ -15,6 +18,17 @@ object Inventory {
         put("os", JSONObject().put("family", "android").put("name", osName()))
         put("agent_version", BuildConfig.VERSION_NAME)
         put("addresses", JSONArray(addresses()))
+        put("form", form(context))
+    }
+
+    /** Type de l'appareil, pour son icône dans loco : « tv » (Android TV : interface de téléviseur), « tablet » (plus
+     *  petite largeur d'écran d'au moins 600 dp, le seuil d'Android pour une tablette), sinon « phone ». */
+    fun form(context: Context): String {
+        val ui = context.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        val pm = context.packageManager
+        if (ui?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION || pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+            pm.hasSystemFeature("android.software.leanback_only")) return "tv"
+        return if (context.resources.configuration.smallestScreenWidthDp >= 600) "tablet" else "phone"
     }
 
     fun full(context: Context): JSONObject = identity(context).apply {
