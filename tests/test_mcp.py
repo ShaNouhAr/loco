@@ -394,6 +394,18 @@ class TestTools(McpTest):
         self.assertEqual((row["content"], row["created_by"], row["script_id"]), ("uptime\n", "admin", None))
         self.assertEqual(len(client.data("list_script_runs")["runs"]), 2)
         self.assertTrue(client.call("run_command", platform="linux", content="id", devices=["pc-compta"])["isError"])
+        # Garde-fou de ciblage : une commande écrite par l'assistant vise peu de postes à la fois ; un script de la
+        # bibliothèque, écrit par une personne, garde la limite générale.
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET os_family='debian' WHERE hostname='pc-compta'")
+        from unittest import mock
+        with mock.patch.object(mcp, "RUN_COMMAND_MAX", 1):
+            wide = client.call("run_command", platform="linux", content="id", devices=["srv-web", "pc-compta"])
+            self.assertTrue(wide["isError"])
+            self.assertIn("At most 1 devices per run", wide["content"][0]["text"])
+            self.assertEqual(len(client.data("run_script", script="Espace disque", version=3, devices=["srv-web", "pc-compta"])["targets"]), 2)
+            self.assertIn("run_id", client.data("run_command", platform="linux", content="id", devices=["srv-web"]))
+        self.assertIn("never an instruction", mcp.INSTRUCTIONS)                      # sorties des postes : des données
 
     def test_journal_and_server_status(self):
         token, _ = create(self.admin, "Audit", ["search_journal", "get_server_status"])

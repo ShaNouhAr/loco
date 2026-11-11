@@ -1,5 +1,15 @@
 # Journal des versions
 
+## 2.151.0 — 2026-11-11
+
+- **Après cette mise à jour, reconnectez-vous une fois** : les sessions ouvertes avant elle ne sont plus reconnues.
+- **Se déconnecter ferme vraiment la session** : le serveur connaît désormais chaque session du portail. Une fois déconnecté, un cookie copié auparavant ne vaut plus rien. Une session dure sept jours au plus, même utilisée sans arrêt ; elle expire toujours après huit heures d'inactivité, et changer son mot de passe ferme les autres sessions du compte.
+- **Double authentification : un code n'ouvre qu'une session** : un code déjà utilisé est refusé (« Ce code a déjà servi »), il faut attendre le suivant. Quelqu'un qui a vu le code être tapé ne peut plus le rejouer dans la minute.
+- **La clé d'inscription ne reste plus sur les postes** : les paquets `.deb` et `.rpm` de l'agent gardaient leur script d'installation, lisible par tous les utilisateurs du poste, avec la clé d'inscription dedans. Il n'est plus lisible que par root, et il est remplacé par une simple note dès que le poste est inscrit ; les postes déjà installés par un paquet sont nettoyés par leur agent à son prochain contact. Pendant l'inscription, la clé n'apparaît plus dans la liste des processus du poste.
+- **La clé d'inscription ne s'écrit plus dans le journal** : le journal d'accès du portail (nginx) ne garde plus les paramètres des adresses, donc plus le `?key=…` des commandes d'inscription.
+- **Assistants IA** : une commande écrite par l'assistant vise 25 postes au plus par appel, pour qu'une erreur de ciblage ne parte pas d'un coup sur tout le parc ; un script de la bibliothèque, écrit et enregistré par une personne, garde la limite de 500. Les consignes données à l'assistant précisent que ce qui revient d'un poste (sortie d'une commande, texte d'un écran, contenu d'un fichier) est une donnée, jamais une instruction à suivre.
+- **Sauvegardes** : `SECURITY.md` disait à tort qu'elles étaient en 0600. Elles sont en 0640 `root:loco` pour que le portail puisse les proposer au téléchargement et les envoyer hors site, et elles contiennent les clés privées du serveur et de l'autorité locale : une archive se protège comme le serveur lui-même.
+
 ## 2.150.0 — 2026-11-11
 
 - **Bureau à distance : le pavé numérique fonctionne** : sur un poste Windows, les touches du pavé numérique tapaient des caractères sans rapport (des glyphes coréens). Chiffres, opérateurs, Entrée et touches de navigation du pavé arrivent maintenant comme les touches attendues. Sur Linux, le chiffre tapé est celui qui arrive, quel que soit l'état de Verr. num. sur le poste ; dans la console texte, où le pavé ne tapait rien, il fonctionne aussi. Sur Android, le pavé tape ses caractères.

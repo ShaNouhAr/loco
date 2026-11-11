@@ -43,6 +43,10 @@ app.config.update(
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(message)s")
 app.logger.setLevel(logging.INFO)
+if not SECRETS.get("secret_key"):
+    # Sans clé enregistrée, celle-ci ne vaut que pour ce processus : toutes les sessions tombent à chaque redémarrage.
+    app.logger.warning("clé de session absente de %s : clé provisoire, les sessions ne survivront pas au redémarrage",
+                       config.SECRETS_PATH)
 
 STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js", "adb_unlock.js", "adb_screen.js", "passkeys.js", "logo.svg")
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))

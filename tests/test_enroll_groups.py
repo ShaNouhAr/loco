@@ -48,7 +48,7 @@ class TestGroupEnrollment(ScopeTest):
         public = fixture.loco.app.test_client()                         # téléchargé par le poste, sans session
         script = public.get(f"/agent/linux.sh?key={key}")
         self.assertEqual(script.status_code, 200)
-        self.assertIn(f"--key '{key}'", script.get_data(as_text=True))
+        self.assertIn(f"LOCO_ENROLL_KEY='{key}' ", script.get_data(as_text=True))
         for bad in (f"g{self.batb}-{'x' * 24}", f"g{self.servers}-{secret}", f"g999-{secret}", key + "x", "g0-" + secret):
             self.assertEqual(Agent(LINUX, "192.168.43.90").enroll(key=bad).status_code, 403, bad)
             self.assertEqual(public.get(f"/agent/linux.sh?key={bad}").status_code, 403, bad)

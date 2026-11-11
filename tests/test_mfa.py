@@ -21,7 +21,7 @@ class MfaTest(unittest.TestCase):
     @staticmethod
     def _clear_admin_mfa():
         with connect() as conn:
-            conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE username='admin'")
+            conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='', totp_counter=0 WHERE username='admin'")
             conn.execute("DELETE FROM login_failures")
 
     def enroll(self):
@@ -58,6 +58,23 @@ class MfaTest(unittest.TestCase):
         self.assertEqual(fresh.c.get("/").status_code, 302)      # toujours pas connecté
         self.assertEqual(fresh.post("/login/mfa", {"code": code_now(secret)}, page="/login/mfa").status_code, 302)
         self.assertEqual(fresh.c.get("/").status_code, 200)      # connecté
+
+    def test_a_code_opens_only_one_session(self):
+        """Un code vu ou intercepté ne se rejoue pas : sa période est retenue à la connexion."""
+        _b, secret, _codes = self.enroll()
+        code = code_now(secret)
+        first = Browser()
+        first.login("admin", ADMIN_PW)
+        self.assertEqual(first.post("/login/mfa", {"code": code}, page="/login/mfa").status_code, 302)
+        again = Browser()
+        again.login("admin", ADMIN_PW)
+        refused = again.post("/login/mfa", {"code": code}, page="/login/mfa")
+        self.assertEqual(refused.status_code, 401)
+        self.assertIn("déjà servi", refused.get_data(as_text=True))
+        self.assertEqual(again.c.get("/").status_code, 302)      # pas connecté
+        following = totp._code(secret, int(time.time() // totp.PERIOD) + 1)
+        self.assertEqual(again.post("/login/mfa", {"code": following}, page="/login/mfa").status_code, 302)
+        self.assertEqual(again.c.get("/").status_code, 200)      # le code suivant ouvre la session
 
     def test_recovery_code_logs_in_once(self):
         _b, _secret, codes = self.enroll()

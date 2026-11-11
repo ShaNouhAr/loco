@@ -5,7 +5,7 @@ Lancé toutes les deux minutes par loco-client.timer (root). Contacte le serveur
 jeton (indépendants de l'adresse IP du poste), envoie l'inventaire des mises à jour et exécute les actions
 demandées depuis le portail : inventaire, mise à jour, redémarrage, retrait de l'agent. Terminal interactif séparé, réservé aux administrateurs du portail.
   loco-client run                         contact du serveur (service)
-  loco-client enroll --server URL --key CLÉ
+  loco-client enroll --server URL --key CLÉ      (ou la clé dans LOCO_ENROLL_KEY, sans --key)
   loco-client status
   loco-client remove                      retrait local (le poste reste à oublier dans le portail)
 Bibliothèque standard de Python uniquement ; autorité du serveur épinglée (/etc/loco-client/ca.crt).
@@ -1527,11 +1527,34 @@ def _run_commands(conf, answer, state):
     return False
 
 
+PACKAGE_SCRIPT = "/usr/share/loco-client/install.sh"
+KEYLESS_SCRIPT = ("#!/bin/sh\n# loco : clé d’inscription retirée une fois le poste inscrit ; réinstaller le paquet le "
+                  "réinscrit.\nexit 0\n")
+
+
+def forget_package_key(path=PACKAGE_SCRIPT):
+    """Poste installé par le paquet .deb ou .rpm : son script d'installation porte la clé d'inscription. Le poste
+    inscrit, elle n'a plus à rester sur le disque : le script laisse la place à une note, lisible par root seul.
+    Remplacement par renommage : un script encore en cours d'exécution garde son fichier d'origine."""
+    try:
+        with open(path, "rb") as f:
+            if b"enroll --server" not in f.read(4 * 1024 * 1024):
+                return False
+        tmp = path + ".loco"
+        with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+            f.write(KEYLESS_SCRIPT)
+        os.replace(tmp, path)
+        return True
+    except OSError:
+        return False
+
+
 def service():
     conf = load(CONFIG)
     if not conf.get("token"):
         log(t("poste non inscrit : relancez la commande d'installation de l'agent.", "machine not enrolled: run the agent install command again.", "equipo no inscrito: vuelva a ejecutar el comando de instalación del agente."))
         return 1
+    forget_package_key()                    # avant le verrou : même pendant une longue mise à jour du poste
     lock = open(LOCK, "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -3745,6 +3768,8 @@ def main(argv):
         return service()
     if cmd == "enroll" and len(argv) == 5 and argv[1] == "--server" and argv[3] == "--key":
         return enroll(argv[2], argv[4])
+    if cmd == "enroll" and len(argv) == 3 and argv[1] == "--server" and os.environ.get("LOCO_ENROLL_KEY"):
+        return enroll(argv[2], os.environ["LOCO_ENROLL_KEY"])    # clé hors de la liste des processus
     if cmd == "status":
         return status_cmd()
     if cmd == "remove":

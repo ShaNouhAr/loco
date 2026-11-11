@@ -1,8 +1,10 @@
 """Comptes, sessions, limitation des tentatives de connexion et journal d'audit."""
 
 import datetime
+import hashlib
 import json
 import secrets
+import sqlite3
 import time
 from functools import wraps
 
@@ -104,7 +106,46 @@ def load_user():
         if directory is None or not directory["enabled"] or "directories" in features.disabled():
             session.clear()
             return
+    if not _session_alive(uid):
+        session.clear()
+        session["csrf"] = secrets.token_hex(16)
+        return
     g.user = row
+
+
+def _session_key(sid):
+    return hashlib.sha256(sid.encode()).hexdigest()
+
+
+def _session_alive(uid):
+    """La session du cookie est-elle encore ouverte côté serveur ? Non après une déconnexion (même si le cookie a été
+    copié avant), ni passé la durée maximale ou le délai d'inactivité. Le dernier passage est noté au plus une fois
+    par minute."""
+    sid = session.get("sid")
+    if not isinstance(sid, str) or not sid:
+        return False
+    key, now = _session_key(sid), time.time()
+    row = db().execute("SELECT created, seen FROM web_sessions WHERE id=? AND user_id=?", (key, uid)).fetchone()
+    if row is None:
+        return False
+    if now - row["created"] > config.SESSION_MAX_HOURS * 3600 or now - row["seen"] > config.SESSION_IDLE_HOURS * 3600:
+        _close_session(key)
+        return False
+    if now - row["seen"] > 60:
+        try:
+            db().execute("UPDATE web_sessions SET seen=? WHERE id=?", (now, key))
+            db().commit()
+        except sqlite3.OperationalError:                         # base occupée : le passage sera noté au suivant
+            db().rollback()
+    return True
+
+
+def _close_session(key):
+    try:
+        db().execute("DELETE FROM web_sessions WHERE id=?", (key,))
+        db().commit()
+    except sqlite3.OperationalError:
+        db().rollback()
 
 
 def login_required(view):
@@ -219,9 +260,14 @@ def _complete_login(row, ip, directory=None, passkey=None):
     """Ouvre la session après validation complète (mot de passe et 2FA le cas échéant, ou clé d'accès)."""
     session.clear()
     session.permanent = True
-    session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16))
+    sid, now = secrets.token_urlsafe(32), time.time()
+    session.update(uid=row["id"], pwv=row["pw_version"], csrf=secrets.token_hex(16), sid=sid)
     if directory:
         session["directory"] = directory
+    # Session connue du serveur (son empreinte seulement) ; les sessions échues partent au passage.
+    db().execute("DELETE FROM web_sessions WHERE created<? OR seen<?",
+                 (now - config.SESSION_MAX_HOURS * 3600, now - config.SESSION_IDLE_HOURS * 3600))
+    db().execute("INSERT INTO web_sessions (id, user_id, created, seen) VALUES (?,?,?,?)", (_session_key(sid), row["id"], now, now))
     db().execute("DELETE FROM login_failures WHERE username=?", (row["username"],))
     db().execute("UPDATE users SET last_login=?, last_ip=? WHERE id=?",
                  (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), ip, row["id"]))
@@ -299,7 +345,16 @@ def login_mfa():
             flash(_('Trop de tentatives. Réessayez dans quelques minutes.'), "error")
             return render_template("login_mfa.html"), 429
         code = request.form.get("code", "")
-        ok = totp.verify(totp.unseal(row["totp_secret"]), code)
+        # Un code n'ouvre qu'une session : sa période est retenue, et un code de cette période ou d'avant est refusé
+        # (quelqu'un qui l'a vu taper ne peut pas le rejouer dans la minute).
+        counter = totp.matching_counter(totp.unseal(row["totp_secret"]), code)
+        ok = counter is not None and db().execute("UPDATE users SET totp_counter=? WHERE id=? AND totp_counter<?",
+                                                  (counter, row["id"], counter)).rowcount == 1
+        if counter is not None and not ok:
+            _record_failure(ip, row["username"])
+            audit("connexion.echec", f"compte « {row['username']} » (2FA, code déjà utilisé)", username="")
+            flash(_('Ce code a déjà servi. Attendez le code suivant.'), "error")
+            return render_template("login_mfa.html"), 401
         if not ok:
             used, remaining = totp.use_recovery_code(row["recovery_codes"], code)
             if used:
@@ -329,6 +384,8 @@ def logout():
                                 (g.user["id"], owner)).fetchall():
             remote._close(row["id"], "Administrateur déconnecté.", g.user["username"])
         audit("deconnexion")
+    if isinstance(session.get("sid"), str):
+        _close_session(_session_key(session["sid"]))             # un cookie copié avant la déconnexion ne vaut plus rien
     session.clear()
     return redirect(url_for("login"))
 
@@ -371,6 +428,8 @@ def account():
             flash(problem, "error")
         else:
             set_password(db(), g.user["id"], new)
+            db().execute("DELETE FROM web_sessions WHERE user_id=? AND id!=?",
+                         (g.user["id"], _session_key(session.get("sid") or "")))
             db().commit()
             session["pwv"] = g.user["pw_version"] + 1
             audit("compte.mot_de_passe")
@@ -440,7 +499,7 @@ def account_mfa_disable():
     if not ok:
         flash(_("Code ou mot de passe incorrect."), "error")
         return redirect(url_for("account"))
-    db().execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (g.user["id"],))
+    db().execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='', totp_counter=0 WHERE id=?", (g.user["id"],))
     db().commit()
     audit("compte.2fa.desactivee")
     flash(_("Double authentification désactivée."), "ok")
@@ -473,7 +532,7 @@ def users_mfa_reset(user_id):
     row = _get_user(user_id)
     if not can_manage_user(row) or not row["mfa_enabled"]:
         abort(403)
-    conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (row["id"],))
+    conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='', totp_counter=0 WHERE id=?", (row["id"],))
     audit("comptes.2fa.reinitialisation", row["username"], commit=False)
     conn.commit()
     flash(_("Double authentification retirée pour %(user)s.", user=row["username"]), "ok")

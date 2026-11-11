@@ -107,7 +107,7 @@ def user_command(args):
             print(f"Compte {row['username']} {'désactivé' if cmd == 'disable' else 'réactivé'}.")
         elif cmd == "mfa-reset":
             row = _user(conn, name)
-            conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='' WHERE id=?", (row["id"],))
+            conn.execute("UPDATE users SET totp_secret='', mfa_enabled=0, recovery_codes='', totp_counter=0 WHERE id=?", (row["id"],))
             _audit(conn, "comptes.2fa.reinitialisation", row["username"])
             print(f"Double authentification retirée pour {row['username']}.")
         elif cmd == "passkeys-reset":

@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.150.0"
+VERSION = "2.151.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -109,6 +109,7 @@ USER_AGENT = f"loco/{VERSION}"
 # Comptes et sessions
 MIN_PASSWORD = 12
 SESSION_IDLE_HOURS = 8
+SESSION_MAX_HOURS = 7 * 24      # durée maximale d'une session, même utilisée sans arrêt
 LOGIN_WINDOW = 15 * 60          # fenêtre d'observation des échecs (s)
 LOGIN_MAX_PER_USER = 5          # échecs avant blocage temporaire du compte
 LOGIN_MAX_PER_IP = 20           # échecs avant blocage temporaire de l'adresse

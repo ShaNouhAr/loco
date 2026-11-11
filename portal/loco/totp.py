@@ -52,13 +52,23 @@ def _code(secret, counter):
     return str(value % (10 ** DIGITS)).zfill(DIGITS)
 
 
-def verify(secret, code, window=1, now=None):
-    """Vrai si le code correspond au secret, en tolérant une fenêtre avant/après (décalage d'horloge)."""
+def matching_counter(secret, code, window=1, now=None):
+    """Période (compteur) dont le code correspond au secret, en tolérant une fenêtre avant/après (décalage d'horloge) ;
+    None si aucun. À la connexion, le compteur accepté est retenu : un même code ne sert pas deux fois."""
     code = (code or "").strip().replace(" ", "")
     if not secret or not code.isdigit() or len(code) != DIGITS:
-        return False
+        return None
     counter = int((now if now is not None else time.time()) // PERIOD)
-    return any(hmac.compare_digest(_code(secret, counter + delta), code) for delta in range(-window, window + 1))
+    found = None
+    for delta in range(-window, window + 1):                    # toutes comparées : durée indépendante du résultat
+        if hmac.compare_digest(_code(secret, counter + delta), code) and found is None:
+            found = counter + delta
+    return found
+
+
+def verify(secret, code, window=1, now=None):
+    """Vrai si le code correspond au secret, en tolérant une fenêtre avant/après (décalage d'horloge)."""
+    return matching_counter(secret, code, window, now) is not None
 
 
 def uri(secret, username, issuer="loco"):

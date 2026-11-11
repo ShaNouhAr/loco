@@ -435,7 +435,8 @@ class TestServiceLoop(unittest.TestCase):
              mock.patch.object(agent, "forward_logs", lambda *a: None), \
              mock.patch.object(agent, "_run_commands", lambda *a: False), \
              mock.patch.multiple(agent, self_update=lambda conf, wanted: bool(wanted) and wanted != agent.VERSION,
-                                 relaunch=lambda: relaunched.append(len(calls)) or 0), \
+                                 relaunch=lambda: relaunched.append(len(calls)) or 0,
+                                 forget_package_key=lambda: False), \
              mock.patch.object(agent, "ensure_desktop_backend", lambda s: None), \
              mock.patch.object(agent, "_apt_lock_busy", lambda o: False), \
              mock.patch.object(agent, "booted_since", lambda last: False), \
@@ -655,3 +656,35 @@ class TestEnrollment(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEnrollmentKeyDoesNotStay(unittest.TestCase):
+    """La clé d'inscription ne reste ni sur le disque du poste, ni dans la liste de ses processus."""
+    def test_package_script_gives_way_to_a_note_once_the_machine_is_enrolled(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as work:
+            path = os.path.join(work, "install.sh")
+            with open(path, "w") as f:
+                f.write("#!/bin/sh\nLOCO_ENROLL_KEY='secret-key' loco-client.py enroll --server 'https://loco.test'\n")
+            os.chmod(path, 0o644)                                # paquet d'avant : lisible par tous
+            self.assertTrue(agent.forget_package_key(path))
+            content = Path(path).read_text()
+            self.assertNotIn("secret-key", content)
+            self.assertTrue(content.startswith("#!/bin/sh\n"))
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            self.assertEqual(os.listdir(work), ["install.sh"])   # aucun fichier temporaire laissé
+            self.assertFalse(agent.forget_package_key(path))     # déjà fait : rien à réécrire
+            self.assertFalse(agent.forget_package_key(os.path.join(work, "absent.sh")))   # poste installé sans paquet
+
+    def test_key_is_read_from_the_environment(self):
+        calls = []
+        with mock.patch.object(agent.os, "geteuid", return_value=0), \
+                mock.patch.object(agent, "enroll", side_effect=lambda server, key: calls.append((server, key)) or 0), \
+                mock.patch.dict(agent.os.environ, {"LOCO_ENROLL_KEY": "cle-env"}):
+            self.assertEqual(agent.main(["enroll", "--server", "https://loco.test"]), 0)
+            self.assertEqual(agent.main(["enroll", "--server", "https://loco.test", "--key", "cle-arg"]), 0)   # forme historique
+        self.assertEqual(calls, [("https://loco.test", "cle-env"), ("https://loco.test", "cle-arg")])
+        with mock.patch.object(agent.os, "geteuid", return_value=0), mock.patch.dict(agent.os.environ, clear=False) as env, \
+                mock.patch.object(agent.sys, "stderr"):
+            env.pop("LOCO_ENROLL_KEY", None)
+            self.assertEqual(agent.main(["enroll", "--server", "https://loco.test"]), 2)   # sans clé : mode d'emploi

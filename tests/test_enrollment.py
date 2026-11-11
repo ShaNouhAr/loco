@@ -68,11 +68,13 @@ class TestAgentPackages(unittest.TestCase):
             prerm = tar.extractfile("./prerm").read().decode()
             self.assertEqual(tar.getmember("./postinst").mode, 0o755)
             md5sums = tar.extractfile("./md5sums").read().decode()
-        self.assertIn("configure)\n        sh /usr/share/loco-client/install.sh\n", postinst)
+        self.assertIn("configure)\n        sh /usr/share/loco-client/install.sh\n        printf '%s\\n' '#!/bin/sh'", postinst)
+        self.assertIn("> /usr/share/loco-client/install.sh\n", postinst)              # poste inscrit : la clé ne reste pas
         self.assertIn("remove)\n        if [ -x /usr/local/lib/loco-client/loco-client.py ]", prerm)
         self.assertNotIn("repos.sh", postinst + prerm)                                # agent seul : dépôts intacts
         with tarfile.open(fileobj=io.BytesIO(members["data.tar.gz"])) as tar:
             script = tar.extractfile("./usr/share/loco-client/install.sh").read()
+            self.assertEqual(tar.getmember("./usr/share/loco-client/install.sh").mode, 0o600)   # clé d'inscription : root seul
             self.assertEqual({m.uname for m in tar.getmembers()}, {"root"})
             grim = tar.extractfile("./usr/share/loco-client/grim-amd64").read()       # grim embarqué pour le hors-ligne
             grim_modes = {a: tar.getmember(f"./usr/share/loco-client/grim-{a}").mode for a in ("amd64", "arm64")}
@@ -94,7 +96,9 @@ class TestAgentPackages(unittest.TestCase):
         self.assertEqual(signature[1004], hashlib.md5(raw_header + payload).digest())
         self.assertEqual(signature[1000], [len(raw_header) + len(payload)])
         self.assertEqual(header[5092], [hashlib.sha256(payload).hexdigest()])
-        self.assertEqual(header[1024], "sh /usr/share/loco-client/install.sh\n")       # %post
+        self.assertTrue(header[1024].startswith("sh /usr/share/loco-client/install.sh\nprintf '%s\\n' '#!/bin/sh'"))   # %post
+        self.assertTrue(header[1024].endswith("> /usr/share/loco-client/install.sh\n"))  # puis la clé est retirée
+        self.assertEqual(header[1030][1] & 0o777, 0o600)                              # script lisible par root seul
         self.assertIn('if [ "$1" -eq 0 ]', header[1025])                              # %preun : retrait final
         self.assertEqual(header[1049][:2], ["python3", "systemd"])
         files = cpio_files(gzip.decompress(payload))
@@ -137,7 +141,7 @@ class TestEnrollmentPage(FleetTest):
         self.assertIn(f'filename="loco-client_{config.VERSION}_all.deb"', deb.headers["Content-Disposition"])
         with tarfile.open(fileobj=io.BytesIO(deb_members(deb.data)["data.tar.gz"])) as tar:
             script = tar.extractfile("./usr/share/loco-client/install.sh").read().decode()
-        self.assertIn(f"--server '{config.HTTPS_URL}' --key '{key}'", script)
+        self.assertIn(f"LOCO_ENROLL_KEY='{key}' /usr/local/lib/loco-client/loco-client.py enroll --server '{config.HTTPS_URL}'\n", script)
         rpm = anonymous.get(f"/agent/loco-client.rpm?key={key}")
         self.assertEqual((rpm.status_code, rpm.mimetype), (200, "application/x-rpm"))
         self.assertEqual(rpm.data[:4], b"\xed\xab\xee\xdb")
@@ -190,6 +194,25 @@ class TestEnrollmentPage(FleetTest):
         nothing = browser(self, "rien", profile(self, "rien", {"dashboard.view"}))
         self.assertEqual(nothing.c.get("/enrollment").status_code, 403)
         self.assertNotIn('href="/enrollment"', nothing.c.get("/").get_data(as_text=True))
+
+
+class TestKeyStaysOutOfTheAccessLog(unittest.TestCase):
+    def test_portal_access_log_never_writes_query_strings(self):
+        """Les commandes d'inscription portent ?key=… : le journal d'accès du portail n'écrit que le chemin."""
+        import re
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "conf")
+        def read(name):
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                return f.read()
+        portal = read("nginx-portal.conf")
+        fmt = re.search(r"log_format loco_portal ([^;]+);", portal).group(1)
+        self.assertIn("$uri", fmt)
+        for variable in ("$request ", '$request"', "$request_uri", "$args", "$query_string", "$http_referer"):
+            self.assertNotIn(variable, fmt)
+        for name in ("nginx-portal.conf", "nginx-portal-http.conf"):
+            text = read(name)
+            self.assertEqual(re.findall(r"^\s*access_log\s+(.*);", text, re.M), ["/var/log/nginx/loco-portal.log loco_portal"], name)
+        self.assertLess(portal.index("log_format loco_portal"), portal.index("server {"))   # défini avant les blocs
 
 
 if __name__ == "__main__":

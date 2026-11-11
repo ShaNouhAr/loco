@@ -656,6 +656,19 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN net_policy TEXT NOT NULL DEFAULT '';
     """,
+    # 47 — Sessions du portail connues du serveur : le cookie porte un identifiant, dont seule l'empreinte est gardée
+    # ici. Se déconnecter la retire (un cookie copié ne vaut plus rien), et elle a une durée maximale. totp_counter :
+    # dernière période du code à usage unique acceptée à la connexion, pour qu'un même code ne serve pas deux fois.
+    """
+    CREATE TABLE web_sessions (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created REAL NOT NULL,
+        seen REAL NOT NULL
+    );
+    CREATE INDEX web_sessions_user ON web_sessions(user_id);
+    ALTER TABLE users ADD COLUMN totp_counter INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

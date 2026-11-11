@@ -4383,5 +4383,6 @@
  "actif partout": "activo en todas partes",
  "· réglé sur l’appareil": "· ajustado en el dispositivo",
  "Le poste n’offre pas cette résolution": "El equipo no ofrece esta resolución",
- "Demandé pour remplir la fenêtre : %(asked)s. L’affichage du poste n’offre pas cette taille et reste en %(got)s ; l’image est ajustée à la fenêtre. Sur une machine virtuelle, une carte et un pilote graphiques complets (VirtIO-GPU, QXL…) offrent d’autres résolutions.": "Solicitado para llenar la ventana: %(asked)s. La pantalla del equipo no ofrece ese tamaño y se queda en %(got)s; la imagen se ajusta a la ventana. En una máquina virtual, una tarjeta y un controlador gráficos completos (VirtIO-GPU, QXL…) ofrecen otras resoluciones."
+ "Demandé pour remplir la fenêtre : %(asked)s. L’affichage du poste n’offre pas cette taille et reste en %(got)s ; l’image est ajustée à la fenêtre. Sur une machine virtuelle, une carte et un pilote graphiques complets (VirtIO-GPU, QXL…) offrent d’autres résolutions.": "Solicitado para llenar la ventana: %(asked)s. La pantalla del equipo no ofrece ese tamaño y se queda en %(got)s; la imagen se ajusta a la ventana. En una máquina virtual, una tarjeta y un controlador gráficos completos (VirtIO-GPU, QXL…) ofrecen otras resoluciones.",
+ "Ce code a déjà servi. Attendez le code suivant.": "Este código ya se ha usado. Espere al siguiente."
 }

@@ -1,7 +1,9 @@
 """Paquets d'installation de l'agent Linux (.deb et .rpm), produits à la demande pour ce serveur.
 
 Le paquet embarque le script d'installation rendu par le portail (agent, autorité épinglée, adresse et clé
-d'inscription) ; son script de post-installation l'exécute, exactement comme `curl … | sudo sh`. L'agent reste maître
+d'inscription) ; son script de post-installation l'exécute, exactement comme `curl … | sudo sh`. Ce script n'est
+lisible que par root, et il est remplacé par une note dès le poste inscrit : la clé d'inscription ne reste pas sur le
+poste. L'agent reste maître
 de ses fichiers (mise à jour automatique, `loco-client remove`) : dpkg et rpm ne possèdent que les scripts.
 Désinstaller le paquet retire l'agent du poste ; le poste se retire de la liste du parc depuis le portail.
 
@@ -25,6 +27,10 @@ SCRIPT = DIRECTORY + "/install.sh"
 REPOS = DIRECTORY + "/repos.sh"
 CA_FILE = DIRECTORY + "/loco-ca.crt"
 AGENT = "/usr/local/lib/loco-client/loco-client.py"
+# Une fois le poste inscrit, le script (et la clé d'inscription qu'il porte) laisse la place à cette note. L'agent fait
+# de même sur les postes installés par un paquet plus ancien (loco-client.py, forget_package_key).
+FORGET = (f"printf '%s\\n' '#!/bin/sh' '# loco : clé d’inscription retirée une fois le poste inscrit ; réinstaller le "
+          f"paquet le réinscrit.' 'exit 0' > {SCRIPT}\n")
 REMOVE = f"if [ -x {AGENT} ]; then {AGENT} remove || true; fi"
 FLAVOR = "depots"
 SUMMARY = "agent du parc loco"
@@ -62,8 +68,8 @@ def _indent(lines, depth):
 def _contents(script, repos, ca, kind):
     """Fichiers du paquet (chemin, contenu ou None pour un dossier, droits), lignes shell d'installation et de
     retrait, description."""
-    files = [(DIRECTORY, None, 0o755), (SCRIPT, _bytes(script), 0o644)]
-    install, remove = f"sh {SCRIPT}\n", REMOVE + "\n"
+    files = [(DIRECTORY, None, 0o755), (SCRIPT, _bytes(script), 0o600)]     # porte la clé d'inscription : root seul
+    install, remove = f"sh {SCRIPT}\n" + FORGET, REMOVE + "\n"
     description = DESCRIPTION
     if repos:
         system_ca, refresh, fallback, cache = SYSTEMS[kind]

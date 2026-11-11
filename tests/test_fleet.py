@@ -646,7 +646,8 @@ class TestInstallers(FleetTest):
         self.assertEqual(self.admin.c.get("/agent/linux.sh?key=faux").status_code, 403)
         key = Agent.key()
         sh = self.admin.c.get(f"/agent/linux.sh?key={key}").get_data(as_text=True)
-        self.assertIn(f"--key '{key}'", sh)
+        self.assertIn(f"LOCO_ENROLL_KEY='{key}' ", sh)
+        self.assertNotIn("--key '", sh)                          # jamais en argument : visible dans la liste des processus
         agent = re.search(r"<<'LOCO_CLIENT_EOF'\n(.*)\nLOCO_CLIENT_EOF", sh, re.S).group(1)
         compile(agent, "loco-client.py", "exec")
         self.assertIn(f'VERSION = "{config.VERSION}"', agent)
