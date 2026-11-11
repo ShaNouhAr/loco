@@ -64,6 +64,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".PairingReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".StartReceiver"
             android:exported="true">
             <intent-filter>

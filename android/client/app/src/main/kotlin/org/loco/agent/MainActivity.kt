@@ -123,6 +123,20 @@ class MainActivity : Activity() {
             getString(R.string.screen_hint),
             getString(if (sharing) R.string.screen_off else R.string.screen_on)) { if (sharing) stopScreen() else requestScreen() }
 
+        // Image fluide à chaque session : une fois l'appareil appairé en adb, loco autorise le partage d'écran une fois
+        // pour toutes. L'appairage se fait ici même, en deux minutes (code saisi dans une notification).
+        val fluid = ProjectionActivity.silent(this)
+        val developer = Settings.Global.getInt(contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) == 1
+        row(access, getString(R.string.pair_title), fluid,
+            getString(if (fluid) R.string.pair_state_on else R.string.pair_state_off),
+            if (fluid) getString(R.string.pair_hint_on)
+            else (if (developer) getString(R.string.pair_hint) else getString(R.string.pair_hint_developer))
+                + Pairing.result.let { if (it.isEmpty()) "" else "\n\n$it" },
+            if (fluid) null else getString(if (developer) R.string.pair_action else R.string.pair_action_developer)) {
+            if (developer) Pairing.start(this)
+            else try { startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) } catch (_: Exception) {}
+        }
+
         val control = controlEnabled()
         row(access, getString(R.string.control_title), control,
             getString(if (control) R.string.control_state_on else R.string.control_state_off),
@@ -369,6 +383,7 @@ class MainActivity : Activity() {
     private fun signature() = listOf(LocoService.lastContact / 60000, LocoService.offline, LocoService.sharing,
         controlEnabled(), StorageAccess.granted(this), batteryExempt(), packageManager.canRequestPackageInstalls(),
         Installs.pending.keys.sorted(), Installs.waitingPermission, LocoService.paused, networkSignature(),
+        ProjectionActivity.silent(this), Pairing.result,
         LocoService.offered?.optString("version"), LocoService.installing, LocoService.updateProblem).joinToString()
 
     /** Ce qui change l'affichage des réseaux de confiance (rien n'est relu hors du mode par nom de Wi-Fi). */

@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.154.0 — 2026-11-11
+
+- **Android : une image fluide à chaque session, à configurer depuis le téléphone** : sans appairage adb, Android limite l'écran distant à environ trois images par seconde. Le nouveau panneau *Image fluide à chaque session* de l'application fait l'appairage sans passer par le portail : **Configurer** ouvre *Débogage sans fil* ; activez-le, touchez *Associer l'appareil avec un code d'association*, puis tapez le code à six chiffres dans la notification de loco, sans fermer cette fenêtre. L'application trouve seule le port et transmet le code à loco. Ensuite, chaque session s'ouvre avec une image fluide, sans fenêtre « Projeter » (une trentaine d'images par seconde mesurées sur un OnePlus 12).
+- **Un appairage limité à l'appareil lui-même** : loco n'appaire qu'avec l'adresse d'où vient la demande, déclarée par l'appareil, jamais une adresse choisie par l'appelant. L'appareil doit donc être sur le même réseau que loco. Le code n'apparaît dans aucune commande, et l'appairage est inscrit au journal comme fait « depuis l'appareil ».
+
 ## 2.153.0 — 2026-11-11
 
 - **Une icône dit de quel type de poste il s'agit** : un petit écran devant le nom des ordinateurs (Debian, Ubuntu, Red Hat, Windows), et pour les appareils Android un téléphone, une tablette ou un téléviseur. On la voit dans Mon parc, dans le titre de la fiche d'un poste, dans le déroulé des mises à jour, dans les groupes de machines et dans le choix des postes d'un déploiement.

@@ -153,6 +153,18 @@ Sur la fiche de l'appareil, **Terminal adb** (ou *Plus › Débogage adb…*) ou
 3. *Associer l'appareil avec un code d'association* : saisissez dans loco le port et le code à six chiffres
    affichés par l'appareil, puis **Appairer**.
 
+**Depuis l'appareil lui-même** (application 2.154.0 et plus) : dans l'application loco, le panneau *Image fluide à
+chaque session* fait la même chose sans passer par le portail. **Configurer** ouvre *Débogage sans fil* ; activez-le,
+touchez *Associer l'appareil avec un code d'association*, puis, sans fermer cette fenêtre, descendez le volet des
+notifications et tapez le code dans la notification de loco. L'application trouve seule le port d'association et
+transmet port et code à loco, qui appaire avec l'adresse de l'appareil — celle d'où vient la demande, jamais une
+autre. L'appareil doit donc être sur le même réseau que loco (pas derrière un routeur). L'appairage est inscrit au
+journal comme fait « depuis l'appareil ».
+
+Sans appairage, Android limite l'écran distant lu par le contrôle à distance à environ trois images par seconde ;
+une fois l'appareil appairé, loco autorise le partage d'écran de l'application une fois pour toutes, et chaque
+session s'ouvre avec une image fluide (une trentaine d'images par seconde mesurées sur un OnePlus 12).
+
 L'appairage se fait une seule fois. Le port de connexion change à chaque activation du débogage sans fil :
 l'application loco le découvre sur l'appareil et l'indique à loco. Android coupe le débogage sans fil au
 redémarrage ou quand l'appareil change de réseau : l'application loco (2.145.0 et plus) le rallume seule, avec

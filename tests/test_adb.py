@@ -177,6 +177,66 @@ class TestSetup(AdbTest):
         self.assertEqual(r.status_code, 403)
 
 
+class TestPairingFromTheDevice(AdbTest):
+    """Appairage demandé par l'application de l'appareil : code saisi sur l'appareil, adresse = celle de l'appareil."""
+
+    def ask(self, agent, **body):
+        return agent.post("/agent/api/adb-pair", body, agent.token)
+
+    def setUp(self):
+        super().setUp()
+        adb._SELF_PAIRING.clear()
+
+    def phone(self, report=None, version="2.139.0"):
+        """Appareil qui déclare l'adresse d'où il contacte loco (même réseau que le serveur)."""
+        a = Agent(dict(ANDROID, agent_version=version, addresses=["192.168.43.71"]), "192.168.43.71", uid="d" * 32)
+        a.enroll()
+        a.post("/agent/api/checkin", dict(a.ident, adb={"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"}), a.token)
+        return a, device(a.uid)
+
+    def test_the_device_pairs_itself_with_its_own_address_only(self):
+        a, dev = self.phone()
+        r = self.ask(a, code="123456", port=37851)
+        self.assertEqual((r.status_code, r.get_json()), (200, {"ok": True}))
+        row = self.link(dev)
+        self.assertEqual((row["mode"], row["paired_by"]), ("wireless", "depuis l'appareil"))
+        self.assertTrue(row["paired_at"])
+        self.assertIn("pair 192.168.43.71:37851", self.args())               # l'adresse d'où vient la demande
+        self.assertNotIn("123456", self.args())                              # le code passe par l'entrée, jamais en argument
+        with transaction() as conn:
+            event = conn.execute("SELECT * FROM audit WHERE action='parc.adb.appairage' ORDER BY id DESC").fetchone()
+        self.assertIn("depuis l'appareil", event["detail"])
+
+    def test_wrong_code_bad_input_and_repeated_attempts(self):
+        a, dev = self.phone()
+        r = self.ask(a, code="654321", port=37851)
+        self.assertEqual(r.status_code, 422)
+        self.assertIn("Appairage refusé", r.get_json()["error"])
+        self.assertFalse(self.link(dev)["paired_at"])
+        self.assertEqual(self.ask(a, code="123456", port=37851).status_code, 429)     # trop rapproché
+        adb._SELF_PAIRING.clear()
+        for body in ({"code": "12345", "port": 37851}, {"code": "123456", "port": 0}, {"code": "123456", "port": "37851"},
+                     {"code": "123456", "port": True}, {"code": "123456"}):
+            self.assertEqual(self.ask(a, **body).status_code, 400, body)
+
+    def test_a_device_seen_through_a_router_cannot_be_paired_from_there(self):
+        a = Agent(dict(ANDROID, addresses=["10.0.2.15"]), "192.168.43.99", uid="e" * 32)
+        a.enroll()
+        r = self.ask(a, code="123456", port=37851)
+        self.assertEqual(r.status_code, 409)                                # adresse non déclarée par l'appareil
+        self.assertNotIn("pair", self.args() if os.path.exists(self.log) else "")
+
+    def test_only_an_authenticated_android_device(self):
+        a, _dev = self.phone()
+        self.assertEqual(a.post("/agent/api/adb-pair", {"code": "123456", "port": 37851}, "faux.jeton").status_code, 401)
+        linux = Agent(LINUX, "192.168.43.73")
+        linux.enroll()
+        self.assertEqual(self.ask(linux, code="123456", port=37851).status_code, 404)
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
+        self.assertEqual(self.ask(a, code="123456", port=37851).status_code, 503)    # fonctionnalité Android coupée
+
+
 class TestPermanentScreen(AdbTest):
     """Appairage adb = autorisation donnée une fois : loco pose sur l'application loco de quoi montrer et piloter
     l'écran sans geste, et lui demande de garder le débogage sans fil joignable."""

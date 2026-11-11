@@ -172,4 +172,22 @@
     <string name="update_done_text">loco %1$s est installé.</string>
     <string name="version_current">à jour</string>
     <string name="version_available">%1$s disponible</string>
+    <string name="pair_title">Image fluide à chaque session</string>
+    <string name="pair_state_on">Activée</string>
+    <string name="pair_state_off">À configurer</string>
+    <string name="pair_hint_on">Cet appareil est appairé avec loco : chaque session montre l\'écran avec une image fluide, sans rien toucher ici.</string>
+    <string name="pair_hint">Sans cela, Android limite l\'image à 3 par seconde environ. À faire une seule fois, en deux minutes : touchez Configurer, activez « Débogage sans fil », puis « Associer l\'appareil avec un code d\'association ». Laissez cette fenêtre ouverte, descendez le volet des notifications et tapez le code à six chiffres dans la notification de loco.</string>
+    <string name="pair_hint_developer">Sans cela, Android limite l\'image à 3 par seconde environ. Il faut d\'abord activer les options pour les développeurs : dans « À propos du téléphone », touchez sept fois « Numéro de build », puis revenez ici.</string>
+    <string name="pair_action">Configurer</string>
+    <string name="pair_action_developer">Ouvrir « À propos du téléphone »</string>
+    <string name="pair_channel">Appairage avec loco</string>
+    <string name="pair_notif_title">Appairage avec loco</string>
+    <string name="pair_notif_text">Dans « Débogage sans fil », touchez « Associer l\'appareil avec un code d\'association », puis tapez ici le code à six chiffres, sans fermer la fenêtre.</string>
+    <string name="pair_code_label">Code à six chiffres</string>
+    <string name="pair_code_action">Saisir le code</string>
+    <string name="pair_working">Appairage en cours…</string>
+    <string name="pair_done">Appairé : l\'image sera fluide dès la prochaine session. Laissez le débogage sans fil activé.</string>
+    <string name="pair_bad_code">Le code attendu fait six chiffres.</string>
+    <string name="pair_no_port">Fenêtre d\'association introuvable : rouvrez « Associer l\'appareil avec un code d\'association », puis tapez le nouveau code.</string>
+    <string name="pair_unreachable">loco est injoignable : vérifiez que l\'appareil est sur le même réseau que loco.</string>
 </resources>

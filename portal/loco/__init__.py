@@ -60,7 +60,7 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     "healthz", "metrics", "static",
                     # Agent des postes (loco-client) : authentifié par sa clé d'inscription puis son jeton.
                     "agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
-                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_ca", "agent_android_apk",
+                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_ca", "agent_android_apk", "agent_adb_pair",
                     # Logo et fond de l'entreprise : affichés aussi sur la page de connexion (avant authentification).
                     "appearance_logo", "appearance_company",
                     # PWA : manifeste, service worker et page hors-ligne (publics, sans session ni CSRF).

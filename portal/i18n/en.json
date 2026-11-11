@@ -4390,5 +4390,10 @@
  "Tablette": "Tablet",
  "Téléviseur": "TV",
  "Type d’appareil": "Device type",
- "(supposé : l’application de cet appareil ne l’annonce pas encore)": "(assumed: this device's app does not report it yet)"
+ "(supposé : l’application de cet appareil ne l’annonce pas encore)": "(assumed: this device's app does not report it yet)",
+ "Code attendu : les six chiffres affichés par l'appareil.": "Code expected: the six digits shown by the device.",
+ "Port d'association introuvable : laissez la fenêtre « Associer avec un code » ouverte.": "Pairing port not found: keep the “Pair with code” window open.",
+ "loco ne joint pas cet appareil directement : il doit être sur le même réseau que le serveur.": "loco cannot reach this device directly: it must be on the same network as the server.",
+ "Appairage refusé : %(e)s. Le code change à chaque ouverture de la fenêtre d'association.": "Pairing refused: %(e)s. The code changes each time the pairing window is opened.",
+ "Un appairage est déjà en cours, patientez quelques secondes.": "A pairing is already in progress, wait a few seconds."
 }

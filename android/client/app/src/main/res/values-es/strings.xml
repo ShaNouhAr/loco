@@ -152,4 +152,22 @@
     <string name="update_done_text">loco %1$s está instalado.</string>
     <string name="version_current">al día</string>
     <string name="version_available">%1$s disponible</string>
+    <string name="pair_title">Imagen fluida en cada sesión</string>
+    <string name="pair_state_on">Activada</string>
+    <string name="pair_state_off">Por configurar</string>
+    <string name="pair_hint_on">Este dispositivo está vinculado con loco: cada sesión muestra la pantalla con una imagen fluida, sin tocar nada aquí.</string>
+    <string name="pair_hint">Sin esto, Android limita la imagen a unas 3 por segundo. Se hace una sola vez, en dos minutos: toque Configurar, active «Depuración inalámbrica» y luego «Vincular dispositivo con código de sincronización». Deje esa ventana abierta, baje el panel de notificaciones y escriba el código de seis cifras en la notificación de loco.</string>
+    <string name="pair_hint_developer">Sin esto, Android limita la imagen a unas 3 por segundo. Primero active las opciones para desarrolladores: en «Información del teléfono», toque siete veces «Número de compilación» y vuelva aquí.</string>
+    <string name="pair_action">Configurar</string>
+    <string name="pair_action_developer">Abrir «Información del teléfono»</string>
+    <string name="pair_channel">Vinculación con loco</string>
+    <string name="pair_notif_title">Vinculación con loco</string>
+    <string name="pair_notif_text">En «Depuración inalámbrica», toque «Vincular dispositivo con código de sincronización» y escriba aquí el código de seis cifras sin cerrar esa ventana.</string>
+    <string name="pair_code_label">Código de seis cifras</string>
+    <string name="pair_code_action">Escribir el código</string>
+    <string name="pair_working">Vinculando…</string>
+    <string name="pair_done">Vinculado: la imagen será fluida desde la próxima sesión. Deje la depuración inalámbrica activada.</string>
+    <string name="pair_bad_code">El código tiene seis cifras.</string>
+    <string name="pair_no_port">Ventana de vinculación no encontrada: vuelva a abrir «Vincular dispositivo con código de sincronización» y escriba el nuevo código.</string>
+    <string name="pair_unreachable">loco no responde: compruebe que el dispositivo está en la misma red que loco.</string>
 </resources>

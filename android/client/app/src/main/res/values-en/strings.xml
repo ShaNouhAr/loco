@@ -152,4 +152,22 @@
     <string name="update_done_text">loco %1$s is installed.</string>
     <string name="version_current">up to date</string>
     <string name="version_available">%1$s available</string>
+    <string name="pair_title">Smooth picture at every session</string>
+    <string name="pair_state_on">On</string>
+    <string name="pair_state_off">To set up</string>
+    <string name="pair_hint_on">This device is paired with loco: every session shows the screen with a smooth picture, with nothing to touch here.</string>
+    <string name="pair_hint">Without it, Android limits the picture to about 3 per second. Do it once, in two minutes: tap Set up, turn on “Wireless debugging”, then “Pair device with pairing code”. Keep that window open, pull down the notification shade and type the six-digit code in the loco notification.</string>
+    <string name="pair_hint_developer">Without it, Android limits the picture to about 3 per second. First turn on developer options: in “About phone”, tap “Build number” seven times, then come back here.</string>
+    <string name="pair_action">Set up</string>
+    <string name="pair_action_developer">Open “About phone”</string>
+    <string name="pair_channel">Pairing with loco</string>
+    <string name="pair_notif_title">Pairing with loco</string>
+    <string name="pair_notif_text">In “Wireless debugging”, tap “Pair device with pairing code”, then type the six-digit code here without closing that window.</string>
+    <string name="pair_code_label">Six-digit code</string>
+    <string name="pair_code_action">Enter the code</string>
+    <string name="pair_working">Pairing…</string>
+    <string name="pair_done">Paired: the picture will be smooth from the next session. Keep wireless debugging on.</string>
+    <string name="pair_bad_code">The code has six digits.</string>
+    <string name="pair_no_port">Pairing window not found: open “Pair device with pairing code” again, then type the new code.</string>
+    <string name="pair_unreachable">loco is unreachable: check that the device is on the same network as loco.</string>
 </resources>

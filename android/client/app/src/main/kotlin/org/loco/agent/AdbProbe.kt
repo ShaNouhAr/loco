@@ -93,7 +93,7 @@ object AdbProbe {
         }
     }
 
-    private fun ownAddresses(): Set<String> = try {
+    internal fun ownAddresses(): Set<String> = try {
         NetworkInterface.getNetworkInterfaces().toList().flatMap { it.inetAddresses.toList() }
             .mapNotNull { it.hostAddress?.substringBefore('%') }.toSet()
     } catch (_: Exception) {

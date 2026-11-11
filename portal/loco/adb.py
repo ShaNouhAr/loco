@@ -552,6 +552,50 @@ def fleet_adb_pair(dev_id):
     return back("fleet_device", dev_id=dev_id, _anchor="details")
 
 
+_SELF_PAIRING = {}                # dernier essai d'appairage demandé par chaque appareil (anti-répétition)
+SELF_PAIR_EVERY = 8
+
+
+@app.route("/agent/api/adb-pair", methods=["POST"])
+def agent_adb_pair():
+    """Appairage demandé depuis l'application loco de l'appareil (application 2.154.0 et plus) : la personne qui tient
+    l'appareil a ouvert « Associer avec un code » dans le débogage sans fil et saisi le code dans la notification de
+    loco ; l'application en joint le port. Le serveur appaire alors avec SA propre adresse seulement — celle d'où vient
+    la demande, déclarée par l'appareil — jamais une adresse choisie par l'appelant. La suite est celle d'un appairage
+    fait depuis la fiche : au contact suivant, loco pose les autorisations (partage d'écran sans fenêtre, …)."""
+    from .fleet import _device as authenticated, _client_ip
+    dev = authenticated()
+    if dev["os_family"] != "android" or dev["state"] != "active":
+        abort(404)
+    data = request.get_json(silent=True) or {}
+    code = str(data.get("code") or "").strip()
+    port = data.get("port")
+    host = _client_ip()
+    if not re.fullmatch(r"\d{6}", code):
+        return {"error": _("Code attendu : les six chiffres affichés par l'appareil.")}, 400
+    if not isinstance(port, int) or isinstance(port, bool) or not 1 <= port <= 65535:
+        return {"error": _("Port d'association introuvable : laissez la fenêtre « Associer avec un code » ouverte.")}, 400
+    if not HOST_RE.match(host) or host not in (dev["addresses"] or "").split():
+        return {"error": _("loco ne joint pas cet appareil directement : il doit être sur le même réseau que le serveur.")}, 409
+    if not can_pair():
+        return {"error": _("La version d'adb de ce serveur est trop ancienne pour l'appairage sans fil (30 ou plus requise).")}, 503
+    now = time.time()
+    with _GUARD:
+        if now - _SELF_PAIRING.get(dev["id"], 0) < SELF_PAIR_EVERY:
+            return {"error": _("Un appairage est déjà en cours, patientez quelques secondes.")}, 429
+        _SELF_PAIRING[dev["id"]] = now
+    error = pair(host, port, code)
+    if error:
+        return {"error": _("Appairage refusé : %(e)s. Le code change à chaque ouverture de la fenêtre d'association.", e=error)}, 422
+    conn = db()
+    conn.execute("BEGIN IMMEDIATE")
+    _save(conn, dev, host="", mode="wireless", port=0, paired_at=time.strftime("%Y-%m-%d %H:%M"),
+          paired_by="depuis l'appareil", error="")
+    audit("parc.adb.appairage", f"{dev['hostname']} ({host}, depuis l'appareil)", username="", commit=False)
+    conn.commit()
+    return {"ok": True}
+
+
 @app.route("/fleet/<int:dev_id>/adb/connect", methods=["POST"])
 @login_required
 def fleet_adb_connect(dev_id):
