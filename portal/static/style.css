@@ -1478,26 +1478,33 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 
 /* Rail latéral gauche rétractable (plein écran bureau) : posé sur l'image, poignée toujours saisissable. */
 /* Commandes du plein écran : un petit panneau flottant et translucide plutôt qu'une colonne sur toute la hauteur. Il
-   laisse deviner le bureau dessous, se densifie quand on s'en sert (survol, saisie), et se replie d'un clic. */
-.remote-rail { display: none; --rail-w: min(236px, 80vw); --rail-edge: 10px; }
-.remote-session[data-kind="desktop"].is-fullscreen .remote-rail { display: block; position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; }
-.remote-rail-body { position: absolute; left: var(--rail-edge); top: var(--rail-edge); width: var(--rail-w); max-height: calc(100% - 2 * var(--rail-edge)); overflow: hidden auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); box-shadow: 0 8px 28px rgb(0 0 0 / .28); transform: translateX(calc(-100% - 2 * var(--rail-edge))); opacity: 0; visibility: hidden; transition: transform .22s ease, opacity .18s ease, visibility .22s, background-color .15s; }
+   laisse deviner le bureau dessous, se densifie quand on s'en sert (survol, saisie), et se replie d'un clic.
+   Il est centré sur le bord gauche ; le rail lui-même ne prend aucun clic, seuls le panneau et sa poignée en prennent. */
+.remote-rail { display: none; --rail-w: min(308px, 86vw); --rail-edge: 10px; }
+.remote-session[data-kind="desktop"].is-fullscreen .remote-rail { display: flex; align-items: center; position: absolute; left: 0; top: 0; bottom: 0; z-index: 60; pointer-events: none; }
+.remote-rail-body { position: relative; flex: none; margin-left: var(--rail-edge); width: var(--rail-w); max-height: calc(100% - 2 * var(--rail-edge)); pointer-events: auto; overflow: hidden auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); box-shadow: 0 8px 28px rgb(0 0 0 / .28); transform: translateX(calc(-100% - 2 * var(--rail-edge))); opacity: 0; visibility: hidden; transition: transform .22s ease, opacity .18s ease, visibility .22s, background-color .15s; }
 .remote-rail.open .remote-rail-body { transform: none; opacity: 1; visibility: visible; }
 .remote-rail-body:hover, .remote-rail-body:focus-within { background: color-mix(in srgb, var(--bg) 86%, transparent); }
-.remote-rail-handle { position: absolute; top: calc(var(--rail-edge) + 8px); left: 0; display: flex; align-items: center; justify-content: center; width: 22px; height: 40px; padding: 0; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-left: 0; border-radius: 0 9px 9px 0; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--text); cursor: pointer; opacity: .55; transition: left .22s ease, opacity .15s; }
+.remote-rail-handle { position: absolute; top: calc(50% - 20px); left: 0; pointer-events: auto; display: flex; align-items: center; justify-content: center; width: 22px; height: 40px; padding: 0; border: 1px solid color-mix(in srgb, var(--line-2) 60%, transparent); border-left: 0; border-radius: 0 9px 9px 0; background: color-mix(in srgb, var(--bg) 55%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); color: var(--text); cursor: pointer; opacity: .55; transition: left .22s ease, opacity .15s; }
 .remote-rail-handle:hover, .remote-rail-handle:focus-visible { opacity: 1; }
 .remote-rail.open .remote-rail-handle { left: calc(var(--rail-edge) + var(--rail-w)); opacity: .8; }
 .remote-rail-handle .chev { width: 16px; height: 16px; transition: transform .22s ease; }
 .remote-rail.open .remote-rail-handle .chev { transform: scaleX(-1); }
-/* En-tête du panneau : l'état de la session à gauche, les actions en icônes à droite (leur nom en infobulle). */
-.remote-rail .remote-pill { position: absolute; top: 13px; left: 12px; max-width: calc(100% - 140px); overflow: hidden; margin: 0; background: color-mix(in srgb, var(--bg-3) 70%, transparent); }
-.remote-rail .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
-.remote-rail .actions > form { width: auto; }
-.remote-rail .actions .btn { width: 30px; height: 30px; padding: 0; }
+/* En-tête du panneau : l'état de la session sur sa ligne, en entier ; dessous, « Quitter le plein écran » en toutes
+   lettres, puis nouvel onglet et fermeture en icônes (leur nom en infobulle). */
+.remote-rail .remote-pill { display: flex; height: auto; min-height: 28px; margin: 0; padding: 4px 10px 4px 9px; border-radius: 9px; white-space: normal; line-height: 1.3; background: color-mix(in srgb, var(--bg-3) 70%, transparent); }
+.remote-session .remote-rail .actions { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; }
+.remote-rail .actions > form { flex: none; width: auto; }
+.remote-rail .actions > form:has(> .btn[hidden]) { display: none; }
+.remote-rail .actions > a.btn { display: none; }
+.remote-rail .actions .btn { flex: none; width: 30px; height: 30px; padding: 0; }
 .remote-rail .actions .btn > span:not(.spin) { display: none; }
-.remote-rail .remote-display { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: -2px 0 0; padding: 0; border: 0; }
-.remote-rail .remote-field { justify-content: space-between; font-size: 12.5px; }
-.remote-rail .remote-field select { max-width: 148px; height: 28px; font-size: 12.5px; }
+.remote-rail .actions #remote-fullscreen { order: -1; flex: 1 1 auto; width: auto; min-width: 0; padding: 0 10px; font-size: 12.5px; font-weight: 600; }
+.remote-rail .actions #remote-fullscreen > span { display: inline; white-space: nowrap; }
+.remote-rail .remote-display { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 0; padding: 0; border: 0; }
+.remote-rail .remote-field { gap: 8px; font-size: 12.5px; }
+.remote-rail .remote-field span { flex: none; min-width: 68px; }
+.remote-rail .remote-field select { flex: 1 1 auto; width: auto; min-width: 0; max-width: none; height: 28px; font-size: 12.5px; }
 .remote-rail .remote-readout { align-self: flex-end; min-width: 0; font-size: 11.5px; }
 .remote-rail #remote-toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 10px 0 0; border: 0; border-top: 1px solid color-mix(in srgb, var(--line-2) 55%, transparent); border-radius: 0; background: none; }
 .remote-rail #remote-toolbar .toolbar-sep { flex-basis: 100%; width: auto; height: 0; margin: 0; background: none; }
@@ -1516,6 +1523,8 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 /* Console ouverte dans son propre onglet : toute la surface appartient au poste. */
 .remote-session .head { align-items: center; }
 .remote-session .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+#remote-fullscreen .ui-icon + .ui-icon, .remote-session.is-fullscreen #remote-fullscreen .ui-icon:first-child { display: none; }
+.remote-session.is-fullscreen #remote-fullscreen .ui-icon + .ui-icon { display: inline; }
 .remote-display { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .remote-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .remote-field span { color: var(--text-2); }

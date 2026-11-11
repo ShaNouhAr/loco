@@ -14,7 +14,7 @@
         <button type="button" class="btn sm" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
         <button type="button" class="btn sm" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>
-      <button class="btn" id="remote-fullscreen" aria-pressed="false">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
+      <button class="btn" id="remote-fullscreen" aria-pressed="false">{{ ui_icon('expand') }}{{ ui_icon('collapse') }}<span>{{ _("Plein écran") }}</span></button>
       <button class="btn" id="remote-close">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
       <a class="btn primary" id="remote-reconnect" href="{{ url_for('system_shell_home') }}" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></a>
       <form method="post" action="{{ url_for('system_shell_disable') }}" data-confirm="{{ _('Désactiver le shell root ?') }}" data-confirm-text="{{ _('Ce shell et tous les autres sont fermés immédiatement. Pour le réactiver, il faudra saisir le mot de passe admin puis redémarrer le serveur.') }}" data-confirm-ok="{{ _('Désactiver') }}">

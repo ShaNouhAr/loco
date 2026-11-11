@@ -16,7 +16,7 @@
         <button type="button" class="btn" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>{% endif %}
       {% if detached %}<a class="btn" href="{{ url_for('fleet_device', dev_id=remote.device_id) }}" target="_blank" rel="noopener" title="{{ _('Fiche du poste') }}">{{ ui_icon('external') }}<span>{{ _("Fiche du poste") }}</span></a>{% endif %}
-      <button class="btn" id="remote-fullscreen" aria-pressed="false" title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}" data-title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}">{{ ui_icon('expand') }}<span>{{ _("Plein écran") }}</span></button>
+      <button class="btn" id="remote-fullscreen" aria-pressed="false" title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}" data-title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}">{{ ui_icon('expand') }}{{ ui_icon('collapse') }}<span>{{ _("Plein écran") }}</span></button>
       <form method="post" action="{{ url_for('remote_open', dev_id=remote.device_id) }}" target="_blank" rel="noopener">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">{% if remote.consent %}<input type="hidden" name="consent" value="1">{% endif %}
         <input type="hidden" name="view" value="console">

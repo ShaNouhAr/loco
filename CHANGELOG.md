@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.149.1 — 2026-11-11
+
+- **Bureau à distance en plein écran : un panneau centré et lisible** : le panneau des commandes reste sur le bord gauche, mais au milieu de la hauteur de l'écran au lieu du coin supérieur. Plus rien n'y est coupé : l'état de la session a sa propre ligne et s'affiche en entier, et les listes *Résolution* et *Zoom* prennent toute la largeur.
+- **Quitter le plein écran se voit** : le bouton est écrit en toutes lettres, avec une icône « réduire », au lieu d'une icône seule. *Nouvel onglet* et *Fermer la session* restent en icônes à sa droite.
+
 ## 2.149.0 — 2026-11-11
 
 - **Mettre à jour l'agent Android depuis l'application** : quand loco propose une version plus récente, l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton **Installer la mise à jour**. L'application se met toujours à jour seule ; ce bouton l'installe tout de suite, sans attendre. Ouvrir l'application interroge loco aussitôt.
