@@ -1339,5 +1339,95 @@ class TestAdaptiveContact(FleetTest):
         self.assertTrue(device(a.uid)["last_scan"])                     # et le comptage est posé
 
 
+class TestFleetListWithoutInventory(FleetTest):
+    """La liste du parc ne relit l'inventaire d'un poste (un bloc JSON de dizaines de Kio) et ne refait la comparaison
+    avec le catalogue que lorsque cet inventaire ou le catalogue a changé."""
+
+    FETCH = {"X-Requested-With": "fetch"}
+
+    def catalog(self, version="26.04"):
+        with transaction() as conn:
+            conn.execute("INSERT INTO win_apps (slug, name, version, kind, args, filename, sha256, status, detect) "
+                         "VALUES ('7-zip', '7-Zip', ?, 'msi', '/qn', '7z.msi', ?, 'ready', '')", (version, "a" * 64))
+
+    def test_prepared_matching_follows_the_reference_rule(self):
+        patterns = ["7-Zip", "Git", "VLC", "VLC*", "Notepad++", "Mozilla Firefox", "  Python  ", "git?", "[gG]it", "", "Node.js"]
+        names = ["7-Zip 26.04 (x64 edition)", "7-Zip", "7-ZipExtra", "Git", "Git Extensions", "Git - 2.47", "Git v2", "git2",
+                 "VLC media player", "Notepad++ (64-bit x64)", "Notepad++", "Mozilla Firefox (x64 fr)", "Python 3.13.1 (64-bit)",
+                 "Python x64", "Python x644", "Python 32-bit", "Pythonista", " Git ", "", "Node.js 22", "Node.jsx"]
+        for pattern in patterns:
+            for name in names:
+                self.assertEqual(fleet._matcher(pattern)(name.strip().lower()), fleet.matches(pattern, name), (pattern, name))
+        apps = [{"slug": f"s{i}", "name": p, "detect": "", "version": "30.1"} for i, p in enumerate(patterns) if p.strip()]
+        inventory = {"apps": [{"name": n, "version": "24.09"} for n in names] + ["invalide", {"version": "1"}]}
+        found = {a["slug"]: (version, outdated) for a, version, outdated in fleet.catalog_state(inventory, apps)}
+        for a in apps:
+            versions = [s.get("version", "") for s in inventory["apps"] if isinstance(s, dict) and fleet.matches(a["name"], s.get("name"))]
+            self.assertEqual(found[a["slug"]], ("24.09", True) if versions else ("", False), a["name"])
+
+    def test_a_poll_does_not_reread_inventories_that_did_not_change(self):
+        self.catalog()
+        windows, linux = Agent(WINDOWS, "192.168.43.50"), Agent(LINUX, "192.168.43.60")
+        for agent in (windows, linux):
+            agent.enroll()
+        windows.checkin({"updates": [], "apps": [{"name": "7-Zip 24.09 (x64 edition)", "version": "24.09.00.0"}]})
+        linux.checkin({"updates": [], "warning": "Dépôt injoignable"})
+        first = self.admin.c.get("/fleet", headers=self.FETCH).get_json()["signature"]
+        with mock.patch.object(fleet, "inventory", wraps=fleet.inventory) as read, \
+                mock.patch.object(fleet, "catalog_state", wraps=fleet.catalog_state) as compare:
+            self.assertEqual(self.admin.c.get("/fleet", headers=self.FETCH).get_json()["signature"], first)
+            page = self.admin.c.get("/fleet").get_data(as_text=True)
+            self.assertEqual((read.call_count, compare.call_count), (0, 0))
+        self.assertIn("1 logiciel à mettre à jour", page)                 # tiré du condensé gardé en mémoire
+        self.assertIn("Dépôt injoignable", page)
+        with fixture.loco.app.test_request_context():
+            row = next(r for r in fleet._rows() if r["d"]["uid"] == windows.uid)
+            self.assertNotIn("inventory", row["d"].keys())                # la liste ne charge plus la colonne
+            self.assertEqual(fleet.inventory(row["d"])["apps"][0]["version"], "24.09.00.0")   # relue à la demande
+
+    def test_a_new_inventory_or_a_new_catalog_version_is_seen_at_once(self):
+        self.catalog("26.04")
+        a = Agent(WINDOWS, "192.168.43.50")
+        a.enroll()
+        a.checkin({"updates": [], "apps": [{"name": "7-Zip 26.04 (x64 edition)", "version": "26.04.00.0"}]})
+        self.assertEqual(status_of(a.uid)[0], "green")
+        with transaction() as conn:
+            conn.execute("UPDATE win_apps SET version='27.00' WHERE slug='7-zip'")      # le catalogue avance
+        self.assertEqual(status_of(a.uid), ("orange", "1 logiciel à mettre à jour"))
+        before = device(a.uid)["inv_rev"]
+        a.checkin({"updates": [], "apps": [{"name": "7-Zip 27.00 (x64 edition)", "version": "27.00.00.0"}]})
+        self.assertGreater(device(a.uid)["inv_rev"], before)             # révision neuve à chaque inventaire
+        self.assertEqual(status_of(a.uid)[0], "green")
+        a.checkin({"updates": [], "apps": [], "error": "Windows Update injoignable"})
+        self.assertEqual(status_of(a.uid), ("grey", "inventaire incomplet : Windows Update injoignable"))
+
+    def test_a_device_enrolled_again_does_not_inherit_the_digest_of_the_deleted_one(self):
+        a = Agent(LINUX, "192.168.43.60")
+        a.enroll()
+        a.checkin({"updates": [], "error": "apt-get update : aucun dépôt joignable"})
+        self.assertIn("aucun dépôt joignable", status_of(a.uid)[1])
+        with transaction() as conn:
+            conn.execute("DELETE FROM devices")
+        again = Agent(LINUX, "192.168.43.60", uid=a.uid)
+        again.enroll()
+        self.assertEqual(device(again.uid)["inv_rev"], 0)
+        self.assertEqual(status_of(again.uid), ("grey", "inventaire en cours"))
+        again.checkin({"updates": []})
+        self.assertEqual(status_of(again.uid)[0], "green")
+
+    def test_command_lookups_use_their_indexes(self):
+        """Actions en cours de tout le parc, et dernière action terminée d'un poste : jamais un parcours de l'historique."""
+        with transaction() as conn:
+            def plan(sql, *args):
+                return " / ".join(r[3] for r in conn.execute("EXPLAIN QUERY PLAN " + sql, args))
+            active = plan("SELECT * FROM device_commands INDEXED BY device_commands_active "
+                          "WHERE state IN ('queued', 'sent', 'running') ORDER BY id")
+            self.assertIn("device_commands_active", active)
+            last = plan("SELECT * FROM device_commands INDEXED BY device_commands_recent WHERE device_id=? "
+                        "AND state IN ('success', 'failed') AND action != 'scan' ORDER BY id DESC LIMIT 1", 1)
+            self.assertIn("device_commands_recent", last)
+            self.assertNotIn("TEMP B-TREE", last)                         # pas de tri : remontée depuis la fin
+
+
 if __name__ == "__main__":
     unittest.main()

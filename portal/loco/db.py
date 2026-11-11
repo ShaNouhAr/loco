@@ -669,6 +669,19 @@ MIGRATIONS = [
     CREATE INDEX web_sessions_user ON web_sessions(user_id);
     ALTER TABLE users ADD COLUMN totp_counter INTEGER NOT NULL DEFAULT 0;
     """,
+    # 48 — Révision de l'inventaire d'un poste : une valeur neuve, jamais réutilisée, à chaque inventaire enregistré
+    # (0 : aucun inventaire enregistré). La liste du parc garde en mémoire ce qu'elle tire de l'inventaire (erreur,
+    # avertissement, logiciels à mettre à jour) et ne relit ce bloc de plusieurs dizaines de Kio par poste que
+    # lorsque sa révision a changé. Les inventaires déjà en base reçoivent chacun une révision. Index des seules actions en cours : la liste les
+    # lit toutes en une requête, sans parcourir l'historique des actions terminées, qui grossit sans fin. Index par
+    # poste, donc dans l'ordre des actions : la dernière action terminée d'un poste se trouve en remontant depuis la
+    # fin, sans trier tout son historique.
+    """
+    ALTER TABLE devices ADD COLUMN inv_rev INTEGER NOT NULL DEFAULT 0;
+    UPDATE devices SET inv_rev = CAST(strftime('%s', 'now') AS INTEGER) * 1000000 + id WHERE inventory NOT IN ('', '{}');
+    CREATE INDEX device_commands_active ON device_commands(device_id) WHERE state IN ('queued', 'sent', 'running');
+    CREATE INDEX device_commands_recent ON device_commands(device_id);
+    """,
 ]
 
 

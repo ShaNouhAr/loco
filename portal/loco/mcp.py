@@ -674,7 +674,7 @@ def _server_status(args):
            "windows_update_cache": d["wu"], "local_deb_packages": d["debs"], "catalog_software": d["apps"]}
     if can("fleet.view"):
         rows = fleet._rows()
-        out["fleet"] = {"devices": len(rows), "online": sum(1 for r in rows if fleet.presence(r["d"])["online"]),
+        out["fleet"] = {"devices": len(rows), "online": sum(1 for r in rows if fleet.is_online(r["d"])),
                         **{STATUS[c]: sum(1 for r in rows if r["color"] == c) for c in STATUS}}
     return out
 

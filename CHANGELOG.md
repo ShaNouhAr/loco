@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.152.0 — 2026-11-11
+
+- **Mon parc bien plus rapide** : la page interroge le serveur toutes les deux secondes pour se tenir à jour, et chaque interrogation recalculait l'état de tous les postes. Le plus coûteux était la comparaison des logiciels installés sur chaque poste Windows avec le catalogue, refaite plusieurs fois par poste. Ce que la liste tire de l'inventaire d'un poste est maintenant gardé en mémoire et n'est recalculé que lorsque cet inventaire ou le catalogue change. Sur un parc simulé avec un catalogue de 30 logiciels : 5,5 ms au lieu de 528 ms pour 100 postes, 34 ms au lieu de 5 secondes pour 1 000 postes. La première interrogation après un redémarrage du portail reste plus longue (0,6 seconde pour 1 000 postes).
+- **La vue d'ensemble en profite aussi** : elle ne recharge plus l'inventaire complet de chaque poste pour compter les voyants.
+- **Un long historique d'actions ne ralentit plus la liste** : les actions en cours de tout le parc se lisent en une seule requête, et la dernière action terminée d'un poste se retrouve sans relire tout son historique.
+
 ## 2.151.0 — 2026-11-11
 
 - **Après cette mise à jour, reconnectez-vous une fois** : les sessions ouvertes avant elle ne sont plus reconnues.

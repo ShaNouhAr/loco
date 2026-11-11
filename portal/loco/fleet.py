@@ -10,6 +10,7 @@ Seule « uninstall » retire l'agent du poste.
 import base64
 import datetime
 import fnmatch
+import functools
 import hashlib
 import hmac
 import ipaddress
@@ -60,9 +61,12 @@ def _now():
 
 def _ago(text):
     try:
-        return datetime.datetime.now() - datetime.datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.now() - datetime.datetime.fromisoformat(text[:19])
     except (TypeError, ValueError):
-        return None
+        try:
+            return datetime.datetime.now() - datetime.datetime.strptime(text[:19], "%Y-%m-%d %H:%M:%S")
+        except (TypeError, ValueError):
+            return None
 
 
 def _hash(token):
@@ -96,6 +100,17 @@ def wu_proxy_directive():
 
 
 def red_threshold():
+    """Seuil du voyant rouge. Lu une fois par requête : la liste du parc le demande pour chaque poste."""
+    try:
+        if "red_threshold" in g:
+            return g.red_threshold
+    except RuntimeError:                                         # hors requête (tâche de fond)
+        return _red_threshold()
+    g.red_threshold = _red_threshold()
+    return g.red_threshold
+
+
+def _red_threshold():
     try:
         value = int(setting("fleet_red_threshold", "10"))
         return value if 2 <= value <= 10000 else 10
@@ -168,13 +183,32 @@ def catalog():
     return db().execute("SELECT * FROM win_apps WHERE status='ready' ORDER BY name COLLATE NOCASE").fetchall()
 
 
+_SUFFIX_RE = re.compile(r"\s*(\(|-\s|v?\d|x64\b|x86\b|64-bit|32-bit)")
+
+
+@functools.lru_cache(maxsize=1024)
+def _matcher(pattern):
+    """Test « ce nom déjà mis en minuscules correspond-il au motif ? », préparé une fois par motif : mêmes règles que
+    matches(), sans refaire la mise en forme du motif pour chacun des centaines de logiciels installés d'un poste."""
+    pattern = (pattern or "").strip().lower()
+    if not pattern:
+        return lambda name: False
+    if any(c in pattern for c in "*?["):
+        glob = re.compile(fnmatch.translate(pattern))
+        return lambda name: glob.match(name) is not None
+    size = len(pattern)
+    return lambda name: name == pattern or (name.startswith(pattern) and _SUFFIX_RE.match(name, size) is not None)
+
+
 def catalog_state(inventory, apps=None):
     """Logiciels du catalogue sur un poste Windows : [(fiche, version installée, à mettre à jour)]."""
-    installed = inventory.get("apps") or []
+    installed = [((s.get("name") or "").strip().lower(), s.get("version", ""))
+                 for s in inventory.get("apps") or [] if isinstance(s, dict)]
+    installed = [(name, version) for name, version in installed if name]
     out = []
     for a in apps if apps is not None else catalog():
-        pattern = a["detect"] or a["name"]
-        versions = [s.get("version", "") for s in installed if isinstance(s, dict) and matches(pattern, s.get("name"))]
+        match = _matcher(a["detect"] or a["name"])
+        versions = [version for name, version in installed if match(name)]
         if not versions:
             out.append((a, "", False))
             continue
@@ -209,29 +243,103 @@ def app_payload(a):
 # --------------------------------------------------------------------------- état des postes
 
 def inventory(dev):
+    """Inventaire d'un poste. Une ligne lue sans sa colonne « inventory » (la liste du parc) le relit à la demande."""
     try:
-        data = json.loads(dev["inventory"] or "{}")
+        if "inventory" in dev.keys():
+            raw = dev["inventory"]
+        else:
+            row = db().execute("SELECT inventory FROM devices WHERE id=?", (dev["id"],)).fetchone()
+            raw = row[0] if row else ""
+        data = json.loads(raw or "{}")
         return data if isinstance(data, dict) else {}
     except ValueError:
         return {}
 
 
+# Ce que les listes tirent de l'inventaire d'un poste, gardé en mémoire tant que cet inventaire n'a pas changé :
+# identifiant du poste -> (révision, {erreur, avertissement}, {catalogue: logiciels à mettre à jour}). La révision
+# (devices.inv_rev) est une valeur neuve à chaque inventaire enregistré, jamais réutilisée — un poste supprimé puis
+# réinscrit sous le même identifiant ne retrouve donc pas l'ancien condensé ; 0 (aucun inventaire enregistré) n'est
+# jamais gardé.
+_DIGESTS = {}
+_LIST_COLUMNS = []
+
+
+def list_columns():
+    """Colonnes d'un poste sans son inventaire, pour les listes : « d.* » moins le bloc JSON."""
+    if not _LIST_COLUMNS:
+        _LIST_COLUMNS.extend(r[1] for r in db().execute("PRAGMA table_info(devices)") if r[1] != "inventory")
+    return ", ".join(_LIST_COLUMNS)
+
+
+def _digest(dev):
+    keys = dev.keys()
+    known = "uid" in keys and "inv_rev" in keys and bool(dev["inv_rev"])
+    entry = _DIGESTS.get(dev["uid"]) if known else None
+    if entry is None or entry[0] != dev["inv_rev"]:
+        inv = inventory(dev)
+        entry = (dev["inv_rev"] if known else None, {"error": inv.get("error") or "", "warning": inv.get("warning") or ""}, {})
+        if known:
+            _DIGESTS[dev["uid"]] = entry
+    return entry
+
+
+def inventory_error(dev):
+    return _digest(dev)[1]["error"]
+
+
+def inventory_warning(dev):
+    return _digest(dev)[1]["warning"]
+
+
+def _catalog_signature(apps):
+    """Empreinte du catalogue tel qu'il sert à la comparaison ; calculée une fois par requête pour une même liste."""
+    try:
+        memo = g.get("catalog_signature")
+        if memo is not None and memo[0] is apps:
+            return memo[1]
+    except RuntimeError:                                         # hors requête (tâche de fond)
+        memo = False
+    signature = hash(tuple((a["slug"], a["name"], a["detect"], a["version"]) for a in apps))
+    if memo is not False:
+        g.catalog_signature = (apps, signature)
+    return signature
+
+
 def app_updates(dev, apps=None):
+    """Logiciels du catalogue à mettre à jour sur un poste Windows. Comparer les centaines de logiciels installés aux
+    motifs du catalogue est le calcul le plus lourd de la liste du parc : il n'est refait que si l'inventaire du
+    poste ou le catalogue a changé."""
     if dev["os_family"] != "windows":
         return []
-    return [a for a, _, outdated in catalog_state(inventory(dev), apps) if outdated]
+    apps = catalog() if apps is None else apps
+    signature, found = _catalog_signature(apps), _digest(dev)[2]
+    slugs = found.get(signature)
+    if slugs is None:
+        slugs = frozenset(a["slug"] for a, _, outdated in catalog_state(inventory(dev), apps) if outdated)
+        found.clear()                                            # un seul catalogue courant par poste
+        found[signature] = slugs
+    return [a for a in apps if a["slug"] in slugs] if slugs else []
 
 
 def last_result(dev_id):
-    return db().execute("SELECT * FROM device_commands WHERE device_id=? AND state IN ('success', 'failed') "
-                        "AND action != 'scan' ORDER BY id DESC LIMIT 1", (dev_id,)).fetchone()
+    # Index par poste imposé : SQLite remonte les actions du poste depuis la plus récente et s'arrête à la première
+    # qui convient, au lieu de trier tout son historique (la liste du parc pose la question pour chaque poste).
+    return db().execute("SELECT * FROM device_commands INDEXED BY device_commands_recent WHERE device_id=? "
+                        "AND state IN ('success', 'failed') AND action != 'scan' ORDER BY id DESC LIMIT 1", (dev_id,)).fetchone()
+
+
+def is_online(dev, seen=False):
+    """L'agent a donné signe de vie récemment. La liste du parc ne veut que ce booléen, pas les libellés de presence()."""
+    seen = _ago(dev["last_seen"]) if seen is False else seen
+    return (dev["state"] != "removed" and seen is not None
+            and datetime.timedelta(0) <= seen <= datetime.timedelta(seconds=ONLINE_SECONDS))
 
 
 def presence(dev):
     """Disponibilité d'après les contacts de l'agent, indépendante de son inventaire et des mises à jour."""
     seen = _ago(dev["last_seen"])
-    online = (dev["state"] != "removed" and seen is not None
-              and datetime.timedelta(0) <= seen <= datetime.timedelta(seconds=ONLINE_SECONDS))
+    online = is_online(dev, seen)
     label = _("En ligne") if online else _("Hors ligne")
     detail = (_("Contact de l'agent dans les %(n)s dernières minutes", n=ONLINE_SECONDS // 60) if online
               else _("Aucun contact de l'agent depuis %(n)s minutes", n=ONLINE_SECONDS // 60)
@@ -272,10 +380,10 @@ def status(dev, apps=None):
     last = last_result(dev["id"])
     if last and last["state"] == "failed":
         reasons.append(_("échec : %(action)s", action=ACTIONS.get(last["action"], last["action"]).lower()))
-    error = inventory(dev).get("error")
+    error = inventory_error(dev)
     if error:
         reasons.append(_("inventaire incomplet : %(error)s", error=error))
-    warning = inventory(dev).get("warning")
+    warning = inventory_warning(dev)
     if warning:
         reasons.append(warning)     # un dépôt en panne parmi d'autres : le voyant reste celui du reste des mises à jour
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
@@ -296,7 +404,7 @@ def status_label(dev, color):
         return _("retrait demandé")
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
         return _("sans contact récent")
-    if inventory(dev).get("error"):
+    if inventory_error(dev):
         return _("inventaire incomplet")
     return _("inventaire en cours")
 
@@ -546,8 +654,8 @@ def _store_inventory(dev, inv):
     }
     from . import update_blocks
     total, security, blocked = update_blocks.counts(db(), dev, clean)
-    db().execute("UPDATE devices SET inventory=?, last_scan=?, updates=?, security_updates=?, blocked_updates=?, reboot_required=? "
-                 "WHERE id=?", (json.dumps(clean), _now(), total, security, blocked,
+    db().execute("UPDATE devices SET inventory=?, inv_rev=?, last_scan=?, updates=?, security_updates=?, blocked_updates=?, "
+                 "reboot_required=? WHERE id=?", (json.dumps(clean), time.time_ns(), _now(), total, security, blocked,
                                 int(bool(inv.get("reboot_required"))), dev["id"]))
     _store_software(dev, inv)
 
@@ -1576,9 +1684,16 @@ def fleet_group_rotate_key(group_id):
 def _rows(apps=None):
     apps = catalog() if apps is None else apps
     out = []
-    for d in db().execute("SELECT * FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
+    # Actions en cours de tous les postes en une requête (index des seules actions en cours), plutôt qu'une par poste.
+    waiting = {}
+    for c in db().execute("SELECT * FROM device_commands INDEXED BY device_commands_active "
+                          "WHERE state IN ('queued', 'sent', 'running') ORDER BY id"):
+        waiting.setdefault(c["device_id"], []).append(c)
+    # Sans la colonne « inventory » : ce que la liste en tire est gardé en mémoire (_digest), l'inventaire n'est relu
+    # que pour un poste dont il a changé.
+    for d in db().execute(f"SELECT {list_columns()} FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         color, reason = status(d, apps)
-        cmds = pending(d["id"])
+        cmds = waiting.get(d["id"], [])
         out.append({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
                     "pending": cmds, "needs_update": needs_update(d, apps),
                     # Redémarrage demandé (bouton ou mise à jour avec redémarrage) et pas encore effectué.
@@ -1660,7 +1775,7 @@ def _enrich(rows, names=None):
 
 def _fleet_view(rows, view):
     """Filtre « Hors ligne » ou « Redémarrage nécessaire » : (lignes gardées, filtre reconnu, nombre de postes de chacun)."""
-    tests = {"hors-ligne": lambda r: not presence(r["d"])["online"], "redemarrage": lambda r: bool(r["d"]["reboot_required"])}
+    tests = {"hors-ligne": lambda r: not is_online(r["d"]), "redemarrage": lambda r: bool(r["d"]["reboot_required"])}
     extras = {key: sum(1 for r in rows if test(r)) for key, test in tests.items()}
     if view not in tests:
         return rows, "", extras
@@ -1723,7 +1838,7 @@ def fleet():
         page = 1
     rows = rows[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
     signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
-                                             presence(r["d"])["online"], len(r["pending"])] for r in rows],
+                                             is_online(r["d"]), len(r["pending"])] for r in rows],
                                            counts, systems, extras, shown]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
@@ -1733,7 +1848,7 @@ def fleet():
     for r in rows:
         r["mon"] = monitoring.latest(r["d"])
         # Proposé seulement si le poste est éteint, branché en Ethernet, et si quelque chose peut émettre sur son réseau.
-        r["wake"] = (can("fleet.wake") and r["d"]["state"] == "active" and not presence(r["d"])["online"] and wake.offer(r["d"], senders)["ok"])
+        r["wake"] = (can("fleet.wake") and r["d"]["state"] == "active" and not is_online(r["d"]) and wake.offer(r["d"], senders)["ok"])
     from .auth import scope_summary
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
