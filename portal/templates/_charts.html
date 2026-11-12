@@ -37,6 +37,20 @@
 </svg>
 {%- endmacro %}
 
+{# État du parc en anneau : un arc par état, proportionnel au nombre de postes, le total au centre. Arcs tracés par
+   stroke-dasharray sur un cercle de longueur 100 (pathLength), départ en haut, liseré entre deux états. #}
+{% macro status_ring(fleet) -%}
+{% set parts = fleet.ring|selectattr('count')|list %}{% set gap = 1.8 if parts|length > 1 else 0 %}{% set ns = namespace(at=0) %}
+<svg class="chart status-ring" viewBox="0 0 96 96" role="img" aria-label="{{ _('État du parc :') }} {% for s in fleet.ring %}{{ s.count }} {{ s.label }}{{ ', ' if not loop.last }}{% endfor %}">
+  <circle class="ring-track" cx="48" cy="48" r="39"/>
+  {% for s in parts %}{% set share = 100 * s.count / fleet.total %}{% set arc = [share - gap, 0.8]|max %}
+  <circle class="ring-arc ring-{{ s.key }}" cx="48" cy="48" r="39" pathLength="100" stroke-dasharray="{{ '%.2f'|format(arc) }} {{ '%.2f'|format(100 - arc) }}" stroke-dashoffset="{{ '%.2f'|format(-ns.at) }}" transform="rotate(-90 48 48)"><title>{{ s.count }} {{ s.label }}</title></circle>{% set ns.at = ns.at + share %}
+  {% endfor %}
+  <text class="ring-total" x="48" y="{{ 47 if fleet.total < 1000 else 46 }}" text-anchor="middle">{{ fleet.total }}</text>
+  <text class="ring-unit" x="48" y="61" text-anchor="middle">{{ _("poste%(v)s", v='s' if fleet.total != 1) }}</text>
+</svg>
+{%- endmacro %}
+
 {# Barre de proportion d'une seule teinte (occupation du disque, une ligne par poste de dépense). #}
 {% macro usage_bar(pct) -%}
 <svg class="bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" x="0" y="0" width="100" height="6"/>{% if pct > 0 %}<rect class="fill" x="0" y="0" width="{{ [pct, 0.8]|max }}" height="6"/>{% endif %}</svg>

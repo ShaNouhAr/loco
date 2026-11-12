@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.156.0 — 2026-11-12
+
+- **Mon parc et la vue d'ensemble se tiennent à jour sans se recharger** : quand l'état du parc change, seules les parties concernées de la page sont remplacées — plus de page qui clignote, le défilement reste où il est. Dans Mon parc, la ligne d'un poste dont l'état change s'éclaire un instant ; la fenêtre *Tout mettre à jour* suit le nombre affiché sur son bouton. Rien n'est remplacé tant qu'un menu ou une fenêtre est ouvert, ni pendant une sélection de postes. Si la page doit changer de forme (premier poste du parc, par exemple), elle se recharge comme avant.
+- **Vue d'ensemble plus visuelle** : le parc est un anneau coloré selon l'état des postes, avec leur nombre au centre. Le processeur et la mémoire du serveur ont, comme le réseau, une courbe des deux dernières minutes, tenue à jour toutes les deux secondes ; elle passe à l'orange puis au rouge à l'approche de la saturation.
+- **La couleur dit le niveau** : les jauges (disque du serveur, ressources d'un poste) sont vertes tant que tout va bien, orange puis rouges à leurs seuils. La couleur d'accent, elle, reste votre réglage.
+- **Des icônes pour se repérer** : sur les titres des panneaux et les tuiles de la vue d'ensemble, de Système, de la fiche d'un poste, des paquets Linux et de Windows Update.
+- **États vides plus lisibles** : une icône au-dessus de la phrase, partout où une liste est vide. Un cache Linux ou Windows Update vide dit quand il se remplira, au lieu d'un en-tête de tableau au-dessus de rien.
+- **Un peu de mouvement** : les panneaux entrent en douceur à l'arrivée sur une page, les onglets en fondu, les boutons s'enfoncent légèrement. Aucun mouvement lors d'un rechargement, ni quand le système demande de réduire les animations.
+
 ## 2.155.0 — 2026-11-12
 
 - **Android : les mises à jour de l'application sans Play Protect, par adb** : sur un appareil appairé en adb et joignable, loco installe lui-même la nouvelle version de l'application, comme depuis un ordinateur — ni fenêtre de confirmation, ni analyse proposée par Play Protect sur l'appareil. Si l'installation par adb échoue (appareil hors du réseau, débogage sans fil coupé), l'application reprend la main et se met à jour seule, comme avant. Jamais pendant une session distante ouverte ; chaque installation est inscrite au journal.

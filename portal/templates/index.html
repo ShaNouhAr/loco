@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_charts.html" import daily_bars, status_bar, usage_bar %}
-{% from "_nav_icons.html" import ui_icon %}
+{% from "_charts.html" import daily_bars, status_ring, usage_bar %}
+{% from "_nav_icons.html" import ui_icon, titled with context %}
 {% from "_software_logo.html" import software_logo %}
 {% block title %}{{ _("Vue d'ensemble") }}{% endblock %}
 {% block content %}
@@ -11,10 +11,10 @@
   </div>
 </div>
 
-<div class="stack" data-poll="{{ url_for('api_status') }}" data-poll-kind="status" data-poll-every="10000" data-signature="{{ state.signature }}">
+<div class="stack" data-poll="{{ url_for('api_status') }}" data-poll-kind="status" data-poll-every="10000" data-signature="{{ state.signature }}" data-refresh-url="{{ url_for('index') }}">
   {% if state.attention %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("À traiter") }}</h2></div>
+  <section class="panel" data-refresh="attention">
+    <div class="panel-h"><h2>{{ titled('alert', _("À traiter")) }}</h2></div>
     <ul class="attention">
       {% for a in state.attention %}
       <li>{% if a.url %}<a class="attention-row" href="{{ a.url }}"><span class="st {{ a.tone }}">{{ a.text }}</span>{{ ui_icon('arrow-right') }}</a>{% else %}<div class="attention-row"><span class="st {{ a.tone }}">{{ a.text }}</span></div>{% endif %}</li>
@@ -22,19 +22,17 @@
     </ul>
   </section>
   {% else %}
-  <section class="panel state-ok"><span class="st ok">{{ _("Aucun point à traiter") }}</span><span class="muted small">{{ _("Contrôlés : %(list)s.", list=state.checked) }}</span></section>
+  <section class="panel state-ok" data-refresh="attention"><span class="st ok">{{ _("Aucun point à traiter") }}</span><span class="muted small">{{ _("Contrôlés : %(list)s.", list=state.checked) }}</span></section>
   {% endif %}
 
   {% set fleet = state.fleet %}
   {% if fleet %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Parc") }}</h2><div class="aside"><a href="{{ url_for('fleet') }}">{{ _("Ouvrir Mon parc") }}</a></div></div>
+  <section class="panel" data-refresh="fleet">
+    <div class="panel-h"><h2>{{ titled('devices', _("Parc")) }}</h2><div class="aside"><a href="{{ url_for('fleet') }}">{{ _("Ouvrir Mon parc") }}</a></div></div>
     <div class="panel-b">
       {% if fleet.total %}
       <div class="fleet-sum">
-        <p class="status-total"><b>{{ fleet.total }}</b><span>{{ _("poste%(v)s équipé%(v)s", v='s' if fleet.total != 1) }}</span></p>
-        {{ status_bar(fleet) }}
-      </div>
+        {{ status_ring(fleet) }}
       <div class="fleet-line">
         <div class="fleet-states">
           {% for s in fleet.ring %}
@@ -50,6 +48,7 @@
         </p>
         {% endif %}
       </div>
+      </div>
       {% else %}
       <p class="empty">{{ _("Aucun poste : installez l'agent depuis <a href=\"%(v)s\">Mon parc</a>.", v=url_for('fleet')) }}</p>
       {% endif %}
@@ -58,30 +57,32 @@
   {% endif %}
 
   <section class="panel" data-net="{{ url_for('api_network') }}">
-    <div class="panel-h"><h2>{{ _("Serveur") }}</h2><div class="aside"><span class="mono" data-net-iface></span>{% if can('system.view') %}<a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}</div></div>
+    <div class="panel-h"><h2>{{ titled('server', _("Serveur")) }}</h2><div class="aside"><span class="mono" data-net-iface></span>{% if can('system.view') %}<a href="{{ url_for('system') }}">{{ _("Système") }}</a>{% endif %}</div></div>
     <div class="server-cells">
       {% if d.cpu %}<div class="server-cell">
-        <div class="k">{{ _("Processeur") }}</div>
-        <div class="v"><span data-bind="cpu.pct" data-fmt="pct">{{ d.cpu.pct }} %</span></div>
+        <div class="k">{{ titled('cpu', _("Processeur")) }}</div>
+        {# Chiffre tenu à jour par la courbe (toutes les 2 s) : une seule mesure, pas deux qui se contredisent. #}
+        <div class="v"><span data-fmt="pct">{{ d.cpu.pct }} %</span></div>
         <div class="s">{{ _("charge") }} <span data-bind="cpu.load1">{{ d.cpu.load1 if lang == 'en' else d.cpu.load1|string|replace('.', ',') }}</span> · {{ _("%(cores)s cœur%(v)s", cores=d.cpu.cores, v='s' if d.cpu.cores > 1) }}</div>
-        <div class="meter {{ 'err' if d.cpu.pct >= 90 else 'warn' if d.cpu.pct >= 75 }}"><i data-bind="cpu.pct" data-fmt="meter" data-width="{{ d.cpu.pct }}"></i></div>
+        {# Courbe des 2 dernières minutes, colorée selon le niveau atteint (seuils : 75 % et 90 %). #}
+        <svg class="net-spark lvl-spark" data-spark="cpu" data-warn="75" data-err="90" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="{{ _('%(label)s, 2 dernières minutes', label=_('Processeur')) }}"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
       </div>{% endif %}
       {% if d.mem %}<div class="server-cell">
-        <div class="k">{{ _("Mémoire") }}</div>
-        <div class="v"><span data-bind="mem.pct" data-fmt="pct">{{ d.mem.pct }} %</span></div>
+        <div class="k">{{ titled('memory', _("Mémoire")) }}</div>
+        <div class="v"><span data-fmt="pct">{{ d.mem.pct }} %</span></div>
         <div class="s"><span data-bind="mem.used" data-fmt="bytes">{{ d.mem.used|human }}</span> {{ _("sur %(total)s", total=d.mem.total|human) }}</div>
-        <div class="meter {{ 'err' if d.mem.pct >= 90 else 'warn' if d.mem.pct >= 80 }}"><i data-bind="mem.pct" data-fmt="meter" data-width="{{ d.mem.pct }}"></i></div>
+        <svg class="net-spark lvl-spark" data-spark="mem" data-warn="80" data-err="90" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="{{ _('%(label)s, 2 dernières minutes', label=_('Mémoire')) }}"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
       </div>{% endif %}
       <div class="server-cell">
-        <div class="k">{{ _("Disque") }}</div>
+        <div class="k">{{ titled('disk', _("Disque")) }}</div>
         <div class="v"><span data-bind="disk.pct" data-fmt="pct">{{ d.disk.pct }} %</span></div>
         <div class="s"><span data-bind="disk.free" data-fmt="bytes">{{ d.disk.free|human }}</span> {{ _("libres sur %(total)s", total=d.disk.total|human) }}</div>
-        <div class="meter {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}"><i data-bind="disk.pct" data-fmt="meter" data-width="{{ d.disk.pct }}"></i></div>
+        <div class="meter level {{ 'err' if d.disk.pct >= 90 else 'warn' if d.disk.pct >= 80 }}" data-warn="80" data-err="90"><i data-bind="disk.pct" data-fmt="meter" data-width="{{ d.disk.pct }}"></i></div>
       </div>
       <div class="net-cells">
         {% for dir, label in [('rx', _('Réseau entrant')), ('tx', _('Réseau sortant'))] %}
         <div class="server-cell" data-net-dir="{{ dir }}">
-          <div class="k">{{ label }}</div>
+          <div class="k">{{ titled('network', label) }}</div>
           <div class="v" data-net-value>—</div>
           <div class="s" data-net-note>{{ _("mesure en cours…") }}</div>
           <svg class="net-spark" viewBox="0 0 120 40" preserveAspectRatio="none" role="img" aria-label="{{ _('%(label)s, 2 dernières minutes', label=label) }}"><line class="base" x1="0" x2="120" y1="39" y2="39"/><path class="area" d=""/><path class="line" d=""/></svg>
@@ -92,8 +93,8 @@
     </div>
   </section>
 
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Stockage") }}</h2>{% if d.stats_updated %}<div class="aside">{{ _("tailles du %(stats_updated)s", stats_updated=d.stats_updated|date_fr) }}</div>{% endif %}</div>
+  <section class="panel" data-refresh="storage">
+    <div class="panel-h"><h2>{{ titled('box', _("Stockage")) }}</h2>{% if d.stats_updated %}<div class="aside">{{ _("tailles du %(stats_updated)s", stats_updated=d.stats_updated|date_fr) }}</div>{% endif %}</div>
     <div class="panel-b">
       <ul class="usage-list">
         {% for s in charts.disk %}<li><span>{% if s.url %}<a href="{{ s.url }}">{{ s.label }}</a>{% else %}{{ s.label }}{% endif %}{% if s.note %}<span class="sub">{{ s.note }}</span>{% endif %}</span><span class="size">{{ s.size|human }}</span>{{ usage_bar(s.pct) }}</li>{% endfor %}
@@ -103,8 +104,8 @@
 
   {% set wu_on = feature('wu') %}
   <div class="{{ 'cols w21 even' if wu_on }}">
-    {% if wu_on %}<section class="panel">
-      <div class="panel-h"><h2>{{ _("Windows Update, 14 derniers jours") }}</h2>
+    {% if wu_on %}<section class="panel" data-refresh="wu">
+      <div class="panel-h"><h2>{{ titled('windows', _("Windows Update, 14 derniers jours")) }}</h2>
         <div class="aside">{% if charts.wu.hit or charts.wu.miss %}{{ _("%(ratio)s %% servis par le cache", ratio=charts.wu.ratio) }}{% endif %}</div></div>
       <div class="panel-b">
         {% if charts.wu.hit or charts.wu.miss %}
@@ -118,8 +119,8 @@
         {% endif %}
       </div>
     </section>{% endif %}
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("Derniers ajouts") }}</h2></div>
+    <section class="panel" data-refresh="latest">
+      <div class="panel-h"><h2>{{ titled('history', _("Derniers ajouts")) }}</h2></div>
       {% if activity %}
       <div class="table-wrap">
         <table data-row-links>

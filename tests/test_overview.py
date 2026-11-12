@@ -135,7 +135,7 @@ class TestScope(FleetTest):
         self.assertNotIn("6 mises à jour de sécurité", page)
         self.assertNotIn("mise à jour en échec", page)
         self.assertNotIn("Redémarrage nécessaire", page)
-        self.assertIn('<p class="status-total"><b>1</b>', page)
+        self.assertIn('<text class="ring-total" x="48" y="47" text-anchor="middle">1</text>', page)      # total au centre de l'anneau
 
     def test_the_filter_applies_to_every_machine_rule(self):
         with transaction() as conn:
@@ -192,7 +192,7 @@ class TestPageContent(OverviewTest):
         page = self.page()
         for gone in ('class="metric"', "Réseau en direct", "Servi en local", "<th>Rôle", "Disque des données"):
             self.assertNotIn(gone, page)
-        positions = [page.index(f"<h2>{title}</h2>") for title in ("Parc", "Serveur", "Stockage", "Derniers ajouts")]
+        positions = [page.index(f"</span>{title}</h2>") for title in ("Parc", "Serveur", "Stockage", "Derniers ajouts")]
         self.assertEqual(positions, sorted(positions))
         self.assertLess(page.index("Aucun point à traiter"), positions[0])
 
@@ -200,6 +200,7 @@ class TestPageContent(OverviewTest):
         page, _list = self.storage()
         self.assertIn('<span data-bind="disk.pct" data-fmt="pct">20 %</span>', page)
         self.assertIn('<i data-bind="disk.pct" data-fmt="meter" data-width="20">', page)
+        self.assertIn('<div class="meter level " data-warn="80" data-err="90">', page)      # verte tant que le disque va bien
         self.assertNotIn('data-bind="disk.pct" data-fmt="bytes"', page)
 
     def test_storage_is_sorted_by_size_and_leads_to_each_cache(self):

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_nav_icons.html" import titled %}
 {% from "_macros.html" import cmd, service %}
 {% block title %}{{ _("Système") }}{% endblock %}
 {% block content %}
@@ -18,12 +19,12 @@
 
   <div class="metrics">
     <a class="metric metric-link" href="#etat">
-      <div class="k">{{ _("Services") }}</div>
+      <div class="k">{{ titled('check', _("Services")) }}</div>
       <div class="v">{{ services|length - stopped|length }}<span class="v-unit">/ {{ services|length }}</span></div>
       <div class="s">{% if stopped %}<span class="st err">{{ _("%(stopped)s arrêté%(v)s", stopped=stopped|length, v='s' if stopped|length > 1) }}</span>{% else %}<span class="st ok">{{ _("tous actifs") }}</span>{% endif %}</div>
     </a>
     <a class="metric metric-link" href="#certificat">
-      <div class="k">{{ _("Certificat HTTPS") }}</div>
+      <div class="k">{{ titled('lock', _("Certificat HTTPS")) }}</div>
       {% if cert and cert.end.days is not none %}
       <div class="v">{{ cert.end.days }}<span class="v-unit">{{ _("jours") }}</span></div>
       <div class="s"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ _("jusqu'au %(text)s", text=cert.end.text) }}</span></div>
@@ -33,13 +34,13 @@
       {% endif %}
     </a>
     <div class="metric">
-      <div class="k">{{ _("Disque des données") }}</div>
+      <div class="k">{{ titled('disk', _("Disque des données")) }}</div>
       <div class="v">{{ disk.free|human }}</div>
       <div class="s">{{ _("libres sur %(total)s", total=disk.total|human) }}</div>
-      <div class="meter {{ 'err' if disk.pct >= 90 else 'warn' if disk.pct >= 80 }}"><i data-width="{{ disk.pct }}"></i></div>
+      <div class="meter level {{ 'err' if disk.pct >= 90 else 'warn' if disk.pct >= 80 }}"><i data-width="{{ disk.pct }}"></i></div>
     </div>
     <a class="metric metric-link" href="#sauvegardes">
-      <div class="k">{{ _("Dernière sauvegarde") }}</div>
+      <div class="k">{{ titled('save', _("Dernière sauvegarde")) }}</div>
       {% if last_backup %}
       <div class="v small-v">{{ last_backup.text }}</div>
       <div class="s">{% if last_backup.late %}<span class="st warn">{{ _("sauvegarde quotidienne en retard") }}</span>{% else %}{{ _("%(backups)s conservée%(v)s", backups=backups|length, v='s' if backups|length > 1) }}{% endif %}</div>
@@ -49,7 +50,7 @@
       {% endif %}
     </a>
     <div class="metric">
-      <div class="k">{{ _("Version") }}</div>
+      <div class="k">{{ titled('tag', _("Version")) }}</div>
       <div class="v">{{ version }}</div>
       <div class="s">{% if server_updates and can('system.view') %}<a href="{{ url_for('appliance_updates') }}">{{ _("mises à jour du serveur") }}</a>{% else %}{{ _("suivie par les agents") }}{% endif %}</div>
     </div>
@@ -65,7 +66,7 @@
 
   <div class="tab-panel on" data-panel="etat"><div class="stack">
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Services") }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>
+    <div class="panel-h"><h2>{{ titled('check', _("Services")) }}</h2><div class="aside">{{ _("%(services)s sur %(services2)s actifs", services=services|length - stopped|length, services2=services|length) }}</div></div>
       <div class="table-wrap">
         <table>
           <tbody>
@@ -79,14 +80,14 @@
 
   <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Emplacements") }}</h2>{% if stats.updated %}<div class="aside">{{ _("tailles du %(updated)s", updated=stats.updated|date_fr) }}</div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ titled('box', _("Emplacements")) }}</h2>{% if stats.updated %}<div class="aside">{{ _("tailles du %(updated)s", updated=stats.updated|date_fr) }}</div>{% endif %}</div>
       <dl class="kv">
         {% for label, path in paths.items() %}<dt>{{ label }}</dt><dd class="mono break">{{ path }}</dd>{% endfor %}
       </dl>
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Versions") }}</h2></div>
+      <div class="panel-h"><h2>{{ titled('tag', _("Versions")) }}</h2></div>
       <dl class="kv">
         {% for name, value in versions.items() %}<dt>{{ name }}</dt><dd class="mono">{{ value or '—' }}</dd>{% endfor %}
       </dl>
@@ -96,7 +97,7 @@
 
   <div class="tab-panel" data-panel="sauvegardes"><div class="stack">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Sauvegardes") }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
+      <div class="panel-h"><h2>{{ titled('save', _("Sauvegardes")) }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
       {% set can_backup = not windows and can('system.configure') %}
       {% if backups %}
       <div class="panel-b backups">
@@ -226,7 +227,7 @@
   <div class="tab-panel" data-panel="reseau"><div class="stack">
     {% if https_port %}
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Port de l'interface web") }}</h2><div class="aside mono">{{ https_port.url }}</div></div>
+      <div class="panel-h"><h2>{{ titled('globe', _("Port de l'interface web")) }}</h2><div class="aside mono">{{ https_port.url }}</div></div>
       <div class="panel-b stack-sm">
         {% set job = https_port.job %}
         {% if https_port.busy %}
@@ -280,7 +281,7 @@
     {% endif %}
     {% if portal %}
     <section class="panel" id="adresse-portail">
-      <div class="panel-h"><h2>{{ _("Adresse du portail") }}</h2><div class="aside mono">{{ portal.url }}</div></div>
+      <div class="panel-h"><h2>{{ titled('globe', _("Adresse du portail")) }}</h2><div class="aside mono">{{ portal.url }}</div></div>
       <div class="panel-b stack-sm">
         <p class="muted small">{{ _("L'adresse que les navigateurs ouvrent et où revient la connexion SSO. Les agents et l'enrôlement restent sur <span class=\"mono\">%(agents)s</span>.", agents=portal.agents) }}</p>
         {% if portal.busy %}
@@ -317,7 +318,7 @@
 
     {% if internal_hosts %}
     <section class="panel" id="noms-internes">
-      <div class="panel-h"><h2>{{ _("Noms internes") }}</h2></div>
+      <div class="panel-h"><h2>{{ titled('tag', _("Noms internes")) }}</h2></div>
       <div class="panel-b stack-sm">
         <p class="muted small">{{ _("Les noms que le DNS de ce serveur ne résout pas, comme l'adresse d'un fournisseur SSO interne. Ils sont écrits dans un bloc dédié de /etc/hosts, conservé par les mises à jour. Le cache Windows Update garde ses propres DNS.") }}</p>
         {% if internal_hosts.entries %}
@@ -347,7 +348,7 @@
     {% endif %}
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Ports réseau") }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
+      <div class="panel-h"><h2>{{ titled('plug', _("Ports réseau")) }}</h2><div class="aside">{{ _("à ouvrir sur le pare-feu") }}</div></div>
       <div class="panel-b">
         <p class="muted small">{{ _("Ports en écoute du serveur loco à autoriser <strong>en entrée</strong> depuis le réseau des postes (et depuis le poste d'administration pour le premier). Ils reflètent la configuration et les fonctionnalités activées de ce serveur.") }}</p>
       </div>
@@ -371,7 +372,7 @@
 
     {% if egress %}
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Flux sortants") }}</h2><div class="aside">{{ _("à autoriser vers Internet") }}</div></div>
+      <div class="panel-h"><h2>{{ titled('forward', _("Flux sortants")) }}</h2><div class="aside">{{ _("à autoriser vers Internet") }}</div></div>
       <div class="panel-b">
         <p class="muted small">{{ _("Destinations que le serveur loco doit pouvoir joindre <strong>en sortie</strong> pour alimenter ses caches et se mettre à jour. Elles sont tirées de la configuration et des fonctionnalités activées de ce serveur.") }}</p>
       </div>
@@ -656,7 +657,7 @@
   {% else %}
   <div class="cols even">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Certificat HTTPS") }}</h2>
+      <div class="panel-h"><h2>{{ titled('lock', _("Certificat HTTPS")) }}</h2>
         {% if cert and cert.end.days is not none %}<div class="aside"><span class="st {{ 'err' if cert.end.days < 30 else 'warn' if cert.end.days < 60 else 'ok' }}">{{ _('expire dans %(n)s j', n=cert.end.days) if cert.end.days < 60 else _('valide') }}</span></div>{% endif %}
       </div>
       {% if cert %}
@@ -713,7 +714,7 @@
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Autorité de certification locale") }}</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ portal_url }}/ca.crt" download>{{ _("Télécharger ca.crt") }}</a></div>{% endif %}</div>
+      <div class="panel-h"><h2>{{ titled('shield', _("Autorité de certification locale")) }}</h2>{% if ca %}<div class="aside"><a class="btn sm" href="{{ portal_url }}/ca.crt" download>{{ _("Télécharger ca.crt") }}</a></div>{% endif %}</div>
       {% if ca %}
       <div class="panel-b">
         <p class="muted">{{ _("Elle signe le certificat du portail. L'importer une fois sur un poste supprime l'alerte du navigateur, y compris après renouvellement du certificat. Les paquets de la page <a href=\"%(v)s\">Enrôlement</a> s'en chargent ; l'agent seul l'épingle sans l'importer.", v=url_for('enrollment')) }}</p>
@@ -751,7 +752,7 @@
   {% set st_labels = {"used": _("en usage"), "ok": _("joignable"), "unreachable": _("injoignable"), "falseticker": _("incohérente"), "unstable": _("instable"), "unknown": _("état inconnu")} %}
   {% set st_class = {"used": "ok", "ok": "ok", "falseticker": "bad", "unstable": "warn", "unreachable": "warn"} %}
   <section class="panel time-panel">
-    <div class="panel-h"><h2>{{ _("Heure du serveur") }}</h2>
+    <div class="panel-h"><h2>{{ titled('clock', _("Heure du serveur")) }}</h2>
       <div class="aside">
         {%- if time_info.container %}<span class="st">{{ _("gérée par l'hôte") }}</span>
         {%- elif not time_info.ntp %}<span class="st">{{ _("synchronisation désactivée") }}</span>
@@ -834,7 +835,7 @@
 
   {% if qemu and (qemu.qemu or qemu.installed) %}
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Agent invité QEMU") }}</h2>
+    <div class="panel-h"><h2>{{ titled('server', _("Agent invité QEMU")) }}</h2>
       <div class="aside">{% if qemu.running %}<span class="st ok">{{ _("actif") }}</span>{% elif qemu.installed %}<span class="st warn">{{ _("installé, arrêté") }}</span>{% elif qemu.qemu %}<span class="muted small">{{ _("non installé") }}</span>{% else %}<span class="muted small">{{ _("non applicable") }}</span>{% endif %}</div>
     </div>
     <div class="panel-b">

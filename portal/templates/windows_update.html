@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_nav_icons.html" import titled %}
 {% from "_macros.html" import service, cmd, cache_panel %}
 {% from "_charts.html" import daily_bars %}
 {% block title %}Windows Update{% endblock %}
@@ -18,7 +19,7 @@
   {% endif %}
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Activité du cache") }}</h2><div class="aside">{{ service(nginx) }}</div></div>
+    <div class="panel-h"><h2>{{ titled('history', _("Activité du cache")) }}</h2><div class="aside">{{ service(nginx) }}</div></div>
     <div class="panel-b">
       <dl class="kv-grid wu-kv">
         <div><dt>{{ _("Taille du cache") }}</dt><dd class="dd-lg" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</dd></div>
@@ -43,7 +44,7 @@
   {% endif %}
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Diriger les postes vers le cache") }}</h2><div class="aside">{{ service(proxy_active) }}</div></div>
+    <div class="panel-h"><h2>{{ titled('forward', _("Diriger les postes vers le cache")) }}</h2><div class="aside">{{ service(proxy_active) }}</div></div>
     <div class="panel-b">
       <p class="muted">{{ _("Deux façons d'envoyer les téléchargements Windows Update des postes vers loco :") }}</p>
       <div class="cols even">
@@ -73,7 +74,7 @@
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Domaines redirigés") }}</h2>
+    <div class="panel-h"><h2>{{ titled('globe', _("Domaines redirigés")) }}</h2>
       {% if can('wu.configure') %}<div class="aside"><button type="button" class="btn sm" data-open="#domains">{{ _("Modifier") }}</button></div>{% endif %}</div>
     <div class="panel-b wu-domains">
       <ul class="plain-list">{% for d in domains %}<li class="mono">{{ d }}</li>{% endfor %}</ul>
@@ -90,7 +91,7 @@
   </section>
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Dernières requêtes") }}</h2><div class="aside">{{ _("en direct") }} · {{ _("Postes :") }} <span data-bind="clients">{{ wu.clients }}</span></div></div>
+    <div class="panel-h"><h2>{{ titled('journal', _("Dernières requêtes")) }}</h2><div class="aside">{{ _("en direct") }} · {{ _("Postes :") }} <span data-bind="clients">{{ wu.clients }}</span></div></div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>{{ _("Heure") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Fichier") }}</th><th class="num">{{ _("Taille") }}</th><th>{{ _("Source") }}</th></tr></thead>
@@ -113,7 +114,7 @@
 
 {% if can('wu.configure') %}
 <dialog id="domains">
-  <div class="dlg-h"><h2>{{ _("Domaines redirigés") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="dlg-h"><h2>{{ titled('globe', _("Domaines redirigés")) }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
   <form class="dlg-b dlg-stack" method="post" action="{{ url_for('windows_update_domains') }}" data-ajax>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <textarea name="domains" rows="6" spellcheck="false" aria-label="Un domaine par ligne">{{ domains|join('\n') }}</textarea>

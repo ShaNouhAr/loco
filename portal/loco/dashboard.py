@@ -13,7 +13,7 @@ from .auth import login_required, can
 from .db import db
 from .permissions import ENDPOINTS
 from .linux import list_debs
-from .util import cpu_usage, disk_usage, mem_info, net_counters, read_stats, service_active
+from .util import cpu_counters, cpu_usage, disk_usage, mem_info, net_counters, read_stats, service_active
 from .wupdate import wu_chart, wu_stats
 
 STATUS_LABELS = {"ready": L_("prêt"), "downloading": L_("téléchargement"), "error": L_("erreur"), "pending": L_("en attente")}
@@ -184,6 +184,9 @@ def api_status():
 def api_network():
     """Compteurs cumulés de l'interface réseau et instant du relevé : le débit se calcule entre deux appels."""
     counters = net_counters()
+    # Processeur et mémoire pour les courbes de la vue d'ensemble : compteurs cumulés du processeur (le navigateur en
+    # déduit la charge entre deux relevés, sans état côté serveur) et part de mémoire occupée.
+    live = {"t": round(time.monotonic(), 3), "cpu": cpu_counters(), "mem": (mem_info() or {}).get("pct")}
     if not counters:
-        return {"available": False}
-    return dict(counters, available=True, t=round(time.monotonic(), 3))
+        return dict(live, available=False)
+    return dict(counters, available=True, **live)

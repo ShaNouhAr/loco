@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_nav_icons.html" import titled %}
 {% from "_macros.html" import cmd, service, cache_panel %}
 {% block title %}{{ _("Paquets Linux") }}{% endblock %}
 {% block content %}
@@ -37,7 +38,7 @@
   {% endif %}
 
   <section class="panel setup" data-setup data-https="{{ client_url }}" data-http="{{ http_url or '' }}">
-    <div class="panel-h"><h2>{{ _("Brancher un poste Linux") }}</h2><div class="aside">{{ _("une commande, à lancer en root sur le poste") }}</div></div>
+    <div class="panel-h"><h2>{{ titled('plug', _("Brancher un poste Linux")) }}</h2><div class="aside">{{ _("une commande, à lancer en root sur le poste") }}</div></div>
     <div class="panel-b setup-steps">
       <div class="setup-step">
         <span class="step-n">1</span>
@@ -104,7 +105,7 @@
 
   {% if apt %}
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Brancher un hôte Proxmox VE") }}</h2><div class="aside">{{ _("dépôts PVE par le cache de loco") }}</div></div>
+    <div class="panel-h"><h2>{{ titled('server', _("Brancher un hôte Proxmox VE")) }}</h2><div class="aside">{{ _("dépôts PVE par le cache de loco") }}</div></div>
     <div class="panel-b">
       <p class="hint">{{ _("Sur un hôte Proxmox VE : remplace son dépôt Proxmox par la variante choisie et fait passer Debian (et le dépôt sans-abonnement) par le cache de loco. Les dépôts existants sont remplacés, jamais dupliqués, où qu'ils soient dans sources.list.d.") }}</p>
       <span class="cmd-label">{{ _("Sans abonnement (gratuit, mis en cache) — recommandé :") }}</span>

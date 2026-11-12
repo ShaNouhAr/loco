@@ -81,6 +81,14 @@
     return path.split(".").reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj);
   }
 
+  // Couleur de niveau d'une jauge ou d'une courbe qui porte ses seuils (data-warn, data-err) : normale, orange, rouge.
+  function level(el, v) {
+    if (!el || !el.dataset || !el.dataset.err) return;
+    var err = v >= Number(el.dataset.err), warn = !err && v >= Number(el.dataset.warn);
+    el.classList.toggle("err", err);
+    el.classList.toggle("warn", warn);
+  }
+
   // Met à jour les éléments [data-bind] à partir d'un objet JSON (actualisation en direct).
   function bind(data) {
     $$("[data-bind]").forEach(function (el) {
@@ -89,7 +97,10 @@
       switch (el.dataset.fmt) {
         case "bytes": el.textContent = bytes(v); break;
         case "pct": el.textContent = Math.round(v) + " %"; break;
-        case "meter": el.style.width = Math.max(0, Math.min(100, v)) + "%"; break;
+        case "meter":
+          el.style.width = Math.max(0, Math.min(100, v)) + "%";
+          level(el.parentNode, v);
+          break;
         case "service":
           el.className = "st " + (v ? "ok" : "err");
           el.textContent = v ? t("actif") : t("arrêté");
@@ -470,16 +481,23 @@
   /* ---------------------------------------------------------------- lignes cliquables */
 
   // Listes (parc, scripts, déploiements, groupes) : toute la ligne ouvre l'élément, sauf les commandes qu'elle contient.
-  $$("table[data-row-links] tbody tr").forEach(function (row) {
-    var link = $("a.host, a.strong-link", row);
-    if (!link) return;
-    row.classList.add("row-link");
-    row.addEventListener("click", function (e) {
-      if (e.defaultPrevented || e.target.closest("a, button, input, select, textarea, label, summary, details, form")) return;
-      if (window.getSelection && String(window.getSelection())) return;      // sélection de texte : ne pas naviguer
-      if (e.ctrlKey || e.metaKey || e.button === 1) window.open(link.href, "_blank"); else link.click();
+  // Le clic est écouté sur le document : les lignes remplacées par l'actualisation en place restent cliquables.
+  function rowLinks(root) {
+    $$("table[data-row-links] tbody tr", root).forEach(function (row) {
+      if ($("a.host, a.strong-link", row)) row.classList.add("row-link");
     });
+  }
+  rowLinks(document);
+  document.addEventListener("click", function (e) {
+    var row = e.target.closest && e.target.closest("tr.row-link");
+    if (!row) return;
+    var link = $("a.host, a.strong-link", row);
+    if (!link || e.defaultPrevented || e.target.closest("a, button, input, select, textarea, label, summary, details, form")) return;
+    if (window.getSelection && String(window.getSelection())) return;      // sélection de texte : ne pas naviguer
+    if (e.ctrlKey || e.metaKey || e.button === 1) window.open(link.href, "_blank"); else link.click();
   });
+  // Après une actualisation en place : ce qui doit être refait sur les zones remplacées (sélection, lignes…).
+  var afterRefresh = [rowLinks];
 
   /* ------------------------------------------------ sélection de postes + mise à jour groupée (Mon parc) */
   var selBar = $("[data-select-bar]");
@@ -504,6 +522,7 @@
     };
     selTable.addEventListener("change", function (e) { if (e.target.matches("[data-select]")) selSync(); });
     if (selAll) selAll.addEventListener("change", function () { selBoxes().forEach(function (b) { b.checked = selAll.checked; }); selSync(); });
+    afterRefresh.push(function () { selBoxes().forEach(function (b) { b.checked = selKept.indexOf(b.dataset.id) >= 0; }); selSync(); });
     var selClear = $("[data-select-clear]");
     if (selClear) selClear.addEventListener("click", function () { selKept = []; selBoxes().forEach(function (b) { b.checked = false; }); selSync(); });
     $$("[data-select-submit]", selBar).forEach(function (selSubmit) { selSubmit.addEventListener("click", function () {
@@ -1105,11 +1124,16 @@
     else if (!st.date || !st.time) text.textContent = t("Indiquez une date et une heure.");
     else text.textContent = describeFr(st) + (next ? (st.rec === "once" ? "" : " · " + t("prochaine exécution : %(when)s", { when: whenFr(next) })) : " · " + t("cet instant est déjà passé"));
   }
-  $$("form").forEach(function (form) {
-    if (!form.querySelector("[data-show-for], [data-planner], [data-alt-when]") && !form.dataset.altWhen) return;
-    syncSwitches(form);
-    form.addEventListener("change", function () { syncSwitches(form); });
-    form.addEventListener("input", function (e) { if (e.target.closest("[data-planner]")) syncSwitches(form); });
+  // Écoute déléguée : un formulaire remplacé par l'actualisation en place garde ses choix conditionnels.
+  var switched = function (form) { return form && (form.querySelector("[data-show-for], [data-planner], [data-alt-when]") || form.dataset.altWhen) ? form : null; };
+  $$("form").forEach(function (form) { if (switched(form)) syncSwitches(form); });
+  document.addEventListener("change", function (e) { var form = switched(e.target.closest && e.target.closest("form")); if (form) syncSwitches(form); });
+  document.addEventListener("input", function (e) {
+    var form = e.target.closest && e.target.closest("[data-planner]") && switched(e.target.closest("form"));
+    if (form) syncSwitches(form);
+  });
+  afterRefresh.push(function (zone) {
+    $$("form", zone).concat(zone.closest("form") || []).forEach(function (form) { if (switched(form)) syncSwitches(form); });
   });
 
   document.addEventListener("click", function (e) {
@@ -1137,7 +1161,11 @@
 
   /* ---------------------------------------------------------------- jauges */
 
-  $$("[data-width]").forEach(function (el) { el.style.width = Math.max(0, Math.min(100, Number(el.dataset.width))) + "%"; });
+  var widths = function (root) {
+    $$("[data-width]", root).forEach(function (el) { el.style.width = Math.max(0, Math.min(100, Number(el.dataset.width))) + "%"; });
+  };
+  widths(document);
+  afterRefresh.push(widths);
 
   /* ---------------------------------------------------------------- actualisation en direct */
 
@@ -1210,7 +1238,7 @@
   var net = $("[data-net]");
   if (net) {
     var SPAN = 60, EVERY = 2000, samples = [], previous = null;
-    var cells = $$("[data-net-dir]", net);
+    var cells = $$("[data-net-dir]", net), sparks = $$("[data-spark]", net);
     // La courbe survit à un rechargement ou à un aller-retour dans le portail, tant que la mesure reste récente.
     var kept = {};
     try { kept = JSON.parse(sessionStorage.getItem("loco-net")) || {}; } catch (e) { /* mémoire indisponible : courbe vide */ }
@@ -1222,22 +1250,40 @@
       return (LANG === "en" ? s : s.replace(".", ",")) + " " + units[i];
     };
     var note = function (cell, dir) {
-      var peak = Math.max.apply(null, samples.map(function (p) { return p[dir]; }));
+      var peak = Math.max.apply(null, samples.map(function (p) { return p[dir] || 0; }));
       $("[data-net-note]", cell).textContent = t("pic sur %(s)s s : %(rate)s", { s: Math.round(samples.length * EVERY / 1000), rate: bits(peak) });
     };
+    var step = 120 / (SPAN - 1);
+    // Tracé d'une série : points du plus ancien au plus récent, calés à droite ; l'aire descend jusqu'à la base.
+    var trace = function (svg, key, top) {
+      var points = [];
+      samples.forEach(function (p, i) {
+        if (p[key] == null) return;
+        points.push([(120 - (samples.length - 1 - i) * step).toFixed(2), (38 - 34 * Math.min(p[key], top) / top).toFixed(2)]);
+      });
+      var line = points.map(function (p, i) { return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ");
+      $(".line", svg).setAttribute("d", line);
+      $(".area", svg).setAttribute("d", points.length > 1 ? line + " L" + points[points.length - 1][0] + " 39 L" + points[0][0] + " 39 Z" : "");
+    };
     var render = function () {
-      var top = Math.max(1000, Math.max.apply(null, samples.map(function (p) { return Math.max(p.rx, p.tx); })));
-      var step = 120 / (SPAN - 1);
-      cells.forEach(function (cell) {
-        var dir = cell.dataset.netDir;
-        var points = samples.map(function (p, i) {
-          return [(120 - (samples.length - 1 - i) * step).toFixed(2), (38 - 34 * p[dir] / top).toFixed(2)];
+      var last = samples[samples.length - 1];
+      if (last.rx != null) {
+        var top = Math.max(1000, Math.max.apply(null, samples.map(function (p) { return Math.max(p.rx || 0, p.tx || 0); })));
+        cells.forEach(function (cell) {
+          var dir = cell.dataset.netDir;
+          trace(cell, dir, top);
+          $("[data-net-value]", cell).textContent = bits(last[dir]);
+          if (!cell.dataset.hover) note(cell, dir);
         });
-        var line = points.map(function (p, i) { return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ");
-        $(".line", cell).setAttribute("d", line);
-        $(".area", cell).setAttribute("d", points.length > 1 ? line + " L120 39 L" + points[0][0] + " 39 Z" : "");
-        $("[data-net-value]", cell).textContent = bits(samples[samples.length - 1][dir]);
-        if (!cell.dataset.hover) note(cell, dir);
+      }
+      // Processeur et mémoire : échelle fixe de 0 à 100 %, couleur selon le dernier niveau, chiffre mis à jour avec la courbe.
+      sparks.forEach(function (svg) {
+        var key = svg.dataset.spark, v = last[key];
+        trace(svg, key, 100);
+        if (v == null) return;
+        level(svg, v);
+        var figure = $('[data-fmt="pct"]', svg.closest(".server-cell"));
+        if (figure) figure.textContent = Math.round(v) + " %";
       });
     };
     cells.forEach(function (cell) {
@@ -1247,6 +1293,7 @@
         var box = svg.getBoundingClientRect();
         var back = Math.round((box.right - e.clientX) / box.width * (SPAN - 1));
         var p = samples[Math.max(0, samples.length - 1 - back)];
+        if (p[dir] == null) return;
         cell.dataset.hover = "1";
         $("[data-net-note]", cell).textContent = t("il y a %(s)s s : %(rate)s", { s: Math.round((Date.now() - p.at) / 1000), rate: bits(p[dir]) });
       });
@@ -1259,16 +1306,28 @@
         .then(function (d) {
           $("[data-net-off]", net).classList.toggle("hidden", d.available);
           $(".net-cells", net).classList.toggle("hidden", !d.available);
-          if (!d.available) return;
-          $("[data-net-iface]", net).textContent = d.iface;
-          if (kept.iface && kept.iface !== d.iface) samples = [];
-          kept.iface = d.iface;
-          if (previous && d.t > previous.t && d.iface === previous.iface) {
-            var dt = d.t - previous.t;
-            samples.push({ rx: Math.max(0, (d.rx - previous.rx) * 8 / dt), tx: Math.max(0, (d.tx - previous.tx) * 8 / dt), at: Date.now() });
-            if (samples.length > SPAN) samples.shift();
-            try { sessionStorage.setItem("loco-net", JSON.stringify({ iface: d.iface, samples: samples })); } catch (e) { /* idem */ }
-            render();
+          if (d.available) {
+            $("[data-net-iface]", net).textContent = d.iface;
+            if (kept.iface && kept.iface !== d.iface) samples = [];
+            kept.iface = d.iface;
+          }
+          if (previous && d.t > previous.t) {
+            var dt = d.t - previous.t, point = { at: Date.now() };
+            if (d.available && previous.available && d.iface === previous.iface) {
+              point.rx = Math.max(0, (d.rx - previous.rx) * 8 / dt);
+              point.tx = Math.max(0, (d.tx - previous.tx) * 8 / dt);
+            }
+            // Processeur : part du temps non inactif entre deux relevés des compteurs ; mémoire : part occupée.
+            if (d.cpu && previous.cpu && d.cpu[0] > previous.cpu[0]) {
+              point.cpu = Math.max(0, Math.min(100, 100 * (1 - (d.cpu[1] - previous.cpu[1]) / (d.cpu[0] - previous.cpu[0]))));
+            }
+            if (typeof d.mem === "number") point.mem = d.mem;
+            if (point.rx != null || point.cpu != null || point.mem != null) {
+              samples.push(point);
+              if (samples.length > SPAN) samples.shift();
+              try { sessionStorage.setItem("loco-net", JSON.stringify({ iface: kept.iface, samples: samples })); } catch (e) { /* idem */ }
+              render();
+            }
           }
           previous = d;
         })
@@ -1480,8 +1539,10 @@
         if (matches.length > LIMIT) { more.hidden = false; more.textContent = expanded ? t("Réduire la liste") : t("Afficher les %(n)s autres", { n: matches.length - LIMIT }); }
         else more.hidden = true;
       }
+      // Cache vide : l'en-tête du tableau s'efface et la phrase prend la forme d'un état vide (icône, explication).
+      panel.classList.toggle("is-empty", loaded && count === 0);
       if (!loaded) setNote(t("Analyse du cache…"));
-      else if (count === 0) setNote(t("Le cache est vide."));
+      else if (count === 0) setNote(t("Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco."));
       else if (matches.length === 0) setNote(t("Aucun fichier ne correspond."));
       else if (shownCount < count) setNote(t("Les %(n)s objets les plus récents ; le reste du cache n'est pas listé.", { n: shownCount }));
       else setNote("");
@@ -1489,7 +1550,12 @@
 
     function apply(d) {
       var info = d && d[area];
-      if (!info || !info.present) { loaded = true; current = []; count = 0; if (sum) sum.hidden = true; if (bar) bar.hidden = true; setNote(info ? t("Le cache est vide.") : t("Cache indisponible.")); return; }
+      if (!info || !info.present) {
+        loaded = true; current = []; count = 0; if (sum) sum.hidden = true; if (bar) bar.hidden = true;
+        panel.classList.add("is-empty");
+        setNote(info ? t("Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.") : t("Cache indisponible."));
+        return;
+      }
       loaded = true; current = info.entries || []; count = info.count || 0; shownCount = info.shown || current.length;
       if (sum) { sum.hidden = false; sum.textContent = count + " " + (count === 1 ? t("fichier") : t("fichiers")) + " · " + bytes(info.bytes || 0); }
       if (bar) bar.hidden = count === 0;
@@ -1729,7 +1795,55 @@
     if (kind === "apps" && !$('tr[data-status="downloading"]')) return;
     // Parc : rechargement quand un poste ou une action change (rien n'est saisi sur ces pages).
     // Suspendu tant que le gestionnaire de fichiers est ouvert : ne pas interrompre un transfert ou une édition.
-    var reload = function (d) { if (document.body.dataset.noReload) return; if (d.signature && d.signature !== live.dataset.signature) window.location.reload(); };
+    var hard = function () { window.location.reload(); };
+    // Actualisation en place : la page est redemandée en arrière-plan et seules ses zones marquées [data-refresh]
+    // sont remplacées — ni page blanche, ni retour en haut, ni perte d'un menu ouvert. Une page sans zone marquée, ou
+    // dont la structure a changé (une zone apparaît ou disparaît), se recharge comme avant.
+    var refreshing = false;
+    var soft = function () {
+      var zones = $$("[data-refresh]");
+      if (!zones.length) return hard();
+      if (refreshing) return;
+      // Ne rien remplacer sous les doigts : saisie, menu ou fenêtre ouverts. La signature reste l'ancienne : nouvel
+      // essai au relevé suivant.
+      var active = document.activeElement;
+      if ($("dialog[open]") || zones.some(function (z) {
+        return $("details[open]", z) || (z.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName));
+      })) return;
+      refreshing = true;
+      fetch(live.dataset.refreshUrl || live.dataset.poll, { credentials: "same-origin", headers: { "X-Requested-With": "refresh" } })
+        .then(function (r) { if (!r.ok || r.redirected) throw new Error(r.status); return r.text(); })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var next = $("[data-poll]", doc), fresh = {};
+          $$("[data-refresh]", doc).forEach(function (z) { fresh[z.dataset.refresh] = z; });
+          if (!next || Object.keys(fresh).length !== zones.length || zones.some(function (z) { return !fresh[z.dataset.refresh]; })) throw new Error("structure");
+          var key = function (row) { var a = $("a.host, a.strong-link", row); return a ? a.getAttribute("href") : ""; };
+          // Ce qui fait l'état d'une ligne : son texte et ses voyants, sans ce qui bouge à chaque contact ([data-quiet] :
+          // heure du dernier contact, jauges) — sinon tout poste allumé s'éclairerait toutes les deux minutes.
+          var shape = function (row) {
+            var copy = row.cloneNode(true);
+            $$("[data-quiet]", copy).forEach(function (q) { q.parentNode.removeChild(q); });
+            return copy.textContent.replace(/\s+/g, " ") + "|" + $$(".st", copy).map(function (s) { return s.className; }).join(",");
+          };
+          zones.forEach(function (z) {
+            var f = fresh[z.dataset.refresh];
+            if (z.innerHTML === f.innerHTML && z.className === f.className) return;
+            var before = {};
+            $$("tr", z).forEach(function (row) { var k = key(row); if (k) before[k] = shape(row); });
+            z.className = f.className;
+            while (z.firstChild) z.removeChild(z.firstChild);
+            Array.prototype.slice.call(f.childNodes).forEach(function (n) { z.appendChild(document.importNode(n, true)); });
+            afterRefresh.forEach(function (fn) { fn(z); });
+            // Lignes nouvelles ou modifiées : éclairées un instant.
+            $$("tr", z).forEach(function (row) { var k = key(row); if (k && before[k] !== shape(row)) row.classList.add("changed"); });
+          });
+          live.dataset.signature = next.dataset.signature;
+        })
+        .catch(hard)
+        .then(function () { refreshing = false; });
+    };
+    var reload = function (d) { if (document.body.dataset.noReload) return; if (d.signature && d.signature !== live.dataset.signature) soft(); };
     var handler = { status: function (d) { bind(d); reload(d); }, wu: function (d) { bind(d); renderWuLog(d); }, apps: renderApps, job: renderJob,
                     reload: reload }[kind];
     var tick = poll(live.dataset.poll, Number(live.dataset.pollEvery) || 10000, handler);

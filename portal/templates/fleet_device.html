@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_nav_icons.html" import titled %}
 {% block title %}{{ dev.label or dev.hostname or dev.uid[:8] }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% from "_charts.html" import line_chart, legend %}
@@ -120,29 +121,29 @@
   <div class="metrics">
     {% if android %}
     <div class="metric">
-      <div class="k">{{ _("Applications") }}</div>
+      <div class="k">{{ titled('package', _("Applications")) }}</div>
       <div class="v">{{ inv.apps|length if inv.apps else '—' }}</div>
       <div class="s">{{ _("installées") }}</div>
     </div>
     {% else %}
     <div class="metric">
-      <div class="k">{{ _("Mises à jour système") }}</div>
+      <div class="k">{{ titled('update', _("Mises à jour système")) }}</div>
       <div class="v">{{ summary.updates if dev.last_scan else '—' }}</div>
       <div class="s">{% if summary.security %}<span class="sec-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s de sécurité", security=summary.security) }}</span>{% elif dev.last_scan %}{% if summary.updates %}{{ _('à installer') }}{% elif summary.blocked %}{{ ngettext("%(num)s mise à jour bloquée", "%(num)s mises à jour bloquées", summary.blocked) }}{% else %}{{ _('système à jour') }}{% endif %}{% else %}{{ _("inventaire en cours") }}{% endif %}</div>
     </div>
     <div class="metric">
-      <div class="k">{{ _('Logiciels') if windows else 'Flatpak' }}</div>
+      <div class="k">{{ titled('layers', _('Logiciels') if windows else 'Flatpak') }}</div>
       <div class="v">{{ summary.apps if windows else (inv.flatpak or 0) }}</div>
       <div class="s">{% if windows %}{{ _('à mettre à jour') if summary.apps else _('catalogue à jour') }}{% else %}{{ ngettext('mise à jour', 'mises à jour', inv.flatpak) if inv.flatpak else _('à jour') }}{% endif %}</div>
     </div>
     <div class="metric">
-      <div class="k">{{ _("Redémarrage") }}</div>
+      <div class="k">{{ titled('restart', _("Redémarrage")) }}</div>
       <div class="v">{% if dev.reboot_required %}<span class="st warn">{{ _("requis") }}</span>{% else %}{{ _("non") }}{% endif %}</div>
       <div class="s">{{ _('pour finir les mises à jour') if dev.reboot_required else _('rien en attente') }}</div>
     </div>
     {% endif %}
     <div class="metric">
-      <div class="k">{{ _("Inventaire") }}</div>
+      <div class="k">{{ titled('journal', _("Inventaire")) }}</div>
       <div class="v small-v">{{ summary.scanned }}</div>
       <div class="s">{{ _("contact toutes les 2 min") }}</div>
     </div>
@@ -249,19 +250,19 @@
       {% else %}
       {% if m.stale %}<p class="note warn">{{ _("Poste hors contact : valeurs du dernier relevé, il y a %(age)s.", age=m.age_text) }}</p>{% endif %}
       <div class="metrics mon-tiles{{ ' stale' if m.stale }}">
-        <div class="metric"><div class="k">{{ _("Processeur") }}</div>
+        <div class="metric"><div class="k">{{ titled('cpu', _("Processeur")) }}</div>
           <div class="v" data-live-v="cpu">{{ '%d'|format(m.cpu|round) if m.cpu is not none else '—' }}{% if m.cpu is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.cpu in ('warn', 'err') %}<span class="st {{ m.levels.cpu }}">{{ _("élevé") }}</span> {% endif %}{{ _("%(n)s cœurs", n=m.raw.cores) if m.raw.cores }}{% if m.raw.load %} · {{ _("charge %(l)s", l=m.raw.load[0]) }}{% endif %}</div></div>
-        <div class="metric"><div class="k">{{ _("Mémoire") }}</div>
+        <div class="metric"><div class="k">{{ titled('memory', _("Mémoire")) }}</div>
           <div class="v" data-live-v="mem">{{ '%d'|format(m.mem|round) if m.mem is not none else '—' }}{% if m.mem is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.mem in ('warn', 'err') %}<span class="st {{ m.levels.mem }}">{{ _("saturée") if m.levels.mem == 'err' else _("élevée") }}</span> {% endif %}{{ _("%(used)s sur %(total)s", used=m.raw.mem_used|human, total=m.raw.mem_total|human) if m.raw.mem_total }}</div></div>
-        <div class="metric"><div class="k">{{ _("Disque le plus rempli") }}</div>
+        <div class="metric"><div class="k">{{ titled('disk', _("Disque le plus rempli")) }}</div>
           <div class="v">{{ '%d'|format(m.disk|round) if m.disk is not none else '—' }}{% if m.disk is not none %}<small> %</small>{% endif %}</div>
           <div class="s">{% if m.levels.disk in ('warn', 'err') %}<span class="st {{ m.levels.disk }}">{{ _("presque plein") }}</span> {% endif %}<span class="mono">{{ m.disk_mount }}</span></div></div>
-        <div class="metric" title="{{ _('Débit moyen depuis le contact précédent (2 min)') }}"><div class="k">{{ _("Réseau") }}</div>
+        <div class="metric" title="{{ _('Débit moyen depuis le contact précédent (2 min)') }}"><div class="k">{{ titled('network', _("Réseau")) }}</div>
           <div class="v small-v" data-live-v="net_rx">{% if m.raw.net_rx is defined %}↓ {{ m.raw.net_rx|human }}/s{% else %}—{% endif %}</div>
           <div class="s" data-live-v="net_tx">{% if m.raw.net_tx is defined %}↑ {{ m.raw.net_tx|human }}/s {{ _("envoyés") }}{% else %}{{ _("au prochain contact") }}{% endif %}</div></div>
-        <div class="metric"><div class="k">{{ _("Démarré depuis") }}</div>
+        <div class="metric"><div class="k">{{ titled('clock', _("Démarré depuis")) }}</div>
           <div class="v small-v">{{ m.uptime_text or '—' }}</div>
           <div class="s">{% if m.swap is not none and m.raw.swap_total %}{{ _("échange %(p)s %%", p='%d'|format(m.swap|round)) }}{% else %}{{ _("pas de fichier d'échange") }}{% endif %}</div></div>
       </div>

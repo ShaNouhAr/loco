@@ -4395,5 +4395,8 @@
  "Port d'association introuvable : laissez la fenêtre « Associer avec un code » ouverte.": "Puerto de vinculación no encontrado: deje abierta la ventana «Vincular con código».",
  "loco ne joint pas cet appareil directement : il doit être sur le même réseau que le serveur.": "loco no alcanza este dispositivo directamente: debe estar en la misma red que el servidor.",
  "Appairage refusé : %(e)s. Le code change à chaque ouverture de la fenêtre d'association.": "Vinculación rechazada: %(e)s. El código cambia cada vez que se abre la ventana de vinculación.",
- "Un appairage est déjà en cours, patientez quelques secondes.": "Ya hay una vinculación en curso, espere unos segundos."
+ "Un appairage est déjà en cours, patientez quelques secondes.": "Ya hay una vinculación en curso, espere unos segundos.",
+ "État du parc :": "Estado del parque:",
+ "poste%(v)s": "equipo%(v)s",
+ "Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.": "La caché está vacía: se llenará con la primera descarga de un equipo conectado a loco."
 }

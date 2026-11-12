@@ -276,6 +276,64 @@ class TestFleet(BrowserTest):
         self.assertEqual(commands(), 4)
 
 
+class TestRefreshInPlace(BrowserTest):
+    """Mon parc suit le parc sans se recharger : seules les zones marquées [data-refresh] sont remplacées."""
+
+    def test_a_machine_coming_back_only_changes_its_row(self):
+        add_devices(3, prefix="pc")
+        add_devices(1, prefix="eteint", last_seen=stamp(3))
+        self.page.goto("/fleet")
+        self.page.evaluate("window.notReloaded = true")
+        row = self.page.locator("#fleet-table tbody tr", has_text="eteint-000")
+        expect(row.locator(".device-availability")).to_have_class(re.compile(r"\berr\b"))
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE hostname='eteint-000'", (stamp(),))
+        expect(row.locator(".device-availability")).to_have_class(re.compile(r"\bok\b"), timeout=LONG)
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"), "la liste devait suivre sans se recharger")
+        expect(self.page.locator("#fleet-table tbody tr.changed")).to_have_count(1)      # elle seule est éclairée
+        row.locator("td").nth(2).click()                                                 # la ligne remplacée reste cliquable
+        expect(self.page).to_have_url(re.compile(r"/fleet/\d+$"))
+
+    def test_the_update_all_window_follows_the_button(self):
+        add_devices(2, prefix="retard", updates=3)
+        add_devices(1, prefix="pc")
+        self.page.goto("/fleet")
+        self.page.evaluate("window.notReloaded = true")
+        button = self.page.locator("[data-open='#update-all']")
+        expect(button).to_contain_text("(2)")
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET updates=3 WHERE hostname='pc-000'")
+        expect(button).to_contain_text("(3)", timeout=LONG)
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"), "la liste devait suivre sans se recharger")
+        button.click()
+        dialog = self.page.locator("dialog#update-all")
+        expect(dialog.locator("h2")).to_have_text("Mettre à jour 3 postes ?")
+        expect(dialog.locator("[name=wave_size]")).to_be_hidden()
+        dialog.locator("label", has_text="Par vagues").click()                           # les choix du formulaire remplacé vivent
+        expect(dialog.locator("[name=wave_size]")).to_be_visible()
+
+    def test_nothing_is_replaced_under_an_open_menu(self):
+        add_devices(2, prefix="pc")
+        add_devices(1, prefix="eteint", last_seen=stamp(3))
+        self.page.goto("/fleet")
+        self.page.evaluate("""() => { const d = document.createElement('details'); d.id = 'essai'; d.open = true;
+                                      document.querySelector('[data-refresh=actions]').appendChild(d); }""")
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE hostname='eteint-000'", (stamp(),))
+        self.page.wait_for_timeout(20000)                                                # un relevé au moins (toutes les 15 s)
+        expect(self.page.locator("#essai")).to_have_count(1)
+        expect(self.page.locator("tr", has_text="eteint-000").locator(".device-availability")).to_have_class(re.compile(r"\berr\b"))
+
+    def test_a_first_machine_reloads_the_page(self):
+        # La liste n'existe pas encore : la structure diffère, la page se recharge comme avant.
+        self.page.goto("/fleet")
+        self.page.evaluate("window.notReloaded = true")
+        expect(self.page.locator("#fleet-table")).to_have_count(0)
+        add_devices(1, prefix="premier")
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(1, timeout=LONG)
+        self.assertIsNone(self.page.evaluate("window.notReloaded || null"))
+
+
 class TestCatalog(BrowserTest):
     def setUp(self):
         super().setUp()
@@ -325,7 +383,7 @@ class TestOverview(BrowserTest):
             expect(self.page.locator(".state-ok")).to_contain_text("Aucun point à traiter")
             firing.append({"key": "service_down", "severity": "critical", "subject": "", "body": "Services arrêtés : nginx."})
             expect(self.page.locator(".attention-row .st.err")).to_have_text("Services arrêtés : nginx.", timeout=LONG)
-            self.assertIsNone(self.page.evaluate("window.notReloaded || null"), "la page devait s'être rechargée seule")
+            self.assertTrue(self.page.evaluate("window.notReloaded || null"), "la page devait suivre sans se recharger")
             firing.clear()
             expect(self.page.locator(".state-ok")).to_be_visible(timeout=LONG)
 

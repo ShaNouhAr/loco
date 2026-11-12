@@ -19,7 +19,7 @@
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
     <p>{{ _("Postes équipés de l'agent loco, du plus urgent au plus à jour.") }}{% if fleet_limit %} <span class="muted">{{ _("Parc de votre profil : %(scope)s.", scope=fleet_limit) }}</span>{% endif %}</p>
   </div>
-  <div class="actions">
+  <div class="actions" data-refresh="actions">
     {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">{{ _("Ajouter un poste") }}</a>{% endif %}
     {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">{{ _("Déployer sur ce groupe") }}</a>{% endif %}
     {% if can('fleet.bulk_update') and total %}
@@ -31,14 +31,14 @@
 
 <div class="stack" data-poll="{{ request.full_path }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
   <div class="fleet-filters">
-    <nav class="chips" aria-label="{{ _('Filtrer par état') }}">
+    <nav class="chips" aria-label="{{ _('Filtrer par état') }}" data-refresh="states">
       <a class="chip {{ 'on' if not state }}" href="{{ filter_url(statut='') }}">{{ _("Tous") }} <b>{{ total }}</b></a>
       {% for key, label, cls in [('red', _('À traiter'), 'err'), ('orange', _('Mises à jour en attente'), 'warn'), ('grey', _('État inconnu'), ''), ('green', _('À jour'), 'ok')] %}
       <a class="chip {{ 'on' if state == key }}" href="{{ filter_url(statut=key) }}" title="{{ {'red': _('%(n)s mises à jour ou plus', n=red_threshold), 'orange': _('de 1 à %(n)s mises à jour', n=red_threshold - 1), 'grey': _('inventaire en cours ou incomplet, sans contact récent, retrait'), 'green': _('aucune mise à jour')}[key] }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
       {% endfor %}
     </nav>
     <div class="row">
-      <nav class="chips" aria-label="{{ _('Filtrer par système') }}">
+      <nav class="chips" aria-label="{{ _('Filtrer par système') }}" data-refresh="systems">
         <a class="chip {{ 'on' if system == 'windows' }}" href="{{ filter_url(os='' if system == 'windows' else 'windows') }}">{{ _("Windows") }} <b>{{ systems.windows }}</b></a>
         <a class="chip {{ 'on' if system == 'linux' }}" href="{{ filter_url(os='' if system == 'linux' else 'linux') }}">{{ _("Linux") }} <b>{{ systems.linux }}</b></a>
         {% for key, label in [('hors-ligne', _('Hors ligne')), ('redemarrage', _('Redémarrage nécessaire'))] if extras[key] or view == key %}
@@ -83,7 +83,7 @@
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
         <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner sur cette page') }}" title="{{ _('Tout sélectionner sur cette page') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
-        <tbody>
+        <tbody data-refresh="rows">
         {% for r in rows %}{% set d = r.d %}{% set devname = d.label or d.hostname or d.uid[:8] %}
           <tr>
             {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=devname) }}"></label></td>{% endif %}
@@ -92,7 +92,7 @@
               {% if d.label and d.hostname and d.label != d.hostname %}<span class="sub mono" title="{{ _('Nom d’hôte') }}">{{ d.hostname }}</span>{% endif %}
               <span class="sub" title="{{ d.os_name }}">{{ r.os_short }}</span>
               {% if r.groups %}<span class="fleet-groups">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a>{% endfor %}</span>{% endif %}</td>
-            <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="{{ _('Adresse par laquelle loco voit le poste (routeur ou NAT)') }}">{{ _("via %(via)s", via=r.via) }}</span>{% endif %}<span class="sub" title="{{ d.last_seen }}">{{ _("vu %(seen)s", seen=r.seen) }}</span></td>
+            <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ r.address or '—' }}</span>{% if r.via %}<span class="sub" title="{{ _('Adresse par laquelle loco voit le poste (routeur ou NAT)') }}">{{ _("via %(via)s", via=r.via) }}</span>{% endif %}<span class="sub" title="{{ d.last_seen }}" data-quiet>{{ _("vu %(seen)s", seen=r.seen) }}</span></td>
             <td data-label="{{ _('Mises à jour') }}">
               <span class="fleet-update-state">
               <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(r.color, '') }}" role="img" aria-label="{{ _('Mises à jour : %(label)s', label=r.label) }}" title="{{ r.reason if r.reason.startswith(r.label) or r.reason.endswith(r.label) else r.label ~ ' : ' ~ r.reason }}"></span>
@@ -108,7 +108,7 @@
               </span>
               </span>
             </td>
-            <td class="hide-sm" data-label="{{ _('Ressources') }}">{{ resources(r.mon) }}</td>
+            <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(r.mon) }}</td>
             <td class="right nowrap card-action">
               {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ _("%(v)s en attente", v=actions[r.pending[0].action]|lower) }}</span>
               {% else %}
@@ -144,7 +144,7 @@
       </table>
     </div>
     {% if pages > 1 %}
-    <nav class="row store-pagination fleet-pager" aria-label="{{ _('Pages du parc') }}">
+    <nav class="row store-pagination fleet-pager" aria-label="{{ _('Pages du parc') }}" data-refresh="pager">
       {% if page > 1 %}<a class="btn sm" href="{{ filter_url(page=page - 1) }}">{{ _("Précédente") }}</a>{% endif %}
       <span class="muted small">{{ _("Page %(page)s sur %(pages)s · %(total)s poste%(v)s", page=page, pages=pages, total=shown, v='s' if shown > 1) }}</span>
       {% if page < pages %}<a class="btn sm" href="{{ filter_url(page=page + 1) }}">{{ _("Suivante") }}</a>{% endif %}
@@ -164,7 +164,8 @@
 {% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels du catalogue.', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels du catalogue.')) }}{% endif %}
 {% if can('fleet.bulk_update') and total and to_update %}
 <dialog id="update-all">
-  <form method="post" action="{{ url_for('fleet_update_all') }}" data-ajax>
+  {# Zone rafraîchie avec la liste : le nombre de postes du titre et les vagues suivent le bouton qui ouvre la fenêtre. #}
+  <form method="post" action="{{ url_for('fleet_update_all') }}" data-ajax data-refresh="update-all">
     <div class="dlg-h"><h2>{{ ngettext('Mettre à jour %(num)s poste ?', 'Mettre à jour %(num)s postes ?', to_update) }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="dlg-b stack-sm">
       <input type="hidden" name="csrf" value="{{ csrf }}">

@@ -50,12 +50,45 @@
   <path d="M4 6h11M4 12h7M4 18h11"/><path d="m16 9 4 3-4 3"/>
 {% elif name == 'ha' %}
   <rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="13" width="7" height="7" rx="1.5"/><path d="M14 7h2.5a2 2 0 0 1 2 2v2.5M10 17H7.5a2 2 0 0 1-2-2v-2.5"/><path d="m16.5 11.5 2 2 2-2M7.5 12.5l-2-2-2 2"/>
+{% elif name == 'alert' %}
+  <path d="M10.3 4.4 2.7 17.6A2 2 0 0 0 4.4 20.6h15.2a2 2 0 0 0 1.7-3L13.7 4.4a2 2 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/>
+{% elif name == 'history' %}
+  <path d="M3.8 12a8.2 8.2 0 1 0 2.4-5.8"/><path d="M3.8 4.6v3.8h3.8"/><path d="M12 7.8V12l2.8 1.8"/>
+{% elif name == 'box' %}
+  <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5Z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>
+{% elif name == 'download' %}
+  <path d="M12 4.5V15M7.5 10.5 12 15l4.5-4.5"/><path d="M5 15.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2.5"/>
+{% elif name == 'cpu' %}
+  <rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>
+{% elif name == 'memory' %}
+  <rect x="2.5" y="7" width="19" height="9" rx="1.5"/><path d="M6.5 10.5v2M10.2 10.5v2M13.8 10.5v2M17.5 10.5v2M5 16v2.5M9 16v2.5M15 16v2.5M19 16v2.5"/>
+{% elif name == 'disk' %}
+  <path d="M4 14.5 6.3 5.6A2 2 0 0 1 8.2 4h7.6a2 2 0 0 1 1.9 1.6L20 14.5"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 17h.01M11 17h6"/>
+{% elif name == 'network' %}
+  <path d="M7 4v13M3.5 13.5 7 17l3.5-3.5M17 20V7M13.5 10.5 17 7l3.5 3.5"/>
+{% elif name == 'clock' %}
+  <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>
+{% elif name == 'lock' %}
+  <rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.8a3.5 3.5 0 0 1 7 0v2.7"/>
+{% elif name == 'check' %}
+  <circle cx="12" cy="12" r="9"/><path d="m8.5 12.2 2.4 2.4 4.6-4.9"/>
+{% elif name == 'tag' %}
+  <path d="M3.5 12.3V5a1.5 1.5 0 0 1 1.5-1.5h7.3L20.5 11.7a1.5 1.5 0 0 1 0 2.1l-6.7 6.7a1.5 1.5 0 0 1-2.1 0Z"/><path d="M8 8h.01" stroke-width="2.4"/>
+{% elif name == 'restart' %}
+  <path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>
+{% elif name == 'save' %}
+  <path d="M5 4h11l4 4v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>
 {% endif %}
 </svg>
 {%- endmacro %}
 
 {# Apparence : thème et couleur d'accent, mémorisés dans le navigateur (theme.js les applique avant l'affichage). #}
 {# Icônes des boutons de console (même tracé que la navigation, 15 px). #}
+{# Titre d'un panneau ou d'une tuile précédé de son icône (jeu de la navigation). #}
+{% macro titled(icon, text) -%}
+<span class="ti">{{ nav_icon(icon) }}</span>{{ text }}
+{%- endmacro %}
+
 {% macro device_icon(dev) -%}
 {#- Petite icône du type de poste : ordinateur, ou pour Android téléphone, tablette, téléviseur. -#}
 {%- set kind = device_kind(dev) -%}

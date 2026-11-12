@@ -221,6 +221,17 @@ def cpu_usage(interval=0.12):
         return {}
 
 
+def cpu_counters():
+    """Compteurs cumulés du processeur depuis le démarrage : [temps total, temps inactif], ou None s'ils ne sont pas
+    lisibles (serveur Windows). Deux relevés donnent la charge entre eux."""
+    if config.WINDOWS:
+        return None
+    try:
+        return list(_cpu_times())
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 PROC_NET_DEV, PROC_NET_ROUTE = "/proc/net/dev", "/proc/net/route"
 VIRTUAL_IFACES = ("lo", "veth", "docker", "br-", "virbr", "vnet", "tap", "tun", "fwbr", "fwpr", "fwln")
 

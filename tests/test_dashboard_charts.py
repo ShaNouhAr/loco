@@ -76,7 +76,7 @@ class TestDashboardCharts(FleetTest):
         self.assertIn("75 % servis par le cache", page)
         self.assertIn('class="bar-hit"', page)
         self.assertIn("17/10 : 3,00 Go depuis le cache, 1,00 Go depuis Internet", page)
-        self.assertIn('class="ring-green"', page)
+        self.assertIn('class="ring-arc ring-green"', page)
         self.assertIn("Stockage", page)
         self.assertIn('class="usage-list"', page)
         self.assertNotIn("<script", page.split("Windows Update, 14 derniers jours")[1].split("Services")[0])
@@ -115,7 +115,7 @@ class TestDashboardCharts(FleetTest):
         viewer = browser(self, "graphiques", profile(self, "graphiques", {"dashboard.view"}))
         page = viewer.c.get("/").get_data(as_text=True)
         self.assertIn("Windows Update, 14 derniers jours", page)
-        self.assertNotIn('class="chart status-bar"', page)
+        self.assertNotIn('class="chart status-ring"', page)
 
 
 class TestWindowsUpdatePage(FleetTest):
@@ -224,7 +224,7 @@ class TestLiveNetwork(FleetTest):
         page = self.admin.c.get("/").get_data(as_text=True)
         self.assertIn('data-net="/api/network"', page)
         with mock.patch("loco.dashboard.net_counters", return_value=None):
-            self.assertEqual(self.admin.c.get("/api/network").get_json(), {"available": False})
+            self.assertIs(self.admin.c.get("/api/network").get_json()["available"], False)
 
     def test_api_returns_counters_with_a_monotonic_timestamp(self):
         with mock.patch("loco.dashboard.net_counters", return_value={"iface": "eth0", "rx": 10, "tx": 20}):
@@ -232,6 +232,32 @@ class TestLiveNetwork(FleetTest):
             second = self.admin.c.get("/api/network").get_json()
         self.assertEqual((first["available"], first["iface"], first["rx"], first["tx"]), (True, "eth0", 10, 20))
         self.assertGreaterEqual(second["t"], first["t"])
+
+    def test_api_carries_processor_and_memory_for_the_live_curves(self):
+        # Compteurs cumulés du processeur : le navigateur en déduit la charge entre deux relevés ; ils restent servis
+        # même sans compteurs réseau, et valent None quand le serveur ne sait pas les lire.
+        with mock.patch("loco.dashboard.net_counters", return_value=None), \
+                mock.patch("loco.dashboard.cpu_counters", return_value=[1000, 400]), \
+                mock.patch("loco.dashboard.mem_info", return_value={"pct": 37, "used": 1, "total": 2}):
+            data = self.admin.c.get("/api/network").get_json()
+        self.assertEqual((data["available"], data["cpu"], data["mem"]), (False, [1000, 400], 37))
+        with mock.patch("loco.dashboard.cpu_counters", return_value=None), mock.patch("loco.dashboard.mem_info", return_value=None):
+            data = self.admin.c.get("/api/network").get_json()
+        self.assertEqual((data["cpu"], data["mem"]), (None, None))
+
+    def test_processor_counters_are_total_and_idle_time(self):
+        with mock.patch.object(config, "WINDOWS", False), mock.patch.object(util, "_cpu_times", return_value=(5000, 4200)):
+            self.assertEqual(util.cpu_counters(), [5000, 4200])
+        with mock.patch.object(config, "WINDOWS", False), mock.patch.object(util, "_cpu_times", side_effect=OSError):
+            self.assertIsNone(util.cpu_counters())
+        with mock.patch.object(config, "WINDOWS", True):
+            self.assertIsNone(util.cpu_counters())
+
+    def test_curves_and_refresh_zones_are_on_the_overview(self):
+        page = self.admin.c.get("/").get_data(as_text=True)
+        for mark in ('data-spark="cpu"', 'data-spark="mem"', 'data-refresh="attention"', 'data-refresh="fleet"', 'data-refresh="storage"',
+                     'data-refresh="latest"', 'data-refresh-url="/"'):
+            self.assertIn(mark, page)
 
 
 if __name__ == "__main__":

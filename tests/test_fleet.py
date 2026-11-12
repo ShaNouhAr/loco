@@ -587,7 +587,7 @@ class TestActions(FleetTest):
         late.enroll()
         late.checkin({"updates": [{"name": "curl", "version": "8.14"}]})
         page = self.admin.c.get("/fleet").get_data(as_text=True)
-        start = page.index('<div class="actions">')
+        start = page.index('<div class="actions" data-refresh="actions">')
         head = page[start:page.index("</div>", start)]
         self.assertIn('data-open="#update-all"', head)                          # en-tête : un seul bouton
         self.assertNotIn('name="reboot"', head)                                  # plus de case flottante
