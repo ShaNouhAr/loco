@@ -168,6 +168,20 @@ class TestServing(unittest.TestCase):
         windows = (ROOT / "portal/locowin.py").read_text(encoding="utf-8")
         self.assertIn('"snippets/loco-relay.conf": tpl("nginx-relay-snippet.conf")', windows)
 
+    def test_stopping_the_service_does_not_wait_for_the_persistent_connections(self):
+        # Vu sur une appliance : nginx attendait dix secondes que les agents rendent leur connexion, le service mettait
+        # douze secondes à s'arrêter, et le supervisord relancé entre-temps échouait quatre fois sur les cinq permises.
+        for name in ("linux/conf/supervisord-alpine.conf", "linux/docker/supervisord.conf"):
+            block = (ROOT / name).read_text(encoding="utf-8").split("[program:nginx]", 1)[1].split("[program:", 1)[0]
+            self.assertIn("\nstopsignal=TERM\n", block, name)
+            self.assertNotIn("stopsignal=QUIT", block, name)
+        alpine = (ROOT / "linux/lib/alpine.sh").read_text(encoding="utf-8")
+        stop, wait, start = (alpine.index("rc-service loco stop"), alpine.index('kill -0 "$(cat /run/loco-supervisord.pid'),
+                             alpine.index("rc-service loco start"))
+        self.assertLess(stop, wait)                       # arrêt, attente de la fin réelle de l'ancien, puis démarrage
+        self.assertLess(wait, start)
+        self.assertNotIn("rc-service loco restart", alpine)
+
     def test_the_three_agents_keep_https_as_a_fallback(self):
         csharp = (ROOT / "windows/client/RemoteControl.cs").read_text(encoding="utf-8")
         self.assertIn("return Agent.RemoteExchange(payload);", csharp)                # canal absent ou rompu : HTTPS

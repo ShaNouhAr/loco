@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.159.0 — 2026-11-12
+
+- **Mon parc : des filtres en listes déroulantes** : les deux rangées de pastilles laissent place à une barre de listes — *État*, *Système*, *Situation* (hors ligne, redémarrage nécessaire) et *Groupe*. Chaque bouton dit le filtre et la valeur choisie, et se remplit quand un filtre est posé ; chaque ligne d'une liste donne son nombre de postes. Un lien *Effacer les filtres* apparaît dès qu'il y en a un. La recherche et les pages gardent les filtres choisis.
+- **Filtrer par distribution** : la liste *Système* propose la famille — Windows, Linux, Android — puis, en retrait, ses distributions présentes dans le parc, sans numéro de version : Windows 10, Windows 11, Windows Server 2025, Debian, Ubuntu, Rocky Linux… Debian 12 et Debian 13 comptent ensemble. Les appareils Android ont désormais leur propre ligne : ils ne sont plus comptés avec Linux.
+- **Appliance et Docker : l'arrêt du service n'attend plus les connexions des agents** : depuis les connexions persistantes (2.158.0), nginx attendait dix secondes que les agents rendent la leur avant d'être arrêté de force ; l'arrêt du service passait de trois à douze secondes, et pendant une mise à jour le service relancé entre-temps échouait jusqu'à quatre fois sur les cinq que le système tolère — au-delà, loco serait resté arrêté. nginx s'arrête maintenant tout de suite, et la mise à jour de l'appliance attend que l'ancien service ait vraiment fini avant de démarrer le nouveau. Les installations Debian, Ubuntu et Red Hat n'étaient pas concernées.
+
 ## 2.158.1 — 2026-11-12
 
 - **Un redémarrage demandé ne se relance plus** : une fois le redémarrage pris par le poste, le bouton *Redémarrer* revenait pendant la minute ou plus qui précède l'arrêt, comme si rien n'avait été demandé — on pouvait en lancer un second. Le poste affiche maintenant « redémarrage en cours », avec un témoin qui tourne, jusqu'à son retour (cinq minutes au plus s'il ne revient pas) ; sur sa fiche, l'entrée *Redémarrer* du menu Plus est remplacée par « Redémarrage en cours » et la tuile Redémarrage le dit aussi.

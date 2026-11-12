@@ -91,9 +91,51 @@ class TestPages(FleetPagesTest):
         for href in re.findall(r'href="([^"]+)"', pager):
             args = urllib.parse.parse_qs(urllib.parse.urlsplit(html.unescape(href)).query)
             self.assertEqual((args["os"], args["q"]), (["windows"], ["pc"]))
-        chips = page.split('class="chips"', 1)[1].split("</nav>", 1)[0]
-        self.assertNotIn("page=", chips)
-        self.assertIn("q=pc", chips)
+        filters = page.split('class="filter-bar"', 1)[1].split('<div class="row">', 1)[0]
+        self.assertNotIn("page=", filters)
+        self.assertIn("q=pc", filters)
+
+    def test_systems_are_offered_by_family_then_by_distribution_without_version(self):
+        add_devices(2, prefix="w11", os_name="Microsoft Windows 11 Professionnel (10.0.26100)")
+        add_devices(1, start=10, prefix="w10", os_name="Windows 10 Pro")
+        add_devices(1, start=20, prefix="srv", os_name="Windows Server 2025 Standard")
+        add_devices(3, start=30, prefix="deb", family="debian", os_name="Debian GNU/Linux 13 (trixie)")
+        add_devices(1, start=40, prefix="deb12", family="debian", os_name="Debian GNU/Linux 12 (bookworm)")
+        add_devices(2, start=50, prefix="ubu", family="debian", os_name="Ubuntu 24.04.1 LTS")
+        add_devices(1, start=60, prefix="rocky", family="rhel", os_name="Rocky Linux 9.4 (Blue Onyx)")
+        add_devices(1, start=70, prefix="tel", family="android", os_name="Android 16 · CPH2581")
+        page = self.get()
+        menu = page.split('aria-label="Filtrer par système"', 1)[1].split("</details>", 1)[0]
+        entries = re.findall(r'<a class="menu-item (sub )?\s*(on)?\s*" role="menuitem" href="([^"]+)">([^<]+)<span class="menu-count">(\d+)</span>', menu)
+        self.assertEqual([(bool(sub), html.unescape(href), label, int(n)) for sub, _on, href, label, n in entries], [
+            (False, "/fleet", "Tous les systèmes", 12),
+            (False, "/fleet?os=windows", "Windows", 4),
+            (True, "/fleet?dist=windows-10", "Windows 10", 1),
+            (True, "/fleet?dist=windows-11", "Windows 11", 2),
+            (True, "/fleet?dist=windows-server-2025", "Windows Server 2025", 1),
+            (False, "/fleet?os=linux", "Linux", 7),
+            (True, "/fleet?dist=debian", "Debian", 4),                    # 12 et 13 ensemble : la distribution, pas la version
+            (True, "/fleet?dist=rocky-linux", "Rocky Linux", 1),
+            (True, "/fleet?dist=ubuntu", "Ubuntu", 2),
+            (False, "/fleet?os=android", "Android", 1),                   # une seule distribution, du même nom : pas de sous-ligne
+        ])
+        self.assertEqual(sorted(hosts(self.get("?dist=debian"))), ["deb-030", "deb-031", "deb-032", "deb12-040"])
+        self.assertEqual(sorted(hosts(self.get("?dist=windows-11"))), ["w11-000", "w11-001"])
+        self.assertEqual(len(hosts(self.get("?os=linux"))), 7)             # Android n'est plus compté avec Linux
+        self.assertEqual(hosts(self.get("?os=android")), ["tel-070"])
+        self.assertEqual(len(hosts(self.get("?dist=inconnue"))), 12)       # valeur inconnue : rien n'est filtré
+        chosen = self.get("?dist=debian&statut=green")
+        self.assertRegex(chosen, r'<summary class="chip on" aria-label="Filtrer par système"><span class="filter-k">Système</span>Debian <b>4</b>')
+        self.assertIn('name="dist" value="debian"', chosen)                # la recherche garde la distribution
+        self.assertIn('href="/fleet?dist=debian"', chosen)                 # « Tous les états » la garde aussi
+        self.assertIn(">Effacer les filtres</a>", chosen)
+        self.assertNotIn(">Effacer les filtres</a>", page)
+
+    def test_without_android_the_family_is_not_offered_and_empty_ones_stay(self):
+        add_devices(1, prefix="deb", family="debian", os_name="Debian GNU/Linux 13 (trixie)")
+        menu = self.get().split('aria-label="Filtrer par système"', 1)[1].split("</details>", 1)[0]
+        self.assertIn('href="/fleet?os=windows">Windows<span class="menu-count">0</span>', menu)
+        self.assertNotIn("Android", menu)
 
     def test_filter_applies_before_cutting_into_pages(self):
         add_devices(60, prefix="win")
@@ -129,7 +171,7 @@ class TestSearch(FleetPagesTest):
         add_devices(2, prefix="lin", family="debian")
         page = self.get("?q=win")
         self.assertRegex(page, r"Tous <b>3</b>")
-        self.assertRegex(page, r"Linux <b>0</b>")
+        self.assertRegex(page, r'Linux<span class="menu-count">0</span>')
 
     def test_no_result_explains_and_offers_to_clear_while_keeping_filters(self):
         add_devices(2)

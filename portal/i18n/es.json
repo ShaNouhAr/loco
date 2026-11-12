@@ -4406,5 +4406,11 @@
  "Mise à jour en cours": "Actualización en curso",
  "le poste redémarre": "el equipo se está reiniciando",
  "Une mise à jour est déjà en cours sur %(dev)s.": "Ya hay una actualización en curso en %(dev)s.",
- "Le redémarrage de %(dev)s est déjà en cours.": "El reinicio de %(dev)s ya está en curso."
+ "Le redémarrage de %(dev)s est déjà en cours.": "El reinicio de %(dev)s ya está en curso.",
+ "Tous les états": "Todos los estados",
+ "Tous les systèmes": "Todos los sistemas",
+ "Filtrer par situation": "Filtrar por situación",
+ "Situation": "Situación",
+ "Toutes les situations": "Todas las situaciones",
+ "Effacer les filtres": "Borrar los filtros"
 }

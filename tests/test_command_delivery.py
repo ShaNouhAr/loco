@@ -363,7 +363,7 @@ class TestNothingTwice(DeliveryTest):
         self.assertIn("mise à jour en attente", actions)                    # le poste ne l'a pas encore prise
         self.assertNotIn(">Mettre à jour</button>", actions)
         self.assertIn("Mises à jour en cours (1)", page)                    # et « Tout mettre à jour » ne le recompte pas
-        self.assertNotIn("Tout mettre à jour", page[page.index('data-refresh="actions"'):page.index('data-refresh="states"')])
+        self.assertNotIn("Tout mettre à jour", page[page.index('data-refresh="actions"'):page.index('data-refresh="filters"')])
         self.assertNotIn('<dialog id="update-all"', page)
         self.assertIn('class="btn primary loading" disabled><span class="spin"></span>Mise à jour en attente', self.card())
         update = next(iter(self.commands()))

@@ -1794,6 +1794,56 @@ def short_os(name):
     return name.replace(" GNU/Linux", "").strip()
 
 
+# Filtre « Système » de la liste : la famille, puis la distribution — pas la version.
+SYSTEM_FAMILIES = (("windows", L_("Windows")), ("linux", L_("Linux")), ("android", L_("Android")))
+
+
+def system_family(dev):
+    return dev["os_family"] if dev["os_family"] in ("windows", "android") else "linux"
+
+
+@functools.lru_cache(maxsize=512)
+def _distribution(family, name):
+    name = re.sub(r"^Microsoft\s+", "", name or "").strip()
+    if family == "android":
+        return "Android"
+    if family == "windows":
+        found = re.match(r"Windows(?: Server)? \d+(?: R2)?", name)        # Windows 10, Windows 11, Windows Server 2025
+        return found.group(0) if found else "Windows"
+    words = []
+    for word in name.replace(" GNU/Linux", "").split():
+        if re.search(r"\d", word) or word.startswith("("):
+            break
+        words.append(word)
+    return " ".join(words) or "Linux"
+
+
+def distribution(dev):
+    """Distribution d'un poste, sans version ni édition : « Windows 11 », « Windows Server 2025 », « Debian », « Ubuntu »,
+    « Rocky Linux », « Android »."""
+    return _distribution(dev["os_family"], dev["os_name"])
+
+
+def _slug(label):
+    return re.sub(r"[^a-z0-9]+", "-", _fold(label)).strip("-")
+
+
+def _systems(rows):
+    """Familles et distributions présentes dans ces lignes, avec le nombre de postes de chacune. Windows et Linux sont
+    toujours proposés ; Android seulement s'il y en a."""
+    found = {}
+    for r in rows:
+        label = distribution(r["d"])
+        item = found.setdefault(system_family(r["d"]), {}).setdefault(_slug(label), {"key": _slug(label), "label": label, "count": 0})
+        item["count"] += 1
+    out = []
+    for key, label in SYSTEM_FAMILIES:
+        dists = sorted(found.get(key, {}).values(), key=lambda d: d["label"].lower())
+        if dists or key != "android":
+            out.append({"key": key, "label": str(label), "count": sum(d["count"] for d in dists), "dists": dists})
+    return out
+
+
 def _group_names():
     names = {}
     for r in db().execute("SELECT m.device_id, g.id, g.name FROM device_group_members m JOIN device_groups g ON g.id=m.group_id "
@@ -1869,15 +1919,23 @@ def fleet():
     query = request.args.get("q", "").strip()[:100]
     rows = _search(rows, query, names)
     counts = {c: sum(1 for r in rows if r["color"] == c) for c in ("green", "orange", "red", "grey")}
-    systems = {"windows": sum(1 for r in rows if r["d"]["os_family"] == "windows")}
-    systems["linux"] = len(rows) - systems["windows"]
+    systems = _systems(rows)
     total = len(rows)
     state = request.args.get("statut", "")
-    system = request.args.get("os", "")
+    system, dist = request.args.get("os", ""), request.args.get("dist", "")
     if state in counts:
         rows = [r for r in rows if r["color"] == state]
-    if system in systems:
-        rows = [r for r in rows if (r["d"]["os_family"] == "windows") == (system == "windows")]
+    # Une distribution choisie l'emporte sur la famille (et dit laquelle c'est) ; une valeur inconnue ne filtre rien.
+    families = {d["key"]: f["key"] for f in systems for d in f["dists"]}
+    if dist in families:
+        system = families[dist]
+        rows = [r for r in rows if _slug(distribution(r["d"])) == dist]
+    else:
+        dist = ""
+        if system in {f["key"] for f in systems}:
+            rows = [r for r in rows if system_family(r["d"]) == system]
+        else:
+            system = ""
     rows, view, extras = _fleet_view(rows, request.args.get("voir", ""))
     rows.sort(key=_urgency)
     shown = len(rows)
@@ -1889,7 +1947,8 @@ def fleet():
     rows = rows[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
     signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                              is_online(r["d"]), [c["state"] for c in r["pending"]], r["rebooting"]] for r in rows],
-                                           counts, systems, extras, shown, to_update, updating]).encode()).hexdigest()[:16]
+                                           counts, [[f["key"], f["count"], [[d["key"], d["count"]] for d in f["dists"]]] for f in systems],
+                                           extras, shown, to_update, updating]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     rows = _enrich(rows, names)
@@ -1903,7 +1962,7 @@ def fleet():
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
                            fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
-                           counts=counts, systems=systems, total=total, state=state, system=system,
+                           counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 

@@ -4406,5 +4406,11 @@
  "Mise à jour en cours": "Update in progress",
  "le poste redémarre": "the device is restarting",
  "Une mise à jour est déjà en cours sur %(dev)s.": "An update is already in progress on %(dev)s.",
- "Le redémarrage de %(dev)s est déjà en cours.": "%(dev)s is already restarting."
+ "Le redémarrage de %(dev)s est déjà en cours.": "%(dev)s is already restarting.",
+ "Tous les états": "All statuses",
+ "Tous les systèmes": "All systems",
+ "Filtrer par situation": "Filter by situation",
+ "Situation": "Situation",
+ "Toutes les situations": "All situations",
+ "Effacer les filtres": "Clear filters"
 }

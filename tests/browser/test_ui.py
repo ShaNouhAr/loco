@@ -232,6 +232,11 @@ class TestFleet(BrowserTest):
     def next_page(self):
         self.page.locator(".fleet-pager a", has_text="Suivante").click()
 
+    def pick(self, filter_label, choice):
+        """Ouvre une liste de filtre et choisit une ligne."""
+        self.page.locator(f"summary[aria-label='{filter_label}']").click()
+        self.page.locator("details.filter[open] .menu-item", has_text=re.compile(r"^\s*" + re.escape(choice))).first.click()
+
     def test_pages_keep_the_most_urgent_first_and_the_filters(self):
         self.page.goto("/fleet")
         expect(self.page.locator("#fleet-table tbody tr")).to_have_count(50)
@@ -239,8 +244,9 @@ class TestFleet(BrowserTest):
         expect(self.page.locator(".fleet-pager")).to_contain_text("Page 1 sur 3 · 127 postes")
         self.next_page()
         expect(self.page).to_have_url(re.compile(r"page=2"))
-        self.page.locator(".chip", has_text="Windows").click()
+        self.pick("Filtrer par système", "Windows")
         expect(self.page).not_to_have_url(re.compile(r"page="))
+        expect(self.page).to_have_url(re.compile(r"os=windows"))
 
     def test_search_finds_a_machine_on_another_page_and_keeps_the_cursor(self):
         self.page.goto("/fleet")
@@ -295,11 +301,29 @@ class TestFleet(BrowserTest):
 
     def test_offline_filter_and_second_click_removes_it(self):
         self.page.goto("/fleet")
-        chip = self.page.locator(".chip", has_text="Hors ligne")
-        chip.click()
+        self.pick("Filtrer par situation", "Hors ligne")
         expect(self.page.locator("#fleet-table tbody tr")).to_have_count(3)
-        self.page.locator(".chip", has_text="Hors ligne").click()
+        expect(self.page.locator("summary[aria-label='Filtrer par situation']")).to_contain_text("Hors ligne")
+        self.pick("Filtrer par situation", "Toutes les situations")
         expect(self.page).not_to_have_url(re.compile(r"voir="))
+
+    def test_the_system_list_filters_by_distribution_and_closes_on_escape(self):
+        add_devices(2, start=500, prefix="deb", family="debian", os_name="Debian GNU/Linux 13 (trixie)")
+        add_devices(1, start=510, prefix="ubu", family="debian", os_name="Ubuntu 24.04.1 LTS")
+        self.page.goto("/fleet")
+        summary = self.page.locator("summary[aria-label='Filtrer par système']")
+        summary.click()
+        menu = self.page.locator("details.filter[open] .menu-list")
+        expect(menu.locator(".menu-item.sub", has_text="Debian")).to_be_visible()
+        self.assertLessEqual(self.overflow(), 0)
+        self.page.keyboard.press("Escape")
+        expect(menu).to_have_count(0)
+        self.pick("Filtrer par système", "Ubuntu")
+        expect(self.page).to_have_url(re.compile(r"dist=ubuntu"))
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(1)
+        expect(summary).to_contain_text("Ubuntu")
+        self.page.get_by_role("link", name="Effacer les filtres").click()
+        expect(self.page.locator("#fleet-table tbody tr")).to_have_count(50)
 
     def test_update_all_says_what_it_really_does(self):
         self.page.goto("/fleet?os=linux")

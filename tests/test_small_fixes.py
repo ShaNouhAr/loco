@@ -87,17 +87,20 @@ class TestViewFilters(FleetTest):
     def test_unknown_filter_is_ignored(self):
         self.assertEqual(len(hosts(self.get("?voir=nimporte"))), 6)
 
-    def test_chips_show_counts_and_a_second_click_removes_the_filter(self):
+    def test_the_situation_list_shows_counts_and_the_choice_made(self):
         page = self.get()
-        self.assertRegex(page, r'href="/fleet\?voir=hors-ligne">Hors ligne <b>3</b>')
-        self.assertRegex(page, r'href="/fleet\?voir=redemarrage">Redémarrage nécessaire <b>1</b>')
-        self.assertRegex(self.get("?voir=hors-ligne"), r'class="chip on" href="/fleet">Hors ligne')
+        self.assertRegex(page, r'href="/fleet\?voir=hors-ligne">Hors ligne<span class="menu-count">3</span>')
+        self.assertRegex(page, r'href="/fleet\?voir=redemarrage">Redémarrage nécessaire<span class="menu-count">1</span>')
+        chosen = self.get("?voir=hors-ligne")
+        self.assertRegex(chosen, r'<summary class="chip on" aria-label="Filtrer par situation"><span class="filter-k">Situation</span>Hors ligne <b>3</b>')
+        self.assertRegex(chosen, r'<a class="menu-item on" role="menuitem" href="/fleet\?voir=hors-ligne">Hors ligne')
+        self.assertRegex(chosen, r'<a class="menu-item " role="menuitem" href="/fleet">Toutes les situations</a>')   # pour l'enlever
 
-    def test_chip_is_hidden_without_machine_unless_selected(self):
+    def test_a_situation_is_hidden_without_machine_unless_selected(self):
         with transaction() as conn:
             conn.execute("UPDATE devices SET reboot_required=0")
-        self.assertNotIn(">Redémarrage nécessaire <b>", self.get())
-        self.assertIn(">Redémarrage nécessaire <b>0</b>", self.get("?voir=redemarrage"))
+        self.assertNotIn(">Redémarrage nécessaire<span", self.get())
+        self.assertIn('>Redémarrage nécessaire<span class="menu-count">0</span>', self.get("?voir=redemarrage"))
 
     def test_other_filters_and_search_keep_it(self):
         page = self.get("?voir=hors-ligne")

@@ -103,7 +103,17 @@ alpine_services() {
     ln -sf "$PREFIX/bin/loco-config" /usr/local/sbin/loco-config
     rc-update add loco default >/dev/null
     rc-update add loco-agent default >/dev/null
-    rc-service loco restart >/dev/null 2>&1 || rc-service loco start >/dev/null \
+    # Arrêt complet, puis démarrage — pas « restart ». Un supervisord encore en service (version d'avant) laisse dix
+    # secondes à nginx pour rendre les connexions persistantes des agents ; relancé pendant ce temps, le nouveau
+    # supervisord échoue (l'ancien tient encore sa place), OpenRC le relance, et au bout de cinq échecs il abandonne :
+    # loco resterait arrêté après une mise à jour. On attend donc que l'ancien ait vraiment fini.
+    rc-service loco stop >/dev/null 2>&1 || true
+    waited=0
+    while [ -f /run/loco-supervisord.pid ] && kill -0 "$(cat /run/loco-supervisord.pid 2>/dev/null)" 2>/dev/null && [ "$waited" -lt 60 ]; do
+        sleep 1
+        waited=$((waited + 1))
+    done
+    rc-service loco start >/dev/null 2>&1 || { rc-service loco zap >/dev/null 2>&1; rc-service loco start >/dev/null; } \
         || die "le service loco ne démarre pas (/var/log/loco/)." "the loco service does not start (/var/log/loco/)." "el servicio loco no arranca (/var/log/loco/)."
     # Lancé depuis l'agent (mise à jour depuis le portail), l'agent se relance seul quand son code change.
     rc-service loco-agent status >/dev/null 2>&1 || rc-service loco-agent start >/dev/null 2>&1 || die "le service loco-agent ne démarre pas (/var/log/loco/agent.log)." "the loco-agent service does not start (/var/log/loco/agent.log)." "el servicio loco-agent no arranca (/var/log/loco/agent.log)."

@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Mon parc") }}{% endblock %}
 {% from "_nav_icons.html" import ui_icon, device_icon %}
-{% macro filter_url(statut=None, os=None, q=None, voir=None, page=None) -%}
-{{ url_for('fleet', group=selected_group.id if selected_group else None,
+{% macro filter_url(statut=None, os=None, q=None, voir=None, page=None, dist=None, group=None) -%}
+{{ url_for('fleet', group=(group or None) if group is not none else (selected_group.id if selected_group else None),
            statut=(statut or None) if statut is not none else (state or None),
-           os=(os or None) if os is not none else (system or None),
+           os=(os or None) if os is not none else ((system or None) if not dist_key else None),
+           dist=(dist or None) if dist is not none else (dist_key or None),
            q=(q or None) if q is not none else (query or None),
            voir=(voir or None) if voir is not none else (view or None), page=page) }}
 {%- endmacro %}
@@ -33,33 +34,62 @@
 
 <div class="stack" data-poll="{{ request.full_path }}" data-poll-kind="reload" data-poll-every="15000" data-signature="{{ signature }}">
   <div class="fleet-filters">
-    <nav class="chips" aria-label="{{ _('Filtrer par état') }}" data-refresh="states">
-      <a class="chip {{ 'on' if not state }}" href="{{ filter_url(statut='') }}">{{ _("Tous") }} <b>{{ total }}</b></a>
-      {% for key, label, cls in [('red', _('À traiter'), 'err'), ('orange', _('Mises à jour en attente'), 'warn'), ('grey', _('État inconnu'), ''), ('green', _('À jour'), 'ok')] %}
-      <a class="chip {{ 'on' if state == key }}" href="{{ filter_url(statut=key) }}" title="{{ {'red': _('%(n)s mises à jour ou plus', n=red_threshold), 'orange': _('de 1 à %(n)s mises à jour', n=red_threshold - 1), 'grey': _('inventaire en cours ou incomplet, sans contact récent, retrait'), 'green': _('aucune mise à jour')}[key] }}"><span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b></a>
-      {% endfor %}
-    </nav>
-    <div class="row">
-      <nav class="chips" aria-label="{{ _('Filtrer par système') }}" data-refresh="systems">
-        <a class="chip {{ 'on' if system == 'windows' }}" href="{{ filter_url(os='' if system == 'windows' else 'windows') }}">{{ _("Windows") }} <b>{{ systems.windows }}</b></a>
-        <a class="chip {{ 'on' if system == 'linux' }}" href="{{ filter_url(os='' if system == 'linux' else 'linux') }}">{{ _("Linux") }} <b>{{ systems.linux }}</b></a>
-        {% for key, label in [('hors-ligne', _('Hors ligne')), ('redemarrage', _('Redémarrage nécessaire'))] if extras[key] or view == key %}
-        <a class="chip {{ 'on' if view == key }}" href="{{ filter_url(voir='' if view == key else key) }}">{{ label }} <b>{{ extras[key] }}</b></a>
-        {% endfor %}
-      </nav>
-      {% if device_groups %}
-      <form method="get" class="inline-form">
-        {% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}{% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}{% if view %}<input type="hidden" name="voir" value="{{ view }}">{% endif %}
-        <select name="group" aria-label="{{ _('Groupe de machines') }}" data-autosubmit>
-          <option value="">{{ _("Tous les groupes") }}</option>
-          {% for group in device_groups %}<option value="{{ group.id }}" {{ 'selected' if selected_group and selected_group.id == group.id }}>{{ group.name }} ({{ group.members }})</option>{% endfor %}
-        </select>
-        <noscript><button class="btn sm">{{ _("Afficher") }}</button></noscript>
-      </form>
+    {# Filtres en listes déroulantes : le bouton dit le filtre et la valeur choisie, la liste donne les choix et leur
+       nombre de postes. Zone rafraîchie en place (jamais sous une liste ouverte). #}
+    {% set states = [('red', _('À traiter'), 'err'), ('orange', _('Mises à jour en attente'), 'warn'), ('grey', _('État inconnu'), ''), ('green', _('À jour'), 'ok')] %}
+    {% set views = [('hors-ligne', _('Hors ligne')), ('redemarrage', _('Redémarrage nécessaire'))] %}
+    <div class="filter-bar" data-refresh="filters">
+      <details class="menu filter">
+        <summary class="chip {{ 'on' if state }}" aria-label="{{ _('Filtrer par état') }}"><span class="filter-k">{{ _("État") }}</span>{% for key, label, cls in states if state == key %}<span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b>{% else %}{{ _("Tous") }} <b>{{ total }}</b>{% endfor %}</summary>
+        <div class="menu-list menu-left" role="menu">
+          <a class="menu-item {{ 'on' if not state }}" role="menuitem" href="{{ filter_url(statut='') }}">{{ _("Tous les états") }}<span class="menu-count">{{ total }}</span></a>
+          {% for key, label, cls in states %}
+          <a class="menu-item {{ 'on' if state == key }}" role="menuitem" href="{{ filter_url(statut=key) }}" title="{{ {'red': _('%(n)s mises à jour ou plus', n=red_threshold), 'orange': _('de 1 à %(n)s mises à jour', n=red_threshold - 1), 'grey': _('inventaire en cours ou incomplet, sans contact récent, retrait'), 'green': _('aucune mise à jour')}[key] }}"><span class="st {{ cls }}"></span>{{ label }}<span class="menu-count">{{ counts[key] }}</span></a>
+          {% endfor %}
+        </div>
+      </details>
+      {# Système : la famille (Windows, Linux, Android), ou l'une de ses distributions — sans numéro de version. #}
+      <details class="menu filter">
+        <summary class="chip {{ 'on' if system }}" aria-label="{{ _('Filtrer par système') }}"><span class="filter-k">{{ _("Système") }}</span>{% if system %}{% for f in systems if f.key == system %}{% if dist_key %}{% for d in f.dists if d.key == dist_key %}{{ d.label }} <b>{{ d.count }}</b>{% endfor %}{% else %}{{ f.label }} <b>{{ f.count }}</b>{% endif %}{% endfor %}{% else %}{{ _("Tous") }}{% endif %}</summary>
+        <div class="menu-list menu-left" role="menu">
+          <a class="menu-item {{ 'on' if not system }}" role="menuitem" href="{{ filter_url(os='', dist='') }}">{{ _("Tous les systèmes") }}<span class="menu-count">{{ total }}</span></a>
+          {% for f in systems %}
+          <a class="menu-item {{ 'on' if system == f.key and not dist_key }}" role="menuitem" href="{{ filter_url(os=f.key, dist='') }}">{{ f.label }}<span class="menu-count">{{ f.count }}</span></a>
+          {% if f.dists|length > 1 or (f.dists and f.dists[0].label != f.label) %}
+          {% for d in f.dists %}<a class="menu-item sub {{ 'on' if dist_key == d.key }}" role="menuitem" href="{{ filter_url(os='', dist=d.key) }}">{{ d.label }}<span class="menu-count">{{ d.count }}</span></a>
+          {% endfor %}
+          {% endif %}
+          {% endfor %}
+        </div>
+      </details>
+      {% if extras['hors-ligne'] or extras['redemarrage'] or view %}
+      <details class="menu filter">
+        <summary class="chip {{ 'on' if view }}" aria-label="{{ _('Filtrer par situation') }}"><span class="filter-k">{{ _("Situation") }}</span>{% for key, label in views if view == key %}{{ label }} <b>{{ extras[key] }}</b>{% else %}{{ _("Toutes") }}{% endfor %}</summary>
+        <div class="menu-list menu-left" role="menu">
+          <a class="menu-item {{ 'on' if not view }}" role="menuitem" href="{{ filter_url(voir='') }}">{{ _("Toutes les situations") }}</a>
+          {% for key, label in views if extras[key] or view == key %}
+          <a class="menu-item {{ 'on' if view == key }}" role="menuitem" href="{{ filter_url(voir=key) }}">{{ label }}<span class="menu-count">{{ extras[key] }}</span></a>
+          {% endfor %}
+        </div>
+      </details>
       {% endif %}
+      {% if device_groups %}
+      <details class="menu filter">
+        <summary class="chip {{ 'on' if selected_group }}" aria-label="{{ _('Groupe de machines') }}"><span class="filter-k">{{ _("Groupe") }}</span>{{ selected_group.name if selected_group else _("Tous") }}</summary>
+        <div class="menu-list menu-left" role="menu">
+          <a class="menu-item {{ 'on' if not selected_group }}" role="menuitem" href="{{ filter_url(group='') }}">{{ _("Tous les groupes") }}</a>
+          {% for group in device_groups %}
+          <a class="menu-item {{ 'on' if selected_group and selected_group.id == group.id }}" role="menuitem" href="{{ filter_url(group=group.id) }}">{{ group.name }}<span class="menu-count">{{ group.members }}</span></a>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+      {% if state or system or view or selected_group %}<a class="filter-clear" href="{{ url_for('fleet', q=query or None) }}">{{ _("Effacer les filtres") }}</a>{% endif %}
+    </div>
+    <div class="row">
       {% if total or query %}
       <form method="get" class="inline-form" data-search-form>
-        {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}{% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}{% if view %}<input type="hidden" name="voir" value="{{ view }}">{% endif %}
+        {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}{% if state %}<input type="hidden" name="statut" value="{{ state }}">{% endif %}{% if dist_key %}<input type="hidden" name="dist" value="{{ dist_key }}">{% elif system %}<input type="hidden" name="os" value="{{ system }}">{% endif %}{% if view %}<input type="hidden" name="voir" value="{{ view }}">{% endif %}
         <input type="search" name="q" value="{{ query }}" class="search-sm" placeholder="{{ _('Rechercher un poste') }}" aria-label="{{ _('Rechercher un poste') }}">
       </form>
       {% endif %}
@@ -160,7 +190,7 @@
     {% elif query and not total %}
     <div class="empty">{{ _("Aucun poste ne correspond à la recherche.") }} <a href="{{ filter_url(q='') }}">{{ _("Effacer la recherche") }}</a></div>
     {% elif total %}
-    <div class="empty">{{ _("Aucun poste dans cet état.") }} <a href="{{ filter_url(statut='', os='', voir='') }}">{{ _("Tout afficher") }}</a></div>
+    <div class="empty">{{ _("Aucun poste dans cet état.") }} <a href="{{ filter_url(statut='', os='', dist='', voir='') }}">{{ _("Tout afficher") }}</a></div>
     {% else %}
     <div class="empty">{% if selected_group %}{{ _("Aucun appareil dans ce groupe.") }}{% else %}{{ _("Aucun poste pour l'instant") }}{% if can('fleet.enroll') %} : <a href="{{ url_for('enrollment') }}">{{ _("ajoutez-en un") }}</a>{% endif %}.{% endif %}</div>
     {% endif %}
