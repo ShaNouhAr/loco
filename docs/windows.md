@@ -53,7 +53,7 @@ ses journaux et ses certificats ; la configuration de l'installateur reste rése
 
 Les paramètres omis lors d'une relance reprennent la configuration existante. Les règles de pare-feu
 du groupe `loco` sont limitées au programme nginx et aux réseaux configurés. Le portail applicatif
-8089 reste en boucle locale. Le cache APT écoute sur 3142 ; Windows Update utilise 80 et 443.
+8089 reste en boucle locale, comme le port voisin 8090 du relais des sessions distantes. Le cache APT écoute sur 3142 ; Windows Update utilise 80 et 443.
 L'installateur refuse les ports déjà occupés, notamment par IIS/HTTP.sys. Libérer ces ports ou utiliser
 `-NoWU` si le cache Windows Update n'est pas nécessaire.
 

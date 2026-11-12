@@ -26,10 +26,55 @@ class RemoteClient(private val context: Context, private val store: Store, priva
     private var lastActivity = 0L
     private var failures = 0
     private val stats = Rfb.Stats("échanges")
+    // Canal persistant quand loco l'offre (RelaySocket), sinon allers-retours HTTPS comme avant. Canal absent ou rompu :
+    // nouvel essai plus tard, de plus en plus rarement (30 s à 10 min).
+    private var relay: RelaySocket? = null
+    private var relayRetryAt = 0L
+    private var relayRetryIn = 30_000L
+    private val wakeLock = Object()
+    private var woken = false
+
+    /** Quelque chose à échanger tout de suite : loco prévient, ou une session a écrit. */
+    private fun signal() {
+        synchronized(wakeLock) { woken = true; wakeLock.notifyAll() }
+    }
+
+    private fun dropRelay() {
+        relay?.close()
+        relay = null
+        relayRetryAt = System.currentTimeMillis() + relayRetryIn
+    }
+
+    /** Un échange, par le canal persistant s'il est ouvert. Canal rompu : le même échange repart par HTTPS (rien n'est
+     *  rejoué, les paquets sont numérotés). */
+    private fun send(body: String): String {
+        val server = store.server
+        val token = store.token
+        relay?.let { if (it.broken || it.key != "$server\n$token") dropRelay() }
+        if (relay == null && System.currentTimeMillis() >= relayRetryAt) {
+            try {
+                relay = RelaySocket(server, token, store.caPem, ::signal)
+                relayRetryIn = 30_000L
+            } catch (e: Exception) {
+                relayRetryAt = System.currentTimeMillis() + relayRetryIn
+                relayRetryIn = minOf(600_000L, relayRetryIn * 2)
+            }
+        }
+        relay?.let { link ->
+            try {
+                return link.exchange(body, 15000)
+            } catch (e: Net.HttpError) {
+                throw e
+            } catch (e: Exception) {
+                dropRelay()
+            }
+        }
+        return Net.postJson("$server/agent/api/remote", body, store.caPem, token, timeoutMs = 20000)
+    }
 
     private inner class Session(val id: String, val kind: String) {
         val toAgent = Pipe()         // navigateur -> agent (messages RFB, frappes, requêtes de fichiers)
-        val toBrowser = Pipe()       // agent -> navigateur (écran encodé, sortie du terminal, réponses)
+        val toBrowser = Pipe().also { it.onData = ::signal }   // agent -> navigateur (écran encodé, sortie du terminal, réponses)
         var ack = 0L                 // dernier paquet entrant consommé
         var seq = 0L                 // compteur sortant
         var pending = ByteArray(0)   // un seul envoi en vol, gardé jusqu'à l'acquittement
@@ -93,7 +138,7 @@ class RemoteClient(private val context: Context, private val store: Store, priva
 
         val started = System.currentTimeMillis()
         val body = payload.toString()
-        val resp = JSONObject(Net.postJson("${store.server}/agent/api/remote", body, store.caPem, store.token, timeoutMs = 20000))
+        val resp = JSONObject(send(body))
         if (sessions.isNotEmpty()) stats.add(body.length, System.currentTimeMillis() - started)
         val descriptors = resp.optJSONArray("sessions") ?: JSONArray()
         val seen = HashMap<String, JSONObject>()
@@ -146,9 +191,13 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         if (busy || opened || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
         // Aucune session : cadence demandée par le serveur — courte quand la fiche de l'appareil est ouverte dans le
         // portail, pour qu'une session s'ouvre sans attendre —, jamais plus lente qu'avant (3 s).
+        if (sessions.isEmpty() && relay?.broken == false) return 20_000        // canal persistant : loco prévient
         if (sessions.isEmpty()) return (resp.optDouble("interval", 3.0).let { if (it.isNaN()) 3.0 else it } * 1000).toLong().coerceIn(300L, 3000L)
         // Des octets attendent encore (image plus grosse qu'un envoi) : enchaîner sans pause.
         if (sessions.values.any { it.toBrowser.available() > 0 }) return 0
+        // Canal persistant : loco prévient et la sortie d'une session réveille ; il ne reste qu'un signe de vie (loco
+        // ferme une session après 30 s sans nouvelles de l'appareil).
+        if (relay?.broken == false) return if (busy) 0 else 10_000
         val idle = now - lastActivity
         return when {
             idle < 4000 -> 10
@@ -166,7 +215,7 @@ class RemoteClient(private val context: Context, private val store: Store, priva
                 continue
             }
             val delay = try {
-                exchange()
+                exchange().also { failures = 0 }
             } catch (e: Net.HttpError) {
                 android.util.Log.e("loco-remote", "HTTP ${e.code} : ${e.body.take(120)}")
                 if (e.code == 401) { stop(); return }
@@ -177,17 +226,23 @@ class RemoteClient(private val context: Context, private val store: Store, priva
                 // (rien n'est rejoué, les paquets sont numérotés). Ensuite seulement, espacer.
                 if (++failures <= 2) 150 else 3000
             }
-            if (delay < 150) failures = 0
-            try { Thread.sleep(delay) } catch (_: InterruptedException) {}
+            // Attente écourtée dès que loco prévient ou qu'une session a quelque chose à envoyer.
+            synchronized(wakeLock) {
+                if (!woken && delay > 0) try { wakeLock.wait(delay) } catch (_: InterruptedException) {}
+                woken = false
+            }
         }
+        dropRelay()
     }
 
     fun stop() {
         running = false
         pause()
+        signal()
     }
 
     private fun pause() {
+        dropRelay()
         for (s in sessions.values) s.close()
         sessions.clear()
         inUse = false

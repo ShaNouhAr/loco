@@ -1871,6 +1871,16 @@ class RemoteProcess:
         return {"id": self.sid, "ack": self.ack, "seq": self.seq,
                 "data": base64.b64encode(self.pending).decode(), "state": self.state, "error": self.error, "consent": self.consent}
 
+    def waits(self):
+        """Descripteurs dont la lecture possible appelle un échange : sortie du processus (rien à attendre tant que le
+        paquet précédent n'est pas acquitté), réponse à la demande d'accord."""
+        fds = []
+        if self.state == "active" and self.process is not None and not self.pending and getattr(self, "reader", None) is not None:
+            fds.append(self.reader)
+        if self.consent_pipe is not None:
+            fds.append(self.consent_pipe)
+        return fds
+
     def read_consent(self):
         if self.consent_pipe is None:
             return
@@ -1948,6 +1958,208 @@ class RemoteTransport:
             raise
 
 
+class RemoteSocket:
+    """Connexion persistante au relais du serveur (WebSocket, RFC 6455, sur la même liaison TLS vérifiée que les
+    échanges HTTPS) : le serveur y prévient l'agent de ce qui arrive. Messages texte entiers, sans extension."""
+    GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+    LIMIT = 8 * 1024 * 1024
+
+    def __init__(self, server, token):
+        parsed = urllib.parse.urlsplit(server)
+        if parsed.scheme not in ("https", "http"):
+            raise ValueError(t("Adresse du serveur invalide", "Invalid server address", "Dirección del servidor no válida"))
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        self.buffer, self.parts, self.sock = b"", [], socket.create_connection((parsed.hostname, port), timeout=10)
+        try:
+            if parsed.scheme == "https":
+                self.sock = context().wrap_socket(self.sock, server_hostname=parsed.hostname)
+            key = base64.b64encode(os.urandom(16)).decode()
+            self.sock.sendall(("GET %s/agent/relay HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                               "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\nAuthorization: Bearer %s\r\n"
+                               "User-Agent: loco-client/%s\r\n\r\n"
+                               % (parsed.path.rstrip("/"), parsed.netloc, key, token, VERSION)).encode("ascii"))
+            head = b""
+            while b"\r\n\r\n" not in head:
+                chunk = self.sock.recv(4096)
+                if not chunk or len(head) > 16384:
+                    raise OSError("relais : réponse incomplète")
+                head += chunk
+            head, _, self.buffer = head.partition(b"\r\n\r\n")
+            lines = head.decode("latin-1").split("\r\n")
+            headers = dict((name.strip().lower(), value.strip()) for name, _, value in (line.partition(":") for line in lines[1:]))
+            expected = base64.b64encode(hashlib.sha1((key + self.GUID).encode()).digest()).decode()
+            if lines[0].split(" ")[1:2] != ["101"] or headers.get("sec-websocket-accept") != expected:
+                raise OSError("relais indisponible (%s)" % lines[0][:60])
+        except BaseException:
+            self.close()
+            raise
+
+    def fileno(self):
+        return self.sock.fileno()
+
+    def close(self):
+        if self.sock is not None:
+            try:
+                self.sock.close()
+            except OSError:
+                pass
+            self.sock = None
+
+    @staticmethod
+    def mask(data, key):
+        if not data:
+            return b""
+        pad = (key * (len(data) // 4 + 1))[:len(data)]
+        return (int.from_bytes(data, "big") ^ int.from_bytes(pad, "big")).to_bytes(len(data), "big")
+
+    def frame(self, opcode, data):
+        key, size = os.urandom(4), len(data)
+        head = bytes([0x80 | opcode]) + (bytes([0x80 | size]) if size < 126 else bytes([0x80 | 126]) + struct.pack("!H", size)
+                                         if size < 65536 else bytes([0x80 | 127]) + struct.pack("!Q", size))
+        self.sock.sendall(head + key + self.mask(data, key))
+
+    def send(self, data):
+        self.frame(1, data)
+
+    def parse(self):
+        """Message entier déjà reçu, ou None. Sert les pings ; une fermeture lève OSError."""
+        while True:
+            buffer = self.buffer
+            if len(buffer) < 2:
+                return None
+            size, offset = buffer[1] & 0x7F, 2
+            if size == 126:
+                if len(buffer) < 4:
+                    return None
+                size, offset = struct.unpack("!H", buffer[2:4])[0], 4
+            elif size == 127:
+                if len(buffer) < 10:
+                    return None
+                size, offset = struct.unpack("!Q", buffer[2:10])[0], 10
+            masked = buffer[1] & 0x80
+            if size > self.LIMIT or sum(len(part) for part in self.parts) + size > self.LIMIT:
+                raise OSError("relais : message trop volumineux")
+            end = offset + (4 if masked else 0) + size
+            if len(buffer) < end:
+                return None
+            data = buffer[end - size:end]
+            if masked:
+                data = self.mask(data, buffer[offset:offset + 4])
+            self.buffer = buffer[end:]
+            opcode, fin = buffer[0] & 0x0F, buffer[0] & 0x80
+            if opcode == 8:
+                raise OSError("relais : connexion fermée par le serveur")
+            if opcode == 9:
+                self.frame(10, data)
+            elif opcode <= 2:
+                self.parts.append(data)
+                if fin:
+                    message, self.parts = b"".join(self.parts), []
+                    return message
+
+    def recv(self, timeout):
+        """Message suivant, ou None si rien d'entier n'est arrivé dans le délai."""
+        deadline = time.monotonic() + timeout
+        while True:
+            message = self.parse()
+            if message is not None:
+                return message
+            if not (hasattr(self.sock, "pending") and self.sock.pending()):
+                remaining = deadline - time.monotonic()
+                if not select.select([self.sock], [], [], max(0.0, remaining))[0]:
+                    return None
+            chunk = self.sock.recv(262144)
+            if not chunk:
+                raise OSError("relais : connexion fermée")
+            self.buffer += chunk
+
+
+class RemoteLink:
+    """Échanges du canal distant. Par connexion persistante quand le serveur l'offre : il prévient alors de ce qui arrive
+    et l'agent ne fait plus aucun relevé à vide ; sinon par allers-retours HTTPS, comme avant. Le protocole est le même
+    dans les deux cas : une session passe de l'un à l'autre sans coupure."""
+    def __init__(self):
+        self.http, self.socket, self.key, self.woken = RemoteTransport(), None, None, False
+        self.retry_at, self.retry_in = 0.0, 30
+
+    @property
+    def persistent(self):
+        return self.socket is not None
+
+    def drop(self):
+        if self.socket is not None:
+            self.socket.close()
+        self.socket, self.woken = None, False
+
+    def close(self):
+        self.drop()
+        self.http.close()
+
+    def exchange(self, server, data, token):
+        key = (server, token, os.stat(CA).st_mtime_ns if os.path.isfile(CA) else None)
+        if self.key != key:
+            self.drop()
+            self.key, self.retry_at, self.retry_in = key, 0.0, 30
+        if self.socket is None and time.monotonic() >= self.retry_at:
+            try:
+                self.socket, self.retry_in = RemoteSocket(server, token), 30
+            except (OSError, ValueError):
+                # Serveur sans relais, ou relais injoignable : nouvel essai de plus en plus espacé (30 s à 10 min).
+                self.retry_at, self.retry_in = time.monotonic() + self.retry_in, min(600, self.retry_in * 2)
+        if self.socket is not None:
+            try:
+                self.socket.send(json.dumps(data).encode())
+                deadline = time.monotonic() + 15
+                while True:
+                    raw = self.socket.recv(max(0.0, deadline - time.monotonic()))
+                    if raw is None:
+                        raise OSError("relais : réponse attendue en vain")
+                    answer = json.loads(raw.decode("utf-8"))
+                    if answer.get("wake"):
+                        self.woken = True
+                    elif "status" in answer:                 # refus du portail : même erreur que par HTTPS
+                        raise urllib.error.HTTPError(server, int(answer["status"]), "relais", None, None)
+                    else:
+                        return answer
+            except urllib.error.HTTPError:
+                raise
+            except (OSError, ValueError):
+                # Canal rompu : le même échange repart par HTTPS (rien n'est rejoué, les paquets sont numérotés).
+                self.drop()
+                self.retry_at = time.monotonic() + self.retry_in
+        return self.http.exchange(server, data, token)
+
+    def wait(self, delay, fds, stopping):
+        """Attend au plus delay secondes. Avec le canal persistant, revient dès que le serveur prévient ou qu'un
+        processus de session a quelque chose à dire."""
+        until = time.monotonic() + delay
+        while not stopping[0]:
+            remaining = until - time.monotonic()
+            if remaining <= 0:
+                return
+            if self.socket is None:
+                time.sleep(min(0.1, remaining))
+                continue
+            if self.woken:
+                self.woken = False
+                return
+            try:
+                if self.socket.buffer or (hasattr(self.socket.sock, "pending") and self.socket.sock.pending()):
+                    ready = [self.socket]
+                else:
+                    ready = select.select([self.socket] + fds, [], [], min(1.0, remaining))[0]
+                if self.socket in ready:
+                    raw = self.socket.recv(0)
+                    if raw is not None and json.loads(raw.decode("utf-8")).get("wake"):
+                        return
+                if any(fd in ready for fd in fds):
+                    return
+            except (OSError, ValueError):
+                self.drop()
+                self.retry_at = time.monotonic() + self.retry_in
+                return
+
+
 def remote_idle_delay(idle):
     """Session ouverte mais silencieuse : relevé rapide juste après une activité, plus espacé ensuite (bien moins de
     requêtes pour une session laissée ouverte ; le premier caractère après une longue pause arrive en ≤ 0,25 s)."""
@@ -1974,7 +2186,7 @@ def remote_service():
         except BlockingIOError:
             return 0
         sessions, last_ok, last_activity, last_checkin = {}, time.monotonic(), time.monotonic(), 0.0
-        transport = RemoteTransport()
+        link = RemoteLink()
         live, sampler, sampled, live_every = False, LiveSampler(), 0.0, 2.0
         loaded = os.stat(PROGRAM)
         signature = (loaded.st_ino, loaded.st_mtime_ns, loaded.st_size)
@@ -1994,7 +2206,7 @@ def remote_service():
                     # fiche est ouverte ou qu'une session tourne) : la moyenne porte toujours sur la même durée.
                     if live and time.monotonic() - sampled >= live_every - 0.15:
                         payload["metrics"], sampled = sampler.sample(), time.monotonic()
-                    answer = transport.exchange(conf["server"], payload, conf["token"])
+                    answer = link.exchange(conf["server"], payload, conf["token"])
                     last_ok = time.monotonic()
                     if answer.get("checkin") and time.monotonic() - last_checkin > 4:
                         # Le serveur signale une action en attente : déclencher tout de suite le contact principal
@@ -2025,7 +2237,13 @@ def remote_service():
                     busy = any(item.pending for item in sessions.values()) or any(d.get("packets") for d in descriptors.values())
                     if busy:
                         last_activity = time.monotonic()
-                    delay = (0 if busy else remote_idle_delay(time.monotonic() - last_activity)) if sessions else remote_rest_delay(answer)
+                    if link.persistent:
+                        # Le serveur prévient et la sortie d'un processus réveille : plus de relevé à vide, seulement un
+                        # signe de vie (la session est fermée par le serveur après 30 s sans nouvelles de l'agent).
+                        stuck = any(item.incoming for item in sessions.values())
+                        delay = (0 if busy else 0.025 if stuck else 10) if sessions else 20
+                    else:
+                        delay = (0 if busy else remote_idle_delay(time.monotonic() - last_activity)) if sessions else remote_rest_delay(answer)
                     if live:                                   # fiche regardée : un relevé toutes les 2 s
                         delay = min(delay, live_every)
                 except (OSError, ValueError, KeyError) as e:
@@ -2038,11 +2256,9 @@ def remote_service():
                             for item in sessions.values():
                                 item.close()
                             sessions.clear()
-                until = time.monotonic() + delay
-                while not stopping[0] and time.monotonic() < until:
-                    time.sleep(min(0.1, max(0, until - time.monotonic())))
+                link.wait(delay, [fd for item in sessions.values() for fd in item.waits()], stopping)
         finally:
-            transport.close()
+            link.close()
             for item in sessions.values():
                 item.close()
     return 0

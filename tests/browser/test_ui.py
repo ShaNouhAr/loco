@@ -7,11 +7,15 @@ la page, erreurs de la console. Ils demandent Playwright et Chromium, installés
 Sans Chromium sur la machine, LOCO_BROWSER_CDP désigne un navigateur déjà lancé et LOCO_BROWSER_PORT le port du portail,
 que ce navigateur doit pouvoir joindre sur 127.0.0.1.
 """
+import base64
 import datetime
 import hashlib
 import json
 import logging
 import os
+import select
+import socket
+import socketserver
 from pathlib import Path
 import re
 import sys
@@ -30,7 +34,7 @@ import test_portal as fixture  # noqa: E402  (crée la base temporaire et le com
 from test_fleet import Agent, LINUX, WINDOWS, device  # noqa: E402
 from test_fleet_pages import add_devices  # noqa: E402
 import locoadmin  # noqa: E402
-from loco import alerts, app, config, dashboard, deployments, wake  # noqa: E402
+from loco import alerts, app, config, dashboard, deployments, relay, wake  # noqa: E402
 from loco.db import transaction  # noqa: E402
 
 ARTIFACTS = ROOT / "test-results" / "browser"
@@ -43,9 +47,42 @@ LONG = 30000            # ms : ce qui dépend d'un rafraîchissement en direct (
 logging.disable(logging.INFO)
 
 
-server = make_server("127.0.0.1", PORT, app, threaded=True)
-BASE = f"http://127.0.0.1:{server.server_port}"
+server = make_server("127.0.0.1", 0, app, threaded=True)
 threading.Thread(target=server.serve_forever, daemon=True).start()
+sessions_relay = relay.Relay()
+assert sessions_relay.start(0)
+
+
+class Front(socketserver.BaseRequestHandler):
+    """Le rôle de nginx devant le portail : les connexions persistantes vont au relais, tout le reste au portail."""
+    def handle(self):
+        head = b""
+        while b"\r\n" not in head and len(head) < 8192:
+            chunk = self.request.recv(8192)
+            if not chunk:
+                return
+            head += chunk
+        path = head.split(b" ", 2)[1] if head.count(b" ") >= 2 else b""
+        persistent = path == b"/agent/relay" or re.match(rb"^/fleet/session/[0-9a-f]+/ws$", path)
+        with socket.create_connection(("127.0.0.1", sessions_relay.port if persistent else server.server_port)) as backend:
+            backend.sendall(head)
+            pair = {self.request: backend, backend: self.request}
+            while True:
+                for ready in select.select(list(pair), [], [], 60)[0]:
+                    data = ready.recv(65536)
+                    if not data:
+                        return
+                    pair[ready].sendall(data)
+
+
+class FrontServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+front = FrontServer(("127.0.0.1", PORT), Front)
+threading.Thread(target=front.serve_forever, daemon=True).start()
+BASE = f"http://127.0.0.1:{front.server_address[1]}"
 
 
 def stamp(hours=0):
@@ -576,6 +613,64 @@ class TestWake(BrowserTest):
             expect(self.page.locator(".head, .device-head").get_by_role("button", name="Réveiller")).to_have_count(0)
             self.assertLessEqual(self.overflow(), 0)
             self.assertTrue(wired["id"])
+
+
+class TestRelayChannel(BrowserTest):
+    """Session distante par le canal persistant : le serveur pousse, le navigateur n'interroge plus."""
+
+    def polls(self):
+        return self.page.evaluate("performance.getEntriesByType('resource').filter(e => e.name.endsWith('/io')).length")
+
+    def tearDown(self):
+        # xterm.js mesure ses caractères avec des styles posés en ligne, que la politique de contenu refuse sans gêner
+        # l'affichage (rendu DOM de ce navigateur sans carte graphique) : bruit connu de la page du terminal.
+        self.problems[:] = [p for p in self.problems if "Applying inline style violates" not in p]
+        super().tearDown()
+
+    def test_the_terminal_follows_the_agent_without_polling(self):
+        agent = Agent(dict(LINUX, hostname="poste-canal"), "192.168.43.79", uid=hashlib.sha256(b"poste-canal").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        self.page.goto(f"/fleet/{dev['id']}")
+        self.page.locator(".device-actions form", has=self.page.locator("input[name=kind][value=terminal]")).first.locator("button").first.click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+        sid = self.page.url.rsplit("/", 1)[1].split("?")[0]
+        expect(self.page.locator("#remote-overlay")).to_be_visible()
+        self.page.wait_for_timeout(1500)                                            # le canal s'ouvre, les relevés HTTPS s'arrêtent
+        before = self.polls()
+        self.page.wait_for_timeout(2000)
+        self.assertLessEqual(self.polls() - before, 1, "le navigateur interroge encore alors que le canal est ouvert")
+        # L'agent prend la session et écrit : la page l'apprend sans rien demander.
+        hello = base64.b64encode(b"bonjour du poste\r\n").decode()
+        agent.post("/agent/api/remote", {"sessions": [{"id": sid, "state": "active", "seq": 1, "ack": 0, "data": hello}]}, agent.token)
+        expect(self.page.locator("#remote-overlay")).to_be_hidden(timeout=3000)
+        expect(self.page.locator("#remote-status")).to_contain_text("Connecté")
+        # Une frappe part par le canal et attend l'agent en base.
+        self.page.locator("#remote-screen textarea").focus()
+        self.page.keyboard.type("ls")
+        deadline, typed = time.time() + 5, b""
+        while time.time() < deadline and typed != b"ls":
+            answer = agent.post("/agent/api/remote", {"sessions": [{"id": sid, "state": "active", "seq": 1, "ack": 0, "data": ""}]}, agent.token).get_json()
+            typed = b"".join(base64.b64decode(p["data"]) for p in answer["sessions"][0]["packets"])
+            time.sleep(0.1)
+        self.assertEqual(typed, b"ls")
+        self.assertLessEqual(self.polls() - before, 2)
+
+    def test_without_the_relay_the_session_still_works(self):
+        agent = Agent(dict(LINUX, hostname="poste-repli"), "192.168.43.80", uid=hashlib.sha256(b"poste-repli").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        self.page.route(re.compile(r"/fleet/session/[0-9a-f]+/ws$"), lambda route: route.abort())
+        self.page.add_init_script("window.WebSocket = function () { throw new Error('canal refusé'); };")
+        self.page.goto(f"/fleet/{dev['id']}")
+        self.page.locator(".device-actions form", has=self.page.locator("input[name=kind][value=terminal]")).first.locator("button").first.click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+        sid = self.page.url.rsplit("/", 1)[1].split("?")[0]
+        hello = base64.b64encode(b"bonjour\r\n").decode()
+        agent.post("/agent/api/remote", {"sessions": [{"id": sid, "state": "active", "seq": 1, "ack": 0, "data": hello}]}, agent.token)
+        expect(self.page.locator("#remote-overlay")).to_be_hidden(timeout=5000)
+        self.page.wait_for_timeout(1500)
+        self.assertGreater(self.polls(), 5)                                         # allers-retours HTTPS, comme avant
 
 
 class TestRemoteConsent(BrowserTest):

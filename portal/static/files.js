@@ -23,6 +23,8 @@ const confirmDialog = window.lrConfirm || ((t, x, ok) => Promise.resolve(window.
 // ---------------------------------------------------------------- transport (octets relayés, acquittés)
 let io = null, running = false, inputSeq = 0, outputAck = 0, queue = new Uint8Array(0), pending = null;
 let inFlight = false, failures = 0, quiet = 0, pollTimer = null, nextId = 1, inbuf = new Uint8Array(0);
+// Canal persistant quand le serveur l'offre (relay-link.js) : ce qu'il pousse est gardé ici jusqu'au prochain passage.
+let link = null, pushed = [];
 const waiting = new Map();          // identifiant de requête -> {resolve, reject}
 
 function schedulePoll(delay = 0) {
@@ -69,31 +71,45 @@ function feed(chunk) {
     else r.reject(new Error(header.error || tr('Opération refusée par le poste.')));
   }
 }
+// Une réponse du serveur, demandée ou poussée. Renvoie false si la session est terminée.
+function absorb(d) {
+  if (pending && d.ack >= pending.seq) pending = null;
+  for (const packet of d.packets) { if (packet.seq <= outputAck) continue; feed(bytes(packet.data)); outputAck = packet.seq; }
+  if (d.state === 'closed' && !d.packets.length) { stop(d.error || tr('Session fermée.')); return false; }
+  return true;
+}
 async function poll() {
   if (!running || inFlight) return;
   inFlight = true; let busy = false;
-  if (!pending && queue.length) {
-    const data = queue.subarray(0, 64 * 1024); queue = queue.slice(data.length);
-    pending = { seq: ++inputSeq, data: base64(data) };
-  }
-  const body = new URLSearchParams({ csrf: root.dataset.csrf, ack: String(outputAck) });
-  if (pending) { body.set('seq', String(pending.seq)); body.set('data', pending.data); }
   try {
-    const response = await fetch(io, { method: 'POST', body, credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(20000) });
-    if ([401, 403, 404, 409, 413].includes(response.status)) { stop(tr('Session de fichiers indisponible ou accès révoqué.'), true); return; }
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const d = await response.json();
+    // (Un élément vide demande seulement un échange : canal tout juste ouvert, refus poussé.)
+    while (pushed.length) {
+      const d = pushed.shift();
+      if (!d) continue;
+      busy = busy || d.packets.length > 0;
+      if (!absorb(d)) return;
+    }
+    if (!pending && queue.length) {
+      const data = queue.subarray(0, 64 * 1024); queue = queue.slice(data.length);
+      pending = { seq: ++inputSeq, data: base64(data) };
+    }
+    const body = new URLSearchParams({ csrf: root.dataset.csrf, ack: String(outputAck) });
+    if (pending) { body.set('seq', String(pending.seq)); body.set('data', pending.data); }
+    const { status, data: d } = await (link ? link.exchange(body, 20000) : fetch(io, { method: 'POST', body,
+      credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(20000) })
+      .then(async r => ({ status: r.status, data: r.ok ? await r.json() : null })));
+    if ([401, 403, 404, 409, 413].includes(status)) { stop(tr('Session de fichiers indisponible ou accès révoqué.'), true); return; }
+    if (status !== 200) throw new Error('HTTP ' + status);
     if (!running) return;
-    failures = 0; busy = d.packets.length > 0;
-    if (pending && d.ack >= pending.seq) pending = null;
-    for (const packet of d.packets) { if (packet.seq <= outputAck) continue; feed(bytes(packet.data)); outputAck = packet.seq; }
-    if (d.state === 'closed' && !d.packets.length) { stop(d.error || tr('Session fermée.')); return; }
+    failures = 0; busy = busy || d.packets.length > 0;
+    if (!absorb(d)) return;
   } catch (error) {
     if (++failures >= 10) { stop(tr('Connexion au serveur interrompue.'), true); return; }
   } finally { inFlight = false; }
   if (!running) return;
-  if (busy || pending || queue.length) { quiet = 0; schedulePoll(0); }
+  // Avec le canal persistant, le serveur prévient : au repos, un simple signe de vie de temps en temps.
+  if (busy || pending || queue.length || pushed.length) { quiet = 0; schedulePoll(0); }
+  else if (link && link.live) schedulePoll(15000);
   else schedulePoll(++quiet < 20 ? 120 : 400);
 }
 function closeRequest(beacon = false) {
@@ -104,6 +120,8 @@ function closeRequest(beacon = false) {
 function stop(text, notify = false) {
   if (!running) return;
   running = false; clearTimeout(pollTimer);
+  if (link) { link.close(); link = null; }
+  pushed = [];
   waiting.forEach(r => r.reject(new Error(text || tr('Session fermée.')))); waiting.clear();
   document.body.removeAttribute('data-no-reload');
   setStatus(text || tr('Session fermée.'), 'err');
@@ -452,6 +470,11 @@ async function openSession() {
     const d = await response.json();
     io = d.io; running = true; failures = 0;
     root.hidden = false;
+    if (root.dataset.link) {
+      import(root.dataset.link).then(m => {
+        if (running && io === d.io) link = m.relayLink(io, data => { pushed.push(data); schedulePoll(); });
+      }).catch(() => { /* HTTPS seul */ });
+    }
     poll();
     const { header } = await request('hello', {});
     info = header; renderRoots();

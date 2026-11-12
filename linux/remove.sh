@@ -85,7 +85,7 @@ fi
 rm -f /etc/nginx/sites-enabled/loco-portal.conf /etc/nginx/sites-available/loco-portal.conf \
       /etc/nginx/sites-enabled/loco-wucache.conf /etc/nginx/sites-available/loco-wucache.conf \
       /etc/nginx/modules-enabled/99-loco-stream.conf /etc/nginx/snippets/loco-clients.conf \
-      /etc/nginx/snippets/loco-admin.conf /etc/nginx/snippets/loco-proxy.conf \
+      /etc/nginx/snippets/loco-admin.conf /etc/nginx/snippets/loco-proxy.conf /etc/nginx/snippets/loco-relay.conf \
       /etc/nginx/snippets/loco-flathub-proxy.conf /etc/nginx/snippets/loco-rpm-proxy.conf \
       /etc/nginx/sites-enabled/loco-apt.conf /etc/nginx/sites-available/loco-apt.conf
 if [ -f "$STATE/nginx-default-disabled" ]; then

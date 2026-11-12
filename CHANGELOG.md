@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.158.0 — 2026-11-12
+
+- **Sessions distantes en connexion persistante** : l'agent d'un poste et le navigateur gardent désormais une connexion ouverte avec loco (WebSocket, sur le port HTTPS habituel). Le serveur les prévient dès qu'une session est demandée, qu'une touche est frappée ou que le poste répond, au lieu d'attendre qu'ils viennent aux nouvelles. Terminal, bureau distant et onglet Fichiers en profitent. Mesuré sur un poste Debian : de la touche à son écho, 62 ms en médiane auparavant, 25 ms maintenant ; une session ouverte au repos ne produit plus aucune requête (une dizaine par seconde auparavant) ; un terminal s'ouvre en moins de 0,2 s, que la fiche du poste ait été ouverte ou non.
+- **Les actions partent tout de suite** : une mise à jour, un redémarrage ou un script demandé depuis le portail réveille aussitôt l'agent connecté, qui vient le chercher sans attendre son prochain contact.
+- **Rien à régler, et un repli permanent** : aucun port à ouvrir sur les postes ni sur le pare-feu. Si la connexion persistante n'est pas possible — agent pas encore à jour, équipement réseau qui la coupe, navigateur qui la refuse —, la session passe par des allers-retours HTTPS comme auparavant, sans coupure : on peut passer de l'un à l'autre en cours de session. Les droits, l'accord de l'utilisateur avant le bureau distant, les limites de sessions et le journal sont inchangés.
+- **Côté serveur** : le relais tourne dans le portail lui-même, sur le port local 8090 (voisin du 8089), et nginx lui transmet deux adresses avec les mêmes règles d'accès que le reste — `/agent/relay` pour les postes, `/fleet/session/…/ws` pour l'interface. La mise à jour refait cette configuration. Si le port 8090 est déjà pris par un autre programme, loco s'installe quand même et les sessions passent par HTTPS.
+- **Un onglet en arrière-plan ne perd plus sa session** : tant que le navigateur reste connecté, loco le sait présent, même si le navigateur ralentit les onglets qu'on ne regarde pas.
+- Agents Linux, Windows et Android : le canal persistant arrive avec leur mise à jour (automatique pour Linux et Windows). L'agent Windows n'a pas pu être essayé sur un vrai Windows avant cette version ; en cas de souci, il retombe de lui-même sur les allers-retours HTTPS.
+
 ## 2.157.0 — 2026-11-12
 
 - **Un terminal s'ouvre tout de suite** : une session demandée attendait que l'agent du poste vienne aux nouvelles, ce qu'il ne faisait que toutes les cinq secondes au repos — d'où deux à cinq secondes d'attente à l'ouverture d'un terminal, d'un bureau distant ou de l'onglet Fichiers. Dès que la fiche d'un poste est ouverte, qu'une session tourne ou vient de se fermer, son agent vient désormais aux nouvelles plusieurs fois par seconde : la session s'ouvre en un quart de seconde environ. Mesuré sur un poste Debian : 3,9 s en médiane auparavant, 0,25 s maintenant.

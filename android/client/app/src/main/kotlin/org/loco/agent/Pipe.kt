@@ -12,6 +12,8 @@ class Pipe {
     private var size = 0
     private var closed = false
     private val lock = Object()
+    /** Appelé après chaque écriture et à la fermeture : le relais envoie sans attendre son prochain relevé. */
+    @Volatile var onData: (() -> Unit)? = null
 
     fun write(data: ByteArray) {
         if (data.isEmpty()) return
@@ -21,6 +23,7 @@ class Pipe {
             size += data.size
             lock.notifyAll()
         }
+        onData?.invoke()
     }
 
     /** Sous verrou : copie jusqu'à n octets disponibles dans out, à partir de off. */
@@ -86,5 +89,6 @@ class Pipe {
 
     fun close() {
         synchronized(lock) { closed = true; lock.notifyAll() }
+        onData?.invoke()
     }
 }

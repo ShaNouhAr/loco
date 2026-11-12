@@ -410,7 +410,7 @@
 
     {% if files_ready and active %}
     <div class="tab-panel" data-panel="fichiers">
-      <div id="file-manager" class="files" data-dev="{{ dev.id }}" data-session-url="{{ url_for('remote_open', dev_id=dev.id) }}"
+      <div id="file-manager" class="files" data-dev="{{ dev.id }}" data-session-url="{{ url_for('remote_open', dev_id=dev.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}"
            data-csrf="{{ csrf }}" data-windows="{{ 1 if dev.os_family == 'windows' else 0 }}"
            data-chmod="{{ 0 if dev.os_family in ('windows', 'android') else 1 }}" hidden>
         <div class="files-bar">

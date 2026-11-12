@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.157.0"
+VERSION = "2.158.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")
@@ -11,6 +11,9 @@ ETC = os.environ.get("LOCO_ETC", "/etc/loco")
 HOST = os.environ.get("LOCO_HOST", "localhost")
 ACNG_PORT = os.environ.get("LOCO_ACNG_PORT", "3142")
 WU_PROXY_PORT = os.environ.get("LOCO_WU_PROXY_PORT", "3128")
+# Relais à connexions persistantes des sessions distantes (loco/relay.py) : port local que nginx sert sous /agent/relay
+# et /fleet/session/<id>/ws. 0 : relais coupé, tout passe par allers-retours HTTPS.
+RELAY_PORT = int(os.environ.get("LOCO_RELAY_PORT", "8090") or 0)
 # Proxy-cache Windows Update (Squid) réellement installé : posé par install.sh avec le cache WU, absent sous Windows.
 WU_PROXY = os.environ.get("LOCO_WU_PROXY", "0") == "1"
 # Image Docker : supervisord à la place de systemd (voir docker/).

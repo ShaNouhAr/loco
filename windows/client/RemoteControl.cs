@@ -54,6 +54,33 @@ namespace Loco
             if (double.IsNaN(seconds)) seconds = 5;
             return (int)(Math.Min(5.0, Math.Max(0.25, seconds)) * 1000);
         }
+        // Échange par le canal persistant quand le serveur l'offre, sinon par HTTPS comme avant. Canal rompu : le même
+        // échange repart par HTTPS (rien n'est rejoué, les paquets sont numérotés) et le canal est retenté plus tard,
+        // de plus en plus rarement s'il n'existe pas (30 s à 10 min).
+        RemoteChannel channel; DateTime retryAt = DateTime.MinValue; int retryIn = 30;
+        bool Persistent { get { return channel != null && !channel.Broken; } }
+        void DropChannel()
+        {
+            if (channel == null) return;
+            channel.Dispose(); channel = null;
+            retryAt = DateTime.UtcNow.AddSeconds(retryIn);
+        }
+        Dictionary<string, object> Exchange(object payload)
+        {
+            if (channel != null && (channel.Broken || channel.Key != Agent.RemoteKey())) DropChannel();
+            if (channel == null && DateTime.UtcNow >= retryAt)
+            {
+                try { channel = Agent.RemoteConnect(); retryIn = 30; }
+                catch (Exception) { retryAt = DateTime.UtcNow.AddSeconds(retryIn); retryIn = Math.Min(600, retryIn * 2); }
+            }
+            if (channel != null)
+            {
+                try { return channel.Exchange(payload, 15000); }
+                catch (LocoHttpException) { throw; }
+                catch (Exception) { DropChannel(); }
+            }
+            return Agent.RemoteExchange(payload);
+        }
         void Loop()
         {
             var sessions = new Dictionary<string, RemoteSession>();
@@ -78,7 +105,7 @@ namespace Loco
                         // fiche est ouverte ou qu'une session tourne) : la moyenne porte toujours sur la même durée.
                         if (live && (!sampledOnce || sampled.Elapsed.TotalSeconds >= liveEvery - 0.15))
                         { payload["metrics"] = Agent.LiveMetrics(sampler); sampled.Restart(); sampledOnce = true; }
-                        var answer = Agent.RemoteExchange(payload);
+                        var answer = Exchange(payload);
                         lastOk.Restart();
                         object doCheckin;
                         if (answer.TryGetValue("checkin", out doCheckin) && doCheckin != null && Convert.ToBoolean(doCheckin))
@@ -108,6 +135,9 @@ namespace Loco
                         if (busy || signaled == 1) idle.Restart();
                         double quiet = idle.Elapsed.TotalSeconds;
                         delay = sessions.Count > 0 ? (busy ? 0 : quiet < 3 ? 12 : quiet < 30 ? 100 : 250) : RestDelay(answer);
+                        // Canal persistant : le serveur prévient et la sortie d'une session réveille (Activity) ; il ne reste
+                        // qu'un signe de vie (le serveur ferme une session après 30 s sans nouvelles de l'agent).
+                        if (Persistent) delay = sessions.Count > 0 ? (busy ? 0 : 10000) : 20000;
                         if (live) delay = Math.Min(delay, (int)(liveEvery * 1000));
                     }
                     catch (Exception e)
@@ -124,7 +154,7 @@ namespace Loco
                     }
                 }
             }
-            finally { foreach (var item in sessions.Values) item.Dispose(); }
+            finally { foreach (var item in sessions.Values) item.Dispose(); if (channel != null) channel.Dispose(); }
         }
     }
 
@@ -304,7 +334,7 @@ namespace Loco
                 }
             }
             catch (Exception e) { lock (gate) if (!disposed) error = kind == "desktop" ? Lang.T("Session graphique inaccessible ou fermée.", "Graphical session inaccessible or closed.", "Sesión gráfica inaccesible o cerrada.") : e.Message; }
-            finally { lock (gate) eof = true; }
+            finally { lock (gate) eof = true; RemoteControl.Activity.Set(); }   // fin du processus : à annoncer sans attendre
         }
         void Write()
         {

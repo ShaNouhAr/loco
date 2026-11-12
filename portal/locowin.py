@@ -76,6 +76,11 @@ def say(text):
     print(f"==> {text}", flush=True)
 
 
+def relay_port(cfg):
+    """Port local du relais des sessions distantes (WebSocket) : voisin de celui du portail, sauf réglage contraire."""
+    return int(cfg.get("relay_port") or int(cfg["app_port"]) + 1)
+
+
 def _slash(path):
     return path.replace("\\", "/")
 
@@ -244,7 +249,7 @@ def render_nginx(cfg):
     values = {
         "DATA": _slash(cfg["data_dir"]), "HOST": cfg["host"], "HOSTNAME": hostname(),
         "HTTPS_PORT": str(cfg["https_port"]), "HTTPS_OLD_LISTEN": "", "PORTAL_PORT": str(cfg.get("http_port") or 0),
-        "APP_PORT": str(cfg["app_port"]), "ACNG_PORT": str(cfg["acng_port"]),
+        "APP_PORT": str(cfg["app_port"]), "RELAY_PORT": str(relay_port(cfg)), "ACNG_PORT": str(cfg["acng_port"]),
         "MAX_UPLOAD": cfg.get("max_upload", "8g"), "WU_CACHE_SIZE": cfg.get("wu_cache_size", "50g"),
         "FLATPAK_CACHE_SIZE": cfg.get("flatpak_cache_size", "20g"), "RPM_CACHE_SIZE": cfg.get("rpm_cache_size", "20g"),
         "APT_CACHE_SIZE": cfg.get("apt_cache_size", "50g"), "RESOLVERS": " ".join(cfg["resolvers"]),
@@ -274,6 +279,7 @@ def render_nginx(cfg):
         "snippets/loco-clients.conf": "# loco : réseaux autorisés pour les postes.\n" + acl(cfg["allow"]),
         "snippets/loco-admin.conf": "# loco : réseaux autorisés pour l'interface.\n" + acl(cfg["admin_allow"]),
         "snippets/loco-proxy.conf": tpl("nginx-proxy-snippet.conf"),
+        "snippets/loco-relay.conf": tpl("nginx-relay-snippet.conf"),
         "snippets/loco-flathub-proxy.conf": tpl("nginx-flathub-proxy-snippet.conf"),
         "snippets/loco-rpm-proxy.conf": tpl("nginx-rpm-proxy-snippet.conf"),
     }
@@ -632,7 +638,8 @@ class Service:
         nginx_test(self.cfg)
         ensure_tls(self.cfg)
         self.collect_versions()
-        import app as entry      # portal/app.py : migrations et application Flask
+        os.environ["LOCO_RELAY_PORT"] = str(relay_port(self.cfg))
+        import app as entry      # portal/app.py : migrations, application Flask et relais des sessions
         server = create_server(entry.app, host="127.0.0.1", port=int(self.cfg["app_port"]), threads=8,
                                ident="loco", clear_untrusted_proxy_headers=False,
                                max_request_body_size=1 << 40, channel_timeout=300)

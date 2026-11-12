@@ -11,6 +11,8 @@ const encoder = new TextEncoder();
 let running = true, inputSeq = 0, outputAck = 0, queue = new Uint8Array(), pending = null;
 let terminal, fit, rfb, channel, failures = 0, cols = 100, rows = 30;
 let pollTimer, inFlight = false, quiet = 0, rtt = 0, lastLabel = '';
+// Canal persistant quand le serveur l'offre (relay-link.js) : ce qu'il pousse est gardé ici jusqu'au prochain passage.
+let link = null, pushed = [];
 let remoteLabel = root.dataset.label || (['terminal', 'adb'].includes(root.dataset.kind) ? t('terminal du poste') : t('bureau du poste')), secureDesktop = false;
 function schedulePoll(delay = 0) {
   if (!running || inFlight) return;
@@ -62,6 +64,7 @@ function closeRequest(beacon = false) {
 function stop(text = t('Session fermée.'), notify = false) {
   if (!running) return;
   running = false; clearTimeout(pollTimer); closeButton.disabled = true; message(text, 'closed');
+  if (link) link.close();
   document.getElementById('remote-reconnect').hidden = false;
   showEnd(text, t('La connexion au poste est fermée. Ouvrez une nouvelle session pour reprendre.'));
   if (channel) { channel.readyState = 3; if (channel.onclose) channel.onclose({ code: 1000, reason: text }); }
@@ -78,25 +81,9 @@ class RelayChannel {
   send(data) { send(data); }
   close() { stop(t('Session fermée.'), true); }
 }
-async function poll() {
-  if (!running || inFlight) return;
-  inFlight = true; let busy = false;
-  if (!pending && queue.length) {
-    const data = queue.subarray(0, 64 * 1024); queue = queue.slice(data.length);
-    pending = { seq: ++inputSeq, data: base64(data) };
-  }
-  const body = new URLSearchParams({ csrf: root.dataset.csrf, ack: String(outputAck), cols: String(cols), rows: String(rows) });
-  if (pending) { body.set('seq', String(pending.seq)); body.set('data', pending.data); }
-  try {
-    const started = performance.now();
-    const response = await fetch(root.dataset.io, { method: 'POST', body, credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(10000) });
-    if ([401,403,404,409,413].includes(response.status)) { stop(t('Session indisponible ou accès révoqué.'), true); return; }
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const data = await response.json();
-    if (!running) return;
-    const elapsed = performance.now() - started; rtt = rtt ? rtt * 0.85 + elapsed * 0.15 : elapsed;
-    failures = 0; busy = data.packets.length > 0;
+// Une réponse du serveur, demandée ou poussée : état de la session, puis octets dans l'ordre (un paquet déjà reçu par
+// l'autre voie est ignoré). Renvoie false si la session est terminée.
+async function absorb(data) {
     if (pending && data.ack >= pending.seq) pending = null;
     if (data.state === 'active' && data.consent === 'pending') {
       lastLabel = ''; message(t("En attente de l'accord…"), 'warn');
@@ -116,14 +103,47 @@ async function poll() {
       else if (channel.onmessage) channel.onmessage({ data: buffer.buffer });
       outputAck = packet.seq;
     }
-    if (data.state === 'closed' && !data.packets.length) { stop(data.error || t('Session terminée.')); return; }
+    if (data.state === 'closed' && !data.packets.length) { stop(data.error || t('Session terminée.')); return false; }
+    return true;
+}
+async function poll() {
+  if (!running || inFlight) return;
+  inFlight = true; let busy = false;
+  try {
+    // Ce que le serveur a poussé s'affiche d'abord ; l'échange qui suit porte l'acquittement.
+    // (Un élément vide demande seulement un échange : canal tout juste ouvert, refus poussé.)
+    while (pushed.length) {
+      const data = pushed.shift();
+      if (!data) continue;
+      busy = busy || data.packets.length > 0;
+      if (!await absorb(data)) return;
+    }
+    if (!pending && queue.length) {
+      const data = queue.subarray(0, 64 * 1024); queue = queue.slice(data.length);
+      pending = { seq: ++inputSeq, data: base64(data) };
+    }
+    const body = new URLSearchParams({ csrf: root.dataset.csrf, ack: String(outputAck), cols: String(cols), rows: String(rows) });
+    if (pending) { body.set('seq', String(pending.seq)); body.set('data', pending.data); }
+    const started = performance.now();
+    const { status, data } = await (link ? link.exchange(body) : fetch(root.dataset.io, { method: 'POST', body,
+      credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' }, signal: AbortSignal.timeout(10000) })
+      .then(async r => ({ status: r.status, data: r.ok ? await r.json() : null })));
+    if ([401,403,404,409,413].includes(status)) { stop(t('Session indisponible ou accès révoqué.'), true); return; }
+    if (status !== 200) throw new Error('HTTP ' + status);
+    if (!running) return;
+    const elapsed = performance.now() - started; rtt = rtt ? rtt * 0.85 + elapsed * 0.15 : elapsed;
+    failures = 0; busy = busy || data.packets.length > 0;
+    if (!await absorb(data)) return;
   } catch (error) {
     if (++failures >= 10) { stop(t('Connexion au serveur interrompue.'), true); return; }
     lastLabel = ''; message(t('Reconnexion au serveur…'), 'warn');
   } finally { inFlight = false; }
-  // Interroger tout de suite tant que ça bouge ; au repos prolongé (> 1 s), espacer un peu pour soulager le serveur.
+  if (!running) return;
+  // Interroger tout de suite tant que ça bouge. Au repos : avec le canal persistant, le serveur prévient — un simple
+  // signe de vie de temps en temps ; sinon interroger souvent, puis un peu moins après une seconde de silence.
   if (failures) schedulePoll(1000);
-  else if (busy || pending || queue.length) { quiet = 0; schedulePoll(0); }
+  else if (busy || pending || queue.length || pushed.length) { quiet = 0; schedulePoll(0); }
+  else if (link && link.live) schedulePoll(15000);
   else schedulePoll(++quiet < 40 ? 25 : 80);
 }
 closeButton.addEventListener('click', () => stop(t('Session fermée.'), true));
@@ -221,8 +241,10 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
     }));
   }
   new ResizeObserver(() => {
+    const before = cols + 'x' + rows;
     fit.fit(); cols = Math.max(20, Math.min(500, terminal.cols)); rows = Math.max(5, Math.min(200, terminal.rows));
     if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
+    if (before !== cols + 'x' + rows) schedulePoll();          // nouvelle taille : à annoncer tout de suite, sans attendre
   }).observe(screen);
   terminal.onData(data => send(encoder.encode(data)));
   terminal.onBinary(data => send(Uint8Array.from(data, c => c.charCodeAt(0) & 255)));
@@ -582,5 +604,13 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
     lastLabel = ''; if (running) connectedMessage();
   });
   rfb.addEventListener('disconnect', e => { if (running) stop(e.detail.clean ? t('Bureau déconnecté.') : t('La connexion au bureau a été interrompue.'), true); });
+}
+// Canal persistant : module chargé à part (adresse versionnée fournie par la page) ; sans lui, tout passe par HTTPS.
+if (root.dataset.link) {
+  import(root.dataset.link).then(m => {
+    // Tout ce qui arrive du canal est rangé, même vide : si un échange est en cours, le suivant part aussitôt après
+    // lui au lieu d'attendre le signe de vie — le serveur ne pousse rien tant qu'il n'a pas eu un échange par ce canal.
+    if (running) link = m.relayLink(root.dataset.io, data => { pushed.push(data); schedulePoll(); });
+  }).catch(() => { /* HTTPS seul */ });
 }
 poll();

@@ -41,6 +41,7 @@ PREFIX=/opt/loco
 ETC=/etc/loco
 STATE=/var/lib/loco
 APP_PORT=8089
+RELAY_PORT=8090            # relais des sessions distantes (WebSocket), local comme le portail
 PACKAGE_RECORD="$STATE/installed-packages"
 PACKAGES=(nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3-flask python3-cryptography python3-qrcode gunicorn curl openssl ca-certificates)
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10"
@@ -255,6 +256,16 @@ for port in $HTTPS_OLD_PORTS; do check_port "$port" nginx; done
 if [ "$HTTP_ENABLED" = 1 ]; then check_port "$PORTAL_PORT" nginx; fi
 if [ "$PLATFORM" = debian ]; then check_port 3142 apt-cacher-ng; else check_port 3142 nginx; fi
 check_port "$APP_PORT" gunicorn
+# Relais des sessions : port local servi par le portail lui-même. Pris par un autre programme, loco s'installe quand
+# même — agents et navigateurs passent alors par allers-retours HTTPS, comme avant.
+if [ "$CONTAINER" = 0 ]; then
+    relay_owner=$(port_owner "$RELAY_PORT")
+    case "$relay_owner" in ''|gunicorn|python*) ;; *)
+        warn "le port $RELAY_PORT (relais des sessions distantes) est pris par « $relay_owner » : les sessions passeront par HTTPS, sans connexion persistante." \
+             "port $RELAY_PORT (remote session relay) is used by \"$relay_owner\": sessions will go over HTTPS, without a persistent connection." \
+             "el puerto $RELAY_PORT (relé de las sesiones remotas) está ocupado por \"$relay_owner\": las sesiones irán por HTTPS, sin conexión persistente." ;;
+    esac
+fi
 if [ "$WU_ENABLED" = 1 ]; then
     check_port 80 nginx
     check_port 443 nginx
@@ -556,7 +567,7 @@ print(max(1, {"":n//1048576,"k":n//1024,"m":n,"g":n*1024,"t":n*1048576}[u]))' "$
 SQUID_SRC=$(for n in $ALLOW_LIST; do echo "acl loco_clients src $n"; done)
 export LRT_WU_PROXY="$WU_ENABLED" LRT_WU_PROXY_PORT="$WU_PROXY_PORT" LRT_WU_PROXY_CACHE_MB="$WU_PROXY_CACHE_MB" \
        LRT_SQUID_USER="$SQUID_USER" LRT_SQUID_SRC="$SQUID_SRC"
-export LRT_PORTAL_PORT="$PORTAL_PORT" LRT_HTTPS_PORT="$HTTPS_PORT" LRT_APP_PORT="$APP_PORT" LRT_DATA="$DATA" \
+export LRT_PORTAL_PORT="$PORTAL_PORT" LRT_HTTPS_PORT="$HTTPS_PORT" LRT_APP_PORT="$APP_PORT" LRT_RELAY_PORT="$RELAY_PORT" LRT_DATA="$DATA" \
        LRT_HOST="$HOST" LRT_HOSTNAME="$SHORT_HOSTNAME" LRT_ADMIN_URL="$ADMIN_URL" LRT_HTTP_URL="$HTTP_URL" \
        LRT_WU_CACHE_SIZE="$WU_CACHE_SIZE" LRT_RESOLVERS="$RESOLVERS" LRT_MAX_UPLOAD="$MAX_UPLOAD" \
        LRT_BACKUP_DIR="$BACKUP_DIR" LRT_PROXY_ENV="$PROXY_ENV" LRT_ALLOW_SPACE="$ALLOW_LIST" \
@@ -596,6 +607,7 @@ install -d /etc/nginx/snippets /etc/nginx/sites-available /etc/nginx/sites-enabl
 { echo "# loco : réseaux autorisés pour les postes (--allow)."; acl "$ALLOW_LIST"; } > /etc/nginx/snippets/loco-clients.conf
 { echo "# loco : réseaux autorisés pour l'interface (--admin-allow)."; acl "$ADMIN_LIST"; } > /etc/nginx/snippets/loco-admin.conf
 render "$PREFIX/conf/nginx-proxy-snippet.conf" > /etc/nginx/snippets/loco-proxy.conf
+render "$PREFIX/conf/nginx-relay-snippet.conf" > /etc/nginx/snippets/loco-relay.conf
 render "$PREFIX/conf/nginx-flathub-proxy-snippet.conf" > /etc/nginx/snippets/loco-flathub-proxy.conf
 render "$PREFIX/conf/nginx-rpm-proxy-snippet.conf" > /etc/nginx/snippets/loco-rpm-proxy.conf
 {

@@ -68,6 +68,9 @@ object Net {
      *  refaisait une poignée de main TLS complète, ce qui coûte cher sur un vrai réseau. */
     @Volatile private var pinned: Pair<String, SSLSocketFactory>? = null
 
+    /** Même fabrique pour le canal persistant (RelaySocket) : même autorité épinglée que les échanges HTTPS. */
+    fun socketFactory(caPem: String): SSLSocketFactory = factoryFor(caPem)
+
     private fun factoryFor(caPem: String): SSLSocketFactory {
         pinned?.let { if (it.first == caPem) return it.second }
         return contextFor(caPem).socketFactory.also { pinned = caPem to it }

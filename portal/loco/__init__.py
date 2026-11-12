@@ -48,7 +48,7 @@ if not SECRETS.get("secret_key"):
     app.logger.warning("clé de session absente de %s : clé provisoire, les sessions ne survivront pas au redémarrage",
                        config.SECRETS_PATH)
 
-STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "permissions.js", "files.js", "adb_unlock.js", "adb_screen.js", "passkeys.js", "logo.svg")
+STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "relay-link.js", "permissions.js", "files.js", "adb_unlock.js", "adb_screen.js", "passkeys.js", "logo.svg")
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))
 
 # Politique de contenu stricte : aucun script ni style en ligne.

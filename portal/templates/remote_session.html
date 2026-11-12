@@ -4,7 +4,7 @@
 {% set android = remote.os_family == 'android' %}
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_macros.html' import term_help %}
-<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
+<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
   <div class="head">
     <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
       <h1>{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind == 'terminal' else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>

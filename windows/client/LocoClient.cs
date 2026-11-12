@@ -378,6 +378,22 @@ namespace Loco
             return Post(Str(conf, "server"), "/agent/api/remote", data, Str(conf, "token"), 10000);
         }
 
+        // Canal persistant (RemoteChannel) : même serveur, même jeton et même vérification du certificat que ci-dessus.
+        internal static string RemoteKey()
+        {
+            var conf = ReadJson(ConfigPath);
+            return Str(conf, "token") == "" ? "" : Str(conf, "server") + "\n" + Str(conf, "token");
+        }
+        internal static RemoteChannel RemoteConnect()
+        {
+            var conf = ReadJson(ConfigPath);
+            if (Str(conf, "token") == "") throw new IOException(Lang.T("Inscription du poste en attente", "Machine enrollment pending", "Inscripción del equipo pendiente"));
+            if (ca == null) LoadCa();
+            return new RemoteChannel(Str(conf, "server"), Str(conf, "token"), CheckCertificate, Version);
+        }
+        internal static string ToJson(object data) { return Json.Serialize(data); }
+        internal static Dictionary<string, object> FromJson(string text) { return Json.Deserialize<Dictionary<string, object>>(text); }
+
         // ------------------------------------------------------------ inscription
 
         static string Setting(string name)

@@ -175,6 +175,7 @@ Avec Docker, les mêmes commandes passent par le conteneur : `docker compose exe
 | Élément | Emplacement | Port |
 |---|---|---|
 | Portail (Flask + gunicorn, unité `loco-portal`, confinée) | `/opt/loco` | 8089, local |
+| Relais des sessions distantes (connexions persistantes, dans le processus du portail) | `/opt/loco/portal/loco/relay.py` | 8090, local |
 | nginx : interface et fichiers des postes (HTTPS) | `/etc/nginx/sites-available/loco-portal.conf` | 8443 |
 | nginx : amorçage HTTP (optionnel) | même fichier | 8088 |
 | nginx : cache Windows Update, relais HTTPS (SNI) | `loco-wucache.conf`, `modules-enabled/99-loco-stream.conf` | 80, 443 |
@@ -226,7 +227,7 @@ powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\loco\windows\remove.
 ### Architecture
 
 Service `loco` (compte `NT SERVICE\loco`) qui lance nginx et le portail
-(Waitress, 8089 en local) ; programme dans `%ProgramFiles%\loco`, données, configuration et journaux
+(Waitress, 8089 en local, et son relais des sessions distantes sur le port voisin 8090) ; programme dans `%ProgramFiles%\loco`, données, configuration et journaux
 dans `%ProgramData%\loco`. Ports : 8443 (HTTPS), 8088 (amorçage HTTP), 3142 (cache APT), 80 et 443
 (Windows Update). Détails : [guide Windows](docs/windows.md).
 
@@ -462,7 +463,7 @@ s’accorde sur l’appareil. Voir [docs/android.md](docs/android.md).
 
 Dans la fiche d’un poste de **Mon parc**, un administrateur peut ouvrir un **Terminal / PowerShell** ou le **Bureau noVNC**. Les boutons **Plein écran** et **Nouvel onglet** sont disponibles dans les deux vues. En **plein écran du bureau**, l’image occupe tout l’écran et les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, fermeture) passent dans un **rail latéral gauche rétractable** : une poignée au bord de l’écran le déploie ou le replie. Le curseur du poste reste affiché et aligné en plein écran comme au retour. Le nouvel onglet ouvre une **console dédiée**, sans la navigation du portail : une petite barre d’outils et tout l’espace disponible pour le poste. La fiche de l’appareil reste ouverte dans son onglet ; chaque console dispose de sa connexion indépendante.
 
-L’agent loco 2.4 ou ultérieur établit lui-même les connexions HTTPS sortantes vers loco, avec l’autorité du serveur épinglée. Aucun port entrant sur le poste, compte SSH, serveur VNC distinct ni accès Proxmox n’est nécessaire. Le terminal utilise un vrai PTY Linux ou ConPTY Windows, avec un shell **root** ou **PowerShell SYSTEM** selon le compte du service.
+L’agent loco 2.4 ou ultérieur établit lui-même les connexions HTTPS sortantes vers loco, avec l’autorité du serveur épinglée. Aucun port entrant sur le poste, compte SSH, serveur VNC distinct ni accès Proxmox n’est nécessaire. À partir de la version **2.158**, l’agent et le navigateur gardent une **connexion persistante** (WebSocket, sur le même port HTTPS) avec loco : le serveur les prévient dès qu’une session est demandée, qu’une touche est frappée ou que le poste répond, au lieu d’attendre leur prochain relevé — une session s’ouvre aussitôt, la frappe répond plus vite et plus aucune requête ne part à vide. Rien à ouvrir ni à régler : si cette connexion n’est pas possible (agent plus ancien, équipement réseau qui la coupe, port local 8090 du serveur déjà pris), la session passe par des allers-retours HTTPS comme auparavant, sans coupure. Le terminal utilise un vrai PTY Linux ou ConPTY Windows, avec un shell **root** ou **PowerShell SYSTEM** selon le compte du service.
 
 Le bureau se règle par deux menus indépendants, mémorisés par le navigateur. **Résolution** : *Adaptée à la fenêtre* (par défaut) change la résolution du bureau Windows pour remplir la fenêtre, **sans jamais d’ascenseurs** : si le pilote impose un mode un peu différent, l’image est ajustée ; *Résolution du poste* garde — et rétablit — la résolution d’origine. **Zoom** : *Ajuster*, ou 50 à 200 %. En résolution adaptée, le zoom agrandit l’interface du poste (comme la mise à l’échelle de Windows) tout en remplissant la fenêtre ; en résolution du poste, il agrandit l’image, avec défilement au-delà de la fenêtre (100 % : un pixel du poste par pixel de l’écran). La résolution et le pourcentage obtenus restent affichés, et le curseur du poste suit la même échelle. À partir de l’agent Windows **2.13.1**, la résolution adaptée reconfigure temporairement le bureau selon les modes du pilote, puis restaure la résolution initiale à la fermeture ; une seule session la modifie, les postes multi-moniteurs conservent leur configuration et une demande faite pendant l’UAC attend le retour au bureau. Avec l’adaptateur VGA standard d’une machine virtuelle (une seule résolution), préférer VirtIO-GPU et son pilote virtio-win. Un ancien agent ou un bureau X11 conserve l’ajustement local ; la console texte Linux 2.13 ou plus récente adapte réellement le PTY.
 
