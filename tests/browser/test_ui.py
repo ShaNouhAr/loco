@@ -606,7 +606,7 @@ class TestWake(BrowserTest):
             expect(self.page.locator("#fleet-table tr", has_text="portable-wifi").get_by_role("button", name="Réveiller")).to_have_count(0)
             self.assertLessEqual(self.overflow(), 0)
             row.get_by_role("button", name="Réveiller").click()
-            expect(self.page.locator("#fleet-table tr", has_text="poste-filaire")).to_contain_text("réveil en attente", timeout=LONG)
+            expect(self.page.locator("#fleet-table tr", has_text="poste-filaire")).to_contain_text("réveil en cours", timeout=LONG)
             send.assert_called_once_with("bc:24:11:1c:a4:02", "192.168.50.0/24", "192.168.50.1")
             self.page.goto(f"/fleet/{wifi['id']}#details")
             expect(self.page.locator(".wake-hint")).to_contain_text("Aucune carte Ethernet")

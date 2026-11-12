@@ -4398,5 +4398,13 @@
  "Un appairage est déjà en cours, patientez quelques secondes.": "Ya hay una vinculación en curso, espere unos segundos.",
  "État du parc :": "Estado del parque:",
  "poste%(v)s": "equipo%(v)s",
- "Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.": "La caché está vacía: se llenará con la primera descarga de un equipo conectado a loco."
+ "Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.": "La caché está vacía: se llenará con la primera descarga de un equipo conectado a loco.",
+ "Suivre le déroulé des mises à jour": "Seguir el desarrollo de las actualizaciones",
+ "Mises à jour en cours (%(n)s)": "Actualizaciones en curso (%(n)s)",
+ "%(v)s en cours": "%(v)s en curso",
+ "Mise à jour en attente": "Actualización pendiente",
+ "Mise à jour en cours": "Actualización en curso",
+ "le poste redémarre": "el equipo se está reiniciando",
+ "Une mise à jour est déjà en cours sur %(dev)s.": "Ya hay una actualización en curso en %(dev)s.",
+ "Le redémarrage de %(dev)s est déjà en cours.": "El reinicio de %(dev)s ya está en curso."
 }

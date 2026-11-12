@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.158.1 — 2026-11-12
+
+- **Un redémarrage demandé ne se relance plus** : une fois le redémarrage pris par le poste, le bouton *Redémarrer* revenait pendant la minute ou plus qui précède l'arrêt, comme si rien n'avait été demandé — on pouvait en lancer un second. Le poste affiche maintenant « redémarrage en cours », avec un témoin qui tourne, jusqu'à son retour (cinq minutes au plus s'il ne revient pas) ; sur sa fiche, l'entrée *Redémarrer* du menu Plus est remplacée par « Redémarrage en cours » et la tuile Redémarrage le dit aussi.
+- **Une mise à jour en cours se voit, et ne se relance pas** : dans Mon parc, le bouton d'un poste laisse place à « mise à jour en attente » tant que le poste ne l'a pas prise, puis à « mise à jour en cours » avec un témoin qui tourne ; sur la fiche, le bouton *Mettre à jour* devient « Mise à jour en cours » et ne se clique plus, et les cases de sélection des paquets disparaissent le temps de la mise à jour.
+- **« Tout mettre à jour » ne recompte plus les postes déjà lancés** : le nombre entre parenthèses ne porte que sur les postes restants, et un bouton « Mises à jour en cours (n) » apparaît à côté, qui mène au déroulé. Quand tous les postes sont déjà lancés, il ne reste que lui.
+- Une seconde demande est refusée par le serveur avec « déjà en cours », même formulée autrement (avec ou sans redémarrage, par la sélection de postes, par « Tout mettre à jour »), et un double clic pendant l'envoi ne part plus deux fois.
+- Le réveil d'un poste s'affiche « réveil en cours » une fois envoyé, au lieu de « réveil en attente ».
+
 ## 2.158.0 — 2026-11-12
 
 - **Sessions distantes en connexion persistante** : l'agent d'un poste et le navigateur gardent désormais une connexion ouverte avec loco (WebSocket, sur le port HTTPS habituel). Le serveur les prévient dès qu'une session est demandée, qu'une touche est frappée ou que le poste répond, au lieu d'attendre qu'ils viennent aux nouvelles. Terminal, bureau distant et onglet Fichiers en profitent. Mesuré sur un poste Debian : de la touche à son écho, 62 ms en médiane auparavant, 25 ms maintenant ; une session ouverte au repos ne produit plus aucune requête (une dizaine par seconde auparavant) ; un terminal s'ouvre en moins de 0,2 s, que la fiche du poste ait été ouverte ou non.

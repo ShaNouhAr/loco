@@ -435,6 +435,14 @@ a.tag:hover { border-color: var(--line-2); color: var(--text); text-decoration: 
 .btn .spin { display: none; }
 .btn.loading { pointer-events: none; }
 .btn.loading .spin { display: inline-block; }
+/* Action déjà lancée : le bouton devient un témoin (il tourne, il dit ce qui est en cours) et ne se clique plus ;
+   « busy » reste un lien, vers le suivi. */
+.btn.busy .spin { display: inline-block; }
+.btn.loading:disabled, .menu-item.loading:disabled { opacity: .75; cursor: default; }
+.busy-note { display: inline-flex; align-items: center; gap: 7px; color: var(--text-2); font-size: 12.5px; white-space: nowrap; }
+.busy-note .spin { flex: none; }
+.busy-note.big { font-size: inherit; color: inherit; gap: 9px; }
+.busy-note.big .spin { width: 14px; height: 14px; }
 .spin { width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: rot .7s linear infinite; }
 @keyframes rot { to { transform: rotate(360deg); } }
 .split { display: inline-flex; }

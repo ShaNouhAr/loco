@@ -332,5 +332,90 @@ class TestAgentUpdate(DeliveryTest):
         self.assertEqual(self.commands(), {})
 
 
+class TestNothingTwice(DeliveryTest):
+    """Une mise à jour ou un redémarrage déjà lancés sont montrés comme tels et ne se relancent pas."""
+
+    UPDATES = {"updates": [{"name": "curl", "version": "8.14"}], "reboot_required": True}
+
+    def setUp(self):
+        super().setUp()
+        self.agent.checkin(self.UPDATES)
+
+    def list(self):
+        return self.admin.c.get("/fleet").get_data(as_text=True)
+
+    def row_actions(self):
+        page = self.list()
+        row = page[page.index('<tbody data-refresh="rows">'):page.index("</tbody>")]
+        return row[row.index('class="right nowrap card-action"'):]
+
+    def card(self):
+        return self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+
+    def act(self, action, **extra):
+        return self.admin.post(f"/fleet/{self.dev}/action", dict({"action": action}, **extra), page=f"/fleet/{self.dev}")
+
+    def test_an_update_is_shown_waiting_then_running_and_cannot_be_asked_again(self):
+        self.assertIn(">Mettre à jour</button>", self.row_actions())
+        self.assertIn("Tout mettre à jour (1)", self.list())
+        self.act("update")
+        actions, page = self.row_actions(), self.list()
+        self.assertIn("mise à jour en attente", actions)                    # le poste ne l'a pas encore prise
+        self.assertNotIn(">Mettre à jour</button>", actions)
+        self.assertIn("Mises à jour en cours (1)", page)                    # et « Tout mettre à jour » ne le recompte pas
+        self.assertNotIn("Tout mettre à jour", page[page.index('data-refresh="actions"'):page.index('data-refresh="states"')])
+        self.assertNotIn('<dialog id="update-all"', page)
+        self.assertIn('class="btn primary loading" disabled><span class="spin"></span>Mise à jour en attente', self.card())
+        update = next(iter(self.commands()))
+        self.checkin()                                                      # le poste la prend
+        self.agent.result(update, "running")
+        self.assertIn('<span class="busy-note"', self.row_actions())
+        self.assertIn("mise à jour en cours", self.row_actions())
+        self.assertIn('loading" disabled><span class="spin"></span>Mise à jour en cours', self.card())
+        self.assertNotIn("data-update-select", self.card())                 # ni par la sélection de paquets
+        # Rien ne s'ajoute : ni par le bouton du poste (même avec redémarrage), ni par « Tout mettre à jour », ni par la sélection.
+        self.act("update")
+        self.act("update", reboot="1")
+        self.admin.post("/fleet/update-all", {"reboot": "1"}, page="/fleet")
+        self.admin.post("/fleet/update-selected", {"ids": str(self.dev)}, page="/fleet")
+        self.assertEqual([c["action"] for c in self.commands().values()], ["update"])
+        self.agent.result(update, "success", inventory={"updates": [], "reboot_required": True})
+        self.assertNotIn("busy-note", self.row_actions())                   # terminée : le poste retrouve ses boutons
+        self.assertNotIn("Mises à jour en cours", self.list())
+
+    def test_a_restart_stays_in_progress_until_the_machine_is_back(self):
+        self.assertIn('aria-label="Redémarrer srv-web"', self.row_actions())
+        self.act("reboot")
+        reboot = next(iter(self.commands()))
+        self.assertIn("redémarrage en attente", self.row_actions())
+        self.checkin()
+        self.agent.result(reboot, "success", "Redémarrage dans une minute.")
+        # L'action est terminée, mais le poste n'a pas encore redémarré : toujours « en cours », plus de bouton.
+        actions, page = self.row_actions(), self.list()
+        self.assertIn('<span class="busy-note"><span class="spin"></span>redémarrage en cours</span>', actions)
+        self.assertNotIn('aria-label="Redémarrer', actions)
+        self.assertIn("reboot-note pending", page)
+        card = self.card()
+        self.assertIn('class="menu-item loading" disabled><span class="spin"></span>Redémarrage en cours', card)
+        self.assertIn("le poste redémarre", card)
+        self.act("reboot")                                                  # un second redémarrage est refusé
+        self.assertEqual([c["action"] for c in self.commands().values()], ["reboot"])
+        self.assertIn("déjà en cours", self.admin.c.get("/fleet").get_data(as_text=True))
+        # Le poste revient (autre instant de démarrage) et n'a plus besoin de redémarrer : plus rien à montrer.
+        self.checkin(boot=1794300150, inventory={"updates": [{"name": "curl", "version": "8.14"}], "reboot_required": False})
+        self.assertNotIn("redémarrage", self.row_actions())
+        self.assertNotIn("le poste redémarre", self.card())
+
+    def test_the_list_signature_follows_what_is_in_progress(self):
+        poll = lambda: self.admin.c.get("/fleet", headers={"X-Requested-With": "fetch"}).get_json()["signature"]   # noqa: E731
+        before = poll()
+        self.act("update")
+        waiting = poll()
+        self.assertNotEqual(before, waiting)
+        self.checkin()
+        self.agent.result(next(iter(self.commands())), "running")
+        self.assertNotEqual(waiting, poll())                                # « en attente » → « en cours » : la liste se rafraîchit
+
+
 if __name__ == "__main__":
     unittest.main()

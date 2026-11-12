@@ -698,6 +698,9 @@
   /* ---------------------------------------------------------------- formulaires */
 
   function send(form, btn) {
+    // Un envoi à la fois par formulaire : un second clic (ou Entrée) pendant l'envoi ne relance rien.
+    if (form.dataset.sending) return;
+    form.dataset.sending = "1";
     var prog = $(".progress", form);
     var hasFile = $$('input[type="file"]', form).some(function (i) { return i.files && i.files.length; });
     if (btn) btn.classList.add("loading");
@@ -716,7 +719,7 @@
         $("[data-size]", prog).textContent = bytes(ev.loaded) + " / " + bytes(ev.total);
       };
     }
-    var fail = function (msg) { if (btn) btn.classList.remove("loading"); toast(msg, "error"); };
+    var fail = function (msg) { delete form.dataset.sending; delete form.dataset.confirmed; if (btn) btn.classList.remove("loading"); toast(msg, "error"); };
     xhr.onload = function () {
       var r = xhr.response;
       if (xhr.status < 400 && r && r.redirect) { window.location.href = r.redirect; return; }

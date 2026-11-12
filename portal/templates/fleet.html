@@ -23,7 +23,9 @@
     {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">{{ _("Ajouter un poste") }}</a>{% endif %}
     {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">{{ _("Déployer sur ce groupe") }}</a>{% endif %}
     {% if can('fleet.bulk_update') and total %}
-    <button type="button" class="btn primary" data-open="#update-all" {{ 'disabled' if not to_update }}>{{ _('Mettre à jour ce groupe') if selected_group else _('Tout mettre à jour') }}{% if to_update %} ({{ to_update }}){% endif %}</button>
+    {# Mises à jour déjà demandées : montrées comme telles (et suivies dans Mises à jour), plus proposées une seconde fois. #}
+    {% if updating %}<a class="btn busy" href="{{ url_for('fleet_updates') }}" title="{{ _('Suivre le déroulé des mises à jour') }}"><span class="spin"></span>{{ _("Mises à jour en cours (%(n)s)", n=updating) }}</a>{% endif %}
+    {% if to_update or not updating %}<button type="button" class="btn primary" data-open="#update-all" {{ 'disabled' if not to_update }}>{{ _('Mettre à jour ce groupe') if selected_group else _('Tout mettre à jour') }}{% if to_update %} ({{ to_update }}){% endif %}</button>{% endif %}
     {% if can('fleet.bulk_update') %}<button type="button" class="btn" data-open="#plan-all" title="{{ _('Planifier une mise à jour, une fois ou de façon récurrente') }}">{{ plan_icon('calendar') }}<span>{{ _("Planifier…") }}</span></button>{% endif %}
     {% endif %}
   </div>
@@ -110,7 +112,12 @@
             </td>
             <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(r.mon) }}</td>
             <td class="right nowrap card-action">
-              {% if r.pending %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ _("%(v)s en attente", v=actions[r.pending[0].action]|lower) }}</span>
+              {# Action lancée : dite à la place des boutons, on ne relance pas ce qui est en cours. « En attente » tant
+                 que le poste ne l'a pas prise, « en cours » ensuite ; un redémarrage annoncé reste « en cours » jusqu'au
+                 retour du poste. #}
+              {% if r.pending and r.pending[0].state == 'queued' %}<span class="st warn small" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}">{{ _("%(v)s en attente", v=actions[r.pending[0].action]|lower) }}</span>
+              {% elif r.pending %}<span class="busy-note" title="{% for c in r.pending %}{{ actions[c.action] }}{{ ', ' if not loop.last }}{% endfor %}"><span class="spin"></span>{{ _("%(v)s en cours", v=actions[r.pending[0].action]|lower) }}</span>
+              {% elif r.rebooting %}<span class="busy-note"><span class="spin"></span>{{ _("redémarrage en cours") }}</span>
               {% else %}
               {% set row_update = can('fleet.update') and r.needs_update %}
               {% set row_reboot = can('fleet.reboot') and d.reboot_required and d.state == 'active' %}

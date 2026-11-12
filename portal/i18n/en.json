@@ -4398,5 +4398,13 @@
  "Un appairage est déjà en cours, patientez quelques secondes.": "A pairing is already in progress, wait a few seconds.",
  "État du parc :": "Fleet status:",
  "poste%(v)s": "device%(v)s",
- "Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.": "The cache is empty: it will fill with the first download from a device connected to loco."
+ "Le cache est vide : il se remplira au premier téléchargement d’un poste branché sur loco.": "The cache is empty: it will fill with the first download from a device connected to loco.",
+ "Suivre le déroulé des mises à jour": "Follow the updates as they run",
+ "Mises à jour en cours (%(n)s)": "Updates in progress (%(n)s)",
+ "%(v)s en cours": "%(v)s in progress",
+ "Mise à jour en attente": "Update pending",
+ "Mise à jour en cours": "Update in progress",
+ "le poste redémarre": "the device is restarting",
+ "Une mise à jour est déjà en cours sur %(dev)s.": "An update is already in progress on %(dev)s.",
+ "Le redémarrage de %(dev)s est déjà en cours.": "%(dev)s is already restarting."
 }

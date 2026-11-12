@@ -648,7 +648,7 @@ class TestResult(WakeTest):
         self.assertEqual(self.commands(self.target, "wake")[0]["state"], "running")
 
     def test_the_list_shows_it_is_on_its_way(self):
-        self.assertIn("réveil en attente", self.fleet_page())
+        self.assertIn("réveil en cours", self.fleet_page())
 
 
 class TestEnabling(WakeTest):

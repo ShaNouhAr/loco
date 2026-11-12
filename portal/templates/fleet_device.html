@@ -5,11 +5,14 @@
 {% from "_charts.html" import line_chart, legend %}
 {% from "_nav_icons.html" import device_icon %}
 {% from "_macros.html" import pkg_progress with context %}
-{% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False) -%}
+{# busy : l'action est déjà lancée sur ce poste — le bouton le dit (témoin, libellé) et ne se clique plus. #}
+{% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='') -%}
+{% if busy %}<button type="button" class="{{ cls or 'menu-item' }} loading" disabled><span class="spin"></span>{{ busy }}</button>{% else %}
 <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}
   <button class="{{ cls or 'menu-item' }}"><span class="spin"></span>{{ label }}</button>
 </form>
+{% endif %}
 {%- endmacro %}
 {% block content %}
 {% include '_fleet_nav.html' %}
@@ -62,7 +65,7 @@
     {% endif %}
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
-    {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
+    {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn', busy=(_('Mise à jour en attente') if updating == 'queued' else _('Mise à jour en cours')) if updating else '') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
     {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
@@ -75,13 +78,13 @@
           <button class="menu-item">{{ _("Bureau distant, avec l'accord de l'utilisateur") }}</button>
         </form>
         {% endif %}
-        {% if can('fleet.update') and can('fleet.reboot') and not android %}{{ action('update', _('Mettre à jour puis redémarrer si nécessaire'), reboot=True) }}{% endif %}
+        {% if can('fleet.update') and can('fleet.reboot') and not android %}{{ action('update', _('Mettre à jour puis redémarrer si nécessaire'), reboot=True, busy=_('Mise à jour en cours') if updating else '') }}{% endif %}
         {% if can('fleet.scan') and not android %}{{ action('scan', _('Refaire l\'inventaire')) }}{% endif %}
         {% if can('fleet.update') and agent_outdated %}{{ action('agent-update', _("Mettre à jour l'agent (%(old)s → %(new)s)", old=dev.agent_version or '?', new=server_version)) }}{% endif %}
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
         {% if android_view and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose_android', device=dev.id) }}">{{ _("Installer des applications…") }}</a>{% endif %}
         {% if adb_view %}<button type="button" class="menu-item" data-open="#adb-setup">{{ _("Débogage adb…") }}</button>{% endif %}
-        {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer')) }}{% endif %}
+        {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}
         {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=devname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
         {% elif can('fleet.remove') %}
         {{ action('forget', _('Oublier ce poste…'), 'menu-item danger', confirm=_('Oublier %(name)s ?', name=devname), text=_('Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n\'existe plus.'), ok=_('Oublier')) }}
@@ -138,8 +141,8 @@
     </div>
     <div class="metric">
       <div class="k">{{ titled('restart', _("Redémarrage")) }}</div>
-      <div class="v">{% if dev.reboot_required %}<span class="st warn">{{ _("requis") }}</span>{% else %}{{ _("non") }}{% endif %}</div>
-      <div class="s">{{ _('pour finir les mises à jour') if dev.reboot_required else _('rien en attente') }}</div>
+      <div class="v">{% if rebooting %}<span class="busy-note big"><span class="spin"></span>{{ _("en cours") }}</span>{% elif dev.reboot_required %}<span class="st warn">{{ _("requis") }}</span>{% else %}{{ _("non") }}{% endif %}</div>
+      <div class="s">{{ _('le poste redémarre') if rebooting else _('pour finir les mises à jour') if dev.reboot_required else _('rien en attente') }}</div>
     </div>
     {% endif %}
     <div class="metric">
@@ -163,7 +166,8 @@
 
     {% if not android %}
     <div class="tab-panel on" data-panel="maj">
-      {% set sel = selectable and (inv.updates or (inv.flatpak and not windows)) %}
+      {# Mise à jour déjà lancée : plus de cases à cocher, on ne lance pas une seconde mise à jour par-dessus. #}
+      {% set sel = selectable and not updating and (inv.updates or (inv.flatpak and not windows)) %}
       {% if sel %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-update-select>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update"><input type="hidden" name="scope" value="selection">{% endif %}
       <div class="panel-h sub"><h2>{{ _("Système") }}</h2>{% if inv.flatpak %}<div class="aside">{{ _("+ %(flatpak)s Flatpak", flatpak=inv.flatpak) }}</div>{% endif %}</div>

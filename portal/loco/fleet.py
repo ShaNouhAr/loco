@@ -514,6 +514,16 @@ def pending(dev_id):
                         "ORDER BY id", (dev_id,)).fetchall()
 
 
+def in_progress(dev, commands):
+    """Ce qui est déjà lancé sur un poste, pour ne pas le proposer une seconde fois. Mise à jour : demandée et pas
+    terminée (« queued » tant que le poste ne l'a pas prise, « running » ensuite). Redémarrage : demandé, ou annoncé
+    par l'agent et pas encore constaté — l'action est alors terminée, mais le poste n'a pas encore redémarré."""
+    update = next((c for c in commands if c["action"] == "update"), None)
+    restart = any(c["action"] == "reboot" or (c["action"] == "update" and '"reboot": true' in (c["params"] or ""))
+                  for c in commands) or reboot_held(dev)
+    return {"updating": "" if update is None else "queued" if update["state"] == "queued" else "running", "rebooting": restart}
+
+
 def _active_window(conn, dev, commands):
     """Fenêtre « active » : l'agent qui honore l'intervalle revient vite (ACTIVE_INTERVAL) au lieu d'attendre CHECKIN.
     Vrai si on vient de lui transmettre des commandes, s'il en reste à exécuter, ou si une commande s'est terminée
@@ -1733,10 +1743,9 @@ def _rows(apps=None):
     for d in db().execute(f"SELECT {list_columns()} FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         color, reason = status(d, apps)
         cmds = waiting.get(d["id"], [])
-        out.append({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
-                    "pending": cmds, "needs_update": needs_update(d, apps),
-                    # Redémarrage demandé (bouton ou mise à jour avec redémarrage) et pas encore effectué.
-                    "rebooting": any(c["action"] == "reboot" or (c["action"] == "update" and '"reboot": true' in (c["params"] or "")) for c in cmds)})
+        # Mise à jour ou redémarrage déjà lancés : montrés comme tels, et plus proposés tant qu'ils ne sont pas finis.
+        out.append(dict({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
+                         "pending": cmds, "needs_update": needs_update(d, apps)}, **in_progress(d, cmds)))
     return out
 
 
@@ -1852,8 +1861,10 @@ def fleet():
         selected_group = groups._group("device", group_id)
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         rows = [r for r in rows if r["d"]["id"] in member_ids]
-    # Ce que « Tout mettre à jour » fera vraiment : tout le groupe ou le parc, quels que soient les filtres affichés.
-    to_update = sum(1 for r in rows if r["needs_update"])
+    # Ce que « Tout mettre à jour » fera vraiment : tout le groupe ou le parc, quels que soient les filtres affichés —
+    # sans les postes dont la mise à jour est déjà demandée, comptés à part (« en cours »).
+    to_update = sum(1 for r in rows if r["needs_update"] and not r["updating"])
+    updating = sum(1 for r in rows if r["updating"])
     names = _group_names()
     query = request.args.get("q", "").strip()[:100]
     rows = _search(rows, query, names)
@@ -1877,8 +1888,8 @@ def fleet():
         page = 1
     rows = rows[(page - 1) * PAGE_SIZE:page * PAGE_SIZE]
     signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
-                                             is_online(r["d"]), len(r["pending"])] for r in rows],
-                                           counts, systems, extras, shown]).encode()).hexdigest()[:16]
+                                             is_online(r["d"]), [c["state"] for c in r["pending"]], r["rebooting"]] for r in rows],
+                                           counts, systems, extras, shown, to_update, updating]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     rows = _enrich(rows, names)
@@ -1893,7 +1904,7 @@ def fleet():
     return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
                            fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
                            counts=counts, systems=systems, total=total, state=state, system=system,
-                           signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update,
+                           signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
 
 
@@ -2006,7 +2017,9 @@ def fleet_device(dev_id):
     availability = presence(dev)
     history = db().execute("SELECT * FROM device_commands WHERE device_id=? ORDER BY id DESC LIMIT 30",
                            (dev_id,)).fetchall()
-    signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"], availability["online"],
+    waiting = pending(dev_id)
+    busy = in_progress(dev, waiting)
+    signature = hashlib.sha256(json.dumps([dev["last_seen"][:16], dev["last_scan"], availability["online"], busy,
                                            [(c["id"], c["state"]) for c in history]]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
@@ -2046,7 +2059,7 @@ def fleet_device(dev_id):
                            net_policy=net_policy_text(dev),
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
-                           needs_update=needs_update(dev), pending=pending(dev_id), summary=summary,
+                           needs_update=needs_update(dev), pending=waiting, updating=busy["updating"], rebooting=busy["rebooting"], summary=summary,
                            selectable=selectable(dev) and can("fleet.update") and dev["state"] == "active",
                            select_version=".".join(map(str, SELECT_UPDATES)),
                            label=status_label(dev, color), presence=availability,
@@ -2141,6 +2154,14 @@ def fleet_action(dev_id):
                 "SELECT 1 FROM win_apps WHERE slug=? AND status='ready'", (slug,)).fetchone():
             abort(400)
         params["slug"] = slug
+    # Déjà lancé sur ce poste (même demandé autrement : avec ou sans redémarrage, autre sélection) : pas de doublon.
+    busy = in_progress(dev, pending(dev_id))
+    if action == "update" and busy["updating"]:
+        flash(_("Une mise à jour est déjà en cours sur %(dev)s.", dev=dev["hostname"]), "error")
+        return _back_to_origin(dev_id)
+    if action == "reboot" and busy["rebooting"]:
+        flash(_("Le redémarrage de %(dev)s est déjà en cours.", dev=dev["hostname"]), "error")
+        return _back_to_origin(dev_id)
     if queue(dev, action, params):
         db().commit()
         audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}")
@@ -2214,7 +2235,8 @@ def fleet_update_all():
         require("fleet.reboot")
     if request.form.get("mode") == "waves":
         from .deployments import start_update_rollout
-        devices = [r["d"] for r in _rows(apps) if r["needs_update"] and (member_ids is None or r["d"]["id"] in member_ids)]
+        devices = [r["d"] for r in _rows(apps) if r["needs_update"] and not r["updating"]
+                   and (member_ids is None or r["d"]["id"] in member_ids)]
         if not devices:
             flash(_("Aucun poste à mettre à jour."), "ok")
             return back("fleet", **({"group": group_id} if group_id else {}))
@@ -2230,7 +2252,7 @@ def fleet_update_all():
     for r in _rows(apps):
         if member_ids is not None and r["d"]["id"] not in member_ids:
             continue
-        if r["needs_update"] and queue(r["d"], "update", {"reboot": reboot}):
+        if r["needs_update"] and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
     audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
@@ -2280,7 +2302,7 @@ def fleet_update_selected():
     count = 0
     for dev_id in ids:
         r = rows.get(dev_id)
-        if r and r["d"]["state"] == "active" and queue(r["d"], "update", {"reboot": reboot}):
+        if r and r["d"]["state"] == "active" and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
     audit("parc.mise-a-jour-selection", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
