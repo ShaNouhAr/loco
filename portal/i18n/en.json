@@ -4412,5 +4412,6 @@
  "Filtrer par situation": "Filter by situation",
  "Situation": "Situation",
  "Toutes les situations": "All situations",
- "Effacer les filtres": "Clear filters"
+ "Effacer les filtres": "Clear filters",
+ "Appareil verrouillé : tapez son code au clavier, puis Entrée (schéma : les numéros de ses points, de 1 à 9) ; la saisie du code s'affiche en noir.": "Locked device: type its code on your keyboard, then Enter (pattern: the numbers of its dots, 1 to 9); the code entry screen shows as black."
 }

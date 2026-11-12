@@ -60,6 +60,13 @@ Depuis la fiche de l'appareil, comme pour un poste :
   déplacer, l'écran bouge pendant le geste. Ce qui bouge est transmis en JPEG, léger, puis l'image redevient
   nette dès que l'écran se pose. Pour une image fluide, il faut le **partage d'écran** (voir plus bas) : le
   contrôle à distance seul reste limité par Android à trois images par seconde environ.
+  **Appareil en veille ou verrouillé** (application 2.160 ou plus) : l'écran se rallume à l'ouverture de la
+  session, et de nouveau au premier clic ou à la première touche s'il s'est rendormi entre-temps. Vous arrivez sur
+  l'écran de verrouillage : **tapez le code de l'appareil sur votre clavier, puis Entrée** — code PIN ou mot de
+  passe tels quels ; pour un schéma, les numéros de ses points, comptés comme sur un pavé de téléphone (1 en haut
+  à gauche, 9 en bas à droite). Android masque l'écran de saisie du code dans l'image transmise : il s'affiche
+  en noir, c'est normal, la frappe passe quand même. Rien n'est contourné — il faut connaître le code, et les
+  essais ratés comptent comme sur l'appareil.
 - **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
   l'autre ; les variables d'environnement, non.
 - **Fichiers** — parcourir, téléverser, télécharger, renommer et supprimer dans le stockage de l'appareil.

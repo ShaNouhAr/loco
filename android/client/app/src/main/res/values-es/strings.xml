@@ -10,7 +10,7 @@
     <string name="control_title">Control remoto en curso</string>
     <string name="control_text">Un administrador ve y controla la pantalla de este dispositivo.</string>
     <string name="svc_screen_on">Pantalla compartida con loco</string>
-    <string name="a11y_desc">Permite a loco mostrar y controlar el dispositivo cuando abre la pantalla remota desde el portal: ver la pantalla sin volver a pedir compartirla cada vez, tocar, desplazar, volver y escribir en el campo activo. No se lee ni se envía nada fuera de una sesión abierta desde el portal, y el dispositivo muestra entonces \u00ab Control remoto en curso \u00bb.</string>
+    <string name="a11y_desc">Permite a loco mostrar y controlar el dispositivo cuando abre la pantalla remota desde el portal: ver la pantalla sin volver a pedir compartirla cada vez, tocar, desplazar, volver y escribir en el campo activo, incluido, con el dispositivo bloqueado, el código que usted escribe desde el portal. La pantalla en reposo se enciende al abrir una sesión. No se lee ni se envía nada fuera de una sesión abierta desde el portal, y el dispositivo muestra entonces \u00ab Control remoto en curso \u00bb.</string>
     <string name="action_leave">Salir de loco</string>
     <string name="leave_explain">El dispositivo se quitará de este servidor y el agente se detendrá. Podrá inscribirlo de nuevo más tarde.</string>
     <string name="cancel">Cancelar</string>

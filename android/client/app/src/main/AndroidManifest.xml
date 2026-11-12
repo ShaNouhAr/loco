@@ -24,6 +24,10 @@
          sans confirmation des applications que loco a lui-même installées. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <!-- Session d'écran ouverte depuis loco : l'écran en veille est rallumé, pour que la personne qui prend la main
+         arrive sur l'écran de verrouillage et puisse saisir le code (voir Wake). Rien n'est déverrouillé. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
     <!-- Relance du service visible après un redémarrage de l'appareil ou une mise à jour de l'application. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Jamais demandée à la personne : accordée par loco, par adb, quand elle appaire son appareil. Sert seulement à
@@ -52,6 +56,16 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Sans interface : allume l'écran en veille à l'ouverture d'une session d'écran, puis se referme (voir Wake). -->
+        <activity
+            android:name=".WakeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <service

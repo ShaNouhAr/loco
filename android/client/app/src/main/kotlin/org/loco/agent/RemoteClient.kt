@@ -159,7 +159,9 @@ class RemoteClient(private val context: Context, private val store: Store, priva
             val s = sessions.getOrPut(id) {
                 opened = true
                 Session(id, d.optString("kind")).also { session ->
-                    val src = screen()
+                    // Session d'écran : l'écran en veille est rallumé avant la première image (voir Wake).
+                    if (session.kind == "desktop") Wake.screen(context, waitMs = 1500)
+                    val src = if (session.kind == "desktop") screen() else null
                     when (session.kind) {
                         "desktop" -> if (src != null) {
                             session.start("rfb") { Rfb.serveDesktop(session.toAgent, session.toBrowser, src, ScaledInput(context, src)) }
@@ -254,8 +256,19 @@ class RemoteClient(private val context: Context, private val store: Store, priva
     private class ScaledInput(private val context: Context, private val source: FrameSource) : InputSink {
         private fun sx(x: Int) = if (source.width > 0) x * source.screenWidth / source.width else x
         private fun sy(y: Int) = if (source.height > 0) y * source.screenHeight / source.height else y
-        override fun pointer(buttons: Int, x: Int, y: Int) { InputService.instance?.pointer(buttons, sx(x), sy(y)) }
-        override fun key(down: Boolean, keysym: Long) { InputService.instance?.key(down, keysym) }
+        private var held = 0
+        // Appareil rendormi pendant la session : le premier clic ou la première touche rallume l'écran, comme un
+        // doigt sur un téléphone en veille — ce geste-là sert au réveil et n'est pas transmis.
+        override fun pointer(buttons: Int, x: Int, y: Int) {
+            val pressed = buttons and held.inv()
+            held = buttons
+            if (pressed != 0 && Wake.screen(context)) return
+            InputService.instance?.pointer(buttons, sx(x), sy(y))
+        }
+        override fun key(down: Boolean, keysym: Long) {
+            if (down && Wake.screen(context)) return
+            InputService.instance?.key(down, keysym)
+        }
         override fun clipboard(text: String) {
             Handler(Looper.getMainLooper()).post {
                 try {

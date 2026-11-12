@@ -10,7 +10,7 @@
     <string name="control_title">Remote control in progress</string>
     <string name="control_text">An administrator is viewing and controlling this device\'s screen.</string>
     <string name="svc_screen_on">Screen shared with loco</string>
-    <string name="a11y_desc">Lets loco show and control the device when you open the remote screen from the portal: see the screen without asking to share it each time, tap, scroll, go back, and type text into the focused field. Nothing is read or sent outside a session you opened from the portal, and the device then shows \u00ab Remote control in progress \u00bb.</string>
+    <string name="a11y_desc">Lets loco show and control the device when you open the remote screen from the portal: see the screen without asking to share it each time, tap, scroll, go back, and type text into the focused field — including, when the device is locked, the code you type from the portal. A sleeping screen is turned on when a session opens. Nothing is read or sent outside a session you opened from the portal, and the device then shows \u00ab Remote control in progress \u00bb.</string>
     <string name="action_leave">Leave loco</string>
     <string name="leave_explain">The device will be removed from this server and the agent will stop. You can enroll it again later.</string>
     <string name="cancel">Cancel</string>

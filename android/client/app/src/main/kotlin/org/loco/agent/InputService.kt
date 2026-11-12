@@ -2,6 +2,7 @@ package org.loco.agent
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.app.KeyguardManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -146,6 +147,7 @@ class InputService : AccessibilityService(), InputSink {
     override fun key(down: Boolean, keysym: Long) {
         if (keysym == 0xffe3L || keysym == 0xffe4L) { ctrl = down; return }     // Ctrl gauche / droit
         if (!down) return
+        if (locked()) { if (lockKey(keysym)) return } else if (lockTyped.isNotEmpty()) main.post { lockTyped.setLength(0) }
         if (ctrl) { shortcut(keysym); return }
         when (keysym) {
             0xff1bL, XF86_BACK -> performGlobalAction(GLOBAL_ACTION_BACK)        // Échap, touche Précédent
@@ -156,6 +158,177 @@ class InputService : AccessibilityService(), InputSink {
             0xff0dL, 0xff8dL -> enter()                                         // Entrée
             0xff09L, 0xff89L -> insert("\t")
             else -> (keypad(keysym) ?: character(keysym))?.let { insert(it) }
+        }
+    }
+
+    // --- Écran de verrouillage ------------------------------------------------
+    // Android masque l'écran de saisie du code dans l'image transmise (surface protégée) : la personne qui prend la main
+    // ne voit pas le pavé. Elle tape donc le code de l'appareil sur son clavier, et chaque touche appuie sur la touche
+    // du pavé de même nom — rien n'est contourné, il faut connaître le code. Tapé depuis l'écran de verrouillage, le
+    // premier caractère fait d'abord monter la saisie du code (balayage vers le haut). Schéma : on tape les numéros des
+    // points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite), puis Entrée le trace.
+    private val lockTyped = StringBuilder()        // mot de passe en cours de frappe (champ illisible) ; vidé hors verrouillage
+
+    private fun locked(): Boolean = try {
+        (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+    } catch (_: Exception) {
+        false
+    }
+
+    private val lockQueue = ArrayList<Long>()      // touches tapées pendant que la saisie du code monte à l'écran
+    private var lockRising = false
+
+    /** Touche tapée appareil verrouillé. Renvoie vrai si elle est prise en charge ici. Elle est traitée sur le fil
+     *  principal, comme les suivantes : les touches gardent leur ordre, même tapées pendant que la saisie du code monte. */
+    private fun lockKey(keysym: Long): Boolean {
+        val root = rootInActiveWindow ?: return false
+        if (root.packageName?.toString() != SYSTEM_UI) return false           // autre fenêtre par-dessus le verrouillage
+        val typed = keypad(keysym) != null || character(keysym) != null
+        if (!typed && keysym != 0xff0dL && keysym != 0xff8dL && keysym != 0xff08L) return false
+        main.post { lockHandle(keysym, typed) }
+        return true
+    }
+
+    private fun lockHandle(keysym: Long, typed: Boolean) {
+        if (lockRising) {
+            lockQueue.add(keysym)
+            return
+        }
+        val root = rootInActiveWindow ?: return
+        if (root.packageName?.toString() != SYSTEM_UI) return
+        if (lockReady(root)) {
+            lockApply(root, keysym)
+            return
+        }
+        // Encore sur l'écran de verrouillage : la première touche fait monter la saisie du code ; elle et les suivantes
+        // attendent qu'elle soit là, puis sont rejouées dans l'ordre.
+        if (!typed) return
+        lockQueue.add(keysym)
+        lockRising = true
+        swipeUp()
+        main.postDelayed({ lockDrain(1) }, 700)
+    }
+
+    private fun lockDrain(attempt: Int) {
+        val root = rootInActiveWindow
+        val ready = locked() && root != null && root.packageName?.toString() == SYSTEM_UI && lockReady(root)
+        if (!ready && locked() && attempt < 4) {
+            main.postDelayed({ lockDrain(attempt + 1) }, 500)
+            return
+        }
+        val keys = lockQueue.toList()
+        lockQueue.clear()
+        lockRising = false
+        if (ready && root != null) for (k in keys) lockApply(root, k)
+    }
+
+    private fun lockGrid(root: AccessibilityNodeInfo): AccessibilityNodeInfo? = try {
+        root.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/lockPatternView")?.firstOrNull { it.isVisibleToUser }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun lockField(root: AccessibilityNodeInfo): AccessibilityNodeInfo? =
+        root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable && it.isPassword }
+
+    /** La saisie du code est-elle à l'écran (pavé PIN, grille du schéma ou champ du mot de passe) ? */
+    private fun lockReady(root: AccessibilityNodeInfo): Boolean =
+        padKey(root, "key1", "1") != null || lockGrid(root) != null || lockField(root) != null
+
+    private fun lockApply(root: AccessibilityNodeInfo, keysym: Long): Boolean {
+        val digit = when (keysym) {
+            in 0x30L..0x39L -> (keysym - 0x30L).toInt()
+            in 0xffb0L..0xffb9L -> (keysym - 0xffb0L).toInt()
+            else -> -1
+        }
+        val enter = keysym == 0xff0dL || keysym == 0xff8dL
+        val back = keysym == 0xff08L
+        // Code PIN : touches du pavé.
+        val pad = when {
+            digit >= 0 -> padKey(root, "key$digit", digit.toString())
+            enter -> padKey(root, "key_enter", null)
+            back -> padKey(root, "delete_button", null)
+            else -> null
+        }
+        if (pad != null) {
+            pad.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            return true
+        }
+        // Schéma : les numéros des points s'accumulent, Entrée trace le schéma d'un seul geste.
+        val grid = lockGrid(root)
+        if (grid != null) {
+            when {
+                digit in 1..9 -> if (lockTyped.length < 9 && !lockTyped.contains(digit.toString())) lockTyped.append(digit)
+                back -> if (lockTyped.isNotEmpty()) lockTyped.setLength(lockTyped.length - 1)
+                enter -> {
+                    drawPattern(grid, lockTyped.toString())
+                    lockTyped.setLength(0)
+                }
+            }
+            return true
+        }
+        // Mot de passe : champ de saisie du verrouillage (son contenu ne se relit pas, on garde ce qui est tapé).
+        val field = lockField(root) ?: return padKey(root, "key1", "1") != null     // pavé PIN : touche sans effet, mais prise
+        when {
+            enter -> {
+                lockTyped.setLength(0)
+                if (Build.VERSION.SDK_INT >= 30) field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+                return true
+            }
+            back -> if (lockTyped.isNotEmpty()) lockTyped.setLength(lockTyped.length - 1)
+            else -> lockTyped.append((keypad(keysym) ?: character(keysym)) ?: return true)
+        }
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, lockTyped.toString())
+        field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        return true
+    }
+
+    /** Touche du pavé du verrouillage : par son identifiant, sinon (chiffres) par son nom lu par l'accessibilité. */
+    private fun padKey(root: AccessibilityNodeInfo, id: String, label: String?): AccessibilityNodeInfo? {
+        try {
+            root.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/$id")?.firstOrNull { it.isClickable && it.isVisibleToUser }?.let { return it }
+        } catch (_: Exception) {
+        }
+        if (label == null) return null
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var seen = 0
+        while (queue.isNotEmpty() && seen++ < 600) {
+            val n = queue.removeFirst()
+            if (n.isClickable && n.isVisibleToUser && (n.contentDescription?.toString() == label || n.text?.toString() == label) &&
+                n.className?.toString()?.contains("EditText") != true) return n
+            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /** Trace un schéma : un seul geste qui passe par le centre des points donnés (1 à 9, ligne par ligne). */
+    private fun drawPattern(grid: AccessibilityNodeInfo, dots: String) {
+        if (dots.length < 2) return
+        val box = android.graphics.Rect()
+        grid.getBoundsInScreen(box)
+        if (box.width() <= 0 || box.height() <= 0) return
+        val path = Path()
+        dots.forEachIndexed { i, dot ->
+            val n = dot - '1'
+            val x = box.left + (n % 3 + 0.5f) * box.width() / 3f
+            val y = box.top + (n / 3 + 0.5f) * box.height() / 3f
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        try {
+            dispatchGesture(GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0, 180L * (dots.length - 1))).build(), null, null)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun swipeUp() {
+        try {
+            val m = resources.displayMetrics
+            val path = Path().apply { moveTo(m.widthPixels / 2f, m.heightPixels * 0.82f); lineTo(m.widthPixels / 2f, m.heightPixels * 0.25f) }
+            dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 220)).build(), null, null)
+        } catch (_: Exception) {
         }
     }
 
@@ -261,6 +434,9 @@ class InputService : AccessibilityService(), InputSink {
     companion object {
         @Volatile
         var instance: InputService? = null
+
+        // Interface système d'Android : c'est elle qui porte l'écran de verrouillage et sa saisie du code.
+        const val SYSTEM_UI = "com.android.systemui"
 
         // Durée de base d'un segment du doigt suivi en direct (allongée avec la distance parcourue).
         const val SEGMENT_MOVE = 16L

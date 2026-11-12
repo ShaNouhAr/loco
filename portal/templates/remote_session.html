@@ -120,7 +120,7 @@
       <span id="remote-readout" class="remote-readout mono" aria-live="polite" title="{{ _('Résolution du bureau et taille d\'affichage (100 %% : un pixel du poste par pixel de l\'écran). La résolution initiale est rétablie à la fermeture de la session.') }}"></span>
       <span id="remote-limit" class="remote-limit" role="status" hidden></span>
     </div>
-    <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+    <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% if remote.kind == 'desktop' %}{{ _("Appareil verrouillé : tapez son code au clavier, puis Entrée (schéma : les numéros de ses points, de 1 à 9) ; la saisie du code s'affiche en noir.") }} {% endif %}{% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
   </div>
   {% endif %}
 </div>

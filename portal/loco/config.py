@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.159.0"
+VERSION = "2.160.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")

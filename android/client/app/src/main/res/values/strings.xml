@@ -14,7 +14,7 @@
     <string name="svc_screen_on">Écran partagé avec loco</string>
 
     <!-- Accessibilité -->
-    <string name="a11y_desc">Permet à loco de montrer et de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : voir l\'écran sans redemander le partage à chaque fois, toucher, faire défiler, revenir, et saisir du texte dans le champ actif. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail, et l\'appareil affiche alors « Contrôle à distance en cours ».</string>
+    <string name="a11y_desc">Permet à loco de montrer et de piloter l\'appareil quand vous ouvrez l\'écran distant depuis le portail : voir l\'écran sans redemander le partage à chaque fois, toucher, faire défiler, revenir, et saisir du texte dans le champ actif — y compris, appareil verrouillé, le code que vous tapez depuis le portail. L\'écran en veille est rallumé à l\'ouverture d\'une session. Rien n\'est lu ni envoyé en dehors d\'une session ouverte depuis le portail, et l\'appareil affiche alors « Contrôle à distance en cours ».</string>
 
     <!-- État -->
     <string name="action_leave">Se retirer de loco</string>

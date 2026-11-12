@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.160.0 — 2026-11-13
+
+- **Android : l'écran en veille se rallume quand on prend la main** : à l'ouverture d'une session d'écran, l'application rallume l'écran de l'appareil ; s'il se rendort pendant la session, le premier clic ou la première touche le rallume, comme un doigt sur un téléphone en veille. On arrive ainsi sur l'écran de verrouillage au lieu d'un écran éteint.
+- **Android : le code de l'appareil se tape au clavier** : appareil verrouillé, tapez son code sur votre clavier puis Entrée — code PIN ou mot de passe tels quels ; pour un schéma, les numéros de ses points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite). Tapée depuis l'écran de verrouillage, la première touche fait monter la saisie du code. Rien n'est contourné : il faut connaître le code, et les essais ratés comptent comme sur l'appareil.
+- Android masque l'écran de saisie du code dans l'image transmise : il s'affiche en noir, la frappe passe quand même. Une note le rappelle sous la session, et la description du service d'accessibilité de l'application dit ce qu'elle fait désormais.
+- Ces nouveautés arrivent avec la mise à jour de l'application Android (2.160.0).
+
 ## 2.159.0 — 2026-11-12
 
 - **Mon parc : des filtres en listes déroulantes** : les deux rangées de pastilles laissent place à une barre de listes — *État*, *Système*, *Situation* (hors ligne, redémarrage nécessaire) et *Groupe*. Chaque bouton dit le filtre et la valeur choisie, et se remplit quand un filtre est posé ; chaque ligne d'une liste donne son nombre de postes. Un lien *Effacer les filtres* apparaît dès qu'il y en a un. La recherche et les pages gardent les filtres choisis.
