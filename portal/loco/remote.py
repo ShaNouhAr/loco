@@ -6,6 +6,7 @@ Les transactions courtes fonctionnent avec gunicorn comme avec waitress, sans se
 """
 import base64
 import binascii
+import datetime
 import hashlib
 import secrets
 import time
@@ -27,6 +28,37 @@ OPEN = ("waiting", "active")
 MCP_IDLE, MCP_DESKTOP_IDLE = 300, 120
 SERVER_SESSIONS, KIND_SESSIONS, DEVICE_SESSIONS = 8, 2, 4    # serveur, poste et type, poste (l'agent Windows n'en sert pas plus)
 CONSENT_VERSION = fleet.CONSENT_VERSION
+# Cadence d'un agent sans session ouverte. Une session demandée attend le prochain relevé de l'agent : c'est le temps
+# d'ouverture d'un terminal ou d'un bureau. Poste regardé (fiche ouverte, session en cours ou tout juste fermée) : plusieurs
+# relevés par seconde. Sinon, aussi court que le parc le permet sans charger le serveur : IDLE_BUDGET échanges par
+# seconde au plus pour tout le parc (≈ 2 ms chacun), entre IDLE_FAST et IDLE_SLOW secondes par poste. Un appareil
+# Android au repos garde son rythme (batterie).
+IDLE_SLOW, IDLE_FAST, IDLE_ANDROID, IDLE_WATCHED, IDLE_BUDGET = 5, 1, 3, 0.3, 25
+WATCH = 30
+_watched, _crowd = {}, [0.0, 0]              # en mémoire : un seul processus sert le portail ; à défaut, rythme lent
+
+
+def watch(dev_id, seconds=WATCH):
+    """Quelqu'un s'intéresse à ce poste : son agent relève le canal distant plusieurs fois par seconde."""
+    now = time.time()
+    if len(_watched) > 256:
+        for key, until in list(_watched.items()):
+            if until < now:
+                _watched.pop(key, None)
+    _watched[dev_id] = max(_watched.get(dev_id, 0), now + seconds)
+
+
+def idle_interval(conn, dev):
+    """Secondes entre deux relevés du canal distant par un agent sans session (agents 2.157 et plus ; les précédents
+    restent à 5 s)."""
+    now = time.time()
+    if _watched.get(dev["id"], 0) > now:
+        return IDLE_WATCHED
+    if now - _crowd[0] > 60:
+        recent = (datetime.datetime.now() - datetime.timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+        _crowd[:] = [now, conn.execute("SELECT COUNT(*) FROM devices WHERE state='active' AND last_seen>=?", (recent,)).fetchone()[0]]
+    floor = IDLE_ANDROID if dev["os_family"] == "android" else IDLE_FAST
+    return min(IDLE_SLOW, max(floor, round(_crowd[1] / IDLE_BUDGET, 1)))
 
 
 def _owner():
@@ -213,6 +245,7 @@ def remote_open(dev_id):
                                                 int(kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal")),
                                                 "pending" if consent else ""))
     audit("parc.session.ouverture", f"{dev['hostname']} : {kind}, {sid}{', accord demandé' if consent else ''}")
+    watch(dev_id, 120)                        # une session en appelle souvent une autre (console, fichiers, reprise)
     if kind == "adb":
         from . import adb
         adb.start(sid, serial)
@@ -248,6 +281,7 @@ def remote_io(sid):
         conn.commit()
         return {"state": "closed", "packets": [], "ack": row["input_seq"]}
     if row["state"] in OPEN:
+        watch(row["device_id"], 60)           # session fermée puis rouverte : la reprise ne fait pas attendre
         _append(row, "in", request.form.get("seq", 0), request.form.get("data", ""))
         cols = _integer(request.form.get("cols", row["cols"]), 20, 500)
         rows = _integer(request.form.get("rows", row["rows"]), 5, 200)
@@ -324,7 +358,8 @@ def remote_agent():
         audit("parc.session.accord", detail, username="agent")
     for detail in finished:
         audit("parc.session.fin", detail, username="agent")
-    answer = {"sessions": output, "interval": 0.025 if output else (monitoring.LIVE_INTERVAL if live else 5)}
+    idle = idle_interval(conn, dev)
+    answer = {"sessions": output, "interval": 0.025 if output else (min(idle, monitoring.LIVE_INTERVAL) if live else idle)}
     if live:
         answer["live"] = monitoring.LIVE_INTERVAL
     # Une action attend ce poste : par ce canal déjà ouvert (toutes les 5 s), on lui demande un contact principal tout

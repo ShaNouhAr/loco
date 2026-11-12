@@ -107,10 +107,12 @@ class RemoteClient(private val context: Context, private val store: Store, priva
             if (d == null || d.optString("state") == "closed") sessions.remove(id)?.close()
         }
         var busy = false
+        var opened = false
         for ((id, d) in seen) {
             val stateD = d.optString("state")
             if (stateD != "waiting" && stateD != "active") continue
             val s = sessions.getOrPut(id) {
+                opened = true
                 Session(id, d.optString("kind")).also { session ->
                     val src = screen()
                     when (session.kind) {
@@ -139,8 +141,12 @@ class RemoteClient(private val context: Context, private val store: Store, priva
         val seenNow = sessions.values.any { it.kind == "desktop" && it.state == "active" }
         if (seenNow != watching) { watching = seenNow; onWatching(seenNow) }
         val now = System.currentTimeMillis()
-        if (busy || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
-        if (sessions.isEmpty()) return 3000
+        // Une session qui s'ouvre compte comme une activité : sans cela, après une longue pause, son premier texte
+        // attendait le relevé lent (1,2 s) d'une session silencieuse.
+        if (busy || opened || sessions.isNotEmpty() && lastActivity == 0L) lastActivity = now
+        // Aucune session : cadence demandée par le serveur — courte quand la fiche de l'appareil est ouverte dans le
+        // portail, pour qu'une session s'ouvre sans attendre —, jamais plus lente qu'avant (3 s).
+        if (sessions.isEmpty()) return (resp.optDouble("interval", 3.0).let { if (it.isNaN()) 3.0 else it } * 1000).toLong().coerceIn(300L, 3000L)
         // Des octets attendent encore (image plus grosse qu'un envoi) : enchaîner sans pause.
         if (sessions.values.any { it.toBrowser.available() > 0 }) return 0
         val idle = now - lastActivity

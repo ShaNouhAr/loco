@@ -154,7 +154,7 @@ class FleetMonitoringTest(unittest.TestCase):
         dev = device(self.agent.uid)
         r = self.agent.post("/agent/api/remote", {"sessions": []}, self.agent.token)
         self.assertNotIn("live", r.get_json())                            # personne ne regarde : rythme normal
-        self.assertEqual(r.get_json()["interval"], 5)
+        self.assertGreaterEqual(r.get_json()["interval"], 0.3)
         page = self.admin.c.get(f"/fleet/{dev['id']}/live", headers={"X-Requested-With": "fetch"})
         self.assertEqual(page.get_json()["points"], [])
         r = self.agent.post("/agent/api/remote", {"sessions": [], "metrics": {"cpu": 42.0, "mem_total": 8 * GIB,

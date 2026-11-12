@@ -40,6 +40,20 @@ namespace Loco
             if (list == null) yield break;
             foreach (object item in list) { var row = item as Dictionary<string, object>; if (row != null) yield return row; }
         }
+        // Aucune session ouverte : cadence demandée par le serveur — courte quand quelqu'un regarde la fiche du poste ou
+        // que le parc est petit, pour qu'un terminal s'ouvre sans attendre —, bornée ; 5 s si le serveur n'en dit rien.
+        internal static int RestDelay(Dictionary<string, object> answer)
+        {
+            double seconds = 5;
+            try
+            {
+                object v;
+                if (answer.TryGetValue("interval", out v) && v != null) seconds = Convert.ToDouble(v, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            catch (Exception) { seconds = 5; }
+            if (double.IsNaN(seconds)) seconds = 5;
+            return (int)(Math.Min(5.0, Math.Max(0.25, seconds)) * 1000);
+        }
         void Loop()
         {
             var sessions = new Dictionary<string, RemoteSession>();
@@ -47,6 +61,7 @@ namespace Loco
             var idle = Stopwatch.StartNew();                         // depuis la dernière activité d'une session
             bool live = false;                                       // fiche du poste regardée : relevé toutes les 2 s
             var sampler = new Agent.UsageSampler();
+            var sampled = Stopwatch.StartNew(); double liveEvery = 2.0; bool sampledOnce = false;
             try
             {
                 var waits = new[] { stopping, (WaitHandle)Activity };
@@ -59,7 +74,10 @@ namespace Loco
                     try
                     {
                         var payload = new Dictionary<string, object> { { "sessions", sessions.Values.Select(s => s.Payload()).ToArray() } };
-                        if (live) payload["metrics"] = Agent.LiveMetrics(sampler);
+                        // Relevé du direct à son rythme propre, pas à celui des échanges (plusieurs par seconde quand la
+                        // fiche est ouverte ou qu'une session tourne) : la moyenne porte toujours sur la même durée.
+                        if (live && (!sampledOnce || sampled.Elapsed.TotalSeconds >= liveEvery - 0.15))
+                        { payload["metrics"] = Agent.LiveMetrics(sampler); sampled.Restart(); sampledOnce = true; }
                         var answer = Agent.RemoteExchange(payload);
                         lastOk.Restart();
                         object doCheckin;
@@ -67,8 +85,9 @@ namespace Loco
                             Checkin.Set();                          // réveille la boucle principale pour un contact immédiat
                         object wanted;
                         bool liveNow = answer.TryGetValue("live", out wanted) && wanted != null && Convert.ToDouble(wanted) > 0;
-                        if (!liveNow) sampler.Reset();                  // prochain direct : repartir d'un relevé frais
+                        if (!liveNow) { sampler.Reset(); sampledOnce = false; }   // prochain direct : repartir d'un relevé frais
                         live = liveNow;
+                        if (live) liveEvery = Math.Max(1.0, Convert.ToDouble(wanted));
                         var descriptors = Items(answer, "sessions").ToDictionary(d => Str(d, "id"));
                         foreach (string sid in sessions.Keys.ToArray())
                             if (!descriptors.ContainsKey(sid) || Str(descriptors[sid], "state") == "closed")
@@ -88,8 +107,8 @@ namespace Loco
                         bool busy = sessions.Values.Any(s => s.HasOutput) || descriptors.Values.Any(d => Items(d, "packets").Any());
                         if (busy || signaled == 1) idle.Restart();
                         double quiet = idle.Elapsed.TotalSeconds;
-                        delay = sessions.Count > 0 ? (busy ? 0 : quiet < 3 ? 12 : quiet < 30 ? 100 : 250) : 5000;
-                        if (live) delay = Math.Min(delay, Math.Max(1000, (int)(Convert.ToDouble(wanted) * 1000)));
+                        delay = sessions.Count > 0 ? (busy ? 0 : quiet < 3 ? 12 : quiet < 30 ? 100 : 250) : RestDelay(answer);
+                        if (live) delay = Math.Min(delay, (int)(liveEvery * 1000));
                     }
                     catch (Exception e)
                     {

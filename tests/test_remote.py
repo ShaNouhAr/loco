@@ -51,6 +51,43 @@ class TestRemote(FleetTest):
             self.assertEqual(self.exchange().status_code, 200)
         self.assertEqual(device(self.agent.uid)['last_seen'], seen)
 
+    def rest(self):
+        return self.exchange().get_json()['interval']
+
+    def quiet(self, crowd=None):
+        from loco import remote
+        remote._watched.clear()
+        remote._crowd[:] = [time.time(), crowd] if crowd is not None else [0.0, 0]
+        return remote
+
+    def test_an_agent_at_rest_polls_as_often_as_the_fleet_allows(self):
+        remote = self.quiet()
+        self.assertEqual(self.rest(), remote.IDLE_FAST)                      # petit parc : un relevé par seconde
+        self.quiet(crowd=50)
+        self.assertEqual(self.rest(), 2)                                     # 50 postes : 25 échanges par seconde au plus
+        self.quiet(crowd=5000)
+        self.assertEqual(self.rest(), remote.IDLE_SLOW)                      # grand parc : jamais plus lent qu'avant
+        with transaction() as conn:
+            self.assertEqual(remote.idle_interval(conn, {'id': 0, 'os_family': 'android'}), remote.IDLE_SLOW)
+            remote._crowd[1] = 3
+            self.assertEqual(remote.idle_interval(conn, {'id': 0, 'os_family': 'android'}), remote.IDLE_ANDROID)   # batterie
+
+    def test_a_watched_machine_is_ready_for_a_session(self):
+        remote = self.quiet(crowd=5000)
+        self.assertEqual(self.rest(), remote.IDLE_SLOW)
+        self.assertEqual(self.admin.c.get(f'/fleet/{self.dev_id}').status_code, 200)         # fiche ouverte
+        self.assertEqual(self.rest(), remote.IDLE_WATCHED)
+        other = Agent(LINUX, '192.168.43.61')
+        other.enroll()
+        self.assertEqual(self.exchange(agent=other).get_json()['interval'], remote.IDLE_SLOW)   # elle seule
+        remote._watched[self.dev_id] = time.time() - 1                                         # fiche refermée depuis un moment
+        self.assertEqual(self.rest(), remote.IDLE_SLOW)
+        sid = self.open()                                                                      # session ouverte sans passer par la fiche
+        self.assertEqual(self.exchange([{'id': sid, 'ack': 0, 'seq': 0, 'data': '', 'state': 'active'}]).get_json()['interval'], 0.025)
+        self.io(sid, {'close': '1'})
+        self.exchange()                                                                        # l'agent apprend la fermeture
+        self.assertEqual(self.rest(), remote.IDLE_WATCHED)                                     # la suivante n'attendra pas
+
     def test_a_queued_action_asks_the_agent_to_check_in_now(self):
         self.assertNotIn('checkin', self.exchange().get_json())              # rien en attente : pas de réveil
         self.admin.post(f'/fleet/{self.dev_id}/action', {'action': 'scan'}, page=f'/fleet/{self.dev_id}')

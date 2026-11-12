@@ -1999,6 +1999,8 @@ def fleet_device_live(dev_id):
 @login_required
 def fleet_device(dev_id):
     dev = _get(dev_id)
+    from . import remote
+    remote.watch(dev["id"])                  # fiche ouverte : l'agent se tient prêt, terminal et bureau s'ouvrent sans attente
     inv = inventory(dev)
     color, reason = status(dev)
     availability = presence(dev)

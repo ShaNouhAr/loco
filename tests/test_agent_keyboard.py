@@ -103,6 +103,12 @@ class TestIdlePolling(unittest.TestCase):
     def test_backoff(self):
         self.assertEqual([agent.remote_idle_delay(s) for s in (0, 2.9, 3, 29, 30, 600)], [0.025, 0.025, 0.1, 0.1, 0.25, 0.25])
 
+    def test_rest_follows_the_server_within_bounds(self):
+        # Sans session : la cadence vient du serveur (fiche du poste ouverte, petit parc), entre 0,25 s et 5 s.
+        answers = ({"interval": 0.3}, {"interval": 1}, {"interval": 5}, {"interval": 0.01}, {"interval": 60}, {}, {"interval": "x"},
+                   {"interval": None}, {"interval": float("nan")})
+        self.assertEqual([agent.remote_rest_delay(a) for a in answers], [0.3, 1, 5, 0.25, 5, 5, 5, 5, 5])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1954,6 +1954,16 @@ def remote_idle_delay(idle):
     return 0.025 if idle < 3 else 0.1 if idle < 30 else 0.25
 
 
+def remote_rest_delay(answer):
+    """Aucune session ouverte : cadence demandée par le serveur — courte quand quelqu'un regarde la fiche du poste ou que
+    le parc est petit, pour qu'un terminal s'ouvre sans attendre —, bornée ; 5 s si le serveur n'en dit rien d'utilisable."""
+    try:
+        wanted = float(answer.get("interval", 5))
+    except (TypeError, ValueError):
+        return 5
+    return min(5.0, max(0.25, wanted)) if wanted == wanted else 5
+
+
 def remote_service():
     stopping = [False]
     signal.signal(signal.SIGTERM, lambda *_: stopping.__setitem__(0, True))
@@ -1965,7 +1975,7 @@ def remote_service():
             return 0
         sessions, last_ok, last_activity, last_checkin = {}, time.monotonic(), time.monotonic(), 0.0
         transport = RemoteTransport()
-        live, sampler = False, LiveSampler()
+        live, sampler, sampled, live_every = False, LiveSampler(), 0.0, 2.0
         loaded = os.stat(PROGRAM)
         signature = (loaded.st_ino, loaded.st_mtime_ns, loaded.st_size)
         try:
@@ -1980,8 +1990,10 @@ def remote_service():
                     if not conf.get("token"):
                         break
                     payload = {"sessions": [s.payload() for s in sessions.values()]}
-                    if live:
-                        payload["metrics"] = sampler.sample()
+                    # Relevé du direct à son rythme propre, pas à celui des échanges (plusieurs par seconde quand la
+                    # fiche est ouverte ou qu'une session tourne) : la moyenne porte toujours sur la même durée.
+                    if live and time.monotonic() - sampled >= live_every - 0.15:
+                        payload["metrics"], sampled = sampler.sample(), time.monotonic()
                     answer = transport.exchange(conf["server"], payload, conf["token"])
                     last_ok = time.monotonic()
                     if answer.get("checkin") and time.monotonic() - last_checkin > 4:
@@ -1991,8 +2003,10 @@ def remote_service():
                         subprocess.run(["systemctl", "start", "--no-block", "loco-client.service"],
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     if not answer.get("live"):
-                        sampler.previous = None                # prochain direct : repartir d'un relevé frais
+                        sampler.previous, sampled = None, 0.0   # prochain direct : repartir d'un relevé frais
                     live = bool(answer.get("live"))
+                    if live:
+                        live_every = max(1.0, float(answer.get("live") or 2))
                     descriptors = {d["id"]: d for d in answer["sessions"]}
                     for sid in list(sessions):
                         if sid not in descriptors or descriptors[sid]["state"] == "closed":
@@ -2011,9 +2025,9 @@ def remote_service():
                     busy = any(item.pending for item in sessions.values()) or any(d.get("packets") for d in descriptors.values())
                     if busy:
                         last_activity = time.monotonic()
-                    delay = (0 if busy else remote_idle_delay(time.monotonic() - last_activity)) if sessions else 5
+                    delay = (0 if busy else remote_idle_delay(time.monotonic() - last_activity)) if sessions else remote_rest_delay(answer)
                     if live:                                   # fiche regardée : un relevé toutes les 2 s
-                        delay = min(delay, max(1.0, float(answer.get("live") or 2)))
+                        delay = min(delay, live_every)
                 except (OSError, ValueError, KeyError) as e:
                     if getattr(e, "code", 0) == 429:
                         # Le navigateur doit vider sa file : réessayer le même paquet, sans coupure ni rejeu.

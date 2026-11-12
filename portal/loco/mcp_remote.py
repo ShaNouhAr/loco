@@ -144,6 +144,7 @@ class Channel:
                               int(self.kind == "desktop" and dev["os_family"] != "windows" and can("remote.terminal")), cols, rows,
                               "pending" if consent else ""))
                 audit("parc.session.ouverture", f"{dev['hostname']} : {self.kind}, {self.sid}{_via()}{', accord demandé' if consent else ''}", commit=False)
+                remote.watch(dev["id"], 120)          # un assistant enchaîne les sessions : les suivantes s'ouvrent sans attente
                 self.fresh = True
             else:
                 self.sid = row["id"]

@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.157.0 — 2026-11-12
+
+- **Un terminal s'ouvre tout de suite** : une session demandée attendait que l'agent du poste vienne aux nouvelles, ce qu'il ne faisait que toutes les cinq secondes au repos — d'où deux à cinq secondes d'attente à l'ouverture d'un terminal, d'un bureau distant ou de l'onglet Fichiers. Dès que la fiche d'un poste est ouverte, qu'une session tourne ou vient de se fermer, son agent vient désormais aux nouvelles plusieurs fois par seconde : la session s'ouvre en un quart de seconde environ. Mesuré sur un poste Debian : 3,9 s en médiane auparavant, 0,25 s maintenant.
+- **Même sans passer par la fiche** : un poste que personne ne regarde vient aux nouvelles toutes les secondes dans un parc de 25 postes au plus, puis de moins en moins souvent à mesure que le parc grandit, jusqu'aux cinq secondes d'avant — le serveur ne reçoit jamais plus de 25 de ces échanges par seconde, environ 2 ms chacun. Un appareil Android au repos garde son rythme de trois secondes, pour sa batterie.
+- **Android : le premier texte d'une session n'attend plus** : après une longue pause, il arrivait avec plus d'une seconde de retard.
+- Le suivi en direct de l'onglet Supervision garde son relevé toutes les deux secondes, quel que soit le rythme des échanges.
+- Les agents Linux et Windows se mettent à jour seuls ; d'ici là, ils gardent leur rythme de cinq secondes. L'application Android suit avec sa propre mise à jour.
+
 ## 2.156.0 — 2026-11-12
 
 - **Mon parc et la vue d'ensemble se tiennent à jour sans se recharger** : quand l'état du parc change, seules les parties concernées de la page sont remplacées — plus de page qui clignote, le défilement reste où il est. Dans Mon parc, la ligne d'un poste dont l'état change s'éclaire un instant ; la fenêtre *Tout mettre à jour* suit le nombre affiché sur son bouton. Rien n'est remplacé tant qu'un menu ou une fenêtre est ouvert, ni pendant une sélection de postes. Si la page doit changer de forme (premier poste du parc, par exemple), elle se recharge comme avant.

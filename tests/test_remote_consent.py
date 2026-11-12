@@ -319,5 +319,11 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertLess(source.index('answer == "timeout"', ask), source.index("OpenDesktop(stopping);", ask))
 
 
+    def test_rest_follows_the_server(self):
+        source = (ROOT / "windows/client/RemoteControl.cs").read_text(encoding="utf-8")
+        self.assertIn(": RestDelay(answer);", source)
+        self.assertIn("Math.Min(5.0, Math.Max(0.25, seconds))", source)
+
+
 if __name__ == "__main__":
     unittest.main()
