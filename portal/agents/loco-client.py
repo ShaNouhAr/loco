@@ -3054,6 +3054,70 @@ def number_screens(found, width, height):
     return kept
 
 
+def kde_outputs(text):
+    """Écrans actifs de KDE Plasma décrits par « kscreen-doctor -j » : (x, y, largeur, hauteur, principal, nom), en
+    coordonnées logiques — le mode de l'écran, tourné s'il l'est, divisé par son échelle. [] si c'est illisible."""
+    try:
+        outputs = json.loads(text).get("outputs") or []
+    except (ValueError, AttributeError):
+        return []
+    rects = []
+    for output in outputs:
+        if not isinstance(output, dict) or not output.get("enabled") or output.get("connected") is False:
+            continue
+        modes = [m for m in output.get("modes") or [] if isinstance(m, dict) and m.get("id") == output.get("currentModeId")]
+        size, pos, scale = (modes[0] if modes else output).get("size") or {}, output.get("pos") or {}, output.get("scale") or 1
+        values = [size.get("width"), size.get("height"), pos.get("x"), pos.get("y"), scale]
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values) or min(values[0], values[1], scale) <= 0:
+            continue
+        w, h = (values[1], values[0]) if output.get("rotation") in (2, 8) else (values[0], values[1])
+        primary = output.get("priority") == 1 or output.get("primary") is True      # « primary » : Plasma d'avant les priorités
+        rects.append((values[2], values[3], w / scale, h / scale, primary, str(output.get("name") or "")))
+    return rects
+
+
+def _same_shape(width, height, w, h):
+    return abs(width * h - height * w) <= 0.03 * height * w
+
+
+def kde_screens(rects, width, height):
+    """Écrans à proposer quand l'image de width × height est le partage « Espace de travail complet » : elle couvre
+    alors le rectangle englobant des écrans, et chacun y a sa place. [] s'il n'y a rien à choisir — un seul écran
+    actif, ou une image qui n'a pas la forme de l'espace de travail (un seul écran partagé)."""
+    if len(rects) < 2:
+        return []
+    left, top = min(r[0] for r in rects), min(r[1] for r in rects)
+    span_w, span_h = max(r[0] + r[2] for r in rects) - left, max(r[1] + r[3] for r in rects) - top
+    if not _same_shape(width, height, span_w, span_h):
+        return []
+    fx, fy, found = width / span_w, height / span_h, []
+    for x, y, w, h, primary, _name in rects:
+        x0, y0 = min(width - 1, max(0, round((x - left) * fx))), min(height - 1, max(0, round((y - top) * fy)))
+        found.append({"x": x0, "y": y0, "w": min(width - x0, round(w * fx)), "h": min(height - y0, round(h * fy)), "primary": primary})
+    return number_screens(found, width, height)
+
+
+def kde_pointer(rects, width, height, shared=""):
+    """Place de l'image partagée (width × height) dans l'espace du pointeur virtuel, qui couvre TOUT l'espace de travail
+    de Plasma : (décalage x, décalage y, largeur totale, hauteur totale), en pixels de l'image. Espace de travail
+    complet, ou un seul écran actif : l'image est cet espace. Un seul écran partagé parmi plusieurs : l'image est cet
+    écran-là — celui que nomme le flux (shared), sinon le seul qui a sa forme ; sans certitude, rien ne change."""
+    same = (0, 0, width, height)
+    if len(rects) < 2:
+        return same
+    left, top = min(r[0] for r in rects), min(r[1] for r in rects)
+    span_w, span_h = max(r[0] + r[2] for r in rects) - left, max(r[1] + r[3] for r in rects) - top
+    if _same_shape(width, height, span_w, span_h):
+        return same
+    shaped = [r for r in rects if _same_shape(width, height, r[2], r[3])]
+    named = [r for r in shaped if shared and r[5] == shared]
+    shown = named[0] if named else shaped[0] if len(shaped) == 1 else None
+    if shown is None:
+        return same
+    fx, fy = width / shown[2], height / shown[3]
+    return (round((shown[0] - left) * fx), round((shown[1] - top) * fy), round(span_w * fx), round(span_h * fy))
+
+
 def screens_rect(screens, selected):
     """Pseudo-rectangle loco « écrans » : l'écran montré (0 = tous) et la liste, décrite en JSON derrière l'en-tête."""
     body = json.dumps({"selected": selected, "screens": screens}, separators=(",", ":")).encode()
@@ -3344,6 +3408,8 @@ class KdePortalBackend:
     def __init__(self, env):
         self._session = self._pipe = self._bus = self._uinput = None
         self._closed, self._relock, self._seq = False, False, 0
+        # Écran montré : 0 pour toute l'image partagée, sinon le numéro d'un écran de l'espace de travail.
+        self.selected, self._origin, self._screens, self._zone, self._node = 0, (0, 0), [], None, None
         import importlib.util
         if importlib.util.find_spec("gi") is None:
             raise RuntimeError(t(*self.MISSING))
@@ -3382,8 +3448,52 @@ class KdePortalBackend:
         except Exception:
             self.close()
             raise
-        self._uinput.width, self._uinput.height = self.width, self.height   # mise à l'échelle du pointeur
+        self._full = (self.width, self.height)
+        self._pointer = (0, 0) + self._full                      # place de l'image dans l'espace du pointeur virtuel
+        self._uinput.width, self._uinput.height = self._full
         self._keys = keyboard_for(system_layout(), lambda code, down: self._uinput.key(code, down))
+        threading.Thread(target=self._watch_screens, name="loco-kde-screens", daemon=True).start()
+
+    def _watch_screens(self):
+        """Écrans de Plasma, relus toutes les dix secondes hors de la boucle d'images (kscreen-doctor met un instant à
+        répondre). Sans l'outil, ou si l'image partagée n'est pas l'espace de travail entier, la liste reste vide."""
+        tool = shutil.which("kscreen-doctor")
+        env = dict(os.environ, QT_QPA_PLATFORM="wayland")
+        shared = self._shared_output() if tool else ""
+        while tool and not self._closed and self._uinput is not None:
+            try:
+                done = subprocess.run([tool, "-j"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env, timeout=8)
+                rects = kde_outputs(done.stdout.decode("utf-8", "replace")) if done.returncode == 0 else []
+            except (OSError, subprocess.SubprocessError):
+                rects = []
+            self._screens, self._pointer = kde_screens(rects, *self._full), kde_pointer(rects, *self._full, shared)
+            time.sleep(10)
+
+    def _shared_output(self):
+        """Nom de l'écran que montre le flux, tel que KWin le donne à PipeWire (« kwin-screencast-DP-1 ») : le portail
+        ne dit pas lequel, et deux écrans de même taille ne se distinguent pas autrement. « » si on ne sait pas."""
+        try:
+            done = subprocess.run(["pw-dump"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=8)
+            for item in json.loads(done.stdout.decode("utf-8", "replace")):
+                if isinstance(item, dict) and item.get("id") == self._node:
+                    name = str(((item.get("info") or {}).get("props") or {}).get("media.name") or "")
+                    return name[len("kwin-screencast-"):] if name.startswith("kwin-screencast-") else ""
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+        return ""
+
+    def screens(self):
+        if self.selected and not any(sc["id"] == self.selected for sc in self._screens):
+            self.select_screen(0)                                # écran choisi puis éteint ou déplacé : toute l'image
+        return self._screens
+
+    def select_screen(self, number):
+        """Montre l'écran de ce numéro (0 : toute l'image partagée) : l'image est rognée, le pointeur décalé d'autant."""
+        chosen = next((sc for sc in self._screens if sc["id"] == number), None) if number else None
+        if chosen is None:
+            self.selected, self._origin, (self.width, self.height) = 0, (0, 0), self._full
+        else:
+            self.selected, self._origin, (self.width, self.height) = number, (chosen["x"], chosen["y"]), (chosen["w"], chosen["h"])
 
     def _request(self, iface, method, signature, build, timeout=20):
         """Appel du portail avec le motif Request/Response : renvoie le dict de résultats, lève si refus ou délai.
@@ -3492,8 +3602,11 @@ class KdePortalBackend:
                                  "El uso compartido de pantalla se detuvo desde el equipo."))
         frame = self._pull(0)
         if frame is not None:
-            self._last = _fit_frame(frame[2], frame[0], frame[1], self.width, self.height)
-        return self._last
+            self._last = _fit_frame(frame[2], frame[0], frame[1], *self._full)
+        if not self.selected:
+            return self._last
+        (x, y), full = self._origin, self._full[0]               # un seul écran : ses lignes, découpées dans l'image entière
+        return b"".join(self._last[(row * full + x) * 4:(row * full + x + self.width) * 4] for row in range(y, y + self.height))
 
     def key(self, sym, down):
         keys = getattr(self, "_keys", None)
@@ -3509,6 +3622,17 @@ class KdePortalBackend:
         self._uinput.key(code, down)
 
     def motion(self, x, y):
+        x, y = x + self._origin[0], y + self._origin[1]          # dans l'image partagée entière
+        zone = next((sc["id"] for sc in self._screens if sc["x"] <= x < sc["x"] + sc["w"] and sc["y"] <= y < sc["y"] + sc["h"]), 0)
+        # Le pointeur virtuel couvre tout l'espace de travail de Plasma, dont l'image n'est parfois qu'un écran.
+        left, top, self._uinput.width, self._uinput.height = self._pointer
+        x, y = x + left, y + top
+        if zone != self._zone:
+            # KWin retient le pointeur quand il passe d'un écran à l'autre (« barrière de bord », 100 px par défaut), même
+            # pour un pointeur absolu : il s'arrêterait cent pixels trop tôt. Un premier envoi, à un pixel près, franchit
+            # la barrière ; le second pose le pointeur où il faut.
+            self._zone = zone
+            self._uinput.motion(x + (1 if x < self._uinput.width - 1 else -1), y)
         self._uinput.motion(x, y)
 
     def button(self, number, down):

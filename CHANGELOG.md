@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.163.0 — 2026-11-13
+
+- **Bureau distant : choisir l'écran sur KDE Plasma (Wayland)** : la liste *Écran* apparaît aussi sur un poste KDE Plasma à plusieurs écrans — *Tous les écrans*, ou un seul. Plasma partage alors son « Espace de travail complet » (première tuile de sa fenêtre *Partage d'écran*, l'accord demandé une fois sur le poste) : loco y découpe l'écran choisi. Un écran réglé à une autre échelle est pris en compte ; le choix est retenu par poste, comme ailleurs.
+- **KDE Plasma : la souris tombe où l'on clique d'un écran à l'autre** : Plasma retient le pointeur une centaine de pixels quand il passe d'un écran au voisin ; un clic fait juste après avoir changé d'écran arrivait à côté. Le pointeur se pose maintenant au bon endroit dès le premier mouvement.
+- **KDE Plasma : un seul écran partagé parmi plusieurs** : quand l'accord donné sur le poste portait sur un seul écran alors que le poste en a plusieurs, la souris agissait ailleurs que là où l'on cliquait. loco reconnaît désormais l'écran partagé et y place le pointeur. Dans ce cas, il n'y a pas de liste (un seul écran est visible) ; pour partager tout l'espace de travail, supprimer `~/.config/loco/portal-token` sur le poste : la session suivante redemande l'accord.
+- GNOME en Wayland montre toujours son écran principal. Ces changements arrivent avec la mise à jour de l'agent du poste (2.163.0).
+
 ## 2.162.0 — 2026-11-13
 
 - **Bureau distant : choisir l'écran d'un poste qui en a plusieurs** : une liste *Écran* apparaît à côté de *Résolution* dès que le poste a plus d'un écran — *Tous les écrans* (côte à côte, comme jusqu'ici) ou un seul, désigné par son numéro, sa taille et la mention *principal*. L'image prend la taille de l'écran choisi ; la souris et le clavier restent justes. En plein écran, la liste suit les autres réglages dans le panneau de commandes.

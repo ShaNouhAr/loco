@@ -166,6 +166,106 @@ class TestLinuxScreens(unittest.TestCase):
         self.assertEqual([[r[4] for r in update] for update in out], [[0], []])
 
 
+def kscreen(*outputs):
+    """Sortie de « kscreen-doctor -j » telle que la donne Plasma 6 (relevée sur un vrai poste) : nom, activé, position,
+    mode courant, échelle, rotation (1 : aucune, 2 et 8 : quart de tour), priorité (1 : écran principal)."""
+    found = []
+    for i, (name, x, y, w, h, scale, rotation, enabled) in enumerate(outputs, 1):
+        found.append({"connected": True, "enabled": enabled, "id": i, "name": name, "pos": {"x": x, "y": y}, "priority": i,
+                      "rotation": rotation, "scale": scale, "currentModeId": "7", "size": {"width": w, "height": h},
+                      "modes": [{"id": "3", "size": {"width": 640, "height": 480}}, {"id": "7", "size": {"width": w, "height": h}}]})
+    return json.dumps({"features": 15, "outputs": found, "screen": {"id": 0}})
+
+
+@unittest.skipUnless(os.name == 'posix', 'Agent Linux')
+class TestKdeScreens(unittest.TestCase):
+    """KDE Plasma en Wayland : le partage « Espace de travail complet » donne une seule image de tous les écrans ; l'agent
+    y découpe l'écran choisi et place le pointeur virtuel, qui couvre toujours tout l'espace de travail."""
+    @classmethod
+    def setUpClass(cls):
+        cls.agent = load_agent('loco_kde_screens')
+
+    TWO = kscreen(("DP-1", 0, 0, 1280, 800, 1, 1, True), ("DP-2", 1280, 0, 1280, 800, 1, 1, True))
+
+    def test_outputs_are_logical_scaled_rotated_and_only_the_enabled_ones(self):
+        a = self.agent
+        text = kscreen(("eDP-1", 0, 0, 1920, 1200, 1.5, 1, True), ("DP-1", 1280, 0, 1080, 1920, 1, 8, True), ("DP-2", 0, 0, 800, 600, 1, 1, False))
+        self.assertEqual(a.kde_outputs(text), [(0, 0, 1280.0, 800.0, True, "eDP-1"), (1280, 0, 1920.0, 1080.0, False, "DP-1")])
+        for broken in ("", "pas du JSON", "[]", '{"outputs": [{"enabled": true}]}', '{"outputs": "x"}'):
+            self.assertEqual(a.kde_outputs(broken), [], broken)
+
+    def test_the_workspace_image_is_cut_into_its_screens(self):
+        a = self.agent
+        self.assertEqual(a.kde_screens(a.kde_outputs(self.TWO), 2560, 800),
+                         [{"id": 1, "x": 0, "y": 0, "w": 1280, "h": 800, "primary": True},
+                          {"id": 2, "x": 1280, "y": 0, "w": 1280, "h": 800, "primary": False}])
+        # Second écran à 150 % : l'image de l'espace de travail compte en pixels logiques (relevé : 2133 × 800).
+        scaled = a.kde_outputs(kscreen(("DP-1", 0, 0, 1280, 800, 1, 1, True), ("DP-2", 1280, 0, 1280, 800, 1.5, 1, True)))
+        self.assertEqual([(sc["x"], sc["y"], sc["w"], sc["h"]) for sc in a.kde_screens(scaled, 2133, 800)], [(0, 0, 1280, 800), (1280, 0, 853, 533)])
+        # Écran secondaire à GAUCHE du principal (position négative) et plus bas : le principal reste le numéro 1.
+        left = a.kde_outputs(kscreen(("DP-1", 0, 0, 1920, 1080, 1, 1, True), ("DP-2", -1280, 56, 1280, 1024, 1, 1, True)))
+        self.assertEqual([(sc["id"], sc["x"], sc["y"], sc["w"], sc["h"]) for sc in a.kde_screens(left, 3200, 1080)],
+                         [(1, 1280, 0, 1920, 1080), (2, 0, 56, 1280, 1024)])
+
+    def test_nothing_to_choose_when_one_screen_is_active_or_shared(self):
+        a = self.agent
+        self.assertEqual(a.kde_screens(a.kde_outputs(kscreen(("DP-1", 0, 0, 1920, 1080, 1, 1, True))), 1920, 1080), [])
+        self.assertEqual(a.kde_screens(a.kde_outputs(self.TWO), 1280, 800), [])          # un seul des deux écrans a été partagé
+        self.assertEqual(a.kde_screens([], 2560, 800), [])
+
+    def test_the_pointer_covers_the_whole_workspace_whatever_is_shared(self):
+        a = self.agent
+        two = a.kde_outputs(self.TWO)
+        self.assertEqual(a.kde_pointer(two, 2560, 800), (0, 0, 2560, 800))               # espace de travail complet
+        self.assertEqual(a.kde_pointer(two, 1280, 800, "DP-2"), (1280, 0, 2560, 800))    # l'écran que nomme le flux
+        self.assertEqual(a.kde_pointer(two, 1280, 800, "DP-1"), (0, 0, 2560, 800))
+        self.assertEqual(a.kde_pointer(two, 1280, 800), (0, 0, 1280, 800))               # deux écrans pareils, aucun nom : inchangé
+        self.assertEqual(a.kde_pointer(two, 1280, 800, "HDMI-9"), (0, 0, 1280, 800))
+        mixed = a.kde_outputs(kscreen(("DP-1", 0, 0, 1920, 1080, 1, 1, True), ("DP-2", 1920, 0, 1280, 1024, 1, 1, True)))
+        self.assertEqual(a.kde_pointer(mixed, 1280, 1024), (1920, 0, 3200, 1080))        # un seul écran a cette forme
+        scaled = a.kde_outputs(kscreen(("DP-1", 0, 0, 1280, 800, 1, 1, True), ("DP-2", 1280, 0, 1280, 800, 1.5, 1, True)))
+        self.assertEqual(a.kde_pointer(scaled, 1280, 800, "DP-2"), (1920, 0, 3200, 1200))  # image en pixels réels, bureau en logique
+        self.assertEqual(a.kde_pointer(a.kde_outputs(kscreen(("DP-1", 0, 0, 1920, 1080, 1, 1, True))), 1920, 1080), (0, 0, 1920, 1080))
+
+    def backend(self, screens, pointer=None):
+        class Pad:
+            width = height = 1
+            def __init__(self): self.moves = []
+            def motion(self, x, y): self.moves.append((x, y, self.width, self.height))
+        b = self.agent.KdePortalBackend.__new__(self.agent.KdePortalBackend)
+        b._full = (6, 2)
+        b.width, b.height, b.selected, b._origin, b._zone, b._closed = 6, 2, 0, (0, 0), None, False
+        b._screens, b._pointer, b._uinput = screens, pointer or (0, 0, 6, 2), Pad()
+        b._last = b"".join(bytes([x + 10 * y]) * 4 for y in range(2) for x in range(6))     # pixel = colonne + 10 × ligne
+        b._ctx = type("Ctx", (), {"iteration": lambda self, block: None})()
+        b._pull = lambda timeout: None
+        return b
+
+    SCREENS = [{"id": 1, "x": 0, "y": 0, "w": 3, "h": 2, "primary": True}, {"id": 2, "x": 3, "y": 0, "w": 3, "h": 2, "primary": False}]
+
+    def test_the_chosen_screen_is_cut_out_and_the_pointer_shifted(self):
+        b = self.backend(self.SCREENS)
+        self.assertEqual(len(b.grab()), 48)
+        b.select_screen(2)
+        self.assertEqual((b.width, b.height, b.selected), (3, 2, 2))
+        self.assertEqual([b.grab()[i] for i in range(0, 24, 4)], [3, 4, 5, 13, 14, 15])       # les colonnes de l'écran 2
+        b.motion(1, 1)
+        b.motion(2, 0)
+        # Premier envoi vers un autre écran : doublé à un pixel près, pour franchir la barrière de bord de KWin.
+        self.assertEqual(b._uinput.moves, [(5, 1, 6, 2), (4, 1, 6, 2), (5, 0, 6, 2)])
+        b.select_screen(9)                                                                  # écran inconnu : toute l'image
+        self.assertEqual((b.width, b.selected, len(b.grab())), (6, 0, 48))
+        b._screens = [self.SCREENS[0]]                                                      # l'écran choisi a disparu
+        b.select_screen(1)
+        b._screens = []
+        self.assertEqual((b.screens(), b.selected, b.width), ([], 0, 6))
+
+    def test_a_single_shared_screen_is_placed_in_the_workspace(self):
+        b = self.backend([], pointer=(6, 0, 12, 2))                                         # l'image est l'écran de droite
+        b.motion(2, 1)
+        self.assertEqual(b._uinput.moves[-1], (8, 1, 12, 2))
+
+
 def _x11_ready():
     if not shutil.which("Xvfb"):
         return False
