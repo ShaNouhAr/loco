@@ -36,12 +36,13 @@ def counted(n, noun, plural=""):
 
 
 def human(n):
+    """Taille lisible. L'unité suivante dès mille (999,9 Mo au plus, puis 0,98 Go) : jamais « 1021,9 Mo »."""
     from .i18n import locale
     lang = locale()
     n = float(n or 0)
     units = UNITS.get(lang, UNITS["fr"])
     for unit in units:
-        if n < 1024 or unit == units[-1]:
+        if n < 999.95 or unit == units[-1]:
             if unit == units[0]:
                 return f"{n:.0f} {unit}"
             text = f"{n:.2f}" if n < 10 else f"{n:.1f}"

@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.163.1 — 2026-11-13
+
+- **Tailles plus lisibles** : une taille passe à l'unité supérieure dès mille — 999,9 Mo au plus, puis 0,98 Go, 1,00 Go… Un cache APT de 1021,9 Mo se lit désormais « 1,00 Go ». Partout où loco affiche une taille : tableau Stockage de la vue d'ensemble, caches, dépôts, sauvegardes, Home Assistant, et ce que le navigateur met à jour en direct.
+- En espagnol, les tailles mises à jour en direct par le navigateur s'affichent en « MB », comme le reste de la page (elles apparaissaient en unités françaises).
+
 ## 2.163.0 — 2026-11-13
 
 - **Bureau distant : choisir l'écran sur KDE Plasma (Wayland)** : la liste *Écran* apparaît aussi sur un poste KDE Plasma à plusieurs écrans — *Tous les écrans*, ou un seul. Plasma partage alors son « Espace de travail complet » (première tuile de sa fenêtre *Partage d'écran*, l'accord demandé une fois sur le poste) : loco y découpe l'écran choisi. Un écran réglé à une autre échelle est pris en compte ; le choix est retenu par poste, comme ailleurs.

@@ -67,11 +67,12 @@
   /* ---------------------------------------------------------------- formats */
 
   var LANG = document.documentElement.lang || "fr";
-  var UNITS = LANG === "en" ? ["B", "KB", "MB", "GB", "TB"] : ["o", "Ko", "Mo", "Go", "To"];
+  var UNITS = LANG === "fr" ? ["o", "Ko", "Mo", "Go", "To"] : ["B", "KB", "MB", "GB", "TB"];
+  // L'unité suivante dès mille (999,9 Mo au plus, puis 0,98 Go) : jamais « 1021,9 Mo ». Comme util.human côté serveur.
   function bytes(n) {
     n = Number(n) || 0;
     var i = 0;
-    while (n >= 1024 && i < UNITS.length - 1) { n /= 1024; i++; }
+    while (n >= 999.95 && i < UNITS.length - 1) { n /= 1024; i++; }
     var num = n.toFixed(n < 10 ? 2 : 1);
     return (i === 0 ? String(Math.round(n)) : LANG === "en" ? num : num.replace(".", ",")) + " " + UNITS[i];
   }
@@ -1357,7 +1358,7 @@
     var human = function (n) {
       n = Number(n) || 0;
       for (var i = 0; i < UNITS.length; i++) {
-        if (n < 1024 || i === UNITS.length - 1) {
+        if (n < 999.95 || i === UNITS.length - 1) {
           if (!i) return Math.round(n) + " " + UNITS[0];
           var text = n < 10 ? n.toFixed(2) : n.toFixed(1);
           return (lang === "en" ? text : text.replace(".", ",")) + " " + UNITS[i];

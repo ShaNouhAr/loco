@@ -77,6 +77,11 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(util.kind_for("Setup.MSI"), "msi")
         self.assertEqual(util.kind_for("archive"), "file")
         self.assertEqual(util.human(88112952), "84,0 Mo")
+        # L'unité suivante dès mille : un cache de 1021,9 Mo se lit 1,00 Go.
+        mega = 1048576
+        self.assertEqual([util.human(n) for n in (0, 999, 1000, 1023, 1024, 999.9 * mega, 999.96 * mega, 1021.9 * mega, 1024 * mega, 31 * 1024 * mega)],
+                         ["0 o", "999 o", "0,98 Ko", "1,00 Ko", "1,00 Ko", "999,9 Mo", "0,98 Go", "1,00 Go", "1,00 Go", "31,0 Go"])
+        self.assertEqual(util.human(5000 * 1024 ** 4), "5000,0 To")           # dernière unité : pas d'au-delà
         self.assertEqual(util.date_fr("2026-10-12 20:57"), "12/10 20:57")
 
     def test_download_rejects_other_schemes(self):
