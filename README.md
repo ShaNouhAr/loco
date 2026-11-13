@@ -47,7 +47,7 @@ Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Deb
 
 - **Installer** — [Choisir son installation](#choisir-son-installation) · [Serveur Linux](#serveur-linux) · [Serveur Windows](#serveur-windows)
 - **Déployer** — [Brancher les postes](#brancher-les-postes) · [Mon parc : agent des postes](#mon-parc--agent-des-postes) · [Centre de logiciels Windows](#centre-de-logiciels-windows) · [Scripts](#scripts)
-- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Serveur MCP](#serveur-mcp) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Haute disponibilité](#haute-disponibilité) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
+- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Serveur MCP](#serveur-mcp) · [Home Assistant](#home-assistant) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Haute disponibilité](#haute-disponibilité) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
 - **Références** — [Sécurité](SECURITY.md) · [Développement](#développement) · [Changelog](CHANGELOG.md) · [Licence](#licence)
 
 ## Choisir son installation
@@ -536,6 +536,12 @@ Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de crée
 ## Fonctionnalités
 
 **Administration → Fonctionnalités**, réservé aux comptes au profil **Administrateur** (tout administrateur, quel que soit son nom ou son origine), active ou désactive des pans entiers de loco : paquets APT, RPM et Flatpak, cache Windows Update, Mon parc et agents, logiciels Windows, accès distant, scripts, annuaires, alertes et serveur MCP. Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d’ensemble ; ses pages et API sont refusées avec un message explicite et ses droits deviennent inopérants. Les agents reçoivent « réessayer plus tard » quand le parc est coupé ; installations et scripts attendent la réactivation. Les dépendances sont appliquées (accès distant et scripts suivent le parc). Sur l’appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés. Les données sont conservées et chaque changement est journalisé.
+
+Deux sections à part, coupées par défaut : **Expérimental** (ce qui est encore en maturation, comme les appareils Android) et **Facultatif** (ce qui est abouti mais ne concerne pas tout le monde, comme Home Assistant).
+
+## Home Assistant
+
+**Facultatif** — à activer dans *Fonctionnalités › Facultatif*. loco se relie à votre Home Assistant par son module SSH, avec une clé qui lui est propre (aucun jeton de Home Assistant n’est demandé ni gardé), après que vous avez confirmé l’empreinte de sa clé d’hôte. La page **Home Assistant** montre les versions du cœur, du système et du Supervisor, les modules complémentaires, les sauvegardes et ce que signale le Supervisor ; elle lance les mises à jour (une à une ou toutes, dans l’ordre conseillé, avec sauvegarde avant), une sauvegarde complète, le redémarrage de Home Assistant ou du système, lit son journal et ouvre un terminal dans la page de session de loco. Chaque action a son droit dans les profils d’accès ; la vue d’ensemble signale les mises à jour disponibles et une liaison en échec. Voir [docs/homeassistant.md](docs/homeassistant.md).
 
 ## Mon compte et apparence
 

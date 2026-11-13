@@ -687,6 +687,74 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN form TEXT NOT NULL DEFAULT '';
     """,
+    # 50 — Home Assistant (fonctionnalité facultative) : instances reliées par SSH avec la clé de loco (host_key : clé
+    # d'hôte confirmée par un administrateur, jamais acceptée d'office ; info : dernier relevé de `ha … --raw-json`),
+    # et leurs opérations longues (mises à jour, sauvegardes, redémarrages), suivies une à une. Une session de terminal
+    # n'est plus forcément celle d'un poste du parc : device_id devient facultatif et target dit de quoi il s'agit
+    # (« homeassistant:<id> »). Ces deux tables sont éphémères — elles sont recréées, les sessions ouvertes au moment
+    # de la mise à jour se ferment de toute façon avec le redémarrage du portail.
+    """
+    DROP TABLE remote_packets;
+    DROP TABLE remote_sessions;
+    CREATE TABLE remote_sessions (
+        id TEXT PRIMARY KEY,
+        device_id INTEGER REFERENCES devices(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        owner TEXT NOT NULL,
+        pw_version INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'waiting',
+        error TEXT NOT NULL DEFAULT '',
+        created REAL NOT NULL,
+        browser_seen REAL NOT NULL,
+        browser_attached INTEGER NOT NULL DEFAULT 0,
+        agent_seen REAL NOT NULL DEFAULT 0,
+        expires REAL NOT NULL,
+        cols INTEGER NOT NULL DEFAULT 100,
+        rows INTEGER NOT NULL DEFAULT 30,
+        input_seq INTEGER NOT NULL DEFAULT 0,
+        output_seq INTEGER NOT NULL DEFAULT 0,
+        terminal_fallback INTEGER NOT NULL DEFAULT 0,
+        consent TEXT NOT NULL DEFAULT '',
+        target TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX remote_sessions_device ON remote_sessions(device_id, state);
+    CREATE TABLE remote_packets (
+        session_id TEXT NOT NULL REFERENCES remote_sessions(id) ON DELETE CASCADE,
+        direction TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        PRIMARY KEY (session_id, direction, seq)
+    );
+    CREATE TABLE homeassistant_hosts (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL DEFAULT 22,
+        username TEXT NOT NULL,
+        host_key TEXT NOT NULL DEFAULT '',
+        info TEXT NOT NULL DEFAULT '',
+        checked REAL NOT NULL DEFAULT 0,
+        error TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE homeassistant_jobs (
+        id INTEGER PRIMARY KEY,
+        host_id INTEGER NOT NULL REFERENCES homeassistant_hosts(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        target TEXT NOT NULL DEFAULT '',
+        label TEXT NOT NULL DEFAULT '',
+        backup INTEGER NOT NULL DEFAULT 0,
+        state TEXT NOT NULL DEFAULT 'queued',
+        output TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '',
+        finished_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX homeassistant_jobs_host ON homeassistant_jobs(host_id, id);
+    """,
 ]
 
 

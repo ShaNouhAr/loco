@@ -49,6 +49,27 @@
   </section>
   {% endif %}
 
+  {# Facultatif : après l'expérimental. Des fonctions abouties, mais hors du cœur de loco : à activer si l'on en a l'usage. #}
+  {% if optional %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Facultatif") }}</h2><div class="aside">{{ _("à activer selon vos besoins") }}</div></div>
+    <p class="note">{{ _("Ces fonctions sont abouties, mais ne concernent pas tout le monde. Désactivées par défaut : activez celles dont vous avez l’usage.") }}</p>
+    <div class="feature-list">
+      {% for f in optional %}
+      <label class="feature-row {{ 'off' if not f.on }}">
+        <span class="feature-text">
+          <strong>{{ f.label }}</strong>
+          <small>{{ f.description }}</small>
+          {% if f.blocked_by %}<small class="warn-text">{{ _("Inactive tant que %(blocked_by)s est désactivé.", blocked_by=f.blocked_by|join(', ')) }}</small>
+          {% elif f.depends %}<small class="faint">{{ _("Nécessite %(depends)s.", depends=f.depends|join(', ')) }}</small>{% endif %}
+        </span>
+        <span class="switch"><input type="checkbox" name="{{ f.key }}" value="1" role="switch" {{ 'checked' if f.chosen }}><i aria-hidden="true"></i></span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   <section class="panel">
     <div class="panel-f sticky-actions row-between">
       <span>{% if not appliance %}{{ _("Sur cette installation, les services réseau (caches APT, Windows Update…) restent démarrés : seuls l’interface, les API et les agents sont coupés.") }}{% else %}{{ _("Chaque changement est inscrit au journal.") }}{% endif %}</span>

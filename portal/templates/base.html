@@ -24,9 +24,12 @@
   <div class="top-in">
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
     {% set android_nav = feature('android') and can('android.view') %}
-    <nav class="nav{{ ' nav-dense' if android_nav }}" aria-label="{{ _('Navigation principale') }}">
+    {% set homeassistant_nav = feature('homeassistant') and can('homeassistant.view') %}
+    <nav class="nav{{ ' nav-dense' if android_nav or homeassistant_nav }}{{ ' nav-crowded' if android_nav and homeassistant_nav }}" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" title="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
-      {% set fleet_on = ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment' %}
+      {# Le terminal d'un Home Assistant est une session distante hors du parc : il relève de son entrée, pas de Mon parc. #}
+      {% set homeassistant_on = ep.startswith('homeassistant') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh') %}
+      {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
@@ -52,6 +55,7 @@
       </details>
       {% endif %}
       {% if android_nav %}<a href="{{ url_for('android_apps') }}" class="nav-android {{ 'on' if ep.startswith('android_') }}" aria-label="Android" {% if ep.startswith('android_') %}aria-current="page"{% endif %}>{{ nav_icon('android') }}<span>Android</span></a>{% endif %}
+      {% if homeassistant_nav %}<a href="{{ url_for('homeassistant') }}" class="nav-homeassistant {{ 'on' if homeassistant_on }}" aria-label="Home Assistant" title="Home Assistant" {% if homeassistant_on %}aria-current="page"{% endif %}>{{ nav_icon('home') }}<span>Home Assistant</span></a>{% endif %}
       {% set admin_items = [
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
         ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),

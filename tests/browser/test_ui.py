@@ -967,5 +967,146 @@ class TestAndroidAppsPhone(AndroidAppsPages):
         self.check_pages()
 
 
+class HomeAssistantPages(BrowserTest):
+    """Home Assistant (fonctionnalité facultative), face à un faux Home Assistant : faux client ssh et fausse commande
+    `ha` (tests/fake_homeassistant.py). Android est activé aussi : c'est la barre de navigation la plus chargée."""
+
+    def setUp(self):
+        super().setUp()
+        import shutil
+        import tempfile
+        import fake_homeassistant
+        from loco import features, homeassistant
+        self.fake, self.hass = fake_homeassistant, homeassistant
+        self.folder = tempfile.mkdtemp(prefix="loco-hass-ui-")
+        self.addCleanup(shutil.rmtree, self.folder, True)
+        ssh = fake_homeassistant.install(self.folder)
+        for patch in (mock.patch("loco.homeassistant.ssh_binary", return_value=ssh), mock.patch.object(homeassistant, "STEPS", (0.1, 0.1))):
+            patch.start()
+            self.addCleanup(patch.stop)
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.OPTIONAL_SETTING, '["homeassistant"]'))
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.EXPERIMENTAL_SETTING, '["android"]'))
+            conn.execute("DELETE FROM homeassistant_hosts")
+            conn.execute("DELETE FROM remote_sessions")
+        self.addCleanup(self.restore)
+
+    def restore(self):
+        from loco import adb, features
+        with transaction() as conn:
+            conn.execute("UPDATE remote_sessions SET state='closed' WHERE state!='closed'")
+        deadline = time.time() + 20
+        while time.time() < deadline and (self.hass._WORKERS or self.hass._REFRESH or adb._WORKERS):
+            time.sleep(0.05)
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key IN (?, ?)", (features.OPTIONAL_SETTING, features.EXPERIMENTAL_SETTING))
+            conn.execute("DELETE FROM homeassistant_hosts")
+            conn.execute("DELETE FROM remote_sessions")
+
+    def tearDown(self):
+        self.problems[:] = [p for p in self.problems if "Applying inline style violates" not in p]      # xterm.js, voir TestRelayChannel
+        super().tearDown()
+
+    def linked(self):
+        """Instance déjà reliée (clé d'hôte confirmée), avec son premier relevé."""
+        with transaction() as conn:
+            host_id = conn.execute("INSERT INTO homeassistant_hosts (name, host, port, username, host_key, created_at, created_by) "
+                                   "VALUES ('Maison', '192.168.43.80', 22, 'root', ?, ?, 'admin')",
+                                   ("ssh-ed25519 " + self.fake.HOST_KEY, stamp())).lastrowid
+        self.assertEqual(self.hass.refresh(host_id), "")
+        return host_id
+
+    def ran(self):
+        try:
+            return [line for line in (Path(self.folder) / "state" / "commands.log").read_text().splitlines() if "--raw-json" not in line and "--help" not in line]
+        except OSError:
+            return []
+
+    def bar(self):
+        return self.page.evaluate("(() => { const b = document.querySelector('.top-in'); return b.scrollWidth - b.clientWidth })()")
+
+
+class TestHomeAssistantDesktop(HomeAssistantPages):
+    def test_linking_shows_the_fingerprint_before_anything_else(self):
+        self.page.goto("/homeassistant")
+        expect(self.page.locator(".nav a.on")).to_have_attribute("aria-label", "Home Assistant")
+        expect(self.page.locator("#hass-public-key")).to_contain_text("ssh-ed25519 AAAA")
+        self.page.fill("[name=host]", "192.168.43.80")
+        self.page.fill("[name=name]", "Maison")
+        self.page.click("form[action$='/homeassistant/link'] button")
+        digest = base64.b64encode(hashlib.sha256(base64.b64decode(self.fake.HOST_KEY)).digest()).decode().rstrip("=")
+        expect(self.page.locator(".hass-confirm dd.mono")).to_have_text("SHA256:" + digest)
+        expect(self.page.locator(".hass-host")).to_have_count(0)                     # rien n'est relié avant la confirmation
+        self.page.click(".hass-confirm button.primary")
+        host = self.page.locator(".hass-host")
+        expect(host.locator(".metric").nth(0)).to_contain_text("2026.11.2 disponible")
+        expect(host.locator(".metric").nth(2)).to_contain_text("à jour")             # le Supervisor n'a rien à proposer
+        expect(host.locator(".metric").nth(2)).not_to_contain_text("disponible")
+        expect(host.locator(".panel-h .pill.warn")).to_have_text("3 mises à jour")
+        self.assertLessEqual(self.overflow(), 0)
+        self.assertLessEqual(self.bar(), 0, "la barre du haut déborde")
+
+    def test_an_update_is_confirmed_followed_in_place_and_not_offered_twice(self):
+        self.linked()
+        (Path(self.folder) / "state" / "slow").write_text("2")
+        self.page.goto("/homeassistant")
+        host = self.page.locator(".hass-host")
+        host.locator("tr", has_text="Home Assistant Core").locator("button").click()
+        dialog = self.page.locator("#hass-update")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator("[data-fill-text=what]")).to_have_text("Maison : Home Assistant Core 2026.11.1 → 2026.11.2")
+        expect(dialog.locator("[name=backup]")).to_be_checked()
+        dialog.locator("button.primary").click()
+        expect(self.page.locator(".flash, .toast").first).to_contain_text("Mise à jour lancée")
+        self.page.evaluate("window.kept = true")
+        row = host.locator(".hass-table").first.locator("tr", has_text="Home Assistant Core")
+        expect(row.locator(".busy-note")).to_be_visible(timeout=LONG)                # en cours : plus de bouton sur cette ligne
+        expect(row.locator("button")).to_have_count(0)
+        expect(host.locator(".metric").nth(0)).to_contain_text("à jour", timeout=LONG)
+        expect(host.locator(".metric").nth(0)).to_contain_text("2026.11.2")
+        expect(host.locator("tr", has_text="sauvegarde avant").locator(".st.ok")).to_have_text("Réussie")
+        self.assertTrue(self.page.evaluate("window.kept === true"), "la page a été rechargée au lieu d'être actualisée en place")
+        self.assertEqual(self.ran(), ["core update --backup --no-progress"])
+
+    def test_the_log_opens_on_demand(self):
+        self.linked()
+        self.page.goto("/homeassistant")
+        self.page.locator(".hass-log > summary").click()
+        expect(self.page.locator("[data-hass-log-text]")).to_contain_text("Home Assistant initialized")
+
+    def test_the_terminal_is_a_real_shell_under_its_own_entry(self):
+        self.linked()
+        self.page.goto("/homeassistant")
+        self.page.locator(".hass-actions form[action$='/shell'] button").first.click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+        expect(self.page.locator("#remote-status")).to_contain_text("Connecté")
+        expect(self.page.locator("#remote-status")).to_contain_text("terminal de Home Assistant")
+        expect(self.page.locator(".nav a.on")).to_have_attribute("aria-label", "Home Assistant")
+        expect(self.page.locator(".head a").first).to_have_attribute("href", "/homeassistant")
+        self.page.locator("#remote-screen textarea").focus()
+        self.page.keyboard.type("ha core restart\n")
+        deadline = time.time() + 10
+        while time.time() < deadline and self.ran() != ["core restart"]:
+            time.sleep(0.1)
+        self.assertEqual(self.ran(), ["core restart"])                               # tapé dans la page, exécuté par le shell
+        self.page.click("#remote-close")
+        expect(self.page.locator("#remote-status")).to_contain_text("Session fermée")
+
+
+class TestHomeAssistantPhone(HomeAssistantPages):
+    viewport = PHONE
+
+    def test_the_page_fits_on_a_phone_even_with_every_entry_in_the_bar(self):
+        self.linked()
+        for path in ("/homeassistant", "/homeassistant?relier=1", "/"):
+            self.page.goto(path)
+            self.assertLessEqual(self.overflow(), 0, path)
+            self.assertLessEqual(self.bar(), 0, f"{path} : la barre du haut déborde")
+        self.page.goto("/homeassistant")
+        self.page.locator(".hass-actions details.menu > summary").first.click()
+        expect(self.page.locator(".hass-actions details.menu[open] .menu-list").first).to_be_visible()
+        self.assertLessEqual(self.overflow(), 0, "menu ouvert")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

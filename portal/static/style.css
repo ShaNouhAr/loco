@@ -276,6 +276,8 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .nav-short { display: none; }
 /* Une entrée de plus (Android) : « Vue d'ensemble » se réduit à son icône, comme le logo qui mène à la même page. */
 .nav-dense .nav-home > span { display: none; }
+/* Android et Home Assistant ensemble : la seconde entrée se réduit elle aussi à son icône. */
+.nav-crowded .nav-homeassistant > span { display: none; }
 /* Noms longs (compte d'annuaire, nom d'hôte) : coupés plutôt que de pousser la barre hors de l'écran. */
 .user-chip .user-name, .brand span { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 @keyframes nav-reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
@@ -1886,6 +1888,8 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 @media (max-width: 520px) {
   .nav { gap: 0; }
   .nav-dense .nav-android > span { display: none; }   /* une entrée de plus : Android en icône, comme l'accueil */
+  .nav-dense .nav-homeassistant > span { display: none; }
+  .nav-crowded .nav-chevron { display: none; }          /* sept entrées sur un téléphone : les chevrons cèdent la place */
   .nav > a, .nav-group > summary { gap: 4px; padding: 0 3px; font-size: 12.5px; }
   .nav .nav-icon { width: 16px; height: 16px; }
   .nav .nav-chevron { width: 10px; height: 10px; }
@@ -2499,3 +2503,25 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .adb-screen-msg { position: absolute; color: var(--text-2); font-size: 13.5px; padding: 0 16px; text-align: center; }
 .adb-screen-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .adb-screen-text { flex: 1 1 auto; min-width: 0; }
+
+/* Home Assistant (fonctionnalité facultative) : une instance par panneau — actions, tuiles, mises à jour, activité, journal. */
+.hass-actions { align-self: stretch; }
+.hass-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.hass-metrics .metric { padding: 16px 18px; }
+.hass-link { margin-left: auto; overflow-wrap: anywhere; }
+.hass-table td:first-child { width: 46%; }
+.hass-table td .sub { display: inline; margin-left: 6px; }
+.hass-output { margin-top: 4px; font-size: 13px; }
+.hass-output pre.log { margin-top: 8px; max-height: 260px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+details.hass-log:not(.menu):not(.nav-group):not(.panel) > summary { display: flex; width: 100%; }
+.hass-log > summary .aside { margin-left: auto; }
+.hass-log:not([open]) > summary { border-bottom: 0; }
+.hass-log pre.log { max-height: 520px; }
+.hass-confirm dd.mono { font-size: 15px; }
+@media (max-width: 1100px) { .hass-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .hass-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hass-metrics .metric .v, .hass-metrics .metric .s { white-space: normal; }
+  .hass-link { margin-left: 0; width: 100%; }
+  .hass-table td:first-child { width: auto; }
+}

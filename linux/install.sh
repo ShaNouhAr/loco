@@ -305,6 +305,14 @@ if ! dpkg-query -W -f='${Status}' adb 2>/dev/null | grep -q "install ok installe
         warn "adb non installé : terminal adb indisponible." "adb not installed: adb terminal unavailable." "adb no instalado: terminal adb no disponible."
     fi
 fi
+# Client SSH (liaison avec Home Assistant, fonctionnalité facultative) : presque toujours déjà là, jamais bloquant.
+if ! command -v ssh >/dev/null 2>&1; then
+    if apt-get install -y -q --no-install-recommends openssh-client >> "$LOG" 2>&1; then
+        grep -qx openssh-client "$PACKAGE_RECORD" || echo openssh-client >> "$PACKAGE_RECORD"
+    else
+        warn "client SSH non installé : liaison avec Home Assistant indisponible." "SSH client not installed: Home Assistant link unavailable." "cliente SSH no instalado: enlace con Home Assistant no disponible."
+    fi
+fi
 fi
 fi
 

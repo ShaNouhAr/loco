@@ -13,7 +13,7 @@ import time
 
 from flask import abort, flash, g, redirect, render_template, request, session, url_for
 
-from . import app, fleet, permissions, scope
+from . import app, features, fleet, permissions, scope
 from .i18n import _, n_
 from .auth import audit, can, login_required, require
 from .db import db
@@ -76,8 +76,8 @@ def consent_ready(dev):
 
 
 def _close(sid, reason, username="loco"):
-    row = db().execute("SELECT s.state,s.kind,d.hostname FROM remote_sessions s JOIN devices d ON d.id=s.device_id "
-                       "WHERE s.id=?", (sid,)).fetchone()
+    row = db().execute("SELECT s.state,s.kind,COALESCE(d.hostname, s.target) AS hostname FROM remote_sessions s "
+                       "LEFT JOIN devices d ON d.id=s.device_id WHERE s.id=?", (sid,)).fetchone()
     if row is not None and row["state"] != "closed":
         db().execute("INSERT INTO audit(at,username,ip,action,detail) VALUES (?,?,?,?,?)",
                      (fleet._now(), username, request.remote_addr or "", "parc.session.fermeture",
@@ -90,17 +90,21 @@ def _prune():
     now = time.time()
     conn = db()
     expired = conn.execute(
-        "SELECT s.id FROM remote_sessions s JOIN users u ON u.id=s.user_id JOIN devices d ON d.id=s.device_id "
+        "SELECT s.id FROM remote_sessions s JOIN users u ON u.id=s.user_id LEFT JOIN devices d ON d.id=s.device_id "
         "WHERE s.state IN ('waiting','active') AND (s.expires<? OR s.browser_seen<(CASE WHEN s.owner NOT LIKE 'mcp:%' THEN ? "
         "WHEN s.kind='desktop' THEN ? ELSE ? END) OR (s.agent_seen>0 AND s.agent_seen<?) OR (s.agent_seen=0 AND s.created<?) OR "
-        "u.disabled=1 OR u.pw_version!=s.pw_version OR d.state!='active')",
+        "u.disabled=1 OR u.pw_version!=s.pw_version OR (d.id IS NOT NULL AND d.state!='active'))",
         (now, now - 60, now - MCP_DESKTOP_IDLE, now - MCP_IDLE, now - 30, now - 30)).fetchall()
     for row in expired:
         _close(row["id"], "Session expirée ou accès révoqué.")
     fleets = {}
-    for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,s.device_id,u.role FROM remote_sessions s "
+    for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,s.device_id,s.target,u.role FROM remote_sessions s "
                             "JOIN users u ON u.id=s.user_id WHERE s.state IN ('waiting','active')").fetchall():
         grants = permissions.role_permissions(conn, row["role"])
+        if row["device_id"] is None:            # session hors du parc : terminal d'un Home Assistant
+            if not {"homeassistant.view", "homeassistant.shell"} <= grants or not features.enabled("homeassistant"):
+                _close(row["id"], "Droit d'accès distant révoqué.")
+            continue
         if ("fleet.view" not in grants or "remote." + row["kind"] not in grants
                 or row["terminal_fallback"] and "remote.terminal" not in grants):
             _close(row["id"], "Droit d'accès distant révoqué.")
@@ -193,13 +197,26 @@ def _read(row, direction, ack):
 
 
 def _browser_session(sid):
-    row = db().execute("SELECT s.*,d.hostname,d.os_family FROM remote_sessions s JOIN devices d ON d.id=s.device_id "
+    row = db().execute("SELECT s.*,COALESCE(d.hostname, h.name, '') AS hostname,COALESCE(d.os_family, '') AS os_family "
+                       "FROM remote_sessions s LEFT JOIN devices d ON d.id=s.device_id "
+                       "LEFT JOIN homeassistant_hosts h ON s.target = 'homeassistant:' || h.id "
                        "WHERE s.id=? AND s.user_id=? AND s.owner=? AND s.pw_version=?",
                        (sid, g.user["id"], _owner(), g.user["pw_version"])).fetchone()
     if row is None:
         abort(404)
-    require("remote." + row["kind"])
+    require("homeassistant.shell" if row["kind"] == "ssh" else "remote." + row["kind"])
     return row
+
+
+def _origin(row):
+    """D'où vient une session, et la route qui en ouvre une autre : la fiche du poste — ou, pour une session hors du
+    parc, la page Home Assistant."""
+    if row["device_id"] is None:
+        host_id = row["target"].partition(":")[2]
+        return {"back": url_for("homeassistant"), "label": _("Retour à Home Assistant"), "page": "Home Assistant",
+                "open": url_for("homeassistant_shell", host_id=int(host_id)) if host_id.isdigit() else url_for("homeassistant")}
+    return {"back": url_for("fleet_device", dev_id=row["device_id"]), "label": _("Retour au poste"), "page": _("Fiche du poste"),
+            "open": url_for("remote_open", dev_id=row["device_id"])}
 
 
 @app.route("/fleet/<int:dev_id>/session", methods=["POST"])
@@ -213,7 +230,7 @@ def remote_open(dev_id):
     serial = ""
     if kind == "adb":
         # Terminal adb : loco se connecte lui-même à l'appareil (réseau local) ; l'application loco n'y prend pas part.
-        from . import adb, features
+        from . import adb
         if dev["os_family"] != "android":
             abort(400)
         if not features.enabled("android"):
@@ -266,7 +283,7 @@ def remote_session(sid):
         db().execute("UPDATE remote_sessions SET browser_attached=1 WHERE id=?", (sid,))
     row = _browser_session(sid)
     db().commit()
-    return render_template("remote_session.html", remote=row, detached=request.args.get("view") == "console")
+    return render_template("remote_session.html", remote=row, origin=_origin(row), detached=request.args.get("view") == "console")
 
 
 @app.route("/fleet/session/<sid>/io", methods=["POST"])
@@ -281,7 +298,8 @@ def remote_io(sid):
         conn.commit()
         return {"state": "closed", "packets": [], "ack": row["input_seq"]}
     if row["state"] in OPEN:
-        watch(row["device_id"], 60)           # session fermée puis rouverte : la reprise ne fait pas attendre
+        if row["device_id"] is not None:
+            watch(row["device_id"], 60)       # session fermée puis rouverte : la reprise ne fait pas attendre
         _append(row, "in", request.form.get("seq", 0), request.form.get("data", ""))
         cols = _integer(request.form.get("cols", row["cols"]), 20, 500)
         rows = _integer(request.form.get("rows", row["rows"]), 5, 200)

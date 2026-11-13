@@ -1,5 +1,17 @@
 # Journal des versions
 
+## 2.161.0 — 2026-11-13
+
+- **Fonctionnalités facultatives** : la page *Fonctionnalités* gagne une section *Facultatif*, après *Expérimental*. Elle réunit ce qui est abouti mais ne concerne pas tout le monde ; comme l'expérimental, c'est coupé par défaut et tout compte au profil Administrateur l'active.
+- **Home Assistant** (facultatif) : une page *Home Assistant* suit et entretient votre installation. loco y entre par le module SSH de Home Assistant (« Advanced SSH & Web Terminal » ou « Terminal & SSH »), avec une clé qui lui est propre : aucun jeton de Home Assistant n'est demandé ni gardé, et la clé privée ne quitte pas le serveur. La page donne les trois étapes de la liaison et la clé publique à copier.
+- **La clé d'hôte se confirme** : avant tout échange, loco montre l'empreinte de la clé que présente l'adresse donnée ; rien n'est enregistré tant que vous ne l'avez pas confirmée. Si elle change ensuite (module réinstallé), la liaison s'arrête et redemande une confirmation.
+- **Ce que la page montre** : les versions de Home Assistant, du système et du Supervisor avec celle qui attend, les modules complémentaires et leur état, le stockage, les sauvegardes, ce que signale le Supervisor (pas de sauvegarde récente, disque presque plein, installation dégradée…) et, à la demande, les 200 dernières lignes du journal. Le relevé se refait tout seul tant que la page est affichée.
+- **Mises à jour** : une à une, ou *Tout mettre à jour*, qui les enchaîne dans l'ordre conseillé — le Supervisor, les modules, Home Assistant, puis le système. La fenêtre de confirmation propose de créer une sauvegarde avant (cochée d'office). Une mise à jour lancée se montre « en cours » et ne se relance pas ; l'activité garde les douze dernières tâches avec leur sortie.
+- **Sauvegarde et redémarrages** : *Sauvegarder* lance une sauvegarde complète, gardée dans Home Assistant ; *Redémarrer* relance Home Assistant ou toute la machine. Quand le système redémarre, loco attend son retour : la tâche n'est réussie que s'il répond de nouveau.
+- **Terminal** : le shell du module SSH s'ouvre dans la page de session de loco (plein écran, nouvel onglet), session journalisée. Il demande la fonctionnalité *Accès distant* et un serveur loco sous Linux.
+- **Droits et vue d'ensemble** : un groupe *Home Assistant* dans les profils d'accès sépare consulter, mettre à jour, sauvegarder, redémarrer, ouvrir un terminal et relier des instances ; seul le profil Administrateur les reçoit d'office. La vue d'ensemble signale dans « À traiter » une liaison en échec, une installation dégradée et les mises à jour disponibles.
+- **Côté serveur** : la liaison utilise le client SSH du serveur — déjà présent sur l'appliance, ajouté par l'installation ailleurs (sans jamais la bloquer). Les sessions distantes ouvertes au moment de la mise à jour sont fermées. Voir [docs/homeassistant.md](docs/homeassistant.md).
+
 ## 2.160.0 — 2026-11-13
 
 - **Android : l'écran en veille se rallume quand on prend la main** : à l'ouverture d'une session d'écran, l'application rallume l'écran de l'appareil ; s'il se rendort pendant la session, le premier clic ou la première touche le rallume, comme un doigt sur un téléphone en veille. On arrive ainsi sur l'écran de verrouillage au lieu d'un écran éteint.

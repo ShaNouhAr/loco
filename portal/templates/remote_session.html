@@ -1,29 +1,32 @@
 {% extends "console_base.html" if detached else "base.html" %}
-{% block title %}{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind == 'terminal' else (_('Écran') if remote.os_family == 'android' else _('Console noVNC')) }} · {{ remote.hostname }}{% endblock %}
+{% block title %}{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind in ('terminal', 'ssh') else (_('Écran') if remote.os_family == 'android' else _('Console noVNC')) }} · {{ remote.hostname }}{% endblock %}
 {% block content %}
 {% set android = remote.os_family == 'android' %}
+{# Terminal d'un Home Assistant (SSH tenu par le serveur) : même page et même terminal que celui d'un poste. #}
+{% set ssh = remote.kind == 'ssh' %}
+{% set term = remote.kind in ('terminal', 'adb', 'ssh') %}
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_macros.html' import term_help %}
-<div id="remote-session" class="remote-session" data-kind="{{ remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}" data-csrf="{{ csrf }}"{% if android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
+<div id="remote-session" class="remote-session" data-kind="{{ 'terminal' if ssh else remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}" data-csrf="{{ csrf }}"{% if ssh %} data-label="{{ _("terminal de Home Assistant") }}"{% elif android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
   <div class="head">
-    <div><p class="small"><a href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a></p>
-      <h1>{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind == 'terminal' else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
-      <p class="small muted remote-description">{% if remote.kind == 'adb' %}{{ _("Shell adb · utilisateur shell d'Android · via le serveur loco") }}{% else %}{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}{% endif %}</p>
+    <div><p class="small"><a href="{{ origin.back }}">{{ origin.label }}</a></p>
+      <h1>{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind in ('terminal', 'ssh') else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
+      <p class="small muted remote-description">{% if ssh %}{{ _("Shell du module SSH de Home Assistant · via le serveur loco") }}{% elif remote.kind == 'adb' %}{{ _("Shell adb · utilisateur shell d'Android · via le serveur loco") }}{% else %}{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}{% endif %}</p>
     </div>
     <div class="actions">
-      {% if remote.kind in ('terminal', 'adb') %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
+      {% if term %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">
         <button type="button" class="btn" id="remote-font-dec" title="{{ _('Réduire le texte') }}" aria-label="{{ _('Réduire le texte') }}">A−</button>
         <button type="button" class="btn" id="remote-font-inc" title="{{ _('Agrandir le texte') }}" aria-label="{{ _('Agrandir le texte') }}">A+</button>
       </div>{% endif %}
-      {% if detached %}<a class="btn" href="{{ url_for('fleet_device', dev_id=remote.device_id) }}" target="_blank" rel="noopener" title="{{ _('Fiche du poste') }}">{{ ui_icon('external') }}<span>{{ _("Fiche du poste") }}</span></a>{% endif %}
+      {% if detached %}<a class="btn" href="{{ origin.back }}" target="_blank" rel="noopener" title="{{ origin.page }}">{{ ui_icon('external') }}<span>{{ origin.page }}</span></a>{% endif %}
       <button class="btn" id="remote-fullscreen" aria-pressed="false" title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}" data-title="{{ _('Plein écran : commandes dans un panneau latéral rétractable') }}">{{ ui_icon('expand') }}{{ ui_icon('collapse') }}<span>{{ _("Plein écran") }}</span></button>
-      <form method="post" action="{{ url_for('remote_open', dev_id=remote.device_id) }}" target="_blank" rel="noopener">
+      <form method="post" action="{{ origin.open }}" target="_blank" rel="noopener">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">{% if remote.consent %}<input type="hidden" name="consent" value="1">{% endif %}
         <input type="hidden" name="view" value="console">
         <button class="btn" id="remote-new-tab" title="{{ _('Ouvre une nouvelle session sur ce poste') }}">{{ ui_icon('external') }}<span>{{ _("Nouvel onglet") }}</span></button>
       </form>
       <button class="btn danger" id="remote-close" title="{{ _('Fermer la session') }}">{{ ui_icon('close') }}<span>{{ _("Fermer la session") }}</span></button>
-      <form method="post" action="{{ url_for('remote_open', dev_id=remote.device_id) }}">
+      <form method="post" action="{{ origin.open }}">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ remote.kind }}">{% if remote.consent %}<input type="hidden" name="consent" value="1">{% endif %}
         {% if detached %}<input type="hidden" name="view" value="console">{% endif %}
         <button class="btn primary" id="remote-reconnect" title="{{ _('Nouvelle session') }}" hidden>{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
@@ -87,17 +90,17 @@
     {% if remote.kind == 'desktop' %}
     <div id="remote-viewport" class="remote-viewport fit"><div id="remote-screen" class="remote-screen desktop"></div></div>
     {% else %}
-    <div id="remote-screen" class="remote-screen {{ remote.kind }}"></div>
+    <div id="remote-screen" class="remote-screen {{ 'terminal' if ssh else remote.kind }}"></div>
     {% endif %}
     <div class="remote-overlay" id="remote-overlay">
       <div class="remote-overlay-box">
         <span class="spin remote-spinner" id="remote-overlay-spinner" aria-hidden="true"></span>
         <span class="remote-overlay-icon" id="remote-overlay-icon" hidden>{{ ui_icon('unplug') }}</span>
-        <p class="remote-overlay-title" id="remote-overlay-title">{{ _("Connexion au poste…") }}</p>
-        <p class="small muted" id="remote-overlay-text">{{ _("Ouverture de la session par l'agent loco du poste.") }}</p>
+        <p class="remote-overlay-title" id="remote-overlay-title">{{ _("Connexion à Home Assistant…") if ssh else _("Connexion au poste…") }}</p>
+        <p class="small muted" id="remote-overlay-text">{{ _("Ouverture de la session SSH par le serveur loco.") if ssh else _("Ouverture de la session par l'agent loco du poste.") }}</p>
         <div class="remote-overlay-actions" id="remote-overlay-actions" hidden>
           <button type="button" class="btn primary" id="remote-overlay-reconnect">{{ ui_icon('refresh') }}<span>{{ _("Nouvelle session") }}</span></button>
-          <a class="btn" href="{{ url_for('fleet_device', dev_id=remote.device_id) }}">{{ _("Retour au poste") }}</a>
+          <a class="btn" href="{{ origin.back }}">{{ origin.label }}</a>
         </div>
       </div>
     </div>
@@ -110,7 +113,7 @@
     </div>
     {% endif %}
   </div>
-  {% if remote.kind in ('terminal', 'adb') %}
+  {% if term %}
   {{ term_help(_("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.")) }}
   {% else %}
   <div class="remote-statusbar" id="remote-statusbar">
@@ -126,7 +129,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
-{% if remote.kind in ('terminal', 'adb') %}
+{% if remote.kind in ('terminal', 'adb', 'ssh') %}
 {% include '_xterm_assets.html' %}
 {% endif %}
 <script type="module" src="{{ url_for('static', filename='remote.js') }}?v={{ asset_v }}"></script>

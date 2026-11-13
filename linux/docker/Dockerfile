@@ -18,7 +18,7 @@ RUN groupadd --system --gid 990 loco \
  && apt-get install -y -q --no-install-recommends \
         nginx libnginx-mod-stream apt-cacher-ng apt-utils gnupg python3 python3-flask python3-cryptography gunicorn \
         curl openssl ca-certificates flatpak ostree createrepo-c rpm \
-        supervisor logrotate iproute2 procps tzdata adb \
+        supervisor logrotate iproute2 procps tzdata adb openssh-client \
  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default /usr/sbin/policy-rc.d
 
 COPY . /usr/src/loco

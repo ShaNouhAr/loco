@@ -421,10 +421,17 @@ _GUARD = threading.Lock()
 
 
 def start(sid, serial):
+    start_command(sid, [binary(), "-s", serial, "shell"], _env(), "adb")
+
+
+def start_command(sid, argv, env, name, after=None):
+    """Relais d'une session de terminal tenue par loco lui-même : la commande tourne ici, dans un pseudo-terminal.
+    name : « adb », ou le nom à dire quand la session se termine (terminal SSH d'un Home Assistant).
+    after : appelé une fois la session terminée (rangement de ce qui ne servait qu'à elle)."""
     with _GUARD:
         if sid in _WORKERS:
             return
-        worker = threading.Thread(target=_shell, args=(sid, serial), name="loco-adb-shell", daemon=True)
+        worker = threading.Thread(target=_shell, args=(sid, argv, env, name, after), name="loco-pty-" + name, daemon=True)
         _WORKERS[sid] = worker
     worker.start()
 
@@ -433,8 +440,8 @@ def _winsize(fd, cols, rows):
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
 
 
-def _shell(sid, serial):
-    """Relais d'une session : sortie du pseudo-terminal vers le navigateur, saisie du navigateur vers adb shell."""
+def _shell(sid, argv, env, name, after=None):
+    """Relais d'une session : sortie du pseudo-terminal vers le navigateur, saisie du navigateur vers la commande."""
     from .remote import PACKET, BUFFER, OPEN
     conn = connect()
     conn.execute("PRAGMA synchronous = NORMAL")
@@ -447,8 +454,7 @@ def _shell(sid, serial):
         master, slave = pty.openpty()
         size = (row["cols"], row["rows"])
         _winsize(master, *size)
-        proc = subprocess.Popen([binary(), "-s", serial, "shell"], stdin=slave, stdout=slave, stderr=slave, env=_env(),
-                                start_new_session=True, close_fds=True)
+        proc = subprocess.Popen(argv, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True, close_fds=True)
         os.close(slave)
         with conn:
             conn.execute("UPDATE remote_sessions SET state='active', agent_seen=? WHERE id=? AND state IN ('waiting','active')",
@@ -520,10 +526,14 @@ def _shell(sid, serial):
                 seen = time.time()
             if ended and not pending:
                 code = proc.poll()
-                error = _("Session adb terminée.") if code in (0, None) else _("Session adb terminée (code %(code)s).", code=code)
+                if name == "adb":
+                    error = _("Session adb terminée.") if code in (0, None) else _("Session adb terminée (code %(code)s).", code=code)
+                else:
+                    error = _("Session terminée.") if code in (0, None) else _("Session terminée (code %(code)s).", code=code)
                 break
     except Exception as e:                  # jamais de session « active » sans relais derrière
-        error = _("Terminal adb interrompu : %(e)s", e=str(e)[:200])
+        error = (_("Terminal adb interrompu : %(e)s", e=str(e)[:200]) if name == "adb"
+                 else _("Terminal interrompu : %(e)s", e=str(e)[:200]))
     finally:
         if proc is not None:
             if proc.poll() is None:
@@ -548,6 +558,11 @@ def _shell(sid, serial):
             except Exception:
                 pass
         conn.close()
+        if after is not None:
+            try:
+                after()
+            except Exception:
+                pass
         with _GUARD:
             _WORKERS.pop(sid, None)
 

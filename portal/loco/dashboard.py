@@ -134,6 +134,9 @@ def _attention():
         for row in paused_rollouts():
             rows.append({"tone": "warn", "text": _("Déploiement « %(title)s » en pause après un échec : à vous de décider de la suite.", title=row["title"]),
                          "url": url_for("deployment_detail", deployment_id=row["id"])})
+    if can("homeassistant.view") and "homeassistant" not in features.disabled():
+        from . import homeassistant
+        rows += homeassistant.attention()
     rows.sort(key=lambda row: row["tone"] != "err")
     return rows
 

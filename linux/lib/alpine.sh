@@ -40,6 +40,14 @@ alpine_packages() {
             warn "adb non installé (dépôt Alpine injoignable) : terminal adb indisponible." "adb not installed (Alpine repository unreachable): adb terminal unavailable." "adb no instalado (repositorio Alpine inaccesible): terminal adb no disponible."
         fi
     fi
+    # Client SSH (liaison avec Home Assistant, fonctionnalité facultative) : déjà sur l'appliance, jamais bloquant ailleurs.
+    if ! command -v ssh >/dev/null 2>&1; then
+        if apk add --no-progress openssh-client-default >> "$LOG" 2>&1; then
+            grep -qx openssh-client-default "$PACKAGE_RECORD" || echo openssh-client-default >> "$PACKAGE_RECORD"
+        else
+            warn "client SSH non installé : liaison avec Home Assistant indisponible." "SSH client not installed: Home Assistant link unavailable." "cliente SSH no instalado: enlace con Home Assistant no disponible."
+        fi
+    fi
     # nginx et le portail sont lancés par supervisord : le service nginx d'Alpine resterait en conflit.
     rc-update del nginx default >/dev/null 2>&1 || true
     rc-service nginx stop >/dev/null 2>&1 || true

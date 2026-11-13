@@ -1792,6 +1792,23 @@
     setTimeout(step, 2000);
   })($("[data-updates-feed]"));
 
+  // Home Assistant : la fin de son journal, lue à l'ouverture du volet puis à la demande.
+  $$("[data-hass-log]").forEach(function (box) {
+    var out = $("[data-hass-log-text]", box), busy = false;
+    var read = function () {
+      if (busy) return;
+      busy = true;
+      out.textContent = t("Lecture du journal…");
+      fetch(box.dataset.hassLog, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) { out.textContent = d.log || t("Journal vide."); out.scrollTop = out.scrollHeight; })
+        .catch(function () { out.textContent = t("Le journal n'a pas pu être lu."); })
+        .then(function () { busy = false; });
+    };
+    box.addEventListener("toggle", function () { if (box.open) read(); });
+    $("[data-hass-log-reload]", box).addEventListener("click", read);
+  });
+
   var live = $("[data-poll]");
   if (live) {
     var kind = live.dataset.pollKind;
