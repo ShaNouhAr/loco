@@ -22,7 +22,10 @@ namespace Loco
         public static int Main(string[] args)
         {
             if (args.Length != 2 || args[0] != "--pipe" || !Regex.IsMatch(args[1], "^loco-desktop-[0-9a-f]{64}$")) return 2;
-            SetProcessDPIAware();
+            // Pixels réels sur chaque écran, même réglés à des échelles différentes (Windows 8.1 et plus) : la zone d'un
+            // écran choisi et la position du pointeur restent justes. À défaut, l'échelle unique du système.
+            try { if (SetProcessDpiAwareness(2) != 0) SetProcessDPIAware(); }
+            catch (Exception) { SetProcessDPIAware(); }
             try
             {
                 using (var pipe = new NamedPipeClientStream(".", args[1], PipeDirection.InOut, PipeOptions.None))
@@ -43,6 +46,7 @@ namespace Loco
             }
         }
         [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
+        [DllImport("shcore.dll")] static extern int SetProcessDpiAwareness(int awareness);
     }
     internal sealed class RfbDesktop
     {
@@ -57,6 +61,9 @@ namespace Loco
         IntPtr inputDesktop;
         string desktopName = "";
         bool extendedSize, desktopNameEncoding;
+        // Écran montré : 0 pour tout le bureau, sinon le numéro Windows de l'écran choisi dans le navigateur.
+        int selectedScreen; bool screensEncoding, screenSwitched; string announcedScreens;
+        List<DesktopScreen> screens = new List<DesktopScreen>(); int screensAt = Environment.TickCount;
         Rectangle captureArea;
         bool tight, jpeg, answerAlways, rgbOrder, cursorShape;
         IntPtr lastCursor = new IntPtr(-1);
@@ -70,7 +77,7 @@ namespace Loco
         byte[] cursorRgba; int cursorW, cursorH, cursorHotX, cursorHotY, bakedVotes; bool cursorInImage, sentBaked;
         public RfbDesktop(Stream stream)
         {
-            this.stream = stream; bounds = SystemInformation.VirtualScreen;
+            this.stream = stream; bounds = Area();
             if (bounds.Width <= 0 || bounds.Height <= 0 || (long)bounds.Width * bounds.Height > 16777216) throw new IOException(Lang.T("Bureau indisponible", "Desktop unavailable", "Escritorio no disponible"));
             width = bounds.Width; height = bounds.Height;
             framebuffer = new RfbFramebuffer(width, height);
@@ -123,6 +130,7 @@ namespace Loco
                     {
                         int count = I16(Read(3), 1); if (count > 128) throw new InvalidDataException();
                         var encodings = Read(count * 4); tight = false; jpeg = false; answerAlways = false; cursorShape = false; extendedSize = false; desktopNameEncoding = false;
+                        screensEncoding = false; announcedScreens = null;
                         for (int i = 0; i < count; i++)
                         {
                             uint encoding = I32(encodings, i * 4);
@@ -136,6 +144,8 @@ namespace Loco
                             if (encoding == 0xfffffecc) extendedSize = true;
                             if (encoding == 0xfffffecd) desktopNameEncoding = true;
                             if (encoding == 0x574d5664) cursorShape = true;
+                            // Pseudo-encodage loco « LOC\x02 » : le client sait afficher la liste des écrans et en choisir un.
+                            if (encoding == 0x4c4f4302) screensEncoding = true;
                         }
                         lastCursor = new IntPtr(-1);
                     }
@@ -160,6 +170,8 @@ namespace Loco
                         }
                         Write(SizeUpdate(1, valid ? 0 : 3));
                     }
+                    // Message loco « L » : sous-type 1 = montrer l'écran de ce numéro (0 : tout le bureau).
+                    else if (kind == 76) { var p = Read(3); if (p[0] == 1) { AttachDesktop(); SelectScreen(I16(p, 1)); } }
                     else throw new InvalidDataException();
                 }
             }
@@ -193,7 +205,9 @@ namespace Loco
             }
             PollClipboard();
             if (pendingResolution) ApplyResolution();
+            if (screensEncoding) AnnounceScreens();
             bool fresh = full;
+            if (screenSwitched) { screenSwitched = false; fresh = true; }
             if (extendedSize && (bounds.Width != width || bounds.Height != height)) { SetFrameSize(bounds.Width, bounds.Height); fresh = true; }
             // Au plus ~30 images par seconde ; l'attente se fait par petites tranches pour laisser passer la saisie.
             int gap = 33 - (int)frameTime.ElapsedMilliseconds;
@@ -298,8 +312,40 @@ namespace Loco
             if (!pendingResolution || !String.Equals(desktopName, "Default", StringComparison.OrdinalIgnoreCase)) return;
             pendingResolution = false;
             resolution.Resize(requestedWidth, requestedHeight);
-            bounds = SystemInformation.VirtualScreen;
+            screensAt = Environment.TickCount;   // le mode vient peut-être de changer : relire les écrans
+            bounds = Area();
             UpdateCaptureArea();
+        }
+        // Zone du bureau montrée : tout le bureau, ou l'écran choisi. La liste des écrans est relue au plus deux fois par
+        // seconde ; un écran choisi puis débranché rend la main à tout le bureau.
+        Rectangle Area()
+        {
+            if (unchecked(Environment.TickCount - screensAt) >= 0)
+            {
+                screens = DesktopScreens.List(); screensAt = unchecked(Environment.TickCount + 500);
+                selectedScreen = DesktopScreens.Valid(screens, selectedScreen);
+            }
+            return DesktopScreens.Area(screens, selectedScreen, SystemInformation.VirtualScreen);
+        }
+        void SelectScreen(int number)
+        {
+            screensAt = Environment.TickCount; selectedScreen = number;
+            var area = Area();
+            if (!DesktopScreens.Usable(area)) return;
+            // Deux écrans de même taille : ni la duplication de l'ancien ni son image gardée ne doivent rester.
+            bounds = area; UpdateCaptureArea(); DropDuplication(); duplicationRetryAt = Environment.TickCount;
+            framebuffer = new RfbFramebuffer(width, height); lastCursor = new IntPtr(-1); cursorInImage = false; bakedVotes = 0;
+            screenSwitched = true; gdiInterval = 0;
+        }
+        // Liste des écrans et écran montré, annoncés au navigateur à l'ouverture puis à chaque changement (écran branché,
+        // débranché, déplacé, choisi) : un rectangle sans image, suivi de sa description.
+        void AnnounceScreens()
+        {
+            string state = DesktopScreens.Describe(screens, selectedScreen, SystemInformation.VirtualScreen);
+            if (state == announcedScreens) return;
+            announcedScreens = state;
+            var body = Encoding.UTF8.GetBytes(state);
+            Write(Join(new byte[] { 0, 0, 0, 1 }, U16(selectedScreen), U16(0), U16(screens.Count), U16(0), U32(0x4c4f4302), U32((uint)body.Length), body));
         }
         bool AttachDesktop()
         {
@@ -327,9 +373,8 @@ namespace Loco
                 }
                 framebuffer = new RfbFramebuffer(width, height);
             }
-            var current = SystemInformation.VirtualScreen;
-            if (current.Width > 0 && current.Height > 0 && (long)current.Width * current.Height <= 16777216)
-            { bounds = current; UpdateCaptureArea(); }
+            var current = Area();
+            if (DesktopScreens.Usable(current)) { bounds = current; UpdateCaptureArea(); }
             return true;
         }
 
@@ -474,8 +519,9 @@ namespace Loco
         {
             long px = bounds.Left + Math.Max(0, Math.Min(captureArea.Width - 1, x - captureArea.Left)) * (long)bounds.Width / captureArea.Width;
             long py = bounds.Top + Math.Max(0, Math.Min(captureArea.Height - 1, y - captureArea.Top)) * (long)bounds.Height / captureArea.Height;
-            var input = new Input { Type = 0 }; input.Data.Mouse.X = (int)((px - bounds.Left) * 65535 / Math.Max(1, bounds.Width - 1));
-            input.Data.Mouse.Y = (int)((py - bounds.Top) * 65535 / Math.Max(1, bounds.Height - 1)); input.Data.Mouse.Flags = 0x8000 | 0x4000 | 1;
+            // Coordonnées absolues sur le bureau entier : l'écran montré n'en est qu'une partie.
+            var input = new Input { Type = 0 }; int ax, ay; DesktopScreens.Absolute(SystemInformation.VirtualScreen, px, py, out ax, out ay);
+            input.Data.Mouse.X = ax; input.Data.Mouse.Y = ay; input.Data.Mouse.Flags = 0x8000 | 0x4000 | 1;
             Send(input);
             foreach (var b in new[] { new[] { 1, 2, 4 }, new[] { 2, 32, 64 }, new[] { 4, 8, 16 } })
                 if (((mouseMask ^ mask) & b[0]) != 0) { input.Data.Mouse.Flags = (uint)((mask & b[0]) != 0 ? b[1] : b[2]); Send(input); }

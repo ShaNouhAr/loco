@@ -4576,5 +4576,9 @@
  "Home Assistant « %(name)s » : la liaison échoue.": "Home Assistant «%(name)s»: el enlace falla.",
  "Home Assistant « %(name)s » : installation dégradée.": "Home Assistant «%(name)s»: instalación degradada.",
  "Home Assistant « %(name)s » : %(n)s mise à jour disponible.": "Home Assistant «%(name)s»: %(n)s actualización disponible.",
- "Home Assistant « %(name)s » : %(n)s mises à jour disponibles.": "Home Assistant «%(name)s»: %(n)s actualizaciones disponibles."
+ "Home Assistant « %(name)s » : %(n)s mises à jour disponibles.": "Home Assistant «%(name)s»: %(n)s actualizaciones disponibles.",
+ "Tous les écrans": "Todas las pantallas",
+ "Écran %(n)s": "Pantalla %(n)s",
+ "Ce poste a plusieurs écrans : montrez-les tous côte à côte, ou un seul. Le choix est retenu pour ce poste.": "Este equipo tiene varias pantallas: muéstrelas todas una al lado de otra, o solo una. La elección se recuerda para este equipo.",
+ "Écran du poste à montrer": "Pantalla del equipo que mostrar"
 }

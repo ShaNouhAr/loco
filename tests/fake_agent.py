@@ -17,18 +17,32 @@ def load_agent():
 
 class Screen:
     """Dégradé connu : pixel (x, y) = rouge 200, vert 3*y, bleu 2*x (octets BGRX), sauf un carré (40..47, 20..27) dont le
-    vert change à chaque capture : seule sa tuile doit transiter dans une mise à jour incrémentale."""
+    vert change à chaque capture : seule sa tuile doit transiter dans une mise à jour incrémentale.
+    LOCO_TEST_SCREENS=n découpe ce bureau en n écrans côte à côte, que le client peut choisir (rouge 100 + 50 × numéro)."""
     width, height, interval = int(os.environ.get("LOCO_TEST_WIDTH", "64")), int(os.environ.get("LOCO_TEST_HEIGHT", "40")), 0
 
     def __init__(self):
         self.events = open(os.environ["LOCO_TEST_EVENTS"], "a")
         self.grabs = 0
+        self.full, self.selected = (self.width, self.height), 0
+
+    def screens(self):
+        count = int(os.environ.get("LOCO_TEST_SCREENS", "1"))
+        each = self.full[0] // max(1, count)
+        return [{"id": i + 1, "x": i * each, "y": 0, "w": each, "h": self.full[1], "primary": i == 0} for i in range(count)] if count > 1 else []
+
+    def select_screen(self, number):
+        chosen = next((sc for sc in self.screens() if sc["id"] == number), None)
+        self.selected = number if chosen else 0
+        self.width, self.height = (chosen["w"], chosen["h"]) if chosen else self.full
+        self.log("screen", self.selected)
 
     def grab(self):
         self.grabs += 1
-        frame = bytearray(b"".join(bytes(((2 * x) % 256, (3 * y) % 256, 200, 0)) for y in range(self.height) for x in range(self.width)))
-        for y in range(20, 28):
-            for x in range(40, 48):
+        red = 100 + 50 * self.selected if self.selected else 200
+        frame = bytearray(b"".join(bytes(((2 * x) % 256, (3 * y) % 256, red, 0)) for y in range(self.height) for x in range(self.width)))
+        for y in range(20, min(28, self.height)):
+            for x in range(40, min(48, self.width)):
                 frame[(y * self.width + x) * 4:(y * self.width + x) * 4 + 4] = bytes((0, (self.grabs * 37) % 256, 0, 0))
         return bytes(frame)
 

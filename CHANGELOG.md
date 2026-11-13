@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.162.0 — 2026-11-13
+
+- **Bureau distant : choisir l'écran d'un poste qui en a plusieurs** : une liste *Écran* apparaît à côté de *Résolution* dès que le poste a plus d'un écran — *Tous les écrans* (côte à côte, comme jusqu'ici) ou un seul, désigné par son numéro, sa taille et la mention *principal*. L'image prend la taille de l'écran choisi ; la souris et le clavier restent justes. En plein écran, la liste suit les autres réglages dans le panneau de commandes.
+- **Le choix est retenu** : par poste, dans votre navigateur. La session suivante sur ce poste rouvre sur le même écran ; un écran débranché en cours de session rend la vue à tous les écrans.
+- **Windows** : les numéros sont ceux des paramètres d'affichage de Windows. Un écran montré seul est lu comme sur un poste à un écran (duplication DXGI, seulement quand l'image change), au lieu de la capture plus lente qu'imposaient plusieurs écrans. Le bureau distant compte désormais en pixels réels sur chaque écran, même réglés à des échelles différentes.
+- **Linux** : sur un bureau X11. GNOME en Wayland continue de montrer son écran principal, KDE Plasma en Wayland celui qui a été accordé sur le poste.
+- La liste arrive avec la mise à jour de l'agent du poste (2.162.0) ; un agent plus ancien montre tous les écrans, comme avant.
+
 ## 2.161.0 — 2026-11-13
 
 - **Fonctionnalités facultatives** : la page *Fonctionnalités* gagne une section *Facultatif*, après *Expérimental*. Elle réunit ce qui est abouti mais ne concerne pas tout le monde ; comme l'expérimental, c'est coupé par défaut et tout compte au profil Administrateur l'active.

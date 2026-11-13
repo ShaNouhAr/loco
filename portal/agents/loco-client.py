@@ -2296,6 +2296,12 @@ def x11_environment():
                        t("Aucune session graphique X11 ouverte sur ce poste.", "No X11 graphical session open on this machine.", "Ninguna sesión gráfica X11 abierta en este equipo."))
 
 
+class XRRMonitorInfo(ctypes.Structure):
+    _fields_ = [("name", ctypes.c_ulong), ("primary", ctypes.c_int), ("automatic", ctypes.c_int), ("noutput", ctypes.c_int),
+                ("x", ctypes.c_int), ("y", ctypes.c_int), ("width", ctypes.c_int), ("height", ctypes.c_int),
+                ("mwidth", ctypes.c_int), ("mheight", ctypes.c_int), ("outputs", ctypes.c_void_p)]
+
+
 class XFixesCursorImage(ctypes.Structure):
     _fields_ = [("x", ctypes.c_short), ("y", ctypes.c_short), ("width", ctypes.c_ushort), ("height", ctypes.c_ushort),
                 ("xhot", ctypes.c_ushort), ("yhot", ctypes.c_ushort), ("cursor_serial", ctypes.c_ulong),
@@ -2920,6 +2926,15 @@ class X11Backend:
             self._get_cursor = bind(ctypes.CDLL("libXfixes.so.3"), "XFixesGetCursorImage", ctypes.POINTER(XFixesCursorImage), [ptr])
         except OSError:
             self._get_cursor = None
+        try:
+            # Écrans du bureau (XRandR 1.5) : facultatif ; sans lui, le bureau entier reste la seule vue.
+            xrr = ctypes.CDLL("libXrandr.so.2")
+            self._monitors = bind(xrr, "XRRGetMonitors", ctypes.POINTER(XRRMonitorInfo), [ptr, ulong, integer, ctypes.POINTER(integer)])
+            self._free_monitors = bind(xrr, "XRRFreeMonitors", None, [ctypes.POINTER(XRRMonitorInfo)])
+        except (OSError, AttributeError):
+            self._monitors = None
+        # Écran montré : 0 pour le bureau entier (tous les écrans côte à côte), sinon le numéro d'un écran.
+        self._full, self._origin, self.selected, self._screens, self._screens_at = (self.width, self.height), (0, 0), 0, [], 0.0
         self._close = bind(x, "XCloseDisplay", integer, [ptr])
         self._cursor_shape, self._cursor_serial = False, None
         self._keys = None
@@ -2940,8 +2955,37 @@ class X11Backend:
         except (AttributeError, OSError):
             self._keys = None
 
+    def screens(self):
+        """Écrans du bureau, dans l'ordre : le principal, puis de gauche à droite et de haut en bas. Relus au plus une
+        fois par seconde. Chacun : numéro (id), position et taille dans le bureau entier, principal ou non."""
+        if not self._monitors:
+            return []
+        if time.monotonic() - self._screens_at < 1:
+            return self._screens
+        count, found = ctypes.c_int(0), []
+        monitors = self._monitors(self._d, self._root, 1, ctypes.byref(count))
+        if monitors:
+            try:
+                for i in range(count.value):
+                    m = monitors[i]
+                    found.append({"x": m.x, "y": m.y, "w": m.width, "h": m.height, "primary": bool(m.primary)})
+            finally:
+                self._free_monitors(monitors)
+        self._screens, self._screens_at = number_screens(found, *self._full), time.monotonic()
+        if self.selected and not any(sc["id"] == self.selected for sc in self._screens):
+            self.select_screen(0)                                # écran choisi puis débranché : retour au bureau entier
+        return self._screens
+
+    def select_screen(self, number):
+        """Montre l'écran de ce numéro (0 : le bureau entier). La taille de l'image suit ; la saisie reste juste."""
+        chosen = next((sc for sc in self.screens() if sc["id"] == number), None) if number else None
+        if chosen is None or len(self._screens) < 2:
+            self.selected, self._origin, (self.width, self.height) = 0, (0, 0), self._full
+        else:
+            self.selected, self._origin, (self.width, self.height) = number, (chosen["x"], chosen["y"]), (chosen["w"], chosen["h"])
+
     def grab(self):
-        image = self._get_image(self._d, self._root, 0, 0, self.width, self.height, ctypes.c_ulong(-1).value, 2)
+        image = self._get_image(self._d, self._root, self._origin[0], self._origin[1], self.width, self.height, ctypes.c_ulong(-1).value, 2)
         if not image:
             raise RuntimeError(t("Capture de la session X11 impossible", "Cannot capture the X11 session", "No se puede capturar la sesión X11"))
         try:
@@ -2966,7 +3010,7 @@ class X11Backend:
         return False
 
     def motion(self, x, y):
-        self._fmotion(self._d, self._screen, x, y, 0)
+        self._fmotion(self._d, self._screen, x + self._origin[0], y + self._origin[1], 0)
 
     def button(self, number, down):
         self._fbutton(self._d, number, bool(down), 0)
@@ -2994,6 +3038,26 @@ class X11Backend:
 
     def close(self):
         self._close(self._d)
+
+
+def number_screens(found, width, height):
+    """Écrans utilisables d'un bureau de width × height, numérotés : le principal d'abord, puis de gauche à droite et de
+    haut en bas. Un écran qui dépasse du bureau (changement de mode en cours) ou vide est écarté ; les doublons (écrans
+    en miroir) ne comptent qu'une fois, et un écran qui couvre à lui seul tout le bureau n'est pas un choix de plus."""
+    kept, seen = [], {(0, 0, width, height)} if len(found) > 1 else set()
+    for sc in sorted(found, key=lambda sc: (not sc.get("primary"), sc["x"], sc["y"])):
+        area = (sc["x"], sc["y"], sc["w"], sc["h"])
+        if area in seen or sc["w"] < 1 or sc["h"] < 1 or sc["x"] < 0 or sc["y"] < 0 or sc["x"] + sc["w"] > width or sc["y"] + sc["h"] > height:
+            continue
+        seen.add(area)
+        kept.append({"id": len(kept) + 1, "x": sc["x"], "y": sc["y"], "w": sc["w"], "h": sc["h"], "primary": bool(sc.get("primary"))})
+    return kept
+
+
+def screens_rect(screens, selected):
+    """Pseudo-rectangle loco « écrans » : l'écran montré (0 = tous) et la liste, décrite en JSON derrière l'en-tête."""
+    body = json.dumps({"selected": selected, "screens": screens}, separators=(",", ":")).encode()
+    return struct.pack(">HHHHi", selected, 0, len(screens), 0, RFB_SCREENS) + struct.pack(">I", len(body)) + body
 
 
 def _grim_bin():
@@ -3493,6 +3557,8 @@ class KdePortalBackend:
 # les touches étendues (préfixe 0xE0) arrivent avec le bit 7 levé. La disposition du poste distant s'applique alors
 # telle quelle (touches mortes, AltGr, touche < > des claviers ISO…).
 QEMU_EXT_KEYS = -258
+RFB_SCREENS = 0x4C4F4302                 # pseudo-encodage loco « LOC\x02 » : liste des écrans et choix de l'écran montré
+RFB_DESKTOP_SIZE = -223                  # pseudo-encodage standard : la taille du bureau a changé
 _XT_EXTENDED = {0x9c: 96, 0x9d: 97, 0xb5: 98, 0xb7: 99, 0xb8: 100, 0xc7: 102, 0xc8: 103, 0xc9: 104, 0xcb: 105,
                 0xcd: 106, 0xcf: 107, 0xd0: 108, 0xd1: 109, 0xd2: 110, 0xd3: 111, 0xdb: 125, 0xdc: 126, 0xdd: 127}
 
@@ -3521,6 +3587,8 @@ def _rfb_serve(backend):
     pressed, mask, tight, last_frame, rgb_order, previous = set(), 0, False, 0, False, None
     # Codes de touches physiques : seulement si le client les propose ET si le backend sait les injecter.
     codes, keycodes, ack_keys = set(), False, False
+    # Choix de l'écran : seulement si le client sait suivre un changement de taille ET afficher la liste des écrans.
+    screens_on, announced, size = False, None, (backend.width, backend.height)
     def interrupted(_signum, _frame):
         raise EOFError()
     # SIGTERM doit aussi relâcher les modificateurs si la console est fermée pendant une frappe.
@@ -3553,11 +3621,25 @@ def _rfb_serve(backend):
                 backend.set_cursor(0x574D5664 in encodings)
                 wanted = QEMU_EXT_KEYS in encodings and hasattr(backend, "keycode")
                 ack_keys, keycodes = wanted and not keycodes, wanted
+                screens_on = RFB_SCREENS in encodings and RFB_DESKTOP_SIZE in encodings and hasattr(backend, "select_screen")
+                announced = None
             elif kind == 3:
                 incremental = read(9)[0] != 0
+                notes = []
+                if screens_on:
+                    state = (backend.selected, json.dumps(backend.screens(), sort_keys=True))
+                    if state != announced:
+                        announced = state
+                        notes.append(screens_rect(backend.screens(), backend.selected))
+                if (backend.width, backend.height) != size:
+                    # L'écran montré a changé : annoncer la nouvelle taille seule ; l'image entière part à la demande suivante.
+                    size, previous = (backend.width, backend.height), None
+                    notes.insert(0, struct.pack(">HHHHi", 0, 0, size[0], size[1], RFB_DESKTOP_SIZE))
+                    write(struct.pack(">BxH", 0, len(notes)) + b"".join(notes))
+                    continue
                 time.sleep(max(0, backend.interval - (time.monotonic() - last_frame)))
                 data = backend.grab()
-                ack = (struct.pack(">HHHHi", 0, 0, 0, 0, QEMU_EXT_KEYS),) if ack_keys else ()
+                ack = tuple(notes) + ((struct.pack(">HHHHi", 0, 0, 0, 0, QEMU_EXT_KEYS),) if ack_keys else ())
                 write(rfb_frame(data, backend.width, backend.height, previous, incremental, tight, rgb_order, backend.cursor(), ack))
                 ack_keys = False
                 previous = data
@@ -3595,6 +3677,10 @@ def _rfb_serve(backend):
                 if length > 1024 * 1024:
                     raise ValueError("Presse-papiers trop volumineux")
                 read(length)
+            elif kind == 76:                                     # message loco « L » : sous-type 1 = montrer cet écran (0 : tous)
+                sub, number = struct.unpack(">BH", read(3))
+                if sub == 1 and screens_on:
+                    backend.select_screen(number)
             else:
                 raise ValueError(t("Message RFB non pris en charge", "Unsupported RFB message", "Mensaje RFB no admitido"))
             backend.flush()

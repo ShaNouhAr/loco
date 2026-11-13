@@ -344,7 +344,22 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
 } else {
   const { default: RFB } = await import('./vendor/novnc-1.7.0/core/rfb.js');
+  // Écrans du poste : l'agent en annonce la liste par un rectangle sans image (pseudo-encodage loco « LOC\x02 »), que
+  // noVNC ne connaît pas — il est déclaré ici, avec son lecteur. Un agent plus ancien n'annonce rien : pas de liste.
+  const SCREENS = 0x4c4f4302;
+  const clientEncodings = RFB.messages.clientEncodings;
+  RFB.messages.clientEncodings = (sock, encodings) => clientEncodings(sock, encodings.concat([SCREENS]));
   channel = new RelayChannel(); rfb = new RFB(screen, channel, { shared: true }); rfb.showDotCursor = true;
+  rfb._decoders[SCREENS] = { decodeRect(x, y, w, h, sock) {
+    if (sock.rQwait('loco screens', 4)) return false;
+    const length = sock.rQshift32();
+    if (length > 65536) throw new Error('loco screens');
+    if (sock.rQwait('loco screens', length, 4)) return false;
+    let state = null;
+    try { state = JSON.parse(new TextDecoder().decode(sock.rQshiftBytes(length))); } catch { /* annonce illisible : ignorée */ }
+    if (state) showScreens(state);
+    return true;
+  } };
   const viewport = document.getElementById('remote-viewport');
   const resolutionMode = document.getElementById('remote-resolution-mode');
   const zoom = document.getElementById('remote-zoom');
@@ -352,6 +367,39 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   const limit = document.getElementById('remote-limit');
   let nativeSize, resizeTimer, connected = false, lastSize = '', asked = null;
   const dpr = () => window.devicePixelRatio || 1;
+
+  // Choix de l'écran d'un poste qui en a plusieurs : tous côte à côte (comme sans ce choix), ou un seul. Le choix est
+  // retenu par poste dans ce navigateur et redemandé à l'ouverture de la session suivante.
+  const screenField = document.getElementById('remote-screen-field'), screenChoice = document.getElementById('remote-screen-choice');
+  const SCREEN_PREF = 'loco-remote-screen:' + (root.dataset.device || '');
+  let screenRestored = false;
+  function chooseScreen(number) {
+    send(new Uint8Array([76, 1, (number >> 8) & 255, number & 255]));
+    nativeSize = null; lastSize = ''; asked = null;       // l'image change de taille : la résolution « du poste » est à relire
+  }
+  function showScreens(state) {
+    const list = (Array.isArray(state.screens) ? state.screens : [])
+      .filter(s => s && Number.isInteger(s.id) && s.id > 0 && s.id < 65536 && s.w > 0 && s.h > 0).slice(0, 16);
+    const options = [[0, t('Tous les écrans')]].concat(list.map(s =>
+      [s.id, t('Écran %(n)s', {n: s.id}) + ` · ${s.w} × ${s.h}` + (s.primary ? ' · ' + t('principal') : '')]));
+    screenChoice.replaceChildren(...options.map(([value, label]) => {
+      const option = document.createElement('option'); option.value = String(value); option.textContent = label; return option;
+    }));
+    const shown = list.some(s => s.id === state.selected) ? state.selected : 0;
+    screenChoice.value = String(shown);
+    screenField.hidden = list.length < 2;
+    if (list.length < 2 || screenRestored) return;
+    screenRestored = true;
+    let saved = 0;
+    try { saved = parseInt(localStorage.getItem(SCREEN_PREF) || '0', 10) || 0; } catch { /* stockage indisponible */ }
+    if (saved !== shown && list.some(s => s.id === saved)) { screenChoice.value = String(saved); chooseScreen(saved); }
+  }
+  screenChoice.addEventListener('change', () => {
+    const number = parseInt(screenChoice.value, 10) || 0;
+    try { localStorage.setItem(SCREEN_PREF, String(number)); } catch { /* ignoré */ }
+    chooseScreen(number);
+    if (connected) rfb.focus();
+  });
 
   // Curseur du poste à la même échelle que le bureau affiché : net à 100 %, proportionné en « Ajuster » ou en zoom.
   const cursor = rfb._cursor, baseChange = cursor.change.bind(cursor);

@@ -1108,5 +1108,94 @@ class TestHomeAssistantPhone(HomeAssistantPages):
         self.assertLessEqual(self.overflow(), 0, "menu ouvert")
 
 
+class TestDesktopScreens(BrowserTest):
+    """Bureau distant d'un poste à plusieurs écrans, face au vrai serveur RFB de l'agent Linux (écran simulé de
+    tests/fake_agent.py) : la liste arrive par le flux du bureau, le choix change l'image, et il est retenu par poste."""
+
+    def setUp(self):
+        super().setUp()
+        import shutil
+        import tempfile
+        import fake_agent
+        from test_mcp_remote import AgentLoop
+        self.folder = tempfile.mkdtemp(prefix="loco-screens-ui-")
+        self.addCleanup(shutil.rmtree, self.folder, True)
+        self.events = os.path.join(self.folder, "events.jsonl")
+        patch = mock.patch.dict(os.environ, {"LOCO_TEST_EVENTS": self.events, "LOCO_TEST_WIDTH": "128", "LOCO_TEST_HEIGHT": "40"})
+        patch.start()
+        self.addCleanup(patch.stop)
+        module = fake_agent.load_agent()
+        module.PROGRAM = os.path.join(str(ROOT), "tests", "fake_agent.py")
+        with transaction() as conn:
+            conn.execute("DELETE FROM remote_sessions")
+        agent = Agent(dict(LINUX, hostname="poste-ecrans"), "192.168.43.81", uid=hashlib.sha256(b"poste-ecrans").hexdigest()[:32])
+        agent.enroll()
+        self.dev = device(agent.uid)
+        self.loop = AgentLoop(agent, module)
+        self.loop.start()
+        self.addCleanup(self.stop_agent)
+
+    def stop_agent(self):
+        self.loop.stopping.set()
+        self.loop.join(10)
+        with transaction() as conn:
+            conn.execute("DELETE FROM remote_sessions")
+
+    def open_desktop(self, page):
+        page.goto(f"/fleet/{self.dev['id']}")
+        page.locator(".device-actions form", has=page.locator("input[name=kind][value=desktop]")).first.locator("button").first.click()
+        page.wait_for_url(re.compile(r"/fleet/session/"))
+        expect(page.locator("#remote-status")).to_contain_text("Connecté")
+        return page.locator("#remote-screen canvas").first
+
+    def chosen(self):
+        try:
+            with open(self.events) as f:
+                return [json.loads(line)[1] for line in f if json.loads(line)[0] == "screen"]
+        except OSError:
+            return []
+
+    def test_two_screens_can_be_shown_one_at_a_time_and_the_choice_is_kept(self):
+        with mock.patch.dict(os.environ, {"LOCO_TEST_SCREENS": "2"}):
+            canvas = self.open_desktop(self.page)
+            expect(canvas).to_have_attribute("width", "128")                      # d'abord tout le bureau, comme avant
+            field, choice = self.page.locator("#remote-screen-field"), self.page.locator("#remote-screen-choice")
+            expect(field).to_be_visible()
+            expect(choice.locator("option")).to_have_text(["Tous les écrans", "Écran 1 · 64 × 40 · principal", "Écran 2 · 64 × 40"])
+            expect(choice).to_have_value("0")
+            choice.select_option("2")
+            expect(canvas).to_have_attribute("width", "64")
+            expect(self.page.locator("#remote-readout")).to_contain_text("64 × 40")
+            self.assertEqual(self.chosen(), [2])
+            self.assertLessEqual(self.overflow(), 0)
+            # Un clic au coin de l'image tombe au coin de l'écran montré, pas du bureau entier.
+            box = canvas.bounding_box()
+            self.page.mouse.click(box["x"] + box["width"] - 2, box["y"] + box["height"] - 2)
+            deadline = time.time() + 5
+            moves = []
+            while time.time() < deadline and not moves:
+                with open(self.events) as f:
+                    moves = [json.loads(line) for line in f if json.loads(line)[0] == "motion"]
+                time.sleep(0.1)
+            self.assertTrue(moves and all(m[1] < 64 for m in moves), moves[-3:])
+            self.assertGreaterEqual(moves[-1][1], 60)
+            # Session suivante sur ce poste, dans ce navigateur : l'écran choisi revient tout seul.
+            self.page.click("#remote-close")
+            second = self.watch(self.context.new_page())
+            canvas = self.open_desktop(second)
+            expect(canvas).to_have_attribute("width", "64")
+            expect(second.locator("#remote-screen-choice")).to_have_value("2")
+            second.locator("#remote-screen-choice").select_option("0")
+            expect(canvas).to_have_attribute("width", "128")
+            self.assertEqual(self.chosen(), [2, 2, 0])
+
+    def test_a_single_screen_offers_no_choice(self):
+        canvas = self.open_desktop(self.page)
+        expect(canvas).to_have_attribute("width", "128")
+        self.page.wait_for_timeout(500)
+        expect(self.page.locator("#remote-screen-field")).to_be_hidden()
+        self.assertEqual(self.chosen(), [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

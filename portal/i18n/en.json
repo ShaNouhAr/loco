@@ -4576,5 +4576,9 @@
  "Home Assistant « %(name)s » : la liaison échoue.": "Home Assistant “%(name)s”: the link is failing.",
  "Home Assistant « %(name)s » : installation dégradée.": "Home Assistant “%(name)s”: unhealthy installation.",
  "Home Assistant « %(name)s » : %(n)s mise à jour disponible.": "Home Assistant “%(name)s”: %(n)s update available.",
- "Home Assistant « %(name)s » : %(n)s mises à jour disponibles.": "Home Assistant “%(name)s”: %(n)s updates available."
+ "Home Assistant « %(name)s » : %(n)s mises à jour disponibles.": "Home Assistant “%(name)s”: %(n)s updates available.",
+ "Tous les écrans": "All screens",
+ "Écran %(n)s": "Screen %(n)s",
+ "Ce poste a plusieurs écrans : montrez-les tous côte à côte, ou un seul. Le choix est retenu pour ce poste.": "This machine has several screens: show them all side by side, or just one. The choice is remembered for this machine.",
+ "Écran du poste à montrer": "Screen of the machine to show"
 }
