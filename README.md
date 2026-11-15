@@ -6,7 +6,7 @@
 
 [![Version](https://img.shields.io/github/v/release/ShaNouhAr/loco?sort=semver&label=version&color=5b8cff&style=flat-square)](https://github.com/ShaNouhAr/loco/releases)
 [![Licence MIT](https://img.shields.io/badge/licence-MIT-34d399?style=flat-square)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-1%E2%80%AF546-a78bfa?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-1%E2%80%AF500+-a78bfa?style=flat-square)
 ![Langues](https://img.shields.io/badge/langues-FR_·_EN_·_ES-fbbf5c?style=flat-square)
 ![Auto-hébergé](https://img.shields.io/badge/100_%25-auto--hébergé-fb7185?style=flat-square)
 
@@ -239,7 +239,7 @@ claude mcp add --transport http loco https://<serveur>:8443/mcp --header "Author
 <br>
 
 <div align="center">
-<img src="docs/media/chiffres.webp" width="100%" alt="En chiffres : 1 546 tests rejoués sur trois distributions à chaque version, 75 droits à combiner dans vos profils d'accès, 34 outils MCP pour vos assistants IA, 3 langues (français, anglais, espagnol), 0 télémétrie">
+<img src="docs/media/chiffres.webp" width="100%" alt="En chiffres : plus de 1 500 tests rejoués sur trois distributions à chaque version, 75 droits à combiner dans vos profils d'accès, 34 outils MCP pour vos assistants IA, 3 langues (français, anglais, espagnol), 0 télémétrie">
 </div>
 
 <br>
@@ -419,8 +419,6 @@ Le détail, et ce que loco ne protège pas : **[SECURITY.md](SECURITY.md)**.
 ## Licence
 
 [MIT](LICENSE). Polices IBM Plex, Bricolage Grotesque et JetBrains Mono sous licence SIL OFL 1.1 (`portal/static/fonts/`) ; photos des fonds d'écran créditées dans `portal/static/wallpapers/CREDITS.txt`.
-
-Vous venez de `local-repo` ? Suivez le **[guide de migration](docs/migration-loco.md)**.
 
 <br>
 

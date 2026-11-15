@@ -6,8 +6,7 @@
     "version": "12",
     "image": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
     "checksums": "https://cloud.debian.org/images/cloud/bookworm/latest/SHA512SUMS",
-    "algorithm": "sha512",
-    "upgrade_from": "v1.9.0"
+    "algorithm": "sha512"
   },
   {
     "id": "debian-13",
@@ -16,8 +15,7 @@
     "version": "13",
     "image": "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2",
     "checksums": "https://cloud.debian.org/images/cloud/trixie/latest/SHA512SUMS",
-    "algorithm": "sha512",
-    "upgrade_from": "v1.9.0"
+    "algorithm": "sha512"
   },
   {
     "id": "ubuntu-22.04",
@@ -26,8 +24,7 @@
     "version": "22.04",
     "image": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
     "checksums": "https://cloud-images.ubuntu.com/jammy/current/SHA256SUMS",
-    "algorithm": "sha256",
-    "upgrade_from": "v1.9.0"
+    "algorithm": "sha256"
   },
   {
     "id": "ubuntu-24.04",
@@ -36,8 +33,7 @@
     "version": "24.04",
     "image": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
     "checksums": "https://cloud-images.ubuntu.com/noble/current/SHA256SUMS",
-    "algorithm": "sha256",
-    "upgrade_from": "v1.9.0"
+    "algorithm": "sha256"
   },
   {
     "id": "ubuntu-26.04",
@@ -46,7 +42,6 @@
     "version": "26.04",
     "image": "https://cloud-images.ubuntu.com/resolute/current/resolute-server-cloudimg-amd64.img",
     "checksums": "https://cloud-images.ubuntu.com/resolute/current/SHA256SUMS",
-    "algorithm": "sha256",
-    "upgrade_from": ""
+    "algorithm": "sha256"
   }
 ]

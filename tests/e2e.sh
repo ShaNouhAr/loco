@@ -1,5 +1,5 @@
 #!/bin/bash
-# VM JETABLE uniquement : installation, migration, clients, isolation, restauration, désinstallation.
+# VM JETABLE uniquement : installation, clients, isolation, restauration, désinstallation.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 PW="E2e-Password-$(date +%s)"
@@ -11,7 +11,7 @@ ready() { curl -fsk --retry 10 --retry-connrefused --retry-delay 1 --max-time 5 
 cli() { (cd /opt/loco/portal && sudo -u loco env LOCO_DATA=/srv/loco LOCO_STATE=/var/lib/loco LOCO_ETC=/etc/loco python3 -m loco.cli "$@"); }
 # Les commandes du scénario partagent le verrou des opérations d'administration avec l'agent.
 # Son inventaire automatique démarre à l'installation et peut sinon occuper le verrou APT
-# pendant le test de migration ou la relance de l'installateur. Aucun verrou APT n'est supprimé.
+# pendant la relance de l'installateur. Aucun verrou APT n'est supprimé.
 with_admin_lock() {
     sudo sh -c 'umask 077; exec flock -o -w 900 /var/lib/loco-agent/lock "$@"' sh "$@"
 }
@@ -35,17 +35,7 @@ build_deb() {
 }
 build_deb native
 build_deb foreign
-build_deb legacy
-if [ -n "${LOCO_E2E_LEGACY_SRC:-}" ]; then
-    step "Installation local-repo 1.9.0 et ancien dépôt"
-    sudo "$LOCO_E2E_LEGACY_SRC/install.sh" --password "$PW" --no-flatpak
-    ready
-    old_uid=$(id -u localrepo)
-    python3 tests/e2e_portal.py https://127.0.0.1:8443 "$PW" "$work/legacy.deb" linux legacy
-    curl -fsSL http://127.0.0.1:8088/linux/setup.sh | sudo sh -s -- --legacy --trust-ca
-    sudo sha256sum /etc/local-repo/tls/ca.crt | cut -d' ' -f1 > "$work/old-ca"
-fi
-step "Installation / migration vers la version actuelle"
+step "Installation"
 sudo ./install.sh --password "$PW" --flatpak
 ready
 # Vérifie aussi les redémarrages successifs du serveur applicatif (nouvelles versions de Gunicorn).
@@ -61,14 +51,6 @@ ready
 if curl -fsk --max-time 5 https://127.0.0.1:9443/healthz >/dev/null 2>&1; then echo 'Le port 9443 devrait être fermé' >&2; exit 1; fi
 # shellcheck disable=SC1091
 HOST=$(. /etc/loco/loco.conf && echo "$HOST")
-if [ -f "$work/old-ca" ]; then
-    [ "$(id -u loco)" = "$old_uid" ]
-    [ ! -d /etc/local-repo ]
-    retry with_admin_lock apt-get update -o APT::Update::Error-Mode=any >/dev/null
-    [ "$(sudo sha256sum /etc/loco/tls/ca.crt | cut -d' ' -f1)" = "$(cat "$work/old-ca")" ]
-    sudo cmp "$work/legacy.deb" /srv/loco/apt/pool/lr-e2e_1.0_all.deb
-    grep -q 'lr-e2e' /srv/loco/apt/Packages
-fi
 sudo /opt/loco/bin/loco-user list
 step "Relance (idempotence)"
 with_admin_lock ./install.sh >/dev/null
@@ -108,17 +90,6 @@ retry with_admin_lock sh "$work/setup.sh" --cache-only >/dev/null
 [ ! -e "$SOURCE" ]
 [ -e /etc/apt/apt.conf.d/01loco-proxy ]
 retry with_admin_lock sh "$work/setup.sh" >/dev/null
-if [ -f "$work/old-ca" ]; then
-    step "Compatibilité explicite du dépôt historique"
-    with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
-    with_admin_lock sh "$work/setup.sh" --legacy >/dev/null
-    with_admin_lock apt-get install -y -q lr-e2e >/dev/null
-    [ "$(lr-e2e)" = loco-legacy-ok ]
-    with_admin_lock apt-get purge -y -q lr-e2e >/dev/null
-    with_admin_lock sh "$work/setup.sh" >/dev/null
-    with_admin_lock apt-get install -y -q lr-e2e >/dev/null
-    [ "$(lr-e2e)" = loco-native-ok ]
-fi
 step "Flatpak : application locale et cache Flathub"
 fp="$work/fp"; arch=$(flatpak --default-arch)
 mkdir -p "$fp/app/files/bin" "$fp/app/export"
@@ -133,13 +104,6 @@ curl -fsSL "https://$HOST:8443/flatpak/setup.sh" | sudo sh >/dev/null
 flatpak remote-ls --system loco --columns=application | grep -qx org.loco.E2e
 sudo flatpak install --system --noninteractive --no-deps loco org.loco.E2e >/dev/null
 flatpak info --system org.loco.E2e | grep -q loco
-step "Migration d'une application Flatpak dont l'origine porte l'ancien nom"
-sudo flatpak remote-add --system local-repo "https://$HOST:8443/flatpak/local-repo.flatpakrepo"
-sudo flatpak install --system --noninteractive --assumeyes --no-deps --reinstall local-repo org.loco.E2e >/dev/null
-sudo flatpak remote-delete --system --force loco
-curl -fsSL "https://$HOST:8443/flatpak/setup.sh" | sudo sh >/dev/null
-[ "$(flatpak info --system --show-origin org.loco.E2e)" = loco ]
-if flatpak remotes --system --columns=name | grep -qx local-repo; then echo 'Ancien remote Flatpak non migré.' >&2; exit 1; fi
 flatpak remote-info --system flathub org.flatpak.Builder >/dev/null
 curl -fsS "https://$HOST:8443/flathub/repo/summary.idx" -o /dev/null
 sudo flatpak uninstall --system --noninteractive org.loco.E2e >/dev/null

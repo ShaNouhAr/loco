@@ -84,7 +84,7 @@ case "${1:-}" in
         fi
         ;;
     list)
-        find "$DEST" -maxdepth 1 -type f \( -name 'loco-*.tar.gz' -o -name 'local-repo-*.tar.gz' \) -exec ls -lh {} +
+        find "$DEST" -maxdepth 1 -type f -name 'loco-*.tar.gz' -exec ls -lh {} +
         ;;
     *)
         sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'

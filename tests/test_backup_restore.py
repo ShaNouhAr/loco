@@ -1,4 +1,4 @@
-"""Les sauvegardes Linux historiques restaurent données et clés dans les nouveaux chemins."""
+"""Les sauvegardes Linux restaurent données et clés dans les chemins du serveur courant."""
 import io
 from pathlib import Path
 import tarfile
@@ -17,19 +17,19 @@ def _archive(path, entries):
             tar.addfile(member, io.BytesIO(content))
 
 
-class TestBackupMigration(unittest.TestCase):
-    def test_restore_old_archive_to_new_paths_keeps_current_configuration(self):
+class TestBackupRestore(unittest.TestCase):
+    def test_restore_from_another_server_keeps_current_configuration(self):
         with tempfile.TemporaryDirectory(dir=test_portal.TMP) as work:
             root = Path(work)
             etc, data, state = (root / name for name in ('etc', 'data', 'state'))
             etc.mkdir()
             config = etc / 'loco.conf'
             config.write_text('current machine')
-            archive = root / 'old.tar.gz'
+            archive = root / 'other.tar.gz'
             with tarfile.open(archive, 'w:gz') as tar:
-                for name, content in [('etc/local-repo/local-repo.conf', b'DATA=/srv/custom\n'),
-                                      ('etc/local-repo/portal.secret', b'original secret'),
-                                      ('var/lib/local-repo/gnupg/private-key', b'original key'),
+                for name, content in [('etc/loco/loco.conf', b'DATA=/srv/custom\n'),
+                                      ('etc/loco/portal.secret', b'original secret'),
+                                      ('var/lib/loco/gnupg/private-key', b'original key'),
                                       ('srv/custom/apt/pool/package.deb', b'original package'),
                                       ('portal.db', b'original database')]:
                     member = tarfile.TarInfo(name)
@@ -42,12 +42,12 @@ class TestBackupMigration(unittest.TestCase):
             self.assertEqual((state / 'gnupg/private-key').read_bytes(), b'original key')
             self.assertEqual((state / 'portal.db').read_bytes(), b'original database')
 
-    def test_unsafe_legacy_archive_does_not_partially_restore(self):
+    def test_unsafe_archive_does_not_partially_restore(self):
         with tempfile.TemporaryDirectory(dir=test_portal.TMP) as work:
             root = Path(work)
             archive = root / 'invalid.tar.gz'
             with tarfile.open(archive, 'w:gz') as tar:
-                for name, content in [('etc/local-repo/local-repo.conf', b'DATA=/srv/local-repo\n'),
+                for name, content in [('etc/loco/loco.conf', b'DATA=/srv/loco\n'),
                                       ('portal.db', b'bad database'), ('../../outside', b'bad')]:
                     member = tarfile.TarInfo(name)
                     member.size = len(content)

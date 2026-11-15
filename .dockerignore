@@ -4,8 +4,6 @@
 **/__pycache__
 **/*.pyc
 test-results
-local-repo
-**/.env.before-loco
 docs
 tests
 windows

@@ -18,7 +18,6 @@ if [ "${1:-}" = "--remove" ]; then
             flatpak remote-modify --system flathub --url="$FLATHUB"
         fi
         flatpak remote-delete --system --force loco 2>/dev/null || true
-        flatpak remote-delete --system --force local-repo 2>/dev/null || true
     fi
     echo "{{ sh_t('Configuration Flatpak loco retirée (Flathub en accès direct).') }}"
     exit 0
@@ -42,14 +41,6 @@ if [ "$LOCAL" = 1 ]; then
 $GET "$BASE/flatpak/loco.flatpakrepo" > "$TMP"
 flatpak remote-add --system --if-not-exists loco "$TMP"
 flatpak remote-modify --system loco --url="$BASE/flatpak/repo/"
-# Réinstaller depuis le même dépôt signé change l'origine sans manipuler l'état interne de Flatpak.
-if flatpak remotes --system --columns=name | grep -qx local-repo; then
-    flatpak list --system --columns=ref,origin | awk '$2 == "local-repo" {print $1}' |
-    while IFS= read -r ref; do
-        flatpak install --system --noninteractive --assumeyes --no-deps --reinstall loco "$ref"
-    done
-    flatpak remote-delete --system --force local-repo
-fi
 fi
 
 flatpak remotes --system --show-details

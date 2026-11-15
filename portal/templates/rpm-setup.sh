@@ -37,16 +37,6 @@ for arg in "$@"; do
     esac
 done
 command -v dnf >/dev/null 2>&1 || { echo "{{ sh_t('Ce poste doit utiliser dnf (famille Red Hat 8 ou plus).') }}" >&2; exit 1; }
-# Reprendre le journal des dépôts désactivés ; il sert aussi à restaurer le système avec --remove.
-if [ -f /etc/local-repo-rpm.state ]; then
-    [ ! -e "$STATE" ] || { echo "{{ sh_t('Deux états de dépôts RPM existent ; migration refusée.') }}" >&2; exit 1; }
-    mv /etc/local-repo-rpm.state "$STATE"
-fi
-if [ -f /etc/pki/ca-trust/source/anchors/local-repo.crt ]; then
-    if [ ! -f "$CA" ]; then mv /etc/pki/ca-trust/source/anchors/local-repo.crt "$CA";
-    else rm -f /etc/pki/ca-trust/source/anchors/local-repo.crt; fi
-    update-ca-trust extract
-fi
 
 # Valeur de « clé » dans la section [id] d'un fichier .repo (première ligne seulement).
 get_opt() {
@@ -91,7 +81,6 @@ restore_system() {
 if [ "$REMOVE" = 1 ]; then
     restore_system
     rm -f "$LOCAL"
-    rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
     if [ -f "$CA" ]; then rm -f "$CA"; update-ca-trust extract; fi
     [ "$FROM_PACKAGE" = 1 ] || dnf clean all >/dev/null 2>&1 || true
     echo "{{ sh_t('Configuration loco retirée ; dépôts du système rétablis.') }}"
@@ -198,8 +187,6 @@ else
     restore_system
 fi
 
-# Les nouveaux dépôts ont été vérifiés et écrits : l'ancien nom peut être retiré.
-rm -f /etc/yum.repos.d/local-repo.repo /etc/yum.repos.d/local-repo-cache.repo
 if [ "$FROM_PACKAGE" = 1 ]; then
     echo "{{ sh_t('Poste configuré pour loco (%(base)s).', base='$BASE') }}"
 else

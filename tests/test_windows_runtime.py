@@ -64,20 +64,19 @@ class TestWindowsBackups(unittest.TestCase):
         self.assertTrue(Path(archive).exists())
         self.assertTrue(other.exists())
 
-    def test_restore_accepts_old_windows_config_name_without_replacing_current_config(self):
+    def test_restore_does_not_replace_current_config(self):
         root = Path(self.work.name)
         current = (root / 'etc/loco.json').read_bytes()
-        archive = root / 'legacy.tar.gz'
+        archive = root / 'other.tar.gz'
         with tarfile.open(archive, 'w:gz') as tar:
-            for name, content in [('portal.db', self.db.read_bytes()), ('etc/local-repo.json', b'{"host":"old"}'),
-                                  ('data/apt/restored.deb', b'legacy package')]:
+            for name, content in [('portal.db', self.db.read_bytes()), ('etc/loco.json', b'{"host":"other"}'),
+                                  ('data/apt/restored.deb', b'restored package')]:
                 member = tarfile.TarInfo(name)
                 member.size = len(content)
                 tar.addfile(member, io.BytesIO(content))
         locowin.backup_restore(self.cfg, archive)
         self.assertEqual((root / 'etc/loco.json').read_bytes(), current)
-        self.assertEqual((root / 'data/apt/restored.deb').read_bytes(), b'legacy package')
-        self.assertFalse((root / 'etc/local-repo.json').exists())
+        self.assertEqual((root / 'data/apt/restored.deb').read_bytes(), b'restored package')
 
     def test_unsafe_archive_is_rejected_before_any_files_are_changed(self):
         for name in ('etc/../outside', 'etc/..\\outside', 'etc/C:/outside', '/outside'):

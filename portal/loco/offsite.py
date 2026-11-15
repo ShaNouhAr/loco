@@ -33,7 +33,7 @@ STATE = "offsite_state"
 TYPES = ("none", "s3", "sftp", "folder")
 # champ secret par section
 SECRETS = {"s3": ("secret_key",), "sftp": ("private_key",), "crypt": ("passphrase",)}
-NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz(?:\.enc)?")
+NAME_RE = re.compile(r"loco-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz(?:\.enc)?")
 
 
 def _cipher():

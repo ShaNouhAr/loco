@@ -100,13 +100,13 @@ def rebuild_apt(repository=LEGACY):
         suite = "local" if repository == LEGACY else repository.split("/")[1]
         origin = "loco"
         label = "loco" if repository == LEGACY else f"loco {repository}"
-        # APT refuse un changement d'Origin/Label sans confirmation sur chaque poste.
-        # Les dépôts déjà publiés gardent ces deux identifiants ; les nouveaux portent loco.
+        # APT refuse un changement d'Origin/Label sans confirmation sur chaque poste : un dépôt déjà publié sous
+        # une autre origine garde ces deux identifiants ; les nouveaux portent loco.
         try:
             with open(os.path.join(root, "Release"), encoding="utf-8") as previous:
                 fields = debpkg.parse_stanza(previous.read())
-            if fields.get("Origin") == "local-repo":
-                origin, label = "local-repo", fields.get("Label", "local-repo")
+            if fields.get("Origin") and fields["Origin"] != origin:
+                origin, label = fields["Origin"], fields.get("Label", fields["Origin"])
         except OSError:
             pass
         if DEBIAN_TOOLS:

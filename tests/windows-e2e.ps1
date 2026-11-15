@@ -2,7 +2,7 @@
 #Requires -RunAsAdministrator
 # Machine Windows JETABLE : installation, requêtes réelles, sauvegarde, relance et désinstallation.
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)][string]$Fixtures, [string]$Source = (Split-Path -Parent $PSScriptRoot), [string]$LegacySource)
+param([Parameter(Mandatory = $true)][string]$Fixtures, [string]$Source = (Split-Path -Parent $PSScriptRoot))
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $tests = $PSScriptRoot
@@ -27,24 +27,7 @@ function Ready {
     }
     throw 'Portail indisponible.'
 }
-if ($LegacySource) {
-    & "$LegacySource\windows\install.ps1" -HostAddress 127.0.0.1 -Password $password
-    if ((Get-Service local-repo).Status -ne 'Running') { throw 'Installation historique en échec.' }
-    $legacyProgram = Join-Path $env:ProgramFiles 'local-repo'
-    $legacyRoot = Join-Path $env:ProgramData 'local-repo'
-    $env:LR_E2E_PASSWORD = $env:LOCO_E2E_PASSWORD
-    & "$legacyProgram\python\python.exe" "$LegacySource\tests\windows_probe.py" $Fixtures
-    if ($LASTEXITCODE -ne 0) { throw 'Sonde historique en échec.' }
-    $oldCa = (Get-FileHash "$legacyRoot\etc\tls\ca.crt").Hash
-    $oldSecret = (Get-FileHash "$legacyRoot\etc\portal.secret").Hash
-}
 Install
-if ($LegacySource) {
-    if ((Get-Service local-repo -ErrorAction SilentlyContinue) -or (Test-Path $legacyRoot)) { throw 'Ancienne installation encore présente.' }
-    if ((Get-FileHash "$root\etc\tls\ca.crt").Hash -ne $oldCa -or (Get-FileHash "$root\etc\portal.secret").Hash -ne $oldSecret) {
-        throw 'La migration a changé les clés.'
-    }
-}
 $env:LOCO_CONFIG = "$root\etc\loco.json"
 Python -m unittest discover -s $tests -p test_windows_runtime.py -v
 Python "$tests\https_redirect.py" https://127.0.0.1:8443

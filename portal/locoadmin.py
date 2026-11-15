@@ -1808,8 +1808,8 @@ def shell_call(req, path=None, timeout=5):
     return json.loads(buf)
 
 
-# Noms d'archives produits par loco-backup : « loco-HÔTE-DATE-HEURE.tar.gz » (et local-repo-… d'avant le renommage).
-BACKUP_NAME_RE = re.compile(r"(?:loco|local-repo)-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
+# Noms d'archives produits par loco-backup : « loco-HÔTE-DATE-HEURE.tar.gz ».
+BACKUP_NAME_RE = re.compile(r"loco-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz")
 
 
 def _share_backups():

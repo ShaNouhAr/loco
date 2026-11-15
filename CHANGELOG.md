@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.164.0 — 2026-11-15
+
+- **Reprise des installations d'avant la 2.0 retirée** : loco ne reprend plus une installation, une sauvegarde ni la configuration d'un poste qui datent d'avant la version 2.0, sous l'ancien nom du projet. Les installateurs Linux, Windows et Docker ne migrent plus une telle installation ; `loco-backup restore` et la page *Système* n'acceptent que les sauvegardes de loco ; les scripts des postes (APT, RPM, Flatpak) ne retirent plus les fichiers posés par ces anciennes versions, et l'ancienne adresse du dépôt Flatpak n'est plus servie. **Pour venir d'une installation aussi ancienne**, installer d'abord la 2.163.1, qui fait la reprise, puis mettre à jour.
+- **Un dépôt APT déjà publié garde son identité**, quelle qu'elle soit (`Origin` et `Label` de son fichier `Release`) : les postes déjà branchés continuent de se mettre à jour sans rien confirmer.
+- **Docker** : `up.sh` construit l'image, démarre loco et attend qu'il soit sain, sans autre étape.
+- **Documentation refaite** : README en images (tour du portail, animation des mises à jour en direct, schéma de fonctionnement), captures neuves prises sur une instance de démonstration, un guide par sujet dans `docs/` et un nouveau guide d'exploitation, [docs/exploitation.md](docs/exploitation.md) : routine, alertes, métriques, sauvegardes, mises à jour, certificats, accès perdus, incidents.
+
 ## 2.163.1 — 2026-11-13
 
 - **Tailles plus lisibles** : une taille passe à l'unité supérieure dès mille — 999,9 Mo au plus, puis 0,98 Go, 1,00 Go… Un cache APT de 1021,9 Mo se lit désormais « 1,00 Go ». Partout où loco affiche une taille : tableau Stockage de la vue d'ensemble, caches, dépôts, sauvegardes, Home Assistant, et ce que le navigateur met à jour en direct.

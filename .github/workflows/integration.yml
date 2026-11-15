@@ -61,7 +61,7 @@ jobs:
           packages: qemu-system-x86 qemu-utils genisoimage
       - name: Accès à KVM
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Installation, migration, isolation, Flatpak, sauvegarde et désinstallation
+      - name: Installation, isolation, Flatpak, sauvegarde et désinstallation
         run: tests/vm-e2e.sh '${{ matrix.platform }}'
       - name: Conserver les résultats
         if: always()
@@ -295,11 +295,7 @@ jobs:
         run: |
           # Les images hébergées ont IIS/HTTP.sys actif ; ce runner est jetable.
           Stop-Service HTTP -Force
-          $legacy = Join-Path $env:RUNNER_TEMP 'local-repo-1.9.0'
-          New-Item $legacy -ItemType Directory -Force | Out-Null
-          git archive --format=tar -o "$env:RUNNER_TEMP\legacy.tar" v1.9.0
-          tar.exe -xf "$env:RUNNER_TEMP\legacy.tar" -C $legacy
-          .\tests\windows-e2e.ps1 -Fixtures "$env:GITHUB_WORKSPACE\test-results\packages" -LegacySource $legacy
+          .\tests\windows-e2e.ps1 -Fixtures "$env:GITHUB_WORKSPACE\test-results\packages"
       - name: Journaux en cas d'échec
         if: failure()
         shell: powershell

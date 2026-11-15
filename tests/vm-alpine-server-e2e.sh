@@ -36,7 +36,7 @@ for (( i=0; i<60; i++ )); do vm_ssh "$ID" 'command -v sudo >/dev/null' < /dev/nu
 # shellcheck disable=SC2016 # Interpolation dans la VM.
 actual=$(vm_ssh "$ID" '. /etc/os-release; echo "$ID-$(echo "$VERSION_ID" | cut -d. -f1-2)"' < /dev/null)
 [ "$actual" = "$ID" ] || { echo "Système inattendu : $actual" >&2; exit 1; }
-tar --exclude=.git --exclude=./loco --exclude=./local-repo --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . |
+tar --exclude=.git --exclude=./loco --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . |
     vm_ssh "$ID" 'mkdir -p loco && tar -xzf - -C loco'
 tar -czf - -C "$FIXTURES" . | vm_ssh "$ID" 'mkdir -p fixtures && tar -xzf - -C fixtures'
 vm_ssh "$ID" 'cd loco && sudo bash tests/alpine-server.sh /home/ci/fixtures' < /dev/null 2>&1 | tee "$LOG_DIR/$ID.log"

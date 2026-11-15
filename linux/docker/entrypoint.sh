@@ -7,15 +7,6 @@ set -euo pipefail
 
 if [ $# -gt 0 ]; then exec "$@"; fi
 
-# Les volumes copiés par up.sh sont montés aux nouveaux chemins, avec les mêmes UID fixes.
-if [ -f /etc/loco/local-repo.conf ]; then
-    [ ! -e /etc/loco/loco.conf ] || { echo 'Deux configurations présentes.' >&2; exit 1; }
-    sed -e 's@/srv/local-repo@/srv/loco@g' -e 's@/var/backups/local-repo@/var/backups/loco@g' \
-        /etc/loco/local-repo.conf > /etc/loco/loco.conf
-    chmod 644 /etc/loco/loco.conf
-    rm /etc/loco/local-repo.conf
-fi
-
 PRIVATE_NETS="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10"
 
 flag() {   # VARIABLE option-si-1 option-si-0 (défaut : 1)

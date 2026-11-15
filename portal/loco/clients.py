@@ -71,7 +71,6 @@ def flatpak_setup():
 
 
 @app.route("/flatpak/loco.flatpakrepo")
-@app.route("/flatpak/local-repo.flatpakrepo")
 def flatpak_repo_file():
     """Fichier .flatpakrepo du dépôt local : adresse (selon le protocole utilisé) et clé publique GPG."""
     if not config.FLATPAK_LOCAL:

@@ -43,7 +43,7 @@ Tout tourne sur les machines de GitHub : un fork n'a besoin d'aucun secret, d'au
 Publier une version : mettre à jour `VERSION` dans `portal/loco/config.py` et le [CHANGELOG](../CHANGELOG.md), puis
 `git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`. Rien n'est publié si un test échoue.
 Les images des VM sont vérifiées par leur empreinte officielle avant le démarrage ; les journaux de chaque test
-sont conservés 14 jours. Les tests couvrent la mise à jour depuis 1.9.0, la détection du poste, l'isolation des
+sont conservés 14 jours. Les tests couvrent la détection du poste, l'isolation des
 paquets, Flatpak, une restauration et la désinstallation.
 
 Historique : [CHANGELOG.md](../CHANGELOG.md).

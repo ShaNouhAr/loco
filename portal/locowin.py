@@ -495,7 +495,7 @@ def backup_restore(cfg, archive):
     """À lancer service arrêté (loco.cmd backup restore s'en charge)."""
     with tarfile.open(archive) as tar:
         names = tar.getnames()
-        if "portal.db" not in names or not {"etc/loco.json", "etc/local-repo.json"}.intersection(names):
+        if "portal.db" not in names or "etc/loco.json" not in names:
             sys.exit("Ce n'est pas une sauvegarde loco pour Windows.")
         for member in tar.getmembers():
             path = PurePosixPath(member.name)
@@ -508,7 +508,7 @@ def backup_restore(cfg, archive):
             if member.name == "portal.db":
                 dest = os.path.join(cfg["state_dir"], "portal.db")
             elif top in targets and rest:
-                if rest in ("loco.json", "local-repo.json") and top == "etc":
+                if rest == "loco.json" and top == "etc":
                     continue    # la configuration propre à ce serveur (adresse, ports, réseaux) est gardée
                 dest = os.path.join(targets[top], *rest.split("/"))
             else:
@@ -678,7 +678,7 @@ def main(argv):
     cmd = argv[0]
     if cmd == "configure":
         result = configure(cfg, password=os.environ.pop("LOCO_PASSWORD", ""))
-        print("LOCALREPO-RESULT " + json.dumps(result), flush=True)
+        print("LOCO-RESULT " + json.dumps(result), flush=True)
     elif cmd == "service":
         Service(cfg).run()
     elif cmd == "stats":

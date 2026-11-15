@@ -123,9 +123,6 @@ if ! command -v python3 >/dev/null; then
 fi
 
 # ---------------------------------------------------------------- réglages
-# shellcheck source=linux/lib/migrate.sh
-. "$SRC/lib/migrate.sh"
-if [[ " $* " != *" --help "* && " $* " != *" -h "* ]]; then migrate_local_repo; fi
 # Valeurs par défaut, puis celles de l'installation précédente, puis les options.
 PORTAL_PORT=8088 HTTPS_PORT=8443 HTTPS_OLD_PORTS="" PORTAL_URL="" HTTP_ENABLED=1 HOST="" DATA=/srv/loco WU_CACHE_SIZE=""
 RESOLVERS="1.1.1.1 9.9.9.9" WU_ENABLED=1 WU_PROXY_PORT=3128 ALLOW="$PRIVATE_NETS" ADMIN_ALLOW="" UPSTREAM_PROXY=""
@@ -272,6 +269,27 @@ if [ "$WU_ENABLED" = 1 ]; then
 fi
 
 # ---------------------------------------------------------------- paquets
+stash_self_client() {
+    # Un serveur peut lui-même être branché comme poste : APT doit rester joignable pendant l'arrêt du cache.
+    [ -z "${LOCO_CLIENT_STASH:-}" ] || return 0
+    LOCO_CLIENT_STASH=$(mktemp -d /var/tmp/loco-client-stash.XXXXXX)
+    # shellcheck disable=SC2317,SC2329  # appelée indirectement par le trap EXIT.
+    restore_self_client() {
+        local file
+        for file in "$LOCO_CLIENT_STASH"/*; do
+            [ -f "$file" ] || continue
+            case "${file##*/}" in
+                01*) mv "$file" /etc/apt/apt.conf.d/ ;;
+                *) mv "$file" /etc/apt/sources.list.d/ ;;
+            esac
+        done
+        rmdir "$LOCO_CLIENT_STASH"
+    }
+    trap restore_self_client EXIT
+    for path in /etc/apt/sources.list.d/loco.{list,sources} /etc/apt/apt.conf.d/01loco-proxy; do
+        if [ -f "$path" ]; then mv "$path" "$LOCO_CLIENT_STASH/"; fi
+    done
+}
 stash_self_client
 if [ "$FLATPAK_ENABLED" = 1 ]; then PACKAGES+=(flatpak ostree); fi
 if [ "$RPM_ENABLED" = 1 ]; then PACKAGES+=(createrepo-c rpm); fi

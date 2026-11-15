@@ -83,8 +83,7 @@ conteneur applique les variables de `.env` avec `linux/install.sh --container`, 
 apt-cacher-ng, le portail et les tâches périodiques. Le conteneur utilise le **réseau de l'hôte** (ports
 8443, 8088, 3142, et 80/443 pour Windows Update) : ne pas l'associer à une installation native sur la même
 machine. Les données sont dans des volumes Docker (`LOCO_DATA_DIR` : dossier de l'hôte pour les dépôts et
-caches). Installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`). Ce script
-migre aussi un ancien projet Docker `local-repo`, en conservant ses volumes d'origine.
+caches). Installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`).
 
 L'installation native reste recommandée en production : elle confine chaque service avec systemd
 (détails dans [SECURITY.md](../SECURITY.md)). Docker Engine 26 ou plus récent avec Compose v2 (validé avec

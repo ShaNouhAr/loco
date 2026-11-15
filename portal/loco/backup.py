@@ -1,4 +1,4 @@
-"""Restauration des archives Linux loco et local-repo vers les chemins du serveur courant.
+"""Restauration des archives Linux de loco vers les chemins du serveur courant.
 Lancé comme script par loco-backup (hors du paquet loco) : traduction autonome, dans la langue du serveur."""
 import os
 from pathlib import Path, PurePosixPath
@@ -38,20 +38,18 @@ def t(fr, en, es):
 
 def _build_plan(tar, data, etc, state):
     """Valide l'archive (membres, chemins, type) et associe chaque fichier à sa destination. Lève ValueError si
-    l'archive n'est pas une sauvegarde loco/local-repo sûre. N'écrit rien : sert aussi à la vérification seule."""
+    l'archive n'est pas une sauvegarde loco sûre. N'écrit rien : sert aussi à la vérification seule."""
     members = tar.getmembers()
     names = {m.name for m in members}
-    configs = ['etc/loco/loco.conf', 'etc/local-repo/local-repo.conf']
-    config = next((name for name in configs if name in names), None)
-    if 'portal.db' not in names or config is None:
-        raise ValueError(t('Sauvegarde Linux loco ou local-repo attendue.', 'A loco or local-repo Linux backup was expected.', 'Se espera una copia de seguridad Linux de loco o local-repo.'))
+    config = 'etc/loco/loco.conf'
+    if 'portal.db' not in names or config not in names:
+        raise ValueError(t('Sauvegarde Linux de loco attendue.', 'A loco Linux backup was expected.', 'Se espera una copia de seguridad Linux de loco.'))
     with tar.extractfile(config) as source:
         match = re.search(r'^DATA=([/A-Za-z0-9._-]+)$', source.read().decode(), re.M)
     if not match:
         raise ValueError(t('Chemin des données absent de la sauvegarde.', 'Data path missing from the backup.', 'Falta la ruta de los datos en la copia de seguridad.'))
     old_data = match.group(1).lstrip('/')
-    roots = [('etc/loco', Path(etc)), ('etc/local-repo', Path(etc)),
-             ('var/lib/loco', Path(state)), ('var/lib/local-repo', Path(state))]
+    roots = [('etc/loco', Path(etc)), ('var/lib/loco', Path(state))]
     roots.extend((old_data + '/' + name, Path(data) / name) for name in ('apt', 'win', 'flatpak', 'rpm'))
     plan = []
     for member in members:
@@ -60,7 +58,7 @@ def _build_plan(tar, data, etc, state):
         if (path.is_absolute() or '..' in path.parts or '\\' in name or ':' in name
                 or not (member.isdir() or member.isfile())):
             raise ValueError(t('Chemin ou type de fichier invalide dans la sauvegarde.', 'Invalid path or file type in the backup.', 'Ruta o tipo de archivo no válido en la copia de seguridad.'))
-        if name in configs or any(name.startswith(p + '/install-state') for p, _ in roots[:2]):
+        if name == config or name.startswith('etc/loco/install-state'):
             continue
         target = Path(state) / 'portal.db' if name == 'portal.db' else None
         for prefix, destination in roots:
@@ -76,7 +74,7 @@ def _build_plan(tar, data, etc, state):
 
 
 def verify(archive, data='/srv/loco', etc='/etc/loco', state='/var/lib/loco'):
-    """Vrai si l'archive est une sauvegarde loco/local-repo valide et sûre ; lève ValueError (message traduit) sinon."""
+    """Vrai si l'archive est une sauvegarde loco valide et sûre ; lève ValueError (message traduit) sinon."""
     try:
         with tarfile.open(archive) as tar:
             _build_plan(tar, data, etc, state)

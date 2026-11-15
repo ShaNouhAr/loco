@@ -56,14 +56,16 @@ class TestAptRepositories(unittest.TestCase):
         self.assertEqual(b.login('admin', fixture.ADMIN_PW).status_code, 302)
         return b
 
-    def test_migrated_repository_keeps_apt_identity(self):
-        repo = linux.create_repository('debian', 'migration-test', '13')
+    def test_published_repository_keeps_its_apt_identity(self):
+        # APT refuse un changement d'Origin/Label sans confirmation sur chaque poste.
+        repo = linux.create_repository('debian', 'identity-test', '13')
         release = Path(linux.repository_path(repo), 'Release')
-        release.write_text(release.read_text().replace('Origin: loco', 'Origin: local-repo')
-                           .replace('Label: loco', 'Label: local-repo'))
+        self.assertIn('Origin: loco\n', release.read_text())
+        release.write_text(release.read_text().replace('Origin: loco', 'Origin: depot-maison')
+                           .replace('Label: loco', 'Label: depot-maison'))
         linux.rebuild_apt(repo)
-        self.assertIn('Origin: local-repo\n', release.read_text())
-        self.assertIn('Label: local-repo debian/migration-test\n', release.read_text())
+        self.assertIn('Origin: depot-maison\n', release.read_text())
+        self.assertIn('Label: depot-maison debian/identity-test\n', release.read_text())
 
     def test_apt_init_seeds_default_repositories(self):
         from loco import cli, config

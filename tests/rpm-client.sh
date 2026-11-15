@@ -39,19 +39,6 @@ step "EPEL via le cache"
 dnf -y -q install htop
 [ "$(from_repo htop)" = loco-epel ] || fail "htop installé depuis $(from_repo htop)"
 
-step "Reprise d'une configuration de poste portant l'ancien nom"
-mv /etc/yum.repos.d/loco.repo /etc/yum.repos.d/local-repo.repo
-mv /etc/yum.repos.d/loco-cache.repo /etc/yum.repos.d/local-repo-cache.repo
-sed -i 's/\[loco/\[local-repo/g' /etc/yum.repos.d/local-repo*.repo
-mv /etc/loco-rpm.state /etc/local-repo-rpm.state
-mv /etc/pki/ca-trust/source/anchors/loco.crt /etc/pki/ca-trust/source/anchors/local-repo.crt
-curl -fsSL "http://$SERVER:8088/rpm/setup.sh" | sh -s -- --trust-ca --epel
-test -f /etc/loco-rpm.state
-test ! -e /etc/local-repo-rpm.state
-test ! -e /etc/yum.repos.d/local-repo.repo
-test ! -e /etc/yum.repos.d/local-repo-cache.repo
-test ! -e /etc/pki/ca-trust/source/anchors/local-repo.crt
-
 step "Retour à l'état d'origine"
 curl -fsSL "https://$SERVER:8443/rpm/setup.sh" | sh -s -- --remove
 dnf -y -q remove lr-rpm-e2e

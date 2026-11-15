@@ -43,17 +43,7 @@ failure_log() {
     if [ "$rc" != 0 ]; then tail -40 "$install_log"; journalctl -u loco-portal -u apt-cacher-ng -u nginx --no-pager -n 70; fi
 }
 trap failure_log EXIT
-if [ -n "${LOCO_E2E_LEGACY_SRC:-}" ]; then
-    "$LOCO_E2E_LEGACY_SRC/install.sh" --host 10.0.2.15 --password "$PW" > "$install_log" 2>&1
-    old_ca=$(sha256sum /etc/local-repo/tls/ca.crt | cut -d' ' -f1)
-    old_uid=$(id -u localrepo)
-fi
 ./install.sh --host 10.0.2.15 --password "$PW" > "$install_log" 2>&1
-if [ -n "${old_ca:-}" ]; then
-    [ "$(sha256sum /etc/loco/tls/ca.crt | cut -d' ' -f1)" = "$old_ca" ]
-    [ "$(id -u loco)" = "$old_uid" ]
-    [ ! -d /etc/local-repo ]
-fi
 CA=/etc/loco/tls/ca.crt
 BASE=https://127.0.0.1:8443
 health() { curl -fsS --cacert "$CA" "$BASE/healthz" | grep -x ok > /dev/null; }

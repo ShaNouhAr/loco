@@ -131,4 +131,3 @@ gpg, gpgv et sqv. Windows 11 (25H2) a été vérifié dans une machine de test d
 Debian 13 (dépôt local HTTPS vérifié par sqv, paquets Debian via le cache APT) et Rocky Linux 9 (dépôt `el9`
 vérifié par dnf, BaseOS via le cache RPM), ainsi qu'une mise à jour Windows de 88 Mo servie par le cache.
 
-Migration depuis local-repo : [guide loco 2.0](migration-loco.md).

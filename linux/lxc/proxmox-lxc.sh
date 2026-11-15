@@ -107,7 +107,7 @@ run_install() {
     if [ -n "$SOURCE" ]; then
         local archive
         archive=$(mktemp --suffix=.tar.gz)
-        tar --exclude=.git --exclude=./loco --exclude=./local-repo --exclude=__pycache__ --exclude=./test-results --exclude=./.env \
+        tar --exclude=.git --exclude=./loco --exclude=__pycache__ --exclude=./test-results --exclude=./.env \
             -czf "$archive" -C "$SOURCE" . || return 1
         pct push "$CTID" "$archive" /root/loco.tar.gz || return 1
         rm -f "$archive"
@@ -128,13 +128,9 @@ run_install() {
 if [ "$UPDATE" = 1 ]; then
     [ -n "$CTID" ] || die "--update demande --ctid."
     pct status "$CTID" 2>/dev/null | grep -q running || die "le conteneur $CTID n'existe pas ou n'est pas démarré."
-    { cexec test -f /etc/loco/loco.conf || cexec test -f /etc/local-repo/local-repo.conf; } || die "loco n'est pas installé dans le conteneur $CTID."
+    cexec test -f /etc/loco/loco.conf || die "loco n'est pas installé dans le conteneur $CTID."
     say "Mise à jour de loco dans le conteneur $CTID"
     run_install "${INSTALL_ARGS[@]}"
-    if pct config "$CTID" | grep -qx 'hostname: local-repo'; then
-        pct set "$CTID" --hostname loco >/dev/null
-        cexec hostnamectl set-hostname loco
-    fi
     exit 0
 fi
 

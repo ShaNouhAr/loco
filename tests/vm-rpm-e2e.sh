@@ -39,7 +39,7 @@ echo "=== Serveur (Debian 13)"
 image=$(vm_image "$ROOT/tests/platforms.json" debian-13)
 VMS+=(server)
 vm_start server "$image" "$(free_port)" "tcp:127.0.0.1:8443-:8443" "tcp:127.0.0.1:8088-:8088"
-tar --exclude=.git --exclude=./loco --exclude=./local-repo --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . | \
+tar --exclude=.git --exclude=./loco --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . | \
     vm_ssh server 'mkdir -p loco && tar -xzf - -C loco'
 # shellcheck disable=SC2029  # mot de passe généré ci-dessus, transmis volontairement à la VM.
 vm_ssh server "cd loco && sudo tests/rpm-server.sh '$PW'" 2>&1 | tee "$LOG_DIR/server.log"

@@ -35,7 +35,7 @@ for key in ('image','checksums'):
     if u.scheme!='https' or u.hostname not in ('cloud.debian.org','cloud-images.ubuntu.com'):
         sys.exit('Les images doivent provenir des serveurs officiels, en HTTPS.')
 if row['algorithm'] not in ('sha256','sha512'):sys.exit('Algorithme invalide')
-for k in ('distribution','suite','version','image','checksums','algorithm','upgrade_from'):print(row[k])
+for k in ('distribution','suite','version','image','checksums','algorithm'):print(row[k])
 PY
 mapfile -t platform < "$work/platform"
 IMAGE_URL=${platform[3]} IMAGE_NAME=${IMAGE_URL##*/} ALGORITHM=${platform[5]}
@@ -96,19 +96,8 @@ ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 'cloud-init status --wait' > "$LOG_DIR/clou
 ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 'cat /etc/os-release' > "$LOG_DIR/os-release"
 grep -qxE "ID=\"?${platform[0]}\"?" "$LOG_DIR/os-release"
 grep -qxE "VERSION_ID=\"?${platform[2]}\"?" "$LOG_DIR/os-release"
-tar --exclude=.git --exclude=./loco --exclude=./local-repo --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . | \
+tar --exclude=.git --exclude=./loco --exclude=__pycache__ --exclude=./test-results -czf - -C "$ROOT" . | \
     ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 'mkdir -p loco && tar -xzf - -C loco'
-LEGACY_SRC=""
-if [ -n "${platform[6]}" ]; then
-    if [ -n "${LOCO_VM_UPGRADE_ARCHIVE:-}" ]; then
-        cp "$LOCO_VM_UPGRADE_ARCHIVE" "$work/legacy.tar.gz"
-    else
-        git -C "$ROOT" archive "${platform[6]}" | gzip > "$work/legacy.tar.gz"
-    fi
-    ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 'mkdir -p loco-legacy && tar -xzf - -C loco-legacy' < "$work/legacy.tar.gz"
-    LEGACY_SRC=/home/ci/loco-legacy
-fi
 # Les tests unitaires sur les bibliothèques de chaque distribution tournent avant, dans ci.yml (conteneurs).
-# shellcheck disable=SC2029  # LEGACY_SRC est un chemin constant fixé ci-dessus, transmis volontairement à la VM.
-ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 "cd loco && sudo apt-get update -q && sudo apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm && LOCO_E2E_LEGACY_SRC=$LEGACY_SRC tests/e2e.sh" 2>&1 | tee "$LOG_DIR/tests.log"
+ssh "${SSH_OPTIONS[@]}" ci@127.0.0.1 "cd loco && sudo apt-get update -q && sudo apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm && tests/e2e.sh" 2>&1 | tee "$LOG_DIR/tests.log"
 echo "Validation VM réussie : $PLATFORM"

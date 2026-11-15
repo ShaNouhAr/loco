@@ -28,31 +28,11 @@ dpkg-deb --root-owner-group -b "$work/deb" "$work/lr-e2e.deb" >/dev/null
 
 step "Construction et premier démarrage"
 printf 'LOCO_BACKUP_KEEP=2\nTZ=Europe/Paris\n' > linux/docker/.env
-if [ -n "${LOCO_E2E_LEGACY_SRC:-}" ]; then
-    oldc() { sudo docker compose --project-directory "$LOCO_E2E_LEGACY_SRC/linux/docker" -f "$LOCO_E2E_LEGACY_SRC/linux/docker/docker-compose.yml" "$@"; }
-    printf 'LR_BACKUP_KEEP=2\nLR_MAX_UPLOAD=7g\nTZ=Europe/Paris\nLR_BACKUP_DIR=%s/backups\n' "$work" > "$LOCO_E2E_LEGACY_SRC/linux/docker/.env"
-    oldc up -d --build
-    for (( i=0; i<90; i++ )); do
-        [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$(oldc ps -q local-repo)")" = healthy ] && break
-        sleep 4
-    done
-    old_ca=$(curl -fsS http://127.0.0.1:8088/ca.crt | sha256sum | cut -d' ' -f1)
-    # shellcheck disable=SC2016 # Interpolation volontaire dans l'ancien conteneur.
-    oldc exec -T -e LR_PASSWORD="$PW" local-repo sh -c 'cd /opt/local-repo/portal && runuser -u localrepo -- env LR_DATA=/srv/local-repo LR_STATE=/var/lib/local-repo LR_ETC=/etc/local-repo LR_PASSWORD="$LR_PASSWORD" python3 -m localrepo.cli user set-password admin'
-    python3 tests/e2e_portal.py https://127.0.0.1:8443 "$PW" "$work/lr-e2e.deb" linux legacy
-    cp "$LOCO_E2E_LEGACY_SRC/linux/docker/.env" linux/docker/.env
-fi
 sudo linux/docker/up.sh
 healthy
-if [ -n "${old_ca:-}" ]; then
-    [ "$(curl -fsS http://127.0.0.1:8088/ca.crt | sha256sum | cut -d' ' -f1)" = "$old_ca" ] || fail 'CA changée par la migration'
-    dc exec -T loco test -f /srv/loco/apt/pool/lr-e2e_1.0_all.deb
-    dc exec -T loco grep -qx MAX_UPLOAD=7g /etc/loco/loco.conf
-    # Le dossier bind des sauvegardes est repris même dans un nouveau dossier de sources.
-    grep -Fq "$work/backups" linux/docker/.env
-fi
 dc logs loco > "$work/first.log"
-if [ -z "${old_ca:-}" ]; then grep -q "Compte initial     : admin / " "$work/first.log" || fail "mot de passe initial absent du journal"; fi
+# Le journal est dans la langue du conteneur (anglais par défaut).
+grep -Eq "(Compte initial|Initial account) +: admin / " "$work/first.log" || fail "mot de passe initial absent du journal"
 # shellcheck disable=SC2016  # expansions faites dans le conteneur
 HOST=$(dc exec -T loco sh -c '. /etc/loco/loco.conf && echo "$HOST"')
 [ -n "$HOST" ] || fail "adresse non détectée"
@@ -102,7 +82,7 @@ dc down
 dc up -d
 healthy
 [ "$(curl -fsS "http://$HOST:8088/ca.crt" | sha256sum | cut -d' ' -f1)" = "$CA_BEFORE" ] || fail "autorité HTTPS régénérée"
-if dc logs loco | grep -q "Compte initial"; then fail "nouveau compte initial après recréation"; fi
+if dc logs loco | grep -Eq "Compte initial|Initial account"; then fail "nouveau compte initial après recréation"; fi
 python3 tests/e2e_portal.py https://127.0.0.1:8443 "$PW" "$work/lr-e2e.deb" linux "$ID/$VERSION_CODENAME"
 sudo apt-get update -q >/dev/null
 sudo apt-get install -y -q --reinstall lr-e2e >/dev/null

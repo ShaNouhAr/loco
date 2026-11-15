@@ -215,8 +215,7 @@ version du paquet.
 
 `tests/platforms.json` est la liste des systèmes vérifiés par le workflow : distribution, nom de code,
 numéro, image officielle et manifeste d'empreintes. Une nouvelle version s'ajoute dans ce fichier ;
-aucune liste dupliquée n'est à maintenir dans le workflow. `upgrade_from` désigne une ancienne version
-réellement compatible avec le système, ou reste vide pour un système nouvellement pris en charge.
+aucune liste dupliquée n'est à maintenir dans le workflow.
 Les VM de test sont jetables et leurs journaux sont archivés. Le workflow actif contrôle
 chaque push/PR, chaque lundi et chaque lancement manuel.
 
@@ -410,7 +409,6 @@ Validation : `tests/vm-rocky-server-e2e.sh rocky-9 rocky-10`, également lancé 
 sont vérifiées par empreinte ; les tests couvrent SELinux actif, firewalld, import APT/RPM, installation
 DNF d’un paquet local, cache APT, refus d’un client hors ACL, relance, sauvegarde/restauration et purge.
 
-Migration depuis local-repo : [guide loco 2.0](migration-loco.md).
 
 ## 15. Appliance ISO (Alpine Linux, BusyBox)
 

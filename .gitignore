@@ -4,10 +4,6 @@ __pycache__/
 
 /test-results/
 .env
-.env.before-loco
-
-# Ancien dossier de travail local, conservé lors du renommage.
-/local-repo/
 
 # Sorties de construction de l’ISO.
 /out/

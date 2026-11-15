@@ -38,12 +38,6 @@ while [ "$#" -gt 0 ]; do
 done
 if [ "$REMOVE" = 1 ]; then
     rm -f "$KEY" "$LIST" "$SOURCE" "$PROXY"
-    rm -f /etc/apt/keyrings/local-repo.gpg /etc/apt/sources.list.d/local-repo.list /etc/apt/sources.list.d/local-repo.sources
-    rm -f /etc/apt/apt.conf.d/01local-repo-proxy
-    if [ -f /usr/local/share/ca-certificates/local-repo.crt ]; then
-        rm -f /usr/local/share/ca-certificates/local-repo.crt
-        update-ca-certificates --fresh >/dev/null
-    fi
     if [ -f "$CA" ]; then rm -f "$CA"; update-ca-certificates --fresh >/dev/null 2>&1 || true; fi
     echo "{{ sh_t('Configuration loco retirée.') }}"
     exit 0
@@ -118,14 +112,6 @@ if [ "$CACHE_ONLY" = 0 ]; then
     rm -f "$LIST"
 else
     rm -f "$SOURCE" "$LIST" "$KEY"
-fi
-# La nouvelle configuration est en place : retirer les anciennes sources pour éviter les doublons.
-rm -f /etc/apt/sources.list.d/local-repo.list /etc/apt/sources.list.d/local-repo.sources
-rm -f /etc/apt/keyrings/local-repo.gpg /etc/apt/apt.conf.d/01local-repo-proxy
-if [ -f /usr/local/share/ca-certificates/local-repo.crt ]; then
-    if [ "$TRUST_CA" = 0 ] && [ ! -f "$CA" ]; then mv /usr/local/share/ca-certificates/local-repo.crt "$CA";
-    else rm -f /usr/local/share/ca-certificates/local-repo.crt; fi
-    update-ca-certificates --fresh >/dev/null
 fi
 if [ "$USE_PROXY" = 1 ]; then
     cat > "$PROXY" <<CONF

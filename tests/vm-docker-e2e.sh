@@ -28,10 +28,9 @@ trap 'exit 143' TERM
 
 image=$(vm_image "$ROOT/tests/platforms.json" debian-13)
 vm_start docker "$image" "$(free_port)"
-tar --exclude=.git --exclude=./loco --exclude=./local-repo --exclude=__pycache__ --exclude=./test-results --exclude=./linux/docker/.env -czf - -C "$ROOT" . | \
+tar --exclude=.git --exclude=./loco --exclude=__pycache__ --exclude=./test-results --exclude=./linux/docker/.env -czf - -C "$ROOT" . | \
     vm_ssh docker 'mkdir -p loco && tar -xzf - -C loco'
 vm_ssh docker 'sudo apt-get update -q && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io docker-compose >/dev/null && sudo docker version --format "Docker {{.Server.Version}}" && sudo docker compose version' \
     2>&1 | tee "$LOG_DIR/docker.log"
-git -C "$ROOT" archive v1.9.0 | gzip | vm_ssh docker 'mkdir -p local-repo-legacy && tar -xzf - -C local-repo-legacy'
-vm_ssh docker 'cd loco && LOCO_E2E_LEGACY_SRC=/home/ci/local-repo-legacy tests/docker-e2e.sh' 2>&1 | tee "$LOG_DIR/tests.log"
+vm_ssh docker 'cd loco && tests/docker-e2e.sh' 2>&1 | tee "$LOG_DIR/tests.log"
 echo "Validation Docker réussie."

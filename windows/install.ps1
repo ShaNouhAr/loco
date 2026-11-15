@@ -75,8 +75,6 @@ foreach ($f in 'portal\locowin.py', 'conf\nginx-portal.conf', 'conf\nginx-apt-pr
     if (-not (Test-Path (Join-Path $Source $f))) { Fail "projet incomplet : $f introuvable dans $Source." }
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-. (Join-Path $PSScriptRoot 'migrate.ps1')
-Move-LegacyInstallation
 
 # ---------------------------------------------------------------- réglages
 # Valeurs par défaut, puis celles de l'installation précédente, puis les paramètres.
@@ -357,7 +355,7 @@ $consoleEncoding = [Console]::OutputEncoding
 [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
 & $python -m locowin configure 2>&1 | ForEach-Object {
     $line = "$_"
-    if ($line.StartsWith('LOCALREPO-RESULT ')) { $result = $line.Substring(17) | ConvertFrom-Json } else { Write-Host "    $line" }
+    if ($line.StartsWith('LOCO-RESULT ')) { $result = $line.Substring(12) | ConvertFrom-Json } else { Write-Host "    $line" }
 }
 $code = $LASTEXITCODE
 [Console]::OutputEncoding = $consoleEncoding
