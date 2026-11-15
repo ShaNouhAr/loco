@@ -1,0 +1,8 @@
+# Construction de l'image depuis les sources du dépôt cloné, à la place de l'image publiée :
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build      (ce que fait ./up.sh)
+services:
+  loco:
+    build:
+      context: ../..
+      dockerfile: linux/docker/Dockerfile
+    image: loco:latest

@@ -7,8 +7,8 @@ work=$(mktemp -d)
 trap 'sudo rm -rf -- "$work"' EXIT
 trap 'echo "Échec du test ligne $LINENO : $BASH_COMMAND" >&2' ERR
 step() { printf '\n\033[1m--- %s\033[0m\n' "$*"; }
-# Projet Docker : linux/docker (docker-compose.yml et .env).
-dc() { sudo docker compose --project-directory linux/docker -f linux/docker/docker-compose.yml "$@"; }
+# Projet Docker : linux/docker (docker-compose.yml, sa variante construite depuis les sources, et .env).
+dc() { sudo docker compose --project-directory linux/docker -f linux/docker/docker-compose.yml -f linux/docker/docker-compose.build.yml "$@"; }
 healthy() {
     local i
     for (( i=0; i<90; i++ )); do
@@ -117,5 +117,23 @@ sudo apt-get purge -y -q lr-e2e >/dev/null
 curl -fsSL "https://$HOST:8443/linux/setup.sh" | sudo sh -s -- --remove
 dc down -v
 rm -f linux/docker/.env
+if ss -Hltn | grep -qE ':(8443|8088|3142) '; then fail "ports encore ouverts"; fi
+
+step "Fichier Compose seul, hors des sources : démarrage sur une image déjà prête"
+# Ce que fait un utilisateur qui ne clone pas le projet : un dossier, docker-compose.yml, docker compose up -d.
+# L'image vient ici de la construction ci-dessus (LOCO_IMAGE) au lieu du registre.
+mkdir "$work/alone"
+cp linux/docker/docker-compose.yml "$work/alone/"
+ac() { sudo env LOCO_IMAGE=loco:latest docker compose --project-directory "$work/alone" -f "$work/alone/docker-compose.yml" "$@"; }
+ac up -d
+for (( i=0; i<90; i++ )); do
+    [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$(ac ps -q loco)")" = healthy ] && break
+    sleep 4
+done
+[ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$(ac ps -q loco)")" = healthy ] || { ac logs --tail 80 loco >&2; fail "fichier Compose seul : loco ne devient pas sain"; }
+[ "$(sudo docker inspect -f '{{.Config.Image}}' "$(ac ps -q loco)")" = loco:latest ] || fail "fichier Compose seul : image inattendue"
+curl -fsk --max-time 8 https://127.0.0.1:8443/healthz | grep -qx ok || fail "fichier Compose seul : portail muet"
+ac logs loco | grep -Eq "Compte initial|Initial account" || fail "fichier Compose seul : compte initial absent du journal"
+ac down -v
 if ss -Hltn | grep -qE ':(8443|8088|3142) '; then fail "ports encore ouverts"; fi
 echo 'Test Docker de bout en bout réussi.'

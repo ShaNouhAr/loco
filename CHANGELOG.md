@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.165.0 — 2026-11-15
+
+- **Docker sans cloner le projet** : une image prête à l'emploi, `ghcr.io/shanouhar/loco`, est publiée avec chaque version. Il suffit de télécharger `linux/docker/docker-compose.yml` dans un dossier puis de lancer `docker compose up -d` ; les réglages vont dans un fichier `.env` à côté (modèle : `.env.example`). Mise à jour : `docker compose pull && docker compose up -d`. La variable `LOCO_IMAGE` choisit l'image, par exemple une version précise (`ghcr.io/shanouhar/loco:2.165.0`).
+- **Depuis les sources, rien ne change** : `sudo ./up.sh` construit toujours l'image sur place. La construction est décrite dans un fichier à part, `docker-compose.build.yml`, que `up.sh` ajoute à `docker-compose.yml`. Qui lançait `docker compose up -d --build` directement utilise maintenant `./up.sh`, ou `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+
 ## 2.164.0 — 2026-11-15
 
 - **Reprise des installations d'avant la 2.0 retirée** : loco ne reprend plus une installation, une sauvegarde ni la configuration d'un poste qui datent d'avant la version 2.0, sous l'ancien nom du projet. Les installateurs Linux, Windows et Docker ne migrent plus une telle installation ; `loco-backup restore` et la page *Système* n'acceptent que les sauvegardes de loco ; les scripts des postes (APT, RPM, Flatpak) ne retirent plus les fichiers posés par ces anciennes versions, et l'ancienne adresse du dépôt Flatpak n'est plus servie. **Pour venir d'une installation aussi ancienne**, installer d'abord la 2.163.1, qui fait la reprise, puis mettre à jour.

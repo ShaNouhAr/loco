@@ -1,7 +1,11 @@
-# loco en conteneur, depuis ce dossier (linux/docker) :
-#   cp .env.example .env     puis renseigner au moins LOCO_HOST
-#   docker compose up -d --build
+# loco en conteneur. Ce fichier se suffit : inutile de cloner le projet.
+#   curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
+#   docker compose up -d         télécharge l'image publiée avec chaque version
 #   docker compose logs loco     compte initial « admin » et empreinte de l'autorité HTTPS
+# Réglages : variables ci-dessous, à poser dans un fichier .env à côté (modèle : .env.example du même dossier).
+# Mise à jour : docker compose pull && docker compose up -d
+# Une version précise : LOCO_IMAGE=ghcr.io/shanouhar/loco:2.165.0
+# Construire l'image depuis les sources (dépôt cloné) : ./up.sh, qui ajoute docker-compose.build.yml.
 #
 # Réseau de l'hôte : le cache Windows Update écoute sur 80 et 443, et le filtrage par réseau
 # (LOCO_ALLOW, LOCO_ADMIN_ALLOW) doit voir la vraie adresse des postes. Ne pas lancer en même temps
@@ -9,10 +13,7 @@
 name: loco    # nom de projet fixe : mêmes volumes quel que soit le dossier
 services:
   loco:
-    build:
-      context: ../..
-      dockerfile: linux/docker/Dockerfile
-    image: loco:latest
+    image: ${LOCO_IMAGE:-ghcr.io/shanouhar/loco:latest}
     network_mode: host
     restart: unless-stopped
     stop_grace_period: 30s

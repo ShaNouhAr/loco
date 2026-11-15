@@ -299,13 +299,16 @@ Les paquets sont embarqués : l'installation se passe d'Internet. Détails : [gu
 <summary><img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;<b>Docker</b></summary>
 <br>
 
+Un fichier suffit, sans cloner le projet :
+
 ```bash
-git clone https://github.com/ShaNouhAr/loco.git
-cd loco/linux/docker
-cp .env.example .env
-sudo ./up.sh
+mkdir loco && cd loco
+curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
+docker compose up -d
 docker compose logs loco    # adresse, empreinte de l'autorité, mot de passe initial
 ```
+
+L'image `ghcr.io/shanouhar/loco` est publiée avec chaque version. Mettre à jour : `docker compose pull && docker compose up -d`.
 
 </details>
 

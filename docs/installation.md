@@ -70,12 +70,26 @@ l'adresse, l'empreinte de l'autorité et le mot de passe initial. Mise à jour :
 
 ### Avec Docker
 
+Sans cloner le projet — l'image `ghcr.io/shanouhar/loco` est publiée avec chaque version :
+
+```bash
+mkdir loco && cd loco
+curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/.env.example -o .env   # facultatif : LOCO_HOST, LOCO_ALLOW, LOCO_PROXY, LOCO_WU…
+docker compose up -d
+docker compose logs loco   # adresse, empreinte de l'autorité, mot de passe initial de « admin »
+```
+
+Mise à jour : `docker compose pull && docker compose up -d`. Pour rester sur une version précise :
+`LOCO_IMAGE=ghcr.io/shanouhar/loco:2.165.0` dans `.env`.
+
+Depuis les sources — l'image est construite sur place :
+
 ```bash
 git clone https://github.com/ShaNouhAr/loco.git
 cd loco/linux/docker
-cp .env.example .env          # réglages : LOCO_HOST, LOCO_ALLOW, LOCO_PROXY, LOCO_WU…
-sudo ./up.sh
-docker compose logs loco   # adresse, empreinte de l'autorité, mot de passe initial de « admin »
+cp .env.example .env
+sudo ./up.sh               # construit l'image, démarre loco et attend qu'il soit sain
 ```
 
 Même portail, mêmes fonctions et même configuration que l'installation native : au démarrage, le
@@ -83,7 +97,7 @@ conteneur applique les variables de `.env` avec `linux/install.sh --container`, 
 apt-cacher-ng, le portail et les tâches périodiques. Le conteneur utilise le **réseau de l'hôte** (ports
 8443, 8088, 3142, et 80/443 pour Windows Update) : ne pas l'associer à une installation native sur la même
 machine. Les données sont dans des volumes Docker (`LOCO_DATA_DIR` : dossier de l'hôte pour les dépôts et
-caches). Installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`).
+caches). Depuis les sources, installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`).
 
 L'installation native reste recommandée en production : elle confine chaque service avec systemd
 (détails dans [SECURITY.md](../SECURITY.md)). Docker Engine 26 ou plus récent avec Compose v2 (validé avec

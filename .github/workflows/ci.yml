@@ -32,6 +32,7 @@ jobs:
             | grep -vE '^portal/agents/console/(pyte|wcwidth)/|^portal/loco/_vendor/' \
             | xargs pipx run pyflakes
           docker compose -f linux/docker/docker-compose.yml config -q
+          docker compose -f linux/docker/docker-compose.yml -f linux/docker/docker-compose.build.yml config -q
       - name: Paquets des tests unitaires
         uses: ./.github/actions/apt-install
         with:

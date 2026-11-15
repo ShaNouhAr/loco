@@ -1,8 +1,9 @@
 # loco en conteneur : voir docker-compose.yml (même dossier) et la section Docker du README.
-# Contexte de construction : la racine du projet. La configuration est faite au démarrage par
+# Contexte de construction : la racine du projet (docker-compose.build.yml, ou l'étape « image » de la publication). La configuration est faite au démarrage par
 # linux/install.sh --container (linux/docker/entrypoint.sh).
 FROM debian:13-slim
 LABEL org.opencontainers.image.title="loco" \
+      org.opencontainers.image.description="Gestion de parc auto-hébergée : mises à jour Windows, Linux et Android, logiciels, prise en main à distance, caches et dépôts signés." \
       org.opencontainers.image.source="https://github.com/ShaNouhAr/loco" \
       org.opencontainers.image.licenses="MIT"
 

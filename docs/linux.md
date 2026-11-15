@@ -272,12 +272,23 @@ L'image reprend le même code et la même configuration que l'installation nativ
 `linux/docker/entrypoint.sh` traduit les variables de `.env` en options de `linux/install.sh --container`, qui régénère
 la configuration (nginx, apt-cacher-ng, portail), puis `supervisord` lance les services.
 
+Avec l'image publiée à chaque version (`ghcr.io/shanouhar/loco`), `docker-compose.yml` se suffit — inutile de
+cloner le projet :
+
 ```bash
-cd linux/docker                 # docker-compose.yml, Dockerfile et .env.example
-cp .env.example .env            # au minimum LOCO_HOST, l'adresse annoncée aux postes
-sudo ./up.sh
+mkdir loco && cd loco
+curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/.env.example -o .env   # au minimum LOCO_HOST, l'adresse annoncée aux postes
+docker compose up -d
 docker compose logs loco  # adresse, empreinte de l'autorité, mot de passe initial (une seule fois)
 ```
+
+`LOCO_IMAGE` choisit l'image : par défaut la dernière publiée (`…:latest`), ou une version précise
+(`ghcr.io/shanouhar/loco:2.165.0`). L'image est reconstruite à chaque version de loco, avec les paquets Debian du
+moment.
+
+Depuis les sources, `sudo ./up.sh` (dans `linux/docker`) construit l'image sur place au lieu de la télécharger : il
+ajoute `docker-compose.build.yml` à `docker-compose.yml`.
 
 **Variables.** Elles correspondent aux options d'`install.sh` (`LOCO_ALLOW` ↔ `--allow`, `LOCO_PROXY` ↔ `--proxy`,
 `LOCO_WU=0` ↔ `--no-wu`, `LOCO_HTTP=0` ↔ `--no-http`…, liste commentée dans `.env.example`) et font foi : une
@@ -305,7 +316,8 @@ docker compose exec loco loco-user passwd admin       # accès perdu
 docker compose exec loco loco-backup create           # sauvegarde immédiate
 docker compose exec loco loco-backup restore /var/backups/loco/ARCHIVE
 docker compose restart loco                                  # après une restauration
-git pull && sudo ./up.sh                           # mise à jour
+docker compose pull && docker compose up -d            # mise à jour (image publiée)
+git pull && sudo ./up.sh                           # mise à jour (depuis les sources)
 docker compose down                                                # arrêt (données conservées)
 ```
 
@@ -322,8 +334,9 @@ pas dans le conteneur : l'installation native reste recommandée lorsque c'est p
 
 **Validation.** `tests/vm-docker-e2e.sh` installe Docker (paquets Debian) dans une VM Debian 13 jetable,
 construit l'image, branche la VM elle-même comme poste (dépôt local et cache), vérifie les services, la
-sauvegarde, la conservation des données et de l'autorité quand le conteneur est recréé, et l'application
-des variables (Windows Update et HTTP désactivés puis rétablis).
+sauvegarde, la conservation des données et de l'autorité quand le conteneur est recréé, l'application
+des variables (Windows Update et HTTP désactivés puis rétablis), puis le démarrage avec `docker-compose.yml`
+seul, hors des sources.
 
 ## 14. Conteneur LXC Proxmox VE
 
