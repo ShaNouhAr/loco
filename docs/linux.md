@@ -2,6 +2,7 @@
 
 Ce guide couvre le déploiement de loco dans un réseau d'entreprise (lab, site, agence) et son
 exploitation courante. Pour une présentation rapide, voir le [README](../README.md).
+La routine, les sauvegardes, les mises à jour et les incidents, toutes installations confondues : [Exploiter loco au quotidien](exploitation.md).
 
 ## 1. Prérequis
 

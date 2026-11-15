@@ -4,6 +4,8 @@ Suivre et entretenir votre Home Assistant depuis loco : versions du cœur, du sy
 mises à jour (une à une ou toutes, avec sauvegarde avant), modules complémentaires, sauvegardes, état de
 santé, journal, redémarrages et terminal. C'est une fonctionnalité **facultative**, coupée par défaut.
 
+![Home Assistant dans loco : versions, mises à jour disponibles, modules et sauvegardes](media/home-assistant.webp)
+
 loco ne demande **aucun jeton** à Home Assistant. Il y entre par son module SSH, avec une clé qui lui est
 propre, et pilote la commande `ha` — celle que vous utiliseriez vous-même dans ce terminal. Il faut donc une
 installation qui a un Supervisor (Home Assistant OS ou Supervised) et un module SSH.

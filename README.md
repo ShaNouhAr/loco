@@ -1,86 +1,266 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
-  <img src="docs/logo-light.svg" alt="Logo de loco" width="160">
-</picture>
+<a href="#tour"><img src="docs/media/hero.webp" width="100%" alt="loco — Tout votre parc. Sur votre serveur. Mises à jour, logiciels, prise en main à distance et dépôts locaux pour Windows, Linux et Android, sans rien confier à un tiers."></a>
 
-# loco
+<br><br>
 
-### Dépôts, caches et gestion de parc, pour tout un réseau d'entreprise
+[![Version](https://img.shields.io/github/v/release/ShaNouhAr/loco?sort=semver&label=version&color=5b8cff&style=flat-square)](https://github.com/ShaNouhAr/loco/releases)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-34d399?style=flat-square)](LICENSE)
+![Tests](https://img.shields.io/badge/tests-1%E2%80%AF546-a78bfa?style=flat-square)
+![Langues](https://img.shields.io/badge/langues-FR_·_EN_·_ES-fbbf5c?style=flat-square)
+![Auto-hébergé](https://img.shields.io/badge/100_%25-auto--hébergé-fb7185?style=flat-square)
 
-Un seul serveur pour les mises à jour **Linux** et **Windows**, les logiciels et la supervision du parc —
-même hors ligne ou derrière un proxy d'entreprise.
-
-[![CI](https://github.com/ShaNouhAr/loco/actions/workflows/ci.yml/badge.svg)](https://github.com/ShaNouhAr/loco/actions/workflows/ci.yml)
-[![Dernière version](https://img.shields.io/github/v/release/ShaNouhAr/loco?sort=semver&label=version&color=2ea043)](https://github.com/ShaNouhAr/loco/releases)
-[![Licence MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-![Plateformes](https://img.shields.io/badge/Debian_·_Ubuntu_·_Rocky_·_Windows_·_Proxmox_·_Docker-444)
+**[Le tour en images](#tour)** &nbsp;·&nbsp; **[Installer](#installer)** &nbsp;·&nbsp; **[Comment ça marche](#fonctionnement)** &nbsp;·&nbsp; **[Documentation](#documentation)** &nbsp;·&nbsp; **[Nouveautés](CHANGELOG.md)**
 
 </div>
 
-Serveur de dépôts et de caches pour un réseau d'entreprise, installé sur Debian, Ubuntu, Rocky Linux ou Windows
-(installation native, recommandée), dans un **conteneur LXC Proxmox VE** ou avec **Docker Compose** :
+<br>
 
-- **Paquets Linux** : cache APT pour Debian / Ubuntu (apt-cacher-ng sous Linux, nginx sous Windows)
-  et dépôts APT signés pour vos propres `.deb`, séparés par distribution et version.
-- **Famille Red Hat** : cache des miroirs Rocky Linux, AlmaLinux et EPEL, et dépôts RPM signés par
-  version majeure (`el8`, `el9`, `el10`) pour RHEL, Rocky Linux et AlmaLinux.
-- **Windows Update** : cache des téléchargements de mises à jour (même principe que [lancache](https://lancache.net)).
-- **Logiciels Windows** : catalogue d'installeurs (`exe`, `msi`, `msu`, `ps1`) installés en silence par PowerShell.
-- **Flatpak** : cache Flathub et, sur un serveur Linux, dépôt Flatpak local signé pour les applications de l'entreprise.
-- **Mon parc** : agent sur les postes Windows (service `loco-client`, installeur MSI) et Linux (systemd), avec
-  voyant vert / orange / rouge par poste, mise à jour d'un poste ou de tout le parc en un clic (Windows Update,
-  APT, DNF, Flatpak et logiciels du catalogue). Un poste reste rattaché quand il change d'adresse IP.
-- **Catalogue winget** : recherche dans le catalogue public de Microsoft et import en un clic (installeur officiel
-  vérifié par SHA-256, options silencieuses et détection des versions installées sur le parc).
-- **Portail web** en HTTPS : comptes nommés, journal d'audit, supervision, sauvegardes ; **apparence personnalisable** par
-  utilisateur (thèmes clairs et sombres, couleur d'accent, transparence, fonds d'écran dont des photos), dans le cadre
-  fixé pour l'instance (logo, couleur et fond de l'entreprise, thèmes proposés, couleur ou fond imposés).
+> **loco** est le serveur qu'on installe une fois et qui s'occupe du reste.
+> Il garde une copie des mises à jour, range vos logiciels, connaît chaque poste — et vous y emmène en un clic.
+>
+> Pas de cloud. Pas d'abonnement. Pas de télémétrie. Une machine virtuelle, un conteneur ou un vieux PC suffisent.
 
-| | |
+<br>
+
+## Ce que loco fait pour vous
+
+<table>
+<tr>
+<td width="33%" valign="top">
+<img src="docs/media/icones/parc.svg" width="44" alt=""><br>
+<b>Un parc lisible d'un regard</b><br>
+Un voyant par poste, tout son inventaire sur sa fiche, et ce qui presse en haut de la page.
+</td>
+<td width="33%" valign="top">
+<img src="docs/media/icones/mises-a-jour.svg" width="44" alt=""><br>
+<b>Des mises à jour qu'on voit avancer</b><br>
+Windows Update, APT, DNF, Flatpak : un poste, un groupe ou tout le parc — paquet par paquet, en direct.
+</td>
+<td width="33%" valign="top">
+<img src="docs/media/icones/distance.svg" width="44" alt=""><br>
+<b>La main sur n'importe quel poste</b><br>
+Bureau, terminal et fichiers dans le navigateur. Aucun port à ouvrir, ni VNC, ni SSH.
+</td>
+</tr>
+<tr>
+<td valign="top">
+<img src="docs/media/icones/logiciels.svg" width="44" alt=""><br>
+<b>Vos logiciels en un clic</b><br>
+Le catalogue WinGet à portée de main, vos installeurs maison à côté. Déployés en silence, vérifiés par empreinte.
+</td>
+<td valign="top">
+<img src="docs/media/icones/depots.svg" width="44" alt=""><br>
+<b>Internet, une seule fois</b><br>
+Chaque mise à jour est téléchargée une fois, puis servie en local. Vos <code>.deb</code> et <code>.rpm</code> ont leurs dépôts signés.
+</td>
+<td valign="top">
+<img src="docs/media/icones/automatisation.svg" width="44" alt=""><br>
+<b>La routine tourne toute seule</b><br>
+Scripts, planifications, déploiements par vagues qui s'arrêtent d'eux-mêmes si quelque chose casse.
+</td>
+</tr>
+<tr>
+<td valign="top">
+<img src="docs/media/icones/securite.svg" width="44" alt=""><br>
+<b>Chacun à sa place</b><br>
+75 droits, des profils limités à une partie du parc, SSO, double authentification, clés d'accès. Et un journal de tout.
+</td>
+<td valign="top">
+<img src="docs/media/icones/ia.svg" width="44" alt=""><br>
+<b>Prêt pour vos assistants IA</b><br>
+Un serveur MCP intégré : Claude Code, Cursor ou VS Code consultent et pilotent loco, dans les limites que vous fixez.
+</td>
+<td valign="top">
+<img src="docs/media/icones/android.svg" width="44" alt=""><br>
+<b>Au-delà des PC</b><br>
+Téléphones et tablettes Android, Home Assistant : même portail, mêmes droits, même journal.
+</td>
+</tr>
+</table>
+
+<br>
+
+<a id="tour"></a>
+
+## Le tour en images
+
+### <img src="docs/media/icones/parc.svg" width="26" align="top" alt=""> &nbsp;Mon parc
+
+**Du plus urgent au plus à jour.** Vert, tout va bien. Orange, des mises à jour attendent. Rouge, il est temps.
+
+<img src="docs/media/parc.webp" width="100%" alt="Mon parc : la liste des postes avec leur voyant, leurs mises à jour en attente, leurs correctifs de sécurité et la charge du processeur, de la mémoire et du disque">
+
+- **Tout sur une ligne** — système, adresse, mises à jour, correctifs de sécurité, processeur, mémoire, disque.
+- **Tout en un geste** — cochez, puis mettez à jour, avec redémarrage si besoin, ou réveillez les postes éteints (Wake-on-LAN).
+- **Un poste qui bouge reste dans le parc** — autre adresse, autre site, VPN : il garde son identité.
+
+<p align="center">
+<img src="docs/media/poste.webp" width="49.4%" alt="Fiche d'un serveur Linux : supervision en direct, courbes du processeur, de la mémoire et du réseau sur 24 heures, occupation des disques">
+<img src="docs/media/poste-windows.webp" width="49.4%" alt="Fiche d'un poste Windows : mises à jour à cocher une par une, logiciels du catalogue à installer ou à mettre à jour">
+</p>
+<p align="center"><sub>← <b>Supervision</b> — en direct toutes les 2 secondes, puis sur 24 heures ou 7 jours.<br><b>Fiche d'un poste</b> — mises à jour à la carte, logiciels du catalogue, historique. →</sub></p>
+
+<br>
+
+### <img src="docs/media/icones/mises-a-jour.svg" width="26" align="top" alt=""> &nbsp;Mises à jour, en direct
+
+**Cliquez. Regardez.** L'étape, le paquet en cours, ce qui est fait, ce qui a échoué — sans recharger la page.
+
+<img src="docs/media/mises-a-jour.webp" width="100%" alt="Animation : trois postes Windows et Linux se mettent à jour en même temps, la barre de chacun avance et les paquets installés se cochent un par un">
+
+- **Rien ne se perd** — une action en attente n'expire pas : elle part quand le poste revient.
+- **Par vagues** — dix postes d'abord, les autres ensuite. Trop d'échecs ? Tout se met en pause et vous décidez.
+- **Une mise à jour douteuse ?** Bloquez-la, sur tout le parc ou sur un groupe. Plus personne ne l'installera par erreur.
+- **La nuit, c'est mieux** — une fois, chaque jour, chaque semaine ou chaque mois.
+
+<br>
+
+### <img src="docs/media/icones/distance.svg" width="26" align="top" alt=""> &nbsp;Prise en main à distance
+
+**L'agent appelle le serveur. Jamais l'inverse.** Pas de port entrant sur les postes, pas de serveur VNC, pas de compte SSH.
+
+<p align="center">
+<img src="docs/media/bureau.webp" width="49.4%" alt="Bureau distant d'un poste Linux à deux écrans : la liste Écran montre l'écran 2, avec un plan technique ouvert">
+<img src="docs/media/terminal.webp" width="49.4%" alt="Terminal root d'un serveur Linux ouvert dans le navigateur">
+</p>
+<p align="center"><sub>← <b>Bureau</b> — deux écrans ? Choisissez lequel regarder.<br><b>Terminal</b> — un vrai shell root ou PowerShell SYSTEM. →</sub></p>
+
+- **Windows**, écran de connexion et fenêtre UAC compris. **Linux** sous X11, GNOME, KDE Plasma, Sway ou Hyprland.
+- **Ctrl+Alt+Suppr**, presse-papiers partagé, envoi d'un mot de passe caractère par caractère.
+- **Gestionnaire de fichiers** — glissez, déposez, modifiez un fichier texte sans quitter la page.
+- **Avec l'accord de la personne**, si vous le voulez : elle accepte ou refuse avant toute image.
+
+<br>
+
+### <img src="docs/media/icones/logiciels.svg" width="26" align="top" alt=""> &nbsp;Logiciels Windows
+
+**Cherchez, ajoutez, déployez.** loco télécharge l'installeur officiel, vérifie son empreinte et retient comment l'installer en silence.
+
+<p align="center">
+<img src="docs/media/logiciels.webp" width="49.4%" alt="Centre de logiciels : le catalogue WinGet avec ses catégories et ses logos">
+<img src="docs/media/catalogue.webp" width="49.4%" alt="Catalogue local : version de chaque logiciel, nombre de postes équipés et postes à mettre à jour">
+</p>
+<p align="center"><sub>← <b>Centre de logiciels</b> — le catalogue WinGet, rangé par catégories.<br><b>Catalogue local</b> — qui l'a, qui est en retard. →</sub></p>
+
+- **Rien ne part avant votre feu vert** — l'aperçu montre les postes visés et ceux qui sont écartés.
+- **Des groupes de logiciels** — « Poste standard », « Bureau d'études » : un nouveau poste est prêt en une fois.
+- **Vos propres installeurs** — `exe`, `msi`, `msu` ou `ps1`, par lien ou par fichier.
+
+<br>
+
+### <img src="docs/media/icones/depots.svg" width="26" align="top" alt=""> &nbsp;Caches et dépôts
+
+**Téléchargé une fois, servi à tous.** Votre lien Internet respire, vos postes se mettent à jour à la vitesse du réseau local.
+
+<img src="docs/media/windows-update.webp" width="100%" alt="Cache Windows Update : volume servi depuis le cache et volume pris sur Internet, jour par jour">
+
+| Ce qui passe par loco | Comment |
 |---|---|
-| ![Vue d'ensemble — fond « Alpes »](docs/dashboard.jpg) | ![Vue d'ensemble — thème sépia, fond « Désert »](docs/dashboard-sepia.jpg) |
-| ![Catalogue de logiciels Windows](docs/apps.jpg) | ![Cache Windows Update](docs/windows-update.jpg) |
+| **Windows Update** | par le DNS du réseau, ou par un proxy intégré — sans toucher au DNS |
+| **Debian, Ubuntu** | cache APT, et dépôts signés pour vos propres `.deb` |
+| **RHEL, Rocky, AlmaLinux** | cache des miroirs et d'EPEL, et dépôts RPM signés par version majeure |
+| **Flatpak** | cache Flathub, et dépôt local signé pour vos applications |
 
-## Sommaire
+Derrière un proxy d'entreprise ? Ça marche aussi.
 
-- **Installer** — [Choisir son installation](#choisir-son-installation) · [Serveur Linux](#serveur-linux) · [Serveur Windows](#serveur-windows)
-- **Déployer** — [Brancher les postes](#brancher-les-postes) · [Mon parc : agent des postes](#mon-parc--agent-des-postes) · [Centre de logiciels Windows](#centre-de-logiciels-windows) · [Scripts](#scripts)
-- **Administrer** — [Sessions distantes](#sessions-distantes-via-lagent) · [Annuaires et SSO](#annuaires-et-sso) · [Serveur MCP](#serveur-mcp) · [Home Assistant](#home-assistant) · [Utilisateurs et profils](#utilisateurs-et-profils-daccès) · [Haute disponibilité](#haute-disponibilité) · [Journal](#journal) · [Fonctionnalités](#fonctionnalités)
-- **Références** — [Sécurité](SECURITY.md) · [Développement](#développement) · [Changelog](CHANGELOG.md) · [Licence](#licence)
+<br>
 
-## Choisir son installation
+### <img src="docs/media/icones/automatisation.svg" width="26" align="top" alt=""> &nbsp;Scripts et planifications
 
-| Serveur | Systèmes | Installation | Guide |
-|---|---|---|---|
-| **Linux natif** (recommandé) | Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04, Rocky Linux 8 / 9 / 10 | `sudo ./install.sh` | [docs/linux.md](docs/linux.md) |
-| **Windows natif** | Windows 11, Windows Server 2022 / 2025 | `windows\install.ps1` | [docs/windows.md](docs/windows.md) |
-| Conteneur LXC | Proxmox VE 7 / 8 / 9 | `linux/lxc/proxmox-lxc.sh` | [docs/linux.md](docs/linux.md) |
-| Appliance ISO | Alpine Linux (BusyBox), BIOS/UEFI | `linux/iso/` (assistant, réponses et portail) | [docs/linux.md](docs/linux.md) |
-| Docker | Docker Engine 26+ et Compose v2 | `linux/docker/` | [docs/linux.md](docs/linux.md) |
+**Écrit une fois, relu, puis lancé partout.** PowerShell, shell ou Python, avec la sortie de chaque poste.
 
-Le portail, les dépôts et les caches sont les mêmes partout ; seul le dépôt Flatpak local demande un
-serveur Linux.
+<p align="center">
+<img src="docs/media/scripts.webp" width="49.4%" alt="Bibliothèque de scripts avec leur système, leur version et leur dernière exécution">
+<img src="docs/media/planifications.webp" width="49.4%" alt="Planifications : mises à jour et scripts lancés chaque jour, chaque semaine ou chaque mois sur des groupes de machines">
+</p>
+<p align="center"><sub>← <b>Scripts</b> — versionnés, figés par empreinte au moment de partir.<br><b>Planifications</b> — « chaque mardi à 21 h 30, les postes du siège ». →</sub></p>
 
-```text
-portal/     portail web et scripts des postes, communs à Linux et Windows
-conf/       gabarits nginx communs
-linux/      installateur Linux (install.sh, remove.sh), outils d'administration, Docker, conteneur LXC,
-            Alpine (lib/alpine.sh) et fabrique ISO (iso/)
-windows/    installateur Windows (install.ps1, remove.ps1), service Windows, composants vérifiés
-docs/       guides Linux et Windows
-tests/      tests unitaires et de bout en bout (VM Linux, Windows Server)
-install.sh  raccourci vers linux/install.sh
+<br>
+
+### <img src="docs/media/icones/securite.svg" width="26" align="top" alt=""> &nbsp;Droits, SSO et journal
+
+**Le bon accès, à la bonne personne, sur les bons postes.** Et la trace de chaque geste.
+
+<p align="center">
+<img src="docs/media/profil.webp" width="49.4%" alt="Profil d'accès Support niveau 1 : limité à trois groupes de machines, douze droits accordés sur soixante-quinze">
+<img src="docs/media/journal.webp" width="49.4%" alt="Journal : chaque action avec son heure, son compte, son adresse et son détail">
+</p>
+<p align="center"><sub>← <b>Profils</b> — des droits, et le périmètre où ils s'exercent.<br><b>Journal</b> — qui, quoi, quand, d'où. Exportable, ou envoyé en syslog. →</sub></p>
+
+- **Vos identités** — Active Directory, LDAP, RADIUS, OpenID Connect (Authentik, Keycloak, Entra ID…).
+- **Deux verrous valent mieux qu'un** — codes à usage unique (TOTP) et clés d'accès (passkeys).
+- **Personne n'entre par surprise** — un compte d'annuaire attend qu'on l'approuve.
+
+<br>
+
+### <img src="docs/media/icones/ia.svg" width="26" align="top" alt=""> &nbsp;Assistants IA
+
+**« Quels postes n'ont pas redémarré depuis un mois ? »** Demandez-le à votre assistant.
+
+<img src="docs/media/mcp.webp" width="100%" alt="Serveur MCP : jetons, outils accordés à chacun, dernier appel et commande de connexion d'un assistant">
+
+```bash
+claude mcp add --transport http loco https://<serveur>:8443/mcp --header "Authorization: Bearer <jeton>"
 ```
 
+- **34 outils**, cochés un à un pour chaque jeton : lire, mettre à jour, lancer un script, ouvrir un terminal.
+- **Jamais plus de droits que vous** — un jeton reste dans les limites du compte qui l'a créé.
+- **Tout est noté** — chaque appel qui change quelque chose rejoint le journal, au nom du jeton.
 
-**Langues** : interface en français, en anglais ou en espagnol, au choix de chaque compte (menu du compte), sinon selon le
-navigateur. Traductions : `portal/i18n/en.json` et `es.json` (texte français -> langue), vérifiées par `tests/test_i18n.py`.
+<br>
 
-## Serveur Linux
+### <img src="docs/media/icones/android.svg" width="26" align="top" alt=""> &nbsp;Android et Home Assistant
 
-### Installation native (recommandée)
+**Deux options, coupées par défaut.** À activer si elles vous parlent.
+
+<p align="center">
+<img src="docs/media/android.webp" width="49.4%" alt="Fiche d'un téléphone Android : applications installées, écran distant, terminal">
+<img src="docs/media/home-assistant.webp" width="49.4%" alt="Home Assistant : versions, mises à jour disponibles, modules complémentaires et sauvegardes">
+</p>
+<p align="center"><sub>← <b>Android</b> <i>(expérimental)</i> — écran, terminal, fichiers et applications de vos propres appareils. Toujours visible, toujours consenti.<br><b>Home Assistant</b> <i>(facultatif)</i> — mises à jour, sauvegardes, santé et terminal, par SSH avec une clé propre à loco. →</sub></p>
+
+<br>
+
+### <img src="docs/media/icones/apparence.svg" width="26" align="top" alt=""> &nbsp;À votre image
+
+**Six thèmes, huit couleurs, quinze fonds.** Ou votre logo et vos couleurs, pour toute l'entreprise.
+
+<img src="docs/media/themes.webp" width="100%" alt="La même page dans les huit apparences livrées : Brume, Alpes, Forêt, Boréale, Océan, Désert, Clair et OLED">
+
+<br>
+
+### <img src="docs/media/icones/mobile.svg" width="26" align="top" alt=""> &nbsp;Dans la poche
+
+**Une alerte à 22 h ?** Le portail s'installe comme une application et tient dans une main.
+
+<img src="docs/media/mobile.webp" width="100%" alt="Le portail sur téléphone : vue d'ensemble, Mon parc, mises à jour en cours et fiche d'un poste">
+
+<br>
+
+<div align="center">
+<img src="docs/media/chiffres.webp" width="100%" alt="En chiffres : 1 546 tests rejoués sur trois distributions à chaque version, 75 droits à combiner dans vos profils d'accès, 34 outils MCP pour vos assistants IA, 3 langues (français, anglais, espagnol), 0 télémétrie">
+</div>
+
+<br>
+
+<a id="installer"></a>
+
+## Installer en cinq minutes
+
+Choisissez votre terrain. Le portail, les dépôts et les caches sont les mêmes partout.
+
+| | Pour qui | Systèmes |
+|---|---|---|
+| <img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;**Linux natif** — recommandé | la production | Debian 12 / 13 · Ubuntu 22.04 / 24.04 / 26.04 · Rocky Linux 8 / 9 / 10 |
+| <img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;**Conteneur LXC** | un hôte Proxmox VE | Proxmox VE 7 / 8 / 9 |
+| <img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;**Appliance ISO** | une machine dédiée, même hors ligne | Alpine Linux, BIOS ou UEFI |
+| <img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;**Docker** | un essai rapide | Docker Engine 26+ et Compose v2 |
+| <img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;**Windows natif** | un parc sans Linux | Windows 11 · Windows Server 2022 / 2025 |
+
+<details open>
+<summary><img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;<b>Linux natif</b></summary>
+<br>
 
 ```bash
 git clone https://github.com/ShaNouhAr/loco.git
@@ -88,115 +268,52 @@ cd loco
 sudo ./install.sh
 ```
 
-Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04 et Rocky Linux 8 / 9 / 10 (validations serveur en amd64). L'installation affiche l'adresse de l'interface
-(`https://<ip>:8443`), l'empreinte de l'autorité de certification et le mot de passe initial du compte
-`admin` (à changer à la première connexion). Le script est relançable : il sert aussi à mettre à jour
-(`git pull && sudo ./install.sh`) et à reconfigurer.
+L'installation affiche l'adresse du portail (`https://<ip>:8443`), l'empreinte de son autorité et le mot de passe initial du compte `admin`.
+Relancer la même commande met à jour.
 
-Sur Rocky Linux, la même commande détecte le système et utilise DNF avec EPEL et PowerTools (8) ou CRB (9/10). SELinux reste
-actif ; les contextes et les ports nécessaires sont configurés. Si firewalld tourne déjà, une règle de
-service dédiée est ajoutée ; les réseaux autorisés restent contrôlés par `--allow` et `--admin-allow`.
-Rocky 10 compile le cache APT depuis une version des sources Debian avec ses correctifs, vérifiée par
-SHA-256 (ce composant manque dans EPEL 10). Rocky 8 compile uniquement l’indexeur `apt-ftparchive`
-2.6.1 depuis les sources Debian vérifiées ; il utilise Python 3.11 pour le portail, dans un environnement
-isolé. Si nginx ne fournit pas le relais TLS requis, l’installateur sélectionne le flux nginx 1.24
-d’AppStream ; un nginx préexistant est mis à jour en conservant sa configuration et reste sur ce flux
-après désinstallation. La première installation prend donc plus de temps ; les relances réutilisent les outils compilés.
+</details>
 
-Options principales (toutes : `sudo ./install.sh --help`) :
-
-| Option | Effet |
-|---|---|
-| `--allow "CIDR …"` | réseaux autorisés pour les postes (défaut : réseaux privés) |
-| `--admin-allow "CIDR …"` | réseaux autorisés pour l'interface (défaut : comme `--allow`) |
-| `--proxy http://hôte:port` | proxy d'entreprise pour sortir sur Internet |
-| `--no-http` | HTTPS seul (autorité déjà déployée sur les postes) |
-| `--no-wu`, `--no-flatpak`, `--no-rpm` | sans cache Windows Update, sans Flatpak, sans famille Red Hat |
-| `--wu-proxy-port P` | port du proxy-cache Windows Update (Squid, sans DNS ; 3128 par défaut) |
-| `--tls-cert F --tls-key F` | certificat d'entreprise au lieu de l'autorité locale |
-| `--backup-keep N` | sauvegardes quotidiennes gardées (défaut 3, 0 = aucune) |
-
-### Conteneur LXC sur Proxmox VE
-
-Sur n'importe quel hôte Proxmox VE 7, 8 ou 9, en root :
+<details>
+<summary><img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;<b>Conteneur LXC sur Proxmox VE</b></summary>
+<br>
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/lxc/proxmox-lxc.sh
-bash proxmox-lxc.sh                                   # DHCP, 100 Go, 2 processeurs, 2 Go de mémoire
-bash proxmox-lxc.sh --ip 192.168.10.20/24 --gw 192.168.10.1 --disk 300 -- --allow "192.168.10.0/24"
+bash proxmox-lxc.sh
 ```
 
-Le script crée un conteneur Debian 13 non privilégié (Debian 12 sur Proxmox 7), choisit le stockage
-(`local-lvm`, `local-zfs`…) et le pont (`vmbr0`) disponibles, télécharge la dernière version publiée
-et y fait l'installation native ; les options après `--` sont celles d'`install.sh`. Il affiche ensuite
-l'adresse, l'empreinte de l'autorité et le mot de passe initial. Mise à jour :
-`bash proxmox-lxc.sh --ctid N --update`. Toutes les options : `bash proxmox-lxc.sh --help`.
+Le script crée le conteneur, y installe la dernière version publiée et affiche l'adresse du portail.
 
-### Avec Docker
+</details>
+
+<details>
+<summary><img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;<b>Appliance ISO</b></summary>
+<br>
+
+Téléchargez l'ISO de la [dernière version](https://github.com/ShaNouhAr/loco/releases/latest), démarrez dessus et suivez l'assistant.
+Les paquets sont embarqués : l'installation se passe d'Internet. Détails : [guide de l'appliance](linux/iso/README.md).
+
+</details>
+
+<details>
+<summary><img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;<b>Docker</b></summary>
+<br>
 
 ```bash
 git clone https://github.com/ShaNouhAr/loco.git
 cd loco/linux/docker
-cp .env.example .env          # réglages : LOCO_HOST, LOCO_ALLOW, LOCO_PROXY, LOCO_WU…
+cp .env.example .env
 sudo ./up.sh
-docker compose logs loco   # adresse, empreinte de l'autorité, mot de passe initial de « admin »
+docker compose logs loco    # adresse, empreinte de l'autorité, mot de passe initial
 ```
 
-Même portail, mêmes fonctions et même configuration que l'installation native : au démarrage, le
-conteneur applique les variables de `.env` avec `linux/install.sh --container`, puis `supervisord` lance nginx,
-apt-cacher-ng, le portail et les tâches périodiques. Le conteneur utilise le **réseau de l'hôte** (ports
-8443, 8088, 3142, et 80/443 pour Windows Update) : ne pas l'associer à une installation native sur la même
-machine. Les données sont dans des volumes Docker (`LOCO_DATA_DIR` : dossier de l'hôte pour les dépôts et
-caches). Installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`). Ce script
-migre aussi un ancien projet Docker `local-repo`, en conservant ses volumes d'origine.
+</details>
 
-L'installation native reste recommandée en production : elle confine chaque service avec systemd
-(détails dans [SECURITY.md](SECURITY.md)). Docker Engine 26 ou plus récent avec Compose v2 (validé avec
-les paquets `docker.io` et `docker-compose` de Debian 13).
+<details>
+<summary><img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;<b>Windows natif</b></summary>
+<br>
 
-Déploiement en entreprise (réseau, GPO, proxy, sauvegardes, supervision, LXC, Docker, dépannage) :
-**[guide Linux](docs/linux.md)**.
-
-### Administration
-
-```bash
-sudo loco-user list | roles | add NOM [PROFIL] | set-role NOM PROFIL | passwd NOM   # comptes (accès perdu : passwd admin)
-sudo loco-backup create | list | restore ARCHIVE             # sauvegardes
-sudo /opt/loco/remove.sh [--purge]                           # désinstallation
-```
-
-Dans un conteneur LXC, depuis l'hôte Proxmox : `pct exec N -- loco-user list`, etc.
-Avec Docker, les mêmes commandes passent par le conteneur : `docker compose exec loco loco-user list`,
-`docker compose exec loco loco-backup create`. Désinstallation : `docker compose down`
-(ajouter `-v` pour effacer aussi les données).
-
-### Architecture
-
-| Élément | Emplacement | Port |
-|---|---|---|
-| Portail (Flask + gunicorn, unité `loco-portal`, confinée) | `/opt/loco` | 8089, local |
-| Relais des sessions distantes (connexions persistantes, dans le processus du portail) | `/opt/loco/portal/loco/relay.py` | 8090, local |
-| nginx : interface et fichiers des postes (HTTPS) | `/etc/nginx/sites-available/loco-portal.conf` | 8443 |
-| nginx : amorçage HTTP (optionnel) | même fichier | 8088 |
-| nginx : cache Windows Update, relais HTTPS (SNI) | `loco-wucache.conf`, `modules-enabled/99-loco-stream.conf` | 80, 443 |
-| squid : proxy-cache Windows Update (sans DNS) | `/etc/squid/squid.conf`, cache `/srv/loco/wuproxy` | 3128 |
-| apt-cacher-ng | `/var/cache/apt-cacher-ng` | 3142 |
-| Données : dépôts, catalogue, caches | `/srv/loco` | — |
-| Base, clé GPG, statistiques | `/var/lib/loco` | — |
-| Configuration, autorité et certificats | `/etc/loco` | — |
-
-Sur Debian / Ubuntu, les dépendances viennent des dépôts officiels (`nginx`, `apt-cacher-ng`, `python3-flask`, `gunicorn`,
-`gnupg`, `flatpak`, `ostree`, `createrepo-c`, `rpm`) : les correctifs de sécurité arrivent avec `apt upgrade`, ou
-depuis le portail (**Administration → Mises à jour** : correctifs de sécurité, noyau, redémarrage).
-Sur Rocky, les paquets système sont suivis par `dnf upgrade` ; le runtime Python isolé et les composants
-compilés sont figés et mis à jour avec les versions de loco.
-
-## Serveur Windows
-
-### Installation
-
-Windows 11 Professionnel / Entreprise et Windows Server 2022 / 2025, en x64, avec PowerShell 5.1
-ou supérieur. Dans une console PowerShell **administrateur**, depuis les sources du projet :
+Dans une console PowerShell **administrateur** :
 
 ```powershell
 Invoke-WebRequest https://github.com/ShaNouhAr/loco/archive/refs/heads/main.zip -OutFile loco.zip
@@ -205,492 +322,113 @@ cd loco-main
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\install.ps1
 ```
 
-L'application tourne dans le service Windows `loco`, avec ses composants Windows natifs :
-Python et nginx ; les dépôts sont signés par le programme lui-même (OpenPGP). Aucune VM Linux, WSL,
-Hyper-V ou installation Docker n'est nécessaire.
-Relancer le même script met à jour le programme en conservant les comptes, les clés et les dépôts.
-
-Les dépôts APT/RPM signés, les caches APT/RPM/Flathub, le catalogue Windows et Windows Update
-sont disponibles. Le **dépôt Flatpak local** reste réservé aux serveurs Linux. Pour un réseau important,
-consulter les limites du nginx Windows et le dimensionnement dans le [guide Windows](docs/windows.md).
-
-### Administration
-
-Dans une console administrateur :
-
-```powershell
-$lr = "$env:ProgramFiles\loco\loco.cmd"
-& $lr user list ; & $lr user passwd admin ; & $lr backup create ; & $lr status
-powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\loco\windows\remove.ps1"   # -Purge : tout effacer
-```
-
-### Architecture
-
-Service `loco` (compte `NT SERVICE\loco`) qui lance nginx et le portail
-(Waitress, 8089 en local, et son relais des sessions distantes sur le port voisin 8090) ; programme dans `%ProgramFiles%\loco`, données, configuration et journaux
-dans `%ProgramData%\loco`. Ports : 8443 (HTTPS), 8088 (amorçage HTTP), 3142 (cache APT), 80 et 443
-(Windows Update). Détails : [guide Windows](docs/windows.md).
-
-## Brancher les postes
-
-Dans **Linux › Paquets**, créez d'abord les dépôts nécessaires : distribution, numéro de version
-facultatif et nom de code (par exemple `debian/trixie` ou `ubuntu/noble`). Une future version s'ajoute
-depuis cette page, sans modifier le code. Chaque dépôt a ses propres fichiers et index signés.
-
-Les postes font confiance à l'autorité locale (`ca.crt`, déployée par GPO ou depuis la page
-*Administration › Système*), puis :
-
-```bash
-# Debian / Ubuntu : dépôt local + cache APT
-curl -fsSL https://<ip>:8443/linux/setup.sh | sudo sh
-# … premier branchement, autorité pas encore importée (affiche son empreinte)
-curl -fsSL http://<ip>:8088/linux/setup.sh | sudo sh -s -- --trust-ca
-# Cache seul, sans dépôt local
-curl -fsSL https://<ip>:8443/linux/setup.sh | sudo sh -s -- --cache-only
-
-# Rocky Linux, AlmaLinux, RHEL 8+ : dépôt local elN + dépôts officiels via le cache (--epel : EPEL aussi)
-curl -fsSL https://<ip>:8443/rpm/setup.sh | sudo sh
-
-# Flatpak : Flathub via le cache + dépôt local « loco »
-curl -fsSL https://<ip>:8443/flatpak/setup.sh | sudo sh
-```
-
-```powershell
-# Windows, PowerShell administrateur : installe un ou plusieurs logiciels du catalogue
-irm 'https://<ip>:8443/win/i/7-zip,vlc' | iex
-```
-
-Le script Windows vérifie le SHA-256 de chaque installeur, laisse 30 minutes à chacun (`$env:LOCO_TIMEOUT`)
-et reconnaît les codes « redémarrage requis », « déjà installé » et « non applicable ».
-
-Pour Windows Update, deux façons d'envoyer les téléchargements des postes vers loco, au choix sur la page
-*Windows Update* : **par DNS** (le DNS du réseau renvoie l'IP du serveur pour les domaines de mise à jour ; un
-script pour un DNS Active Directory est fourni) ou **par proxy, sans DNS** — loco embarque un proxy-cache (Squid) et
-l'agent règle le proxy WinHTTP des postes Windows gérés vers loco (par poste, réversible, retiré si loco devient
-injoignable). Les deux mettent en cache les mêmes fichiers immuables et relaient le HTTPS sans le déchiffrer. La
-commande manuelle `netsh winhttp set proxy` est aussi proposée (pages *Windows Update* et *Enrôlement*).
-
-Le script Linux lit `/etc/os-release` et sélectionne le dépôt correspondant au poste. Si ce dépôt
-n'existe pas, il s'arrête avant de remplacer la configuration. Les dérivées peuvent choisir explicitement
-`--distribution ubuntu --suite noble`. Les sources APT sont au format deb822 (`loco.sources`).
-
-**Mise à jour depuis 1.0.0** : l'ancien dépôt `/apt/` et les postes déjà branchés restent fonctionnels.
-L'action *Copier vers un autre dépôt* conserve les originaux. Vérifiez la compatibilité de chaque paquet,
-puis relancez le script sur les postes. `--legacy` permet de conserver explicitement l'ancien dépôt partagé.
-
-## Centre de logiciels Windows
-
-Dans **Windows → Logiciels**, les onglets **Catalogue local**, **Centre de logiciels** et **Groupes de logiciels** réunissent les applications ; leurs boutons *Déployer* ouvrent la préparation d'un déploiement, qui se suit dans **Mon parc → Déploiements** (une action sur les appareils, comme les scripts). Le centre de logiciels utilise le catalogue communautaire Microsoft WinGet, avec recherche, catégories, fiches et logos vérifiés puis mis en cache sur loco. Une initiale remplace les logos indisponibles. Les fiches indiquent l'éditeur, la version, la licence et l'installeur silencieux disponible. **Ajouter à loco** télécharge l'installeur officiel et vérifie son empreinte SHA-256. L'index est renouvelé chaque jour ; son dernier exemplaire valide reste consultable si Internet est momentanément indisponible. Un logiciel se retire du catalogue depuis sa ligne, ou plusieurs en les cochant, y compris ceux dont le téléchargement a échoué ; rien n'est désinstallé des postes.
-
-Depuis une fiche du centre de logiciels, **Déployer sur des appareils ou groupes** importe le logiciel si nécessaire, puis ouvre la préparation commune aux logiciels du catalogue. On peut aussi sélectionner plusieurs logiciels dans le catalogue ou créer un **groupe de logiciels** (par exemple « Socle bureautique »). Un logiciel peut appartenir à plusieurs groupes. Ajouter un logiciel à un groupe depuis le centre de logiciels l'importe une seule fois dans le catalogue ; les actualisations et nouvelles tentatives conservent la vérification de l'empreinte WinGet.
-
-Dans **Mon parc → Groupes de machines**, créez les groupes et choisissez leurs membres ; la fiche d'un appareil permet aussi de modifier ses appartenances. Un appareil peut être dans plusieurs groupes. Le filtre de Mon parc affiche un groupe et limite l'action de mise à jour globale aux appareils de ce groupe.
-
-Un déploiement peut combiner logiciels et groupes de logiciels, puis appareils individuels et groupes de machines. La prévisualisation déduplique les sélections et indique les appareils exclus : les logiciels de ce store sont destinés à Windows, tandis que les groupes de machines peuvent aussi contenir Linux. **Aucune installation ne part avant la confirmation** et la vérification des installeurs. La sélection est figée à la préparation, valable une heure : ajouter un membre à un groupe ne provoque aucune installation implicite. Une fiche, un fichier ou une cible modifiés depuis la préparation imposent une nouvelle prévisualisation.
-
-À la confirmation, loco conserve les versions des installeurs et envoie un lot à chaque agent Windows concerné, au prochain contact du poste, y compris après une période hors ligne. Modifier ou supprimer ensuite le logiciel du catalogue ne remplace pas ces fichiers. Les versions déjà installées d'après un inventaire récent et les installations identiques déjà en attente sont ignorées ; une option permet la réinstallation explicite. **Mon parc → Déploiements** présente l'avancement, les exclusions et le journal de chaque poste. L'annulation arrête les commandes non transmises ; une installation déjà reçue par un agent peut se terminer. Les sauvegardes conservent les groupes, les commandes et les fichiers nécessaires ; le cache des versions sans commande active est purgé après une heure.
-
-Les droits **Gérer les groupes de logiciels**, **Gérer les groupes de machines**, **Consulter les déploiements** et **Déployer sur des groupes ou plusieurs postes** sont distincts. Le dernier est réservé aux administrateurs par défaut ; l'Opérateur conserve le déploiement individuel. Les droits sont revérifiés à la confirmation puis avant transmission aux agents.
-
-## Mon parc : agent des postes
-
-L'agent `loco-client` (Windows et Linux) remonte l'inventaire des postes et exécute les actions reçues de loco —
-mises à jour, logiciels, scripts, redémarrage. Un poste reste rattaché même quand son adresse IP change.
-
-<details>
-<summary><b>Lire le détail</b></summary>
-
-La page **Mon parc** liste les postes équipés de l'agent `loco-client`. Pour en ajouter un, ouvrez **Enrôlement**
-(barre de navigation, ou *Ajouter un poste* dans Mon parc) : un onglet par système (Windows ; Debian, Ubuntu ;
-Rocky, AlmaLinux, RHEL) avec l'installeur de l'agent à télécharger — **MSI**, paquet **.deb** ou **.rpm** — et sa
-commande d'installation, puis la configuration des dépôts et caches (APT, DNF, Flatpak) et, sous Windows, les
-logiciels du catalogue. Les fichiers et commandes de l'agent contiennent la clé d'inscription du serveur. Sans
-paquet, la commande reste disponible :
-
-```powershell
-# Windows 10/11, Windows Server 2016+ (PowerShell administrateur) : installe le MSI, service « loco-client »
-irm 'https://<ip>:8443/agent/windows.ps1?key=<clé>' | iex
-```
-
-```bash
-# Debian, Ubuntu, Rocky Linux, AlmaLinux, RHEL (systemd) : agent Python et minuterie systemd
-curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
-```
-
-**Inscrire directement dans un groupe** : en haut de la page Enrôlement, *Inscrire les postes dans le groupe* bascule
-le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du
-groupe** (`g<id>-…`) : un poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans
-quitter les siens). Aucun agent à mettre à jour : la clé de groupe prend la place de la clé du serveur. Par défaut,
-aucun groupe ; *Enrôler des postes dans ce groupe* (menu ⋯ d'un groupe) ouvre la page sur lui. Un compte limité à
-une partie du parc n'inscrit que dans les groupes attribués à son profil (jamais sans groupe : le poste sortirait de
-son parc). *Changer la clé de ce groupe* (droit *Configurer le parc*) rend caducs ses fichiers et commandes déjà
-distribués ; supprimer le groupe aussi.
-
-- L'agent contacte loco toutes les deux minutes au repos — et toutes les dix secondes tant qu'une action est en
-  attente ou vient de s'exécuter, pour qu'elle parte presque tout de suite — et envoie l'inventaire des mises à jour
-  (Windows Update avec les correctifs de sécurité, APT, DNF, Flatpak). L'inventaire des logiciels installés est aussi
-  remonté, sous Windows (logiciels installés) comme sous Linux (paquets APT/RPM avec version, architecture et taille,
-  applications Flatpak, et caractéristiques du poste : processeur, mémoire, disque, noyau, virtualisation) ; il
-  s'affiche sur la fiche du poste dans Mon parc. À l'inscription d'un poste Linux, ses logiciels et caractéristiques
-  s'affichent dès le premier contact, le décompte des mises à jour suivant une fois le premier scan réseau terminé.
-- **Voyants** : vert, aucune mise à jour ; orange, 1 à 9 mises à jour ; rouge, 10 mises à jour ou plus.
-  Le total additionne système, Flatpak et logiciels du catalogue. Le seuil rouge est réglable dans Mon parc.
-  Un inventaire manquant, incomplet ou un poste sans contact récent est gris, sans fausser le comptage.
-- **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
-  facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
-  Ces actions utilisent une liste fermée ; les administrateurs disposent aussi du terminal interactif décrit ci-dessous.
-- **Nom personnalisé** : la fiche d'un poste (menu *Plus → Nom personnalisé…*) permet de lui donner un nom plus
-  parlant, affiché à la place de son nom d'hôte dans Mon parc et dans la recherche ; le nom d'hôte reste visible.
-  Droit *Nommer les appareils* (Administrateur et Opérateur).
-- **Mises à jour une par une, en direct** : sur la fiche d'un poste, l'onglet *Mises à jour* permet de cocher
-  certaines mises à jour du système (paquets APT/RPM, applications Flatpak, ou mises à jour Windows) et de lancer
-  *Mettre à jour la sélection* ; *Mettre à jour* fait toujours tout. Pendant l'exécution, la fiche suit l'avancement
-  sans se recharger : étape (préparation, téléchargement, installation), paquet ou mise à jour en cours, barre de
-  progression, et dans le tableau les éléments terminés (✓) et celui en cours. Sous Windows, les mises à jour
-  s'installent une par une (pile de maintenance d'abord) et une erreur n'arrête plus les suivantes. Agents 2.120.0 et
-  plus (ils se mettent à jour seuls) ; l'outil MCP `update_device` accepte la même sélection (`updates`, `flatpak`).
-- **Suivi des mises à jour** (*Mon parc → Mises à jour*) : les mises à jour et redémarrages de votre parc, en direct. **En cours** :
-  étape, barre et paquets ou mises à jour Windows un par un (installé, en cours, en échec). **En attente** : ce que chaque ligne
-  attend vraiment (prochain contact, planification, poste hors ligne) ; une action en attente n'expire pas, elle part au retour du
-  poste, et *Annuler* la retire. **Terminées** : 24 heures sur cette page, échecs d'abord avec leur motif, puis dans l'historique du poste.
-- **Planifications** (*Mon parc → Planifications*) : mises à jour et scripts lancés **une fois, chaque jour, chaque
-  semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour), à l'heure du serveur, sur tout le parc, des
-  groupes (membres résolus à chaque exécution) ou des appareils. On planifie aussi en contexte : bouton calendrier à
-  côté de *Mettre à jour* sur la fiche d'un poste, *Planifier…* à côté de *Tout mettre à jour*, et choix « Maintenant /
-  Planifier » à l'exécution d'un script. Un résumé en clair (« Chaque mardi et jeudi à 02:00 · prochaine exécution… »)
-  accompagne la saisie ; la fiche d'un poste liste les planifications qui le concernent. Une planification due devient
-  une action envoyée au prochain contact des agents ; une occurrence manquée n'est pas rattrapée. Pause, reprise et
-  suppression depuis la liste. Un script modifié après sa planification la met en pause (on n'exécute que ce qui a été
-  relu) ; une action encore en file s'annule depuis la fiche du poste. Droits : ceux de l'action planifiée (mettre à
-  jour, tout le parc, redémarrer, exécuter des scripts), revérifiés à l'envoi aux postes.
-- **Identité** : chaque poste a un identifiant et un jeton propres, indépendants de son adresse. Un poste qui change
-  d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache. Réinstaller
-  l'agent garde la fiche du poste : l'agent prouve qu'il détient son jeton, sans le présenter. La clé d'inscription
-  seule ne permet donc pas de reprendre un poste : qui présente l'identifiant d'un poste déjà inscrit sans cette preuve
-  (disque restauré, clone, poste retiré) est inscrit comme un nouveau poste, et le journal le note.
-- **Sécurité** : l'autorité HTTPS de loco est épinglée par l'agent (empreinte SHA-256) sans modifier le magasin de
-  certificats du poste ; installeurs vérifiés par SHA-256 ; jetons stockés hachés côté serveur.
-- **Paquets .deb et .rpm** : produits par loco pour ce serveur (adresse, autorité épinglée et clé incluses), ils
-  s'installent par `sudo apt install ./loco-client_<version>+depots_all.deb` ou
-  `sudo dnf install ./loco-client-<version>-1.depots.noarch.rpm` et inscrivent le poste aussitôt. Cette variante
-  recommandée configure aussi les dépôts et le cache de loco (autorité confiée au système) ; la variante
-  « agent seul » (`loco-client_<version>_all.deb`, `loco-client-<version>-1.noarch.rpm`) ne touche pas aux dépôts.
-  Passer de l'agent seul au paquet complet est une mise à jour qui garde l'inscription ; désinstaller le paquet
-  retire l'agent (et, pour le paquet complet, la configuration des dépôts). Le paquet ne contient que les scripts
-  d'installation : l'agent se met ensuite à jour seul. Ils se téléchargent aussi depuis le poste, en HTTPS ou par
-  le port HTTP d'amorçage (`/agent/loco-client.deb?key=…`, `&depots=1` pour la variante complète).
-- **Windows, MSI téléchargé** : la page *Enrôlement* propose le MSI en téléchargement direct (lien public, également
-  ouvrable depuis le navigateur du poste) et la commande `msiexec` à lancer en administrateur avec l'adresse, la clé
-  et l'empreinte du serveur ; un simple double-clic installe le service sans l'inscrire.
-- **Windows en masse** : distribuer `loco-client.msi` (GPO, Intune, SCCM) et définir `Server`, `Key` et `CaSha256`
-  sous `HKLM\SOFTWARE\Policies\loco\Client`, ou `msiexec /i loco-client.msi SERVER=… KEY=… CA_SHA256=… /qn`.
-  Le MSI est publié avec chaque version ; le serveur le télécharge depuis GitHub à la première installation
-  (empreinte vérifiée) ou utilise celui déposé dans `portal/agents/`. Il n'est pas signé (pas de certificat de
-  signature de code) : SmartScreen peut avertir lors d'une installation manuelle.
-- **Logiciels** : dans *Logiciels Windows*, renseigner le nom affiché dans Windows et la version permet de repérer les
-  postes à mettre à jour. Le *Centre de logiciels* importe un logiciel avec ces informations ; *Nouvelles versions*
-  met à jour les logiciels issus de winget, puis les postes concernés passent en orange.
-
-L'agent se met à jour automatiquement avec loco.
-
-**Changer l'adresse du serveur** : annoncez d'abord la future adresse (*Mon parc › Adresse du serveur pour les agents*,
-ou `sudo loco-fleet announce https://192.168.1.20:8443`), attendez que tous les postes soient prévenus
-(`loco-fleet servers`), puis changez l'adresse (`install.sh --host`, ou `setup-loco` sur l'appliance qui fait l'annonce
-lui-même). Les agents passent seuls à la nouvelle adresse, après vérification de l'autorité HTTPS de loco ; un poste
-resté éteint pendant toute l'annonce se réinscrit avec la commande d'installation (même identité). Les agents Linux
-mettent aussi à jour leur proxy APT et leurs dépôts ; un poste configuré par `setup.sh` sans agent doit le relancer.
-
-**Déployer par vagues** : dans *Tout mettre à jour* et à la confirmation d'un déploiement, choisissez *Par vagues*, le nombre
-de postes par vague, l'attente entre deux vagues, le seuil d'échecs et, si besoin, un groupe pilote. Une vague ne part
-que si la précédente compte au moins une réussite et moins d'échecs que le seuil ; sinon tout se met en pause, la vue
-d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
-planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
-
-**Accord de l'utilisateur avant le bureau distant** (désactivé par défaut) : exigé sur un poste (fiche, onglet *Détails*, ou sélection
-dans Mon parc), ou demandé pour une session (menu *Plus* de la fiche). La personne devant le poste accepte ou refuse dans une fenêtre,
-avant toute capture. Sans réponse en une minute, ou sur un écran verrouillé, c'est un refus. Si personne n'est connecté, le bureau
-s'ouvre sans demande. Sous Linux, il faut zenity ou kdialog. Le terminal et les fichiers ne sont pas concernés.
-
-**Bloquer une mise à jour** : onglet *Blocages* de Mon parc, ou *Bloquer* sur sa ligne dans la fiche d'un poste. Un paquet (Linux)
-ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe. loco ne l'installe plus, quel que soit le
-chemin : poste, tout le parc, vagues, planifications, assistants IA. Sur le poste, Debian et Ubuntu retiennent le paquet
-(`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques, et Windows masque la mise à jour, sauf celles qu'il
-impose. Avec DNF, seules les mises à jour lancées par loco sont concernées. Flatpak et logiciels du catalogue ne le sont pas.
-
-**Réveiller un poste éteint** (Wake-on-LAN) : bouton *Réveiller* dans Mon parc et sur la fiche du poste. Il n'apparaît que si
-le poste a une carte Ethernet branchée à son dernier contact, jamais en Wi-Fi, et si le serveur ou un poste allumé est sur le
-même réseau : un paquet de réveil ne traverse pas les routeurs. La fiche indique les cartes du poste et, sinon, pourquoi le
-réveil n'est pas disponible. *Activer le réveil* (fiche du poste, ou sélection) demande à l'agent de l'activer sur ses cartes
-Ethernet et de le maintenir : sous Linux, il le réapplique à chaque contact, car un redémarrage le remet souvent à zéro. Il doit
-aussi être autorisé dans le BIOS, ce que l'agent ne peut pas faire.
-
-**Changer le port de l'interface** : *Système › Réseau › Port de l'interface web*. Le nouveau port s'ouvre à côté de
-l'ancien, donc rien n'est coupé. Les agents l'apprennent à leur prochain contact et la page compte ceux qui le
-connaissent. Ouvrez ensuite l'interface sur le nouveau port et fermez l'ancien depuis celui-ci : les agents basculent
-seuls, y compris leurs dépôts HTTPS. Pensez au pare-feu devant le serveur, aux favoris, aux clients MCP, à la supervision
-et, avec le SSO, à l'adresse de retour déclarée chez le fournisseur d'identité. En ligne de commande : `install.sh
---https-port N --https-old-ports "ANCIEN"`, puis `--https-old-ports ""` pour fermer. Sous Docker (`LOCO_HTTPS_PORT`) et sur
-un serveur Windows (`install.ps1 -HttpsPort`), annoncez d'abord la nouvelle adresse aux agents : il n'y a pas de double écoute.
-
-**Ouvrir loco par son nom** : *Système › Réseau › Adresse du portail*. C'est l'adresse des navigateurs et du retour SSO ;
-les agents et l'enrôlement gardent la leur, donc rien ne change pour le parc. Le certificat doit couvrir ce nom : pour un
-certificat de loco, cochez *Ajouter ce nom au certificat de loco* ; pour un certificat d'entreprise, demandez-en un qui le
-couvre. La page liste les URL de retour à redéclarer chez les fournisseurs SSO. En ligne de commande : `loco-config
-portal-url https://loco.exemple.lan:8443 [--add-to-certificate]`, et `--default` pour revenir à l'adresse des agents. Sous
-Docker : `LOCO_PORTAL_URL`. Sur un serveur Windows : `install.ps1 -PortalUrl`.
-
-**Noms que le DNS du serveur ne résout pas** : *Système › Réseau › Noms internes*, ou directement depuis *Vérifier la
-configuration* d'un fournisseur SSO. Ils vont dans un bloc dédié de `/etc/hosts`, refait après une mise à jour ou
-`setup-loco`. Les DNS du cache Windows Update (`--resolvers`) ne changent pas. Sous Docker : `extra_hosts`.
-
-Sur Windows, le MSI installe aussi **loco-tray.exe**, lancé dans chaque session utilisateur. Sa pastille reprend l'état de Mon parc : vert sans mise à jour, orange de 1 à 9 mises à jour, rouge à partir de 10 (seuil réglable). Un état indisponible ou ancien est gris. Le menu et le double-clic affichent uniquement des détails : **aucune action de mise à jour n'est accessible à l'utilisateur**. Le compagnon ne contacte pas le serveur et ne lit aucun jeton ; il consulte un fichier d'état public, accessible uniquement en lecture aux utilisateurs standards. Le service privilégié reste seul responsable des actions reçues de loco.
+Ni WSL, ni Hyper-V, ni Docker : loco tourne dans un service Windows.
 
 </details>
 
-## Sessions distantes via l’agent
+**Et ensuite ?**
 
-Terminal, bureau noVNC et gestionnaire de fichiers d’un poste, pilotés par l’agent via un relais HTTPS
-sortant — aucun port entrant, serveur VNC ou compte SSH sur le poste.
+1. Ouvrez `https://<ip>:8443` et changez le mot de passe d'`admin`.
+2. Allez dans **Mon parc › Enrôlement** : une commande à copier par poste — ou un MSI, un `.deb`, un `.rpm`.
+3. Regardez le parc se remplir.
 
-**Expérimental — Android** : les mêmes écran, terminal et fichiers sont disponibles sur vos propres appareils
-Android, via une application à installer (sans QR code), derrière *Fonctionnalités › Expérimental*. Un catalogue
-d'applications installe des APK de dépôts F-Droid vérifiés (F-Droid, IzzyOnDroid…) et ouvre les fiches Google Play
-sur l'appareil, et un terminal adb (débogage sans fil) donne un vrai `adb shell` depuis le portail. Chaque accès
-s’accorde sur l’appareil. Voir [docs/android.md](docs/android.md).
+Toutes les options, le proxy d'entreprise, les certificats : **[Installer loco](docs/installation.md)**.
 
-<details>
-<summary><b>Lire le détail</b></summary>
+<br>
 
-Dans la fiche d’un poste de **Mon parc**, un administrateur peut ouvrir un **Terminal / PowerShell** ou le **Bureau noVNC**. Les boutons **Plein écran** et **Nouvel onglet** sont disponibles dans les deux vues. En **plein écran du bureau**, l’image occupe tout l’écran et les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, fermeture) passent dans un **rail latéral gauche rétractable** : une poignée au bord de l’écran le déploie ou le replie. Le curseur du poste reste affiché et aligné en plein écran comme au retour. Le nouvel onglet ouvre une **console dédiée**, sans la navigation du portail : une petite barre d’outils et tout l’espace disponible pour le poste. La fiche de l’appareil reste ouverte dans son onglet ; chaque console dispose de sa connexion indépendante.
+<a id="fonctionnement"></a>
 
-L’agent loco 2.4 ou ultérieur établit lui-même les connexions HTTPS sortantes vers loco, avec l’autorité du serveur épinglée. Aucun port entrant sur le poste, compte SSH, serveur VNC distinct ni accès Proxmox n’est nécessaire. À partir de la version **2.158**, l’agent et le navigateur gardent une **connexion persistante** (WebSocket, sur le même port HTTPS) avec loco : le serveur les prévient dès qu’une session est demandée, qu’une touche est frappée ou que le poste répond, au lieu d’attendre leur prochain relevé — une session s’ouvre aussitôt, la frappe répond plus vite et plus aucune requête ne part à vide. Rien à ouvrir ni à régler : si cette connexion n’est pas possible (agent plus ancien, équipement réseau qui la coupe, port local 8090 du serveur déjà pris), la session passe par des allers-retours HTTPS comme auparavant, sans coupure. Le terminal utilise un vrai PTY Linux ou ConPTY Windows, avec un shell **root** ou **PowerShell SYSTEM** selon le compte du service.
+## Comment ça marche
 
-Le bureau se règle par deux menus indépendants, mémorisés par le navigateur. **Résolution** : *Adaptée à la fenêtre* (par défaut) change la résolution du bureau Windows pour remplir la fenêtre, **sans jamais d’ascenseurs** : si le pilote impose un mode un peu différent, l’image est ajustée ; *Résolution du poste* garde — et rétablit — la résolution d’origine. **Zoom** : *Ajuster*, ou 50 à 200 %. En résolution adaptée, le zoom agrandit l’interface du poste (comme la mise à l’échelle de Windows) tout en remplissant la fenêtre ; en résolution du poste, il agrandit l’image, avec défilement au-delà de la fenêtre (100 % : un pixel du poste par pixel de l’écran). La résolution et le pourcentage obtenus restent affichés, et le curseur du poste suit la même échelle. À partir de l’agent Windows **2.13.1**, la résolution adaptée reconfigure temporairement le bureau selon les modes du pilote, puis restaure la résolution initiale à la fermeture ; une seule session la modifie, les postes multi-moniteurs conservent leur configuration et une demande faite pendant l’UAC attend le retour au bureau. Avec l’adaptateur VGA standard d’une machine virtuelle (une seule résolution), préférer VirtIO-GPU et son pilote virtio-win. Un ancien agent ou un bureau X11 conserve l’ajustement local ; la console texte Linux 2.13 ou plus récente adapte réellement le PTY.
+```mermaid
+flowchart LR
+    vous(["Vous<br>un navigateur, un assistant IA"])
+    postes["Vos postes<br>Windows · Linux · Android"]
+    net(("Internet"))
 
-**Plusieurs écrans** : quand le poste en a plus d’un, une liste **Écran** apparaît à côté de *Résolution* — *Tous les écrans* (côte à côte, comme auparavant) ou un seul, désigné par son numéro, sa taille et la mention *principal*. L’image prend la taille de l’écran choisi, la souris et le clavier restent justes, et le choix est retenu par poste dans le navigateur : la session suivante rouvre sur le même écran. Sous Windows, les numéros sont ceux des paramètres d’affichage, et un écran seul est lu par duplication DXGI comme un poste à un écran. Disponible à partir de l’agent **2.162.0** sous Windows et sur un bureau Linux X11, **2.163.0** sur KDE Plasma en Wayland ; un écran débranché en cours de session rend la vue à tous les écrans. Sur KDE Plasma, la liste apparaît quand le partage accordé sur le poste est **Espace de travail complet** (première tuile de la fenêtre « Partage d’écran ») : loco découpe alors chaque écran dans cette image. Si un seul écran a été accordé, loco ne montre que lui — souris à la bonne place, même à côté d’autres écrans ; pour changer d’avis, supprimer `~/.config/loco/portal-token` sur le poste : la session suivante redemande l’accord. GNOME en Wayland montre son écran principal.
+    subgraph serveur ["Le serveur loco, chez vous"]
+        direction TB
+        portail["Portail<br>HTTPS"]
+        depots["Dépôts signés<br>et catalogue de logiciels"]
+        caches["Caches<br>Windows Update · APT · RPM · Flathub"]
+    end
 
-Une pastille indique l’état de la session et la latence vers le serveur ; une superposition accompagne l’ouverture et propose, en fin de session, d’en ouvrir une nouvelle en un clic. À partir de l’agent Windows **2.17**, l’écran est lu par **duplication DXGI** : seulement quand il change, avec les zones modifiées, et la demande d’image reste en attente tant que rien ne bouge (aucun trafic ni calcul sur un bureau immobile). GDI prend le relais sur le bureau sécurisé, avec plusieurs écrans ou un pilote sans duplication. Les zones d’interface (texte, aplats, icônes) sont transmises **sans perte** (Tight zlib), les zones complexes (photos, dégradés, fonds d’écran) en **JPEG** ; un écran immobile n’est pas retransmis. Sur les machines dont le pilote d’affichage n’a pas de curseur matériel (VM, adaptateur de base), Windows dessine son curseur dans l’image : l’agent le reconnaît et le navigateur n’en affiche alors qu’un point de repère, au lieu d’une seconde flèche décalée. Le **presse-papiers texte** est partagé dans les deux sens (agent Windows 2.15) via le panneau *Presse-papiers* : le texte copié sur le poste s’affiche dans le navigateur (et, s’il l’autorise, dans le presse-papiers local) ; *Envoyer au poste* place un texte dans le presse-papiers du poste. Une option envoie automatiquement le presse-papiers local au poste à chaque clic sur le bureau. Uniquement sur le bureau utilisateur, jamais sur le bureau sécurisé ; rien n’est conservé par loco.
-
-Le bureau partage la session graphique existante : session interactive sous **Windows 11 et Windows Server 2022/2025**, ou bureau graphique sous Linux : **X11** (bibliothèques X11 et XTest requises), **GNOME en Wayland** (bureau à distance de Mutter, images par PipeWire et GStreamer ; GNOME affiche son indicateur de partage d’écran pendant la session) compositeur Wayland **wlroots** comme Sway ou Hyprland (`grim`, embarqué dans le paquet `.deb` de l’agent — donc présent même sur un poste hors-ligne —, et `/dev/uinput`), ou **KDE Plasma en Wayland** (portail `xdg-desktop-portal` : capture par ScreenCast/PipeWire et saisie par `/dev/uinput` ; un accord de partage d’écran est demandé sur le poste la première fois, puis mémorisé pour les sessions suivantes). Les autres compositeurs Wayland ne sont pas pris en charge. L’agent Windows 2.13 permet également le contrôle du bureau sécurisé (UAC, connexion/verrouillage) dans la session interactive. Un Linux sans session graphique peut ouvrir la console texte décrite ci-dessous.
-
-Dans la même fiche, l’onglet **Fichiers** ouvre un **gestionnaire de fichiers** du poste (agent loco **2.23** ou ultérieur) : parcourir l’arborescence, téléverser (bouton ou glisser-déposer), télécharger, créer un dossier, renommer, copier, déplacer, supprimer, modifier un fichier texte dans l’éditeur intégré et, sous Linux, ajuster les droits (octal). Fil d’Ariane, raccourcis vers la racine et le dossier personnel, affichage optionnel des fichiers cachés et progression par transfert. Comme le terminal et le bureau, tout passe par le même relais HTTPS sortant : l’agent exécute chaque opération en **root** (SYSTEM sous Windows) et le serveur ne se connecte jamais au poste. Le rafraîchissement automatique de la fiche est suspendu tant que l’onglet reste ouvert, pour ne pas interrompre un transfert ou une édition.
-
-Les sessions nécessitent le droit **Terminal distant**, **Bureau noVNC** ou **Gérer les fichiers du poste**, selon le type choisi, et restent liées à la connexion au portail. Le profil Administrateur possède ces droits ; les autres profils doivent les recevoir explicitement. La fermeture de l’onglet, la déconnexion, le retrait de l’agent ou la révocation des droits les coupe. Elles expirent après une heure, après une minute sans navigateur ou après une perte prolongée du contact avec l’agent. Deux sessions de chaque type peuvent coexister par poste, dans une limite de huit sessions pour le serveur. Recharger la page ferme l’ancien flux ; **Nouvelle session** permet de repartir proprement.
-
-Sur un Linux sans session graphique, ou arrêté à l’écran de connexion de GNOME, **Console noVNC** ouvre automatiquement une **console texte root** rendue en RFB par l'agent 2.7 ou plus récent : shell interactif, couleurs ANSI, flèches, tabulation et Ctrl+C. Aucun serveur X ni port VNC n'est nécessaire. Le droit **Terminal distant** est requis en plus du droit **Bureau noVNC** ; sans lui, aucun shell n'est lancé. Cette console privée ne remplace pas le terminal physique du poste. L’écran démarre à 128 colonnes × 40 lignes (1024 × 640 pixels) et adapte le PTY et ses pixels à la fenêtre avec l’agent 2.13, avec glyphes latins et tracés de tableaux ; utilisez le terminal habituel pour la sélection/copie de texte, le défilement et les autres écritures.
-
-La console texte embarque les sources de [pyte](https://pyte.readthedocs.io/en/stable/) (LGPLv3), wcwidth (MIT) et font8x8 (domaine public), avec leurs licences dans `portal/agents/console` ; aucun téléchargement de dépendance n'est effectué sur le poste.
-
-Sur Windows, l’agent 2.13 suit le bureau sécurisé lors d’une demande UAC et revient ensuite au bureau utilisateur. Le contrôle graphique s’exécute sous SYSTEM dans la session interactive ; le tray reste non privilégié. Les transitions momentanément indisponibles suspendent la capture et la saisie sans fermer la session. Aucune stratégie UAC n’est désactivée.
-
-Le **panneau de commandes** de la console noVNC envoie **Ctrl+Alt+Suppr** et les raccourcis courants (menu Démarrer, Exécuter, Explorateur, Afficher le bureau, Verrouiller, Gestionnaire des tâches, Alt+Tab, Alt+F4, Échap, Impr. écran, menu contextuel). Les touches Ctrl, Alt, Maj et Win peuvent être maintenues jusqu’au clic suivant. **Envoyer du texte** tape un texte caractère par caractère, quelle que soit la disposition du clavier du poste (mots de passe, commandes) ; rien n’est conservé. Sous Windows, la séquence sécurisée n’est acceptée que d’un service : le compagnon de bureau la signale au service loco-client, qui l’envoie uniquement pendant une session de bureau à distance (agent 2.14).
-
-Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
-
-</details>
-
-## Scripts
-
-**Mon parc → Scripts** regroupe une bibliothèque de scripts **PowerShell** (Windows) et **shell** (Linux) avec leur description, leur auteur et leur version : chaque changement de contenu ou de système crée une nouvelle version. **Exécuter** ouvre la sélection des appareils et des groupes de machines ; seuls les postes actifs du bon système sont retenus. La version relue doit être celle exécutée : un script modifié entre-temps impose de le revoir.
-
-Le contenu envoyé est figé à l’exécution avec son empreinte SHA-256, vérifiée par l’agent avant de lancer le script en **SYSTEM** (PowerShell sans profil) ou **root** (`/bin/sh`, ou l’interpréteur de la première ligne `#!`), avec un délai de 30 minutes. La page de l’exécution suit chaque poste en direct : état, code de retour, sortie standard et erreurs. Les postes qui n’ont pas encore reçu le script peuvent être annulés ; un script déjà transmis se termine. Les résultats restent consultables après la suppression du script.
-
-Les droits **Consulter les scripts**, **Gérer les scripts** et **Exécuter des scripts** sont distincts ; les deux derniers sont sensibles et réservés par défaut aux administrateurs. Le droit d’exécution est revérifié avant la transmission à l’agent. Agents Windows et Linux 2.14 ou plus récents.
-
-## Annuaires et SSO
-
-Dans **Administration → Annuaires et SSO**, ajoutez un annuaire **LDAP** (Active Directory, OpenLDAP, 389 DS, FreeIPA…) ou un serveur **RADIUS** (NPS, FreeRADIUS…) : les utilisateurs se connectent avec leur identifiant et leur mot de passe habituels, **depuis le formulaire de connexion de loco** ; un identifiant inconnu de loco est essayé dans l’ordre des annuaires actifs (boutons **Monter**). Ajoutez aussi un fournisseur **OpenID Connect** (**Authentik**, Keycloak, Zitadel, Authelia, Microsoft Entra ID…) : un bouton **Se connecter avec …** apparaît sur la page de connexion.
-
-- **LDAP** : adresse `ldaps://` (recommandé) ou `ldap://` avec **StartTLS** obligatoire, le mot de passe ne circule jamais en clair ; certificat vérifié avec les autorités du système ou l’autorité PEM fournie. Avec un **compte de service**, loco recherche l’utilisateur (base et filtre, modèles Active Directory et OpenLDAP) puis vérifie son mot de passe par une liaison ; sans compte de service, il se lie directement avec un modèle (`{username}@entreprise.local` ou `uid={username},ou=people,dc=exemple,dc=org`). Le nom affiché et le courriel sont relus à chaque connexion. Les identifiants sont échappés dans le filtre (RFC 4515) et un mot de passe vide est refusé.
-- **RADIUS** : authentification PAP (RFC 2865) avec le secret partagé ; loco envoie et **exige l’attribut Message-Authenticator** dans les réponses (protection BlastRADIUS, RFC 3579). Sur NPS ou FreeRADIUS, déclarez loco comme client RADIUS et activez cet attribut dans les réponses.
-- **Authentik / OpenID Connect** : dans Authentik, créez une application avec un fournisseur **OAuth2/OpenID** de type **Confidentiel**, l’URL de redirection affichée par loco (mode strict) et le type d’autorisation **Authorization Code** ; recopiez dans loco l’émetteur (`https://authentik.exemple.fr/application/o/<slug>/`), l’identifiant et le secret client. Flux « code » avec **PKCE** (S256), `state` et `nonce` liés au navigateur ; jeton d’identité vérifié (signature RSA, ECDSA ou EdDSA par les clés publiées, ou HS256 avec le secret client quand le fournisseur Authentik n’a pas de clé de signature ; émetteur, audience, expiration). Le certificat auto-signé d’Authentik se colle tel quel (il est alors **épinglé**), comme l’autorité de votre réseau. Aucun jeton n’est conservé ; mot de passe, double authentification et règles d’accès restent gérés par le fournisseur.
-- **Configurer Authentik** crée ou met à jour le fournisseur et l’application, sans doublon, avec un jeton API temporaire qui n’est ni stocké ni journalisé, puis enregistre le client. Le certificat d’Authentik est vérifié avant l’envoi du jeton, et une autorité récupérée doit être confirmée par son empreinte. Les changements sont montrés avant d’être appliqués, et aucune URL de retour n’est supprimée sans confirmation. Sans jeton, loco prépare un blueprint à coller.
-- **Vérifier la configuration** (OpenID Connect) contrôle depuis le serveur, sans connexion ni compte créé : résolution du nom, connexion, certificat (intermédiaire ou racine manquants), découverte, clés, client et secret, URL de retour et flux « code ». Chaque étape donne son état et sa correction. Ce contrôle part aussi à l’enregistrement du fournisseur.
-- **Tester** vérifie la connexion à l’annuaire et un compte, sans créer de demande ; le résultat est journalisé sans le mot de passe. Pour OpenID Connect, c’est une vraie connexion chez le fournisseur, qui affiche l’identité reçue (identifiant proposé, nom, courriel, groupes) ; elle fonctionne aussi avant l’activation.
-
-Un administrateur à compte local peut **lier son compte** à son identité chez le fournisseur, depuis *Mon compte › Connexion SSO* : son mot de passe, ses droits et sa double authentification restent en place. Dans les options d’un fournisseur OpenID Connect, des lignes `groupe = profil` **proposent** un profil à l’approbation d’une demande, sans rien accorder seules.
-
-La première connexion d’une identité crée un compte **sans accès**, en tête de **Comptes**. Une personne disposant du droit **Approuver les comptes d’annuaire** choisit son profil puis l’approuve. Aucune correspondance de nom ou de courriel ne fusionne un compte local avec une identité d’annuaire, et les groupes de l’annuaire n’attribuent aucun droit loco. Un compte d’annuaire change son mot de passe dans l’annuaire. **Les comptes locaux restent toujours disponibles** pour administrer loco.
-
-Les secrets (mot de passe du compte de service, secret partagé, secret client) sont chiffrés avec une clé dérivée de la clé de session du serveur, conservée dans ses sauvegardes, et ne sont jamais réaffichés. Modifier ou désactiver un annuaire ferme les sessions de ses comptes ; le supprimer les désactive. Les droits **Gérer les annuaires** et **Approuver les comptes d’annuaire** sont distincts et attribués aux administrateurs par défaut.
-
-Les connexions OpenID Connect d’avant la 2.14 (retirées alors, revenues en 2.112 sous cette forme) ne sont pas reprises : leurs comptes restent sans accès. Dans **Comptes**, **Mot de passe local** leur donne un mot de passe temporaire ; ou supprimez-les et laissez la personne refaire une demande avec le bouton du fournisseur.
-
-## Serveur MCP
-
-loco expose un **serveur MCP** (Model Context Protocol, le protocole par lequel un LLM appelle des outils) : un LLM consulte et pilote loco depuis son **client MCP** — Claude Code, Cursor, VS Code ou tout client qui accepte un en-tête d’authentification. Dans **Administration → Serveur MCP**, créez un **jeton** par client et activez un à un les outils qu’il ouvre. Le LLM peut alors répondre à « quels postes attendent des mises à jour ? », lancer celles-ci, lire un journal système ou ouvrir le terminal d’un poste, dans les limites du jeton. Les clients qui se connectent depuis le cloud de leur éditeur (claude.ai, ChatGPT) ne joignent pas un loco installé sur un réseau local.
-
-- **Outil par outil** : chaque jeton n’ouvre que les outils activés (lister ou consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, exécuter des commandes écrites par le LLM, shell adb d’un appareil Android, état du serveur, journal…). La fenêtre du jeton les range par domaine, avec leur nom MCP (`list_devices`, `terminal_run`…) et un repère **action** ou **sensible** ; préréglages **Lecture seule**, **Tout ce que je peux** ou **Rien**.
-- **Accès distant en direct**, par les mêmes sessions que l’interface (droits **Ouvrir un terminal distant**, **Gérer les fichiers du poste**, **Ouvrir le bureau noVNC**) :
-  - **terminal** : commande ou script (jusqu’à 64 Ko) dans le bash root (Linux) ou le PowerShell SYSTEM (Windows) du poste, sortie et code de sortie en quelques secondes, interrompue (Ctrl+C) au-delà du délai choisi (jusqu’à 5 min) ;
-  - **terminal interactif** : le LLM tape et appuie sur des touches (`{enter}`, `{ctrl+c}`, `{esc}`, flèches…) et lit l’écran du terminal (120 × 40), pour vim, top, les invites oui/non ou PowerShell ; la session garde son état d’un appel à l’autre ;
-  - **fichiers** : parcourir, lire (texte ou base64), écrire (remplacement atomique), créer un dossier, copier, déplacer, renommer, changer les droits, supprimer — outils distincts pour la lecture, l’écriture, l’organisation et la suppression ;
-  - **bureau** : capture d’écran renvoyée en image au LLM (bureau Windows ou Linux, y compris GNOME en Wayland, écran de verrouillage, console texte d’un poste sans affichage ; zoom sur une zone), clic, saisie de texte, touches et raccourcis (Ctrl+Alt+Suppr compris), molette — chaque action renvoie une nouvelle capture.
-
-  Une session par jeton, poste et type est réutilisée d’un appel à l’autre et se ferme après 5 minutes sans appel (2 pour le bureau) ; révoquer ou modifier le jeton la ferme aussitôt. Une personne passe avant le client MCP : si la limite de sessions du poste est atteinte, ouvrir une session depuis l’interface ferme d’abord les sessions MCP inactives. Un poste visé par un appel MCP est « préchauffé » une minute (relevé toutes les 2 s) pour que la session suivante s’ouvre vite, et l’agent espace ses relevés quand une session reste silencieuse. Après la première capture, seules les zones modifiées de l’écran transitent ; la saisie de texte suit la disposition réelle du clavier du poste (AZERTY, touches mortes, AltGr). Chaque commande, écriture, suppression et action sur le bureau entre au journal (le texte saisi n’y figure pas).
-- **Jamais plus que son créateur** : un jeton est rattaché au compte qui le crée ; ses droits effectifs sont, à chaque appel, les outils activés **et** permis par le profil actuel de ce compte. Compte désactivé, supprimé ou à finaliser, annuaire coupé, jeton expiré ou révoqué : refus immédiat. L’agent du poste revérifie aussi les droits du compte avant d’exécuter.
-- **Jeton montré une seule fois** (loco n’en garde qu’une empreinte), avec la commande `claude mcp add` et la configuration JSON déjà remplies. Expiration au choix (30 jours, 90 jours, 1 an, jamais).
-- **Traçabilité** : chaque action passe par les mêmes fonctions que l’interface et entre au journal avec le nom du jeton (« · MCP « Claude Code » ») ; une commande écrite par le LLM est gardée telle quelle dans l’historique des scripts (« MCP : … »). La liste des jetons montre le dernier appel de chacun (date, adresse, client).
-- **Protocole** : `https://<serveur>:8443/mcp`, transport HTTP « Streamable HTTP » sans session, en-tête `Authorization: Bearer <jeton>`. loco répond aux deux générations de MCP : la poignée de main `initialize` (2025-03-26 à 2025-11-25) et la génération 2026-07-28 (`server/discover`, métadonnées par requête). Servi uniquement en HTTPS, derrière les mêmes réseaux autorisés que l’interface ; une page web d’une autre origine est refusée. Les clients Node.js qui ne connaissent pas le certificat de loco l’acceptent avec `NODE_EXTRA_CA_CERTS=ca.crt` (autorité téléchargeable sur `/ca.crt`).
-
-Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de créer ses propres jetons et de révoquer ceux des comptes que l’on gère. Fonction désactivable dans **Fonctionnalités** (« Serveur MCP »).
-
-## Fonctionnalités
-
-**Administration → Fonctionnalités**, réservé aux comptes au profil **Administrateur** (tout administrateur, quel que soit son nom ou son origine), active ou désactive des pans entiers de loco : paquets APT, RPM et Flatpak, cache Windows Update, Mon parc et agents, logiciels Windows, accès distant, scripts, annuaires, alertes et serveur MCP. Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d’ensemble ; ses pages et API sont refusées avec un message explicite et ses droits deviennent inopérants. Les agents reçoivent « réessayer plus tard » quand le parc est coupé ; installations et scripts attendent la réactivation. Les dépendances sont appliquées (accès distant et scripts suivent le parc). Sur l’appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés. Les données sont conservées et chaque changement est journalisé.
-
-Deux sections à part, coupées par défaut : **Expérimental** (ce qui est encore en maturation, comme les appareils Android) et **Facultatif** (ce qui est abouti mais ne concerne pas tout le monde, comme Home Assistant).
-
-## Home Assistant
-
-**Facultatif** — à activer dans *Fonctionnalités › Facultatif*. loco se relie à votre Home Assistant par son module SSH, avec une clé qui lui est propre (aucun jeton de Home Assistant n’est demandé ni gardé), après que vous avez confirmé l’empreinte de sa clé d’hôte. La page **Home Assistant** montre les versions du cœur, du système et du Supervisor, les modules complémentaires, les sauvegardes et ce que signale le Supervisor ; elle lance les mises à jour (une à une ou toutes, dans l’ordre conseillé, avec sauvegarde avant), une sauvegarde complète, le redémarrage de Home Assistant ou du système, lit son journal et ouvre un terminal dans la page de session de loco. Chaque action a son droit dans les profils d’accès ; la vue d’ensemble signale les mises à jour disponibles et une liaison en échec. Voir [docs/homeassistant.md](docs/homeassistant.md).
-
-## Mon compte et apparence
-
-**Mon compte** présente le profil, le type de compte et ses dates, avec quatre onglets : **Sécurité** (changement du mot de passe avec ses règles vérifiées en direct, **clés d’accès**, **double authentification** par application TOTP avec codes de secours), **Apparence**, **Mes droits** (regroupés par domaine) et **Activité récente** (dix dernières actions du compte). La fenêtre **Apparence** (menu du compte) propose six thèmes — **OLED**, **Sombre doux**, **Minuit**, **Clair**, **Sépia** et **Sapin** —, huit **couleurs d’accent**, la **transparence** des panneaux, des **fonds** (dégradés, photos, image personnelle) et des presets ; le choix est enregistré sur le compte et le suit d’un navigateur à l’autre.
-
-**Clés d’accès (passkeys)** : un compte local peut se connecter sans mot de passe, avec son téléphone, son ordinateur ou une clé de sécurité (WebAuthn/FIDO2). La clé s’ajoute dans *Mon compte › Sécurité › Clés d’accès* (le mot de passe actuel est redemandé, dix clés au plus par compte), puis la page de connexion propose **Se connecter avec une clé d’accès**. L’appareil vérifie la personne (empreinte, visage ou code) à chaque usage : la clé vaut mot de passe et second facteur, et loco n’en garde que la partie publique. Le mot de passe reste utilisable. Deux conditions, imposées par les navigateurs : loco doit être ouvert par un **nom** — celui de *Système › Réseau › Adresse du portail*, jamais une adresse IP — et son **certificat** doit être reconnu par le navigateur (autorité de loco installée sur l’appareil, ou certificat de votre autorité). Ailleurs, la page l’explique et ne propose pas le bouton. Appareil perdu : la personne retire la clé dans *Mon compte*, ou un administrateur le fait depuis *Comptes* (*Retirer les clés d’accès*, ou `loco-user passkeys-reset NOM`) ; réinitialiser un mot de passe retire aussi les clés du compte. Les comptes d’annuaire et SSO gardent les règles de leur fournisseur.
-
-**Apparence de l’instance** (*Administration → Apparence*, droit *Configurer le serveur*) : l’identité de l’entreprise et le cadre des choix de chacun. À l’installation, tout est proposé, comme ci-dessus, et l’apparence par défaut est le preset **Brume** (thème *Sombre doux*, sans couleur d’accent).
-- **Identité** : **logo** (en-tête, écran de connexion, icône de l’onglet), **couleur de l’entreprise** (proposée comme couleur d’accent ; le texte posé dessus passe en noir ou en blanc selon sa clarté) et **fond de l’entreprise** (image proposée dans les fonds, servie aussi à l’écran de connexion).
-- **Apparence par défaut** : thème, couleur, fond et opacité des nouveaux comptes et du bouton *Réinitialiser*.
-- **Écran de connexion** : il suit l’apparence par défaut ou reçoit la sienne, y compris un thème non proposé aux comptes. *Appliquer à la connexion*, dans la fenêtre **Apparence**, lui donne celle que vous êtes en train d’essayer.
-- **Choix laissés à chacun** : les **thèmes proposés** (par exemple un clair et un sombre seulement), la couleur d’accent et le fond **au choix ou imposés**. Rien n’est supprimé : un thème décoché est seulement masqué, et ce qui n’est plus proposé est remplacé à l’affichage par l’apparence par défaut, sans toucher aux réglages enregistrés des comptes. *Réglages d’origine* rétablit tous les choix.
-
-## Utilisateurs et profils d’accès
-
-Six profils intégrés (Administrateur, Lecture seule, Opérateur, Gestionnaire des dépôts, Auditeur, Sans accès)
-et **plus de 60 permissions** granulaires ; profils personnalisables, **limités à une partie du parc** si besoin (groupes de
-machines et postes choisis), et délégation qui respecte les droits et le parc de chacun.
-
-<details>
-<summary><b>Lire le détail</b></summary>
-
-Dans **Administration → Comptes**, attribuez un profil à chaque utilisateur. **Profils d’accès** permet de consulter les droits, dupliquer un modèle et créer ou modifier vos propres profils. Les comptes existants conservent leur profil et leur mot de passe à la mise à jour.
-
-| Profil intégré | Accès par défaut |
-|---|---|
-| Sans accès | Aucun droit ; profil initial des comptes d’annuaire en attente. |
-| Administrateur | Tous les droits actuels et futurs ; profil protégé. |
-| Lecture seule | Vue d’ensemble, appareils, caches et catalogues locaux. |
-| Opérateur | Lecture seule, inventaires, mises à jour individuelles et déploiement de logiciels. Les redémarrages, actions sur tout le parc, retraits d’agents et consoles distantes demandent leurs propres droits. |
-| Gestionnaire des dépôts | Gestion des paquets et installeurs APT, RPM, Flatpak, Windows et du centre de logiciels ; aucun déploiement sur les appareils. |
-| Auditeur | Consultation, système, comptes, profils, journal et son export JSON ; aucune modification. |
-
-Les permissions distinguent la consultation et les actions : création, import, copie et suppression de paquets ; ajout, édition et actualisation des logiciels ; inventaire, mise à jour, déploiement, redémarrage et retrait des appareils ; action sur tout le parc ; terminal et bureau distant ; consultation, gestion et exécution des scripts ; configuration, mises à jour et redémarrage du serveur ; consultation, création, modification, réinitialisation et suppression des comptes ; gestion des profils et des annuaires ; lecture, export et durée de conservation du journal. Elles s’appliquent aux pages, API et requêtes directes, ainsi qu’à la navigation et aux boutons visibles.
-
-L’éditeur organise les droits par domaine avec navigation directe, recherche, filtres « accordés » et « sensibles », compteurs et sélection des droits visibles d’une catégorie. La barre d’enregistrement reste accessible en bas de page. Cocher une action sélectionne ses prérequis ; retirer un prérequis retire les actions qui en dépendent, avec indication des ajustements automatiques. Les droits de consultation nécessaires sont aussi ajoutés automatiquement à l’enregistrement côté serveur. Un profil vide laisse l’utilisateur accéder à **Mon compte** et changer son mot de passe. Les profils intégrés restent protégés ; dupliquez-les pour les adapter. Un profil personnalisé ne reçoit aucun nouveau droit automatiquement lors des futures versions.
-
-La délégation respecte les droits de la personne qui administre : elle peut attribuer uniquement des profils dont elle possède tous les droits, et gérer uniquement des comptes dans cette limite. Seul un Administrateur complet peut attribuer le profil Administrateur ou gérer un autre administrateur. Changer son propre profil, désactiver ou supprimer son propre compte et modifier le profil qui protège son accès sont bloqués. Il doit rester au moins un administrateur local actif, y compris lors de modifications simultanées.
-
-Changer les droits d’un profil ferme les connexions de tous ses membres et leurs sessions distantes. Changer le profil d’un compte, le désactiver ou réinitialiser/changer son mot de passe révoque aussi ses accès. Ses commandes encore en attente sur le serveur sont annulées avant transmission aux agents ; les opérations déjà transmises peuvent se terminer. Les connexions et les droits sont contrôlés à nouveau à chaque requête, et avant l’envoi d’une commande à un agent. Le journal conserve les changements de comptes, de profils et de permissions.
-
-**Parc accessible.** Chaque profil personnalisé couvre **tout le parc** (par défaut) ou des **groupes et postes choisis** : les postes ajoutés plus tard à un groupe choisi y entrent d’eux-mêmes. Ses comptes ne voient et ne visent que ces postes, partout — Mon parc, fiche, recherche, vue d’ensemble, groupes (réduits à leurs postes), déploiements, scripts et leur historique, planifications, sessions distantes et jetons MCP, dont les outils suivent le parc du compte qui les a créés. Un poste hors parc répond « introuvable » ; un déploiement, une exécution de script ou une planification qui en vise un reste invisible. Une planification applique à chaque occurrence le parc de son auteur, et un profil limité ne peut pas viser « Tout le parc ». Gérer les groupes de machines et configurer le parc (clé d’inscription, adresses, seuils) sont réservés aux profils qui couvrent tout le parc, puisque les groupes définissent le parc des autres. Un gérant limité ne crée ou n’attribue que des profils dont les groupes et postes sont dans les siens. Changer le parc d’un profil reconnecte ses comptes ; une session distante dont le poste sort du parc se ferme. Les profils intégrés couvrent tout le parc ; le journal reste global.
-
-Ces permissions portent sur le portail. Les dépôts et caches destinés aux postes conservent leur contrôle d’accès par réseau.
-
-Depuis la console d’administration :
-
-```bash
-sudo loco-user roles                         # identifiants des profils disponibles
-sudo loco-user add alice viewer              # mot de passe temporaire
-sudo loco-user set-role alice operator       # attribution ou récupération d’un profil
-sudo loco-user passwd admin                  # récupérer l’accès au compte admin
+    vous --> portail
+    postes -->|"l'agent appelle le serveur"| portail
+    postes -->|"logiciels, paquets maison"| depots
+    postes -->|"mises à jour"| caches
+    caches ==>|"une seule fois"| net
 ```
 
-Sur Windows natif, utilisez `loco user …` ; sur l’appliance Alpine, `loco-user …` en root.
+- **Les postes appellent le serveur.** Jamais l'inverse : rien à ouvrir sur les postes, rien à exposer sur Internet.
+- **Tout est vérifié.** Dépôts signés, installeurs contrôlés par empreinte SHA-256, autorité du serveur épinglée par les agents.
+- **Rien ne sort.** Vos inventaires, vos journaux et vos clés restent sur votre serveur.
 
-</details>
+<br>
 
-## Journal
+<a id="documentation"></a>
 
-La page *Administration › Journal* trace les connexions et les actions, avec le compte et l'adresse d'origine.
+## Documentation
 
-- **Lecture** : événements groupés par jour, actions en clair (« Adresse du serveur annoncée aux agents ») et
-  catégorie ; filtres par période (aujourd'hui, 7 jours, 30 jours, dates au choix), catégorie (connexions, parc,
-  accès distant, logiciels, dépôts Linux, Windows Update, scripts, comptes et annuaires, serveur), compte, échecs seulement et recherche
-  dans les détails ; pages de 100 événements. Les échecs de connexion des dernières 24 heures sont signalés en tête.
-- **Export JSON** de la vue filtrée, d'une période (dates incluses) ou du journal entier : serveur, période, filtres,
-  auteur de l'export et événements (date, compte, adresse, action et son libellé, détail). Chaque export est
-  lui-même journalisé.
-- **Conservation** réglable (7 jours à 2 ans, ou sans limite), **30 jours par défaut** : les événements plus anciens
-  sont supprimés au démarrage du portail puis au plus une fois par heure. Exportez-les avant de réduire la durée.
-- Droits distincts : *Consulter le journal*, *Exporter le journal* (inclus dans le profil Auditeur) et *Configurer la
-  conservation du journal*.
+<table>
+<tr>
+<td width="33%" valign="top">
+<h4>Mettre en place</h4>
+<img src="docs/media/icones/installation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/installation.md">Installer loco</a></b><br><sub>Les cinq installations et leurs options.</sub><br><br>
+<img src="docs/media/icones/linux.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/linux.md">Serveur Linux en entreprise</a></b><br><sub>Réseau, GPO, proxy, Docker, LXC, Rocky, ISO.</sub><br><br>
+<img src="docs/media/icones/windows.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/windows.md">Serveur Windows</a></b><br><sub>Installation, limites, dimensionnement.</sub><br><br>
+<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/postes.md">Brancher les postes</a></b><br><sub>Dépôts, caches, Windows Update.</sub><br><br>
+<img src="docs/media/icones/haute-disponibilite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/haute-disponibilite.md">Haute disponibilité</a></b><br><sub>Deux serveurs, une seule adresse.</sub><br><br>
+</td>
+<td width="33%" valign="top">
+<h4>Utiliser</h4>
+<img src="docs/media/icones/parc.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/parc.md">Mon parc</a></b><br><sub>Agent, mises à jour, vagues, blocages, scripts.</sub><br><br>
+<img src="docs/media/icones/logiciels.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/logiciels.md">Logiciels Windows</a></b><br><sub>Catalogue, groupes, déploiements.</sub><br><br>
+<img src="docs/media/icones/distance.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/sessions-distantes.md">Sessions distantes</a></b><br><sub>Bureau, terminal, fichiers.</sub><br><br>
+<img src="docs/media/icones/comptes.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/comptes.md">Comptes, profils et SSO</a></b><br><sub>Droits, annuaires, apparence.</sub><br><br>
+<img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">Serveur MCP</a></b><br><sub>Brancher un assistant IA.</sub><br><br>
+<img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Appareils, applications, écran distant.</sub><br><br>
+<img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>Liaison SSH, mises à jour, sauvegardes.</sub><br><br>
+</td>
+<td width="33%" valign="top">
+<h4>Faire tourner</h4>
+<img src="docs/media/icones/exploitation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/exploitation.md">Exploiter loco au quotidien</a></b><br><sub>Routine, sauvegardes, mises à jour, incidents.</sub><br><br>
+<img src="docs/media/icones/journal.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/journal.md">Journal et syslog</a></b><br><sub>Ce qui est tracé, où l'envoyer.</sub><br><br>
+<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="SECURITY.md">Sécurité</a></b><br><sub>Le modèle, ses limites, signaler une faille.</sub><br><br>
+<h4>Contribuer</h4>
+<img src="docs/media/icones/developpement.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/developpement.md">Développement</a></b><br><sub>Dépôt, tests, publication.</sub><br><br>
+<img src="docs/media/icones/serveur.svg" width="22" align="top" alt=""> &nbsp;<b><a href="CHANGELOG.md">Changelog</a></b><br><sub>Toutes les versions, une par une.</sub><br><br>
+</td>
+</tr>
+</table>
 
-### Envoi vers un serveur syslog
+<br>
 
-*Administration › Envoi syslog* envoie vers votre serveur syslog ou votre SIEM, au choix, le **journal de loco**, les **journaux
-des postes**, ou les deux. Format RFC 5424, en TLS (recommandé), TCP ou UDP, avec un bouton pour envoyer un message de test.
+## Sécurité, en bref
 
-- **Journal de loco** : tout ce qui figure dans la page Journal, à partir de l'activation (pas l'historique). Chaque événement
-  porte le compte, l'adresse, l'action et sa catégorie ; un échec part en avertissement, le reste en information.
-- **Journaux des postes** : journald sous Linux, journaux d'événements System et Application sous Windows, au niveau minimal choisi
-  (erreurs, avertissements, notices ou informations). *Toujours inclure la sécurité* ajoute, sous Linux, les messages
-  d'authentification et, sous Windows, les échecs d'audit du journal Sécurité (les réussites aussi à partir du niveau
-  Informations). L'envoi peut être limité à des groupes de machines. Agents 2.124.0 et plus (ils se mettent à jour seuls).
-- **Les postes passent par loco** : ils n'ont pas besoin de joindre le serveur syslog, seulement loco comme d'habitude. L'hôte
-  du message est le nom que loco connaît au poste. Les journaux remontent à chaque contact de l'agent, toutes les 2 à 3 minutes.
-- **Si le serveur syslog est absent**, l'envoi reprend là où il s'était arrêté : rien n'est stocké sur le serveur loco, le
-  retard est rattrapé tant que le journal d'origine conserve les lignes. Syslog n'a pas d'accusé de réception : un événement
-  peut arriver en double après une panne, une coupure brutale peut en perdre quelques-uns, et l'UDP ne garantit jamais l'arrivée.
-- La page montre le dernier envoi, le dernier échec et l'état de chaque poste ; la règle d'alerte *Envoi syslog en échec*
-  prévient après 5 minutes. Droit *Envoyer les journaux vers un serveur syslog*, réservé aux profils qui couvrent tout le parc.
-  En haute disponibilité, seul le principal envoie et le réglage suit la réplication.
+- **Chez vous** — aucune télémétrie ; rien ne quitte le serveur sans que vous l'ayez décidé.
+- **Confiné** — le portail tourne sans privilèges ; un agent séparé revalide chaque opération d'administration.
+- **Signé et vérifié** — dépôts APT, RPM et Flatpak signés, installeurs contrôlés par SHA-256.
+- **Durci** — HTTPS, politique de contenu stricte, protection CSRF, blocage des tentatives de connexion, filtrage par réseau.
+- **Tracé** — connexions, échecs et modifications au journal, avec le compte et l'adresse.
 
-## Haute disponibilité
+Le détail, et ce que loco ne protège pas : **[SECURITY.md](SECURITY.md)**.
 
-Deux serveurs loco, une seule **IP virtuelle** : le **principal** sert le portail, les dépôts et les agents ; le **secours** réplique tout en continu et prend l’IP automatiquement si le principal tombe (keepalived / VRRP). Les postes, le portail et les dépôts ne connaissent que l’IP virtuelle, inchangée lors d’une bascule. Dans **Administration → Serveur → Haute disponibilité** :
-
-- **Mettre en place** : sur le premier serveur, **Activer** demande une IP virtuelle libre et affiche un **code d’appairage** à usage unique ; sur un second serveur neuf (même version de loco), **Rejoindre** avec l’adresse du principal et ce code copie toute la configuration et les dépôts, puis arme la bascule. loco règle lui‑même son adresse sur l’IP virtuelle et étend son certificat à l’IP virtuelle et aux deux serveurs.
-- **Réplication** : configuration, base et dépôts passent **chiffrés** (AES‑256‑GCM) d’un serveur à l’autre, authentifiés par un secret de grappe dont le portail ne garde que l’empreinte. Les caches (Windows Update, APT…) ne sont pas répliqués : ils se reconstruisent. Pendant une mise à jour, le contrôle de santé ne déclenche pas de bascule.
-- **Bascule et supervision** : la page montre le rôle de chaque serveur, qui porte l’IP virtuelle, la fraîcheur de la réplication, l’état de keepalived et les derniers événements. **Basculer vers le secours** fait une bascule volontaire (maintenance planifiée) ; le secours reste passif (en lecture) tant qu’il ne porte pas l’IP virtuelle.
-
-Réservé au droit **Configurer le serveur**. Indisponible avec Docker ; `keepalived` est inclus dans l’appliance et installé à la demande sur Debian/Ubuntu et Red Hat.
-
-## Supervision
-
-Supervision : `https://<ip>:8443/metrics` (Prometheus) et `/healthz`.
-
-## Sécurité
-
-Comptes à rôles, HTTPS, CSP stricte, CSRF, blocage des tentatives, audit, filtrage réseau, processus
-confiné, dépôts signés. Détails et limites : [SECURITY.md](SECURITY.md).
-
-## Développement
-
-```bash
-sudo apt-get install python3-flask apt-utils gnupg createrepo-c rpm
-python3 -m unittest discover -s tests          # portail, dépôts APT et RPM, signatures réelles
-tests/e2e.sh                                   # bout en bout, sur une machine JETABLE uniquement
-tests/vm-e2e.sh debian-13                       # VM jetable ; nécessite QEMU, genisoimage, SSH et curl
-tests/vm-rocky-server-e2e.sh rocky-8             # serveur Rocky 8 natif, SELinux et pare-feu actifs
-tests/vm-rpm-e2e.sh rocky-9                     # serveur Debian 13 + poste Rocky 9, deux VM jetables
-tests/vm-docker-e2e.sh                          # image Docker et docker compose dans une VM Debian 13 jetable
-```
-
-### Intégration continue et publication
-
-Tout tourne sur les machines de GitHub : un fork n'a besoin d'aucun secret, d'aucun serveur ni d'aucun réglage
-(il suffit d'activer *Actions* sur le fork).
-
-| Workflow | Quand | Contenu | Durée |
-|---|---|---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | chaque push et pull request | `shellcheck`, `pyflakes`, tests unitaires, syntaxe PowerShell — sans VM | ~3 min |
-| [`integration.yml`](.github/workflows/integration.yml) | push touchant installeurs, agents, ISO ou tests VM ; à la demande ; avant chaque publication | une VM QEMU par entrée de [`tests/platforms.json`](tests/platforms.json) (Debian 12/13, Ubuntu 22.04/24.04/26.04), serveur + poste pour [`tests/rpm-platforms.json`](tests/rpm-platforms.json) (Rocky et AlmaLinux 8/9/10), Docker, serveurs natifs Rocky 8/9/10 et Alpine, ISO de l'appliance (BIOS et UEFI), serveurs Windows 2022/2025 et agent MSI | ~20 min |
-| [`release.yml`](.github/workflows/release.yml) | push d'un tag `vX.Y.Z` | vérifications + intégration complète, puis publication des sources, de l'ISO et de l'agent Windows testés dans ce même run | ~25 min |
-
-Publier une version : mettre à jour `VERSION` dans `portal/loco/config.py` et le [CHANGELOG](CHANGELOG.md), puis
-`git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3`. Rien n'est publié si un test échoue.
-Les images des VM sont vérifiées par leur empreinte officielle avant le démarrage ; les journaux de chaque test
-sont conservés 14 jours. Les tests couvrent la mise à jour depuis 1.9.0, la détection du poste, l'isolation des
-paquets, Flatpak, une restauration et la désinstallation.
-
-Historique : [CHANGELOG.md](CHANGELOG.md).
+<br>
 
 ## Licence
 
-MIT. Polices [IBM Plex](https://github.com/IBM/plex) sous licence SIL OFL 1.1
-(`portal/static/fonts/IBMPlex-LICENSE.txt`).
+[MIT](LICENSE). Polices IBM Plex, Bricolage Grotesque et JetBrains Mono sous licence SIL OFL 1.1 (`portal/static/fonts/`) ; photos des fonds d'écran créditées dans `portal/static/wallpapers/CREDITS.txt`.
 
-Passage depuis une version local-repo : [guide de migration vers loco](docs/migration-loco.md).
+Vous venez de `local-repo` ? Suivez le **[guide de migration](docs/migration-loco.md)**.
+
+<br>
+
+<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+  <img src="docs/logo-light.svg" alt="Logo de loco" width="72">
+</picture>
+<br>
+<sub>Captures prises sur une instance de démonstration : l'entreprise, ses postes et ses comptes sont inventés.</sub>
+</div>

@@ -5,6 +5,8 @@ parcourir les fichiers, ouvrir un terminal, et laisser un assistant IA faire la 
 MCP. L'inscription se fait **sans QR code** : on installe une application, on saisit l'adresse du serveur
 et une clé. C'est une fonctionnalité **expérimentale**, coupée par défaut.
 
+![Fiche d'un téléphone Android dans Mon parc](media/android.webp)
+
 loco installe aussi des applications sur ces appareils : depuis des dépôts F-Droid vérifiés, ou en ouvrant
 leur fiche Google Play (voir [Applications](#applications)). Pas de mises à jour du système Android. Rien
 n'est capturé en dehors d'une session que vous ouvrez depuis le portail, et chaque capacité (écran, contrôle,
