@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.166.0 — 2026-11-16
+
+- **Agent Wazuh sur les postes (facultatif)** : à activer dans *Fonctionnalités › Facultatif*. Une page *Mon parc › Wazuh* règle l'adresse de votre manager, la version de l'agent (choisie parmi celles publiées par Wazuh), le groupe d'agents et, s'il en faut un, le mot de passe d'enrôlement ; puis pose l'agent Wazuh sur les postes cochés, ou sur un poste depuis sa fiche (*Plus › Installer l'agent Wazuh*). Windows, Debian, Ubuntu et famille Red Hat.
+- **Le paquet officiel, vérifié, sans Internet sur les postes** : loco télécharge une fois le paquet de Wazuh (deb, rpm ou msi), le contrôle avec l'empreinte SHA-512 publiée par Wazuh, puis le remet aux postes par leur agent loco, qui vérifie à son tour son empreinte avant de l'installer.
+- **L'état de chaque poste** : connecté, en attente du manager, déconnecté, arrêté ou non installé, avec la version, le numéro et le nom de l'agent chez Wazuh — sur la page Wazuh et sur la fiche du poste. Quand l'agent ne se connecte pas, le compte rendu reprend l'erreur de son journal (mot de passe refusé, nom déjà pris sur le manager…). *Réappliquer*, *Mettre à jour* et *Retirer* complètent le tout.
+- **Le mot de passe d'enrôlement reste secret** : gardé chiffré, jamais réaffiché ni écrit au journal ; sur le poste, il va dans le fichier que lit l'agent Wazuh (`authd.pass`, lisible des seuls administrateurs), jamais en argument d'une commande.
+- **Trois droits** dans les profils d'accès : consulter Wazuh, installer et retirer l'agent, régler Wazuh. Un compte limité à une partie du parc n'agit que sur elle.
+- Les agents loco se mettent à jour seuls en 2.166.0 pour remonter l'état de l'agent Wazuh ; une installation demandée avant attend leur mise à jour. Voir [docs/wazuh.md](docs/wazuh.md).
+
 ## 2.165.0 — 2026-11-15
 
 - **Docker sans cloner le projet** : une image prête à l'emploi, `ghcr.io/shanouhar/loco`, est publiée avec chaque version. Il suffit de télécharger `linux/docker/docker-compose.yml` dans un dossier puis de lancer `docker compose up -d` ; les réglages vont dans un fichier `.env` à côté (modèle : `.env.example`). Mise à jour : `docker compose pull && docker compose up -d`. La variable `LOCO_IMAGE` choisit l'image, par exemple une version précise (`ghcr.io/shanouhar/loco:2.165.0`).

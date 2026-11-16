@@ -76,6 +76,11 @@ GROUPS = [
         ("homeassistant.shell", L_("Ouvrir un terminal Home Assistant"), L_("Shell du module SSH de Home Assistant : accès complet à sa configuration et à la commande ha."), ("homeassistant.view",), True),
         ("homeassistant.manage", L_("Relier des instances Home Assistant"), L_("Ajouter ou retirer une instance, voir la clé publique de loco et confirmer la clé d'hôte de Home Assistant."), ("homeassistant.view",), True),
     ]),
+    (L_("Wazuh"), [
+        ("wazuh.view", L_("Consulter Wazuh"), L_("État de l'agent Wazuh sur les postes du parc."), ("fleet.view",), False),
+        ("wazuh.install", L_("Installer et retirer l'agent Wazuh"), L_("Poser l'agent Wazuh sur des postes, le mettre à jour ou le retirer (en root ou SYSTEM)."), ("wazuh.view",), True),
+        ("wazuh.manage", L_("Régler Wazuh"), L_("Adresse du manager, mot de passe d'enrôlement, groupe et version de l'agent."), ("wazuh.view",), True),
+    ]),
     (L_("Cache Windows Update"), [
         ("wu.view", L_("Consulter le cache Windows Update"), L_("Statistiques, domaines et commandes DNS."), (), False),
         ("wu.configure", L_("Modifier les domaines du cache"), L_("Changer les destinations relayées par le serveur."), ("wu.view",), True),
@@ -188,6 +193,8 @@ ENDPOINTS = {
     "remote_open": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb"),
     "remote_session": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb", "homeassistant.shell"),
     "remote_io": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb", "homeassistant.shell"),
+    "wazuh": "wazuh.view", "wazuh_settings": "wazuh.manage", "wazuh_versions": "wazuh.manage",
+    "wazuh_install": "wazuh.install", "wazuh_remove": "wazuh.install",
     "homeassistant": "homeassistant.view", "homeassistant_refresh": "homeassistant.view", "homeassistant_log": "homeassistant.view",
     "homeassistant_update": "homeassistant.update", "homeassistant_backup": "homeassistant.backup",
     "homeassistant_restart": "homeassistant.restart", "homeassistant_shell": "homeassistant.shell",
@@ -241,7 +248,7 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
                       "wake": "fleet.wake", "wake-relay": "fleet.wake",
-                      "install-apk": "fleet.install", "agent-update": "fleet.update"}
+                      "install-apk": "fleet.install", "agent-update": "fleet.update", "wazuh": "wazuh.install"}
 
 
 def expand(values):

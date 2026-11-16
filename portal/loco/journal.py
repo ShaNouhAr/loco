@@ -34,6 +34,8 @@ LABELS = {
     "profils.parc": L_("Parc d'un profil modifié"),
     "apparence.instance": L_("Apparence de l'instance modifiée"), "apparence.logo": L_("Logo de l'instance"),
     "apparence.fond-entreprise": L_("Fond de l'entreprise"),
+    "parc.wazuh.installation": L_("Installation de l'agent Wazuh demandée"), "parc.wazuh.retrait": L_("Retrait de l'agent Wazuh demandé"),
+    "parc.wazuh.reglages": L_("Réglages Wazuh modifiés"),
     "parc.inscription": L_("Poste inscrit"), "parc.oubli": L_("Poste oublié"), "parc.cle": L_("Nouvelle clé d'inscription"),
     "parc.cle-groupe": L_("Nouvelle clé d'inscription d'un groupe"),
     "parc.seuil": L_("Seuil des pastilles"), "parc.adresse-annoncee": L_("Adresse du serveur annoncée aux agents"),

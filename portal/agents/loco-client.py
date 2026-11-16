@@ -430,7 +430,7 @@ def identity():
     return {"hostname": socket.gethostname(), "agent_version": VERSION, "addresses": addresses(), "trust": trust_sha(), "cards": network_cards(networks),
             "boot": boot_time(),
             "networks": [a for nic, values in networks.items() if not VIRTUAL_NIC.match(nic) and not VPN_NIC.match(nic) for a in values][:16],
-            "os": {"family": family(), "name": rel.get("PRETTY_NAME") or platform.platform()}}
+            "os": {"family": family(), "name": rel.get("PRETTY_NAME") or platform.platform()}, "wazuh": wazuh_state()}
 
 
 def boot_time():
@@ -1262,10 +1262,192 @@ def install_package(cmd):
     return code, "\n".join(logs)
 
 
+# --------------------------------------------------------------------------- agent Wazuh (fonctionnalité facultative de loco)
+
+WAZUH_HOME = "/var/ossec"
+
+
+def wazuh_state():
+    """État de l'agent Wazuh du poste, lu sur place : installé, version, service en marche, lien avec le manager,
+    identité chez Wazuh. Jamais la clé de l'agent : de client.keys, seuls le numéro et le nom sont lus."""
+    control = os.path.join(WAZUH_HOME, "bin", "wazuh-control")
+    if not os.path.isfile(control):
+        return {"installed": False}
+    out = {"installed": True, "version": "", "active": False, "status": "", "manager": "", "id": "", "name": ""}
+    code, text = run([control, "info", "-v"], timeout=20)
+    if code == 0:
+        out["version"] = text.strip().lstrip("v")[:20]
+    try:
+        for name in os.listdir(os.path.join(WAZUH_HOME, "var", "run")):
+            found = re.fullmatch(r"wazuh-agentd-(\d+)\.pid", name)
+            if found and os.path.isdir("/proc/" + found.group(1)):
+                out["active"] = True
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(WAZUH_HOME, "var", "run", "wazuh-agentd.state")) as f:
+            found = re.search(r"^status='(\w+)'", f.read(), re.M)
+        if found and out["active"]:
+            out["status"] = found.group(1)
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(WAZUH_HOME, "etc", "ossec.conf"), errors="replace") as f:
+            found = re.search(r"<client>.*?<address>\s*([^<\s]+)\s*</address>", f.read(), re.S)
+        if found:
+            out["manager"] = found.group(1)[:255]
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(WAZUH_HOME, "etc", "client.keys"), errors="replace") as f:
+            fields = f.readline().split()
+        if len(fields) >= 2:
+            out["id"], out["name"] = fields[0][:8], fields[1][:128]
+    except OSError:
+        pass
+    return out
+
+
+def wazuh_last_errors(limit=2):
+    """Dernières erreurs écrites par l'agent Wazuh dans son journal (nom déjà pris sur le manager, mot de passe refusé,
+    manager injoignable…) : elles disent pourquoi l'enrôlement n'aboutit pas."""
+    try:
+        with open(os.path.join(WAZUH_HOME, "logs", "ossec.log"), "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 16384))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return []
+    found = [re.sub(r"^\S+ \S+ ", "", line).strip()[:300] for line in lines if ": ERROR: " in line]
+    return list(dict.fromkeys(found))[-limit:]
+
+
+def wazuh_set_manager(manager):
+    """Adresse du manager dans ossec.conf (poste déjà équipé : le paquet ne la réécrit pas à la mise à jour)."""
+    path = os.path.join(WAZUH_HOME, "etc", "ossec.conf")
+    with open(path, errors="replace") as f:
+        text = f.read()
+    changed, count = re.subn(r"(<client>.*?<address>)[^<]*(</address>)", lambda m: m.group(1) + manager + m.group(2), text, count=1, flags=re.S)
+    if count and changed != text:
+        tmp = path + ".loco"
+        with open(tmp, "w") as f:
+            f.write(changed)
+        shutil.copymode(path, tmp)
+        shutil.chown(tmp, os.stat(path).st_uid, os.stat(path).st_gid)
+        os.replace(tmp, path)
+        return True
+    return False
+
+
+def wazuh_apply(server, cmd):
+    """Installe l'agent Wazuh remis par loco (paquet vérifié par son empreinte), réglé pour le manager, ou le retire.
+    Le mot de passe d'enrôlement va dans le fichier que lit l'agent Wazuh, jamais dans une commande ni dans la sortie."""
+    spec = cmd.get("wazuh") if isinstance(cmd.get("wazuh"), dict) else {}
+    fam = family()
+    if fam not in ("debian", "rhel"):
+        return 1, t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
+    logs = []
+    if spec.get("op") == "remove":
+        if not os.path.isdir(WAZUH_HOME):
+            return 0, t("L'agent Wazuh n'est pas installé sur ce poste.", "The Wazuh agent is not installed on this machine.", "El agente Wazuh no está instalado en este equipo.")
+        run(["systemctl", "disable", "--now", "wazuh-agent"], timeout=120)
+        if fam == "debian":
+            code, out = run(["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "purge", "wazuh-agent"])
+        else:
+            code, out = run(["dnf" if shutil.which("dnf") else "yum", "-y", "remove", "wazuh-agent"])
+        logs.append(out)
+        if code == 0:
+            logs.append(t("Agent Wazuh retiré du poste.", "Wazuh agent removed from the machine.", "Agente Wazuh retirado del equipo."))
+        return code, "\n".join(logs)
+    package = spec.get("package") if isinstance(spec.get("package"), dict) else {}
+    manager, group = str(spec.get("manager") or ""), str(spec.get("group") or "")
+    name = os.path.basename(str(package.get("file") or ""))
+    if (spec.get("op") != "install" or not re.fullmatch(r"[A-Za-z0-9.:\[\]-]{1,253}", manager) or not re.fullmatch(r"[A-Za-z0-9_.,-]{0,300}", group)
+            or not re.fullmatch(r"wazuh-agent[A-Za-z0-9_.-]+\.(deb|rpm)", name) or not str(package.get("url") or "").startswith("/agent/wazuh/")):
+        return 1, t("Commande Wazuh incomplète.", "Incomplete Wazuh command.", "Orden Wazuh incompleta.")
+    already = os.path.isfile(os.path.join(WAZUH_HOME, "bin", "wazuh-control"))
+    work = tempfile.mkdtemp(prefix="loco-wazuh-")
+    try:
+        data = download(server, package["url"], timeout=900)
+        if hashlib.sha256(data).hexdigest() != str(package.get("sha256") or "").lower():
+            return 1, t("Paquet de l'agent Wazuh refusé : empreinte SHA-256 incorrecte.", "Wazuh agent package refused: wrong SHA-256 checksum.", "Paquete del agente Wazuh rechazado: suma SHA-256 incorrecta.")
+        path = os.path.join(work, name)
+        with open(path, "wb") as f:
+            f.write(data)
+        os.chmod(work, 0o755)                       # apt lit le paquet sous son compte « _apt »
+        os.chmod(path, 0o644)
+        # Variables de déploiement de Wazuh : lues par le paquet à sa première installation (adresse du manager, groupes).
+        env = dict(ENV, WAZUH_MANAGER=manager)
+        if group:
+            env["WAZUH_AGENT_GROUP"] = group
+        if fam == "debian":
+            command = ["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "-o", "Dpkg::Options::=--force-confdef",
+                       "-o", "Dpkg::Options::=--force-confold", "install", "--allow-downgrades", path]
+        else:
+            command = ["dnf" if shutil.which("dnf") else "yum", "-y", "install", path]
+        try:
+            p = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, errors="replace",
+                               env=env, timeout=1800, stdin=subprocess.DEVNULL)
+            code, out = p.returncode, p.stdout
+        except FileNotFoundError:
+            code, out = 127, f"{command[0]} introuvable\n"
+        except subprocess.TimeoutExpired:
+            code, out = 124, t("délai dépassé\n", "timed out\n", "tiempo agotado\n")
+        logs.extend(line for line in out.splitlines() if not re.fullmatch(r"\(Reading database \.\.\. \d+%", line.strip()))
+        if code != 0:
+            return code, "\n".join(logs)
+    except (OSError, ValueError) as e:
+        return 1, t(f"Paquet de l'agent Wazuh non reçu de loco : {e}", f"Wazuh agent package not received from loco: {e}", f"Paquete del agente Wazuh no recibido de loco: {e}")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    try:
+        if already and wazuh_set_manager(manager):
+            logs.append(t(f"Adresse du manager mise à jour : {manager}", f"Manager address updated: {manager}", f"Dirección del manager actualizada: {manager}"))
+        secret = spec.get("password")
+        if isinstance(secret, str) and secret:
+            target = os.path.join(WAZUH_HOME, "etc", "authd.pass")
+            fd = os.open(target + ".loco", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+            with os.fdopen(fd, "w") as f:
+                f.write(secret + "\n")
+            try:
+                shutil.chown(target + ".loco", "root", "wazuh")
+            except (LookupError, OSError):
+                pass
+            os.chmod(target + ".loco", 0o640)
+            os.replace(target + ".loco", target)
+            logs.append(t("Mot de passe d'enrôlement posé pour l'agent Wazuh.", "Enrollment password set for the Wazuh agent.", "Contraseña de inscripción puesta para el agente Wazuh."))
+    except OSError as e:
+        return 1, "\n".join(logs + [t(f"Réglage de l'agent Wazuh impossible : {e}", f"Cannot configure the Wazuh agent: {e}", f"No se puede configurar el agente Wazuh: {e}")])
+    run(["systemctl", "daemon-reload"], timeout=120)
+    code, out = run(["systemctl", "enable", "wazuh-agent"], timeout=120)
+    code, out = run(["systemctl", "restart", "wazuh-agent"], timeout=300)
+    if code != 0:
+        return code, "\n".join(logs + [out, t("Le service de l'agent Wazuh n'a pas démarré.", "The Wazuh agent service did not start.", "El servicio del agente Wazuh no arrancó.")])
+    state = wazuh_state()
+    for _wait in range(15):                         # enrôlement puis premier échange avec le manager : quelques secondes
+        if state.get("status") == "connected":
+            break
+        time.sleep(2)
+        state = wazuh_state()
+    if state.get("status") == "connected":
+        logs.append(t(f"Agent Wazuh {state['version']} installé et connecté au manager {manager}" + (f" (agent {state['id']} « {state['name']} »)." if state["id"] else "."),
+                      f"Wazuh agent {state['version']} installed and connected to manager {manager}" + (f" (agent {state['id']} “{state['name']}”)." if state["id"] else "."),
+                      f"Agente Wazuh {state['version']} instalado y conectado al manager {manager}" + (f" (agente {state['id']} «{state['name']}»)." if state["id"] else ".")))
+    else:
+        logs.append(t(f"Agent Wazuh {state.get('version', '')} installé et démarré ; pas encore connecté au manager {manager} (ports 1514 et 1515 à vérifier, mot de passe d'enrôlement, groupe).",
+                      f"Wazuh agent {state.get('version', '')} installed and started; not connected to manager {manager} yet (check ports 1514 and 1515, the enrollment password, the group).",
+                      f"Agente Wazuh {state.get('version', '')} instalado e iniciado; aún no conectado al manager {manager} (compruebe los puertos 1514 y 1515, la contraseña de inscripción, el grupo)."))
+        for line in wazuh_last_errors():
+            logs.append(t("Journal de l'agent Wazuh : ", "Wazuh agent log: ", "Registro del agente Wazuh: ") + line)
+    return 0, "\n".join(logs)
+
+
 # --------------------------------------------------------------------------- service
 
-def report(conf, cmd_id, state, output="", code=None, inventory=None, progress=None):
+def report(conf, cmd_id, state, output="", code=None, inventory=None, progress=None, extra=None):
     data = {"id": cmd_id, "state": state, "output": output[-OUTPUT_LIMIT:], "exit_code": code}
+    if extra:
+        data.update(extra)
     if inventory is not None:
         data["inventory"] = inventory
     if progress is not None:
@@ -1509,6 +1691,9 @@ def _run_commands(conf, answer, state):
         elif action == "run-script":
             code, out = run_script(cmd)
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)
+        elif action == "wazuh":
+            code, out = wazuh_apply(conf["server"], cmd)
+            report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, extra={"wazuh": wazuh_state()})
         elif action == "wake-relay":
             code, out = relay_wake(cmd.get("wake"))
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code)

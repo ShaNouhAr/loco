@@ -1108,6 +1108,98 @@ class TestHomeAssistantPhone(HomeAssistantPages):
         self.assertLessEqual(self.overflow(), 0, "menu ouvert")
 
 
+class WazuhPages(BrowserTest):
+    """Wazuh (fonctionnalité facultative) : réglages, liste des postes avec leur état, installation sur les postes cochés."""
+
+    def setUp(self):
+        super().setUp()
+        from loco import features, wazuh
+        patch = mock.patch.object(wazuh, "versions", return_value=(["4.14.10", "4.14.9"], 0, ""))
+        patch.start()
+        self.addCleanup(patch.stop)
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.OPTIONAL_SETTING, '["wazuh"]'))
+            conn.execute("DELETE FROM settings WHERE key=?", (wazuh.SETTING,))
+            conn.execute("DELETE FROM devices")
+        self.addCleanup(self.restore)
+        states = ({"installed": True, "version": "4.14.9", "active": True, "status": "connected", "manager": "wazuh.exemple.test", "id": "003", "name": "srv-fichiers"},
+                  {"installed": False}, {"installed": True, "version": "4.13.1", "active": True, "status": "pending", "manager": "ancien-manager.exemple.test", "id": "", "name": ""})
+        for index, state in enumerate(states):
+            ident = dict(LINUX if index else WINDOWS, hostname=("srv-fichiers", "poste-comptabilite-02", "serveur-de-sauvegarde-du-batiment-b")[index], agent_version="2.166.0")
+            agent = Agent(ident, f"192.168.43.{170 + index}", uid=hashlib.sha256(ident["hostname"].encode()).hexdigest()[:32])
+            agent.enroll()
+            agent.post("/agent/api/checkin", dict(agent.ident, wazuh=state), agent.token)
+
+    def restore(self):
+        from loco import features, wazuh
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key IN (?, ?)", (features.OPTIONAL_SETTING, wazuh.SETTING))
+            conn.execute("DELETE FROM devices")
+
+    def configure(self):
+        self.page.goto("/fleet/wazuh")
+        self.page.fill("[name=manager]", "wazuh.exemple.test")
+        self.page.select_option("select[name=version]", "4.14.9")
+        self.page.fill("#reglages [name=group]", "servers")
+        self.page.fill("[name=password]", "Enrolement-Wazuh-2026")
+        self.page.click("#reglages button.primary")
+        expect(self.page.locator(".flash, .toast").first).to_contain_text("Réglages Wazuh enregistrés")
+
+
+class TestWazuhDesktop(WazuhPages):
+    def test_settings_then_install_on_ticked_computers(self):
+        self.page.goto("/fleet")
+        self.page.click(".subnav a:has-text('Wazuh')")
+        expect(self.page.locator(".subnav a.on")).to_have_text("Wazuh")
+        expect(self.page.locator(".note.warn")).to_contain_text("n'est pas encore réglé")
+        self.configure()
+        expect(self.page.locator("[name=password]")).not_to_have_value("Enrolement-Wazuh-2026")     # jamais réaffiché
+        expect(self.page.locator(".metric").nth(1)).to_contain_text("2")                            # deux postes équipés sur trois
+        rows = self.page.locator("[data-pick-form] tbody tr")
+        expect(rows).to_have_count(3)
+        expect(rows.filter(has_text="srv-fichiers").locator(".st.ok")).to_have_text("Connecté")
+        expect(rows.filter(has_text="poste-comptabilite-02")).to_contain_text("Non installé")
+        late = rows.filter(has_text="serveur-de-sauvegarde")
+        expect(late).to_contain_text("relié à ancien-manager.exemple.test")
+        expect(late.locator("button", has_text="Mettre à jour")).to_be_visible()
+        submit = self.page.locator("[data-pick-submit]")
+        expect(submit).to_be_disabled()
+        expect(self.page.locator(".wazuh-bar [data-pick-all]")).to_be_hidden()     # sur ordinateur, seulement dans l'en-tête
+        self.page.check("thead [data-pick-all]")
+        expect(self.page.locator("[data-pick-count]")).to_have_text("3")
+        rows.filter(has_text="srv-fichiers").locator("[data-pick]").uncheck()
+        expect(self.page.locator("[data-pick-count]")).to_have_text("2")
+        expect(submit).to_be_enabled()
+        self.assertLessEqual(self.overflow(), 0)
+        submit.click()
+        expect(self.page.locator(".flash, .toast").first).to_contain_text("demandée sur 2 postes")
+        expect(self.page.locator("[data-pick-form] .busy-note")).to_have_count(2)
+        expect(rows.filter(has_text="poste-comptabilite-02").locator("[data-pick]")).to_be_disabled()
+        self.assertLessEqual(self.overflow(), 0)
+
+    def test_device_page_offers_the_agent_in_its_menu(self):
+        self.configure()
+        self.page.click("a:has-text('poste-comptabilite-02')")
+        self.page.click("summary[aria-label='Autres actions']")
+        self.page.locator("button.menu-item", has_text="Installer l'agent Wazuh").click()
+        expect(self.page.locator(".flash, .toast").first).to_contain_text("demandée sur 1 poste")
+        expect(self.page.locator(".pending-item")).to_contain_text("Installation de l'agent Wazuh")
+        self.assertLessEqual(self.overflow(), 0)
+
+
+class TestWazuhPhone(WazuhPages):
+    viewport = PHONE
+
+    def test_the_page_fits_on_a_phone(self):
+        self.configure()
+        self.assertLessEqual(self.overflow(), 0)
+        expect(self.page.locator("thead [data-pick-all]")).to_be_hidden()            # tableau en cartes : plus d'en-tête
+        self.page.check(".wazuh-bar [data-pick-all]")                                  # la barre du bas prend le relais
+        expect(self.page.locator("[data-pick-count]")).to_have_text("3")
+        expect(self.page.locator("[data-pick-submit]")).to_be_enabled()
+        self.assertLessEqual(self.overflow(), 0, "postes cochés")
+
+
 class TestDesktopScreens(BrowserTest):
     """Bureau distant d'un poste à plusieurs écrans, face au vrai serveur RFB de l'agent Linux (écran simulé de
     tests/fake_agent.py) : la liste arrive par le flux du bureau, le choix change l'image, et il est retenu par poste."""

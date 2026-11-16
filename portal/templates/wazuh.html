@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Wazuh · {{ host }}{% endblock %}
+{% block content %}
+{% include '_fleet_nav.html' %}
+{% set manage = can('wazuh.manage') %}
+{% set install = can('wazuh.install') %}
+<div class="head">
+  <div>
+    <h1>Wazuh</h1>
+    <p>{{ _("L'agent Wazuh posé sur vos postes par loco, réglé pour votre manager. Le paquet officiel est téléchargé et vérifié une fois par loco, puis remis à chaque poste par son agent loco : un poste n'a pas besoin d'Internet.") }}</p>
+  </div>
+</div>
+
+<div class="stack">
+  {% if not ready %}
+  <div class="note warn"><p>{{ _("Wazuh n'est pas encore réglé : indiquez l'adresse de votre manager et la version de l'agent à installer.") if manage else _("Wazuh n'est pas encore réglé : un compte autorisé doit indiquer l'adresse du manager.") }}</p></div>
+  {% endif %}
+
+  {% if ready %}
+  <div class="metrics">
+    <div class="metric"><div class="k">{{ _("Manager") }}</div><div class="v small-v mono">{{ cfg.manager }}</div><div class="s">{{ _("agent %(v)s", v=cfg.version) }}{% if cfg.group %} · {{ _("groupe %(g)s", g=cfg.group) }}{% endif %}</div></div>
+    <div class="metric"><div class="k">{{ _("Postes équipés") }}</div><div class="v">{{ counts.installed }}<span class="v-unit">/ {{ counts.total }}</span></div><div class="s">{{ _("Windows et Linux du parc") }}</div></div>
+    <div class="metric"><div class="k">{{ _("Connectés au manager") }}</div><div class="v">{{ counts.connected }}</div><div class="s">{% if counts.installed > counts.connected %}<span class="st warn">{{ ngettext("%(num)s à regarder", "%(num)s à regarder", counts.installed - counts.connected) }}</span>{% elif counts.installed %}<span class="st ok">{{ _("tous") }}</span>{% else %}{{ _("aucun agent installé") }}{% endif %}</div></div>
+  </div>
+  {% endif %}
+
+  {% if manage %}
+  <form method="post" action="{{ url_for('wazuh_settings') }}" class="panel" id="reglages" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-h"><h2>{{ _("Réglages") }}</h2><div class="aside">{{ _("valables pour les prochaines installations") }}</div></div>
+    <div class="panel-b stack-sm">
+      <div class="wazuh-fields">
+        <label class="f"><span>{{ _("Adresse du manager") }}</span><input type="text" name="manager" value="{{ cfg.manager }}" required maxlength="253" spellcheck="false" class="mono" placeholder="wazuh.exemple.lan"></label>
+        <label class="f"><span>{{ _("Version de l'agent") }}</span>
+          {% if versions %}<select name="version">
+            {% if cfg.version and cfg.version not in versions %}<option value="{{ cfg.version }}" selected>{{ cfg.version }}</option>{% endif %}
+            {% for v in versions %}<option value="{{ v }}"{{ ' selected' if v == cfg.version or (not cfg.version and loop.first) }}>{{ v }}</option>{% endfor %}
+          </select>{% else %}<input type="text" name="version" value="{{ cfg.version }}" required maxlength="12" class="mono" placeholder="4.14.10">{% endif %}
+        </label>
+        <label class="f"><span>{{ _("Groupe d'agents") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="text" name="group" value="{{ cfg.group }}" maxlength="200" spellcheck="false" class="mono" placeholder="servers"></label>
+        <label class="f"><span>{{ _("Mot de passe d'enrôlement") }} <em class="faint">{{ _("(optionnel)") }}</em></span><input type="password" name="password" value="{{ cfg.password }}" maxlength="256" autocomplete="new-password"></label>
+      </div>
+      <p class="hint">{{ _("La version de l'agent ne doit pas dépasser celle du manager. Le groupe doit déjà exister sur le manager ; plusieurs groupes se séparent par des virgules.") }}</p>
+      <p class="hint">{{ _("Le mot de passe d'enrôlement est celui du manager (authd.pass), s'il en exige un. loco le garde chiffré, ne le réaffiche jamais et ne l'écrit pas au journal.") }}{% if cfg.password %} <label class="check inline"><input type="checkbox" name="clear_password" value="1"> {{ _("ne plus en envoyer") }}</label>{% endif %}</p>
+      {% if version_error %}<p class="hint warn-text">{{ _("Versions de Wazuh non relevées (%(e)s) : la liste est celle du dernier relevé.", e=version_error) }}</p>{% endif %}
+    </div>
+    <div class="panel-f row-between">
+      <button type="submit" class="linkbtn" formaction="{{ url_for('wazuh_versions') }}" formnovalidate>{{ _("Relever les versions publiées par Wazuh") }}</button>
+      <button class="btn primary">{{ _("Enregistrer") }}</button>
+    </div>
+  </form>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('wazuh_install') }}" class="panel" data-pick-form>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-h"><h2>{{ _("Postes") }}{% if rows %} <span class="h-count">{{ rows|length }}</span>{% endif %}</h2><div class="aside">{{ _("Windows, Debian, Ubuntu et famille Red Hat") }}</div></div>
+    {% if rows %}
+    <div class="table-wrap">
+      <table class="table-cards wazuh-table">
+        <thead><tr>{% if install %}<th class="chk"><input type="checkbox" data-pick-all aria-label="{{ _('Tout cocher') }}"></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Agent Wazuh") }}</th><th>{{ _("Version") }}</th><th>{{ _("Identité chez Wazuh") }}</th>{% if install %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for r in rows %}
+          {% set w = r.w %}
+          <tr>
+            {% if install %}<td class="chk" data-label="{{ _('Sélectionner') }}"><input type="checkbox" name="ids" value="{{ r.d.id }}" data-pick aria-label="{{ r.d.label or r.d.hostname }}"{{ ' disabled' if r.busy }}></td>{% endif %}
+            <td><a class="strong-link" href="{{ url_for('fleet_device', dev_id=r.d.id) }}">{{ r.d.label or r.d.hostname }}</a><span class="sub">{{ r.os }}</span></td>
+            <td data-label="{{ _('Agent Wazuh') }}">{% if r.busy %}<span class="busy-note"><span class="spin"></span>{{ _("retrait demandé") if r.busy == 'remove' else _("installation demandée") }}</span>{% else %}<span class="st {{ w.level if w.level != 'off' }}">{{ w.label }}</span>{% endif %}{% if w.detail %}<span class="sub">{{ w.detail }}</span>{% endif %}</td>
+            <td class="{{ 'hide-sm' if not w.version }}" data-label="{{ _('Version') }}"><span class="mono">{{ w.version or '—' }}</span></td>
+            <td class="{{ 'hide-sm' if not (w.state and w.state.installed and w.state.id) }}" data-label="{{ _('Identité chez Wazuh') }}">{% if w.state and w.state.installed and w.state.id %}<span class="mono">{{ w.state.id }}</span> · {{ w.state.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            {% if install %}<td class="right nowrap card-action">
+              {% if not r.busy and ready %}
+              {% if not w.installed %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Installer") }}</button>
+              {% elif w.outdated %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Mettre à jour") }}</button>
+              {% else %}<button class="linkbtn" name="only" value="{{ r.d.id }}" title="{{ _('Réinstalle l\'agent avec les réglages actuels (manager, groupe, mot de passe)') }}">{{ _("Réappliquer") }}</button>{% endif %}
+              {% endif %}
+              {% if not r.busy and w.installed %}<button class="linkbtn danger" name="only" value="{{ r.d.id }}" formaction="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=r.d.label or r.d.hostname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">{{ _("Retirer") }}</button>{% endif %}
+            </td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if install and ready %}
+    <div class="update-select-bar wazuh-bar">
+      <label class="f inline"><span>{{ _("Groupe d'agents") }}</span><input type="text" name="group" value="{{ cfg.group }}" maxlength="200" spellcheck="false" class="mono" placeholder="{{ _('aucun') }}"></label>
+      <label class="check inline pick-all-sm"><input type="checkbox" data-pick-all> {{ _("Tout cocher") }}</label>
+      <span class="muted small">{{ _("Sélection") }} : <b data-pick-count>0</b></span>
+      <button class="btn primary" data-pick-submit disabled>{{ _("Installer sur les postes cochés") }}</button>
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="empty">{{ _("Aucun poste Windows ou Linux dans votre parc.") }}</p>
+    {% endif %}
+  </form>
+
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Ce que fait loco, et ce qu'il ne fait pas") }}</h2></div>
+    <div class="panel-b">
+      <ul class="block-limits">
+        <li>{{ _("Sur le poste, l'agent loco installe le paquet officiel de Wazuh (deb, rpm ou msi), inscrit l'adresse du manager et le groupe, puis démarre le service. L'agent Wazuh s'enrôle lui-même auprès du manager.") }}</li>
+        <li>{{ _("Le poste doit joindre le manager sur les ports 1514 (échanges) et 1515 (enrôlement). loco ne règle ni le manager ni son pare-feu.") }}</li>
+        <li>{{ _("Le mot de passe d'enrôlement est écrit sur le poste dans le fichier que lit l'agent Wazuh (authd.pass), lisible des seuls administrateurs ; il n'est jamais passé en argument d'une commande.") }}</li>
+        <li>{{ _("Retirer l'agent le désinstalle du poste. Son entrée reste sur le manager, où vous pouvez la supprimer.") }}</li>
+        <li>{{ _("L'état affiché ici est celui que remonte le poste à chaque contact (agents loco %(v)s et plus) : installé, service en marche, lien avec le manager.", v=agent_version) }}</li>
+      </ul>
+    </div>
+    {% if manage and packages %}
+    <div class="panel-f">{{ _("Paquets gardés sur loco :") }} {% for name, size in packages %}<span class="mono">{{ name }}</span> <span class="faint">({{ size|human }})</span>{{ ' · ' if not loop.last }}{% endfor %}</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

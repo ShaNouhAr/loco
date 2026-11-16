@@ -66,7 +66,7 @@
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn', busy=(_('Mise à jour en attente') if updating == 'queued' else _('Mise à jour en cours')) if updating else '') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
-    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') %}
+    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') or (wazuh and can('wazuh.install')) %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
       <div class="menu-list" role="menu">
@@ -84,6 +84,16 @@
         {% if windows and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose', device=dev.id) }}">{{ _("Déployer des logiciels…") }}</a>{% endif %}
         {% if android_view and can('fleet.install') %}<a class="menu-item" href="{{ url_for('deployment_compose_android', device=dev.id) }}">{{ _("Installer des applications…") }}</a>{% endif %}
         {% if adb_view %}<button type="button" class="menu-item" data-open="#adb-setup">{{ _("Débogage adb…") }}</button>{% endif %}
+        {% if wazuh and can('wazuh.install') and not wazuh.busy %}
+        {% if wazuh.ready %}<form method="post" action="{{ url_for('wazuh_install') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="only" value="{{ dev.id }}"><input type="hidden" name="from" value="device">
+          <button class="menu-item">{{ _("Mettre à jour l'agent Wazuh") if wazuh.w.outdated else _("Réappliquer les réglages de l'agent Wazuh") if wazuh.w.installed else _("Installer l'agent Wazuh") }}</button>
+        </form>{% endif %}
+        {% if wazuh.w.installed %}<form method="post" action="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=devname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="only" value="{{ dev.id }}"><input type="hidden" name="from" value="device">
+          <button class="menu-item">{{ _("Retirer l'agent Wazuh…") }}</button>
+        </form>{% endif %}
+        {% endif %}
         {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}
         {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=devname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
         {% elif can('fleet.remove') %}
@@ -473,6 +483,7 @@
         <dt>{{ _("Dernier inventaire") }}</dt><dd>{{ summary.scanned }}{% if dev.last_scan %} <span class="faint small">· {{ dev.last_scan|date_fr }}</span>{% endif %}</dd>
         <dt>{{ _("Agent") }}</dt><dd><span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>{% if agent_outdated %} <span class="muted small">{{ _("· ce serveur est en %(v)s", v=server_version) }}</span>{% else %} <span class="muted small">{{ _("· à jour") }}</span>{% endif %}</dd>
         {% if android %}<dt>{{ _("Réseaux de confiance") }}</dt><dd>{{ net_policy or _("actif partout") }} <span class="muted small">{{ _("· réglé sur l’appareil") }}</span></dd>{% endif %}
+        {% if wazuh %}<dt>{{ _("Agent Wazuh") }}</dt><dd>{% if wazuh.busy %}<span class="busy-note"><span class="spin"></span>{{ _("retrait demandé") if wazuh.busy == 'remove' else _("installation demandée") }}</span>{% else %}<span class="st {{ wazuh.w.level if wazuh.w.level != 'off' }}">{{ wazuh.w.label }}</span>{% endif %}{% if wazuh.w.version %} <span class="mono small">{{ wazuh.w.version }}</span>{% endif %}{% if wazuh.w.detail %} <span class="muted small">· {{ wazuh.w.detail }}</span>{% endif %} <span class="muted small">·</span> <a class="small" href="{{ url_for('wazuh') }}">{{ _("page Wazuh") }}</a></dd>{% endif %}
         <dt>{{ _("Adresses du serveur connues") }}</dt><dd class="mono small">{{ dev.servers or '—' }}</dd>
         <dt>{{ _("Inscrit") }}</dt><dd>{{ summary.enrolled }} <span class="faint small">· {{ dev.enrolled_at|date_fr }}</span></dd>
         <dt>{{ _("Identifiant") }}</dt><dd class="mono small break">{{ dev.uid }}</dd>

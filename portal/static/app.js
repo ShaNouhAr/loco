@@ -1712,6 +1712,24 @@
     }, true);
   })();
 
+  /* ------------------------------------------- liste à cocher (Wazuh) : tout cocher, compteur, bouton actif */
+  $$("[data-pick-form]").forEach(function (form) {
+    var boxes = function () { return $$("input[data-pick]:not(:disabled)", form); };
+    // Deux cases « tout cocher » : l'en-tête du tableau, et la barre du bas sur téléphone (tableau en cartes, sans en-tête).
+    var alls = $$("[data-pick-all]", form), btn = $("[data-pick-submit]", form), count = $("[data-pick-count]", form);
+    var sync = function () {
+      var list = boxes(), n = list.filter(function (b) { return b.checked; }).length;
+      if (count) count.textContent = n;
+      if (btn) btn.disabled = !n;
+      alls.forEach(function (all) { all.checked = n > 0 && n === list.length; all.indeterminate = n > 0 && n < list.length; });
+    };
+    form.addEventListener("change", function (e) {
+      if (alls.indexOf(e.target) >= 0) boxes().forEach(function (b) { b.checked = e.target.checked; });
+      sync();
+    });
+    sync();
+  });
+
   /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
   (function () {
     var form = $("[data-update-select]");

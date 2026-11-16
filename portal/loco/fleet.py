@@ -53,7 +53,7 @@ FORMS = {"phone": L_("Téléphone"), "tablet": L_("Tablette"), "tv": L_("Télév
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
-           "agent-update": L_("Mise à jour de l'agent")}
+           "agent-update": L_("Mise à jour de l'agent"), "wazuh": L_("Agent Wazuh")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -457,6 +457,8 @@ def action_label(cmd):
         label = n_("%(action)s : %(num)s sélectionnée", "%(action)s : %(num)s sélectionnées", count, action=label)
     if params.get("reboot"):
         label = _("%(action)s (avec redémarrage)", action=label)
+    if cmd["action"] == "wazuh":
+        label = _("Retrait de l'agent Wazuh") if params.get("op") == "remove" else _("Installation de l'agent Wazuh")
     return label
 
 
@@ -909,6 +911,9 @@ def _payload(dev, cmd):
                 item["url"] = f"/agent/android/apk/{item['sha256']}"
             out["apps"].append(item)
         return out
+    if cmd["action"] == "wazuh":
+        from . import wazuh
+        return wazuh.payload(dev, params, out)
     if cmd["action"] == "install-package":
         if dev["os_family"] not in ("debian", "rhel"):
             return None
@@ -953,6 +958,9 @@ def agent_checkin():
     if isinstance(data.get("metrics"), dict):           # agents 2.71.0 et plus : supervision
         from . import monitoring
         monitoring.record(conn, dev["id"], data["metrics"])
+    if isinstance(data.get("wazuh"), dict):             # agents 2.166.0 et plus : état de l'agent Wazuh du poste
+        from . import wazuh
+        wazuh.record(conn, dev, data["wazuh"])
     if dev["os_family"] == "android":
         policy = net_policy(data)       # application 2.147.0 et plus : réseaux de confiance choisis sur l'appareil
         if policy is not None and policy != dev["net_policy"]:
@@ -988,7 +996,8 @@ def agent_checkin():
             "AND (run_after='' OR run_after<=?) ORDER BY id", (dev["id"], _now())).fetchall():
         if (c["action"] == "install-app" and "windows_apps" in features.disabled(conn)
                 or c["action"] == "run-script" and "scripts" in features.disabled(conn)
-                or c["action"] == "install-apk" and "android" in features.disabled(conn)):
+                or c["action"] == "install-apk" and "android" in features.disabled(conn)
+                or c["action"] == "wazuh" and "wazuh" in features.disabled(conn)):
             continue                # fonctionnalité coupée : la commande attend sa réactivation
         actor = conn.execute("SELECT role,disabled,must_change,pending FROM users WHERE username=?", (c["created_by"],)).fetchone()
         grants = permissions.role_permissions(conn, actor["role"]) if actor and not actor["disabled"] and not actor["pending"] and not actor["must_change"] else frozenset()
@@ -1291,6 +1300,9 @@ def agent_result():
         conn.execute("UPDATE devices SET reboot_pending=? WHERE id=?", (f"{_now()}|{dev['boot']}", dev["id"]))
     if cmd["action"] == "uninstall" and state == "success":
         conn.execute("UPDATE devices SET state='removed', token_hash='' WHERE id=?", (dev["id"],))
+    if isinstance(data.get("wazuh"), dict):             # état de l'agent Wazuh après une installation ou un retrait
+        from . import wazuh
+        wazuh.record(conn, dev, data["wazuh"])
     if state in ("success", "failed"):
         from .deployments import cleanup_artifacts
         cleanup_artifacts(conn)
@@ -2115,6 +2127,7 @@ def fleet_device(dev_id):
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,
+                           wazuh=_wazuh_panel(dev),
                            net_policy=net_policy_text(dev),
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
@@ -2123,6 +2136,11 @@ def fleet_device(dev_id):
                            select_version=".".join(map(str, SELECT_UPDATES)),
                            label=status_label(dev, color), presence=availability,
                            planned=schedules.covering(db(), dev_id))
+
+
+def _wazuh_panel(dev):
+    from . import wazuh
+    return wazuh.device_panel(dev)
 
 
 @app.route("/fleet/<int:dev_id>/progress")

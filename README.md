@@ -74,7 +74,7 @@ Un serveur MCP intégré : Claude Code, Cursor ou VS Code consultent et pilotent
 <td valign="top">
 <img src="docs/media/icones/android.svg" width="44" alt=""><br>
 <b>Au-delà des PC</b><br>
-Téléphones et tablettes Android, Home Assistant : même portail, mêmes droits, même journal.
+Téléphones et tablettes Android, Home Assistant, agent Wazuh : même portail, mêmes droits, même journal.
 </td>
 </tr>
 </table>
@@ -210,15 +210,17 @@ claude mcp add --transport http loco https://<serveur>:8443/mcp --header "Author
 
 <br>
 
-### <img src="docs/media/icones/android.svg" width="26" align="top" alt=""> &nbsp;Android et Home Assistant
+### <img src="docs/media/icones/android.svg" width="26" align="top" alt=""> &nbsp;Android, Home Assistant et Wazuh
 
-**Deux options, coupées par défaut.** À activer si elles vous parlent.
+**Trois options, coupées par défaut.** À activer si elles vous parlent.
 
 <p align="center">
 <img src="docs/media/android.webp" width="49.4%" alt="Fiche d'un téléphone Android : applications installées, écran distant, terminal">
 <img src="docs/media/home-assistant.webp" width="49.4%" alt="Home Assistant : versions, mises à jour disponibles, modules complémentaires et sauvegardes">
 </p>
 <p align="center"><sub>← <b>Android</b> <i>(expérimental)</i> — écran, terminal, fichiers et applications de vos propres appareils. Toujours visible, toujours consenti.<br><b>Home Assistant</b> <i>(facultatif)</i> — mises à jour, sauvegardes, santé et terminal, par SSH avec une clé propre à loco. →</sub></p>
+
+**Agent Wazuh** *(facultatif)* — vous avez un manager Wazuh ? loco pose son agent sur les postes que vous cochez, réglé pour votre manager, et montre sur chaque fiche s'il est connecté. Le paquet officiel est vérifié par loco puis remis aux postes, qui n'ont pas besoin d'Internet. [En savoir plus](docs/wazuh.md).
 
 <br>
 
@@ -392,6 +394,7 @@ flowchart LR
 <img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">Serveur MCP</a></b><br><sub>Brancher un assistant IA.</sub><br><br>
 <img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Appareils, applications, écran distant.</sub><br><br>
 <img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>Liaison SSH, mises à jour, sauvegardes.</sub><br><br>
+<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/wazuh.md">Agent Wazuh</a></b><br><sub>Posé sur les postes, réglé pour votre manager.</sub><br><br>
 </td>
 <td width="33%" valign="top">
 <h4>Faire tourner</h4>

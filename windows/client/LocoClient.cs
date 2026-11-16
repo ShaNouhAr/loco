@@ -605,7 +605,7 @@ namespace Loco
             return new Dictionary<string, object> {
                 { "hostname", Environment.MachineName.ToLowerInvariant() }, { "agent_version", Version },
                 { "addresses", addresses }, { "trust", TrustSha() }, { "cards", cards }, { "networks", networks.Take(16).ToList() }, { "wake_error", wakeError },
-                { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } } };
+                { "os", new Dictionary<string, object> { { "family", "windows" }, { "name", caption } } }, { "wazuh", WazuhInfo() } };
         }
 
         static readonly Regex VirtualNic = new Regex("virtual|vpn|tap-|wintun|wireguard|tailscale|zerotier|bluetooth|npcap|loopback|wsl|^vethernet", RegexOptions.IgnoreCase);
@@ -1166,11 +1166,165 @@ namespace Loco
             return ok;
         }
 
-        static void Report(Dictionary<string, object> conf, object id, string state, string output, int? code, object inventory)
+        // ------------------------------------------------------------ agent Wazuh (fonctionnalité facultative de loco)
+
+        const string WazuhService = "WazuhSvc";
+
+        // Entrée « Wazuh Agent » des programmes installés : (code produit pour msiexec, version).
+        static KeyValuePair<string, string> WazuhProduct()
+        {
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                try
+                {
+                    using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view).OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
+                    {
+                        if (root == null) continue;
+                        foreach (string name in root.GetSubKeyNames())
+                            using (var k = root.OpenSubKey(name))
+                            {
+                                var display = k == null ? null : k.GetValue("DisplayName") as string;
+                                if (display != null && display.StartsWith("Wazuh Agent", StringComparison.OrdinalIgnoreCase))
+                                    return new KeyValuePair<string, string>(name, Convert.ToString(k.GetValue("DisplayVersion") ?? ""));
+                            }
+                    }
+                }
+                catch (Exception) { }
+            }
+            return new KeyValuePair<string, string>("", "");
+        }
+
+        static bool WazuhRunning()
+        {
+            try { using (var service = new ServiceController(WazuhService)) return service.Status == ServiceControllerStatus.Running; }
+            catch (Exception) { return false; }
+        }
+
+        internal static Dictionary<string, object> WazuhInfo()
+        {
+            try
+            {
+                string home = WazuhState.Home();
+                return WazuhState.Read(home, home != null && WazuhRunning(), home == null ? "" : WazuhProduct().Value);
+            }
+            catch (Exception) { return new Dictionary<string, object> { { "installed", false } }; }
+        }
+
+        static void WazuhRestart()
+        {
+            using (var service = new ServiceController(WazuhService))
+            {
+                if (service.Status != ServiceControllerStatus.Stopped && service.Status != ServiceControllerStatus.StopPending)
+                {
+                    service.Stop();
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(60));
+                }
+                service.Start();
+                service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(60));
+            }
+        }
+
+        // Mot de passe d'enrôlement : dans le fichier que lit l'agent Wazuh, lisible de SYSTEM et des administrateurs
+        // seulement — posé vide avec ses droits, rempli ensuite. Jamais en argument d'une commande ni dans un journal.
+        static void WazuhPassword(string home, string secret)
+        {
+            string target = Path.Combine(home, "authd.pass"), tmp = target + ".loco";
+            File.WriteAllText(tmp, "");
+            var security = new FileSecurity();
+            security.SetAccessRuleProtection(true, false);
+            security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null), FileSystemRights.FullControl, AccessControlType.Allow));
+            security.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null), FileSystemRights.FullControl, AccessControlType.Allow));
+            File.SetAccessControl(tmp, security);
+            File.WriteAllText(tmp, secret + "\n", new UTF8Encoding(false));
+            if (File.Exists(target)) File.Delete(target);
+            File.Move(tmp, target);
+        }
+
+        // Installe l'agent Wazuh remis par loco (MSI vérifié par son empreinte), réglé pour le manager, ou le retire.
+        static bool WazuhApply(string server, Dictionary<string, object> cmd, out string output)
+        {
+            var lines = new List<string>();
+            object value;
+            var spec = cmd.TryGetValue("wazuh", out value) ? value as Dictionary<string, object> : null;
+            string op = Str(spec, "op");
+            try
+            {
+                if (op == "remove")
+                {
+                    var product = WazuhProduct();
+                    if (product.Key == "") { output = Lang.T("L'agent Wazuh n'est pas installé sur ce poste.", "The Wazuh agent is not installed on this machine.", "El agente Wazuh no está instalado en este equipo."); return true; }
+                    int removed = RunInstaller("msiexec.exe", "/x " + product.Key + " /qn /norestart");
+                    if (removed != 0 && removed != 3010 && removed != 1641 && removed != 1605) throw new Exception(Lang.T("code de sortie ", "exit code ", "código de salida ") + removed);
+                    output = Lang.T("Agent Wazuh retiré du poste.", "Wazuh agent removed from the machine.", "Agente Wazuh retirado del equipo.");
+                    return true;
+                }
+                var package = spec != null && spec.TryGetValue("package", out value) ? value as Dictionary<string, object> : null;
+                string manager = Str(spec, "manager"), group = Str(spec, "group"), file = Path.GetFileName(Str(package, "file")), url = Str(package, "url");
+                if (op != "install" || !WazuhState.Manager.IsMatch(manager) || !WazuhState.Group.IsMatch(group) || !WazuhState.Package.IsMatch(file) || !url.StartsWith("/agent/wazuh/"))
+                    throw new Exception(Lang.T("Commande Wazuh incomplète.", "Incomplete Wazuh command.", "Orden Wazuh incompleta."));
+                bool already = WazuhState.Home() != null;
+                string dir = Path.Combine(Path.GetTempPath(), "loco-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(dir);
+                try
+                {
+                    string dest = Path.Combine(dir, file);
+                    Download(server + url, dest);
+                    if (Sha256File(dest) != Str(package, "sha256").ToLowerInvariant()) throw new Exception(Lang.T("somme SHA-256 invalide", "invalid SHA-256 checksum", "suma SHA-256 no válida"));
+                    // Propriétés de déploiement de Wazuh : lues par l'installeur à la première installation (manager, groupes).
+                    string args = "/i \"" + dest + "\" /qn /norestart WAZUH_MANAGER=\"" + manager + "\"" + (group == "" ? "" : " WAZUH_AGENT_GROUP=\"" + group + "\"");
+                    int code = RunInstaller("msiexec.exe", args);
+                    if (code != 0 && code != 3010 && code != 1641) throw new Exception(Lang.T("code de sortie ", "exit code ", "código de salida ") + code);
+                }
+                finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
+                string home = WazuhState.Home();
+                if (home == null) throw new Exception(Lang.T("agent Wazuh introuvable après l'installation", "Wazuh agent not found after the installation", "agente Wazuh no encontrado tras la instalación"));
+                if (already)
+                {
+                    string conf = Path.Combine(home, "ossec.conf"), text = File.ReadAllText(conf), changed = WazuhState.WithManager(text, manager);
+                    if (changed != text)
+                    {
+                        File.WriteAllText(conf, changed, new UTF8Encoding(false));
+                        lines.Add(Lang.T("Adresse du manager mise à jour : ", "Manager address updated: ", "Dirección del manager actualizada: ") + manager);
+                    }
+                }
+                string secret = Str(spec, "password");
+                if (secret != "")
+                {
+                    WazuhPassword(home, secret);
+                    lines.Add(Lang.T("Mot de passe d'enrôlement posé pour l'agent Wazuh.", "Enrollment password set for the Wazuh agent.", "Contraseña de inscripción puesta para el agente Wazuh."));
+                }
+                WazuhRestart();
+                var state = WazuhInfo();
+                for (int i = 0; i < 15 && Str(state, "status") != "connected"; i++) { Thread.Sleep(2000); state = WazuhInfo(); }
+                string version = Str(state, "version");
+                if (Str(state, "status") == "connected")
+                    lines.Add(Lang.T("Agent Wazuh " + version + " installé et connecté au manager " + manager + ".",
+                                     "Wazuh agent " + version + " installed and connected to manager " + manager + ".",
+                                     "Agente Wazuh " + version + " instalado y conectado al manager " + manager + "."));
+                else
+                    lines.Add(Lang.T("Agent Wazuh " + version + " installé et démarré ; pas encore connecté au manager " + manager + " (ports 1514 et 1515 à vérifier, mot de passe d'enrôlement, groupe).",
+                                     "Wazuh agent " + version + " installed and started; not connected to manager " + manager + " yet (check ports 1514 and 1515, the enrollment password, the group).",
+                                     "Agente Wazuh " + version + " instalado e iniciado; aún no conectado al manager " + manager + " (compruebe los puertos 1514 y 1515, la contraseña de inscripción, el grupo)."));
+                if (Str(state, "status") != "connected")
+                    foreach (string line in WazuhState.LastErrors(home, 2))
+                        lines.Add(Lang.T("Journal de l'agent Wazuh : ", "Wazuh agent log: ", "Registro del agente Wazuh: ") + line);
+                output = string.Join("\n", lines);
+                return true;
+            }
+            catch (Exception e)
+            {
+                lines.Add(Lang.T("ÉCHEC : agent Wazuh : ", "FAILED: Wazuh agent: ", "FALLO: agente Wazuh: ") + e.Message);
+                output = string.Join("\n", lines);
+                return false;
+            }
+        }
+
+        static void Report(Dictionary<string, object> conf, object id, string state, string output, int? code, object inventory, object wazuh = null)
         {
             if (output.Length > OutputLimit) output = output.Substring(output.Length - OutputLimit);
             var data = new Dictionary<string, object> { { "id", id }, { "state", state }, { "output", output }, { "exit_code", code } };
             if (inventory != null) data["inventory"] = inventory;
+            if (wazuh != null) data["wazuh"] = wazuh;
             try { PublishIndicator(Post(Str(conf, "server"), "/agent/api/result", data, Str(conf, "token"))); }
             catch (Exception e) { Log(Lang.T("résultat non transmis : ", "result not sent: ", "resultado no transmitido: ") + e.Message); }
         }
@@ -1473,6 +1627,11 @@ namespace Loco
                     {
                         string output; int code = RunScript(cmd, out output);
                         Report(conf, id, code == 0 ? "success" : "failed", output, code, null);
+                    }
+                    else if (action == "wazuh")
+                    {
+                        string output; bool done = WazuhApply(Str(conf, "server"), cmd, out output);
+                        Report(conf, id, done ? "success" : "failed", output, done ? 0 : 1, null, WazuhInfo());
                     }
                     else if (action == "wake-relay")
                     {

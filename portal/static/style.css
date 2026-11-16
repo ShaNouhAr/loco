@@ -2476,6 +2476,17 @@ dialog.mcp-dialog { width: min(980px, calc(100vw - 32px)); }
 .update-select-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 18px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .update-select-bar label.check { margin: 0; }
 .update-select-hint { padding: 0 20px 12px; }
+/* Wazuh : réglages sur une ligne, barre d'installation sur les postes cochés. */
+.wazuh-fields { display: grid; grid-template-columns: 1.3fr .7fr 1fr 1.1fr; gap: 16px; }
+@media (max-width: 980px) { .wazuh-fields { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .wazuh-fields { grid-template-columns: 1fr; } }
+.wazuh-bar label.f.inline { display: flex; flex-direction: row; align-items: center; gap: 10px; margin: 0 auto 0 0; }
+.wazuh-bar label.f.inline input { width: 200px; max-width: 100%; }
+label.check.inline { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 0 6px; }
+.wazuh-table .linkbtn.danger { color: var(--err); }
+.wazuh-bar label.check.pick-all-sm { display: none; }
+@media (max-width: 720px) { .wazuh-bar label.check.pick-all-sm { display: inline-flex; } }
+@media (max-width: 760px) { .wazuh-table td.chk { width: auto; } .wazuh-bar label.f.inline { margin: 0; flex-wrap: wrap; } }
 .update-table tr.upd-done .upd-name { color: var(--text-3); }
 .update-table tr.upd-done .upd-name::before { content: "✓"; margin-right: 8px; color: var(--ok); font-weight: 600; }
 .update-table tr.upd-now { background: color-mix(in srgb, var(--accent) 7%, transparent); }

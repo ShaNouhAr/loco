@@ -16,6 +16,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | **Brancher un assistant IA** | [Serveur MCP](mcp.md) |
 | Gérer des appareils **Android** | [Android](android.md) |
 | Suivre **Home Assistant** | [Home Assistant](homeassistant.md) |
+| Poser l'**agent Wazuh** sur les postes | [Agent Wazuh](wazuh.md) |
 | **Contribuer** | [Développement](developpement.md) |
 
 À côté : [politique de sécurité](../SECURITY.md) · [changelog](../CHANGELOG.md) · [appliance ISO](../linux/iso/README.md).

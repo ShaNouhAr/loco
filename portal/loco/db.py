@@ -755,6 +755,11 @@ MIGRATIONS = [
     );
     CREATE INDEX homeassistant_jobs_host ON homeassistant_jobs(host_id, id);
     """,
+    # 51 : agent Wazuh des postes (fonctionnalité facultative) — son état, remonté par l'agent loco à chaque contact
+    # (JSON : installé, version, service, lien avec le manager, identité chez Wazuh).
+    """
+    ALTER TABLE devices ADD COLUMN wazuh TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

@@ -7,5 +7,6 @@
   {% if can_any('deployments.view','fleet.install') %}<a href="{{ url_for('deployments') }}" class="{{ 'on' if request.endpoint.startswith('deployment') }}">{{ _("Déploiements") }}</a>{% endif %}
   {% if can('scripts.view') %}<a href="{{ url_for('scripts') }}" class="{{ 'on' if request.endpoint.startswith('script') }}">{{ _("Scripts") }}</a>{% endif %}
   <a href="{{ url_for('schedules') }}" class="{{ 'on' if request.endpoint.startswith('schedule') }}">{{ _("Planifications") }}</a>
+  {% if feature('wazuh') and can('wazuh.view') %}<a href="{{ url_for('wazuh') }}" class="{{ 'on' if request.endpoint.startswith('wazuh') }}">Wazuh</a>{% endif %}
   {% if can('fleet.settings') %}<a href="{{ url_for('fleet_settings') }}" class="{{ 'on' if request.endpoint == 'fleet_settings' }}">{{ _("Réglages") }}</a>{% endif %}
 </nav>
