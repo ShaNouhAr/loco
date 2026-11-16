@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from '_mcp_tools.html' import tool_grid %}
+{% from '_brand_logos.html' import claude_logo, codex_logo %}
+{% block title %}{{ _("Autoriser une application") }}{% endblock %}
+{# Autorisation OAuth d'un client MCP : la personne connectée choisit les outils et la durée du jeton remis à l'application. #}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Autoriser %(app)s", app=client.name) }}</h1>
+    <p>{{ _("Une application de cet ordinateur demande à utiliser le serveur MCP de loco avec votre compte. Choisissez ce qu'elle pourra faire : elle recevra un jeton limité à ces outils, sans dépasser vos propres droits.") }}</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('mcp_oauth_authorize') }}" class="stack" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for key in ('client_id', 'redirect_uri', 'state', 'code_challenge', 'code_challenge_method', 'resource', 'scope') %}<input type="hidden" name="{{ key }}" value="{{ params[key] }}">
+  {% endfor %}<input type="hidden" name="response_type" value="code">
+  {% if error %}<div class="note err"><p>{{ error }}</p></div>{% endif %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Demande d'accès") }}</h2><div class="aside">{{ _("compte %(user)s", user=g.user.username) }}</div></div>
+    <div class="panel-b stack-sm">
+      <dl class="kv-grid">
+        <div><dt>{{ _("Application") }}</dt><dd class="app-ident">{% if brand %}<span class="app-tile-logo {{ brand }}">{{ claude_logo() if brand == 'claude' else codex_logo() }}</span>{% endif %}<strong>{{ client.name }}</strong></dd></div>
+        <div><dt>{{ _("Retour du jeton") }}</dt><dd class="mono">{{ target }}</dd></div>
+      </dl>
+      <p class="hint">{{ _("Le jeton est remis directement à l'application, sur cet ordinateur : vous n'avez rien à copier. Il apparaît ensuite dans la liste des jetons MCP, où vous pouvez modifier ses outils ou le révoquer.") }}</p>
+      <div class="grid2">
+        <label class="f"><span>{{ _("Nom du jeton") }}</span><input type="text" name="name" required maxlength="80" value="{{ request.form.get('name') or client.name }}"></label>
+        <label class="f"><span>{{ _("Expiration") }}</span><select name="expiry">
+          {% set expiry = request.form.get('expiry', '90') %}
+          <option value="30"{{ ' selected' if expiry == '30' }}>{{ _("30 jours") }}</option><option value="90"{{ ' selected' if expiry == '90' }}>{{ _("90 jours") }}</option>
+          <option value="365"{{ ' selected' if expiry == '365' }}>{{ _("1 an") }}</option><option value="0"{{ ' selected' if expiry == '0' }}>{{ _("Jamais") }}</option></select></label>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Outils autorisés") }}</h2><div class="aside">{{ _("la consultation est cochée d'office, sans l'accès distant") }}</div></div>
+    <div class="panel-b dlg-stack">
+      {{ tool_grid(tools, request.form.getlist('tools') if error else checked) }}
+    </div>
+    <div class="panel-f row-between">
+      <button class="btn" name="decision" value="deny" formnovalidate>{{ _("Refuser") }}</button>
+      <button class="btn primary" name="decision" value="allow"><span class="spin"></span>{{ _("Autoriser") }}</button>
+    </div>
+  </section>
+</form>
+{% endblock %}

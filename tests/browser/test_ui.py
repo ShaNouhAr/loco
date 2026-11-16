@@ -1296,5 +1296,61 @@ class TestDesktopScreens(BrowserTest):
         self.assertEqual(self.chosen(), [])
 
 
+
+class McpApps(BrowserTest):
+    """Serveur MCP : tuiles Claude et Codex (liens vers les applications), page d'autorisation OAuth."""
+
+    def authorize_url(self):
+        r = app.test_client().post("/mcp/oauth/register", json={"redirect_uris": ["http://127.0.0.1:53682/callback"],
+                                                                  "client_name": "Claude Code"})
+        verifier = base64.urlsafe_b64encode(os.urandom(40)).decode().rstrip("=")
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+        import urllib.parse
+        return "/mcp/oauth/authorize?" + urllib.parse.urlencode({
+            "response_type": "code", "client_id": r.get_json()["client_id"], "redirect_uri": "http://127.0.0.1:53682/callback",
+            "code_challenge": challenge, "code_challenge_method": "S256", "state": "etat", "scope": "mcp"})
+
+
+class TestMcpAppsDesktop(McpApps):
+    def test_the_tiles_open_the_applications_and_the_consent_returns_to_the_application(self):
+        self.page.goto("/accounts/mcp")
+        claude, codex = self.page.locator(".app-tile.claude"), self.page.locator(".app-tile.codex")
+        expect(claude).to_contain_text("Claude")
+        expect(codex).to_contain_text("Codex")
+        self.assertTrue(claude.get_attribute("href").startswith("claude://code/new?q="))
+        self.assertTrue(codex.get_attribute("href").startswith("codex://new?prompt="))
+        expect(claude.locator(".brand-logo")).to_be_visible()
+        self.assertLessEqual(self.overflow(), 0)
+        captured = []
+        self.context.route(re.compile(r"^http://127\.0\.0\.1:53682/"), lambda route: (captured.append(route.request.url), route.abort()))
+        self.page.goto(self.authorize_url())
+        expect(self.page.locator("h1")).to_have_text("Autoriser Claude Code")
+        expect(self.page.locator(".app-ident .brand-logo")).to_be_visible()
+        expect(self.page.locator("input[value=list_devices]")).to_be_checked()
+        expect(self.page.locator("input[value=read_file]")).not_to_be_checked()        # accès distant : jamais d'office
+        self.assertLessEqual(self.overflow(), 0)
+        self.page.click("button[name=decision][value=allow]")
+        for _ in range(40):
+            if captured:
+                break
+            self.page.wait_for_timeout(100)
+        self.assertTrue(captured, "pas de retour vers l'application")
+        self.assertRegex(captured[0], r"^http://127\.0\.0\.1:53682/callback\?code=[^&]+&state=etat&iss=")
+        self.problems[:] = [p for p in self.problems if "53682" not in p]                # retour coupé exprès
+
+
+class TestMcpAppsPhone(McpApps):
+    viewport = PHONE
+
+    def test_the_tiles_and_the_consent_fit_on_a_phone(self):
+        self.page.goto("/accounts/mcp")
+        claude = self.page.locator(".app-tile.claude").bounding_box()
+        codex = self.page.locator(".app-tile.codex").bounding_box()
+        self.assertGreater(codex["y"], claude["y"] + claude["height"] - 1)                 # l'une sous l'autre
+        self.assertLessEqual(self.overflow(), 0)
+        self.page.goto(self.authorize_url())
+        expect(self.page.locator("h1")).to_have_text("Autoriser Claude Code")
+        self.assertLessEqual(self.overflow(), 0)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

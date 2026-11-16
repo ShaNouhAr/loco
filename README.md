@@ -200,10 +200,7 @@ Derrière un proxy d'entreprise ? Ça marche aussi.
 
 <img src="docs/media/mcp.webp" width="100%" alt="Serveur MCP : jetons, outils accordés à chacun, dernier appel et commande de connexion d'un assistant">
 
-```bash
-claude mcp add --transport http loco https://<serveur>:8443/mcp --header "Authorization: Bearer <jeton>"
-```
-
+- **Claude ou Codex en un clic** — le bouton ouvre l'application avec la demande d'ajout ; vous autorisez l'accès dans loco, sans jeton à copier.
 - **34 outils**, cochés un à un pour chaque jeton : lire, mettre à jour, lancer un script, ouvrir un terminal.
 - **Jamais plus de droits que vous** — un jeton reste dans les limites du compte qui l'a créé.
 - **Tout est noté** — chaque appel qui change quelque chose rejoint le journal, au nom du jeton.

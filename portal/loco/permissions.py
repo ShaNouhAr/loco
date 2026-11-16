@@ -238,7 +238,7 @@ ENDPOINTS = {
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
     "mcp_settings": "mcp.manage", "mcp_token_add": "mcp.manage", "mcp_token_update": "mcp.manage",
-    "mcp_token_revoke": "mcp.manage",
+    "mcp_token_revoke": "mcp.manage", "mcp_oauth_authorize": "mcp.manage",
 }
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery",

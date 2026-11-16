@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.168.0 — 2026-11-16
+
+- **Ajouter loco à Claude ou à Codex en un clic** : la page *Serveur MCP* propose deux boutons, aux couleurs et logos de Claude et de Codex. Chacun ouvre l'application de bureau de l'ordinateur avec la demande d'ajout déjà écrite : envoyée, elle ajoute loco à la configuration **locale** de l'application, puis ouvre loco dans le navigateur pour autoriser l'accès. Aucun jeton à copier. Les commandes équivalentes pour un terminal (`claude mcp add … && claude mcp login loco`, `codex mcp add … && codex mcp login loco`) sont données dessous.
+- **Connexion par loco (OAuth 2.1)** : un client MCP peut désormais se connecter sans jeton préparé. Il découvre loco, s'enregistre seul, et la personne autorise dans loco, sur la page *Autoriser Claude Code* (ou Codex) : nom, durée et outils du jeton — la consultation est cochée d'office, jamais l'accès distant. Le jeton obtenu est un jeton MCP ordinaire, dans les limites du compte qui l'a autorisé, visible dans la liste (« obtenu par … ») et révocable. PKCE obligatoire, code renvoyé seulement à une application de l'ordinateur (boucle locale), jeton valable pour le seul serveur MCP de loco. Se déconnecter de Claude Code le retire aussi de loco.
+- **Codex demande un nom** : il refuse de se connecter par loco si loco est joint par une adresse IP privée. La page le signale ; déclarez un nom dans *Système › Réseau › Adresse du portail*.
+- Les jetons créés à la main et leur en-tête `Authorization` fonctionnent comme avant. Voir [docs/mcp.md](docs/mcp.md).
+
 ## 2.167.0 — 2026-11-16
 
 - **Wazuh : retirer l'agent efface aussi son entrée sur le manager** : quand l'agent Wazuh est désinstallé d'un poste, loco retire son entrée du manager (`manage_agents -r`), puis l'écrit dans le compte rendu du retrait. Il lui faut un accès SSH au manager, à régler une fois sur la page Wazuh (bloc *Retrait des entrées du manager*) : loco donne une ligne à ajouter à `authorized_keys`, qui n'autorise sa clé qu'à cette seule commande, avec les seuls chiffres reçus — ni shell, ni autre commande ; la clé d'hôte du manager est montrée et confirmée avant tout échange, et un bouton *Essayer l'accès* vérifie le tout sans rien retirer. Sans cet accès, rien ne change : l'entrée reste sur le manager, et le compte rendu le dit.

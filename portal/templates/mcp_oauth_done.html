@@ -1,0 +1,14 @@
+{# Fin d'une autorisation OAuth d'un client MCP : retour vers l'application (page intermédiaire : la CSP
+   « form-action 'self' » interdit au navigateur de suivre une redirection vers une autre origine après un formulaire). #}
+{% extends "_auth.html" %}
+{% block title %}{{ _("Serveur MCP") }}{% endblock %}
+{% block auth_title %}{{ _("Serveur MCP") }}{% endblock %}
+{% block auth_sub %}{% endblock %}
+{% block auth_body %}
+<p class="note {{ kind }}" role="{{ 'alert' if kind == 'err' else 'status' }}">{{ message }}</p>
+{% if target %}
+<a class="btn primary" href="{{ target }}" data-continue="{{ target }}">{{ _("Revenir à l'application") }}</a>
+{% else %}
+<a class="btn" href="{{ url_for('mcp_settings') }}">{{ _("Jetons MCP") }}</a>
+{% endif %}
+{% endblock %}

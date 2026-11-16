@@ -760,6 +760,28 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN wazuh TEXT NOT NULL DEFAULT '';
     """,
+    # 52 : connexion d'un client MCP par OAuth (Claude Code, Codex…) — le client s'enregistre seul, la personne autorise
+    # l'accès dans loco, et le jeton obtenu est un jeton MCP comme les autres (rattaché à son client d'origine).
+    """
+    CREATE TABLE mcp_oauth_clients (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        redirect_uris TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        used_at TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE mcp_oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        redirect_uri TEXT NOT NULL,
+        challenge TEXT NOT NULL,
+        resource TEXT NOT NULL DEFAULT '',
+        granted TEXT NOT NULL DEFAULT '{}',
+        expires_at REAL NOT NULL
+    );
+    ALTER TABLE mcp_tokens ADD COLUMN client_id TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

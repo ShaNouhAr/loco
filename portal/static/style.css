@@ -2399,6 +2399,36 @@ img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 .mcp-json .hint { margin-top: 8px; }
 .mcp-connect > .hint:last-child { margin-top: 16px; }
 .mcp-once { margin: 0 0 10px; }
+/* Tuiles Claude et Codex : couleurs et logos de chaque application (ivoire et orange de Claude, noir de Codex),
+   claires ou sombres selon le thème (light-dark suit la color-scheme du thème). */
+.app-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 6px; }
+.app-tile { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 16px; border: 1px solid; border-radius: 14px;
+  text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease; }
+.app-tile:hover { text-decoration: none; transform: translateY(-1px); box-shadow: var(--shadow-pop); }
+.app-tile:focus-visible { outline: 2px solid var(--accent, #2a78d6); outline-offset: 2px; }
+.app-tile-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 11px; }
+.app-tile-logo .brand-logo { width: 28px; height: 28px; }
+.app-tile-text { display: grid; gap: 2px; min-width: 0; }
+.app-tile-text b { font-size: 17px; line-height: 22px; }
+.app-tile-text small { font-size: 12.5px; line-height: 17px; }
+.app-tile > .ui-icon { flex: none; width: 17px; height: 17px; margin-left: auto; opacity: .55; }
+.app-tile:hover > .ui-icon { opacity: .9; }
+.app-tile.claude { background: light-dark(#faf9f5, #262624); border-color: light-dark(#e8e6dc, #3d3d3a); color: light-dark(#141413, #faf9f5); }
+.app-tile.claude:hover { background: light-dark(#f5f4ed, #2c2c2a); }
+.app-tile.claude .app-tile-logo { background: light-dark(#f0eee6, #1f1e1d); }
+.app-tile.claude b { font-family: ui-serif, Georgia, "Times New Roman", serif; font-weight: 500; letter-spacing: -.01em; }
+.app-tile.claude small { color: light-dark(#73726c, #b0aea5); }
+.app-tile.codex { background: #0d0d0d; border-color: light-dark(#0d0d0d, #2f2f2f); color: #fff; }
+.app-tile.codex:hover { background: #1a1a1a; }
+.app-tile.codex .app-tile-logo .brand-logo { width: 36px; height: 36px; }
+.app-tile.codex b { font-weight: 600; letter-spacing: -.01em; }
+.app-tile.codex small { color: rgb(255 255 255 / .62); }
+@media (max-width: 720px) { .app-tiles { grid-template-columns: minmax(0, 1fr); } }
+.app-ident { display: flex; align-items: center; gap: 10px; }
+.app-ident .app-tile-logo { width: 32px; height: 32px; border-radius: 8px; }
+.app-ident .app-tile-logo .brand-logo { width: 20px; height: 20px; }
+.app-ident .app-tile-logo.claude { background: light-dark(#f0eee6, #1f1e1d); }
+.app-ident .app-tile-logo.codex .brand-logo { width: 28px; height: 28px; }
 .cmd.snippet code { white-space: pre; max-height: 220px; overflow: auto; font-size: 12.5px; }
 .mcp-table td .faint { margin: 0 2px; }
 .mcp-table tr.off td { color: var(--text-2); }

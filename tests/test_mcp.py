@@ -128,7 +128,7 @@ class TestTransport(McpTest):
         anonymous = Client(None)
         r = anonymous.request("initialize", {"protocolVersion": "2025-11-25"})
         self.assertEqual(r.status_code, 401)
-        self.assertIn('Bearer realm="loco"', r.headers["WWW-Authenticate"])
+        self.assertIn('Bearer resource_metadata="', r.headers["WWW-Authenticate"])         # connexion OAuth possible
         self.assertEqual(Client("loco_mcp_" + "A" * 43).request("tools/list").status_code, 401)   # bon format, inconnu
         self.assertEqual(Client("jeton-quelconque").request("tools/list").status_code, 401)
         token, _ = create(self.admin, "Claude", ["list_devices"])

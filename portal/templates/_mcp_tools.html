@@ -1,0 +1,29 @@
+{# Grille des outils MCP (création, modification d'un jeton, autorisation d'une application). #}
+{# Outils un à un, par domaine, sur deux colonnes ; ceux que le compte n'a pas restent visibles, grisés, avec la raison. #}
+{% macro tool_grid(tools, checked=()) -%}
+<div class="mcp-presets" role="group" aria-label="{{ _('Préréglages') }}">
+  <span>{{ _("Activer :") }}</span>
+  <button type="button" class="chip" data-mcp-preset="read">{{ _("Lecture seule") }}</button>
+  <button type="button" class="chip" data-mcp-preset="all">{{ _("Tout ce que je peux") }}</button>
+  <button type="button" class="chip" data-mcp-preset="none">{{ _("Rien") }}</button>
+</div>
+{% for grp in tools %}
+<fieldset class="mcp-group">
+  <legend>{{ grp.label }}</legend>
+  <div class="mcp-tools">
+    {% for t in grp.tools %}
+    <label class="mcp-tool{{ ' off' if not t.available }}">
+      <span class="mcp-tool-text">
+        <span class="mcp-tool-name"><strong>{{ t.label }}</strong>{% if t.destructive %}<span class="tag warn">{{ _("sensible") }}</span>{% elif not t.read_only %}<span class="tag">{{ _("action") }}</span>{% endif %}</span>
+        <small>{{ t.hint }}</small>
+        {% if t.off %}<small class="warn-text">{{ _("Fonctionnalité désactivée : %(f)s.", f=t.off|join(', ')) }}</small>
+        {% elif t.missing %}<small class="warn-text">{{ _("Votre profil n’a pas le droit : %(p)s.", p=t.missing|join(', ')) }}</small>{% endif %}
+        <code class="mcp-tool-id">{{ t.name }}</code>
+      </span>
+      <span class="switch"><input type="checkbox" name="tools" value="{{ t.name }}" role="switch"{{ ' data-read' if t.read_only }}{{ ' checked' if t.name in checked and t.available }}{{ ' disabled' if not t.available }}><i aria-hidden="true"></i></span>
+    </label>
+    {% endfor %}
+  </div>
+</fieldset>
+{% endfor %}
+{%- endmacro %}

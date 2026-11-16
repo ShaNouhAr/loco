@@ -15,6 +15,7 @@ import binascii
 import datetime
 import hashlib
 import json
+import os
 import re
 import secrets
 import time
@@ -900,8 +901,10 @@ def mcp_endpoint():
         return _respond({"error": "Use POST: this server offers neither an SSE stream nor sessions."}, 405, {"Allow": "POST"})
     found = authenticate()
     if found is None:
+        # Où se connecter (OAuth, RFC 9728) : un client MCP sans jeton ouvre alors la page d'autorisation de loco.
+        from .mcp_oauth import challenge_header
         return _error(None, -32001, "Missing, invalid, expired or revoked access token.", 401,
-                      headers={"WWW-Authenticate": 'Bearer realm="loco", error="invalid_token"'})
+                      headers={"WWW-Authenticate": challenge_header(bool(request.headers.get("Authorization")))})
     token, user = found
     if (request.content_length or 0) > MAX_BODY:
         return _error(None, -32600, "Request too large.", 413)
@@ -972,7 +975,7 @@ def _day(value):
     return f"{MONTHS_EN[int(month) - 1]} {int(day)}, {year}" if locale() == "en" else f"{day}/{month}/{year}"
 
 
-def _token_view(row):
+def _token_view(row, apps=None):
     names = _parse_tools(row["tools"])
     now = _now()
     return {"id": row["id"], "name": row["name"], "hint": row["hint"], "owner": row["username"],
@@ -983,13 +986,37 @@ def _token_view(row):
             "created": fleet.ago_text(row["created_at"]),
             "expires": _day(row["expires_at"]) if row["expires_at"] else "", "expired": bool(row["expires_at"]) and row["expires_at"] <= now,
             "owner_disabled": bool(row["owner_disabled"]), "used": fleet.ago_text(row["last_used_at"]) if row["last_used_at"] else "",
-            "ip": row["last_ip"], "client": row["last_client"]}
+            "ip": row["last_ip"], "client": row["last_client"],
+            "app": (apps or {}).get(row["client_id"], _("application connectée")) if row["client_id"] else ""}
+
+
+def _authority():
+    """(adresse, empreinte SHA-256) de l'autorité de loco quand c'est elle qui a signé le certificat du portail —
+    un poste ne la reconnaît pas d'office ; None pour un certificat d'une autre autorité (entreprise, publique)."""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes
+        with open(os.path.join(config.TLS_DIR, "ca.crt"), "rb") as f:
+            ca = x509.load_pem_x509_certificate(f.read())
+        with open(os.path.join(config.TLS_DIR, "server.crt"), "rb") as f:
+            server = x509.load_pem_x509_certificate(f.read())
+    except (OSError, ValueError):
+        return None
+    if server.issuer != ca.subject:
+        return None
+    digest = ca.fingerprint(hashes.SHA256()).hex().upper()
+    return config.portal_url() + "/ca.crt", ":".join(digest[i:i + 2] for i in range(0, len(digest), 2))
 
 
 def _page(created=None, status=200):
+    from .mcp_oauth import client_names, prompts
     own = permissions.role_permissions(db(), g.user["role"])
-    return render_template("mcp.html", tools=_catalog_view(own), tokens=[_token_view(r) for r in _visible()],
-                           endpoint=_endpoint_url(), created=created, expiries=EXPIRIES), status
+    rows = _visible()
+    apps = client_names(db(), [r["client_id"] for r in rows])
+    authority = _authority()
+    return render_template("mcp.html", tools=_catalog_view(own), tokens=[_token_view(r, apps) for r in rows],
+                           endpoint=_endpoint_url(), created=created, expiries=EXPIRIES,
+                           links=prompts(_endpoint_url(), *(authority or ("", "")))), status
 
 
 def _form_values():
