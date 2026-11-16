@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
@@ -34,6 +35,11 @@ def ident(family, hostname, version="2.166.0"):
 
 
 CONNECTED = {"installed": True, "version": "v4.14.9", "active": True, "status": "connected", "manager": "wazuh.lab.test", "id": "003", "name": "pc"}
+MANAGER = {"installed": False, "role": "manager", "version": "v4.14.9", "active": True}
+HOST_KEY = "AAAAC3NzaC1lZDI1NTE5AAAAIGxvY28td2F6dWgtZXNzYWktY2xlLWQtaG90ZS0wMDE="
+REMOVED = "Provide the ID of the agent to be removed (or '\\q' to quit): 003\nAgent '003' removed.\n"
+EMPTY = "Choose your action: A,E,L,R or Q: \n** No agent available. You need to add one first.\n\nmanage_agents: Exiting.\n"
+ABSENT = "Provide the ID of the agent to be removed (or '\\q' to quit): %s\n2026/11/16 13:34:12 manage_agents: ERROR: 9011: Agent ID not found\n"
 
 
 class WazuhTest(FleetTest):
@@ -391,6 +397,246 @@ class TestInstall(WazuhTest):
         self.assertRegex(self.admin.c.get(f"/fleet/{dev}").get_data(as_text=True), "Retrait de l(&#39;|')agent Wazuh")
 
 
+class TestManagerHost(WazuhTest):
+    def test_the_manager_host_is_recognised_and_left_alone(self):
+        self.configure()
+        _agent, dev = self.machine(hostname="em-wazuh", state=MANAGER)
+        self.machine(hostname="pc-equipe", ip="192.168.43.91", state=CONNECTED)
+        with transaction() as conn:
+            self.assertEqual(json.loads(conn.execute("SELECT wazuh FROM devices WHERE id=?", (dev,)).fetchone()[0]),
+                             {"installed": False, "role": "manager", "version": "4.14.9", "active": True})
+        html = self.page()
+        self.assertIn("Manager Wazuh", html)
+        self.assertNotIn("Arrêté", html)
+        self.assertRegex(html, r'name="ids" value="%d" data-pick aria-label="em-wazuh" disabled' % dev)
+        self.assertRegex(html, r'Postes équipés</div><div class="v">1<span class="v-unit">/ 1</span>')   # le manager n'est pas compté
+        for path in ("/fleet/wazuh/install", "/fleet/wazuh/remove"):
+            self.assertEqual(self.post(path, {"only": str(dev)}).status_code, 302)
+        self.assertEqual(self.commands(dev), [])
+        page = self.admin.c.get(f"/fleet/{dev}").get_data(as_text=True)
+        self.assertIn("Manager Wazuh", page)
+        self.assertNotIn("Retirer l'agent Wazuh", page)
+        self.assertNotIn("Installer l'agent Wazuh", page)
+
+    def test_a_stopped_manager_is_said_so(self):
+        _agent, dev = self.machine(hostname="em-wazuh", state=dict(MANAGER, active=False))
+        with fixture.loco.app.test_request_context("/", headers={"Accept-Language": "fr"}):
+            from loco.db import db
+            view = wazuh.view(db().execute("SELECT * FROM devices WHERE id=?", (dev,)).fetchone())
+        self.assertEqual((view["label"], view["level"], view["installed"], view["server"]), ("Manager Wazuh", "err", False, True))
+        self.assertIn("le service du manager Wazuh ne tourne pas", view["detail"])
+
+    def test_a_command_queued_before_the_host_was_known_as_manager_is_refused(self):
+        self.configure()
+        agent, dev = self.machine(hostname="em-wazuh")
+        self.post("/fleet/wazuh/remove", {"only": str(dev)})
+        agent.post("/agent/api/checkin", dict(agent.ident, wazuh=MANAGER), agent.token)
+        self.assertEqual(agent.checkin().get_json()["commands"], [])
+        [cmd] = self.commands(dev)
+        self.assertEqual(cmd["state"], "failed")
+        self.assertIn("manager Wazuh", cmd["output"])
+
+
+def run_forced_command(line, sent):
+    """Ce que fait sshd de la ligne d'authorized_keys : commande imposée (entre guillemets, \\" pour un guillemet), lancée
+    par le shell du compte avec SSH_ORIGINAL_COMMAND = ce que le client a envoyé. manage_agents est remplacé par un
+    script qui écrit ses arguments."""
+    command = re.search(r'command="((?:[^"\\]|\\.)*)"', line).group(1).replace('\\"', '"')
+    with tempfile.TemporaryDirectory() as work:
+        probe = os.path.join(work, "manage_agents")
+        Path(probe).write_text('#!/bin/sh\nprintf "[%s]" "$@"\n')
+        os.chmod(probe, 0o755)
+        done = subprocess.run(["sh", "-c", command.replace(wazuh.MANAGE_AGENTS, probe)], env={"PATH": os.environ["PATH"],
+                              "SSH_ORIGINAL_COMMAND": sent}, cwd=work, capture_output=True, text=True, timeout=20)
+        return done.stdout, sorted(os.listdir(work))
+
+
+class TestUnenroll(WazuhTest):
+    def setUp(self):
+        super().setUp()
+        keys = tempfile.mkdtemp(prefix="loco-wazuh-key-")
+        self.addCleanup(shutil.rmtree, keys, True)
+        for patch in (mock.patch.object(wazuh, "KEY_DIR", keys), mock.patch.object(wazuh, "KEY_PATH", os.path.join(keys, "id_ed25519")),
+                      mock.patch.object(wazuh, "unenroll_soon", wazuh._unenroll)):           # retrait de l'entrée sans fil d'exécution
+            patch.start()
+            self.addCleanup(patch.stop)
+        self.configure()
+
+    def cfg(self):
+        with transaction() as conn:
+            return wazuh.load(conn)
+
+    def link(self):
+        with transaction() as conn:
+            wazuh._save(conn, dict(wazuh.load(conn), host_key="ssh-ed25519 " + HOST_KEY))
+
+    def removal(self, reported=None, state="success", device_state=CONNECTED, ssh=(0, REMOVED)):
+        """Retrait demandé, remis à l'agent, puis son compte rendu : (sortie de la commande, appels ssh)."""
+        agent, dev = self.machine(state=device_state)
+        self.post("/fleet/wazuh/remove", {"only": str(dev)})
+        [sent] = agent.checkin().get_json()["commands"]
+        with mock.patch.object(wazuh, "_ssh", return_value=ssh) as call:
+            data = {"id": sent["id"], "state": state, "output": "Agent Wazuh retiré du poste.", "exit_code": 0 if state == "success" else 1}
+            if reported is not False:
+                data["wazuh"] = reported or {"installed": False}
+            self.assertEqual(agent.post("/agent/api/result", data, agent.token).status_code, 200)
+        return self.commands(dev)[-1]["output"], [c.args[1] for c in call.call_args_list]
+
+    def audit(self):
+        with transaction() as conn:
+            return [dict(r) for r in conn.execute("SELECT username, action, detail FROM audit WHERE action LIKE 'parc.wazuh.%'")]
+
+    def test_the_authorized_line_lets_only_the_digits_through(self):
+        line = wazuh.authorized_line()
+        self.assertTrue(line.startswith('restrict,command="/var/ossec/bin/manage_agents -r '))
+        self.assertTrue(line.endswith(wazuh.public_key()))
+        self.assertEqual(run_forced_command(line, "/var/ossec/bin/manage_agents -r 003")[0], "[-r][003]")
+        out, files = run_forced_command(line, '$(touch pwn); `touch pwn2`; * 7 > fichier')
+        self.assertEqual((out, files), ("[-r][27]", ["manage_agents"]))                 # rien n'est lancé ni écrit
+        self.assertEqual(run_forced_command(line, "")[0], "[-r]")
+
+    def test_the_key_for_the_manager_is_its_own(self):
+        from loco import homeassistant
+        self.assertNotEqual(wazuh.public_key(), homeassistant.public_key())
+        self.assertEqual(stat.S_IMODE(os.stat(wazuh.KEY_PATH).st_mode), 0o600)
+
+    def test_access_is_set_in_two_steps_with_the_host_key_confirmed(self):
+        page = self.page()
+        self.assertIn("Retrait des entrées du manager", page)
+        self.assertIn("restrict,command=", page)
+        with mock.patch("loco.homeassistant.probe_host_key", return_value=("ssh-ed25519", HOST_KEY)) as probe:
+            self.post("/fleet/wazuh/access", {"ssh_user": "root", "ssh_port": "2222"})
+        self.assertEqual(probe.call_args.args[:2], ("wazuh.lab.test", 2222))
+        self.assertFalse(wazuh.linked(self.cfg()))                    # rien d'enregistré avant la confirmation
+        page = self.page()
+        from loco.homeassistant import fingerprint
+        self.assertIn(fingerprint(HOST_KEY), page)
+        self.assertEqual(self.post("/fleet/wazuh/access/confirm", {"nonce": "0" * 16}).status_code, 400)
+        with mock.patch("loco.homeassistant.probe_host_key", return_value=("ssh-ed25519", HOST_KEY)):
+            self.post("/fleet/wazuh/access", {"ssh_user": "root", "ssh_port": "2222"})
+        nonce = self.page().split('name="nonce" value="')[1].split('"')[0]
+        with mock.patch.object(wazuh, "_ssh", return_value=(0, ABSENT % wazuh.PROBE_ID)) as call:
+            self.post("/fleet/wazuh/access/confirm", {"nonce": nonce})
+        self.assertEqual(call.call_args.args[1], "echo loco-shell-ouvert; /var/ossec/bin/manage_agents -r 99999999")
+        cfg = self.cfg()
+        self.assertEqual((cfg["ssh_user"], cfg["ssh_port"], cfg["host_key"]), ("root", "2222", "ssh-ed25519 " + HOST_KEY))
+        self.assertIn(("admin", "parc.wazuh.acces"), [(a["username"], a["action"]) for a in self.audit()])
+        page = self.page()
+        self.assertIn("accès réglé", page)
+        self.assertIn("root@wazuh.lab.test:2222", page)
+        self.assertIn("puis loco efface son entrée sur le manager", page)
+
+    def test_the_access_test_tells_a_full_shell_from_the_restricted_key(self):
+        self.link()
+        cfg = self.cfg()
+        with mock.patch.object(wazuh, "_ssh", return_value=(0, ABSENT % wazuh.PROBE_ID)):
+            self.assertEqual(wazuh.check(cfg)[0], "ok")
+        with mock.patch.object(wazuh, "_ssh", return_value=(0, "loco-shell-ouvert\n" + ABSENT % wazuh.PROBE_ID)):
+            self.assertEqual(wazuh.check(cfg)[0], "warn")
+        with mock.patch.object(wazuh, "_ssh", return_value=(0, EMPTY)):                     # manager sans aucun agent inscrit
+            self.assertEqual(wazuh.check(cfg)[0], "ok")
+        with mock.patch.object(wazuh, "_ssh", return_value=(255, "root@wazuh.lab.test: Permission denied (publickey).")), \
+                fixture.loco.app.test_request_context("/", headers={"Accept-Language": "fr"}):
+            with self.assertRaisesRegex(wazuh.LinkError, "refuse la clé de loco"):
+                wazuh.check(cfg)
+
+    def test_ssh_uses_loco_key_and_the_confirmed_host_key_only(self):
+        self.link()
+        seen = {}
+
+        def fake(argv, **kwargs):
+            known = [a.split("=", 1)[1] for a in argv if a.startswith("UserKnownHostsFile=")][0]
+            seen.update(argv=argv, known=Path(known).read_text(), path=known)
+            return subprocess.CompletedProcess(argv, 0, REMOVED.encode())
+        with mock.patch("loco.homeassistant.ssh_binary", return_value="/usr/bin/ssh"), mock.patch.object(wazuh.subprocess, "run", fake):
+            self.assertIn("003", wazuh.unenroll(self.cfg(), "003"))
+        argv = seen["argv"]
+        self.assertEqual(argv[argv.index("-i") + 1], wazuh.KEY_PATH)
+        self.assertIn("StrictHostKeyChecking=yes", argv)
+        self.assertEqual(argv[-3:], ["--", "wazuh.lab.test", "/var/ossec/bin/manage_agents -r 003"])
+        self.assertEqual(seen["known"], "wazuh.lab.test ssh-ed25519 %s\n" % HOST_KEY)
+        self.assertFalse(os.path.exists(seen["path"]))
+        with self.assertRaises(wazuh.LinkError):
+            wazuh.unenroll(self.cfg(), "000")                     # jamais le manager lui-même
+
+    def test_removal_also_removes_the_entry_from_the_manager(self):
+        self.link()
+        output, calls = self.removal()
+        self.assertEqual(calls, ["/var/ossec/bin/manage_agents -r 003"])
+        self.assertIn("Agent Wazuh retiré du poste.\nEntrée 003 retirée du manager Wazuh.", output)
+        [entry] = [a for a in self.audit() if a["action"] == "parc.wazuh.desenrolement"]
+        self.assertEqual(entry["username"], "admin")
+        self.assertIn("pc-wazuh", entry["detail"])
+
+    def test_an_entry_already_gone_is_not_an_error(self):
+        self.link()
+        output, _calls = self.removal(ssh=(0, ABSENT % "003"))
+        self.assertIn("Entrée 003 déjà absente du manager Wazuh.", output)
+        with transaction() as conn:
+            conn.execute("DELETE FROM devices")
+        output, _calls = self.removal(ssh=(0, EMPTY))
+        self.assertIn("Entrée 003 déjà absente du manager Wazuh.", output)
+
+    def test_a_refused_access_is_reported_with_the_removal(self):
+        self.link()
+        output, _calls = self.removal(ssh=(255, "root@wazuh.lab.test: Permission denied (publickey)."))
+        self.assertIn("Entrée 003 non retirée du manager : Le manager refuse la clé de loco", output)
+
+    def test_without_access_the_entry_stays_and_the_removal_says_so(self):
+        output, calls = self.removal()
+        self.assertEqual(calls, [])
+        self.assertIn("Entrée 003 laissée sur le manager", output)
+        self.assertIn("Son entrée reste sur le manager", self.page())
+
+    def test_nothing_is_removed_from_the_manager_when_unsure(self):
+        self.link()
+        cases = ((dict(reported={"installed": True, "id": "003", "manager": "wazuh.lab.test"}), "encore présent sur le poste"),
+                 (dict(reported=MANAGER), "encore présent sur le poste"),
+                 (dict(reported=False), "encore présent sur le poste"),
+                 (dict(device_state=dict(CONNECTED, manager="autre.lab.test")), "relié à autre.lab.test"),
+                 (dict(device_state=dict(CONNECTED, manager="")), "relié à ?"),
+                 (dict(device_state=dict(CONNECTED, id="000")), "Aucune entrée connue"),
+                 (dict(device_state=dict(CONNECTED, id="")), "Aucune entrée connue"),
+                 (dict(state="failed"), None))
+        for index, (kwargs, note) in enumerate(cases):
+            with transaction() as conn:
+                conn.execute("DELETE FROM devices")
+            output, calls = self.removal(**kwargs)
+            self.assertEqual(calls, [], kwargs)
+            if note:
+                self.assertIn(note, output, kwargs)
+            else:
+                self.assertEqual(output, "Agent Wazuh retiré du poste.")
+
+    def test_an_installation_never_touches_the_manager(self):
+        self.link()
+        agent, dev = self.machine(state=CONNECTED)
+        self.package("wazuh-agent_4.14.9-1_amd64.deb")
+        self.post("/fleet/wazuh/install", {"only": str(dev)})
+        [sent] = agent.checkin().get_json()["commands"]
+        with mock.patch.object(wazuh, "_ssh") as call:
+            agent.post("/agent/api/result", {"id": sent["id"], "state": "success", "output": "ok", "exit_code": 0,
+                                             "wazuh": {"installed": False}}, agent.token)
+        call.assert_not_called()
+
+    def test_a_new_manager_address_needs_its_host_key_confirmed_again(self):
+        self.link()
+        self.configure(manager="wazuh2.lab.test")
+        self.assertEqual(self.cfg()["host_key"], "")
+        self.link()
+        self.configure(manager="WAZUH2.lab.test", group="docker")                  # même adresse : l'accès reste
+        self.assertTrue(self.cfg()["host_key"])
+
+    def test_access_can_be_removed_and_needs_the_settings_right(self):
+        self.link()
+        installer = self.account("poseur", {"wazuh.view", "wazuh.install", "fleet.view"})
+        for path in ("/fleet/wazuh/access", "/fleet/wazuh/access/test", "/fleet/wazuh/access/delete", "/fleet/wazuh/access/confirm"):
+            self.assertEqual(self.post(path, {"ssh_user": "root", "ssh_port": "22"}, browser=installer).status_code, 403, path)
+        self.assertNotIn("Retrait des entrées du manager", self.page(installer))
+        self.post("/fleet/wazuh/access/delete")
+        self.assertFalse(wazuh.linked(self.cfg()))
+
+
 class FakeResponse(io.BytesIO):
     def __enter__(self):
         return self
@@ -502,6 +748,7 @@ class TestLinuxAgent(unittest.TestCase):
             patch.start()
             self.addCleanup(patch.stop)
         self.calls = []
+        self.kind = "agent"
 
     def installed(self, status="connected", manager="ancien.lab.test", running=True):
         """Arborescence d'un agent Wazuh installé (comme le pose le paquet officiel)."""
@@ -517,7 +764,7 @@ class TestLinuxAgent(unittest.TestCase):
 
     def fake_run(self, cmd, timeout=7200):
         self.calls.append(cmd)
-        return (0, "v4.14.9\n") if cmd[1:] == ["info", "-v"] else (0, "")
+        return (0, 'WAZUH_VERSION="v4.14.9"\nWAZUH_REVISION="rc2"\nWAZUH_TYPE="%s"\n' % self.kind) if cmd[1:] == ["info"] else (0, "")
 
     def test_nothing_installed(self):
         self.assertEqual(agent.wazuh_state(), {"installed": False})
@@ -681,6 +928,32 @@ class TestLinuxAgent(unittest.TestCase):
             code, _out, seen = self.apply(cmd, content)
         self.assertEqual(code, 0)
         self.assertEqual(seen["command"][:3], ["dnf", "-y", "install"])
+
+    def test_on_the_manager_the_state_says_so_without_reading_the_enrolled_agents(self):
+        self.installed(running=False)
+        Path(self.home, "var/run", "wazuh-remoted-%d.pid" % os.getpid()).write_text("")
+        self.kind = "server"
+        with mock.patch.object(agent, "run", self.fake_run):
+            state = agent.wazuh_state()
+        self.assertEqual(state, {"installed": False, "role": "manager", "version": "4.14.9", "active": True})
+        self.assertNotIn("pc-wazuh", json.dumps(state))                 # client.keys du manager : les agents inscrits
+
+    def test_a_manager_is_recognised_even_without_the_version_command(self):
+        self.installed(running=False)
+        Path(self.home, "bin/wazuh-analysisd").write_text("")
+        with mock.patch.object(agent, "run", return_value=(1, "")):
+            state = agent.wazuh_state()
+        self.assertEqual((state.get("role"), state["active"]), ("manager", False))
+
+    def test_nothing_is_installed_or_removed_on_the_manager(self):
+        self.installed()
+        self.kind = "server"
+        for op in ("install", "remove"):
+            with mock.patch.object(agent, "run", self.fake_run):
+                code, out = agent.wazuh_apply("https://loco.test:8443", {"id": 2, "action": "wazuh", "wazuh": {"op": op}})
+            self.assertEqual(code, 1)
+            self.assertIn("manager Wazuh", out)
+        self.assertEqual([c for c in self.calls if c[1:] != ["info"]], [])
 
     def test_identity_carries_the_state(self):
         with mock.patch.object(agent, "run", self.fake_run):

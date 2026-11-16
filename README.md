@@ -220,7 +220,7 @@ claude mcp add --transport http loco https://<serveur>:8443/mcp --header "Author
 </p>
 <p align="center"><sub>← <b>Android</b> <i>(expérimental)</i> — écran, terminal, fichiers et applications de vos propres appareils. Toujours visible, toujours consenti.<br><b>Home Assistant</b> <i>(facultatif)</i> — mises à jour, sauvegardes, santé et terminal, par SSH avec une clé propre à loco. →</sub></p>
 
-**Agent Wazuh** *(facultatif)* — vous avez un manager Wazuh ? loco pose son agent sur les postes que vous cochez, réglé pour votre manager, et montre sur chaque fiche s'il est connecté. Le paquet officiel est vérifié par loco puis remis aux postes, qui n'ont pas besoin d'Internet. [En savoir plus](docs/wazuh.md).
+**Agent Wazuh** *(facultatif)* — vous avez un manager Wazuh ? loco pose son agent sur les postes que vous cochez, réglé pour votre manager, et montre sur chaque fiche s'il est connecté. Le paquet officiel est vérifié par loco puis remis aux postes, qui n'ont pas besoin d'Internet. Retirer l'agent d'un poste peut aussi effacer son entrée sur le manager. [En savoir plus](docs/wazuh.md).
 
 <br>
 

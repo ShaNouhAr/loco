@@ -3,14 +3,15 @@
 **Facultatif** — à activer dans *Administration › Fonctionnalités › Facultatif*.
 
 Vous avez un manager [Wazuh](https://wazuh.com) et un parc déjà inscrit dans loco : loco pose l'agent Wazuh sur les
-postes que vous choisissez, réglé pour votre manager, et vous dit où il en est. Il ne remplace pas Wazuh et ne règle
-pas votre manager.
+postes que vous choisissez, réglé pour votre manager, et vous dit où il en est. Quand vous retirez l'agent d'un poste,
+loco peut aussi effacer son entrée sur le manager. Il ne remplace pas Wazuh et ne règle pas votre manager.
 
 **Sommaire** —
 [Régler](#régler) ·
 [Installer](#installer-sur-des-postes) ·
 [Suivre](#suivre-létat) ·
 [Retirer](#retirer) ·
+[Effacer l'entrée du manager](#effacer-lentrée-du-manager) ·
 [Ce qui se passe sur le poste](#ce-qui-se-passe-sur-le-poste) ·
 [Droits](#droits) ·
 [Si ça ne se connecte pas](#si-ça-ne-se-connecte-pas)
@@ -66,6 +67,7 @@ La page Wazuh et la fiche de chaque poste (onglet *Détails*) montrent ce que le
 | **Déconnecté** | le manager ne répond plus à ce poste |
 | **Arrêté** | le service de l'agent Wazuh ne tourne pas |
 | **Non installé** | pas d'agent Wazuh sur ce poste |
+| **Manager Wazuh** | ce poste est le manager lui-même : loco n'y pose ni n'y retire d'agent, et ne le compte pas parmi les postes à équiper |
 | **Inconnu** | l'agent loco du poste est antérieur à la 2.166.0 : il se met à jour seul, l'état suit |
 
 S'y ajoutent la version installée, le numéro et le nom de l'agent chez Wazuh, et une précision quand le poste est
@@ -74,7 +76,42 @@ relié à un autre manager que celui réglé.
 ## Retirer
 
 Fiche du poste, *Plus › Retirer l'agent Wazuh…*, ou *Retirer* sur sa ligne. L'agent est désinstallé du poste.
-Son entrée reste sur le manager : supprimez-la là-bas si le poste ne doit plus y figurer.
+
+Si loco a accès au manager (ci-dessous), il efface ensuite l'entrée du poste sur le manager, et le compte rendu du
+retrait, dans l'historique du poste, le dit : « Entrée 003 retirée du manager Wazuh. » Sinon, l'entrée reste sur le
+manager : supprimez-la là-bas si le poste ne doit plus y figurer.
+
+## Effacer l'entrée du manager
+
+*Mon parc › Wazuh*, bloc **Retrait des entrées du manager** — facultatif, à régler une fois.
+
+loco se connecte au manager en SSH, avec une clé qui lui est propre, et n'y lance qu'une commande :
+`manage_agents -r <numéro>`. Trois étapes :
+
+1. **Autoriser la clé de loco** — loco affiche une ligne à ajouter au fichier `~/.ssh/authorized_keys` du compte
+   choisi sur le manager (`root` en général, `manage_agents` demandant les droits d'administration) :
+
+   ```
+   restrict,command="/var/ossec/bin/manage_agents -r $(printf %s \"$SSH_ORIGINAL_COMMAND\" | tr -cd 0-9)" ssh-ed25519 AAAA… loco@…
+   ```
+
+   Avec elle, la clé ne peut lancer que `manage_agents -r`, avec les seuls **chiffres** de ce qu'elle envoie : ni
+   shell, ni redirection, ni autre commande (`restrict` coupe aussi terminal et tunnels). La clé privée reste sur le
+   serveur loco.
+2. **Relever la clé d'hôte** — indiquez le compte et le port SSH ; loco relève la clé que présente le manager et en
+   montre l'empreinte. Comparez-la à celle du manager (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`), puis
+   confirmez : loco n'échangera qu'avec cette clé-là.
+3. **Essayer** — *Essayer l'accès* demande au manager de retirer un numéro qu'aucun agent ne porte : rien n'est retiré,
+   mais loco sait que l'accès fonctionne. Il prévient si la clé ouvre un shell complet (ligne sans `command=`).
+
+Ensuite, à chaque retrait réussi, loco efface l'entrée du poste. Par prudence, il ne le fait que si :
+
+- le poste était relié au manager réglé (pas à un autre) ;
+- le poste dit l'agent bien désinstallé ;
+- le numéro de l'agent est connu — jamais `000`, le manager lui-même.
+
+Changer l'adresse du manager dans les réglages oublie la clé d'hôte : elle se confirme de nouveau. *Retirer l'accès*
+coupe tout de suite ; retirez aussi la ligne d'`authorized_keys` sur le manager.
 
 ## Ce qui se passe sur le poste
 
@@ -103,7 +140,7 @@ Trois droits, dans les profils d'accès :
 |---|---|
 | **Consulter Wazuh** | voir la page et l'état des postes |
 | **Installer et retirer l'agent Wazuh** | poser l'agent, le mettre à jour, le retirer — sur les postes du parc de son profil |
-| **Régler Wazuh** | adresse du manager, mot de passe d'enrôlement, groupe et version |
+| **Régler Wazuh** | adresse du manager, mot de passe d'enrôlement, groupe et version, accès de loco au manager |
 
 Le profil Administrateur les a tous ; les autres profils doivent les recevoir. Les droits sont revérifiés au moment où
 la commande part vers le poste.

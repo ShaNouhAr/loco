@@ -1123,9 +1123,11 @@ class WazuhPages(BrowserTest):
             conn.execute("DELETE FROM devices")
         self.addCleanup(self.restore)
         states = ({"installed": True, "version": "4.14.9", "active": True, "status": "connected", "manager": "wazuh.exemple.test", "id": "003", "name": "srv-fichiers"},
-                  {"installed": False}, {"installed": True, "version": "4.13.1", "active": True, "status": "pending", "manager": "ancien-manager.exemple.test", "id": "", "name": ""})
+                  {"installed": False}, {"installed": True, "version": "4.13.1", "active": True, "status": "pending", "manager": "ancien-manager.exemple.test", "id": "", "name": ""},
+                  {"installed": False, "role": "manager", "version": "4.14.9", "active": True})
         for index, state in enumerate(states):
-            ident = dict(LINUX if index else WINDOWS, hostname=("srv-fichiers", "poste-comptabilite-02", "serveur-de-sauvegarde-du-batiment-b")[index], agent_version="2.166.0")
+            ident = dict(LINUX if index else WINDOWS, hostname=("srv-fichiers", "poste-comptabilite-02", "serveur-de-sauvegarde-du-batiment-b", "wazuh-manager")[index],
+                         agent_version="2.167.0")
             agent = Agent(ident, f"192.168.43.{170 + index}", uid=hashlib.sha256(ident["hostname"].encode()).hexdigest()[:32])
             agent.enroll()
             agent.post("/agent/api/checkin", dict(agent.ident, wazuh=state), agent.token)
@@ -1156,7 +1158,12 @@ class TestWazuhDesktop(WazuhPages):
         expect(self.page.locator("[name=password]")).not_to_have_value("Enrolement-Wazuh-2026")     # jamais réaffiché
         expect(self.page.locator(".metric").nth(1)).to_contain_text("2")                            # deux postes équipés sur trois
         rows = self.page.locator("[data-pick-form] tbody tr")
-        expect(rows).to_have_count(3)
+        expect(rows).to_have_count(4)
+        manager = rows.filter(has_text="wazuh-manager")
+        expect(manager.locator(".st.ok")).to_have_text("Manager Wazuh")                 # le manager lui-même : rien à y poser
+        expect(manager.locator("[data-pick]")).to_be_disabled()
+        expect(manager.locator("button")).to_have_count(0)
+        expect(self.page.locator("#acces")).to_contain_text("restrict,command=")      # accès au manager : ligne à autoriser
         expect(rows.filter(has_text="srv-fichiers").locator(".st.ok")).to_have_text("Connecté")
         expect(rows.filter(has_text="poste-comptabilite-02")).to_contain_text("Non installé")
         late = rows.filter(has_text="serveur-de-sauvegarde")

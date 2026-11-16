@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Wazuh · {{ host }}{% endblock %}
+{% from "_macros.html" import cmd %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 {% set manage = can('wazuh.manage') %}
@@ -51,6 +52,82 @@
   </form>
   {% endif %}
 
+  {% if access %}
+  {# Retrait des entrées du manager : accès SSH limité à manage_agents -r, clé d'hôte confirmée avant tout échange. #}
+  <section class="panel" id="acces">
+    <div class="panel-h"><h2>{{ _("Retrait des entrées du manager") }}</h2><div class="aside">{% if access.linked %}<span class="st ok">{{ _("accès réglé") }}</span>{% else %}{{ _("facultatif") }}{% endif %}</div></div>
+    {% if access.pending %}
+    {% set p = access.pending %}
+    <div class="panel-b stack-sm">
+      <p>{{ _("Voici l'empreinte de la clé que présente le manager. Comparez-la à la sienne avant de confirmer : c'est ce qui garantit que loco parle bien à lui, et à lui seul.") }}</p>
+      <dl class="kv-grid">
+        <div><dt>{{ _("Empreinte (%(type)s)", type=p.type) }}</dt><dd class="mono">{{ p.fingerprint }}</dd></div>
+        <div><dt>{{ _("Accès") }}</dt><dd class="mono">{{ p.user }}@{{ p.manager }}{% if p.port != 22 %}:{{ p.port }}{% endif %}</dd></div>
+      </dl>
+      {% if p.same is not none %}<p class="hint">{{ _("Cette clé est la même que celle déjà confirmée.") if p.same else _("Cette clé diffère de celle confirmée jusqu'ici. C'est attendu si le manager a été réinstallé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+      <p class="hint">{{ _("Pour la lire, lancez sur le manager :") }}</p>
+      {{ cmd('wazuh-hostkey', 'for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done', '#') }}
+    </div>
+    <div class="panel-f row-between">
+      <form method="post" action="{{ url_for('wazuh_access_confirm') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="cancel" value="1">
+        <button class="linkbtn">{{ _("Annuler") }}</button>
+      </form>
+      <form method="post" action="{{ url_for('wazuh_access_confirm') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="nonce" value="{{ p.nonce }}">
+        <button class="btn primary"><span class="spin"></span>{{ _("L'empreinte est la bonne : confirmer") }}</button>
+      </form>
+    </div>
+    {% elif access.linked %}
+    <div class="panel-b stack-sm">
+      <p class="muted">{{ _("Quand vous retirez l'agent Wazuh d'un poste, loco efface aussi son entrée sur le manager, une fois l'agent désinstallé. Le résultat s'ajoute au compte rendu du retrait, dans l'historique du poste.") }}</p>
+      <dl class="kv-grid">
+        <div><dt>{{ _("Accès") }}</dt><dd class="mono">{{ cfg.ssh_user }}@{{ cfg.manager }}{% if cfg.ssh_port != '22' %}:{{ cfg.ssh_port }}{% endif %}</dd></div>
+        <div><dt>{{ _("Clé d'hôte du manager") }}</dt><dd class="mono">{{ access.fingerprint }}</dd></div>
+      </dl>
+      <details class="hint"><summary>{{ _("Ligne à autoriser sur le manager") }}</summary>
+        <div class="cmd wrap"><code id="wazuh-authorized">{{ access.line }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+      </details>
+    </div>
+    <div class="panel-f row-between">
+      <form method="post" action="{{ url_for('wazuh_access_delete') }}" data-confirm="{{ _('Retirer l\'accès de loco au manager ?') }}" data-confirm-text="{{ _('Les prochains retraits laisseront l\'entrée des postes sur le manager. Retirez aussi la clé de loco des clés autorisées, sur le manager.') }}" data-confirm-ok="{{ _('Retirer') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="linkbtn danger">{{ _("Retirer l'accès") }}</button>
+      </form>
+      <div class="row">
+        <form method="post" action="{{ url_for('wazuh_access') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ssh_user" value="{{ cfg.ssh_user }}"><input type="hidden" name="ssh_port" value="{{ cfg.ssh_port }}">
+          <button class="linkbtn">{{ _("Relever de nouveau la clé d'hôte") }}</button>
+        </form>
+        <form method="post" action="{{ url_for('wazuh_access_test') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn"><span class="spin"></span>{{ _("Essayer l'accès") }}</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <form method="post" action="{{ url_for('wazuh_access') }}" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="panel-b stack-sm">
+        <p class="muted">{{ _("Quand vous retirez l'agent Wazuh d'un poste, loco peut aussi effacer son entrée sur le manager. Il lui faut pour cela un accès SSH au manager, limité à cette seule opération. Sans lui, l'entrée reste sur le manager.") }}</p>
+        {% if not access.ssh %}<div class="note warn"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur.") }}</p></div>{% endif %}
+        <p>{{ _("Sur le manager, ajoutez cette ligne au fichier ~/.ssh/authorized_keys du compte choisi (root en général) :") }}</p>
+        <div class="cmd wrap"><code id="wazuh-authorized">{{ access.line }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+        <p class="hint">{{ _("Avec elle, la clé de loco ne peut lancer que manage_agents -r suivi d'un numéro d'agent : ni shell, ni autre commande. La clé privée correspondante ne quitte jamais ce serveur.") }}</p>
+        <div class="rollout-fields">
+          <label class="f"><span>{{ _("Utilisateur SSH") }}</span><input type="text" name="ssh_user" value="{{ cfg.ssh_user }}" spellcheck="false" autocomplete="off" required maxlength="32"></label>
+          <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="ssh_port" value="{{ cfg.ssh_port }}" min="1" max="65535" required></label>
+        </div>
+      </div>
+      <div class="panel-f row-between">
+        <span class="hint">{{ _("loco relève la clé d'hôte de %(host)s ; vous la confirmez avant tout échange.", host=cfg.manager) }}</span>
+        <button class="btn primary"{{ ' disabled' if not access.ssh }}><span class="spin"></span>{{ _("Relever la clé d'hôte du manager") }}</button>
+      </div>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <form method="post" action="{{ url_for('wazuh_install') }}" class="panel" data-pick-form>
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <div class="panel-h"><h2>{{ _("Postes") }}{% if rows %} <span class="h-count">{{ rows|length }}</span>{% endif %}</h2><div class="aside">{{ _("Windows, Debian, Ubuntu et famille Red Hat") }}</div></div>
@@ -62,18 +139,18 @@
           {% for r in rows %}
           {% set w = r.w %}
           <tr>
-            {% if install %}<td class="chk" data-label="{{ _('Sélectionner') }}"><input type="checkbox" name="ids" value="{{ r.d.id }}" data-pick aria-label="{{ r.d.label or r.d.hostname }}"{{ ' disabled' if r.busy }}></td>{% endif %}
+            {% if install %}<td class="chk" data-label="{{ _('Sélectionner') }}"><input type="checkbox" name="ids" value="{{ r.d.id }}" data-pick aria-label="{{ r.d.label or r.d.hostname }}"{{ ' disabled' if r.busy or w.server }}></td>{% endif %}
             <td><a class="strong-link" href="{{ url_for('fleet_device', dev_id=r.d.id) }}">{{ r.d.label or r.d.hostname }}</a><span class="sub">{{ r.os }}</span></td>
             <td data-label="{{ _('Agent Wazuh') }}">{% if r.busy %}<span class="busy-note"><span class="spin"></span>{{ _("retrait demandé") if r.busy == 'remove' else _("installation demandée") }}</span>{% else %}<span class="st {{ w.level if w.level != 'off' }}">{{ w.label }}</span>{% endif %}{% if w.detail %}<span class="sub">{{ w.detail }}</span>{% endif %}</td>
             <td class="{{ 'hide-sm' if not w.version }}" data-label="{{ _('Version') }}"><span class="mono">{{ w.version or '—' }}</span></td>
             <td class="{{ 'hide-sm' if not (w.state and w.state.installed and w.state.id) }}" data-label="{{ _('Identité chez Wazuh') }}">{% if w.state and w.state.installed and w.state.id %}<span class="mono">{{ w.state.id }}</span> · {{ w.state.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
             {% if install %}<td class="right nowrap card-action">
-              {% if not r.busy and ready %}
+              {% if not r.busy and ready and not w.server %}
               {% if not w.installed %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Installer") }}</button>
               {% elif w.outdated %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Mettre à jour") }}</button>
               {% else %}<button class="linkbtn" name="only" value="{{ r.d.id }}" title="{{ _('Réinstalle l\'agent avec les réglages actuels (manager, groupe, mot de passe)') }}">{{ _("Réappliquer") }}</button>{% endif %}
               {% endif %}
-              {% if not r.busy and w.installed %}<button class="linkbtn danger" name="only" value="{{ r.d.id }}" formaction="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=r.d.label or r.d.hostname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">{{ _("Retirer") }}</button>{% endif %}
+              {% if not r.busy and w.installed %}<button class="linkbtn danger" name="only" value="{{ r.d.id }}" formaction="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=r.d.label or r.d.hostname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste, puis loco efface son entrée sur le manager.') if linked else _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">{{ _("Retirer") }}</button>{% endif %}
             </td>{% endif %}
           </tr>
           {% endfor %}
@@ -100,7 +177,8 @@
         <li>{{ _("Sur le poste, l'agent loco installe le paquet officiel de Wazuh (deb, rpm ou msi), inscrit l'adresse du manager et le groupe, puis démarre le service. L'agent Wazuh s'enrôle lui-même auprès du manager.") }}</li>
         <li>{{ _("Le poste doit joindre le manager sur les ports 1514 (échanges) et 1515 (enrôlement). loco ne règle ni le manager ni son pare-feu.") }}</li>
         <li>{{ _("Le mot de passe d'enrôlement est écrit sur le poste dans le fichier que lit l'agent Wazuh (authd.pass), lisible des seuls administrateurs ; il n'est jamais passé en argument d'une commande.") }}</li>
-        <li>{{ _("Retirer l'agent le désinstalle du poste. Son entrée reste sur le manager, où vous pouvez la supprimer.") }}</li>
+        <li>{{ _("Retirer l'agent le désinstalle du poste, puis loco efface son entrée sur le manager (accès réglé plus haut).") if linked else _("Retirer l'agent le désinstalle du poste. Son entrée reste sur le manager, sauf si vous donnez à loco l'accès prévu pour l'effacer.") }}</li>
+        <li>{{ _("Le manager lui-même, s'il est inscrit dans loco, est reconnu comme tel : aucun agent ne s'y pose.") }}</li>
         <li>{{ _("L'état affiché ici est celui que remonte le poste à chaque contact (agents loco %(v)s et plus) : installé, service en marche, lien avec le manager.", v=agent_version) }}</li>
       </ul>
     </div>

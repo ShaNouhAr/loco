@@ -1300,6 +1300,10 @@ def agent_result():
         conn.execute("UPDATE devices SET reboot_pending=? WHERE id=?", (f"{_now()}|{dev['boot']}", dev["id"]))
     if cmd["action"] == "uninstall" and state == "success":
         conn.execute("UPDATE devices SET state='removed', token_hash='' WHERE id=?", (dev["id"],))
+    unenroll = None
+    if cmd["action"] == "wazuh" and state == "success":  # agent Wazuh retiré : son entrée du manager aussi (état gardé AVANT ce compte rendu)
+        from . import wazuh
+        unenroll = wazuh.removed(conn, dev, cmd, data.get("wazuh"))
     if isinstance(data.get("wazuh"), dict):             # état de l'agent Wazuh après une installation ou un retrait
         from . import wazuh
         wazuh.record(conn, dev, data["wazuh"])
@@ -1308,6 +1312,8 @@ def agent_result():
         cleanup_artifacts(conn)
     record_contact(dev, conn)
     conn.commit()
+    if unenroll:
+        wazuh.unenroll_soon(unenroll)
     dev = conn.execute("SELECT * FROM devices WHERE id=?", (dev["id"],)).fetchone()
     color, reason = status(dev)
     return {"ok": True, "indicator": {"color": color, "reason": reason}}

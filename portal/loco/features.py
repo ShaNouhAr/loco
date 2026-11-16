@@ -27,7 +27,7 @@ FEATURES = {
     "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
     "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
     "homeassistant": (L_("Home Assistant"), L_("Votre Home Assistant relié par SSH avec une clé propre à loco : versions, mises à jour du cœur, du système et des modules complémentaires, sauvegardes, état de santé, redémarrages et terminal."), (), ""),
-    "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco."), ("fleet",), ""),
+    "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco. Au retrait, loco peut aussi effacer l'entrée du poste sur le manager."), ("fleet",), ""),
 }
 
 # Fonctionnalités expérimentales : désactivées par défaut, activables par un administrateur.

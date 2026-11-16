@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.167.0 — 2026-11-16
+
+- **Wazuh : retirer l'agent efface aussi son entrée sur le manager** : quand l'agent Wazuh est désinstallé d'un poste, loco retire son entrée du manager (`manage_agents -r`), puis l'écrit dans le compte rendu du retrait. Il lui faut un accès SSH au manager, à régler une fois sur la page Wazuh (bloc *Retrait des entrées du manager*) : loco donne une ligne à ajouter à `authorized_keys`, qui n'autorise sa clé qu'à cette seule commande, avec les seuls chiffres reçus — ni shell, ni autre commande ; la clé d'hôte du manager est montrée et confirmée avant tout échange, et un bouton *Essayer l'accès* vérifie le tout sans rien retirer. Sans cet accès, rien ne change : l'entrée reste sur le manager, et le compte rendu le dit.
+- **Prudence** : loco ne retire une entrée que si le poste était relié au manager réglé et qu'il dit l'agent bien désinstallé ; jamais l'entrée `000` (le manager lui-même).
+- **Le manager Wazuh inscrit comme poste est reconnu** : il apparaît en « Manager Wazuh » (au lieu de « Arrêté — le service de l'agent Wazuh ne tourne pas »), n'est pas compté parmi les postes à équiper, et loco n'y pose ni n'y retire d'agent. Arrive avec la mise à jour de l'agent loco du poste (2.167.0).
+
 ## 2.166.1 — 2026-11-16
 
 - **Wazuh : enrôlement sans mot de passe après en avoir eu un** : quand le mot de passe d'enrôlement est retiré des réglages (*ne plus en envoyer*), *Réappliquer* retire aussi du poste le fichier `authd.pass` posé auparavant. Sans cela, l'agent Wazuh continuait d'envoyer l'ancien mot de passe, et un manager qui n'en attend pas le refusait en boucle (« Invalid request for new agent »).

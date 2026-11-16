@@ -1267,23 +1267,33 @@ def install_package(cmd):
 WAZUH_HOME = "/var/ossec"
 
 
+def wazuh_alive(daemon):
+    """Un processus Wazuh tourne : son fichier pid (var/run/<daemon>-<pid>.pid) désigne un processus vivant."""
+    try:
+        for name in os.listdir(os.path.join(WAZUH_HOME, "var", "run")):
+            found = re.fullmatch(re.escape(daemon) + r"-(\d+)\.pid", name)
+            if found and os.path.isdir("/proc/" + found.group(1)):
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def wazuh_state():
     """État de l'agent Wazuh du poste, lu sur place : installé, version, service en marche, lien avec le manager,
-    identité chez Wazuh. Jamais la clé de l'agent : de client.keys, seuls le numéro et le nom sont lus."""
+    identité chez Wazuh. Jamais la clé de l'agent : de client.keys, seuls le numéro et le nom sont lus.
+    Sur le manager Wazuh lui-même, /var/ossec est celui du manager : il est dit tel quel (rôle « manager »), et son
+    client.keys, qui liste les agents inscrits, n'est pas lu."""
     control = os.path.join(WAZUH_HOME, "bin", "wazuh-control")
     if not os.path.isfile(control):
         return {"installed": False}
-    out = {"installed": True, "version": "", "active": False, "status": "", "manager": "", "id": "", "name": ""}
-    code, text = run([control, "info", "-v"], timeout=20)
-    if code == 0:
-        out["version"] = text.strip().lstrip("v")[:20]
-    try:
-        for name in os.listdir(os.path.join(WAZUH_HOME, "var", "run")):
-            found = re.fullmatch(r"wazuh-agentd-(\d+)\.pid", name)
-            if found and os.path.isdir("/proc/" + found.group(1)):
-                out["active"] = True
-    except OSError:
-        pass
+    code, text = run([control, "info"], timeout=20)
+    info = dict(re.findall(r'^(WAZUH_[A-Z]+)="?([^"\n]*)"?', text, re.M)) if code == 0 else {}
+    version = info.get("WAZUH_VERSION", "").strip().lstrip("v")[:20]
+    kind = info.get("WAZUH_TYPE") or ("server" if os.path.isfile(os.path.join(WAZUH_HOME, "bin", "wazuh-analysisd")) else "agent")
+    if kind == "server":
+        return {"installed": False, "role": "manager", "version": version, "active": wazuh_alive("wazuh-remoted")}
+    out = {"installed": True, "version": version, "active": wazuh_alive("wazuh-agentd"), "status": "", "manager": "", "id": "", "name": ""}
     try:
         with open(os.path.join(WAZUH_HOME, "var", "run", "wazuh-agentd.state")) as f:
             found = re.search(r"^status='(\w+)'", f.read(), re.M)
@@ -1346,6 +1356,10 @@ def wazuh_apply(server, cmd):
     fam = family()
     if fam not in ("debian", "rhel"):
         return 1, t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
+    if wazuh_state().get("role") == "manager":
+        return 1, t("Ce poste est le manager Wazuh : loco n'y pose ni n'y retire d'agent.",
+                    "This machine is the Wazuh manager: loco neither installs nor removes an agent on it.",
+                    "Este equipo es el manager de Wazuh: loco no instala ni retira ningún agente en él.")
     logs = []
     if spec.get("op") == "remove":
         if not os.path.isdir(WAZUH_HOME):

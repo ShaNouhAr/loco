@@ -5,6 +5,10 @@ loco ne remplace pas Wazuh : il pose son agent sur les postes déjà inscrits, r
 publie, puis remis aux postes par le canal de l'agent loco : un poste n'a pas besoin d'Internet. Le mot de passe
 d'enrôlement, s'il y en a un, est gardé chiffré, n'est jamais réaffiché ni journalisé, et ne voyage que dans la commande
 remise à l'agent ; sur le poste il est écrit dans le fichier que l'agent Wazuh lit (authd.pass), jamais passé en argument.
+
+Quand l'agent est retiré d'un poste, loco retire aussi son entrée du manager, s'il y a accès : par SSH, avec une clé qui
+lui est propre, que le manager n'autorise qu'à lancer `manage_agents -r <numéro>` (commande imposée dans authorized_keys,
+seuls les chiffres reçus sont gardés). La clé d'hôte du manager est confirmée par un administrateur avant tout échange.
 """
 import base64
 import gzip
@@ -13,16 +17,18 @@ import hmac
 import json
 import os
 import re
+import secrets
+import subprocess
 import tempfile
 import threading
 import time
 import urllib.request
 
-from flask import abort, flash, render_template, request, send_file
+from flask import abort, flash, render_template, request, send_file, session
 
-from . import app, config, features, fleet, scope
+from . import app, config, features, fleet, homeassistant, scope
 from .auth import audit, can, login_required, require
-from .db import db
+from .db import connect, db
 from .i18n import _, n_
 from .util import back
 
@@ -39,6 +45,12 @@ MAX_PACKAGE = 200 * 1024 * 1024
 VERSIONS_TTL = 24 * 3600
 FAMILIES = ("debian", "rhel", "windows")
 MASK = "••••••••"
+KEY_DIR = os.path.join(config.STATE, "wazuh")
+KEY_PATH = os.path.join(KEY_DIR, "id_ed25519")
+MANAGE_AGENTS = "/var/ossec/bin/manage_agents"
+PROBE_ID = "99999999"                       # numéro qu'aucun agent ne porte : l'essai de l'accès ne retire rien
+SHELL_MARK = "loco-shell-ouvert"            # sans chiffre : écarté par la commande imposée, affiché par un shell complet
+AGENT_ID_RE = re.compile(r"[0-9]{1,8}")
 
 
 # --------------------------------------------------------------------------- réglages
@@ -62,7 +74,7 @@ def _open(value):
 
 def load(conn=None):
     """Réglages effectifs : manager, groupe par défaut, version de l'agent, mot de passe d'enrôlement (déchiffré)."""
-    cfg = {"manager": "", "group": "", "version": "", "password": ""}
+    cfg = {"manager": "", "group": "", "version": "", "password": "", "ssh_user": "root", "ssh_port": "22", "host_key": ""}
     row = (conn or db()).execute("SELECT value FROM settings WHERE key=?", (SETTING,)).fetchone()
     if row:
         try:
@@ -269,9 +281,12 @@ def clean_state(raw):
     """État de l'agent Wazuh remonté par l'agent loco, borné ; None si le poste ne dit rien (agent loco plus ancien)."""
     if not isinstance(raw, dict):
         return None
+    version = str(raw.get("version") or "").lstrip("v")
+    if raw.get("role") == "manager":            # le poste est le manager Wazuh lui-même : pas d'agent à y poser
+        return {"installed": False, "role": "manager", "version": version if VERSION_RE.fullmatch(version) else "",
+                "active": bool(raw.get("active"))}
     if not raw.get("installed"):
         return {"installed": False}
-    version = str(raw.get("version") or "").lstrip("v")
     status = raw.get("status") if raw.get("status") in ("connected", "pending", "disconnected") else ""
     return {"installed": True, "version": version if VERSION_RE.fullmatch(version) else "",
             "active": bool(raw.get("active")), "status": status,
@@ -289,6 +304,20 @@ def record(conn, dev, raw):
         conn.execute("UPDATE devices SET wazuh=? WHERE id=?", (text, dev["id"]))
 
 
+def stored(dev):
+    """État gardé pour le poste (dernier remonté), ou None."""
+    try:
+        state = json.loads(dev["wazuh"]) if dev["wazuh"] else None
+    except ValueError:
+        return None
+    return state if isinstance(state, dict) else None
+
+
+def is_server(dev):
+    """Le poste est le manager Wazuh (d'après ce qu'il remonte) : loco n'y pose ni n'y retire d'agent."""
+    return (stored(dev) or {}).get("role") == "manager"
+
+
 def supported(dev):
     return dev["os_family"] in FAMILIES
 
@@ -300,18 +329,22 @@ def agent_ready(dev):
 def view(dev, cfg=None):
     """État de l'agent Wazuh d'un poste, prêt à afficher : niveau (ok, warn, err, off), libellé, précision, actions."""
     cfg = cfg or load()
-    try:
-        state = json.loads(dev["wazuh"]) if dev["wazuh"] else None
-    except ValueError:
-        state = None
-    out = {"state": state, "level": "off", "label": _("Inconnu"), "detail": "", "installed": False, "outdated": False}
+    state = stored(dev)
+    out = {"state": state, "level": "off", "label": _("Inconnu"), "detail": "", "installed": False, "outdated": False, "server": False}
     if not agent_ready(dev):
         out["detail"] = _("l'agent loco du poste doit d'abord se mettre à jour")
         return out
     if state is None:
         out["detail"] = _("pas encore remonté par le poste")
         return out
-    if not state["installed"]:
+    if state.get("role") == "manager":
+        out.update(server=True, version=state.get("version", ""), label=_("Manager Wazuh"))
+        if state.get("active"):
+            out.update(level="ok", detail=_("ce poste est le manager : pas d'agent Wazuh à y poser"))
+        else:
+            out.update(level="err", detail=_("le service du manager Wazuh ne tourne pas"))
+        return out
+    if not state.get("installed"):
         out["label"] = _("Non installé")
         return out
     out["installed"] = True
@@ -357,6 +390,8 @@ def payload(dev, params, out):
         return _("L'agent Wazuh ne s'installe pas sur ce système.")
     if not agent_ready(dev):
         return fleet.WAIT                   # l'agent loco se met à jour seul : la commande l'attend
+    if is_server(dev):
+        return _("Ce poste est le manager Wazuh : loco n'y pose ni n'y retire d'agent.")
     op = params.get("op")
     if op == "remove":
         out["wazuh"] = {"op": "remove"}
@@ -386,6 +421,176 @@ def agent_wazuh_package(name):
     return send_file(package_path(name), mimetype="application/octet-stream", as_attachment=True, download_name=name)
 
 
+# --------------------------------------------------------------------------- retrait des entrées du manager
+
+class LinkError(Exception):
+    """Accès SSH au manager impossible ou refusé ; le message se montre tel quel."""
+
+
+def linked(cfg):
+    """loco a accès au manager pour y retirer les entrées des postes : clé d'hôte confirmée pour l'adresse réglée."""
+    return bool(cfg["manager"] and cfg["host_key"])
+
+
+def _ssh_host(cfg):
+    return cfg["manager"].strip("[]")
+
+
+def _ssh_port(cfg):
+    try:
+        port = int(cfg["ssh_port"] or 22)
+    except ValueError:
+        return 22
+    return port if 1 <= port <= 65535 else 22
+
+
+def public_key():
+    """Clé publique de loco pour le manager (distincte de celle de Home Assistant)."""
+    return homeassistant.public_key(KEY_PATH)
+
+
+def authorized_line():
+    """Ligne à ajouter aux clés autorisées du compte, sur le manager : avec elle, la clé de loco ne peut que lancer
+    manage_agents -r, avec les seuls chiffres de ce qu'elle envoie ; ni shell, ni redirection, ni autre commande."""
+    return (f'restrict,command="{MANAGE_AGENTS} -r $(printf %s \\"$SSH_ORIGINAL_COMMAND\\" | tr -cd 0-9)" {public_key()}')
+
+
+def _explain(output, cfg):
+    """Refus ou échec dit clairement : clé non autorisée, clé d'hôte changée, manage_agents absent, hôte injoignable."""
+    text = output.strip()
+    low = text.lower()
+    if "permission denied (" in low or "too many authentication failures" in low:
+        return _("Le manager refuse la clé de loco : ajoutez la ligne donnée par loco aux clés autorisées de %(user)s, sur le manager.",
+                 user=cfg["ssh_user"])
+    if "host key verification failed" in low or "remote host identification has changed" in low:
+        return _("La clé d'hôte du manager n'est plus celle qui a été confirmée : relevez-la de nouveau et vérifiez-la avant de la confirmer.")
+    if "manage_agents" in low and ("no such file" in low or "not found" in low):
+        return _("manage_agents est introuvable à cette adresse : ce n'est pas un manager Wazuh.")
+    return (text.splitlines()[-1] if text else _("liaison SSH interrompue"))[:240]
+
+
+def _ssh(cfg, remote, timeout=40):
+    """Lance une commande sur le manager avec la clé de loco, la clé d'hôte confirmée et elle seule : (code, sortie)."""
+    if not homeassistant.ssh_binary():
+        raise LinkError(_("Le client SSH (commande ssh) n'est pas installé sur ce serveur."))
+    if not linked(cfg):
+        raise LinkError(_("loco n'a pas accès au manager : la clé d'hôte n'est pas confirmée."))
+    public_key()
+    host, port = _ssh_host(cfg), _ssh_port(cfg)
+    os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
+    fd, known = tempfile.mkstemp(prefix="known-", dir=KEY_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="ascii") as f:
+            f.write(f"{homeassistant._pattern(host, port)} {cfg['host_key']}\n")
+        argv = (homeassistant._base(host, port, cfg["ssh_user"], known, key=KEY_PATH)
+                + ["-o", "StrictHostKeyChecking=yes", "-T", "--", host, remote])
+        try:
+            done = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            raise LinkError(_("Le manager n'a pas répondu dans le délai (%(n)s s).", n=timeout)) from e
+        except OSError as e:
+            raise LinkError(str(e)[:200]) from e
+    finally:
+        try:
+            os.unlink(known)
+        except OSError:
+            pass
+    return done.returncode, done.stdout.decode("utf-8", "replace")
+
+
+def _absent(output):
+    """Le manager n'a pas (ou plus) cette entrée : numéro inconnu, ou aucun agent inscrit du tout."""
+    low = output.lower()
+    return "9011" in output or "agent id not found" in low or "no agent available" in low
+
+
+def check(cfg):
+    """Essaie l'accès sans rien retirer (numéro qu'aucun agent ne porte) : (niveau, message). LinkError en cas d'échec."""
+    _code, output = _ssh(cfg, f"echo {SHELL_MARK}; {MANAGE_AGENTS} -r {PROBE_ID}")
+    if not _absent(output):
+        raise LinkError(_explain(output, cfg))
+    if SHELL_MARK in output:
+        return "warn", _("Accès établi, mais la clé de loco ouvre un shell complet sur le manager : remplacez sa ligne par celle "
+                         "que donne loco, qui ne permet que le retrait d'un agent.")
+    return "ok", _("Accès établi : loco peut retirer un agent du manager, et rien d'autre.")
+
+
+def unenroll(cfg, agent_id):
+    """Retire l'entrée d'un agent du manager : message du résultat. LinkError si l'accès échoue ou si rien n'est sûr."""
+    if not AGENT_ID_RE.fullmatch(agent_id) or int(agent_id) == 0:
+        raise LinkError(_("numéro d'agent Wazuh invalide"))
+    _code, output = _ssh(cfg, f"{MANAGE_AGENTS} -r {agent_id}")
+    if re.search(r"Agent '0*%s' removed" % int(agent_id), output):
+        return _("Entrée %(id)s retirée du manager Wazuh.", id=agent_id)
+    if _absent(output):
+        return _("Entrée %(id)s déjà absente du manager Wazuh.", id=agent_id)
+    raise LinkError(_explain(output, cfg))
+
+
+def _append(conn, cmd_id, line):
+    conn.execute("UPDATE device_commands SET output = output || CASE WHEN output = '' THEN '' ELSE char(10) END || ? WHERE id=?",
+                 (line, cmd_id))
+
+
+def removed(conn, dev, cmd, reported):
+    """Compte rendu d'un retrait réussi de l'agent Wazuh : renvoie la tâche de retrait de l'entrée du manager, ou None
+    (la raison s'ajoute alors à la sortie de la commande). L'entrée est lue dans l'état gardé AVANT ce compte rendu.
+    Prudence : rien n'est retiré si le poste n'était pas relié au manager réglé, ou s'il dit avoir encore l'agent
+    (sur l'hôte même du manager, un agent loco ancien remontait le premier agent inscrit comme identité)."""
+    try:
+        params = json.loads(cmd["params"] or "{}")
+    except ValueError:
+        return None
+    if cmd["action"] != "wazuh" or params.get("op") != "remove":
+        return None
+    state, cfg = stored(dev) or {}, load(conn)
+    agent_id = str(state.get("id") or "")
+    now = clean_state(reported) or {}
+    if not state.get("installed") or not AGENT_ID_RE.fullmatch(agent_id) or int(agent_id) == 0:
+        note = _("Aucune entrée connue chez Wazuh pour ce poste : rien à retirer du manager.")
+    elif now.get("installed") or now.get("role") or not isinstance(reported, dict):
+        note = _("L'agent Wazuh est encore présent sur le poste : son entrée reste sur le manager.")
+    elif not cfg["manager"] or (state.get("manager") or "").lower() != cfg["manager"].lower():
+        note = _("Le poste était relié à %(m)s, pas au manager réglé : son entrée n'y a pas été retirée.", m=state.get("manager") or "?")
+    elif not linked(cfg):
+        note = _("Entrée %(id)s laissée sur le manager : loco n'y a pas accès (page Wazuh, « Retrait des entrées du manager »).", id=agent_id)
+    else:
+        return {"cmd": cmd["id"], "agent": agent_id, "name": str(state.get("name") or ""), "host": dev["hostname"],
+                "user": cmd["created_by"]}
+    _append(conn, cmd["id"], note)
+    return None
+
+
+def unenroll_soon(job):
+    """Retrait de l'entrée du manager en arrière-plan : le compte rendu de l'agent n'attend pas la liaison SSH."""
+    threading.Thread(target=_unenroll, args=(job,), name="loco-wazuh-unenroll", daemon=True).start()
+
+
+def _unenroll(job):
+    conn = connect()
+    try:
+        cfg = load(conn)
+        try:
+            line = unenroll(cfg, job["agent"])
+        except LinkError as e:
+            line = _("Entrée %(id)s non retirée du manager : %(e)s", id=job["agent"], e=str(e))
+        _append(conn, job["cmd"], line)
+        conn.execute("INSERT INTO audit (at, username, ip, action, detail) VALUES (?, ?, '', 'parc.wazuh.desenrolement', ?)",
+                     (time.strftime("%Y-%m-%d %H:%M:%S"), job["user"] or "loco",
+                      f"{job['host']} — agent {job['agent']} {job['name']} : {line}"[:500]))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _pending():
+    """Accès au manager en cours de réglage : clé d'hôte relevée, en attente de confirmation (dans la session)."""
+    data = session.get("wazuh_pending")
+    if not isinstance(data, dict) or time.time() - data.get("at", 0) > 900:
+        return None
+    return dict(data, fingerprint=homeassistant.fingerprint(data["key"]))
+
+
 # --------------------------------------------------------------------------- portail
 
 def _devices(conn):
@@ -404,11 +609,18 @@ def wazuh():
     for dev in _devices(conn):
         rows.append({"d": dev, "w": view(dev, cfg), "busy": busy(conn, dev["id"]), "ready": agent_ready(dev),
                      "os": fleet.short_os(dev["os_name"]) or str(fleet.FAMILIES.get(dev["os_family"], ""))})
-    counts = {"installed": sum(1 for r in rows if r["w"]["installed"]), "connected": sum(1 for r in rows if r["w"]["level"] == "ok"),
-              "total": len(rows)}
+    counts = {"installed": sum(1 for r in rows if r["w"]["installed"]),
+              "connected": sum(1 for r in rows if r["w"]["installed"] and r["w"]["level"] == "ok"),
+              "total": sum(1 for r in rows if not r["w"]["server"])}
+    manage = can("wazuh.manage")
+    access = None
+    if manage and ready(cfg):
+        access = {"linked": linked(cfg), "pending": _pending(), "line": authorized_line(), "ssh": bool(homeassistant.ssh_binary()),
+                  "fingerprint": homeassistant.fingerprint(cfg["host_key"].split()[-1]) if linked(cfg) else ""}
     return render_template("wazuh.html", cfg=dict(cfg, password=MASK if cfg["password"] else ""), ready=ready(cfg), rows=rows,
                            counts=counts, versions=known, versions_at=checked, version_error=version_error,
-                           packages=cached_packages(), agent_version=".".join(map(str, AGENT_VERSION)) + ".0")
+                           packages=cached_packages(), agent_version=".".join(map(str, AGENT_VERSION)) + ".0",
+                           linked=linked(cfg), access=access)
 
 
 @app.route("/fleet/wazuh/settings", methods=["POST"])
@@ -439,13 +651,15 @@ def wazuh_settings():
     changed = [k for k, v in (("manager", manager), ("group", group), ("version", version)) if cfg[k] != v]
     if password != cfg["password"]:
         changed.append("password")
-    _save(conn, {"manager": manager, "group": group, "version": version, "password": password})
+    host_key = cfg["host_key"] if manager.lower() == cfg["manager"].lower() else ""      # autre adresse : clé d'hôte à reconfirmer
+    _save(conn, dict(cfg, manager=manager, group=group, version=version, password=password, host_key=host_key))
     # Le mot de passe n'est jamais écrit au journal : seulement le fait qu'il a changé.
     audit("parc.wazuh.reglages", f"manager {manager}, agent {version}{f', groupe {group}' if group else ''}"
           + (", mot de passe d'enrôlement modifié" if "password" in changed else ""))
     if "version" in changed:
         cleanup_packages(conn, version)
-    flash(_("Réglages Wazuh enregistrés."), "ok")
+    flash(_("Réglages Wazuh enregistrés.") if host_key or not cfg["host_key"] else
+          _("Réglages Wazuh enregistrés. Le manager a changé d'adresse : confirmez de nouveau sa clé d'hôte pour que loco y retire les entrées."), "ok")
     return back("wazuh")
 
 
@@ -459,6 +673,90 @@ def wazuh_versions():
     else:
         flash(n_("%(num)s version de l'agent Wazuh disponible.", "%(num)s versions de l'agent Wazuh disponibles.", len(known)), "ok")
     return back("wazuh")
+
+
+@app.route("/fleet/wazuh/access", methods=["POST"])
+@login_required
+def wazuh_access():
+    """Première étape : relever la clé d'hôte que présente le manager, et la montrer pour confirmation."""
+    require("wazuh.manage")
+    cfg = load()
+    username = request.form.get("ssh_user", "").strip()
+    try:
+        port = int(request.form.get("ssh_port", "22") or 22)
+    except ValueError:
+        port = 0
+    try:
+        if not ready(cfg):
+            raise LinkError(_("Réglez d'abord l'adresse du manager."))
+        if not homeassistant.USER_RE.match(username):
+            raise LinkError(_("Nom d'utilisateur SSH invalide."))
+        if not 1 <= port <= 65535:
+            raise LinkError(_("Port SSH invalide."))
+        public_key()
+        kind, key = homeassistant.probe_host_key(
+            _ssh_host(cfg), port, lambda e: _("Le manager Wazuh ne répond pas en SSH à cette adresse : %(e)s", e=e))
+    except (LinkError, homeassistant.LinkError) as e:
+        flash(str(e), "error")
+        return back("wazuh", _anchor="acces")
+    session["wazuh_pending"] = {"manager": cfg["manager"], "user": username, "port": port, "type": kind, "key": key,
+                                "at": time.time(), "nonce": secrets.token_hex(8),
+                                "same": cfg["host_key"].split()[-1:] == [key] if cfg["host_key"] else None}
+    return back("wazuh", _anchor="acces")
+
+
+@app.route("/fleet/wazuh/access/confirm", methods=["POST"])
+@login_required
+def wazuh_access_confirm():
+    """Seconde étape : l'administrateur a comparé l'empreinte. L'accès est enregistré avec cette clé d'hôte et elle seule,
+    puis essayé sans rien retirer."""
+    require("wazuh.manage")
+    data = _pending()
+    session.pop("wazuh_pending", None)
+    if request.form.get("cancel") == "1" or data is None:
+        return back("wazuh", _anchor="acces")
+    if not secrets.compare_digest(request.form.get("nonce", ""), data["nonce"]):
+        abort(400)
+    conn = db()
+    cfg = load(conn)
+    if cfg["manager"] != data["manager"]:
+        flash(_("L'adresse du manager a changé entre-temps : relevez de nouveau sa clé d'hôte."), "error")
+        return back("wazuh", _anchor="acces")
+    cfg.update(ssh_user=data["user"], ssh_port=str(data["port"]), host_key=f"{data['type']} {data['key']}")
+    _save(conn, cfg)
+    audit("parc.wazuh.acces", f"{data['user']}@{cfg['manager']}:{data['port']}, clé d'hôte {data['fingerprint']}")
+    _flash_check(cfg)
+    return back("wazuh", _anchor="acces")
+
+
+@app.route("/fleet/wazuh/access/test", methods=["POST"])
+@login_required
+def wazuh_access_test():
+    require("wazuh.manage")
+    _flash_check(load())
+    return back("wazuh", _anchor="acces")
+
+
+@app.route("/fleet/wazuh/access/delete", methods=["POST"])
+@login_required
+def wazuh_access_delete():
+    require("wazuh.manage")
+    conn = db()
+    cfg = load(conn)
+    if cfg["host_key"]:
+        _save(conn, dict(cfg, host_key=""))
+        audit("parc.wazuh.acces", f"accès au manager {cfg['manager']} retiré")
+    flash(_("loco n'accède plus au manager. Retirez aussi sa clé des clés autorisées, sur le manager."), "ok")
+    return back("wazuh", _anchor="acces")
+
+
+def _flash_check(cfg):
+    try:
+        level, message = check(cfg)
+    except LinkError as e:
+        flash(_("Accès au manager en échec : %(e)s", e=str(e)), "error")
+        return
+    flash(message, "ok" if level == "ok" else "error")
 
 
 def _targets(conn):
@@ -489,7 +787,8 @@ def wazuh_install():
         flash(str(e), "error")
         return back("wazuh")
     devices = _targets(conn)
-    names = [d["hostname"] for d in devices if not busy(conn, d["id"]) and fleet.queue(d, "wazuh", {"op": "install", "group": group})]
+    names = [d["hostname"] for d in devices if not is_server(d) and not busy(conn, d["id"])
+             and fleet.queue(d, "wazuh", {"op": "install", "group": group})]
     conn.commit()
     if names:
         audit("parc.wazuh.installation", f"{', '.join(names[:20])}{'…' if len(names) > 20 else ''} → {cfg['manager']}"
@@ -508,7 +807,7 @@ def wazuh_remove():
     require("wazuh.install")
     conn = db()
     devices = _targets(conn)
-    names = [d["hostname"] for d in devices if not busy(conn, d["id"]) and fleet.queue(d, "wazuh", {"op": "remove"})]
+    names = [d["hostname"] for d in devices if not is_server(d) and not busy(conn, d["id"]) and fleet.queue(d, "wazuh", {"op": "remove"})]
     conn.commit()
     if names:
         audit("parc.wazuh.retrait", f"{', '.join(names[:20])}{'…' if len(names) > 20 else ''}")
@@ -530,7 +829,7 @@ def device_panel(dev):
     if not features.enabled("wazuh") or not supported(dev) or not can("wazuh.view"):
         return None
     cfg = load()
-    return {"w": view(dev, cfg), "busy": busy(db(), dev["id"]), "ready": ready(cfg), "group": cfg["group"]}
+    return {"w": view(dev, cfg), "busy": busy(db(), dev["id"]), "ready": ready(cfg), "group": cfg["group"], "linked": linked(cfg)}
 
 
 def cleanup_packages(conn, version):

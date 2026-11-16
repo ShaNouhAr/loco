@@ -90,22 +90,22 @@ def ssh_binary():
     return shutil.which("ssh")
 
 
-def public_key():
-    """Clé publique de loco, à ajouter au module SSH de Home Assistant. La paire est créée au premier besoin ; la clé
-    privée reste sur ce serveur, lisible par le seul compte du portail."""
-    if not os.path.isfile(KEY_PATH) or not os.path.isfile(KEY_PATH + ".pub"):
+def public_key(key_path=KEY_PATH):
+    """Clé publique de loco, à ajouter au module SSH de Home Assistant (ou, pour Wazuh, sur le manager). La paire est
+    créée au premier besoin ; la clé privée reste sur ce serveur, lisible par le seul compte du portail."""
+    if not os.path.isfile(key_path) or not os.path.isfile(key_path + ".pub"):
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
         key = Ed25519PrivateKey.generate()
         private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, serialization.NoEncryption())
         public = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
-        os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-        for path, data, mode in ((KEY_PATH, private, 0o600), (KEY_PATH + ".pub", public + b" loco@" + config.HOST.encode() + b"\n", 0o644)):
+        os.makedirs(os.path.dirname(key_path), mode=0o700, exist_ok=True)
+        for path, data, mode in ((key_path, private, 0o600), (key_path + ".pub", public + b" loco@" + config.HOST.encode() + b"\n", 0o644)):
             fd = os.open(path + ".new", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
             with os.fdopen(fd, "wb") as f:
                 f.write(data)
             os.replace(path + ".new", path)
-    with open(KEY_PATH + ".pub", encoding="ascii") as f:
+    with open(key_path + ".pub", encoding="ascii") as f:
         return f.read().strip()
 
 
@@ -118,18 +118,19 @@ def _pattern(host, port):
     return host if int(port) == 22 else f"[{host}]:{port}"
 
 
-def _base(host, port, username, known):
+def _base(host, port, username, known, key=KEY_PATH):
     """Arguments communs : la clé de loco et elle seule, la clé d'hôte du fichier donné et elle seule, aucun réglage
     hérité du compte ni de la machine."""
-    return [ssh_binary() or "ssh", "-F", os.devnull, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", KEY_PATH,
+    return [ssh_binary() or "ssh", "-F", os.devnull, "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-i", key,
             "-o", "UserKnownHostsFile=" + known, "-o", "GlobalKnownHostsFile=" + os.devnull,
             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
             "-o", "LogLevel=ERROR", "-p", str(int(port)), "-l", username]
 
 
-def probe_host_key(host, port):
-    """Clé d'hôte que présente Home Assistant, relevée sans rien authentifier ni accepter : (type, clé en base64).
-    L'appelant la montre à l'administrateur, qui la confirme."""
+def probe_host_key(host, port, unreachable=None):
+    """Clé d'hôte que présente Home Assistant (ou un autre hôte SSH), relevée sans rien authentifier ni accepter :
+    (type, clé en base64). L'appelant la montre à l'administrateur, qui la confirme. `unreachable` : message d'échec."""
+    unreachable = unreachable or (lambda e: _("Home Assistant ne répond pas en SSH à cette adresse : %(e)s", e=e))
     if not ssh_binary():
         raise LinkError(_("Le client SSH (commande ssh) n'est pas installé sur ce serveur."))
     with tempfile.TemporaryDirectory(prefix="loco-ha-") as work:
@@ -141,7 +142,7 @@ def probe_host_key(host, port):
         try:
             done = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=25)
         except (OSError, subprocess.TimeoutExpired) as e:
-            raise LinkError(_("Home Assistant ne répond pas en SSH à cette adresse : %(e)s", e=str(e)[:160])) from e
+            raise LinkError(unreachable(str(e)[:160])) from e
         try:
             with open(known, encoding="ascii", errors="replace") as f:
                 fields = [line.split() for line in f if line.strip() and not line.startswith("#")]
@@ -151,7 +152,7 @@ def probe_host_key(host, port):
             if len(entry) >= 3 and re.fullmatch(r"[A-Za-z0-9+/=]{40,}", entry[2]):
                 return entry[1], entry[2]
         reason = done.stderr.decode("utf-8", "replace").strip().splitlines()
-        raise LinkError(_("Home Assistant ne répond pas en SSH à cette adresse : %(e)s", e=(reason[-1] if reason else "?")[:160]))
+        raise LinkError(unreachable((reason[-1] if reason else "?")[:160]))
 
 
 class _Known:
