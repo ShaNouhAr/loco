@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.166.1 — 2026-11-16
+
+- **Wazuh : enrôlement sans mot de passe après en avoir eu un** : quand le mot de passe d'enrôlement est retiré des réglages (*ne plus en envoyer*), *Réappliquer* retire aussi du poste le fichier `authd.pass` posé auparavant. Sans cela, l'agent Wazuh continuait d'envoyer l'ancien mot de passe, et un manager qui n'en attend pas le refusait en boucle (« Invalid request for new agent »).
+
 ## 2.166.0 — 2026-11-16
 
 - **Agent Wazuh sur les postes (facultatif)** : à activer dans *Fonctionnalités › Facultatif*. Une page *Mon parc › Wazuh* règle l'adresse de votre manager, la version de l'agent (choisie parmi celles publiées par Wazuh), le groupe d'agents et, s'il en faut un, le mot de passe d'enrôlement ; puis pose l'agent Wazuh sur les postes cochés, ou sur un poste depuis sa fiche (*Plus › Installer l'agent Wazuh*). Windows, Debian, Ubuntu et famille Red Hat.

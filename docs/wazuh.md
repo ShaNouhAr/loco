@@ -31,6 +31,9 @@ pas votre manager.
 Le mot de passe est gardé chiffré. loco ne le réaffiche jamais et ne l'écrit pas au journal : seul le fait qu'il a
 changé y figure.
 
+Sans mot de passe dans loco (case *ne plus en envoyer*), une réinstallation retire du poste le fichier `authd.pass`
+posé auparavant : un manager qui n'attend pas de mot de passe refuse l'agent qui en envoie un.
+
 ## Installer sur des postes
 
 Deux chemins :
@@ -113,7 +116,8 @@ Le compte rendu de l'installation (historique du poste) le dit : « installé et
 |---|---|
 | Le poste joint-il le manager ? | ports **1514** (échanges) et **1515** (enrôlement) ouverts du poste vers le manager |
 | La version | l'agent ne doit pas être plus récent que le manager |
-| Le mot de passe d'enrôlement | celui de `/var/ossec/etc/authd.pass` sur le manager, sans espace ni saut de ligne en trop |
+| `Invalid password` | le mot de passe ne correspond pas à `/var/ossec/etc/authd.pass` du manager (espace ou saut de ligne en trop compris) |
+| `Invalid request for new agent` | le poste envoie un mot de passe alors que le manager n'en attend pas (`<use_password>no</use_password>`) : cochez *ne plus en envoyer*, puis *Réappliquer* |
 | Le groupe | il doit exister sur le manager (`/var/ossec/bin/agent_groups -l`) |
 | Un ancien agent du même nom | une entrée du même nom sur le manager peut bloquer l'enrôlement : la retirer, puis *Réappliquer* |
 

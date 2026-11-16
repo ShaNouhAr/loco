@@ -1416,6 +1416,12 @@ def wazuh_apply(server, cmd):
             os.chmod(target + ".loco", 0o640)
             os.replace(target + ".loco", target)
             logs.append(t("Mot de passe d'enrôlement posé pour l'agent Wazuh.", "Enrollment password set for the Wazuh agent.", "Contraseña de inscripción puesta para el agente Wazuh."))
+        elif os.path.exists(os.path.join(WAZUH_HOME, "etc", "authd.pass")):
+            # Aucun mot de passe réglé dans loco : l'agent Wazuh ne doit plus en envoyer. Un manager qui n'en attend
+            # pas refuse sinon l'enrôlement (« Invalid request for new agent »).
+            os.unlink(os.path.join(WAZUH_HOME, "etc", "authd.pass"))
+            logs.append(t("Mot de passe d'enrôlement retiré du poste : l'agent Wazuh s'enrôle sans.", "Enrollment password removed from the machine: the Wazuh agent enrolls without one.",
+                          "Contraseña de inscripción retirada del equipo: el agente Wazuh se inscribe sin ella."))
     except OSError as e:
         return 1, "\n".join(logs + [t(f"Réglage de l'agent Wazuh impossible : {e}", f"Cannot configure the Wazuh agent: {e}", f"No se puede configurar el agente Wazuh: {e}")])
     run(["systemctl", "daemon-reload"], timeout=120)

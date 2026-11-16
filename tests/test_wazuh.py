@@ -608,6 +608,20 @@ class TestLinuxAgent(unittest.TestCase):
         self.assertNotIn("WAZUH_AGENT_GROUP", seen["env"])
         self.assertFalse(Path(self.home, "etc/authd.pass").exists())
 
+    def test_a_password_left_from_before_is_removed_when_loco_has_none(self):
+        """Mot de passe retiré des réglages : un manager qui n'en attend pas refuse l'agent qui en envoie un
+        (« Invalid request for new agent »). Réappliquer doit donc retirer l'ancien authd.pass du poste."""
+        self.installed()
+        Path(self.home, "etc/authd.pass").write_text("ancien mot de passe\n")
+        cmd, content = self.command(password="")
+        with mock.patch.object(agent, "download", lambda *a, **k: content), \
+                mock.patch.object(agent.subprocess, "run", lambda command, **kw: subprocess.CompletedProcess(command, 0, stdout="")), \
+                mock.patch.object(agent, "run", self.fake_run):
+            code, out = agent.wazuh_apply("https://loco.test:8443", cmd)
+        self.assertEqual(code, 0, out)
+        self.assertFalse(Path(self.home, "etc/authd.pass").exists())
+        self.assertIn("Mot de passe d'enrôlement retiré du poste", out)
+
     def test_an_existing_agent_is_pointed_to_the_configured_manager(self):
         self.installed(manager="ancien.lab.test")
 

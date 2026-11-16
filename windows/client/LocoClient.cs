@@ -1293,6 +1293,14 @@ namespace Loco
                     WazuhPassword(home, secret);
                     lines.Add(Lang.T("Mot de passe d'enrôlement posé pour l'agent Wazuh.", "Enrollment password set for the Wazuh agent.", "Contraseña de inscripción puesta para el agente Wazuh."));
                 }
+                else if (File.Exists(Path.Combine(home, "authd.pass")))
+                {
+                    // Aucun mot de passe réglé dans loco : l'agent Wazuh ne doit plus en envoyer (sinon un manager qui
+                    // n'en attend pas refuse l'enrôlement : « Invalid request for new agent »).
+                    File.Delete(Path.Combine(home, "authd.pass"));
+                    lines.Add(Lang.T("Mot de passe d'enrôlement retiré du poste : l'agent Wazuh s'enrôle sans.", "Enrollment password removed from the machine: the Wazuh agent enrolls without one.",
+                                     "Contraseña de inscripción retirada del equipo: el agente Wazuh se inscribe sin ella."));
+                }
                 WazuhRestart();
                 var state = WazuhInfo();
                 for (int i = 0; i < 15 && Str(state, "status") != "connected"; i++) { Thread.Sleep(2000); state = WazuhInfo(); }
