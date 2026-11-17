@@ -2,7 +2,7 @@
 
 ![Jetons MCP et commande de connexion d'un assistant](media/mcp.webp)
 
-loco expose un **serveur MCP** (Model Context Protocol, le protocole par lequel un LLM appelle des outils) : un LLM consulte et pilote loco depuis son **client MCP** — Claude Code, Cursor, VS Code ou tout client qui accepte un en-tête d’authentification. Dans **Administration → Serveur MCP**, ajoutez loco à **Claude** ou à **Codex** en un clic (voir ci-dessous), ou créez un **jeton** par client et activez un à un les outils qu’il ouvre. Le LLM peut alors répondre à « quels postes attendent des mises à jour ? », lancer celles-ci, lire un journal système ou ouvrir le terminal d’un poste, dans les limites du jeton. Les clients qui se connectent depuis le cloud de leur éditeur (claude.ai, ChatGPT) ne joignent pas un loco installé sur un réseau local.
+loco expose un **serveur MCP** (Model Context Protocol, le protocole par lequel un LLM appelle des outils) : un LLM consulte et pilote loco depuis son **client MCP** — Claude Code, Cursor, VS Code ou tout client qui accepte un en-tête d’authentification. Dans **Administration → Serveur MCP**, ajoutez loco à **Claude** ou à **Codex** par un installateur (voir ci-dessous), ou créez un **jeton** par client et activez un à un les outils qu’il ouvre. Le LLM peut alors répondre à « quels postes attendent des mises à jour ? », lancer celles-ci, lire un journal système ou ouvrir le terminal d’un poste, dans les limites du jeton. Les clients qui se connectent depuis le cloud de leur éditeur (claude.ai, ChatGPT) ne joignent pas un loco installé sur un réseau local.
 
 - **Outil par outil** : chaque jeton n’ouvre que les outils activés (lister ou consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, exécuter des commandes écrites par le LLM, shell adb d’un appareil Android, état du serveur, journal…). La fenêtre du jeton les range par domaine, avec leur nom MCP (`list_devices`, `terminal_run`…) et un repère **action** ou **sensible** ; préréglages **Lecture seule**, **Tout ce que je peux** ou **Rien**.
 - **Accès distant en direct**, par les mêmes sessions que l’interface (droits **Ouvrir un terminal distant**, **Gérer les fichiers du poste**, **Ouvrir le bureau noVNC**) :
@@ -19,31 +19,49 @@ loco expose un **serveur MCP** (Model Context Protocol, le protocole par lequel 
 
 ## Ajouter loco à Claude ou à Codex
 
-Le bloc **Ajouter loco à Claude ou à Codex** de la page Serveur MCP évite de copier un jeton :
+Ni Claude ni Codex n’acceptent qu’un lien ajoute un serveur MCP. Le bloc **Ajouter loco à Claude ou à Codex** de la
+page Serveur MCP prépare donc un **installateur** pour l’ordinateur où tourne l’application :
 
-1. **Claude** ou **Codex** ouvre l’application de bureau de cet ordinateur, avec la demande d’ajout déjà écrite.
-   Envoyez-la : l’agent ajoute loco à la configuration **locale** de l’application (`claude mcp add --scope user …`,
-   `codex mcp add …`) — le serveur n’est déclaré que sur ce poste, jamais comme connecteur dans le cloud.
-2. L’application ouvre loco dans le navigateur (`claude mcp login loco`, `codex mcp login loco`). Connecté à loco, vous
-   voyez **Autoriser Claude Code** (ou Codex) : nom du jeton, durée, et outils — la consultation est cochée d’office,
-   l’accès distant (fichiers, écran, terminal) jamais. **Autoriser** renvoie l’application à son écoute locale.
-3. L’application reçoit un jeton MCP ordinaire, qui apparaît dans la liste (« obtenu par Claude Code ») : vous
-   pouvez modifier ses outils ou le révoquer comme les autres.
+1. Cliquez sur **Claude** ou **Codex**. Dans la fenêtre : nom du jeton, durée, système de l’ordinateur (deviné d’après
+   le navigateur) et outils — la consultation est cochée d’office, l’accès distant (fichiers, écran, terminal) jamais.
+2. **Télécharger l’installateur** crée le jeton et renvoie un fichier qui le contient :
+   - **Windows** — `ajouter-loco-a-claude.cmd` : ouvrez-le (Windows peut demander *Informations complémentaires*, puis
+     *Exécuter quand même* : le fichier n’est pas signé) ;
+   - **macOS** et **Linux** — `ajouter-loco-a-claude.command` / `.sh` : dans le Terminal, `sh` suivi du fichier.
+3. L’installateur écrit la configuration MCP de l’application, puis s’efface :
+   - **Claude Code** (commande `claude` et onglet *Code* de l’application de bureau) : entrée `loco` de type `http`,
+     avec l’en-tête du jeton, dans `~/.claude.json` ;
+   - **Codex** (application de bureau et commande `codex`) : section `[mcp_servers.loco]` (`url`, `http_headers`) dans
+     `~/.codex/config.toml` — une ancienne section `loco` est remplacée.
 
-Les mêmes commandes, à lancer dans un terminal, sont données sous les deux boutons.
+   Le reste de ces fichiers est gardé, et une copie de l’ancien fichier est laissée à côté (`….avant-loco`).
+4. Redémarrez l’application : loco apparaît dans ses serveurs MCP. Le jeton figure dans la liste de loco (« obtenu par
+   l’installateur Claude ») ; modifiez ses outils ou révoquez-le comme les autres.
 
-Comment ça marche : connexion OAuth 2.1 selon la spécification d’autorisation MCP. Le client découvre loco (métadonnées
-de la ressource protégée et du serveur d’autorisation, `/.well-known/…`), s’enregistre seul (client public), puis
-échange le code d’autorisation contre le jeton avec PKCE. Le code ne peut revenir qu’à une application de l’ordinateur
-(adresse de retour en boucle locale, `http://127.0.0.1:…` ou `http://localhost:…`, ou schéma propre à une application) ;
-le jeton n’est valable que pour le serveur MCP de loco et n’est jamais montré.
+**Certificat.** Si le poste ne reconnaît pas le certificat de loco et que c’est l’autorité de loco qui l’a signé,
+l’installateur l’affiche avec son empreinte SHA-256 et demande s’il faut lui faire confiance : magasin de l’utilisateur
+sous Windows (Windows demande aussi confirmation), trousseau de session sous macOS ; sous Linux, réglage
+`NODE_EXTRA_CA_CERTS` de Claude Code (`~/.claude/settings.json`) et, pour Codex, magasin du système (`sudo`).
 
-| À savoir | |
-|---|---|
-| **Codex et les adresses IP** | Codex refuse de se connecter par loco si loco est joint par une adresse IP privée : il lui faut un nom (par exemple `loco.exemple.lan`), à déclarer dans *Système › Réseau › Adresse du portail*. La page le signale. Claude Code accepte les deux. |
-| **Certificat** | L’application doit reconnaître le certificat de loco. S’il est signé par l’autorité de loco, la demande pré-remplie donne son adresse et son empreinte SHA-256 : `NODE_EXTRA_CA_CERTS` (bloc `env` de `~/.claude/settings.json`) pour Claude Code, `CODEX_CA_CERTIFICATE` pour Codex — ou l’autorité ajoutée au magasin du système. |
-| **Se déconnecter** | *Sign out* de Claude Code (`claude mcp logout loco`) retire aussi le jeton de loco. Pour Codex, révoquez le jeton dans la liste de loco. |
-| **Droits** | Autoriser une application demande le droit **Créer des jetons MCP** ; le jeton reste dans les limites du compte qui l’a autorisé. |
+Le jeton ne passe ni par une conversation ni par une ligne de commande : il est dans le fichier téléchargé, puis dans
+la configuration de l’application.
+
+### Sans installateur : connexion par loco
+
+Un client MCP peut aussi se connecter **sans jeton préparé**, par OAuth 2.1 (spécification d’autorisation MCP) :
+
+```bash
+claude mcp add --scope user --transport http loco https://<serveur>:8443/mcp && claude mcp login loco
+codex mcp add loco --url https://<serveur>:8443/mcp && codex mcp login loco
+```
+
+La commande `login` ouvre loco dans le navigateur, sur **Autoriser Claude Code** (ou Codex) : nom, durée et outils du
+jeton, puis **Autoriser**. Le client découvre loco (`/.well-known/…`), s’enregistre seul (client public) et reçoit le
+jeton après échange du code avec PKCE ; le code ne revient qu’à une application de l’ordinateur (boucle locale ou schéma
+propre à une application). *Sign out* de Claude Code (`claude mcp logout loco`) retire aussi le jeton de loco.
+
+Codex refuse cette connexion quand loco est joint par une adresse IP privée : il lui faut un nom, à déclarer dans
+*Système › Réseau › Adresse du portail* (l’installateur, lui, n’est pas concerné).
 
 Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de créer ses propres jetons et de révoquer ceux des comptes que l’on gère. Fonction désactivable dans **Fonctionnalités** (« Serveur MCP »).
 

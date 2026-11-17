@@ -745,6 +745,15 @@
     if (form.hasAttribute("data-ajax")) { e.preventDefault(); send(form, btn); }
     else if (form.hasAttribute("data-clean")) { e.preventDefault(); go(form); }
     else if (btn) btn.classList.add("loading");
+    // Formulaire qui renvoie un fichier (installateur) : la page reste ; on ferme la fenêtre et on la recharge.
+    if (form.hasAttribute("data-download")) {
+      setTimeout(function () {
+        if (btn) btn.classList.remove("loading");
+        var dlg = form.closest("dialog");
+        if (dlg && dlg.open) dlg.close();
+        location.reload();
+      }, 2000);
+    }
   });
 
   /* ---------------------------------------------------------------- dépôt de fichiers */

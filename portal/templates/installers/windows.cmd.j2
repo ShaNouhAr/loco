@@ -1,0 +1,127 @@
+@echo off
+rem {{ m.title }} : installateur genere par loco {{ version }}. Il contient un jeton : il s'efface apres usage.
+chcp 65001 >nul
+set "LOCO_SELF=%~f0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = [IO.File]::ReadAllText($env:LOCO_SELF, [Text.Encoding]::UTF8); Invoke-Expression $s.Substring($s.LastIndexOf('#=== loco PowerShell'))"
+echo.
+pause
+(goto) 2>nul & del "%~f0"
+#=== loco PowerShell
+$ErrorActionPreference = 'Stop'
+$App = {{ ps(app) }}
+$Url = {{ ps(url) }}
+$Token = {{ ps(token) }}
+$CaPem = {{ ps(pem) }}
+$CaSha = {{ ps(fingerprint) }}
+$Text = @{
+  title = {{ ps(m.title) }}; check = {{ ps(m.check) }}; trust = {{ ps(m.trust) }}; ask = {{ ps(m.ask) }}
+  trusted = {{ ps(m.trusted) }}; skipped = {{ ps(m.skipped) }}; down = {{ ps(m.down) }}; backup = {{ ps(m.backup) }}
+  done_claude = {{ ps(m.done_claude) }}; done_codex = {{ ps(m.done_codex) }}; failed = {{ ps(m.failed) }}
+}
+$Utf8 = New-Object System.Text.UTF8Encoding $false
+$UserHome = [Environment]::GetFolderPath('UserProfile')
+if (-not $UserHome) { $UserHome = $HOME }
+
+function Test-Loco {
+  # 'ok' : loco répond et son certificat est reconnu ; 'trust' : certificat non reconnu ; 'down' : injoignable.
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    $null = Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Uri ($Url.Substring(0, $Url.Length - 4) + '/healthz')
+    return 'ok'
+  } catch {
+    $e = $_.Exception
+    while ($e) {
+      if ($e -is [System.Security.Authentication.AuthenticationException]) { return 'trust' }
+      if ($e -is [System.Net.WebException] -and $e.Status -eq [System.Net.WebExceptionStatus]::TrustFailure) { return 'trust' }
+      $e = $e.InnerException
+    }
+    return 'down'
+  }
+}
+
+function Save-Copy([string]$Path) {
+  if ((Test-Path -LiteralPath $Path) -and (Get-Item -LiteralPath $Path -Force).Length -gt 0) {
+    Copy-Item -LiteralPath $Path -Destination ($Path + '.avant-loco') -Force
+    Write-Host ($Text.backup + ' ' + $Path + '.avant-loco')
+  }
+}
+
+function Set-Claude {
+  # Claude Code (commande claude et onglet Code de l'application de bureau) lit ses serveurs MCP dans ~/.claude.json.
+  $dir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { $UserHome }
+  $path = Join-Path $dir '.claude.json'
+  $raw = if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllText($path, $Utf8) } else { '' }
+  if (-not $raw.Trim()) { $raw = '{}' }
+  $entry = [ordered]@{ type = 'http'; url = $Url; headers = [ordered]@{ Authorization = 'Bearer ' + $Token } }
+  if ($PSVersionTable.PSVersion.Major -ge 6) {
+    $data = ConvertFrom-Json -InputObject $raw -AsHashtable
+    if ($null -eq $data['mcpServers']) { $data['mcpServers'] = [ordered]@{} }
+    $data['mcpServers']['loco'] = $entry
+    $out = ConvertTo-Json -InputObject $data -Depth 100
+  } else {
+    # Windows PowerShell 5.1 : ConvertFrom-Json confond les clés qui ne diffèrent que par la casse (chemins de projets).
+    Add-Type -AssemblyName System.Web.Extensions
+    $js = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $js.MaxJsonLength = [int]::MaxValue
+    $js.RecursionLimit = 1000
+    $data = $js.DeserializeObject($raw)
+    if (-not $data.ContainsKey('mcpServers') -or $null -eq $data['mcpServers']) { $data['mcpServers'] = New-Object 'System.Collections.Generic.Dictionary[string,object]' }
+    $data['mcpServers']['loco'] = $entry
+    $out = $js.Serialize($data)
+  }
+  Save-Copy $path
+  [IO.File]::WriteAllText($path, $out, $Utf8)
+}
+
+function Set-Codex {
+  # Codex (application de bureau et commande codex) lit ses serveurs MCP dans ~/.codex/config.toml.
+  $dir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $UserHome '.codex' }
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  $path = Join-Path $dir 'config.toml'
+  $lines = if (Test-Path -LiteralPath $path) { [IO.File]::ReadAllLines($path, $Utf8) } else { @() }
+  $kept = New-Object System.Collections.Generic.List[string]
+  $skip = $false
+  foreach ($line in $lines) {
+    if ($line -match '^\s*\[') {
+      $header = (($line -replace '#.*$', '') -replace '[\s"\[\]]', '')
+      $skip = ($header -eq 'mcp_servers.loco' -or $header.StartsWith('mcp_servers.loco.'))
+    }
+    if (-not $skip) { $kept.Add($line) }
+  }
+  while ($kept.Count -gt 0 -and -not $kept[$kept.Count - 1].Trim()) { $kept.RemoveAt($kept.Count - 1) }
+  if ($kept.Count -gt 0) { $kept.Add('') }
+  $kept.Add('[mcp_servers.loco]')
+  $kept.Add('url = "' + $Url + '"')
+  $kept.Add('http_headers = { "Authorization" = "Bearer ' + $Token + '" }')
+  Save-Copy $path
+  [IO.File]::WriteAllText($path, (($kept -join "`n") + "`n"), $Utf8)
+}
+
+try {
+  Write-Host $Text.title
+  Write-Host ''
+  Write-Host $Text.check
+  $state = Test-Loco
+  if ($state -eq 'trust' -and $CaPem) {
+    Write-Host $Text.trust
+    Write-Host ('  ' + $CaSha)
+    $answer = Read-Host $Text.ask
+    if ($answer -match '^\s*(|o|oui|y|yes|s|si)\s*$') {
+      $cer = Join-Path ([IO.Path]::GetTempPath()) 'loco-ca.cer'
+      [IO.File]::WriteAllText($cer, $CaPem)
+      try { Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null } finally { Remove-Item -LiteralPath $cer -Force }
+      Write-Host $Text.trusted
+      $state = Test-Loco
+    } else {
+      Write-Host $Text.skipped
+    }
+  }
+  if ($state -eq 'down') { Write-Host $Text.down }
+  if ($App -eq 'claude') { Set-Claude; $done = $Text.done_claude } else { Set-Codex; $done = $Text.done_codex }
+  Write-Host ''
+  Write-Host $done
+} catch {
+  Write-Host ''
+  Write-Host ($Text.failed + ' ' + $_.Exception.Message)
+  exit 1
+}

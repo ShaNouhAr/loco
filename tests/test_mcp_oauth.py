@@ -6,11 +6,8 @@ import datetime
 import hashlib
 import html
 import json
-import os
 import re
 import secrets
-import shutil
-import tempfile
 import unittest
 import urllib.parse
 from unittest import mock
@@ -281,70 +278,18 @@ class TestRevocation(OAuthTest):
         self.assertIn("mcp.acces.revocation", self.actions())
 
 
-class TestLinksToTheApplications(OAuthTest):
-    def links(self):
+class TestTerminal(OAuthTest):
+    def test_the_terminal_commands_need_no_token_and_codex_by_ip_is_flagged(self):
         page = html.unescape(self.admin.c.get("/accounts/mcp").get_data(as_text=True))
-        claude = re.search(r'href="(claude://code/new\?q=[^"]+)"', page).group(1)
-        codex = re.search(r'href="(codex://new\?prompt=[^"]+)"', page).group(1)
-        return (urllib.parse.parse_qs(urllib.parse.urlsplit(claude).query)["q"][0],
-                urllib.parse.parse_qs(urllib.parse.urlsplit(codex).query)["prompt"][0], page)
-
-    def test_the_page_opens_claude_and_codex_with_the_request_prefilled_and_no_token(self):
-        claude, codex, page = self.links()
-        endpoint = mcp_oauth.resource()
-        self.assertIn(f"claude mcp add --scope user --transport http loco {endpoint}", claude)
-        self.assertIn("claude mcp login loco", claude)
-        self.assertIn(f"codex mcp add loco --url {endpoint}", codex)
-        self.assertIn("codex mcp login loco", codex)
-        for text in (claude, codex):
-            self.assertNotIn("loco_mcp_", text)
-            self.assertNotIn("empreinte", text)                          # certificat d'une autre autorité (ou aucun ici)
-        self.assertIn(f"claude mcp add --scope user --transport http loco {endpoint}\nclaude mcp login loco", page)
-
-    def test_an_address_by_ip_warns_that_codex_needs_a_name(self):
-        self.assertNotIn("Codex refuse", self.links()[2])
+        self.assertIn(f"claude mcp add --scope user --transport http loco {mcp_oauth.resource()}\nclaude mcp login loco", page)
+        self.assertIn(f"codex mcp add loco --url {mcp_oauth.resource()}\ncodex mcp login loco", page)
+        self.assertNotIn("Codex refuse", page)
         with mock.patch.object(config, "portal_url", return_value="https://192.168.1.20:8443"):
-            page = self.links()[2]
+            page = self.admin.c.get("/accounts/mcp").get_data(as_text=True)
             self.assertTrue(mcp_oauth.by_ip())
-        self.assertIn("Codex refuse de se connecter par loco quand loco est joint par une adresse IP", page)
+        self.assertIn("Codex refuse cette connexion quand loco est joint par une adresse IP", page)
         with mock.patch.object(config, "portal_url", return_value="https://[fd00::20]:8443"):
             self.assertTrue(mcp_oauth.by_ip())
-
-    def test_the_authority_of_loco_is_given_with_its_fingerprint_when_it_signed_the_certificate(self):
-        from cryptography import x509
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import ec
-        folder = tempfile.mkdtemp(prefix="loco-tls-")
-        self.addCleanup(shutil.rmtree, folder, True)
-        now = datetime.datetime.now(datetime.timezone.utc)
-
-        def certificate(subject, issuer, key, signer, ca):
-            builder = (x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(key.public_key())
-                       .serial_number(x509.random_serial_number()).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=9))
-                       .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True))
-            return builder.sign(signer, hashes.SHA256())
-        ca_key, server_key = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
-        ca_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "loco CA essai")])
-        ca = certificate(ca_name, ca_name, ca_key, ca_key, True)
-        server = certificate(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "loco.essai")]), ca_name, server_key, ca_key, False)
-        for name, cert in (("ca.crt", ca), ("server.crt", server)):
-            with open(os.path.join(folder, name), "wb") as f:
-                f.write(cert.public_bytes(serialization.Encoding.PEM))
-        with mock.patch.object(config, "TLS_DIR", folder):
-            claude, codex, _page = self.links()
-        fingerprint = ca.fingerprint(hashes.SHA256()).hex().upper()
-        expected = ":".join(fingerprint[i:i + 2] for i in range(0, 64, 2))
-        for text, variable in ((claude, "NODE_EXTRA_CA_CERTS"), (codex, "CODEX_CA_CERTIFICATE")):
-            self.assertIn(expected, text)
-            self.assertIn(variable, text)
-        other = ec.generate_private_key(ec.SECP256R1())
-        alien = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "Autorité d'entreprise")])
-        with open(os.path.join(folder, "server.crt"), "wb") as f:
-            f.write(certificate(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, "loco.essai")]), alien, server_key, other, False)
-                    .public_bytes(serialization.Encoding.PEM))
-        with mock.patch.object(config, "TLS_DIR", folder):
-            claude, _codex, _page = self.links()
-        self.assertNotIn(expected, claude)
 
 
 if __name__ == "__main__":

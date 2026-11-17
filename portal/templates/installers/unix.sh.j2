@@ -1,0 +1,161 @@
+#!/bin/sh
+# {{ m.title }} : installateur généré par loco {{ version }}. Il contient un jeton : il s'efface après usage.
+# Lancement : sh <ce fichier>, depuis le Terminal.
+set -u
+APP={{ sh(app) }}
+URL={{ sh(url) }}
+CA_SHA={{ sh(fingerprint) }}
+LOCO_TOKEN={{ sh(token) }}
+LOCO_URL="$URL"
+export LOCO_TOKEN LOCO_URL
+SELF=$0
+MACOS={{ "1" if macos else "0" }}
+umask 077
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/loco.XXXXXX") || exit 1
+trap 'rm -rf "$WORK"' EXIT
+{% if pem %}
+cat > "$WORK/loco-ca.pem" <<'LOCO_AUTHORITY'
+{{ pem }}LOCO_AUTHORITY
+{% endif %}
+
+say() { printf '%s\n' "$1"; }
+
+# Réponse « oui » par défaut (Entrée) ; « non » si rien ne peut être lu (lancement sans terminal).
+ask() {
+    printf '%s ' "$1"
+    read -r answer || answer=n
+    case "$answer" in ""|[oOyYsS]*) return 0 ;; *) return 1 ;; esac
+}
+
+# ok : loco répond et son certificat est reconnu ; trust : certificat non reconnu ; down : injoignable ou inconnu.
+check() {
+    command -v curl >/dev/null 2>&1 || { echo down; return; }
+    curl -fsS --max-time 15 -o /dev/null "${URL%/mcp}/healthz" 2>/dev/null
+    case $? in 0) echo ok ;; 35|51|58|60|77|83) echo trust ;; *) echo down ;; esac
+}
+
+backup() {
+    [ -s "$1" ] && cp -p "$1" "$1.avant-loco" && say {{ sh(m.backup) }}" $1.avant-loco"
+    return 0
+}
+
+# Fichier JSON : la valeur de « $2 » (chemin a.b) devient l'objet JSON de la variable d'environnement LOCO_VALUE.
+json_set() {
+    file=$1 key=$2
+    backup "$file"
+    if [ "$MACOS" = 1 ]; then
+        cat > "$WORK/edit.js" <<'LOCO_JXA'
+ObjC.import('Foundation');
+function run(argv) {
+  var env = $.NSProcessInfo.processInfo.environment;
+  var text = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, null);
+  var data = (text.isNil() || ObjC.unwrap(text).trim() === '') ? {} : JSON.parse(ObjC.unwrap(text));
+  var parts = argv[1].split('.'), node = data;
+  for (var i = 0; i < parts.length - 1; i++) {
+    if (node[parts[i]] === undefined || node[parts[i]] === null || typeof node[parts[i]] !== 'object') node[parts[i]] = {};
+    node = node[parts[i]];
+  }
+  node[parts[parts.length - 1]] = JSON.parse(ObjC.unwrap(env.objectForKey('LOCO_VALUE')));
+  $(JSON.stringify(data, null, 2)).writeToFileAtomicallyEncodingError(argv[0], true, $.NSUTF8StringEncoding, null);
+}
+LOCO_JXA
+        osascript -l JavaScript "$WORK/edit.js" "$file" "$key" >/dev/null
+    else
+        python3 - "$file" "$key" <<'LOCO_PY'
+import json, os, sys
+path, key = sys.argv[1], sys.argv[2].split(".")
+try:
+    with open(path, encoding="utf-8") as f:
+        text = f.read()
+except FileNotFoundError:
+    text = ""
+data = json.loads(text) if text.strip() else {}
+node = data
+for part in key[:-1]:
+    if not isinstance(node.get(part), dict):
+        node[part] = {}
+    node = node[part]
+node[key[-1]] = json.loads(os.environ["LOCO_VALUE"])
+tmp = path + ".loco-tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+os.chmod(tmp, os.stat(path).st_mode & 0o777 if os.path.exists(path) else 0o600)
+os.replace(tmp, path)
+LOCO_PY
+    fi
+}
+
+set_claude() {
+    dir=${CLAUDE_CONFIG_DIR:-$HOME}
+    LOCO_VALUE=$(printf '{"type":"http","url":"%s","headers":{"Authorization":"Bearer %s"}}' "$LOCO_URL" "$LOCO_TOKEN")
+    export LOCO_VALUE
+    json_set "$dir/.claude.json" mcpServers.loco
+}
+
+set_codex() {
+    dir=${CODEX_HOME:-$HOME/.codex}
+    mkdir -p "$dir"
+    file=$dir/config.toml
+    [ -f "$file" ] || : > "$file"
+    backup "$file"
+    awk '
+        /^[[:space:]]*\[/ { h = $0; sub(/#.*/, "", h); gsub(/[[:space:]"\[\]]/, "", h); skip = (h == "mcp_servers.loco" || index(h, "mcp_servers.loco.") == 1) }
+        !skip { lines[++n] = $0 }
+        END { while (n > 0 && lines[n] ~ /^[[:space:]]*$/) n--; for (i = 1; i <= n; i++) print lines[i] }
+    ' "$file" > "$WORK/config.toml"
+    {
+        [ -s "$WORK/config.toml" ] && echo
+        echo '[mcp_servers.loco]'
+        printf 'url = "%s"\n' "$LOCO_URL"
+        printf 'http_headers = { "Authorization" = "Bearer %s" }\n' "$LOCO_TOKEN"
+    } >> "$WORK/config.toml"
+    cat "$WORK/config.toml" > "$file"
+}
+
+# Autorité de loco : trousseau de session (macOS) ; sous Linux, Claude Code la lit par NODE_EXTRA_CA_CERTS et Codex par
+# le magasin du système.
+trust() {
+    if [ "$MACOS" = 1 ]; then
+        security add-trusted-cert -r trustRoot -k "$HOME/Library/Keychains/login.keychain-db" "$WORK/loco-ca.pem" && return 0
+        return 1
+    fi
+    mkdir -p "$HOME/.config/loco" && cp "$WORK/loco-ca.pem" "$HOME/.config/loco/ca.pem" && chmod 644 "$HOME/.config/loco/ca.pem"
+    if [ "$APP" = claude ]; then
+        LOCO_VALUE=$(printf '"%s"' "$HOME/.config/loco/ca.pem")
+        export LOCO_VALUE
+        mkdir -p "$HOME/.claude"
+        json_set "$HOME/.claude/settings.json" env.NODE_EXTRA_CA_CERTS
+        return 0
+    fi
+    say {{ sh(m.linux_ca) }}
+    if command -v update-ca-certificates >/dev/null 2>&1; then
+        sudo cp "$HOME/.config/loco/ca.pem" /usr/local/share/ca-certificates/loco.crt && sudo update-ca-certificates >/dev/null 2>&1
+    elif command -v update-ca-trust >/dev/null 2>&1; then
+        sudo cp "$HOME/.config/loco/ca.pem" /etc/pki/ca-trust/source/anchors/loco.pem && sudo update-ca-trust >/dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+say {{ sh(m.title) }}
+say ""
+say {{ sh(m.check) }}
+state=$(check)
+if [ "$state" = trust ] && [ -f "$WORK/loco-ca.pem" ]; then
+    say {{ sh(m.trust) }}
+    say "  $CA_SHA"
+    if ask {{ sh(m.ask) }}; then
+        if trust; then say {{ sh(m.trusted) }}; else say {{ sh(m.skipped) }}; fi
+    else
+        say {{ sh(m.skipped) }}
+    fi
+elif [ "$state" = down ]; then
+    say {{ sh(m.down) }}
+fi
+if [ "$APP" = claude ]; then set_claude && done_text={{ sh(m.done_claude) }}; else set_codex && done_text={{ sh(m.done_codex) }}; fi
+status=$?
+say ""
+if [ "$status" -eq 0 ]; then say "$done_text"; else say {{ sh(m.failed) }}; fi
+case "$SELF" in *ajouter-loco-a-*) rm -f -- "$SELF" ;; esac
+exit "$status"

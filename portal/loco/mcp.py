@@ -987,7 +987,13 @@ def _token_view(row, apps=None):
             "expires": _day(row["expires_at"]) if row["expires_at"] else "", "expired": bool(row["expires_at"]) and row["expires_at"] <= now,
             "owner_disabled": bool(row["owner_disabled"]), "used": fleet.ago_text(row["last_used_at"]) if row["last_used_at"] else "",
             "ip": row["last_ip"], "client": row["last_client"],
-            "app": (apps or {}).get(row["client_id"], _("application connectée")) if row["client_id"] else ""}
+            "app": _origin(row["client_id"], apps) if row["client_id"] else ""}
+
+
+def _origin(client_id, apps):
+    """Ce qui a obtenu le jeton : une application connectée par OAuth, ou un installateur Claude / Codex."""
+    from .mcp_install import app_label
+    return app_label(client_id) or (apps or {}).get(client_id, _("application connectée"))
 
 
 def _authority():
@@ -1009,14 +1015,17 @@ def _authority():
 
 
 def _page(created=None, status=200):
-    from .mcp_oauth import client_names, prompts
+    from .mcp_install import detect_system
+    from .mcp_oauth import by_ip, client_names
     own = permissions.role_permissions(db(), g.user["role"])
     rows = _visible()
     apps = client_names(db(), [r["client_id"] for r in rows])
-    authority = _authority()
-    return render_template("mcp.html", tools=_catalog_view(own), tokens=[_token_view(r, apps) for r in rows],
-                           endpoint=_endpoint_url(), created=created, expiries=EXPIRIES,
-                           links=prompts(_endpoint_url(), *(authority or ("", "")))), status
+    tools = _catalog_view(own)
+    # Installateurs : la consultation cochée d'office, jamais l'accès distant (fichiers, écran, terminal d'un poste).
+    checked = [t["name"] for grp in tools if grp["key"] != "remote" for t in grp["tools"] if t["available"] and t["read_only"]]
+    return render_template("mcp.html", tools=tools, tokens=[_token_view(r, apps) for r in rows], endpoint=_endpoint_url(),
+                           created=created, expiries=EXPIRIES, install_checked=checked, system=detect_system(),
+                           by_ip=by_ip()), status
 
 
 def _form_values():

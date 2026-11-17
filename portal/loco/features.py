@@ -43,7 +43,7 @@ OPT_IN = {EXPERIMENTAL_SETTING: EXPERIMENTAL, OPTIONAL_SETTING: OPTIONAL}
 MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("flatpak",), "loco.wupdate": ("wu",),
            "loco.winapps": ("windows_apps",), "loco.winget": ("windows_apps",), "loco.deployments": ("windows_apps", "fleet"),
            "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"), "loco.schedules": ("fleet",),
-           "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",),
+           "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
            "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh")}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),

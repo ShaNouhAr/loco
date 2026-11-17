@@ -1312,23 +1312,28 @@ class McpApps(BrowserTest):
 
 
 class TestMcpAppsDesktop(McpApps):
-    def test_the_tiles_open_the_applications_and_the_consent_returns_to_the_application(self):
+    def test_a_tile_downloads_the_installer_and_the_consent_returns_to_the_application(self):
         self.page.goto("/accounts/mcp")
-        claude, codex = self.page.locator(".app-tile.claude"), self.page.locator(".app-tile.codex")
-        expect(claude).to_contain_text("Claude")
-        expect(codex).to_contain_text("Codex")
-        self.assertTrue(claude.get_attribute("href").startswith("claude://code/new?q="))
-        self.assertTrue(codex.get_attribute("href").startswith("codex://new?prompt="))
+        claude = self.page.locator(".app-tile.claude")
         expect(claude.locator(".brand-logo")).to_be_visible()
         self.assertLessEqual(self.overflow(), 0)
+        claude.click()
+        dialog = self.page.locator("#mcp-install-claude")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator("input[value=list_devices]")).to_be_checked()               # consultation d'office
+        expect(dialog.locator("input[value=read_file]")).not_to_be_checked()             # jamais l'accès distant
+        dialog.locator("select[name=system]").select_option("linux")
+        with self.page.expect_download() as caught:
+            dialog.locator("button.primary").click()
+        download = caught.value
+        self.assertEqual(download.suggested_filename, "ajouter-loco-a-claude.sh")
+        expect(dialog).to_be_hidden(timeout=6000)                                          # fenêtre refermée, page rechargée
+        expect(self.page.locator(".mcp-table")).to_contain_text("obtenu par l'installateur Claude")
         captured = []
         self.context.route(re.compile(r"^http://127\.0\.0\.1:53682/"), lambda route: (captured.append(route.request.url), route.abort()))
         self.page.goto(self.authorize_url())
         expect(self.page.locator("h1")).to_have_text("Autoriser Claude Code")
         expect(self.page.locator(".app-ident .brand-logo")).to_be_visible()
-        expect(self.page.locator("input[value=list_devices]")).to_be_checked()
-        expect(self.page.locator("input[value=read_file]")).not_to_be_checked()        # accès distant : jamais d'office
-        self.assertLessEqual(self.overflow(), 0)
         self.page.click("button[name=decision][value=allow]")
         for _ in range(40):
             if captured:
@@ -1348,6 +1353,10 @@ class TestMcpAppsPhone(McpApps):
         codex = self.page.locator(".app-tile.codex").bounding_box()
         self.assertGreater(codex["y"], claude["y"] + claude["height"] - 1)                 # l'une sous l'autre
         self.assertLessEqual(self.overflow(), 0)
+        self.page.locator(".app-tile.codex").click()
+        expect(self.page.locator("#mcp-install-codex")).to_be_visible()
+        self.assertLessEqual(self.overflow(), 0, "fenêtre de l'installateur")
+        self.page.locator("#mcp-install-codex [data-close]").first.click()
         self.page.goto(self.authorize_url())
         expect(self.page.locator("h1")).to_have_text("Autoriser Claude Code")
         self.assertLessEqual(self.overflow(), 0)

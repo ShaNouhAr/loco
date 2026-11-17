@@ -8,34 +8,60 @@
 <div class="dlg-h"><div><h2>{{ title }}</h2>{% if sub %}<p>{{ sub }}</p>{% endif %}</div><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button></div>
 {%- endmacro %}
 
-{# Claude et Codex : un lien ouvre l'application avec la demande d'ajout pré-remplie ; la connexion se fait par OAuth. #}
+{# Claude et Codex : un installateur, téléchargé avec un jeton créé pour lui, écrit la configuration MCP de l'application
+   sur cet ordinateur (aucune des deux n'accepte qu'un lien ajoute un serveur MCP). #}
 {% macro apps_panel() -%}
 <section class="panel" id="applications">
-  <div class="panel-h"><h2>{{ _("Ajouter loco à Claude ou à Codex") }}</h2><div class="aside">{{ _("sans jeton à copier") }}</div></div>
+  <div class="panel-h"><h2>{{ _("Ajouter loco à Claude ou à Codex") }}</h2><div class="aside">{{ _("installé sur cet ordinateur") }}</div></div>
   <div class="panel-b mcp-connect">
-    <p class="muted">{{ _("Le lien ouvre l'application de cet ordinateur avec la demande d'ajout pré-remplie. Envoyez-la : l'application ajoute loco à sa configuration locale, puis ouvre loco dans votre navigateur, où vous choisissez les outils et autorisez l'accès.") }}</p>
+    <p class="muted">{{ _("Choisissez l'application et les outils : loco prépare un installateur qui ajoute le serveur MCP à la configuration de l'application, sur cet ordinateur, avec un jeton créé pour lui. Ouvrez-le une fois téléchargé, puis redémarrez l'application.") }}</p>
     <div class="app-tiles">
-      <a class="app-tile claude" href="{{ links.claude }}">
+      <button type="button" class="app-tile claude" data-open="#mcp-install-claude">
         <span class="app-tile-logo">{{ claude_logo() }}</span>
-        <span class="app-tile-text"><b>Claude</b><small>{{ _("Ouvrir Claude Code avec la demande d'ajout") }}</small></span>
-        {{ ui_icon('external') }}
-      </a>
-      <a class="app-tile codex" href="{{ links.codex }}">
+        <span class="app-tile-text"><b>Claude</b><small>{{ _("Claude Code : application de bureau et terminal") }}</small></span>
+        {{ ui_icon('download') }}
+      </button>
+      <button type="button" class="app-tile codex" data-open="#mcp-install-codex">
         <span class="app-tile-logo">{{ codex_logo() }}</span>
-        <span class="app-tile-text"><b>Codex</b><small>{{ _("Ouvrir Codex avec la demande d'ajout") }}</small></span>
-        {{ ui_icon('external') }}
-      </a>
+        <span class="app-tile-text"><b>Codex</b><small>{{ _("Codex : application de bureau et terminal") }}</small></span>
+        {{ ui_icon('download') }}
+      </button>
     </div>
-    <span class="cmd-label">{{ _("Claude Code dans un terminal") }}</span>
-    <div class="cmd wrap"><code>claude mcp add --scope user --transport http loco {{ endpoint }}
+    <details class="mcp-json">
+      <summary>{{ _("Sans installateur : connexion par loco depuis un terminal") }}</summary>
+      <span class="cmd-label">{{ _("Claude Code") }}</span>
+      <div class="cmd wrap"><code>claude mcp add --scope user --transport http loco {{ endpoint }}
 claude mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
-    <span class="cmd-label">{{ _("Codex dans un terminal") }}</span>
-    <div class="cmd wrap"><code>codex mcp add loco --url {{ endpoint }}
+      <span class="cmd-label">{{ _("Codex") }}</span>
+      <div class="cmd wrap"><code>codex mcp add loco --url {{ endpoint }}
 codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
-    {% if links.by_ip %}<p class="note warn">{{ _("Codex refuse de se connecter par loco quand loco est joint par une adresse IP : il lui faut un nom (par exemple loco.exemple.lan), à déclarer dans Système › Réseau › Adresse du portail. Claude Code, lui, l'accepte.") }}</p>{% endif %}
-    <p class="hint">{{ _("Rien ne s'ouvre ? Le lien demande l'application de bureau Claude ou Codex sur cet ordinateur. Le serveur est ajouté à la configuration de l'application sur ce poste seulement ; le jeton obtenu apparaît ensuite dans la liste ci-dessous.") }}</p>
+      <p class="hint">{{ _("La commande login ouvre loco dans le navigateur, où vous autorisez l'accès.") }}{% if by_ip %} {{ _("Codex refuse cette connexion quand loco est joint par une adresse IP : il lui faut un nom, à déclarer dans Système › Réseau › Adresse du portail. L'installateur, lui, n'est pas concerné.") }}{% endif %}</p>
+    </details>
   </div>
 </section>
+{%- endmacro %}
+
+{# Fenêtre d'un installateur : nom, durée et outils du jeton, système de l'ordinateur. #}
+{% macro install_dialog(key, label, logo) -%}
+<dialog id="mcp-install-{{ key }}" class="mcp-dialog">
+  <form method="post" action="{{ url_for('mcp_installer') }}" data-download>
+    {{ dlg_head(_("Ajouter loco à %(app)s", app=label), _("L'installateur écrit la configuration MCP de %(app)s sur cet ordinateur, avec un jeton limité aux outils activés ici.", app=label)) }}
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="app" value="{{ key }}">
+      <div class="install-fields">
+        <label class="f"><span>{{ _("Nom du jeton") }}</span><input type="text" name="name" required maxlength="80" value="{{ 'Claude Code' if key == 'claude' else 'Codex' }}"></label>
+        <label class="f"><span>{{ _("Expiration") }}</span><select name="expiry">
+          <option value="30">{{ _("30 jours") }}</option><option value="90" selected>{{ _("90 jours") }}</option>
+          <option value="365">{{ _("1 an") }}</option><option value="0">{{ _("Jamais") }}</option></select></label>
+        <label class="f"><span>{{ _("Système de cet ordinateur") }}</span><select name="system">
+          {% for value, text in (('windows', 'Windows'), ('macos', 'macOS'), ('linux', 'Linux')) %}<option value="{{ value }}"{{ ' selected' if value == system }}>{{ text }}</option>{% endfor %}</select></label>
+      </div>
+      <p class="hint">{{ _("Windows : ouvrez le fichier téléchargé (Windows peut demander « Informations complémentaires », puis « Exécuter quand même »). macOS et Linux : dans le Terminal, lancez sh suivi du fichier téléchargé. S'il faut faire reconnaître le certificat de loco, l'installateur le demande. Il s'efface ensuite.") }}</p>
+      {{ tool_grid(tools, install_checked) }}
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary">{{ ui_icon('download') }}<span>{{ _("Télécharger l'installateur") }}</span></button></div>
+  </form>
+</dialog>
 {%- endmacro %}
 
 {# Connexion d'un client : avec le jeton tout juste créé, ou un emplacement « <jeton> » à remplacer. #}
@@ -141,6 +167,8 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Créer le jeton") }}</button></div>
   </form>
 </dialog>
+
+{% if can('mcp.manage') %}{{ install_dialog('claude', 'Claude', claude_logo) }}{{ install_dialog('codex', 'Codex', codex_logo) }}{% endif %}
 
 {% for t in tokens if t.mine %}
 <dialog id="mcp-edit-{{ t.id }}" class="mcp-dialog">

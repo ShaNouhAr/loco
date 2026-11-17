@@ -2402,8 +2402,8 @@ img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 /* Tuiles Claude et Codex : couleurs et logos de chaque application (ivoire et orange de Claude, noir de Codex),
    claires ou sombres selon le thème (light-dark suit la color-scheme du thème). */
 .app-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 6px; }
-.app-tile { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 14px 16px; border: 1px solid; border-radius: 14px;
-  text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease; }
+.app-tile { display: flex; align-items: center; gap: 14px; width: 100%; min-width: 0; padding: 14px 16px; border: 1px solid; border-radius: 14px;
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease; }
 .app-tile:hover { text-decoration: none; transform: translateY(-1px); box-shadow: var(--shadow-pop); }
 .app-tile:focus-visible { outline: 2px solid var(--accent, #2a78d6); outline-offset: 2px; }
 .app-tile-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 11px; }
@@ -2423,7 +2423,8 @@ img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 .app-tile.codex .app-tile-logo .brand-logo { width: 36px; height: 36px; }
 .app-tile.codex b { font-weight: 600; letter-spacing: -.01em; }
 .app-tile.codex small { color: rgb(255 255 255 / .62); }
-@media (max-width: 720px) { .app-tiles { grid-template-columns: minmax(0, 1fr); } }
+.install-fields { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 720px) { .app-tiles, .install-fields { grid-template-columns: minmax(0, 1fr); } }
 .app-ident { display: flex; align-items: center; gap: 10px; }
 .app-ident .app-tile-logo { width: 32px; height: 32px; border-radius: 8px; }
 .app-ident .app-tile-logo .brand-logo { width: 20px; height: 20px; }

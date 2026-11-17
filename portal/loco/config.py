@@ -3,7 +3,7 @@
 import os
 import re
 
-VERSION = "2.168.0"
+VERSION = "2.169.0"
 
 DATA = os.environ.get("LOCO_DATA", "/srv/loco")
 STATE = os.environ.get("LOCO_STATE", "/var/lib/loco")

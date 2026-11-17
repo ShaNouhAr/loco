@@ -387,30 +387,3 @@ def client_names(conn, ids):
         return {}
     marks = ",".join("?" * len(ids))
     return {r["id"]: r["name"] for r in conn.execute(f"SELECT id, name FROM mcp_oauth_clients WHERE id IN ({marks})", ids)}
-
-
-# --------------------------------------------------------------------------- liens vers les applications
-
-def prompts(endpoint, ca_url, fingerprint):
-    """Liens qui ouvrent Claude Code (application de bureau) ou Codex avec la demande d'ajout pré-remplie : le serveur
-    est ajouté à la configuration locale de l'application, sans jeton ; la connexion se fait ensuite par loco."""
-    trust = _("Si le certificat de loco n'est pas reconnu, son autorité est à %(ca)s (empreinte SHA-256 %(fp)s) : "
-              "vérifie l'empreinte avant de l'utiliser.", ca=ca_url, fp=fingerprint) if fingerprint else ""
-    claude = " ".join(p for p in (
-        _("Ajoute le serveur MCP de loco à ma configuration locale de Claude Code, pour tous mes projets : "
-          "« claude mcp add --scope user --transport http loco %(url)s ». Aucun jeton n'est nécessaire. Ensuite, lance "
-          "« claude mcp login loco » : mon navigateur s'ouvrira sur loco pour que j'autorise l'accès.", url=endpoint),
-        _("Si la commande claude n'est pas disponible, ajoute dans ~/.claude.json, sous « mcpServers », l'entrée "
-          "« loco » de type « http » à l'adresse %(url)s, puis dis-moi de me connecter depuis le menu des serveurs MCP.", url=endpoint),
-        trust and trust + " " + _("Pour Claude Code : variable NODE_EXTRA_CA_CERTS dans le bloc « env » de ~/.claude/settings.json."),
-    ) if p)
-    codex = " ".join(p for p in (
-        _("Ajoute le serveur MCP de loco à ma configuration locale de Codex : « codex mcp add loco --url %(url)s » "
-          "(ou, sans la commande codex, une section [mcp_servers.loco] avec url = \"%(url)s\" dans ~/.codex/config.toml). "
-          "Aucun jeton n'est nécessaire. Ensuite, lance « codex mcp login loco » : mon navigateur s'ouvrira sur loco pour "
-          "que j'autorise l'accès.", url=endpoint),
-        trust and trust + " " + _("Pour Codex : variable CODEX_CA_CERTIFICATE pointant sur ce fichier."),
-    ) if p)
-    quote = urllib.parse.quote
-    return {"claude": "claude://code/new?q=" + quote(claude, safe=""), "codex": "codex://new?prompt=" + quote(codex, safe=""),
-            "claude_text": claude, "codex_text": codex, "by_ip": by_ip()}

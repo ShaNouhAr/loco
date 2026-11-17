@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.169.0 — 2026-11-17
+
+- **Claude et Codex : un installateur au lieu du message pré-rempli** : les tuiles Claude et Codex de la page *Serveur MCP* ouvrent une fenêtre — nom, durée et outils du jeton, système de l'ordinateur — puis téléchargent un installateur (Windows `.cmd`, macOS et Linux à lancer avec `sh`). Ouvert, il écrit la configuration MCP de l'application : `~/.claude.json` pour Claude Code (commande `claude` et onglet *Code* de l'application de bureau), `~/.codex/config.toml` pour Codex (application de bureau et commande `codex`), en gardant le reste du fichier et une copie de l'ancien. Il s'efface ensuite. Aucun lien ne permet d'ajouter un serveur MCP à ces applications, d'où l'installateur.
+- **Certificat de loco** : si le poste ne le reconnaît pas et que l'autorité de loco l'a signé, l'installateur montre son empreinte et propose de lui faire confiance (magasin de l'utilisateur sous Windows, trousseau sous macOS, réglage de Claude Code ou magasin du système sous Linux).
+- **Codex par adresse IP** : avec l'installateur, Codex se connecte aussi à un loco joint par une adresse IP. La connexion par loco (OAuth), toujours possible depuis un terminal, demande toujours un nom pour Codex.
+
 ## 2.168.0 — 2026-11-16
 
 - **Ajouter loco à Claude ou à Codex en un clic** : la page *Serveur MCP* propose deux boutons, aux couleurs et logos de Claude et de Codex. Chacun ouvre l'application de bureau de l'ordinateur avec la demande d'ajout déjà écrite : envoyée, elle ajoute loco à la configuration **locale** de l'application, puis ouvre loco dans le navigateur pour autoriser l'accès. Aucun jeton à copier. Les commandes équivalentes pour un terminal (`claude mcp add … && claude mcp login loco`, `codex mcp add … && codex mcp login loco`) sont données dessous.
