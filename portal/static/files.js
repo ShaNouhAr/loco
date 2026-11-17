@@ -462,7 +462,7 @@ pane.addEventListener('drop', e => {
 async function openSession() {
   if (running || io) return;
   setStatus(tr('Ouverture de la session…'));
-  document.body.dataset.noReload = '1';
+  if (window.locoHold) window.locoHold('files', true); else document.body.dataset.noReload = '1';   // pas d'actualisation de la fiche
   try {
     const body = new URLSearchParams({ csrf: root.dataset.csrf, kind: 'files' });
     const response = await fetch(root.dataset.sessionUrl, { method: 'POST', body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });

@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.172.1 — 2026-11-17
+
+- **Pages suivies en direct, plus jamais sous les doigts** : la fiche d'un poste s'actualise désormais en place (en-tête, actions en cours, onglets *Mises à jour*, *Historique* et *Détails*) au lieu de se recharger toute entière chaque minute ; une fenêtre ou un menu ouverts, un texte sélectionné, une saisie, des cases cochées ou un journal déplié ne sont plus perdus — l'actualisation attend, et un journal ouvert le reste. Même règle pour le suivi des mises à jour, le déroulé d'un script et le détail d'un déploiement, qui se rechargent seulement quand personne n'y fait rien.
+- **Wazuh en direct** : la page *Wazuh* suit les installations, retraits et états remontés par les agents, sans recharger.
+- **Plus de page d'erreur en cours de route** : quand loco redémarre (une mise à jour) ou qu'une requête échoue, Mon parc et les autres pages suivies ne se rechargent plus sur une page d'erreur ; elles reprennent au relevé suivant. Une requête sans réponse n'arrête plus le suivi, et le retour sur l'onglet relance un relevé tout de suite.
+- Un menu qui ouvre une fenêtre se referme.
+
 ## 2.172.0 — 2026-11-17
 
 - **Barre des postes cochés plus claire** (Mon parc) : « 2 postes sélectionnés » au lieu de « Sélection : 2 », puis *Réveiller*, *Redémarrer* et *Mettre à jour*. *Redémarrer* est nouveau : les postes cochés redémarrent une minute après leur prochain contact (droit de redémarrer ; ceux qui redémarrent déjà, qui changent de version du système ou les appareils Android sont laissés et comptés). La case isolée « Redémarrer si nécessaire » devient *Mettre à jour puis redémarrer si nécessaire* dans le menu *Plus*, avec *Activer le réveil à distance*.

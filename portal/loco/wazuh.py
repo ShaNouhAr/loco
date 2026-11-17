@@ -604,7 +604,6 @@ def _devices(conn):
 def wazuh():
     conn = db()
     cfg = load(conn)
-    known, checked, version_error = versions(conn) if can("wazuh.manage") or not cfg["version"] else ([], 0, "")
     rows = []
     for dev in _devices(conn):
         rows.append({"d": dev, "w": view(dev, cfg), "busy": busy(conn, dev["id"]), "ready": agent_ready(dev),
@@ -612,6 +611,14 @@ def wazuh():
     counts = {"installed": sum(1 for r in rows if r["w"]["installed"]),
               "connected": sum(1 for r in rows if r["w"]["installed"] and r["w"]["level"] == "ok"),
               "total": sum(1 for r in rows if not r["w"]["server"])}
+    # Ce qui se voit des postes : la page le suit en direct (installations demandées, états remontés par les agents).
+    signature = hashlib.sha256(json.dumps([[cfg["manager"], cfg["version"], cfg["group"], ready(cfg)],
+                                           [[r["d"]["id"], r["d"]["label"], r["d"]["hostname"], r["busy"], r["os"],
+                                             {k: v for k, v in r["w"].items() if k != "state"}, r["w"].get("state")] for r in rows]],
+                                          sort_keys=True, default=str).encode()).hexdigest()[:16]
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"signature": signature}, 200, {"Cache-Control": "no-store"}
+    known, checked, version_error = versions(conn) if can("wazuh.manage") or not cfg["version"] else ([], 0, "")
     manage = can("wazuh.manage")
     access = None
     if manage and ready(cfg):
@@ -620,7 +627,7 @@ def wazuh():
     return render_template("wazuh.html", cfg=dict(cfg, password=MASK if cfg["password"] else ""), ready=ready(cfg), rows=rows,
                            counts=counts, versions=known, versions_at=checked, version_error=version_error,
                            packages=cached_packages(), agent_version=".".join(map(str, AGENT_VERSION)) + ".0",
-                           linked=linked(cfg), access=access)
+                           linked=linked(cfg), access=access, signature=signature)
 
 
 @app.route("/fleet/wazuh/settings", methods=["POST"])

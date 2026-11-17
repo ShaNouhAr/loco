@@ -22,7 +22,8 @@
 {% set active = dev.state == 'active' %}
 {% set devname = dev.label or dev.hostname or dev.uid[:8] %}
 
-<div class="device-head">
+{# Zones [data-refresh] : remplacées en place quand le poste ou ses actions changent (voir app.js), jamais sous les doigts. #}
+<div class="device-head" data-refresh="head">
   <div class="device-id">
     <p class="small"><a href="{{ url_for('fleet') }}">{{ _("Mon parc") }}</a></p>
     <h1><span class="device-name">{{ device_icon(dev) }}{{ devname }}</span> <span class="pill {{ 'ok' if presence.online else 'err' }} device-availability" title="{{ presence.detail }}">{{ presence.label }}</span></h1>
@@ -107,6 +108,7 @@
 </div>
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
+  <div class="refresh-contents" data-refresh="summary">
   {% if pending %}<div class="pending-list" data-progress="{{ url_for('fleet_device_progress', dev_id=dev.id) }}">{% for c in pending %}
     {% set live = progress_view(c.progress) if c.state == 'running' else none %}
     <div class="pending-item" data-cmd="{{ c.id }}"><span class="st {{ 'ok' if c.state == 'running' else 'warn' }}"></span><span><strong>{{ action_label(c) }}</strong> ·
@@ -162,6 +164,7 @@
       <div class="s">{{ _("contact toutes les 2 min") }}</div>
     </div>
   </div>
+  </div>
 
   <section class="panel">
     <div class="tabs device-tabs" role="tablist" data-hash>
@@ -177,6 +180,7 @@
 
     {% if not android %}
     <div class="tab-panel on" data-panel="maj">
+      <div class="refresh-contents" data-refresh="tab-maj">
       {% if (release or upgrading) and active %}
       {# Nouvelle version majeure du système : annoncée par l'inventaire, posée sur demande (elle finit par un redémarrage). #}
       <div class="release-offer">
@@ -268,6 +272,7 @@
         <noscript><button class="btn sm">{{ _("Appliquer") }}</button></noscript>
       </form>
       {% endif %}
+      </div>
     </div>
     {% endif %}
 
@@ -418,6 +423,7 @@
     {% endif %}
 
     <div class="tab-panel" data-panel="historique">
+      <div class="refresh-contents" data-refresh="tab-historique">
       {% if history %}
       <div class="table-wrap">
         <table>
@@ -431,7 +437,7 @@
               <td class="muted hide-sm">{{ c.created_by or '—' }}</td>
               <td>{% if c.state == 'success' %}<span class="st ok">{{ _("réussie") }}</span>{% elif c.state == 'failed' %}<span class="st err">{{ _("échec") }}</span>{% elif c.state == 'cancelled' %}<span class="st">{{ _("annulée") }}</span>{% else %}<span class="st warn">{{ 'en cours' if c.state == 'running' else ('transmise' if c.state == 'sent' else 'en attente') }}</span>{% endif %}</td>
             </tr>
-            {% if c.output or (hv and 'items' in hv) %}<tr class="note-row"><td colspan="4">{% if hv and 'items' in hv %}{{ pkg_progress(c.id, hv) }}{% endif %}{% if c.output %}<details><summary class="small muted">{{ _("Journal") }}</summary><pre class="log">{{ c.output }}</pre></details>{% endif %}</td></tr>{% endif %}
+            {% if c.output or (hv and 'items' in hv) %}<tr class="note-row"><td colspan="4">{% if hv and 'items' in hv %}{{ pkg_progress(c.id, hv) }}{% endif %}{% if c.output %}<details data-key="journal-{{ c.id }}"><summary class="small muted">{{ _("Journal") }}</summary><pre class="log">{{ c.output }}</pre></details>{% endif %}</td></tr>{% endif %}
           {% endfor %}
           </tbody>
         </table>
@@ -439,6 +445,7 @@
       {% else %}
       <div class="empty">{{ _("Aucune action pour l'instant.") }}</div>
       {% endif %}
+      </div>
     </div>
 
     {% if files_ready and active %}
@@ -493,6 +500,7 @@
     {% endif %}
 
     <div class="tab-panel" data-panel="details">
+      <div class="refresh-contents" data-refresh="tab-details">
       <dl class="kv">
         <dt>{{ _("Système") }}</dt><dd>{{ dev.os_name or families.get(dev.os_family, '—') }}</dd>
         {% if android %}<dt>{{ _("Type d’appareil") }}</dt><dd>{{ device_kind_label(device_kind(dev)) }}{% if not dev.form %} <span class="muted small">{{ _("(supposé : l’application de cet appareil ne l’annonce pas encore)") }}</span>{% endif %}</dd>{% endif %}
@@ -575,6 +583,7 @@
         {% else %}
         <span class="muted">{{ _("Aucun groupe") }}{% if can('fleet.groups') %} {{ _(": créez-en dans") }} <a href="{{ url_for('fleet') }}">{{ _("Mon parc") }}</a>{% endif %}.</span>
         {% endif %}
+      </div>
       </div>
     </div>
   </section>

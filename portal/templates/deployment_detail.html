@@ -119,7 +119,7 @@
               {% elif t.state in ('sent', 'running') %}<span class="small muted">{{ _('Installation en cours sur le poste…') if t.state == 'running' else _('Commande reçue par l’agent, démarrage…') }}</span>{% endif %}
               {% if t.reason %}<span class="muted">{{ t.reason }}</span>{% endif %}
               {% for skipped in t.skipped %}<span class="sub sans">{{ skipped.name }} : {{ skipped.reason }}</span>{% endfor %}
-              {% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' }}><summary>{{ _("Journal de l'installation") }}</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% endif %}
+              {% if t.output %}<details class="output-details" data-key="journal-{{ t.device_id or t.hostname }}" {{ 'open' if t.state == 'failed' }}><summary>{{ _("Journal de l'installation") }}</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% endif %}
             </td>
           </tr>
           {% endfor %}

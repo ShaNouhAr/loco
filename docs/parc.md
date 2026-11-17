@@ -51,6 +51,10 @@ distribués ; supprimer le groupe aussi.
 - **Nom personnalisé** : la fiche d'un poste (menu *Plus → Nom personnalisé…*) permet de lui donner un nom plus
   parlant, affiché à la place de son nom d'hôte dans Mon parc et dans la recherche ; le nom d'hôte reste visible.
   Droit *Nommer les appareils* (Administrateur et Opérateur).
+- **Pages suivies en direct** : Mon parc, la fiche d'un poste et la page Wazuh s'actualisent en place quand un poste
+  ou une action change, sans recharger ; rien n'est remplacé pendant que vous agissez (fenêtre ou menu ouverts, saisie,
+  cases cochées, texte sélectionné), et un journal déplié le reste. Une erreur passagère (loco qui redémarre) est ignorée
+  jusqu'au relevé suivant.
 - **Mises à jour une par une, en direct** : sur la fiche d'un poste, l'onglet *Mises à jour* permet de cocher
   certaines mises à jour du système (paquets APT/RPM, applications Flatpak, ou mises à jour Windows) et de lancer
   *Mettre à jour la sélection* ; *Mettre à jour* fait toujours tout. Pendant l'exécution, la fiche suit l'avancement

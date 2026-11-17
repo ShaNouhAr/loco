@@ -222,7 +222,7 @@
             {% for j in v.jobs %}
             <tr>
               <td>{{ j.label or actions[j.action][0] }}{% if j.backup %} <span class="badge-ro">{{ _("sauvegarde avant") }}</span>{% endif %}
-                {% if j.output and j.state in ('failed', 'success') %}<details class="hass-output"><summary class="linkbtn">{{ _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+                {% if j.output and j.state in ('failed', 'success') %}<details class="hass-output" data-key="sortie-{{ j.id }}"><summary class="linkbtn">{{ _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
               <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
               <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
             </tr>

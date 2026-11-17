@@ -337,7 +337,7 @@ class TestDeployments(FleetTest):
         self.assertNotIn(draft.rsplit('/', 1)[-1], html)
         html = self.admin.c.get(failed).get_data(as_text=True)
         self.assertIn('Échecs', html)
-        self.assertIn('<details class="output-details" open>', html)        # journal d'un échec déplié
+        self.assertRegex(html, r'<details class="output-details" data-key="journal-[^"]+" open>')   # journal d'un échec déplié
 
     def test_deployments_live_in_mon_parc_and_old_addresses_redirect(self):
         """Une action sur les appareils, comme les scripts : sous-menu et entrée « Mon parc », plus d'onglet côté Logiciels."""

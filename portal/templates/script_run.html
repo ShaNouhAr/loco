@@ -39,7 +39,7 @@
         <tr>
           <td class="nowrap">{% if t.device_id %}<a href="{{ url_for('fleet_device', dev_id=t.device_id) }}">{{ t.hostname }}</a>{% else %}{{ t.hostname }}{% endif %}</td>
           <td class="nowrap"><span class="st {{ cls }}">{{ states.get(t.state, t.state) }}</span>{% if t.exit_code is not none and t.state in ('success', 'failed') %}<span class="sub sans">{{ _("code %(exit_code)s", exit_code=t.exit_code) }}</span>{% elif t.state == 'queued' and t.run_after %}<span class="sub sans">{{ _("planifié pour %(run_after)s", run_after=t.run_after) }}</span>{% endif %}</td>
-          <td>{% if t.output %}<details class="output-details" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>{{ _("Sortie du script") }}</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ _('Exécution en cours…') if t.state == 'running' else (_('Planifié pour ') ~ t.run_after ~ ' (heure du serveur)' if t.run_after else _('En attente du poste')) }}</span>{% endif %}</td>
+          <td>{% if t.output %}<details class="output-details" data-key="sortie-{{ t.device_id or t.hostname }}" {{ 'open' if t.state == 'failed' or targets|length == 1 }}><summary>{{ _("Sortie du script") }}</summary><pre class="deployment-output">{{ t.output }}</pre></details>{% elif t.state in ('queued', 'sent', 'running') %}<span class="small muted">{{ _('Exécution en cours…') if t.state == 'running' else (_('Planifié pour ') ~ t.run_after ~ ' (heure du serveur)' if t.run_after else _('En attente du poste')) }}</span>{% endif %}</td>
         </tr>
       {% endfor %}</tbody>
     </table></div>

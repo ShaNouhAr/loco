@@ -519,6 +519,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .fleet-select-count { font-size: 13.5px; color: var(--text-2); }
 .fleet-select-count strong { color: var(--text); }
 .fleet-select-count .linkbtn { margin-left: 12px; }
+/* Zone actualisée en place sans changer la mise en page : ses enfants restent ceux du conteneur (marges de .stack…). */
+.refresh-contents { display: contents; }
 
 /* Double authentification */
 .code-input { letter-spacing: 0.35em; font-size: 20px; text-align: center; max-width: 220px; }

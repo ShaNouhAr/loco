@@ -12,13 +12,14 @@
   </div>
 </div>
 
-<div class="stack">
+{# Suivie en direct : installations demandées et états remontés par les agents (zones [data-refresh], voir app.js). #}
+<div class="stack" data-poll="{{ url_for('wazuh') }}" data-poll-kind="reload" data-poll-every="5000" data-signature="{{ signature }}">
   {% if not ready %}
   <div class="note warn"><p>{{ _("Wazuh n'est pas encore réglé : indiquez l'adresse de votre manager et la version de l'agent à installer.") if manage else _("Wazuh n'est pas encore réglé : un compte autorisé doit indiquer l'adresse du manager.") }}</p></div>
   {% endif %}
 
   {% if ready %}
-  <div class="metrics">
+  <div class="metrics" data-refresh="metrics">
     <div class="metric"><div class="k">{{ _("Manager") }}</div><div class="v small-v mono">{{ cfg.manager }}</div><div class="s">{{ _("agent %(v)s", v=cfg.version) }}{% if cfg.group %} · {{ _("groupe %(g)s", g=cfg.group) }}{% endif %}</div></div>
     <div class="metric"><div class="k">{{ _("Postes équipés") }}</div><div class="v">{{ counts.installed }}<span class="v-unit">/ {{ counts.total }}</span></div><div class="s">{{ _("Windows et Linux du parc") }}</div></div>
     <div class="metric"><div class="k">{{ _("Connectés au manager") }}</div><div class="v">{{ counts.connected }}</div><div class="s">{% if counts.installed > counts.connected %}<span class="st warn">{{ ngettext("%(num)s à regarder", "%(num)s à regarder", counts.installed - counts.connected) }}</span>{% elif counts.installed %}<span class="st ok">{{ _("tous") }}</span>{% else %}{{ _("aucun agent installé") }}{% endif %}</div></div>
@@ -130,12 +131,12 @@
 
   <form method="post" action="{{ url_for('wazuh_install') }}" class="panel" data-pick-form>
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <div class="panel-h"><h2>{{ _("Postes") }}{% if rows %} <span class="h-count">{{ rows|length }}</span>{% endif %}</h2><div class="aside">{{ _("Windows, Debian, Ubuntu et famille Red Hat") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Postes") }}{% if rows %} <span class="h-count" data-refresh="count">{{ rows|length }}</span>{% endif %}</h2><div class="aside">{{ _("Windows, Debian, Ubuntu et famille Red Hat") }}</div></div>
     {% if rows %}
     <div class="table-wrap">
       <table class="table-cards wazuh-table">
         <thead><tr>{% if install %}<th class="chk"><input type="checkbox" data-pick-all aria-label="{{ _('Tout cocher') }}"></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Agent Wazuh") }}</th><th>{{ _("Version") }}</th><th>{{ _("Identité chez Wazuh") }}</th>{% if install %}<th></th>{% endif %}</tr></thead>
-        <tbody>
+        <tbody data-refresh="rows">
           {% for r in rows %}
           {% set w = r.w %}
           <tr>

@@ -377,7 +377,7 @@ class TestRefreshInPlace(BrowserTest):
         add_devices(2, prefix="pc")
         add_devices(1, prefix="eteint", last_seen=stamp(3))
         self.page.goto("/fleet")
-        self.page.evaluate("""() => { const d = document.createElement('details'); d.id = 'essai'; d.open = true;
+        self.page.evaluate("""() => { const d = document.createElement('details'); d.id = 'essai'; d.className = 'menu'; d.open = true;
                                       document.querySelector('[data-refresh=actions]').appendChild(d); }""")
         with transaction() as conn:
             conn.execute("UPDATE devices SET last_seen=? WHERE hostname='eteint-000'", (stamp(),))
@@ -393,6 +393,84 @@ class TestRefreshInPlace(BrowserTest):
         add_devices(1, prefix="premier")
         expect(self.page.locator("#fleet-table tbody tr")).to_have_count(1, timeout=LONG)
         self.assertIsNone(self.page.evaluate("window.notReloaded || null"))
+
+
+class TestLiveRefresh(BrowserTest):
+    """Pages suivies en direct : elles s'actualisent en place, jamais sous les doigts, ni sur une page d'erreur."""
+
+    def finish(self, agent, action="scan", output="Inventaire transmis."):
+        """Une action demandée au poste, prise à son contact puis rendue réussie."""
+        with transaction() as conn:
+            conn.execute("INSERT INTO device_commands (device_id, action, created_at, created_by) VALUES (?,?,?,?)",
+                         (device(agent.uid)["id"], action, stamp(), "admin"))
+        cmd = agent.checkin().get_json()["commands"][0]["id"]
+        agent.result(cmd, "success", output)
+        return cmd
+
+    def test_device_page_follows_a_finished_action_without_reloading(self):
+        agent = Agent(LINUX, "192.168.47.10")
+        agent.enroll()
+        agent.checkin({"updates": []})
+        dev_id = device(agent.uid)["id"]
+        self.page.goto(f"/fleet/{dev_id}#historique")
+        self.page.evaluate("window.notReloaded = true")
+        expect(self.page.locator("[data-panel=historique]")).to_contain_text("Aucune action")
+        self.finish(agent)
+        expect(self.page.locator("[data-panel=historique] .st.ok")).to_have_count(1, timeout=LONG)
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"), "la fiche devait suivre sans se recharger")
+        expect(self.page.locator("[data-tab=historique]")).to_have_attribute("aria-selected", "true")   # onglet gardé
+
+    def test_an_open_window_and_an_open_log_survive_the_refresh(self):
+        agent = Agent(LINUX, "192.168.47.11")
+        agent.enroll()
+        agent.checkin({"updates": []})
+        dev_id = device(agent.uid)["id"]
+        self.finish(agent, output="ligne 1\nligne 2")
+        self.page.goto(f"/fleet/{dev_id}#historique")
+        self.page.locator("[data-panel=historique] summary", has_text="Journal").click()
+        self.page.click("summary[aria-label='Autres actions']")
+        self.page.locator("button.menu-item", has_text="Nom personnalisé").click()
+        dialog = self.page.locator("dialog#rename")
+        expect(dialog).to_be_visible()
+        self.page.evaluate("window.notReloaded = true")
+        self.finish(agent)
+        self.page.wait_for_timeout(13000)                                       # un relevé au moins (toutes les 10 s)
+        expect(dialog).to_be_visible()                                           # rien n'a bougé sous les doigts
+        expect(self.page.locator("[data-panel=historique] .st.ok")).to_have_count(1)
+        dialog.locator("button", has_text="Annuler").click()
+        expect(self.page.locator("[data-panel=historique] .st.ok")).to_have_count(2, timeout=LONG)   # puis la fiche suit
+        expect(self.page.locator("[data-panel=historique] details[open]", has_text="Journal")).to_have_count(1)   # journal resté ouvert
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"))
+
+    def test_ticked_updates_are_never_unticked_by_a_refresh(self):
+        agent = Agent(LINUX, "192.168.47.12")
+        agent.enroll()
+        agent.checkin({"updates": [{"name": "curl", "version": "8.14", "security": False}, {"name": "vim", "version": "9.1", "security": False}]})
+        dev_id = device(agent.uid)["id"]
+        self.page.goto(f"/fleet/{dev_id}")
+        self.page.locator("input[name=only][value=curl]").check()
+        self.finish(agent)
+        self.page.wait_for_timeout(13000)
+        expect(self.page.locator("input[name=only][value=curl]")).to_be_checked()
+
+    def test_fleet_list_does_not_reload_onto_an_error_page(self):
+        add_devices(2, prefix="pc")
+        add_devices(1, prefix="eteint", last_seen=stamp(3))
+        self.page.goto("/fleet")
+        self.page.evaluate("window.notReloaded = true")
+        # Le portail redémarre (mise à jour) : chaque relecture de la page échoue un moment.
+        self.page.route(re.compile(r".*/fleet(\?.*)?$"), lambda route: route.fulfill(status=502, body="Bad Gateway")
+                        if route.request.headers.get("x-requested-with") == "refresh" else route.continue_())
+        with transaction() as conn:
+            conn.execute("UPDATE devices SET last_seen=? WHERE hostname='eteint-000'", (stamp(),))
+        self.page.wait_for_timeout(20000)
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"), "une erreur passagère ne doit pas recharger la page")
+        expect(self.page.locator("#fleet-table")).to_be_visible()
+        self.problems[:] = [p for p in self.problems if "502" not in p]                 # les échecs simulés, voulus
+        self.page.unroute(re.compile(r".*/fleet(\?.*)?$"))
+        row = self.page.locator("#fleet-table tbody tr", has_text="eteint-000")
+        expect(row.locator(".device-availability")).to_have_class(re.compile(r"\bok\b"), timeout=LONG)   # puis elle reprend
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"))
 
 
 class TestCatalog(BrowserTest):
@@ -1185,6 +1263,21 @@ class TestWazuhDesktop(WazuhPages):
         expect(self.page.locator("[data-pick-form] .busy-note")).to_have_count(2)
         expect(rows.filter(has_text="poste-comptabilite-02").locator("[data-pick]")).to_be_disabled()
         self.assertLessEqual(self.overflow(), 0)
+
+    def test_the_list_follows_the_agents_without_reloading(self):
+        self.configure()
+        self.page.goto("/fleet/wazuh")
+        self.page.evaluate("window.notReloaded = true")
+        row = self.page.locator("[data-pick-form] tbody tr", has_text="poste-comptabilite-02")
+        expect(row).to_contain_text("Non installé")
+        ident = dict(LINUX, hostname="poste-comptabilite-02", agent_version="2.167.0")
+        agent = Agent(ident, "192.168.43.171", uid=hashlib.sha256(b"poste-comptabilite-02").hexdigest()[:32])
+        agent.enroll()
+        agent.post("/agent/api/checkin", dict(agent.ident, wazuh={"installed": True, "version": "4.14.9", "active": True, "status": "connected",
+                                                                 "manager": "wazuh.exemple.test", "id": "007", "name": "poste-comptabilite-02"}), agent.token)
+        expect(row.locator(".st.ok")).to_have_text("Connecté", timeout=LONG)
+        expect(self.page.locator(".metric").nth(1)).to_contain_text("3")
+        self.assertTrue(self.page.evaluate("window.notReloaded || null"), "la page Wazuh devait suivre sans se recharger")
 
     def test_device_page_offers_the_agent_in_its_menu(self):
         self.configure()

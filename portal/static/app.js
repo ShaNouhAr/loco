@@ -500,6 +500,69 @@
   // Après une actualisation en place : ce qui doit être refait sur les zones remplacées (sélection, lignes…).
   var afterRefresh = [rowLinks];
 
+  /* ------------------------------------------- actualisation automatique : jamais sous les doigts */
+
+  // Ce qui suspend l'actualisation automatique de la page, par raison (sélection en cours, direct de la supervision…) :
+  // lever l'une ne lève pas les autres.
+  var holds = {};
+  function hold(reason, on) {
+    if (on) holds[reason] = true; else delete holds[reason];
+    if (Object.keys(holds).length) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;
+  }
+  window.locoHold = hold;                          // pour les autres scripts de la page (gestionnaire de fichiers)
+  // Un volet <details> ouvert ou fermé par la personne (pas par la page) garde son état : repéré au clic sur son résumé.
+  document.addEventListener("click", function (e) {
+    var s = e.target.closest && e.target.closest("summary");
+    if (s && s.parentElement && s.parentElement.tagName === "DETAILS") s.parentElement.dataset.userToggled = "1";
+  }, true);
+  var detailsKey = function (d) { return d.id || d.dataset.key || d.dataset.pkg || ""; };
+  // La personne est en train de faire quelque chose dans root : fenêtre ou menu ouverts, saisie, texte sélectionné, cases
+  // cochées ou champs modifiés (et pas encore envoyés), volet ouvert qu'on ne saurait pas rouvrir après coup.
+  function userBusy(root) {
+    root = root || document;
+    if ($("dialog[open]") || $(".nav-group[open]")) return true;
+    if ($("details.menu[open], details.row-menu[open]", root) || (root.matches && root.matches("details.menu[open]"))) return true;
+    var active = document.activeElement;
+    if (active && root.contains(active) && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) return true;
+    var sel = window.getSelection && window.getSelection();
+    if (sel && String(sel).trim() && sel.anchorNode && root.contains(sel.anchorNode)) return true;
+    if ($$("details[open][data-user-toggled]", root).some(function (d) { return !detailsKey(d); })) return true;
+    return $$("input, textarea, select", root).some(function (f) {
+      if (f.type === "hidden" || f.disabled || !f.offsetParent || f.closest("dialog:not([open])")) return false;
+      if (f.type === "checkbox" || f.type === "radio") return f.checked !== f.defaultChecked;
+      if (f.tagName === "SELECT") return $$("option", f).some(function (o) { return o.selected !== o.defaultSelected; });
+      return f.type !== "file" && f.value !== f.defaultValue;
+    });
+  }
+  // Volets ouverts ou fermés par la personne, retrouvés après un rechargement de la même page.
+  var OPEN_KEY = "loco-open:" + location.pathname;
+  function rememberOpen() {
+    var state = {};
+    $$("details[data-user-toggled]").forEach(function (d) { var k = detailsKey(d); if (k) state[k] = d.open; });
+    try { sessionStorage.setItem(OPEN_KEY, JSON.stringify(state)); } catch (e) { /* mémoire indisponible */ }
+  }
+  function restoreOpen(root, state) {
+    if (!state) {
+      try { state = JSON.parse(sessionStorage.getItem(OPEN_KEY) || "null"); sessionStorage.removeItem(OPEN_KEY); } catch (e) { state = null; }
+    }
+    if (!state) return;
+    $$("details", root).forEach(function (d) {
+      var k = detailsKey(d);
+      if (k && Object.prototype.hasOwnProperty.call(state, k)) { d.open = state[k]; d.dataset.userToggled = "1"; }
+    });
+  }
+  restoreOpen(document);
+  // Rechargement automatique, seulement si personne n'est en train d'agir sur la page. Faux s'il est remis à plus tard :
+  // l'appelant réessaie à son relevé suivant.
+  function guardedReload() {
+    if (document.body.dataset.noReload || userBusy(document)) return false;
+    rememberOpen();
+    window.location.reload();
+    return true;
+  }
+  // Demande d'actualisation (une action vient de finir…) : en place quand la page le sait (voir plus bas), sinon rechargement.
+  var requestRefresh = guardedReload;
+
   /* ------------------------------------------------ sélection de postes + mise à jour groupée (Mon parc) */
   var selBar = $("[data-select-bar]");
   if (selBar) {
@@ -516,7 +579,7 @@
       try { sessionStorage.setItem(SEL_KEY, JSON.stringify(selKept)); } catch (e) { /* idem */ }
       var n = selKept.length, away = n - shown;
       selBar.hidden = n === 0;
-      if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;   // ne pas rafraîchir pendant une sélection
+      hold("selection", n > 0);                    // ne pas rafraîchir pendant une sélection
       var c = $("[data-select-count]"); if (c) c.textContent = n;
       var noun = $("[data-select-noun]"); if (noun) noun.textContent = n === 1 ? noun.dataset.one : noun.dataset.many;
       var far = $("[data-select-elsewhere]"); if (far) far.textContent = away ? t("dont %(n)s hors de cette page", { n: away }) : "";
@@ -540,7 +603,7 @@
         selSubmit.disabled = true; selSubmit.classList.add("loading");
         fetch(selSubmit.dataset.action, { method: "POST", body: data })
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-          .then(function () { try { sessionStorage.removeItem(SEL_KEY); } catch (e) { /* idem */ } delete document.body.dataset.noReload; window.location.reload(); })
+          .then(function () { try { sessionStorage.removeItem(SEL_KEY); } catch (e) { /* idem */ } hold("selection", false); window.location.reload(); })
           .catch(function () { selSubmit.disabled = false; selSubmit.classList.remove("loading"); toast(t("Action impossible."), "error"); });
       });
     }); });
@@ -799,6 +862,8 @@
       var dlg = $(open.dataset.open);
       if (open.dataset.app) fillEdit(dlg, JSON.parse(open.dataset.app));
       if (open.dataset.fill) fillForm(dlg, JSON.parse(open.dataset.fill));
+      var menu = open.closest("details.menu, details.row-menu");
+      if (menu) menu.open = false;                 // fenêtre ouverte depuis un menu : le menu se referme
       dlg.showModal();
       var first = $("input[type=text], input[type=url]", dlg);
       if (first) first.focus();
@@ -1184,16 +1249,25 @@
 
   /* ---------------------------------------------------------------- actualisation en direct */
 
+  // Requête d'actualisation qui abandonne au bout de ms : un serveur qui ne répond pas ne doit pas figer le suivi en direct.
+  function timedFetch(url, options, ms) {
+    if (!window.AbortController) return fetch(url, options);
+    var ctrl = new AbortController(), timer = setTimeout(function () { ctrl.abort(); }, ms || 20000);
+    options = Object.assign({}, options, { signal: ctrl.signal });
+    return fetch(url, options).then(function (r) { clearTimeout(timer); return r; }, function (e) { clearTimeout(timer); throw e; });
+  }
+
   function poll(url, every, fn) {
     var busy = false;
     var tick = function () {
       if (document.hidden || busy) return;
       busy = true;
-      fetch(url, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
+      timedFetch(url, { headers: { "X-Requested-With": "fetch" }, credentials: "same-origin" })
         .then(function (r) { if (r.status === 401) { window.location.reload(); throw new Error("401"); } if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(fn).catch(function () {}).then(function () { busy = false; });
     };
     setInterval(tick, every);
+    document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });   // retour sur l'onglet
     return tick;
   }
 
@@ -1235,7 +1309,7 @@
         ? t("téléchargement %(pct)s %%", { pct: Math.round(100 * a.progress.done / a.progress.total) }).replace("%%", "%")
         : t("téléchargement %(size)s", { size: bytes(a.progress.done) });
     });
-    if (changed) window.location.reload();
+    if (changed) guardedReload();
   }
 
   // Opération de l'appliance : journal en direct, rechargement à la fin (le portail redémarre pendant
@@ -1426,12 +1500,12 @@
     var stop = function () {
       if (!timer) return;
       clearInterval(timer[0]); clearInterval(timer[1]); timer = null;
-      delete document.body.dataset.noReload;
+      hold("live", false);
     };
     var start = function () {
       if (timer) return;
       started = Date.now();
-      document.body.dataset.noReload = "1";        // pas de rechargement de la page pendant le direct
+      hold("live", true);                          // pas de rechargement de la page pendant le direct
       tick();
       timer = [setInterval(tick, 2000), setInterval(function () { render(); status(); }, 500)];   // défilement continu
     };
@@ -1505,7 +1579,7 @@
   var operations = $("[data-operations]");
   if (operations) {
     poll(operations.dataset.operations, 3000, function (d) {
-      if (d.signature !== operations.dataset.signature) window.location.reload();
+      if (d.signature !== operations.dataset.signature) guardedReload();
     });
   }
   /* ---------------------------------------------------------------- caches (Windows Update, APT, RPM…) */
@@ -1739,43 +1813,50 @@
       sync();
     });
     sync();
+    afterRefresh.push(function (zone) { if (form.contains(zone)) sync(); });   // lignes remplacées en place
   });
 
   /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
   (function () {
-    var form = $("[data-update-select]");
-    if (form) {
-      var boxes = function () { return $$("input[name=only], input[name=only_flatpak]", form); };
+    // Écoute déléguée : l'onglet des mises à jour peut être remplacé par l'actualisation en place.
+    var sync = function () {
+      var form = $("[data-update-select]");
+      if (!form) { hold("updates", false); return; }
+      var list = $$("input[name=only], input[name=only_flatpak]", form), n = list.filter(function (b) { return b.checked; }).length;
       var all = $("[data-check-all]", form), btn = $("[data-select-submit]", form), count = $("[data-select-count]", form);
-      var sync = function () {
-        var list = boxes(), n = list.filter(function (b) { return b.checked; }).length;
-        if (count) count.textContent = n;
-        if (btn) btn.disabled = !n;
-        if (all) { all.checked = n > 0 && n === list.length; all.indeterminate = n > 0 && n < list.length; }
-        // Choix en cours : pas de rechargement automatique de la fiche (il effacerait les cases cochées).
-        if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;
-      };
-      form.addEventListener("change", function (e) {
-        if (e.target === all) boxes().forEach(function (b) { b.checked = all.checked; });
-        sync();
-      });
+      if (count) count.textContent = n;
+      if (btn) btn.disabled = !n;
+      if (all) { all.checked = n > 0 && n === list.length; all.indeterminate = n > 0 && n < list.length; }
+      // Choix en cours : pas d'actualisation automatique de la fiche (elle effacerait les cases cochées).
+      hold("updates", n > 0);
+    };
+    document.addEventListener("change", function (e) {
+      var form = e.target.closest && e.target.closest("[data-update-select]");
+      if (!form) return;
+      if (e.target.matches("[data-check-all]")) $$("input[name=only], input[name=only_flatpak]", form).forEach(function (b) { b.checked = e.target.checked; });
       sync();
-    }
-    var pendingList = $("[data-progress]");
-    if (!pendingList || !$("[data-cmd]", pendingList)) return;
-    var rows = {}, seen = [];
-    $$("[data-update-row]").forEach(function (tr) { if (tr.dataset.updateRow) rows[tr.dataset.updateRow] = tr; });
+    });
+    sync();
+    afterRefresh.push(sync);
+    // Avancement des actions en cours, toutes les 2 s. Une action finie ou nouvelle : la fiche s'actualise (en place si
+    // elle le sait), sans rien couper sous les doigts ; la liste des actions est relue à chaque fois (elle a pu être remplacée).
+    var running = false, seen = [];
     var step = function () {
-      fetch(pendingList.dataset.progress, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+      var list = $("[data-progress]");
+      if (!list || !$("[data-cmd]", list)) { running = false; return; }
+      timedFetch(list.dataset.progress, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (!d) return setTimeout(step, 5000);
-          // Plus rien en cours, ou une action nouvelle : la fiche se recharge (inventaire et historique à jour).
-          if (!d.commands.length || d.commands.some(function (c) { return !$('[data-cmd="' + c.id + '"]', pendingList); })) {
-            if (!document.body.dataset.noReload) return location.reload();
+          var current = $("[data-progress]");
+          if (!current || !d.commands.length || d.commands.some(function (c) { return !$('[data-cmd="' + c.id + '"]', current); })) {
+            requestRefresh();
+            return setTimeout(step, 2000);
           }
+          var rows = {};
+          $$("[data-update-row]").forEach(function (tr) { if (tr.dataset.updateRow) rows[tr.dataset.updateRow] = tr; });
           d.commands.forEach(function (c) {
-            var item = $('[data-cmd="' + c.id + '"]', pendingList);
+            var item = $('[data-cmd="' + c.id + '"]', current);
             if (!item) return;
             var label = $("[data-cmd-label]", item), bar = $("[data-cmd-bar]", item);
             if (c.label && label) label.textContent = c.label.charAt(0).toLowerCase() + c.label.slice(1);
@@ -1784,6 +1865,7 @@
             if (c.app && rows[c.app]) {
               if (seen.indexOf(c.app) < 0) seen.push(c.app);
               seen.forEach(function (name) {
+                if (!rows[name]) return;
                 rows[name].classList.toggle("upd-now", name === c.app);
                 rows[name].classList.toggle("upd-done", name !== c.app);
               });
@@ -1793,7 +1875,13 @@
         })
         .catch(function () { setTimeout(step, 5000); });
     };
-    setTimeout(step, 1000);
+    var start = function () {
+      if (running || !$("[data-progress] [data-cmd]")) return;
+      running = true;
+      setTimeout(step, 1000);
+    };
+    start();
+    afterRefresh.push(start);
   })();
 
   /* Déroulé global des mises à jour du parc : barres et paquets en direct ; rechargement quand l'ensemble change.
@@ -1801,11 +1889,14 @@
   (function (feed) {
     if (!feed) return;
     var step = function () {
-      fetch(feed.dataset.updates, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
+      timedFetch(feed.dataset.updates, { credentials: "same-origin", headers: { "X-Requested-With": "fetch" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
           if (!d) return setTimeout(step, 10000);
-          if (d.signature !== feed.dataset.signature) return location.reload();
+          if (d.signature !== feed.dataset.signature) {
+            if (guardedReload()) return;
+            return setTimeout(step, 2000);         // la personne agit sur la page : nouvel essai au relevé suivant
+          }
           d.running.forEach(function (c) {
             var item = $('[data-cmd="' + c.id + '"]', feed);
             if (!item) return;
@@ -1843,31 +1934,32 @@
   if (live) {
     var kind = live.dataset.pollKind;
     if (kind === "apps" && !$('tr[data-status="downloading"]')) return;
-    // Parc : rechargement quand un poste ou une action change (rien n'est saisi sur ces pages).
-    // Suspendu tant que le gestionnaire de fichiers est ouvert : ne pas interrompre un transfert ou une édition.
-    var hard = function () { window.location.reload(); };
+    // Parc : actualisation quand un poste ou une action change. Suspendue tant que le gestionnaire de fichiers est ouvert,
+    // qu'une sélection est en cours, ou que la personne agit sur la page (voir userBusy) : nouvel essai au relevé suivant.
     // Actualisation en place : la page est redemandée en arrière-plan et seules ses zones marquées [data-refresh]
     // sont remplacées — ni page blanche, ni retour en haut, ni perte d'un menu ouvert. Une page sans zone marquée, ou
-    // dont la structure a changé (une zone apparaît ou disparaît), se recharge comme avant.
+    // dont la structure a changé (une zone apparaît ou disparaît), se recharge, quand personne n'y fait rien. Une
+    // erreur passagère (portail qui redémarre, réseau) ne recharge jamais la page sur une page d'erreur.
     var refreshing = false;
     var soft = function () {
       var zones = $$("[data-refresh]");
-      if (!zones.length) return hard();
-      if (refreshing) return;
-      // Ne rien remplacer sous les doigts : saisie, menu ou fenêtre ouverts. La signature reste l'ancienne : nouvel
-      // essai au relevé suivant.
-      var active = document.activeElement;
-      if ($("dialog[open]") || zones.some(function (z) {
-        return $("details[open]", z) || (z.contains(active) && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName));
-      })) return;
+      if (!zones.length) return guardedReload();
+      if (refreshing || document.body.dataset.noReload) return false;
+      if ($("dialog[open]") || zones.some(function (z) { return userBusy(z); })) return false;
       refreshing = true;
-      fetch(live.dataset.refreshUrl || live.dataset.poll, { credentials: "same-origin", headers: { "X-Requested-With": "refresh" } })
-        .then(function (r) { if (!r.ok || r.redirected) throw new Error(r.status); return r.text(); })
+      timedFetch(live.dataset.refreshUrl || live.dataset.poll, { credentials: "same-origin", headers: { "X-Requested-With": "refresh" } }, 30000)
+        .then(function (r) {
+          if (r.redirected) throw new Error("reload");             // session finie : la page de connexion
+          if (!r.ok) throw new Error("later");
+          return r.text();
+        })
         .then(function (html) {
           var doc = new DOMParser().parseFromString(html, "text/html");
           var next = $("[data-poll]", doc), fresh = {};
           $$("[data-refresh]", doc).forEach(function (z) { fresh[z.dataset.refresh] = z; });
-          if (!next || Object.keys(fresh).length !== zones.length || zones.some(function (z) { return !fresh[z.dataset.refresh]; })) throw new Error("structure");
+          if (!next || Object.keys(fresh).length !== zones.length || zones.some(function (z) { return !fresh[z.dataset.refresh]; })) throw new Error("reload");
+          // La personne a pu agir pendant la requête : rien n'est remplacé, nouvel essai au relevé suivant.
+          if ($("dialog[open]") || zones.some(function (z) { return userBusy(z); })) return;
           var key = function (row) { var a = $("a.host, a.strong-link", row); return a ? a.getAttribute("href") : ""; };
           // Ce qui fait l'état d'une ligne : son texte et ses voyants, sans ce qui bouge à chaque contact ([data-quiet] :
           // heure du dernier contact, jauges) — sinon tout poste allumé s'éclairerait toutes les deux minutes.
@@ -1879,20 +1971,32 @@
           zones.forEach(function (z) {
             var f = fresh[z.dataset.refresh];
             if (z.innerHTML === f.innerHTML && z.className === f.className) return;
-            var before = {};
+            var before = {}, opened = {}, scrolls = {};
             $$("tr", z).forEach(function (row) { var k = key(row); if (k) before[k] = shape(row); });
+            // Volets ouverts ou fermés par la personne, et défilement de leurs journaux : retrouvés après le remplacement.
+            $$("details[data-user-toggled]", z).forEach(function (d) {
+              var k = detailsKey(d);
+              if (!k) return;
+              opened[k] = d.open;
+              var log = $("pre", d);
+              if (log && log.scrollTop) scrolls[k] = log.scrollTop;
+            });
             z.className = f.className;
             while (z.firstChild) z.removeChild(z.firstChild);
             Array.prototype.slice.call(f.childNodes).forEach(function (n) { z.appendChild(document.importNode(n, true)); });
+            restoreOpen(z, opened);
+            $$("details", z).forEach(function (d) { var k = detailsKey(d), log = $("pre", d); if (k && log && scrolls[k]) log.scrollTop = scrolls[k]; });
             afterRefresh.forEach(function (fn) { fn(z); });
             // Lignes nouvelles ou modifiées : éclairées un instant.
             $$("tr", z).forEach(function (row) { var k = key(row); if (k && before[k] !== shape(row)) row.classList.add("changed"); });
           });
           live.dataset.signature = next.dataset.signature;
         })
-        .catch(hard)
+        .catch(function (e) { if (e && e.message === "reload") guardedReload(); })   // sinon : nouvel essai au relevé suivant
         .then(function () { refreshing = false; });
+      return true;
     };
+    if ($("[data-refresh]")) requestRefresh = soft;
     var reload = function (d) { if (document.body.dataset.noReload) return; if (d.signature && d.signature !== live.dataset.signature) soft(); };
     var handler = { status: function (d) { bind(d); reload(d); }, wu: function (d) { bind(d); renderWuLog(d); }, apps: renderApps, job: renderJob,
                     reload: reload }[kind];
