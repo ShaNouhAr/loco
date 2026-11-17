@@ -518,6 +518,7 @@
       selBar.hidden = n === 0;
       if (n) document.body.dataset.noReload = "1"; else delete document.body.dataset.noReload;   // ne pas rafraîchir pendant une sélection
       var c = $("[data-select-count]"); if (c) c.textContent = n;
+      var noun = $("[data-select-noun]"); if (noun) noun.textContent = n === 1 ? noun.dataset.one : noun.dataset.many;
       var far = $("[data-select-elsewhere]"); if (far) far.textContent = away ? t("dont %(n)s hors de cette page", { n: away }) : "";
       if (selAll) { selAll.checked = shown > 0 && shown === boxes.length; selAll.indeterminate = shown > 0 && shown < boxes.length; }
     };
@@ -529,12 +530,13 @@
     $$("[data-select-submit]", selBar).forEach(function (selSubmit) { selSubmit.addEventListener("click", function () {
       var ids = selKept.slice();
       if (!ids.length) return;
+      var menu = selSubmit.closest("details"); if (menu) menu.open = false;     // action du menu « Plus » : le menu se referme
       confirmDialog(selSubmit.dataset.confirm, selSubmit.dataset.confirmText, selSubmit.dataset.confirmOk).then(function (ok) {
         if (!ok) return;
         var data = new FormData();
         data.set("csrf", selSubmit.dataset.csrf);
         ids.forEach(function (id) { data.append("ids", id); });
-        var rb = $("[data-select-reboot]"); if (rb && rb.checked && !selSubmit.hasAttribute("data-no-reboot")) data.set("reboot", "1");
+        if (selSubmit.hasAttribute("data-reboot")) data.set("reboot", "1");      // « Mettre à jour puis redémarrer si nécessaire »
         selSubmit.disabled = true; selSubmit.classList.add("loading");
         fetch(selSubmit.dataset.action, { method: "POST", body: data })
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })

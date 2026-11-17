@@ -404,20 +404,22 @@ def fleet_remote_consent(dev_id):
     return back("fleet_device", dev_id=dev_id)
 
 
-@app.route("/fleet/remote-consent-selected", methods=["POST"])
+@app.route("/fleet/groups/<int:group_id>/remote-consent", methods=["POST"])
 @login_required
-def fleet_remote_consent_selected():
-    enabled = request.args.get("enabled") == "1"
-    try:
-        ids = {int(i) for i in request.form.getlist("ids")}
-    except ValueError:
-        abort(400)
-    if not ids or len(ids) > 5000:
-        abort(400)
-    chosen = [d["id"] for d in db().execute("SELECT id FROM devices WHERE state='active'" + scope.sql()).fetchall() if d["id"] in ids]
-    db().executemany("UPDATE devices SET remote_consent=? WHERE id=?", [(int(enabled), dev_id) for dev_id in chosen])
-    audit("parc.accord-reglage", f"{len(chosen)} poste(s) : {'exigé' if enabled else 'plus exigé'}", commit=False)
+def fleet_group_remote_consent(group_id):
+    """Exiger, ou non, l'accord de la personne devant le poste avant le bureau distant, sur tous les postes d'un groupe."""
+    from . import groups
+    group = groups._group("device", group_id)
+    enabled = request.form.get("enabled") == "1"
+    cur = db().execute("UPDATE devices SET remote_consent=? WHERE state='active' "
+                       "AND id IN (SELECT device_id FROM device_group_members WHERE group_id=?)" + scope.sql(),
+                       (int(enabled), group_id))
+    n = cur.rowcount
+    audit("parc.accord-reglage", f"groupe {group['name']} : {n} poste(s), {'exigé' if enabled else 'plus exigé'}", commit=False)
     db().commit()
-    flash(n_("Accord avant le bureau distant exigé sur %(num)s poste.", "Accord avant le bureau distant exigé sur %(num)s postes.", len(chosen)) if enabled
-          else n_("Accord avant le bureau distant retiré sur %(num)s poste.", "Accord avant le bureau distant retiré sur %(num)s postes.", len(chosen)), "ok")
-    return back("fleet")
+    if not n:
+        flash(_("Aucun poste actif dans le groupe %(name)s.", name=group["name"]), "error")
+    else:
+        flash(n_("Accord avant le bureau distant exigé sur %(num)s poste du groupe %(name)s.", "Accord avant le bureau distant exigé sur %(num)s postes du groupe %(name)s.", n, name=group["name"]) if enabled
+              else n_("Accord avant le bureau distant retiré sur %(num)s poste du groupe %(name)s.", "Accord avant le bureau distant retiré sur %(num)s postes du groupe %(name)s.", n, name=group["name"]), "ok")
+    return back("fleet_groups", _anchor=f"group-{group_id}")

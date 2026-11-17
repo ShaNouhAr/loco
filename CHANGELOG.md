@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.172.0 — 2026-11-17
+
+- **Barre des postes cochés plus claire** (Mon parc) : « 2 postes sélectionnés » au lieu de « Sélection : 2 », puis *Réveiller*, *Redémarrer* et *Mettre à jour*. *Redémarrer* est nouveau : les postes cochés redémarrent une minute après leur prochain contact (droit de redémarrer ; ceux qui redémarrent déjà, qui changent de version du système ou les appareils Android sont laissés et comptés). La case isolée « Redémarrer si nécessaire » devient *Mettre à jour puis redémarrer si nécessaire* dans le menu *Plus*, avec *Activer le réveil à distance*.
+- **Accord avant le bureau distant, par groupe** : *Exiger l'accord* et *Ne plus l'exiger* quittent la barre de sélection ; on les règle désormais pour tous les postes d'un groupe, depuis le menu du groupe (*Groupes de machines*), et toujours poste par poste sur sa fiche.
+
 ## 2.171.0 — 2026-11-17
 
 - **Mettre à jour vers une nouvelle version du système** : quand la version majeure suivante est publiée (Debian 13, Ubuntu 26.04 LTS, Fedora, nouvelle version de Windows proposée par Windows Update), loco l'affiche — « Mettre à jour vers Debian 13 (trixie) » sur la fiche du poste et dans Mon parc, filtre *Situation › Mise à jour vers une nouvelle version* — et la pose sur demande, redémarrage compris. Debian : version actuelle mise à jour, refus s'il reste des paquets retenus, dépôts passés à la nouvelle version avec copie des anciens fichiers (un dépôt tiers qui ne la publie pas encore est désactivé, pas supprimé), place disque vérifiée, dépôts remis comme avant si quelque chose manque, puis `upgrade` et `full-upgrade` sans question. Ubuntu : l'outil officiel `do-release-upgrade`, après un redémarrage si la version actuelle en demande un, puis le dépôt de loco remis pour la nouvelle version. Fedora : `dnf system-upgrade`, installation hors ligne au redémarrage, version vérifiée au retour. Sous Linux, la mise à jour tourne hors de l'agent, avec son avancement en direct et son journal sur le poste. Droits : mettre à jour et redémarrer.

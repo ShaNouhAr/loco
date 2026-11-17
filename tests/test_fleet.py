@@ -1471,6 +1471,41 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class TestSelectionBar(FleetTest):
+    """Barre des postes cochés dans Mon parc : nombre en clair, Redémarrer, options rangées dans « Plus »."""
+
+    def test_reboot_the_selected_devices(self):
+        agents = [Agent(LINUX, f"192.168.46.{i}") for i in (10, 11)] + [Agent(WINDOWS, "192.168.46.12")]
+        for a in agents:
+            a.enroll()
+            a.checkin({"updates": [], "apps": []})
+        ids = [device(a.uid)["id"] for a in agents]
+        page = self.admin.c.get("/fleet").get_data(as_text=True)
+        bar = page[page.index("data-select-bar"):page.index('<div class="table-wrap">')]
+        self.assertIn('data-action="/fleet/reboot-selected"', bar)
+        self.assertIn("postes sélectionnés", bar)
+        self.assertIn("Mettre à jour puis redémarrer si nécessaire", bar)
+        self.assertNotIn("Exiger", bar)
+        self.assertNotIn("data-select-reboot", bar)                            # plus de case à cocher isolée
+        self.admin.post(f"/fleet/{ids[0]}/action", {"action": "reboot"}, page=f"/fleet/{ids[0]}")
+        r = self.admin.post("/fleet/reboot-selected", {"ids": [str(i) for i in ids]}, page="/fleet")
+        self.assertEqual((r.get_json()["count"], r.get_json()["skipped"]), (2, 1))   # le premier redémarre déjà
+        with transaction() as conn:
+            self.assertEqual(sorted(r[0] for r in conn.execute("SELECT device_id FROM device_commands WHERE action='reboot'")), sorted(ids))
+
+    def test_needs_the_reboot_right(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        a = Agent(LINUX, "192.168.46.13")
+        a.enroll()
+        updater = test_permissions.TestPermissions.browser(
+            self, "maj-sel", test_permissions.TestPermissions.profile(self, "maj-sel", {"fleet.update"}))
+        self.assertEqual(updater.post("/fleet/reboot-selected", {"ids": [str(device(a.uid)["id"])]}, page="/account").status_code, 403)
+        page = updater.c.get("/fleet").get_data(as_text=True)
+        self.assertNotIn("/fleet/reboot-selected", page)
+        self.assertNotIn("Mettre à jour puis redémarrer si nécessaire", page)
+
+
 DEBIAN12 = dict(LINUX, hostname="srv-ancien", os={"family": "debian", "name": "Debian GNU/Linux 12 (bookworm)"})
 TRIXIE = {"kind": "debian", "version": "13", "codename": "trixie", "name": "Debian 13 (trixie)"}
 

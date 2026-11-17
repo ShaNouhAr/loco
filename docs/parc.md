@@ -44,6 +44,10 @@ distribués ; supprimer le groupe aussi.
 - **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
   facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
   Ces actions utilisent une liste fermée ; les administrateurs disposent aussi du terminal interactif décrit ci-dessous.
+- **Postes cochés dans Mon parc** : une barre dit combien de postes sont sélectionnés (sur toutes les pages) et propose
+  *Réveiller*, *Redémarrer* et *Mettre à jour* ; le menu *Plus* ajoute *Mettre à jour puis redémarrer si nécessaire* et
+  *Activer le réveil à distance*. Un poste qui redémarre déjà, change de version du système, ou un appareil Android, est
+  laissé de côté et compté. Droits : ceux de chaque action sur un poste.
 - **Nom personnalisé** : la fiche d'un poste (menu *Plus → Nom personnalisé…*) permet de lui donner un nom plus
   parlant, affiché à la place de son nom d'hôte dans Mon parc et dans la recherche ; le nom d'hôte reste visible.
   Droit *Nommer les appareils* (Administrateur et Opérateur).
@@ -144,10 +148,10 @@ mettent aussi à jour leur proxy APT et leurs dépôts ; un poste configuré par
 de postes par vague, l'attente entre deux vagues, le seuil d'échecs et, si besoin, un groupe pilote. Une vague ne part
 que si la précédente compte au moins une réussite et moins d'échecs que le seuil ; sinon tout se met en pause, la vue
 d'ensemble le signale, une notification part, et vous décidez de la suite. Un poste éteint ne bloque pas. Les
-planifications et *Mettre à jour les sélectionnés* partent toujours d'un coup.
+planifications et les actions sur des postes cochés partent toujours d'un coup.
 
-**Accord de l'utilisateur avant le bureau distant** (désactivé par défaut) : exigé sur un poste (fiche, onglet *Détails*, ou sélection
-dans Mon parc), ou demandé pour une session (menu *Plus* de la fiche). La personne devant le poste accepte ou refuse dans une fenêtre,
+**Accord de l'utilisateur avant le bureau distant** (désactivé par défaut) : exigé sur un poste (fiche, onglet *Détails*) ou sur tous
+les postes d'un groupe (*Groupes de machines*, menu du groupe), ou demandé pour une session (menu *Plus* de la fiche). La personne devant le poste accepte ou refuse dans une fenêtre,
 avant toute capture. Sans réponse en une minute, ou sur un écran verrouillé, c'est un refus. Si personne n'est connecté, le bureau
 s'ouvre sans demande. Sous Linux, il faut zenity ou kdialog. Le terminal et les fichiers ne sont pas concernés.
 

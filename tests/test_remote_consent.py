@@ -128,22 +128,36 @@ class TestPortal(FleetTest):
         operator.login("technicien", "Technicien-Pass-1234")
         self.require()
         self.assertEqual(operator.post(f"/fleet/{self.dev_id}/remote-consent", {"enabled": "0"}).status_code, 403)
-        self.assertEqual(operator.post("/fleet/remote-consent-selected?enabled=0", {"ids": [self.dev_id]}).status_code, 403)
+        with transaction() as conn:
+            group = conn.execute("INSERT INTO device_groups (name, updated_at) VALUES ('Accueil', '')").lastrowid
+            conn.execute("INSERT INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, self.dev_id))
+        self.assertEqual(operator.post(f"/fleet/groups/{group}/remote-consent", {"enabled": "0"}).status_code, 403)
         self.assertEqual(device(self.agent.uid)["remote_consent"], 1)
         self.assertNotIn("Ne plus exiger l'accord", operator.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True))
         with transaction() as conn:
             conn.execute("DELETE FROM users WHERE username='technicien'")
 
-    def test_selection_and_journal(self):
-        other = Agent(LINUX, "192.168.43.63")
+    def test_set_for_a_whole_group_from_its_menu_and_journal(self):
+        other, outside = Agent(LINUX, "192.168.43.63"), Agent(LINUX, "192.168.43.64")
         other.enroll()
-        ids = [self.dev_id, device(other.uid)["id"]]
-        self.assertEqual(self.admin.post("/fleet/remote-consent-selected?enabled=1", {"ids": ids}).status_code, 302)
-        self.assertEqual((device(self.agent.uid)["remote_consent"], device(other.uid)["remote_consent"]), (1, 1))
-        self.admin.post("/fleet/remote-consent-selected?enabled=0", {"ids": [self.dev_id]})
-        self.assertEqual((device(self.agent.uid)["remote_consent"], device(other.uid)["remote_consent"]), (0, 1))
-        self.assertEqual(self.admin.post("/fleet/remote-consent-selected?enabled=1", {"ids": ["x"]}).status_code, 400)
-        self.assertEqual(self.audit("parc.accord-reglage")[-1], "1 poste(s) : plus exigé")
+        outside.enroll()
+        with transaction() as conn:
+            conn.execute("DELETE FROM device_groups")
+            group = conn.execute("INSERT INTO device_groups (name, updated_at) VALUES ('Accueil', '')").lastrowid
+            for uid in (self.agent.uid, other.uid):
+                conn.execute("INSERT INTO device_group_members (group_id, device_id) VALUES (?,?)", (group, device(uid)["id"]))
+        page = self.admin.c.get("/fleet/groups").get_data(as_text=True)
+        self.assertIn("Bureau distant : exiger l’accord de l’utilisateur…", page)
+        self.assertNotIn("Bureau distant : ne plus exiger l’accord…", page)
+        self.assertEqual(self.admin.post(f"/fleet/groups/{group}/remote-consent", {"enabled": "1"}).status_code, 302)
+        self.assertEqual([device(a.uid)["remote_consent"] for a in (self.agent, other, outside)], [1, 1, 0])
+        page = self.admin.c.get("/fleet/groups").get_data(as_text=True)
+        self.assertIn("Bureau distant : ne plus exiger l’accord…", page)
+        self.assertNotIn("Bureau distant : exiger l’accord de l’utilisateur…", page)
+        self.admin.post(f"/fleet/groups/{group}/remote-consent", {"enabled": "0"})
+        self.assertEqual([device(a.uid)["remote_consent"] for a in (self.agent, other, outside)], [0, 0, 0])
+        self.assertEqual(self.audit("parc.accord-reglage")[-1], "groupe Accueil : 2 poste(s), plus exigé")
+        self.assertNotIn("Exiger l’accord", self.admin.c.get("/fleet").get_data(as_text=True))   # plus dans la barre de sélection
 
     def test_device_page_says_what_applies(self):
         page = self.admin.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)

@@ -2502,6 +2502,37 @@ def fleet_update_selected():
     return {"ok": True, "count": count}
 
 
+@app.route("/fleet/reboot-selected", methods=["POST"])
+@login_required
+def fleet_reboot_selected():
+    """Redémarre les postes cochés dans la liste. Mêmes droits qu'un redémarrage de poste ; ceux qui redémarrent déjà,
+    qui changent de version du système, ou les appareils Android, sont laissés et comptés."""
+    require("fleet.reboot")
+    try:
+        ids = {int(i) for i in request.form.getlist("ids")}
+    except ValueError:
+        abort(400)
+    if not ids or len(ids) > 5000:
+        abort(400)
+    rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
+    count = 0
+    for dev_id in ids:
+        r = rows.get(dev_id)
+        if (r and r["d"]["state"] == "active" and r["d"]["os_family"] != "android" and not r["rebooting"] and not r["upgrading"]
+                and queue(r["d"], "reboot", {})):
+            count += 1
+    db().commit()
+    audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(len(ids), 'sélectionné')}")
+    if count:
+        flash(n_("Redémarrage demandé sur %(num)s poste : il redémarre une minute après son prochain contact.",
+                 "Redémarrage demandé sur %(num)s postes : chacun redémarre une minute après son prochain contact.", count), "ok")
+    if len(ids) > count:
+        flash(n_("%(num)s poste laissé tel quel : redémarrage déjà en cours, mise à jour de version en cours, appareil Android ou poste retiré.",
+                 "%(num)s postes laissés tels quels : redémarrage déjà en cours, mise à jour de version en cours, appareils Android ou postes retirés.",
+                 len(ids) - count), "error")
+    return {"ok": True, "count": count, "skipped": len(ids) - count}
+
+
 def _report_wake(result):
     for name in result["direct"]:
         flash(_("Réveil de %(dev)s envoyé : il devrait reprendre contact d'ici quelques minutes.", dev=name), "ok")
