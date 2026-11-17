@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.172.3 — 2026-11-17
+
+- **Téléphone : la barre du haut ne dépasse plus** : avec Mon parc, Linux, Windows, Home Assistant ou Android et Administration, elle débordait de l'écran sur la plupart des téléphones (la page s'élargissait et se décalait). Elle se resserre désormais selon la place réelle — flèches, puis libellés des menus non ouverts — et chaque entrée garde son icône ; Administration retrouve la sienne quand son libellé ne tient plus.
+- **Plus rien ne dépasse sur un petit téléphone (320 à 360 px)** : les noms et identifiants longs sans espace (applications du catalogue, paquets Android, liens dans une description, commande dans un texte) sont coupés plutôt que d'élargir la page ; l'état de Windows Update, la case « réinstaller » d'un déploiement et les interrupteurs des alertes passent à la ligne.
+
 ## 2.172.2 — 2026-11-17
 
 - **Enrôlement Windows sans importer l'autorité de loco** : la commande de la page *Enrôlement* échouait sur un poste neuf (« Impossible d'établir une relation de confiance pour le canal sécurisé SSL/TLS »), le certificat de loco n'étant pas encore reconnu. Elle reconnaît désormais ce certificat par son empreinte SHA-256, pour le script comme pour le téléchargement du MSI : elle fonctionne du premier coup, et tout autre certificat reste refusé. Un certificat déjà reconnu par le poste (autorité d'entreprise) passe comme avant. À lancer dans Windows PowerShell (pas PowerShell 7).

@@ -64,6 +64,20 @@
     navGroups.forEach(function (group) { if (!group.contains(e.target)) openNav(group, false); });
   });
 
+  // Sur un petit écran, la barre tient toujours sur sa ligne : elle se resserre par étapes (voir .nav.fit-* du CSS),
+  // mesurées dans la fenêtre réelle — le nombre de menus et la longueur des libellés varient selon le compte et la langue.
+  (function (nav) {
+    if (!nav) return;
+    var levels = ["fit-1", "fit-2", "fit-3"];
+    var fit = function () {
+      levels.forEach(function (c) { nav.classList.remove(c); });
+      for (var i = 0; i < levels.length && nav.scrollWidth > nav.clientWidth + 1; i++) nav.classList.add(levels[i]);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  })($(".top .nav"));
+
   /* ---------------------------------------------------------------- formats */
 
   var LANG = document.documentElement.lang || "fr";

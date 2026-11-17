@@ -7,7 +7,7 @@
 <div class="head">
   <div class="store-card-top">{{ android_logo(source.id if info.icon else none, info.package, info.name, 'large') }}
     <div><h1>{{ info.name }}</h1>
-      <p>{{ info.author or source.name }} · <span class="mono">{{ info.version }}</span> · <span class="mono faint">{{ info.package }}</span></p></div>
+      <p>{{ info.author or source.name }} · <span class="mono">{{ info.version }}</span> · <span class="mono faint break-any">{{ info.package }}</span></p></div>
   </div>
   <div class="actions">
     {% if known %}

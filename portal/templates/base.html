@@ -30,11 +30,11 @@
       {# Le terminal d'un Home Assistant est une session distante hors du parc : il relève de son entrée, pas de Mon parc. #}
       {% set homeassistant_on = ep.startswith('homeassistant') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh') %}
       {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on %}
-      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
+      {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" aria-label="{{ _('Mon parc') }}" title="{{ _('Mon parc') }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
-        <summary aria-expanded="false" aria-controls="nav-linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
+        <summary aria-expanded="false" aria-controls="nav-linux" aria-label="Linux" title="Linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-linux">
           <div class="nav-panel">
             {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>{{ _("Paquets") }}</strong><small>{{ _('Debian, Ubuntu, Red Hat : caches et dépôts') if rpm_enabled and can('rpm.view') else _('Debian, Ubuntu : cache et dépôts') }}</small></span></a>{% endif %}
@@ -45,7 +45,7 @@
       {% endif %}
       {% if can_any("wu.view", "windows.view", "store.view") %}
       <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail')) }}">
-        <summary aria-expanded="false" aria-controls="nav-windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
+        <summary aria-expanded="false" aria-controls="nav-windows" aria-label="Windows" title="Windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-windows">
           <div class="nav-panel">
             {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>{{ _("Cache des mises à jour") }}</small></span></a>{% endif %}
@@ -77,7 +77,7 @@
       {% for sec, ok, endpoint, on, icon, label, desc in admin_items if ok %}{% set adminnav.any = true %}{% if on %}{% set adminnav.on = sec %}{% endif %}{% endfor %}
       {% if adminnav.any %}
       <details class="nav-group nav-admin {{ 'on' if adminnav.on }}">
-        <summary aria-expanded="false" aria-controls="nav-admin">{{ nav_icon('settings') }}<span class="nav-long">{{ _("Administration") }}</span><span class="nav-short">{{ _("Admin") }}</span>{{ nav_icon('chevron') }}</summary>
+        <summary aria-expanded="false" aria-controls="nav-admin" aria-label="{{ _('Administration') }}" title="{{ _('Administration') }}">{{ nav_icon('settings') }}<span class="nav-long">{{ _("Administration") }}</span><span class="nav-short">{{ _("Admin") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-admin">
           <div class="nav-panel nav-sections">
             {% for key, title in admin_sections %}

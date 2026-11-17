@@ -220,7 +220,7 @@ p a:hover, .hint a:hover, .note a:hover, .empty a:hover, li a:hover, .panel-f a:
 h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.015em; }
 p { margin: 0; }
 code, .mono, kbd { font-family: var(--mono); font-size: 12.5px; font-variant-ligatures: none; }
-code { padding: 1px 5px; border-radius: 4px; background: var(--bg-3); color: var(--text); }
+code { padding: 1px 5px; border-radius: 4px; background: var(--bg-3); color: var(--text); overflow-wrap: break-word; }   /* commande longue dans un texte : coupée plutôt que de déborder */
 ::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .muted { color: var(--text-2); }
 .faint { color: var(--text-3); }
@@ -263,6 +263,15 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .nav-group > summary { list-style: none; }
 .nav-group > summary::-webkit-details-marker { display: none; }
 .nav-group[open] .nav-chevron { transform: rotate(180deg); }
+/* Barre trop étroite (téléphone, menus nombreux) : resserrée par étapes jusqu'à tenir sur sa ligne (voir app.js) —
+   chevrons, puis libellés des entrées qui ne sont pas ouvertes, puis tous les libellés ; l'icône reste, le nom aussi
+   pour les lecteurs d'écran et en infobulle. */
+.nav.fit-1 .nav-chevron { display: none; }
+.nav.fit-1 > a, .nav.fit-1 > .nav-group > summary { padding: 0 6px; }
+.nav.fit-2 > a:not(.on) > span, .nav.fit-2 > .nav-group:not(.on) > summary > span { display: none; }
+.nav.fit-3 > a > span, .nav.fit-3 > .nav-group > summary > span { display: none; }
+/* Administration n'a que son libellé sur un téléphone : sans lui, son icône revient. */
+.nav.fit-2 > .nav-admin:not(.on) > summary > .nav-icon:not(.nav-chevron), .nav.fit-3 > .nav-admin > summary > .nav-icon:not(.nav-chevron) { display: block; }
 .nav-dropdown { position: absolute; top: 100%; left: -4px; width: 300px; padding-top: 8px; z-index: 1; }
 .nav-panel { padding: 6px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow-pop); }
 .nav-group[open] .nav-panel { animation: nav-reveal .12s ease-out; }
@@ -488,6 +497,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .rule-group + .rule-group { border-top: 1px solid var(--line); }
 .rule-group-title { margin: 0 0 8px; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
 .rule-controls { display: flex; align-items: center; gap: 12px; flex: none; }
+/* Très petit écran : seuil et interrupteur passent sous le texte plutôt que de déborder. */
+@media (max-width: 420px) { .rule-group .feature-row { flex-wrap: wrap; } .rule-controls { flex-basis: 100%; justify-content: flex-end; } }
 .threshold { display: inline-flex; align-items: baseline; gap: 6px; }
 .threshold-unit { font-size: 12.5px; color: var(--text-3); min-width: 2.5em; }
 .test-row { gap: 12px; }
@@ -521,6 +532,9 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .fleet-select-count .linkbtn { margin-left: 12px; }
 /* Zone actualisée en place sans changer la mise en page : ses enfants restent ceux du conteneur (marges de .stack…). */
 .refresh-contents { display: contents; }
+/* Identifiant long sans espace (paquet Android, identifiant winget) : coupé où il faut plutôt que d'élargir la page. */
+.break-any { overflow-wrap: anywhere; }
+.store-card-top h1 { overflow-wrap: anywhere; }   /* nom d'application en un seul mot (PortForCommandPalette) */
 /* Bouton au libellé long : passe à la ligne plutôt que d'élargir la page sur téléphone. */
 .btn.btn-wrap { height: auto; min-height: var(--h); padding-top: 5px; padding-bottom: 5px; white-space: normal; text-align: center; max-width: 100%; }
 
@@ -1286,7 +1300,7 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .store-item-version { margin-top: 3px; font: 12.5px var(--sans); color: var(--text-3); }
 .store-item-action { position: relative; z-index: 1; flex: none; }
 .store-item-action .st { font-size: 13px; }
-.store-description { white-space: pre-line; }
+.store-description { white-space: pre-line; overflow-wrap: anywhere; }   /* lien long dans une description : coupé */
 .store-pagination { justify-content: center; }
 .rollout-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .fleet-pager { padding: 12px 24px; border-top: 1px solid var(--line); }
@@ -1346,6 +1360,7 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .compose-bar-in > * + * { margin-top: 0 !important; }
 .compose-title { flex: 1; min-width: 240px; }
 .compose-force { padding-bottom: 8px; white-space: nowrap; }
+@media (max-width: 720px) { .compose-force { white-space: normal; } }
 @media (max-width: 850px) { .deployment-columns { grid-template-columns: 1fr; } }
 
 .script-content { font-family: var(--mono); font-size: 13px; line-height: 1.55; tab-size: 4; min-height: 320px; }
@@ -1908,6 +1923,7 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
   .table-cards td.card-action { padding-top: 8px; }
   .table-cards td:empty, .table-cards td.hide-sm { display: none; }
   .table-cards td.num { text-align: left; }
+  .st { white-space: normal; }                       /* état en phrase (Windows Update…) : sur deux lignes plutôt que de déborder */
 }
 @media (max-width: 520px) {
   .nav { gap: 0; }

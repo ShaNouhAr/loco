@@ -346,7 +346,7 @@ class TestDeployments(FleetTest):
             html = self.admin.c.get(page).get_data(as_text=True)
             self.assertIn('aria-label="Gestion du parc"', html)                 # sous-menu de Mon parc
             self.assertNotIn('aria-label="Gestion des logiciels"', html)
-            self.assertRegex(html, r'<a href="/fleet" class="on" aria-current="page">')   # « Mon parc » actif en haut
+            self.assertRegex(html, r'<a href="/fleet" class="on"[^>]* aria-current="page">')   # « Mon parc » actif en haut
         catalog = self.admin.c.get('/windows-apps').get_data(as_text=True)
         self.assertIn('aria-label="Gestion des logiciels"', catalog)
         self.assertNotIn('href="/fleet/deployments"', catalog.split('aria-label="Gestion des logiciels"')[1].split('</nav>')[0])

@@ -40,7 +40,7 @@ from loco.db import transaction  # noqa: E402
 ARTIFACTS = ROOT / "test-results" / "browser"
 PORT = int(os.environ.get("LOCO_BROWSER_PORT", "0"))
 DESKTOP = {"width": 1440, "height": 900}
-PHONE = {"width": 420, "height": 860}
+PHONE = {"width": 360, "height": 800}       # petit Android courant (les plus étroits encore répandus)
 # Pages que le parcours ne doit ni suivre ni charger comme une page.
 NOT_PAGES = re.compile(r"/(logout|lang|set-language|agent/|win/|apt/|rpm/|flatpak/|flathub/|ca\.crt|sw\.js|metrics|healthz)|\.(msi|deb|rpm|exe|tar|gz|json|ps1|sh)(\?|$)")
 LONG = 30000            # ms : ce qui dépend d'un rafraîchissement en direct (10 à 15 s)
@@ -162,6 +162,33 @@ class BrowserTest(unittest.TestCase):
 
     def overflow(self):
         return self.page.evaluate("document.documentElement.scrollWidth - innerWidth")
+
+
+class TestTopBarOnPhones(BrowserTest):
+    """La barre du haut tient sur sa ligne sur un téléphone, même avec tous les menus : elle se resserre (chevrons, puis
+    libellés des menus fermés) et chaque entrée garde une icône visible."""
+    viewport = {"width": 360, "height": 800}
+
+    def test_every_entry_fits_and_stays_visible(self):
+        from loco import features
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.EXPERIMENTAL_SETTING, '["android"]'))
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.OPTIONAL_SETTING, '["homeassistant"]'))
+        self.addCleanup(self.restore)
+        for path in ("/fleet", "/system", "/"):
+            self.page.goto(path)
+            nav = self.page.locator(".top .nav")
+            self.assertLessEqual(nav.evaluate("n => n.scrollWidth - n.clientWidth"), 0, path)
+            self.assertLessEqual(self.overflow(), 0, path)
+            hidden = nav.evaluate("""n => [...n.children].filter(c => ![...c.querySelectorAll(':scope > svg, :scope > span, :scope > summary > svg, :scope > summary > span')]
+                                          .some(e => e.getBoundingClientRect().width > 0)).map(c => c.className)""")
+            self.assertEqual(hidden, [], path)                                  # aucune entrée sans icône ni libellé
+        expect(self.page.locator(".nav-admin > summary")).to_have_attribute("aria-label", "Administration")
+
+    def restore(self):
+        from loco import features
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key IN (?, ?)", (features.EXPERIMENTAL_SETTING, features.OPTIONAL_SETTING))
 
 
 class TestSignIn(BrowserTest):

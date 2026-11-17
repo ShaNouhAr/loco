@@ -8,7 +8,7 @@
 <div class="head">
   <div class="store-card-top">{{ software_logo(package_id, name, 'large') }}
     <div><h1>{{ name }}</h1>
-      <p>{{ doc.get('Publisher') or _('Éditeur non renseigné') }}{% if doc.get('PackageVersion') %} · <span class="mono">{{ doc.get('PackageVersion') }}</span>{% endif %} · <span class="mono faint">{{ package_id }}</span></p></div>
+      <p>{{ doc.get('Publisher') or _('Éditeur non renseigné') }}{% if doc.get('PackageVersion') %} · <span class="mono">{{ doc.get('PackageVersion') }}</span>{% endif %} · <span class="mono faint break-any">{{ package_id }}</span></p></div>
   </div>
   <div class="actions">
     {% if known %}
