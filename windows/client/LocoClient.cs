@@ -121,6 +121,9 @@ namespace Loco
         static readonly string LogStatePath = Path.Combine(Root, "logs.json");
         static readonly string LogPath = Path.Combine(Root, "loco-client.log");
         const string SecurityCategory = "0fa1201d-4330-4fa8-8ae9-b877473b6441";   // Windows Update : Security Updates
+        // Windows Update : « Upgrades », les nouvelles versions de Windows (Windows 11 depuis Windows 10, 24H2 → 25H2…).
+        // Elles ne partent jamais avec les mises à jour : loco les annonce à part et ne les pose que sur demande.
+        const string UpgradesCategory = "3689bdc8-b205-4af4-8d4a-a63924c5e9d5";
         const int OutputLimit = 60000;
         const int InstallerTimeout = 1800;
         public static int Interval = 120;
@@ -787,6 +790,28 @@ namespace Loco
             return false;
         }
 
+        static bool IsUpgrade(dynamic u)
+        {
+            try
+            {
+                foreach (dynamic c in u.Categories)
+                    if (string.Equals(Convert.ToString(c.CategoryID), UpgradesCategory, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            catch (Exception) { }
+            return false;
+        }
+
+        static readonly Regex UpgradeVersion = new Regex(@"\b(\d{2}H\d)\b", RegexOptions.IgnoreCase);
+
+        // Nouvelle version de Windows proposée par Windows Update, pour l'inventaire : la plus récente s'il y en a plusieurs.
+        static Dictionary<string, object> ReleaseEntry(dynamic u)
+        {
+            string title = Convert.ToString(u.Title);
+            Match m = UpgradeVersion.Match(title);
+            return new Dictionary<string, object> { { "kind", "windows" }, { "name", title }, { "id", Convert.ToString(u.Identity.UpdateID) },
+                { "version", m.Success ? m.Groups[1].Value.ToUpperInvariant() : "" } };
+        }
+
         static bool IsDriver(dynamic u)
         {
             try { return Convert.ToInt32(u.Type) == 2; }    // UpdateType : 1 = logiciel, 2 = pilote
@@ -944,6 +969,7 @@ namespace Loco
         static Dictionary<string, object> Inventory()
         {
             var updates = new List<Dictionary<string, object>>();
+            Dictionary<string, object> release = null;
             string error = "";
             try
             {
@@ -951,14 +977,22 @@ namespace Loco
                 dynamic result = SearchUpdates(searcher);
                 foreach (dynamic u in result.Updates)
                 {
+                    if (IsUpgrade(u) && !IsBlocked(u))
+                    {
+                        var entry = ReleaseEntry(u);
+                        if (release == null || string.CompareOrdinal(Convert.ToString(entry["version"]), Convert.ToString(release["version"])) > 0) release = entry;
+                        continue;
+                    }
                     updates.Add(UpdateEntry(u));
                     if (IsBlocked(u)) HideUpdate(u);
                 }
                 AddHiddenUpdates(searcher, updates);
             }
             catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
-            return new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
+            var inv = new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
                 { "reboot_required", RebootRequired() }, { "error", error } };
+            if (release != null) inv["release"] = release;
+            return inv;
         }
 
         // ------------------------------------------------------------ actions
@@ -978,6 +1012,7 @@ namespace Loco
             {
                 if (only != null && !only.Contains(Convert.ToString(u.Identity.UpdateID))) continue;
                 if (IsBlocked(u)) { lines.Add(Lang.T("Bloquée dans loco, non installée : ", "Blocked in loco, not installed: ", "Bloqueada en loco, no instalada: ") + Convert.ToString(u.Title)); HideUpdate(u); continue; }
+                if (IsUpgrade(u)) continue;             // nouvelle version de Windows : seulement sur demande (InstallWindowsUpgrade)
                 if ((bool)u.InstallationBehavior.CanRequestUserInput) { lines.Add(Lang.T("Ignorée (interactive) : ", "Skipped (interactive): ", "Omitida (interactiva): ") + u.Title); continue; }
                 if (!(bool)u.EulaAccepted) u.AcceptEula();
                 chosen.Add(u);
@@ -1025,6 +1060,49 @@ namespace Loco
             if (reboot) lines.Add(Lang.T("Redémarrage nécessaire pour terminer.", "Reboot required to finish.", "Reinicio necesario para terminar."));
             if (progress != null && markPkg != null) progress("updates", "", chosen.Count, chosen.Count, 100, "");   // état final des mises à jour
             return ok;
+        }
+
+        // Nouvelle version de Windows choisie dans loco (identifiant Windows Update d'une mise à jour « Upgrades ») :
+        // téléchargée puis installée ; Windows la termine au redémarrage qui suit. Vrai si elle est installée.
+        static bool InstallWindowsUpgrade(string id, List<string> lines, Progress progress, out bool reboot)
+        {
+            reboot = false;
+            dynamic session = NewSession();
+            if (progress != null) progress("updates", "", 0, 0, -1, "prepare");
+            dynamic target = null;
+            foreach (dynamic u in SearchUpdates(session.CreateUpdateSearcher()).Updates)
+                if (string.Equals(Convert.ToString(u.Identity.UpdateID), id, StringComparison.OrdinalIgnoreCase) && IsUpgrade(u)) { target = u; break; }
+            if (target == null) { lines.Add(Lang.T("Windows Update ne propose plus cette nouvelle version : rien n'a été installé.", "Windows Update no longer offers this new version: nothing was installed.", "Windows Update ya no ofrece esta nueva versión: no se instaló nada.")); return false; }
+            string title = Convert.ToString(target.Title);
+            if (IsBlocked(target)) { lines.Add(Lang.T("Bloquée dans loco, non installée : ", "Blocked in loco, not installed: ", "Bloqueada en loco, no instalada: ") + title); return false; }
+            if (!(bool)target.EulaAccepted) target.AcceptEula();
+            dynamic coll = Activator.CreateInstance(Type.GetTypeFromProgID("Microsoft.Update.UpdateColl"));
+            coll.Add(target);
+            try
+            {
+                if (!(bool)target.IsDownloaded)
+                {
+                    if (progress != null) progress("updates", title, 1, 1, 5, "download");
+                    dynamic downloader = session.CreateUpdateDownloader();
+                    downloader.Updates = coll;
+                    downloader.Download();
+                }
+                if (progress != null) progress("updates", title, 1, 1, 50, "install");
+                dynamic installer = session.CreateUpdateInstaller();
+                installer.Updates = coll;
+                dynamic result = installer.Install();
+                dynamic r = result.GetUpdateResult(0);
+                int code = (int)r.ResultCode, hr = (int)r.HResult;
+                reboot = (bool)result.RebootRequired;
+                if (code == 2 || code == 3)
+                {
+                    lines.Add(Lang.T("Windows Update : nouvelle version installée : ", "Windows Update: new version installed: ", "Windows Update: nueva versión instalada: ") + title + ".");
+                    return true;
+                }
+                lines.Add(Lang.T("ÉCHEC", "FAILED", "FALLO") + " (code " + code + (hr != 0 ? string.Format(", 0x{0:X8}", hr) : "") + ") : " + title);
+            }
+            catch (Exception e) { lines.Add(Lang.T("ÉCHEC", "FAILED", "FALLO") + " (" + e.Message.Trim() + ") : " + title); }
+            return false;
         }
 
         // Script de la bibliothèque loco : contenu vérifié par son empreinte, exécuté en SYSTEM par PowerShell.
@@ -1564,7 +1642,7 @@ namespace Loco
                         string err = Str(inv, "error");
                         Report(conf, id, err == "" ? "success" : "failed", err == "" ? "Inventaire transmis." : err, 0, inv);
                     }
-                    else if (action == "update" || action == "install-app")
+                    else if (action == "update" || action == "install-app" || action == "os-upgrade")
                     {
                         var lines = new List<string>();
                         bool ok = true;
@@ -1606,6 +1684,21 @@ namespace Loco
                             try { Post(Str(conf, "server"), "/agent/api/result", report, Str(conf, "token")); }
                             catch (Exception) { }
                         };
+                        if (action == "os-upgrade")
+                        {
+                            // Nouvelle version de Windows : elle seule, puis le redémarrage qui la termine.
+                            var target = cmd.ContainsKey("target") ? cmd["target"] as Dictionary<string, object> : null;
+                            bool restart = false;
+                            try { ok = target != null && InstallWindowsUpgrade(Str(target, "id"), lines, progress, out restart); }
+                            catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
+                            if (target == null) lines.Add(Lang.T("Nouvelle version non précisée.", "New version not specified.", "Nueva versión no indicada."));
+                            var after = Inventory();
+                            lastScan = now;
+                            if (ok) lines.Add(Lang.T("Redémarrage dans une minute : Windows termine l'installation pendant ce redémarrage (jusqu'à une heure).", "Rebooting in one minute: Windows finishes the installation during this restart (up to an hour).", "Reinicio en un minuto: Windows termina la instalación durante este reinicio (hasta una hora)."));
+                            Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, after);
+                            if (ok) { SaveState(lastScan, scanHours, true); Restart(Lang.T("redémarrage pour la nouvelle version de Windows", "reboot for the new Windows version", "reinicio para la nueva versión de Windows")); return true; }
+                            continue;
+                        }
                         if (action == "update")
                         {
                             // Sélection faite dans loco (« only ») : seulement ces mises à jour Windows, sans les logiciels du catalogue.

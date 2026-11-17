@@ -32,13 +32,13 @@
       <div class="upd-row" role="listitem" data-cmd="{{ r.id }}">
         {{ device(r) }}
         <div class="upd-state">
-          {% if r.online %}<span class="upd-step" data-cmd-label>{{ r.progress.label if r.progress else (_("Démarrage…") if r.action == 'update' else _("Redémarrage en cours")) }}</span>
+          {% if r.online %}<span class="upd-step" data-cmd-label>{{ r.progress.label if r.progress else (_("Démarrage…") if r.action in ('update', 'os-upgrade') else _("Redémarrage en cours")) }}</span>
           {% else %}<span class="st warn">{{ _("Sans réponse du poste") }}</span><span class="sub">{{ _("vu %(seen)s", seen=r.seen) }}</span>{% endif %}
-          {% if r.action == 'update' %}<span class="upd-bar"><svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent if r.progress else 0 }}" height="6" data-cmd-bar/></svg><span class="upd-pct" data-cmd-pct>{{ r.progress.percent ~ ' %' if r.progress }}</span></span>{% endif %}
+          {% if r.action in ('update', 'os-upgrade') %}<span class="upd-bar"><svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent if r.progress else 0 }}" height="6" data-cmd-bar/></svg><span class="upd-pct" data-cmd-pct>{{ r.progress.percent ~ ' %' if r.progress }}</span></span>{% endif %}
         </div>
         {{ when(r) }}
         <div class="upd-link"></div>
-        {% if r.action == 'update' %}{{ pkg_progress(r.id, r.progress, open=true) }}{% endif %}
+        {% if r.action in ('update', 'os-upgrade') %}{{ pkg_progress(r.id, r.progress, open=true) }}{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -55,7 +55,7 @@
         {{ device(r) }}
         <div class="upd-state"><span class="st {{ r.tone }}">{{ r.status }}</span><span class="sub">{{ r.detail }}</span></div>
         {{ when(r) }}
-        <div class="upd-link">{% if r.state == 'queued' and can('fleet.update' if r.action == 'update' else 'fleet.reboot') %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=r.dev_id, cmd_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return" value="{{ url_for('fleet_updates') }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}</div>
+        <div class="upd-link">{% if r.state == 'queued' and can('fleet.update' if r.action in ('update', 'os-upgrade') else 'fleet.reboot') %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=r.dev_id, cmd_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return" value="{{ url_for('fleet_updates') }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}</div>
       </div>
       {% endfor %}
     </div>

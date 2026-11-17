@@ -437,7 +437,8 @@ class TestServiceLoop(unittest.TestCase):
              mock.patch.multiple(agent, self_update=lambda conf, wanted: bool(wanted) and wanted != agent.VERSION,
                                  relaunch=lambda: relaunched.append(len(calls)) or 0,
                                  forget_package_key=lambda: False), \
-             mock.patch.object(agent, "ensure_desktop_backend", lambda s: None), \
+             mock.patch.multiple(agent, ensure_desktop_backend=lambda s: None, os_upgrade_poll=lambda conf: None,
+                                 upgrade_job=lambda: None), \
              mock.patch.object(agent, "_apt_lock_busy", lambda o: False), \
              mock.patch.object(agent, "booted_since", lambda last: False), \
              mock.patch.object(agent.time, "sleep", lambda s: None), \

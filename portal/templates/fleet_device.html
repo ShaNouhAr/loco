@@ -3,7 +3,7 @@
 {% block title %}{{ dev.label or dev.hostname or dev.uid[:8] }}{% endblock %}
 {% from "_schedule.html" import schedule_dialog, icon as plan_icon with context %}
 {% from "_charts.html" import line_chart, legend %}
-{% from "_nav_icons.html" import device_icon %}
+{% from "_nav_icons.html" import device_icon, ui_icon %}
 {% from "_macros.html" import pkg_progress with context %}
 {# busy : l'action est déjà lancée sur ce poste — le bouton le dit (témoin, libellé) et ne se clique plus. #}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='') -%}
@@ -29,6 +29,7 @@
     {% if dev.label and dev.hostname and dev.label != dev.hostname %}<p class="small muted mono device-hostname">{{ dev.hostname }}</p>{% endif %}
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
+      {% if release and active and not android %}<a class="tag up" href="#maj">{{ ui_icon('release') }}{{ _("Mettre à jour vers %(name)s", name=release.name) }}</a>{% endif %}
       <span class="mono">{{ address or '—' }}</span>
       <span title="{{ dev.last_seen }}">{{ _("vu %(seen)s", seen=summary.seen) }}</span>
       <span class="mono">{{ _("loco-client %(v)s", v=dev.agent_version or '?') }}</span>
@@ -66,6 +67,7 @@
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn', busy=(_('Mise à jour en attente') if updating == 'queued' else _('Mise à jour en cours')) if updating else '') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
+    {% if active and can('fleet.reboot') and not android %}<div class="split-action">{% if upgrading %}<button type="button" class="btn" disabled title="{{ _('Le poste redémarre de lui-même à la fin de la mise à jour vers la nouvelle version.') }}">{{ _("Redémarrer") }}</button>{% else %}{{ action('reboot', _('Redémarrer'), 'btn', confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}<button type="button" class="btn icon" data-open="#plan-reboot" title="{{ _('Planifier un redémarrage') }}" aria-label="{{ _('Planifier un redémarrage') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
     {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') or (wazuh and can('wazuh.install') and not wazuh.w.server) %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
@@ -94,7 +96,6 @@
           <button class="menu-item">{{ _("Retirer l'agent Wazuh…") }}</button>
         </form>{% endif %}
         {% endif %}
-        {% if can('fleet.reboot') and not android %}{{ action('reboot', _('Redémarrer'), confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}
         {% if can('fleet.remove') %}<hr>{{ action('uninstall', _('Retirer l\'agent…'), 'menu-item danger', confirm=_('Retirer l\'agent de %(name)s ?', name=devname), text=_('Au prochain contact, l\'agent se désinstalle du poste, qui quitte le parc. Les dépôts et caches configurés sur le poste restent en place.'), ok=_('Retirer')) }}{% endif %}
         {% elif can('fleet.remove') %}
         {{ action('forget', _('Oublier ce poste…'), 'menu-item danger', confirm=_('Oublier %(name)s ?', name=devname), text=_('Le poste disparaît de la liste et son jeton est refusé. À utiliser si le poste n\'existe plus.'), ok=_('Oublier')) }}
@@ -116,7 +117,7 @@
       {% else %}{{ _("au prochain contact") }}{% endif %}</span></span>
       {% if c.state in ('sent', 'running') %}<svg class="chart progress-bar pending-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ live.percent if live else 0 }}" height="6" data-cmd-bar/></svg>{% endif %}
       {% if c.state == 'queued' %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=dev.id, cmd_id=c.id) }}" class="pending-cancel"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}
-    </div>{% if c.action == 'update' %}{{ pkg_progress(c.id, live, open=true) }}{% endif %}{% endfor %}</div>{% endif %}
+    </div>{% if c.action in ('update', 'os-upgrade') %}{{ pkg_progress(c.id, live, open=true) }}{% endif %}{% endfor %}</div>{% endif %}
   {% if planned %}<div class="planned">
     {% for p in planned %}<a class="planned-item" href="{{ url_for('schedules') }}#planif-{{ p.id }}">{{ plan_icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span><strong>{{ p.name or p.label }}</strong> · {{ p.when[0]|lower }}{{ p.when[1:] }}</span><span class="muted">{{ _("prochaine : %(next)s", next=p.next) }}</span></a>{% endfor %}
   </div>{% endif %}
@@ -128,7 +129,7 @@
   <div class="device-update-state">
     <span class="small muted">{{ _("Mises à jour") }}</span>
     <span class="pill {{ cls }}" title="{{ reason }}">{{ label|capitalize }}</span>
-    {% if reason|replace('poste ', '') != label %}<span class="small muted">{{ reason|capitalize }}.</span>{% endif %}
+    {% if reason|replace('poste ', '') != label %}<span class="small muted">{{ reason[:1]|upper }}{{ reason[1:] }}.</span>{% endif %}
   </div>
   {% endif %}
   <div class="metrics">
@@ -176,6 +177,24 @@
 
     {% if not android %}
     <div class="tab-panel on" data-panel="maj">
+      {% if (release or upgrading) and active %}
+      {# Nouvelle version majeure du système : annoncée par l'inventaire, posée sur demande (elle finit par un redémarrage). #}
+      <div class="release-offer">
+        <span class="release-ico">{{ ui_icon('release') }}</span>
+        <div class="release-text">
+          {% if upgrading %}
+          <strong>{{ _("Mise à jour vers %(name)s en cours", name=upgrading_name) if upgrading_name else _("Mise à jour vers la nouvelle version en cours") }}</strong>
+          <span class="sub">{{ _("Son avancement s'affiche en haut de la fiche ; le poste redémarre à la fin, puis son inventaire montre la nouvelle version.") }}</span>
+          {% else %}
+          <strong>{{ release.name }}</strong>
+          <span class="sub">{% if release.kind == 'windows' %}{{ _("Windows Update propose cette nouvelle version de Windows : loco la télécharge et l'installe, puis redémarre le poste ; Windows termine l'installation pendant ce redémarrage.") }}{% elif release.kind == 'ubuntu' %}{{ _("Ce poste est en %(current)s. loco met d'abord à jour la version actuelle, lance l'outil officiel d'Ubuntu (do-release-upgrade) sans aucune question, puis redémarre le poste.", current=dev.os_name) }}{% elif release.kind == 'fedora' %}{{ _("Ce poste est en %(current)s. loco met d'abord à jour la version actuelle, télécharge la nouvelle (dnf system-upgrade), puis redémarre le poste pour l'installer hors ligne.", current=dev.os_name) }}{% else %}{{ _("Ce poste est en %(current)s. loco met d'abord à jour la version actuelle, passe ses dépôts à la nouvelle (un dépôt tiers qui ne la publie pas encore est désactivé), installe tout, puis redémarre le poste.", current=dev.os_name) }}{% endif %} {{ _("Comptez de 20 minutes à plus d'une heure.") }}</span>
+          {% if upgrade_blocked %}<span class="sub warn-text">{{ _("Des mises à jour de ce poste sont bloquées dans loco : levez ces blocages avant, sinon la mise à jour vers la nouvelle version refuse de commencer.") }} {% if can('fleet.view') %}<a href="{{ url_for('update_blocks') }}">{{ _("Voir les blocages") }}</a>{% endif %}</span>{% endif %}
+          {% if not upgrade_ready %}<span class="sub">{{ _("L'agent du poste doit d'abord passer en %(v)s (il se met à jour seul) : la mise à jour vers la nouvelle version attend son prochain contact.", v=server_version) }}</span>{% endif %}
+          {% endif %}
+        </div>
+        {% if can('fleet.update') and can('fleet.reboot') %}<div class="release-act">{{ action('os-upgrade', _('Mettre à jour vers %(name)s', name=release.name) if release else '', 'btn primary', confirm=_('Mettre à jour %(name)s vers %(release)s ?', name=devname, release=release.name if release else ''), text=_("Faites d'abord une sauvegarde ou un instantané du poste : une fois commencé, ce passage à la nouvelle version ne se défait pas. Le poste reste utilisable mais ralenti pendant l'installation, puis il redémarre."), ok=_('Mettre à jour'), busy=_('Mise à jour en cours') if upgrading or updating else (_('Redémarrage en cours') if rebooting else '')) }}</div>{% endif %}
+      </div>
+      {% endif %}
       {# Mise à jour déjà lancée : plus de cases à cocher, on ne lance pas une seconde mise à jour par-dessus. #}
       {% set sel = selectable and not updating and (inv.updates or (inv.flatpak and not windows)) %}
       {% if sel %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-update-select>
@@ -405,7 +424,7 @@
           <thead><tr><th>{{ _("Date") }}</th><th>{{ _("Action") }}</th><th class="hide-sm">{{ _("Par") }}</th><th>{{ _("État") }}</th></tr></thead>
           <tbody>
           {% for c in history %}
-            {% set hv = progress_view(c.progress) if c.action == 'update' else none %}
+            {% set hv = progress_view(c.progress) if c.action in ('update', 'os-upgrade') else none %}
             <tr class="{{ 'has-note' if c.output or (hv and 'items' in hv) }}">
               <td class="muted nowrap">{{ (c.finished_at or c.created_at)|date_fr }}</td>
               <td>{{ action_label(c) }}</td>
@@ -693,6 +712,7 @@
   <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Fermer") }}</button></div>
 </dialog>
 {% endif %}
+{% if active and can('fleet.reboot') and not android %}{{ schedule_dialog('plan-reboot', _('Planifier un redémarrage'), 'reboot', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), intro=_('Redémarrage de %(name)s : il a lieu une minute après la remise de la commande au poste ; un message prévient la personne connectée.', name=devname)) }}{% endif %}
 {% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels du catalogue déjà installés.', name=devname)) }}{% endif %}
 {% if can('fleet.rename') %}
 <dialog id="rename" class="app-dialog">

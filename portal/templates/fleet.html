@@ -37,7 +37,7 @@
     {# Filtres en listes déroulantes : le bouton dit le filtre et la valeur choisie, la liste donne les choix et leur
        nombre de postes. Zone rafraîchie en place (jamais sous une liste ouverte). #}
     {% set states = [('red', _('À traiter'), 'err'), ('orange', _('Mises à jour en attente'), 'warn'), ('grey', _('État inconnu'), ''), ('green', _('À jour'), 'ok')] %}
-    {% set views = [('hors-ligne', _('Hors ligne')), ('redemarrage', _('Redémarrage nécessaire'))] %}
+    {% set views = [('hors-ligne', _('Hors ligne')), ('redemarrage', _('Redémarrage nécessaire')), ('nouvelle-version', _('Mise à jour vers une nouvelle version'))] %}
     <div class="filter-bar" data-refresh="filters">
       <details class="menu filter">
         <summary class="chip {{ 'on' if state }}" aria-label="{{ _('Filtrer par état') }}"><span class="filter-k">{{ _("État") }}</span>{% for key, label, cls in states if state == key %}<span class="st {{ cls }}"></span>{{ label }} <b>{{ counts[key] }}</b>{% else %}{{ _("Tous") }} <b>{{ total }}</b>{% endfor %}</summary>
@@ -62,7 +62,7 @@
           {% endfor %}
         </div>
       </details>
-      {% if extras['hors-ligne'] or extras['redemarrage'] or view %}
+      {% if extras['hors-ligne'] or extras['redemarrage'] or extras['nouvelle-version'] or view %}
       <details class="menu filter">
         <summary class="chip {{ 'on' if view }}" aria-label="{{ _('Filtrer par situation') }}"><span class="filter-k">{{ _("Situation") }}</span>{% for key, label in views if view == key %}{{ label }} <b>{{ extras[key] }}</b>{% else %}{{ _("Toutes") }}{% endfor %}</summary>
         <div class="menu-list menu-left" role="menu">
@@ -136,6 +136,8 @@
                 {% if r.apps %}<span class="count">{{ _("%(apps)s logiciel%(v)s", apps=r.apps, v='s' if r.apps > 1) }}</span>{% endif %}
                 {% if r.security %}<span class="sec-pill" title="{{ _('dont %(security)s de sécurité', security=r.security) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s sécurité", security=r.security) }}</span>{% endif %}
               {% endif %}
+              {% if r.upgrading %}<span class="release-note">{{ ui_icon('release') }}{{ _("mise à jour vers la nouvelle version en cours") }}</span>
+              {% elif r.release %}<a class="release-note" href="{{ url_for('fleet_device', dev_id=d.id) }}#maj" title="{{ _('Nouvelle version majeure du système : la mise à jour se lance depuis la fiche du poste') }}">{{ ui_icon('release') }}{{ _("Mettre à jour vers %(name)s", name=r.release.name) }}</a>{% endif %}
               {% if d.reboot_required %}<span class="reboot-note{{ ' pending' if r.rebooting }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>{{ _("redémarrage en cours") if r.rebooting else _("redémarrage nécessaire") }}</span>{% endif %}
               </span>
               </span>

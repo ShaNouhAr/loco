@@ -782,6 +782,37 @@ MIGRATIONS = [
     );
     ALTER TABLE mcp_tokens ADD COLUMN client_id TEXT NOT NULL DEFAULT '';
     """,
+    # 53 : redémarrages planifiés — l'action « reboot » rejoint les planifications (table refaite : SQLite ne sait pas
+    # modifier une contrainte CHECK ; aucune autre table ne la référence).
+    """
+    CREATE TABLE schedules_new (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        action TEXT NOT NULL CHECK (action IN ('update', 'reboot', 'run-script')),
+        params TEXT NOT NULL DEFAULT '{}',
+        targets TEXT NOT NULL DEFAULT '{}',
+        recurrence TEXT NOT NULL CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly')),
+        at_time TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        weekdays TEXT NOT NULL DEFAULT '',
+        monthday INTEGER NOT NULL DEFAULT 0,
+        next_run TEXT NOT NULL DEFAULT '',
+        last_run TEXT NOT NULL DEFAULT '',
+        last_result TEXT NOT NULL DEFAULT '',
+        last_ref INTEGER,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    INSERT INTO schedules_new (id, name, action, params, targets, recurrence, at_time, start_date, weekdays, monthday,
+                               next_run, last_run, last_result, last_ref, enabled, created_by, created_at, updated_at)
+        SELECT id, name, action, params, targets, recurrence, at_time, start_date, weekdays, monthday,
+               next_run, last_run, last_result, last_ref, enabled, created_by, created_at, updated_at FROM schedules;
+    DROP TABLE schedules;
+    ALTER TABLE schedules_new RENAME TO schedules;
+    CREATE INDEX schedules_due ON schedules(enabled, next_run);
+    """,
 ]
 
 

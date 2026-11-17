@@ -54,20 +54,49 @@ distribués ; supprimer le groupe aussi.
   progression, et dans le tableau les éléments terminés (✓) et celui en cours. Sous Windows, les mises à jour
   s'installent une par une (pile de maintenance d'abord) et une erreur n'arrête plus les suivantes. Agents 2.120.0 et
   plus (ils se mettent à jour seuls) ; l'outil MCP `update_device` accepte la même sélection (`updates`, `flatpak`).
+- **Mettre à jour vers une nouvelle version du système** : quand la version majeure suivante est publiée, la fiche du
+  poste le dit (« Mettre à jour vers Debian 13 (trixie) », à côté du nom du système et en tête de l'onglet *Mises à
+  jour*), comme Mon parc, qui a aussi le filtre *Situation › Mise à jour vers une nouvelle version*. Le voyant ne
+  change pas : c'est une information. Le bouton lance le passage, qui finit toujours par un redémarrage :
+  - **Debian** : la version suivante, dès que l'archive du poste la publie comme version stable. L'agent met d'abord à
+    jour la version actuelle, refuse de commencer s'il reste des paquets retenus (dont les blocages de loco) ou des
+    paquets incohérents, puis passe les dépôts à la nouvelle version (`bookworm`, `-updates`, `-security`,
+    `-backports` → `trixie`…, y compris le dépôt de loco) et garde une copie des anciens fichiers. Un dépôt tiers qui ne
+    publie pas encore la nouvelle version est désactivé (commenté, jamais supprimé), et le compte rendu le nomme. La place
+    disque est vérifiée avant de rien installer ; si les nouveaux dépôts sont illisibles ou la place manque, les dépôts
+    sont remis comme avant. Ensuite `apt-get upgrade` puis `full-upgrade`, sans question (fichiers de configuration
+    modifiés gardés), et redémarrage.
+  - **Ubuntu** : la version que propose `do-release-upgrade` selon le réglage du poste (LTS seulement par défaut). La
+    version actuelle est d'abord mise à jour ; si elle demande un redémarrage, le poste redémarre et la mise à jour
+    reprend seule. L'outil officiel d'Ubuntu fait le reste, sans question, puis le dépôt de loco est remis pour la
+    nouvelle version.
+  - **Fedora** : la version suivante dès sa publication ; `dnf system-upgrade` la télécharge, puis le poste redémarre
+    pour l'installer hors ligne, et loco vérifie la version au retour.
+  - **Windows** : la nouvelle version que propose Windows Update (Windows 11 depuis Windows 10, 24H2 → 25H2…). Elle ne
+    part plus avec *Mettre à jour* : seulement par ce bouton, puis Windows la termine au redémarrage.
+  - Rocky Linux, AlmaLinux et RHEL ne sont pas concernés : le passage d'une version majeure à l'autre y demande Leapp
+    ou ELevate et des vérifications à la main.
+
+  Sous Linux, la mise à jour tourne dans son propre service, hors de l'agent : elle survit à une relance de l'agent et
+  n'a pas de limite de durée (loco la dit en échec sans résultat après 24 h). Son avancement s'affiche en direct
+  (étape, paquets) et son journal complet reste sur le poste (`/var/lib/loco-client/os-upgrade/upgrade.log`). Pendant ce
+  temps, loco n'envoie rien d'autre au poste. Droits : mettre à jour un appareil et redémarrer les appareils. Agents
+  2.171.0 et plus.
 - **Suivi des mises à jour** (*Mon parc → Mises à jour*) : les mises à jour et redémarrages de votre parc, en direct. **En cours** :
   étape, barre et paquets ou mises à jour Windows un par un (installé, en cours, en échec). **En attente** : ce que chaque ligne
   attend vraiment (prochain contact, planification, poste hors ligne) ; une action en attente n'expire pas, elle part au retour du
   poste, et *Annuler* la retire. **Terminées** : 24 heures sur cette page, échecs d'abord avec leur motif, puis dans l'historique du poste.
-- **Planifications** (*Mon parc → Planifications*) : mises à jour et scripts lancés **une fois, chaque jour, chaque
+- **Planifications** (*Mon parc → Planifications*) : mises à jour, redémarrages et scripts lancés **une fois, chaque jour, chaque
   semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour), à l'heure du serveur, sur tout le parc, des
   groupes (membres résolus à chaque exécution) ou des appareils. On planifie aussi en contexte : bouton calendrier à
-  côté de *Mettre à jour* sur la fiche d'un poste, *Planifier…* à côté de *Tout mettre à jour*, et choix « Maintenant /
+  côté de *Mettre à jour* et de *Redémarrer* sur la fiche d'un poste, *Planifier…* à côté de *Tout mettre à jour*, et choix « Maintenant /
   Planifier » à l'exécution d'un script. Un résumé en clair (« Chaque mardi et jeudi à 02:00 · prochaine exécution… »)
   accompagne la saisie ; la fiche d'un poste liste les planifications qui le concernent. Une planification due devient
   une action envoyée au prochain contact des agents ; une occurrence manquée n'est pas rattrapée. Pause, reprise et
   suppression depuis la liste. Un script modifié après sa planification la met en pause (on n'exécute que ce qui a été
   relu) ; une action encore en file s'annule depuis la fiche du poste. Droits : ceux de l'action planifiée (mettre à
-  jour, tout le parc, redémarrer, exécuter des scripts), revérifiés à l'envoi aux postes.
+  jour, tout le parc, redémarrer, exécuter des scripts), revérifiés à l'envoi aux postes ; redémarrer un groupe ou tout
+  le parc demande aussi le droit « tout le parc ». Les appareils Android ne redémarrent pas sur planification.
 - **Identité** : chaque poste a un identifiant et un jeton propres, indépendants de son adresse. Un poste qui change
   d'IP (DHCP, autre site, VPN) reste dans le parc ; seul *Retirer l'agent*, poussé depuis loco, le détache. Réinstaller
   l'agent garde la fiche du poste : l'agent prouve qu'il détient son jeton, sans le présenter. La clé d'inscription

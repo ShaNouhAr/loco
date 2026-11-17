@@ -7,10 +7,10 @@
 <div class="head">
   <div>
     <h1>{{ _('Modifier la planification') if s else _('Nouvelle planification') }}</h1>
-    <p>{{ _("Une mise à jour ou un script, lancé automatiquement sur les postes choisis.") }}</p>
+    <p>{{ _("Une mise à jour, un redémarrage ou un script, lancé automatiquement sur les postes choisis.") }}</p>
   </div>
 </div>
-{% set can_update, can_script = can('fleet.update'), can('scripts.run') and scripts %}
+{% set can_update, can_script, can_reboot = can('fleet.update'), can('scripts.run') and scripts, can('fleet.reboot') %}
 {% set selection = targets.devices or targets.groups %}
 <form method="post" action="{{ url_for('schedule_save', sched_id=s.id if s else 0) }}" class="stack schedule-form">
   <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -20,13 +20,17 @@
         <div class="panel-h"><h2>{{ _("Que faire") }}</h2></div>
         <div class="panel-b stack-sm">
           <div class="seg" role="radiogroup" aria-label="{{ _('Action') }}">
-            {% if can_update %}<label><input type="radio" name="action" value="update" {{ 'checked' if action == 'update' or not can_script }}><span>{{ _("Mettre à jour") }}</span></label>{% endif %}
-            {% if can_script %}<label><input type="radio" name="action" value="run-script" {{ 'checked' if action == 'run-script' or not can_update }}><span>{{ _("Exécuter un script") }}</span></label>{% endif %}
+            {% if can_update %}<label><input type="radio" name="action" value="update" {{ 'checked' if action == 'update' or not (can_script or can_reboot) }}><span>{{ _("Mettre à jour") }}</span></label>{% endif %}
+            {% if can_reboot %}<label><input type="radio" name="action" value="reboot" {{ 'checked' if action == 'reboot' or not (can_update or can_script) }}><span>{{ _("Redémarrer") }}</span></label>{% endif %}
+            {% if can_script %}<label><input type="radio" name="action" value="run-script" {{ 'checked' if action == 'run-script' or not (can_update or can_reboot) }}><span>{{ _("Exécuter un script") }}</span></label>{% endif %}
           </div>
           <div data-show-for="action:update" class="stack-sm">
             <p class="small muted">{{ _("Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue déjà installés, sur chaque poste visé.") }}</p>
             {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1" {{ 'checked' if params.reboot }}> {{ _("Redémarrer si une mise à jour l'exige") }}</label>{% endif %}
           </div>
+          {% if can_reboot %}
+          <p class="small muted" data-show-for="action:reboot">{{ _("Chaque poste visé redémarre une minute après avoir reçu la commande ; un message prévient la personne connectée. Les appareils Android ne sont pas concernés.") }}</p>
+          {% endif %}
           {% if can_script %}
           <div data-show-for="action:run-script">
             <label class="f"><span>{{ _("Script") }}</span>

@@ -3,8 +3,10 @@
 
 Lancé toutes les deux minutes par loco-client.timer (root). Contacte le serveur loco avec son identifiant et son
 jeton (indépendants de l'adresse IP du poste), envoie l'inventaire des mises à jour et exécute les actions
-demandées depuis le portail : inventaire, mise à jour, redémarrage, retrait de l'agent. Terminal interactif séparé, réservé aux administrateurs du portail.
+demandées depuis le portail : inventaire, mise à jour, passage à la version majeure suivante (Debian, Ubuntu, Fedora),
+redémarrage, retrait de l'agent. Terminal interactif séparé, réservé aux administrateurs du portail.
   loco-client run                         contact du serveur (service)
+  loco-client os-upgrade                  mise à niveau du système demandée par loco (lancée par l'agent, hors de lui)
   loco-client enroll --server URL --key CLÉ      (ou la clé dans LOCO_ENROLL_KEY, sans --key)
   loco-client status
   loco-client remove                      retrait local (le poste reste à oublier dans le portail)
@@ -216,10 +218,11 @@ def checkin(conf, data):
     """Contact du serveur. Si son adresse habituelle ne répond plus (réseau, certificat), les adresses annoncées
     sont essayées ; la première qui répond avec un certificat de l'autorité loco épinglée devient l'adresse du poste."""
     data["servers"] = known_servers(conf)
-    # Actions reçues que l'agent traite encore : aucune. Il exécute toutes les actions d'une réponse avant le contact
-    # suivant, et un seul agent tourne à la fois (verrou). Le serveur sait ainsi qu'une action notée « transmise » n'a
-    # jamais démarré (réponse perdue, agent ou poste arrêté avant de la lire) et la transmet de nouveau.
-    data["holding"] = []
+    # Actions reçues que l'agent traite encore : seulement une mise à niveau du système, qui tourne hors de l'agent
+    # (« holding » posé par l'appelant). Le reste, il l'exécute avant le contact suivant, et un seul agent tourne à la
+    # fois (verrou). Le serveur sait ainsi qu'une action notée « transmise » n'a jamais démarré (réponse perdue, agent
+    # ou poste arrêté avant de la lire) et la transmet de nouveau.
+    data["holding"] = [h for h in data.get("holding") or [] if isinstance(h, int)]
     failure = None
     for server in data["servers"]:
         try:
@@ -480,11 +483,11 @@ def apply_trust(answer):
     log(t("autorités de confiance mises à jour", "trusted authorities updated", "autoridades de confianza actualizadas"))
 
 
-def run(cmd, timeout=7200):
+def run(cmd, timeout=7200, env=None):
     """(code, sortie) ; la sortie est tronquée au début pour garder la fin, la plus utile."""
     try:
         p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, errors="replace",
-                           env=ENV, timeout=timeout, stdin=subprocess.DEVNULL)
+                           env=env or ENV, timeout=timeout, stdin=subprocess.DEVNULL)
         return p.returncode, p.stdout
     except FileNotFoundError:
         return 127, f"{cmd[0]} introuvable\n"
@@ -492,11 +495,11 @@ def run(cmd, timeout=7200):
         return 124, (e.stdout or "") if isinstance(e.stdout, str) else t("délai dépassé\n", "timed out\n", "tiempo agotado\n")
 
 
-def run_stream(cmd, on_line, timeout=7200):
+def run_stream(cmd, on_line, timeout=7200, env=None):
     """Comme run(), en passant chaque ligne à on_line au fil de l'exécution (avancement en direct). on_line renvoie
     True pour une ligne d'état à ne pas garder dans le journal."""
     try:
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=ENV, stdin=subprocess.DEVNULL)
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env or ENV, stdin=subprocess.DEVNULL)
     except FileNotFoundError:
         return 127, f"{cmd[0]} introuvable\n"
     kept, rest, deadline = [], b"", time.monotonic() + timeout
@@ -1093,6 +1096,7 @@ def scan_updates(state=None):
     else:
         inv["error"] = t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
     inv["flatpak"] = flatpak_updates()
+    inv["release"] = release_offer(state)       # nouvelle version majeure du système, ou None
     return inv
 
 
@@ -1175,7 +1179,7 @@ def apply_blocks(answer, state):
     if patterns != (state.get("blocks") or []):
         state["rescan"] = True                  # inventaire suivant : nouveaux paquets visés, et l'état réel pour le portail
     state["blocks"] = patterns
-    if family() == "debian":
+    if family() == "debian" and not upgrade_job():     # pendant une mise à niveau, dpkg est à elle
         error = sync_holds(patterns, state)
         if error:
             log(error)
@@ -1260,6 +1264,873 @@ def install_package(cmd):
     else:
         return 1, t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
     return code, "\n".join(logs)
+
+
+# --------------------------------------------------------------------------- nouvelle version majeure du système
+
+# Debian, Ubuntu et Fedora : l'inventaire signale la version majeure suivante dès qu'elle est publiée, et loco la pose
+# sur demande. La mise à niveau tourne dans son propre service (systemd-run) : elle survit à un arrêt ou à une relance
+# de l'agent comme à la limite de durée de son service. Elle rend compte elle-même au serveur ; l'agent la déclare
+# « tenue » à chaque contact, la relance après un redémarrage qu'elle a demandé et la solde si elle s'est arrêtée net.
+UPGRADE_DIR = "/var/lib/loco-client/os-upgrade"
+UPGRADE_JOB = os.path.join(UPGRADE_DIR, "job.json")
+UPGRADE_LOG = os.path.join(UPGRADE_DIR, "upgrade.log")
+UPGRADE_KINDS = ("debian", "ubuntu", "fedora")
+UPGRADE_EXCLUSIVE = ("scan", "update", "install-package", "wazuh", "reboot", "uninstall")   # refusées pendant une mise à niveau
+RELEASE_CHECK_HOURS = 24        # nouvelle version cherchée une fois par jour (résultat gardé entre deux inventaires)
+UPGRADE_REBOOT_WAIT = 3600      # redémarrage demandé en cours de mise à niveau : au-delà, elle est dite en échec
+DEBIAN_CODENAMES = {11: "bullseye", 12: "bookworm", 13: "trixie", 14: "forky", 15: "duke"}
+# Ni question ni relance de services en cours de route (needrestart couperait l'agent ou le réseau) : réponses par
+# défaut de debconf, fichiers de configuration modifiés sur le poste gardés tels quels.
+UPGRADE_ENV = dict(ENV, APT_LISTCHANGES_FRONTEND="none", APT_LISTBUGS_FRONTEND="none", NEEDRESTART_MODE="l",
+                   NEEDRESTART_SUSPEND="1", UCF_FORCE_CONFFOLD="1", RELEASE_UPGRADER_NO_SCREEN="1")
+APT_UPGRADE = ["apt-get", "-y", "-q", "-o", "APT::Status-Fd=1", "-o", "DPkg::Lock::Timeout=600",
+               "-o", "Dpkg::Options::=--force-confdef", "-o", "Dpkg::Options::=--force-confold"]
+SOURCES_LIST = "/etc/apt/sources.list"
+SOURCES_DIR = "/etc/apt/sources.list.d"
+LOCO_SOURCES = (os.path.join(SOURCES_DIR, "loco.sources"), os.path.join(SOURCES_DIR, "loco.list"))
+ONE_LINE_SOURCE = re.compile(r"^(?P<lead>\s*)(?P<type>deb|deb-src)(?P<sp1>\s+)(?P<opts>\[[^\]]*\]\s+)?(?P<uri>\S+)"
+                             r"(?P<sp2>\s+)(?P<suite>\S+)(?P<rest>.*)$")
+CODENAME_RE = re.compile(r"[a-z][a-z0-9]{1,30}")
+
+
+def _major(version):
+    found = re.match(r"\s*(\d+)", str(version or ""))
+    return int(found.group(1)) if found else None
+
+
+def _read(path, limit=1024 * 1024):
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read(limit)
+
+
+def boot_id():
+    """Identifiant du démarrage en cours (change à chaque redémarrage)."""
+    try:
+        return _read("/proc/sys/kernel/random/boot_id").strip()
+    except OSError:
+        return str(boot_time())
+
+
+def _url_opener(proxy=""):
+    handlers = [urllib.request.ProxyHandler({"http": proxy, "https": proxy})] if proxy else []
+    return urllib.request.build_opener(*handlers)
+
+
+def fetch_small(url, timeout=90, limit=4 * 1024 * 1024, proxy=""):
+    """Petit fichier distant (Release d'un dépôt, liste des versions) : son texte, None s'il n'existe pas, OSError si
+    le serveur ne répond pas. Lu par APT quand il est là : mêmes mandataires et mêmes autorités que les mises à jour
+    (cache APT de loco compris)."""
+    helper = "/usr/lib/apt/apt-helper"
+    if os.path.exists(helper) and not proxy:
+        work = tempfile.mkdtemp(prefix="loco-release-")
+        try:
+            target = os.path.join(work, "file")
+            code, out = run([helper, "-o", "Acquire::http::Timeout=20", "-o", "Acquire::https::Timeout=20",
+                             "-o", "Acquire::Retries=0", "download-file", url, target], timeout=timeout)
+            if code == 0 and os.path.isfile(target):
+                return _read(target, limit)
+            if re.search(r"\b40[34]\b|\b410\b|Not Found|File not found|No such file", out):
+                return None
+            raise OSError((out.strip().splitlines() or [url])[-1][:200])
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+    request = urllib.request.Request(url, headers={"User-Agent": f"loco-client/{VERSION}"})
+    try:
+        with _url_opener(proxy).open(request, timeout=30) as r:
+            return r.read(limit).decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        if e.code in (403, 404, 410):
+            return None
+        raise OSError(f"HTTP {e.code}")
+
+
+def release_fields(text):
+    """En-tête d'un fichier Release ou InRelease : Suite, Codename, Version…"""
+    fields = {}
+    for line in (text or "").splitlines():
+        if line[:1] in (" ", "\t") or ":" not in line:
+            continue
+        key, _sep, value = line.partition(":")
+        if re.fullmatch(r"[A-Za-z0-9-]+", key):
+            fields.setdefault(key, value.strip())
+    return fields
+
+
+def apt_source_files():
+    files = [SOURCES_LIST] if os.path.isfile(SOURCES_LIST) else []
+    return (files + sorted(glob.glob(os.path.join(SOURCES_DIR, "*.list")))
+            + sorted(glob.glob(os.path.join(SOURCES_DIR, "*.sources"))))
+
+
+def _deb822_stanzas(lines):
+    """Paragraphes d'un fichier .sources : [(début, fin)], fin exclue. Les commentaires avant un paragraphe n'en sont pas."""
+    found, start = [], None
+    for i, line in enumerate(lines):
+        if not line.strip():
+            if start is not None:
+                found.append((start, i))
+                start = None
+        elif start is None and not line.lstrip().startswith("#"):
+            start = i
+    if start is not None:
+        found.append((start, len(lines)))
+    return found
+
+
+def _deb822_fields(lines, start, end):
+    """Champs d'un paragraphe : {nom en minuscules : (première ligne, dernière ligne, valeur)}."""
+    fields, key = {}, None
+    for i in range(start, end):
+        line = lines[i]
+        if line.lstrip().startswith("#"):
+            continue
+        if line[:1] in (" ", "\t") and key:
+            first, _last, value = fields[key]
+            fields[key] = (first, i, (value + " " + line.strip()).strip())
+            continue
+        name, sep, value = line.partition(":")
+        if sep and re.fullmatch(r"[A-Za-z0-9-]+", name.strip()):
+            key = name.strip().lower()
+            fields[key] = (i, i, value.strip())
+    return fields
+
+
+def apt_source_entries():
+    """Dépôts APT actifs (paquets binaires) : [(adresse, suite, composants)]."""
+    entries = []
+    for path in apt_source_files():
+        try:
+            lines = _read(path).split("\n")
+        except OSError:
+            continue
+        if path.endswith(".sources"):
+            for start, end in _deb822_stanzas(lines):
+                f = _deb822_fields(lines, start, end)
+                if f.get("enabled", (0, 0, "yes"))[2].lower() == "no" or "deb" not in f.get("types", (0, 0, ""))[2].split():
+                    continue
+                for uri in f.get("uris", (0, 0, ""))[2].split():
+                    for suite in f.get("suites", (0, 0, ""))[2].split():
+                        entries.append((uri, suite, f.get("components", (0, 0, ""))[2].split()))
+        else:
+            for line in lines:
+                m = ONE_LINE_SOURCE.match(line)
+                if m and m.group("type") == "deb":
+                    entries.append((m.group("uri"), m.group("suite"), m.group("rest").split("#")[0].split()))
+    return entries
+
+
+def suite_for(suite, old, new):
+    """Suite d'un dépôt pour la nouvelle version : bookworm → trixie, bookworm-security → trixie-security,
+    bullseye/updates → trixie-security ; None pour une suite sans rapport (stable, ./, nom propre d'un éditeur)."""
+    if suite == old:
+        return new
+    if suite == old + "/updates":                   # ancien nom des mises à jour de sécurité de Debian (jusqu'à la 10)
+        return new + "-security"
+    if suite.startswith(old + "-") and re.fullmatch(r"[a-z]+(-[a-z]+)*", suite[len(old) + 1:]):
+        return new + suite[len(old):]
+    return None
+
+
+def flat_uri_for(uri, old, new):
+    """Dépôt « plat » (suite ./) rangé par version, comme le dépôt de loco (…/repositories/debian/bookworm/) : la même
+    adresse pour la nouvelle version, ou None."""
+    scheme, sep, path = uri.partition("://")
+    parts = path.split("/")
+    if not sep or old not in parts[1:]:
+        return None
+    return scheme + "://" + "/".join(new if i and part == old else part for i, part in enumerate(parts))
+
+
+def _disabled_note(old, new):
+    return t(f"# loco ({old} → {new}) : rien pour {new} à cette adresse, dépôt désactivé",
+             f"# loco ({old} → {new}): nothing for {new} at this address, repository disabled",
+             f"# loco ({old} → {new}): nada para {new} en esta dirección, repositorio desactivado")
+
+
+def _retarget_lines(lines, old, new, exists, moved, disabled):
+    changed = False
+    for i, line in enumerate(lines):
+        m = ONE_LINE_SOURCE.match(line)
+        if not m:
+            continue
+        uri, suite = m.group("uri"), m.group("suite")
+        components = m.group("rest").split("#")[0].split()
+        if suite.endswith("/"):
+            new_uri, new_suite = flat_uri_for(uri, old, new), suite
+        else:
+            new_uri, new_suite = uri, suite_for(suite, old, new)
+        if new_uri is None or new_suite is None:
+            continue
+        changed = True
+        if exists(new_uri, new_suite):
+            lines[i] = (m.group("lead") + m.group("type") + m.group("sp1") + (m.group("opts") or "") + new_uri
+                        + m.group("sp2") + new_suite + m.group("rest"))
+            moved.append({"uri": new_uri, "suite": new_suite, "components": components})
+        else:
+            lines[i] = _disabled_note(old, new) + "\n# " + line
+            disabled.append(f"{new_uri} {new_suite}")
+    return changed
+
+
+def _retarget_deb822(lines, old, new, exists, moved, disabled):
+    changed = False
+    for start, end in reversed(_deb822_stanzas(lines)):     # de la fin : un ajout ne décale pas les paragraphes à venir
+        f = _deb822_fields(lines, start, end)
+        if "uris" not in f or "suites" not in f or f.get("enabled", (0, 0, "yes"))[2].lower() == "no":
+            continue
+        uris, suites = f["uris"][2].split(), f["suites"][2].split()
+        components = f.get("components", (0, 0, ""))[2].split()
+        edits, keep = {}, True
+        if suites and all(s.endswith("/") for s in suites):
+            new_uris = [flat_uri_for(u, old, new) or u for u in uris]
+            if new_uris == uris:
+                continue
+            if all(exists(u, suites[0]) for u in new_uris):
+                edits["uris"] = " ".join(new_uris)
+                moved.extend({"uri": u, "suite": suites[0], "components": components} for u in new_uris)
+            else:
+                keep = False
+                disabled.extend(f"{u} {suites[0]}" for u in new_uris)
+        else:
+            kept, touched = [], False
+            for suite in suites:
+                new_suite = suite_for(suite, old, new)
+                if new_suite is None:
+                    kept.append(suite)
+                    continue
+                touched = True
+                if uris and exists(uris[0], new_suite):
+                    kept.append(new_suite)
+                    moved.extend({"uri": u, "suite": new_suite, "components": components} for u in uris)
+                else:
+                    disabled.extend(f"{u} {new_suite}" for u in uris)
+            if not touched:
+                continue
+            if kept:
+                edits["suites"] = " ".join(kept)
+            else:
+                keep = False
+        changed = True
+        if not keep:
+            if "enabled" in f:
+                edits["enabled"] = "no"
+            else:
+                lines[end:end] = [_disabled_note(old, new), "Enabled: no"]
+        for key in sorted(edits, key=lambda k: f[k][0], reverse=True):
+            first, last, _value = f[key]
+            label = lines[first].split(":", 1)[0].strip()
+            lines[first:last + 1] = (([_disabled_note(old, new)] if key == "enabled" else []) + [f"{label}: {edits[key]}"])
+    return changed
+
+
+def retarget_sources(texts, old, new, exists):
+    """Dépôts APT passés de la version old à new. texts : {fichier : contenu} ; exists(adresse, suite) dit si cette
+    suite est publiée à cette adresse. Renvoie ({fichier : contenu} des fichiers changés, [dépôts passés], [dépôts
+    désactivés]). Un dépôt sans rien pour la nouvelle version est désactivé (commenté), jamais supprimé."""
+    changed, moved, disabled = {}, [], []
+    for path, text in texts.items():
+        lines = text.split("\n")
+        retarget = _retarget_deb822 if path.endswith(".sources") else _retarget_lines
+        if retarget(lines, old, new, exists, moved, disabled):
+            changed[path] = "\n".join(lines)
+    return changed, moved, disabled
+
+
+def debian_archive(codename):
+    """Adresse de l'archive Debian du poste (dépôt « main » de sa version, hors sécurité), ou None."""
+    for uri, suite, components in apt_source_entries():
+        if suite == codename and "main" in components and "security" not in uri:
+            return uri.rstrip("/")
+    return None
+
+
+def debian_offer(rel):
+    """Debian : la version suivante, si son archive la publie déjà comme version stable (ou oldstable)."""
+    current, codename = _major(rel.get("VERSION_ID")), rel.get("VERSION_CODENAME") or ""
+    if current is None or not codename:
+        return None                                 # testing, sid : rien à proposer
+    base = debian_archive(codename)
+    if not base:
+        return None
+    suites = [DEBIAN_CODENAMES[current + 1]] if current + 1 in DEBIAN_CODENAMES else ["stable", "oldstable"]
+    for suite in suites:
+        fields = release_fields(fetch_small(f"{base}/dists/{suite}/Release") or "")
+        name = fields.get("Codename", "")
+        if (_major(fields.get("Version")) == current + 1 and fields.get("Suite") in ("stable", "oldstable", "oldoldstable")
+                and CODENAME_RE.fullmatch(name)):
+            return {"kind": "debian", "version": str(current + 1), "codename": name, "name": f"Debian {current + 1} ({name})"}
+    return None
+
+
+def _ubuntu_prompt():
+    try:
+        found = re.search(r"^\s*Prompt\s*=\s*(\w+)", _read("/etc/update-manager/release-upgrades"), re.M)
+    except OSError:
+        found = None
+    return found.group(1).lower() if found else "lts"
+
+
+def ubuntu_offer(rel):
+    """Ubuntu : la version que proposerait do-release-upgrade, selon le réglage du poste (LTS seulement par défaut)."""
+    if shutil.which("do-release-upgrade"):
+        code, out = run(["do-release-upgrade", "-c"], timeout=180)
+        found = re.search(r"New release '([^']{1,40})' available", out)
+        version = re.match(r"\d+\.\d+", found.group(1)) if found and code == 0 else None
+        return {"kind": "ubuntu", "version": version.group(0), "name": "Ubuntu " + found.group(1).strip()} if version else None
+    # Outil absent (image minimale) : la même liste des versions, lue directement.
+    prompt = _ubuntu_prompt()
+    if prompt == "never":
+        return None
+    url = "https://changelogs.ubuntu.com/meta-release" + ("-lts" if prompt == "lts" else "")
+    current = tuple(int(x) for x in re.findall(r"\d+", rel.get("VERSION_ID") or ""))
+    best = None
+    for block in (fetch_small(url) or "").split("\n\n"):
+        fields = release_fields(block)
+        version = tuple(int(x) for x in re.findall(r"\d+", fields.get("Version", "")))
+        if (fields.get("Supported") == "1" and version[:2] > current[:2] and (prompt != "lts" or "LTS" in fields.get("Version", ""))
+                and (best is None or version < best[0])):
+            best = (version, fields)
+    if best is None or len(best[0]) < 2:
+        return None
+    return {"kind": "ubuntu", "version": "%d.%02d" % best[0][:2], "name": "Ubuntu " + best[1].get("Version", "")[:40]}
+
+
+def _dnf_proxy():
+    for path in ("/etc/dnf/dnf.conf", "/etc/yum.conf"):
+        try:
+            found = re.search(r"^\s*proxy\s*=\s*(\S+)", _read(path), re.M)
+        except OSError:
+            continue
+        if found and found.group(1).lower() not in ("_none_", "none"):
+            return found.group(1)
+    return ""
+
+
+def fedora_offer(rel):
+    """Fedora : la version suivante, dès qu'elle est publiée (état « current » chez Fedora)."""
+    current = _major(rel.get("VERSION_ID"))
+    if current is None or os.path.exists("/run/ostree-booted"):    # Silverblue, Kinoite… : rpm-ostree, pas dnf
+        return None
+    text = fetch_small(f"https://bodhi.fedoraproject.org/releases/F{current + 1}", proxy=_dnf_proxy() or "")
+    if text and json.loads(text).get("state") == "current":
+        return {"kind": "fedora", "version": str(current + 1), "name": f"Fedora Linux {current + 1}"}
+    return None
+
+
+def release_offer(state):
+    """Nouvelle version majeure proposée à ce poste, ou None. Cherchée au plus une fois par jour ; un réseau en panne
+    garde la réponse précédente."""
+    rel = os_release()
+    kind = rel.get("ID", "")
+    finder = {"debian": debian_offer, "ubuntu": ubuntu_offer, "fedora": fedora_offer}.get(kind)
+    if finder is None or upgrade_job():
+        return None
+    cached = state.get("release") if isinstance(state, dict) and isinstance(state.get("release"), dict) else {}
+    base = f"{kind} {rel.get('VERSION_ID', '')}"
+    same = cached.get("base") == base
+    if same and time.time() - cached.get("checked", 0) < RELEASE_CHECK_HOURS * 3600:
+        return cached.get("offer")
+    try:
+        offer = finder(rel)
+    except Exception as e:      # noqa: BLE001 - cette recherche ne doit jamais faire échouer l'inventaire
+        log(t(f"nouvelle version du système non vérifiée : {e}", f"new system version not checked: {e}", f"nueva versión del sistema no comprobada: {e}"))
+        return cached.get("offer") if same else None
+    if isinstance(state, dict):
+        state["release"] = {"base": base, "checked": time.time(), "offer": offer}
+    return offer
+
+
+def upgrade_job():
+    job = load(UPGRADE_JOB)
+    return job if isinstance(job.get("id"), int) and job.get("kind") in UPGRADE_KINDS else None
+
+
+def save_job(job):
+    os.makedirs(UPGRADE_DIR, mode=0o700, exist_ok=True)
+    save(UPGRADE_JOB, job)
+
+
+def _log_tail(lines=150):
+    try:
+        with open(UPGRADE_LOG, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 200000))
+            return "\n".join(f.read().decode("utf-8", "replace").splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
+def upgrade_output(notes):
+    """Compte rendu d'une mise à niveau : ses étapes, puis la fin de son journal."""
+    tail = _log_tail()
+    return "\n".join(notes) + ("\n\n" + t(f"Fin du journal ({UPGRADE_LOG}) :", f"End of the log ({UPGRADE_LOG}):", f"Final del registro ({UPGRADE_LOG}):") + "\n" + tail if tail else "")
+
+
+def finish_job(conf, job, outcome, output):
+    """Résultat final de la mise à niveau : gardé sur le disque, puis rendu au serveur (à chaque contact s'il le faut)."""
+    job.update(stage="done", finished=time.time(),
+               result={"state": outcome, "output": output[-OUTPUT_LIMIT:], "code": 0 if outcome == "success" else 1})
+    save_job(job)
+    if report(conf, job["id"], outcome, job["result"]["output"], job["result"]["code"]):
+        job["reported"] = True
+        save_job(job)
+
+
+def launch_worker(job):
+    """Lance la mise à niveau dans son propre service, hors de l'agent. Faux si rien n'a pu la lancer."""
+    job.update(stage="running", launched=time.time(), boot=boot_id(), pid=0, launches=job.get("launches", 0) + 1)
+    save_job(job)
+    program = PROGRAM if os.path.exists(PROGRAM) else os.path.abspath(__file__)
+    argv = [sys.executable or "/usr/bin/python3", program, "os-upgrade"]
+    if shutil.which("systemd-run") and os.path.isdir("/run/systemd/system"):
+        code, out = run(["systemd-run", f"--unit=loco-os-upgrade-{job['id']}-{job['launches']}", "--collect", "--quiet",
+                         "--description=loco: system upgrade", *argv], timeout=60)
+        if code == 0:
+            return True
+        log(t(f"systemd-run : {out.strip()[:200]}", f"systemd-run: {out.strip()[:200]}", f"systemd-run: {out.strip()[:200]}"))
+    try:
+        subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd="/",
+                         close_fds=True, start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
+def worker_alive(job):
+    if job.get("boot") != boot_id():
+        return False                                # le poste a redémarré depuis le lancement
+    if not job.get("pid"):
+        return time.time() - job.get("launched", 0) < 300
+    try:
+        with open(f"/proc/{int(job['pid'])}/cmdline", "rb") as f:
+            return b"os-upgrade" in f.read()
+    except (OSError, ValueError):
+        return False
+
+
+def os_upgrade_start(conf, cmd):
+    """Action « os-upgrade » : prépare la mise à niveau et la lance hors de l'agent, qui poursuit ses contacts."""
+    target = cmd.get("target") if isinstance(cmd.get("target"), dict) else {}
+    rel = os_release()
+    kind, version = rel.get("ID", ""), str(target.get("version") or "")
+    codename = str(target.get("codename") or "")
+    if (kind not in UPGRADE_KINDS or target.get("kind") != kind or not re.fullmatch(r"\d{1,4}(\.\d{1,2})?", version)
+            or (kind == "debian" and not CODENAME_RE.fullmatch(codename))):
+        report(conf, cmd["id"], "failed", t("Mise à niveau du système non prise en charge sur ce poste.", "System upgrade not supported on this machine.", "Actualización del sistema no admitida en este equipo."), 1)
+        return
+    if upgrade_job():
+        report(conf, cmd["id"], "failed", t("Une mise à niveau du système est déjà en cours sur ce poste.", "A system upgrade is already running on this machine.", "Ya hay una actualización del sistema en curso en este equipo."), 1)
+        return
+    job = {"id": cmd["id"], "kind": kind, "from": rel.get("PRETTY_NAME", ""), "started": time.time(),
+           "target": {"version": version, "codename": codename, "name": str(target.get("name") or "")[:80]}}
+    os.makedirs(UPGRADE_DIR, mode=0o700, exist_ok=True)
+    with open(UPGRADE_LOG, "a", encoding="utf-8") as f:
+        f.write(f"\n===== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} loco {VERSION} : {job['from']} -> {job['target']['name'] or version}\n")
+    if not launch_worker(job):
+        finish_job(conf, job, "failed", t("Impossible de lancer la mise à niveau sur ce poste.", "Cannot start the upgrade on this machine.", "No se puede iniciar la actualización en este equipo."))
+
+
+def _fedora_result(job):
+    """Fedora, après le redémarrage qui installe la nouvelle version hors ligne : (résultat, compte rendu)."""
+    want, rel = _major(job["target"]["version"]), os_release()
+    notes = list(job.get("notes") or [])
+    if _major(rel.get("VERSION_ID")) == want:
+        notes.append(t(f"Passé à {rel.get('PRETTY_NAME')}.", f"Upgraded to {rel.get('PRETTY_NAME')}.", f"Actualizado a {rel.get('PRETTY_NAME')}."))
+        return "success", "\n".join(notes)
+    _code, journal = run(["journalctl", "-b", "-1", "--no-pager", "-n", "80", "-u", "dnf-system-upgrade.service",
+                          "-u", "dnf5-offline-transaction.service"], timeout=60)
+    notes.append(t(f"Le poste a redémarré mais reste en {rel.get('PRETTY_NAME')} : l'installation hors ligne n'a pas abouti.",
+                   f"The machine restarted but is still on {rel.get('PRETTY_NAME')}: the offline installation did not complete.",
+                   f"El equipo se reinició pero sigue en {rel.get('PRETTY_NAME')}: la instalación sin conexión no terminó."))
+    return "failed", "\n".join(notes) + "\n\n" + journal.strip()[-20000:]
+
+
+def os_upgrade_poll(conf):
+    """Suivi, à chaque contact, d'une mise à niveau lancée par loco. Renvoie l'identifiant de l'action tant qu'elle n'est
+    pas soldée auprès du serveur (l'agent la déclare alors « tenue »), None sinon."""
+    job = upgrade_job()
+    if not job:
+        return None
+    stage = job.get("stage")
+    if stage == "running" and not worker_alive(job):
+        finish_job(conf, job, "failed", t("Mise à niveau interrompue : son processus s'est arrêté sans conclure (poste éteint ou redémarré en cours de route ?). Sur le poste : dpkg --configure -a puis apt-get full-upgrade (ou dnf distro-sync), et le journal ci-dessous.",
+                                          "Upgrade interrupted: its process stopped without finishing (machine shut down or restarted midway?). On the machine: dpkg --configure -a then apt-get full-upgrade (or dnf distro-sync), and the log below.",
+                                          "Actualización interrumpida: su proceso se detuvo sin terminar (¿equipo apagado o reiniciado a mitad?). En el equipo: dpkg --configure -a y luego apt-get full-upgrade (o dnf distro-sync), y el registro abajo.")
+                   + "\n\n" + _log_tail())
+    elif stage in ("reboot-first", "offline"):
+        if boot_time() > job.get("reboot_at", 0):
+            if stage == "offline":
+                outcome, output = _fedora_result(job)
+                finish_job(conf, job, outcome, output)
+            else:
+                job["rebooted"] = True
+                if not launch_worker(job):
+                    finish_job(conf, job, "failed", t("Impossible de reprendre la mise à niveau après le redémarrage.", "Cannot resume the upgrade after the restart.", "No se puede reanudar la actualización tras el reinicio."))
+        elif time.time() - job.get("reboot_at", 0) > UPGRADE_REBOOT_WAIT:
+            finish_job(conf, job, "failed", t("Le poste n'a pas redémarré comme prévu pendant la mise à niveau.", "The machine did not restart as planned during the upgrade.", "El equipo no se reinició como estaba previsto durante la actualización."))
+    job = upgrade_job()
+    if job and job.get("stage") == "done":
+        result = job.get("result") or {}
+        if not job.get("reported") and report(conf, job["id"], result.get("state", "failed"), result.get("output", ""), result.get("code", 1)):
+            job["reported"] = True
+            save_job(job)
+        if job.get("reported"):
+            try:
+                os.replace(UPGRADE_JOB, UPGRADE_JOB + ".done")      # dernier compte rendu gardé pour mémoire
+            except OSError:
+                pass
+            return None
+    return job["id"] if job else None
+
+
+def _size_text(n):
+    value = n / 1e9
+    return t(f"{value:.1f} Go".replace(".", ","), f"{value:.1f} GB", f"{value:.1f} GB".replace(".", ","))
+
+
+def _apt_size(text):
+    number, unit = text.split()
+    return int(float(number.replace(",", "")) * {"B": 1, "kB": 1e3, "MB": 1e6, "GB": 1e9}.get(unit, 1))
+
+
+def upgrade_space(out):
+    """(octets à télécharger, place supplémentaire) d'après apt-get -o APT::Get::Trivial-Only=true full-upgrade."""
+    need = re.search(r"Need to get ([\d.,]+ [kMG]?B)(?:/[\d.,]+ [kMG]?B)? of archives", out)
+    after = re.search(r"After this operation, ([\d.,]+ [kMG]?B) (of additional disk space will be used|disk space will be freed)", out)
+    download = _apt_size(need.group(1)) if need else 0
+    extra = (_apt_size(after.group(1)) * (1 if "additional" in after.group(2) else -1)) if after else 0
+    return download, extra
+
+
+def _mount_of(path):
+    path = os.path.realpath(path)
+    while not os.path.ismount(path):
+        path = os.path.dirname(path)
+    return path
+
+
+class OsUpgrade:
+    """Mise à niveau vers la version majeure suivante, menée hors de l'agent (voir launch_worker) : chaque étape est
+    écrite dans UPGRADE_LOG, son avancement remonte au serveur. Chaque méthode (debian, ubuntu, fedora) renvoie
+    (« success » | « failed » | « reboot-first » | « offline », texte)."""
+
+    def __init__(self, conf, job):
+        self.conf, self.job = conf, job
+        self.notes = list(job.get("notes") or [])
+        self.progress = Progress(lambda data: report(conf, job["id"], "running", progress=data))
+        self.phase, self.percent, self.span, self.phases, self.memo = "prepare", 0, (0, 100), ("download", "install"), {}
+        self.lines = 0
+        self.out = open(UPGRADE_LOG, "a", encoding="utf-8", errors="replace")
+
+    def write(self, text):
+        stamp = datetime.datetime.now().strftime("%H:%M:%S")
+        for line in str(text).rstrip("\n").split("\n"):
+            line = line.rstrip("\r").split("\r")[-1]     # ligne réécrite sur place (« Reading database … 5 % ») : son état final
+            self.out.write(f"{stamp} {line}\n")
+        self.out.flush()
+
+    def note(self, text):
+        self.notes.append(text)
+        self.write("== " + text)
+
+    def step(self, phase, percent, app=""):
+        self.phase, self.percent = phase, percent
+        self.progress("os_upgrade", phase, app=app, percent=percent, force=True)
+
+    def cmd(self, argv, timeout=3600):
+        self.write("$ " + " ".join(argv))
+        code, out = run(argv, timeout=timeout, env=UPGRADE_ENV)
+        if out.strip():
+            self.write(out)
+        if code:
+            self.write(f"(code {code})")
+        return code, out
+
+    def on_line(self, line):
+        """Lignes d'apt (APT::Status-Fd) et de dpkg : avancement et paquet en cours ; le reste va au journal."""
+        kind, _sep, rest = line.partition(":")
+        if kind in ("dlstatus", "pmstatus"):
+            fields = rest.split(":")
+            number = next((i for i, f in enumerate(fields) if i and re.fullmatch(r"\d+(\.\d+)?", f)), None)
+            if number is not None:
+                low, high = self.span
+                share = float(fields[number]) / 100
+                if kind == "dlstatus":
+                    phase, percent = self.phases[0], low + (high - low) * 0.3 * share
+                else:
+                    phase, percent = self.phases[1], low + (high - low) * (0.3 + 0.7 * share)
+                self.phase, self.percent = phase, int(percent)
+                self.progress("os_upgrade", phase, app=":".join(fields[:number]).split(":")[0] if kind == "pmstatus" else "",
+                              percent=self.percent)
+            return True
+        self.write(line)
+        for regex, state in ((APT_UNPACK_RE, "running"), (APT_SETUP_RE, "ok"), (APT_ERR_RE, "failed")):
+            found = regex.match(line)
+            if found:
+                self.progress.item(found.group(1), state)
+                self.progress("os_upgrade", self.phase, app=found.group(1), percent=self.percent, force=state == "failed")
+        return False
+
+    def on_free_line(self, line):
+        """Sortie sans pourcentage (do-release-upgrade, dnf) : la part accomplie croît avec les paquets vus."""
+        self.lines += 1
+        low, high = self.span
+        if line.startswith(("Get:", "Fetched")) or DNF_DOWNLOAD_RE.match(line) or re.match(r"^\[\s*\d+/\d+\]", line):
+            self.phase = self.phases[0]
+        elif APT_UNPACK_RE.match(line) or APT_SETUP_RE.match(line) or DNF_STEP_RE.match(line):
+            self.phase = self.phases[1]
+        self.percent = int(low + (high - low) * (1 - 0.999 ** self.lines))
+        self.on_line(line)
+        self.progress("os_upgrade", self.phase, percent=self.percent)
+        return False
+
+    def apt(self, args, low, high, phases=("download", "install")):
+        self.span, self.phases = (low, high), phases
+        self.write("$ apt-get " + " ".join(args))
+        code, _out = run_stream(APT_UPGRADE + args, self.on_line, timeout=6 * 3600, env=UPGRADE_ENV)
+        if code:
+            self.write(f"(code {code})")
+        return code
+
+    def stream(self, argv, low, high, phases=("download", "install"), timeout=6 * 3600):
+        self.span, self.phases, self.lines = (low, high), phases, 0
+        self.write("$ " + " ".join(argv))
+        code, _out = run_stream(argv, self.on_free_line, timeout=timeout, env=UPGRADE_ENV)
+        if code:
+            self.write(f"(code {code})")
+        return code
+
+    def exists(self, uri, suite):
+        """La suite est-elle publiée à cette adresse (fichier Release ou InRelease) ?"""
+        key = (uri, suite)
+        if key not in self.memo:
+            base = uri.rstrip("/")
+            prefix = (base if suite in ("./", "/") else f"{base}/{suite.strip('/')}") if suite.endswith("/") else f"{base}/dists/{suite}"
+            found = False
+            for name in ("InRelease", "Release"):
+                try:
+                    if fetch_small(f"{prefix}/{name}", limit=1) is not None:
+                        found = True
+                        break
+                except OSError as e:
+                    self.write(f"{prefix}/{name} : {e}")
+            self.memo[key] = found
+        return self.memo[key]
+
+    def apt_update(self):
+        code, out = apt_update()
+        self.write(out)
+        return code, (out.strip().splitlines() or [""])[-1][:300]
+
+    def prepare_apt(self, rel):
+        """Version actuelle cohérente et à jour avant de changer de version. Renvoie le texte d'un refus, ou ""."""
+        self.step("prepare", 1)
+        self.cmd(["dpkg", "--configure", "-a"], timeout=7200)
+        code, reason = self.apt_update()
+        if code:
+            return t(f"Dépôts illisibles avant la mise à niveau : {reason}", f"Repositories unreadable before the upgrade: {reason}", f"Repositorios ilegibles antes de la actualización: {reason}")
+        code, out = self.cmd(["apt-mark", "showhold"])
+        held = out.split() if code == 0 else []
+        if held:
+            names = ", ".join(held[:12]) + (" …" if len(held) > 12 else "")
+            return t(f"Paquets retenus sur le poste : {names}. Levez ces retenues (et les blocages posés dans loco) avant la mise à niveau : la nouvelle version serait sinon installée à moitié.",
+                     f"Packages held on the machine: {names}. Release these holds (and the blocks set in loco) before the upgrade: otherwise the new version would be half installed.",
+                     f"Paquetes retenidos en el equipo: {names}. Libere estas retenciones (y los bloqueos de loco) antes de la actualización: si no, la nueva versión quedaría a medias.")
+        if self.apt(["full-upgrade"], 2, 10, ("prepare", "prepare")):
+            return t("La mise à jour de la version actuelle a échoué : la mise à niveau n'a pas commencé.", "Updating the current version failed: the upgrade did not start.", "La actualización de la versión actual falló: la actualización mayor no empezó.")
+        _code, audit = self.cmd(["dpkg", "--audit"])
+        if audit.strip():
+            return t("dpkg signale des paquets dans un état incohérent (dpkg --audit) : réparez-les avant la mise à niveau.", "dpkg reports packages in an inconsistent state (dpkg --audit): fix them before the upgrade.", "dpkg indica paquetes en un estado incoherente (dpkg --audit): repárelos antes de la actualización.")
+        self.note(t(f"{rel.get('PRETTY_NAME')} : version actuelle à jour.", f"{rel.get('PRETTY_NAME')}: current version up to date.", f"{rel.get('PRETTY_NAME')}: versión actual al día."))
+        return ""
+
+    def write_sources(self, texts):
+        for path, text in texts.items():
+            mode = os.stat(path).st_mode & 0o777 if os.path.exists(path) else 0o644
+            tmp = path + ".loco-tmp"
+            with open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode), "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, path)
+
+    def backup_sources(self, texts, old):
+        """Copie des fichiers de dépôts avant leur changement : UPGRADE_DIR/sources-<ancienne version>/…"""
+        folder = os.path.join(UPGRADE_DIR, f"sources-{old}")
+        for path, text in texts.items():
+            target = folder + path
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if not os.path.exists(target):
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(text)
+        return folder
+
+    def space_check(self):
+        """Place disque pour la nouvelle version (archives à télécharger, place supplémentaire). (refus, texte)."""
+        self.cmd(["apt-get", "clean"])
+        _code, out = run(["apt-get", "-q", "-o", "APT::Get::Trivial-Only=true", "full-upgrade"], timeout=1800, env=UPGRADE_ENV)
+        download, extra = upgrade_space(out)
+        need = {}
+        for path, amount in (("/var/cache/apt/archives", download), ("/usr", max(extra, 0))):
+            try:
+                st, device = os.statvfs(path), os.stat(path).st_dev
+            except OSError:
+                continue
+            need.setdefault(device, [_mount_of(path), 0, st.f_bavail * st.f_frsize])[1] += amount
+        for mount, amount, free in need.values():
+            wanted = int(amount * 1.1) + 300 * 1000 * 1000 if amount else 0
+            if wanted > free:
+                return True, t(f"Place insuffisante pour la mise à niveau : environ {_size_text(wanted)} nécessaires sur {mount}, {_size_text(free)} libres. Rien n'a été installé.",
+                               f"Not enough space for the upgrade: about {_size_text(wanted)} needed on {mount}, {_size_text(free)} free. Nothing was installed.",
+                               f"Espacio insuficiente para la actualización: unos {_size_text(wanted)} necesarios en {mount}, {_size_text(free)} libres. No se instaló nada.")
+        return False, (t(f"À télécharger : {_size_text(download)}.", f"To download: {_size_text(download)}.", f"Por descargar: {_size_text(download)}.") if download else "")
+
+    def debian(self):
+        rel, target = os_release(), self.job["target"]
+        want, new = _major(target.get("version")), target.get("codename") or ""
+        current, old = _major(rel.get("VERSION_ID")), rel.get("VERSION_CODENAME") or ""
+        if current is not None and current == want:
+            return "success", t(f"Le poste est déjà en {rel.get('PRETTY_NAME')}.", f"The machine is already on {rel.get('PRETTY_NAME')}.", f"El equipo ya está en {rel.get('PRETTY_NAME')}.")
+        if current is None or want != current + 1 or not CODENAME_RE.fullmatch(new) or not CODENAME_RE.fullmatch(old):
+            return "failed", t("Seule la version qui suit celle du poste peut être installée.", "Only the version following the machine's one can be installed.", "Solo se puede instalar la versión siguiente a la del equipo.")
+        refused = self.prepare_apt(rel)
+        if refused:
+            return "failed", refused
+        self.step("sources", 11)
+        texts = {}
+        for path in apt_source_files():
+            texts[path] = _read(path)
+        changed, moved, disabled = retarget_sources(texts, old, new, self.exists)
+        if not any(m["suite"] == new and "main" in m["components"] for m in moved):
+            return "failed", t(f"Aucun dépôt Debian de {new} trouvé à partir de ceux du poste : rien n'a été changé.", f"No Debian {new} repository found from the machine's repositories: nothing was changed.", f"No se encontró ningún repositorio Debian {new} a partir de los del equipo: no se cambió nada.")
+        before = {path: texts[path] for path in changed}
+        folder = self.backup_sources(before, old)
+        self.write_sources(changed)
+        self.note(t(f"Dépôts passés de {old} à {new} (copie des anciens fichiers : {folder}).", f"Repositories moved from {old} to {new} (copy of the old files: {folder}).", f"Repositorios pasados de {old} a {new} (copia de los archivos antiguos: {folder})."))
+        for item in disabled:
+            self.note(t(f"Dépôt désactivé, rien pour {new} à cette adresse : {item}", f"Repository disabled, nothing for {new} at this address: {item}", f"Repositorio desactivado, nada para {new} en esta dirección: {item}"))
+        code, reason = self.apt_update()
+        if code == 0:
+            refused, text = self.space_check()
+        else:
+            refused, text = True, t(f"Dépôts de {new} illisibles : {reason}", f"{new} repositories unreadable: {reason}", f"Repositorios de {new} ilegibles: {reason}")
+        if refused:
+            self.write_sources(before)
+            self.apt_update()
+            return "failed", text + " " + t("Les dépôts ont été remis comme avant.", "The repositories were put back as before.", "Los repositorios se dejaron como antes.")
+        if text:
+            self.note(text)
+        self.step("download", 15)
+        code = self.apt(["upgrade"], 15, 45) or self.apt(["full-upgrade"], 45, 97)
+        if code:
+            self.note(t("Échec en cours de route : reprise (dpkg --configure -a, apt-get -f install, apt-get full-upgrade).", "Failure midway: retrying (dpkg --configure -a, apt-get -f install, apt-get full-upgrade).", "Fallo a mitad: nuevo intento (dpkg --configure -a, apt-get -f install, apt-get full-upgrade)."))
+            self.cmd(["dpkg", "--configure", "-a"], timeout=7200)
+            self.apt(["-f", "install"], 90, 94)
+            code = self.apt(["full-upgrade"], 94, 98)
+        return self.verdict(code, want)
+
+    def verdict(self, code, want):
+        rel = os_release()
+        reached = (_major(rel.get("VERSION_ID")) == _major(want)) if "." not in str(want) else rel.get("VERSION_ID") == want
+        if code == 0 and reached:
+            return "success", t(f"Passé à {rel.get('PRETTY_NAME')}. Redémarrage dans une minute.", f"Upgraded to {rel.get('PRETTY_NAME')}. Rebooting in one minute.", f"Actualizado a {rel.get('PRETTY_NAME')}. Reinicio en un minuto.")
+        if reached:
+            return "failed", t(f"Le poste est passé en {rel.get('PRETTY_NAME')}, mais des paquets n'ont pas pu être installés : voir le journal ci-dessous. Il n'est pas redémarré.", f"The machine is now on {rel.get('PRETTY_NAME')}, but some packages could not be installed: see the log below. It was not restarted.", f"El equipo pasó a {rel.get('PRETTY_NAME')}, pero algunos paquetes no se pudieron instalar: vea el registro abajo. No se reinició.")
+        return "failed", t(f"La mise à niveau s'est arrêtée en cours de route (le poste est encore en {rel.get('PRETTY_NAME')}) : voir le journal ci-dessous. Il n'est pas redémarré.", f"The upgrade stopped midway (the machine is still on {rel.get('PRETTY_NAME')}): see the log below. It was not restarted.", f"La actualización se detuvo a mitad (el equipo sigue en {rel.get('PRETTY_NAME')}): vea el registro abajo. No se reinició.")
+
+    def ubuntu(self):
+        rel, target = os_release(), self.job["target"]
+        want = target.get("version") or ""
+        if rel.get("VERSION_ID") == want:
+            return "success", t(f"Le poste est déjà en {rel.get('PRETTY_NAME')}.", f"The machine is already on {rel.get('PRETTY_NAME')}.", f"El equipo ya está en {rel.get('PRETTY_NAME')}.")
+        refused = self.prepare_apt(rel)
+        if refused:
+            return "failed", refused
+        if not shutil.which("do-release-upgrade") and (self.apt(["install", "ubuntu-release-upgrader-core"], 10, 11, ("prepare", "prepare"))
+                                                        or not shutil.which("do-release-upgrade")):
+            return "failed", t("L'outil de mise à niveau d'Ubuntu (do-release-upgrade) n'a pas pu être installé.", "Ubuntu's upgrade tool (do-release-upgrade) could not be installed.", "No se pudo instalar la herramienta de actualización de Ubuntu (do-release-upgrade).")
+        if reboot_required() and not self.job.get("rebooted"):
+            return "reboot-first", t("Redémarrage nécessaire avant la mise à niveau (mises à jour en attente) : le poste redémarre, puis elle reprend.", "A restart is needed before the upgrade (pending updates): the machine restarts, then the upgrade resumes.", "Hace falta reiniciar antes de la actualización (actualizaciones pendientes): el equipo se reinicia y luego continúa.")
+        loco = {path: _read(path) for path in LOCO_SOURCES if os.path.exists(path)}
+        old = rel.get("VERSION_CODENAME") or ""
+        self.step("download", 12)
+        code = self.stream(["do-release-upgrade", "-f", "DistUpgradeViewNonInteractive"], 12, 97, timeout=8 * 3600)
+        after = os_release()
+        new = after.get("VERSION_CODENAME") or ""
+        if loco and new and new != old and CODENAME_RE.fullmatch(old):
+            # do-release-upgrade désactive les dépôts tiers, dont celui de loco : il est remis, pour la nouvelle version.
+            changed, _moved, disabled = retarget_sources(loco, old, new, self.exists)
+            restored = dict(loco)
+            restored.update(changed)
+            self.write_sources(restored)
+            for item in disabled:
+                self.note(t(f"Dépôt de loco désactivé, rien pour {new} à cette adresse : {item} (créez-le dans Linux › Paquets).", f"loco repository disabled, nothing for {new} at this address: {item} (create it in Linux › Packages).", f"Repositorio de loco desactivado, nada para {new} en esta dirección: {item} (créelo en Linux › Paquetes)."))
+            self.apt_update()
+        if after.get("VERSION_ID") != want:
+            try:
+                self.write("--- /var/log/dist-upgrade/main.log\n" + "\n".join(_read("/var/log/dist-upgrade/main.log", 2000000).splitlines()[-120:]))
+            except OSError:
+                pass
+        return self.verdict(code, want)
+
+    def dnf(self, args, low, high, phases=("download", "install")):
+        return self.stream(["dnf", "-y", *args], low, high, phases)
+
+    def fedora(self):
+        rel, target = os_release(), self.job["target"]
+        want, current = _major(target.get("version")), _major(rel.get("VERSION_ID"))
+        if current is not None and current == want:
+            return "success", t(f"Le poste est déjà en {rel.get('PRETTY_NAME')}.", f"The machine is already on {rel.get('PRETTY_NAME')}.", f"El equipo ya está en {rel.get('PRETTY_NAME')}.")
+        if current is None or want != current + 1 or not shutil.which("dnf"):
+            return "failed", t("Seule la version qui suit celle du poste peut être installée.", "Only the version following the machine's one can be installed.", "Solo se puede instalar la versión siguiente a la del equipo.")
+        self.step("prepare", 1)
+        if self.dnf(["upgrade", "--refresh"], 2, 10, ("prepare", "prepare")):
+            return "failed", t("La mise à jour de la version actuelle a échoué : la mise à niveau n'a pas commencé.", "Updating the current version failed: the upgrade did not start.", "La actualización de la versión actual falló: la actualización mayor no empezó.")
+        self.note(t(f"{rel.get('PRETTY_NAME')} : version actuelle à jour.", f"{rel.get('PRETTY_NAME')}: current version up to date.", f"{rel.get('PRETTY_NAME')}: versión actual al día."))
+        dnf5 = "dnf5" in os.path.realpath(shutil.which("dnf"))
+        if not dnf5 and run(["rpm", "-q", "python3-dnf-plugin-system-upgrade"])[0] != 0 and self.dnf(["install", "python3-dnf-plugin-system-upgrade"], 10, 11, ("prepare", "prepare")):
+            return "failed", t("Le module system-upgrade de dnf n'a pas pu être installé.", "dnf's system-upgrade plugin could not be installed.", "No se pudo instalar el módulo system-upgrade de dnf.")
+        self.step("download", 12)
+        if self.dnf(["system-upgrade", "download", f"--releasever={want}"], 12, 90, ("download", "download")):
+            return "failed", t(f"Les paquets de Fedora {want} n'ont pas pu être préparés (voir le journal) : rien n'a été installé. Un conflit de dépendances se règle sur le poste, par exemple avec dnf system-upgrade download --releasever={want} --allowerasing.",
+                               f"Fedora {want} packages could not be prepared (see the log): nothing was installed. A dependency conflict is solved on the machine, for example with dnf system-upgrade download --releasever={want} --allowerasing.",
+                               f"No se pudieron preparar los paquetes de Fedora {want} (vea el registro): no se instaló nada. Un conflicto de dependencias se resuelve en el equipo, por ejemplo con dnf system-upgrade download --releasever={want} --allowerasing.")
+        return "offline", t(f"Paquets de Fedora {want} téléchargés : le poste redémarre pour les installer hors ligne (plusieurs minutes, poste indisponible), puis loco vérifie la version.",
+                            f"Fedora {want} packages downloaded: the machine restarts to install them offline (several minutes, machine unavailable), then loco checks the version.",
+                            f"Paquetes de Fedora {want} descargados: el equipo se reinicia para instalarlos sin conexión (varios minutos, equipo no disponible) y luego loco comprueba la versión.")
+
+
+def os_upgrade_worker():
+    """Commande « os-upgrade » (lancée par launch_worker) : la mise à niveau elle-même, jusqu'à son résultat."""
+    job = upgrade_job()
+    if not job or job.get("stage") != "running":
+        return 1
+    lock = open(os.path.join(UPGRADE_DIR, "worker.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return 0
+    job.update(pid=os.getpid(), boot=boot_id())
+    save_job(job)
+    conf = load(CONFIG)
+    work = OsUpgrade(conf, job)
+    try:
+        outcome, text = getattr(work, job["kind"])()
+    except Exception as e:                          # l'action ne doit jamais rester sans résultat
+        outcome, text = "failed", t("Erreur inattendue de la mise à niveau : ", "Unexpected upgrade error: ", "Error inesperado de la actualización: ") + f"{type(e).__name__}: {e}"
+    work.note(text)
+    if outcome in ("reboot-first", "offline"):
+        job.update(stage=outcome, reboot_at=time.time(), notes=work.notes)
+        save_job(job)
+        work.step(outcome, max(work.percent, 12))
+        if outcome == "offline":
+            work.cmd(["dnf", "-y", "system-upgrade", "reboot"], timeout=600)      # redémarre le poste tout de suite
+        else:
+            subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage avant la mise à niveau du système", "loco: reboot before the system upgrade", "loco: reinicio antes de la actualización del sistema")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return 0
+    finish_job(conf, job, outcome, upgrade_output(work.notes))
+    if outcome == "success":
+        subprocess.run(["shutdown", "-r", "+1", t("loco : redémarrage après la mise à niveau du système", "loco: reboot after the system upgrade", "loco: reinicio tras la actualización del sistema")], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return 0
 
 
 # --------------------------------------------------------------------------- agent Wazuh (fonctionnalité facultative de loco)
@@ -1474,8 +2345,10 @@ def report(conf, cmd_id, state, output="", code=None, inventory=None, progress=N
         data["progress"] = progress
     try:
         call(conf["server"], "/agent/api/result", data, conf["token"])
+        return True
     except (OSError, ValueError) as e:
         log(t(f"résultat non transmis : {e}", f"result not sent: {e}", f"resultado no transmitido: {e}"))
+        return False
 
 
 def run_script(cmd):
@@ -1687,7 +2560,12 @@ def _run_commands(conf, answer, state):
         action = cmd.get("action")
         log(t(f"action {cmd.get('id')} : {action}", f"action {cmd.get('id')}: {action}", f"acción {cmd.get('id')}: {action}"))
         report(conf, cmd["id"], "running")
-        if action == "scan":
+        if action in UPGRADE_EXCLUSIVE and upgrade_job():
+            # Le serveur n'en transmet pas pendant une mise à niveau du système ; si cela arrive, rien ne la dérange.
+            report(conf, cmd["id"], "failed", t("Mise à niveau du système en cours sur ce poste : action non lancée.", "System upgrade running on this machine: action not started.", "Actualización del sistema en curso en este equipo: acción no iniciada."), 1)
+        elif action == "os-upgrade":
+            os_upgrade_start(conf, cmd)         # elle suit son cours hors de l'agent et rend compte elle-même
+        elif action == "scan":
             inv = scan(state)
             state["last_scan"] = time.time()
             report(conf, cmd["id"], "success" if not inv["error"] else "failed", inv["error"] or t("Inventaire transmis.", "Inventory sent.", "Inventario transmitido."),
@@ -1783,11 +2661,14 @@ def service():
     data = identity()
     data["wake_error"] = state.get("wake_error", "")
     data["metrics"] = metrics(state)
+    # Mise à niveau du système en cours (hors de l'agent) : déclarée tenue ; ni inventaire ni travail d'APT d'ici là.
+    upgrading = os_upgrade_poll(conf)
+    data["holding"] = [upgrading] if upgrading else []
     last = state.get("last_scan", 0)
     # Inventaire refait après un redémarrage (celui d'avant ne reflète plus les mises à jour installées) et après une
     # mise à jour de l'agent (une nouvelle version peut remonter des informations de plus, comme les paquets installés).
-    if (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
-            or state.get("inventory_version") != VERSION):
+    if not upgrading and (time.time() - last > state.get("scan_hours", 6) * 3600 or state.get("rescan") or booted_since(last)
+                          or state.get("inventory_version") != VERSION):
         data["inventory"] = scan(state, local=local)
         state.update(last_scan=time.time(), rescan=_apt_lock_busy(data["inventory"].get("error") or ""), inventory_version=VERSION)
     try:
@@ -1816,7 +2697,8 @@ def service():
     save(STATE, state)
     if self_update(conf, answer.get("agent_version")):
         return relaunch()
-    ensure_desktop_backend(state)                               # poste KDE/GNOME Wayland : composants du bureau distant prêts
+    if not upgrade_job():
+        ensure_desktop_backend(state)                           # poste KDE/GNOME Wayland : composants du bureau distant prêts
     save(STATE, state)
     # Contacts adaptatifs : tant que le serveur demande un intervalle court (action en attente, enchaînement d'une
     # commande), recontacter vite SANS refaire l'inventaire, jusqu'au retour au repos ou à la fin de la fenêtre active.
@@ -1827,6 +2709,8 @@ def service():
         data = identity()
         data["wake_error"] = state.get("wake_error", "")
         data["metrics"] = metrics(state)
+        upgrading = os_upgrade_poll(conf)
+        data["holding"] = [upgrading] if upgrading else []
         try:
             answer = checkin(conf, data)
         except (urllib.error.HTTPError, OSError, ValueError):
@@ -1887,6 +2771,10 @@ def status_cmd():
     rows.append((t("Identifiant", "ID", "Identificador"), conf.get("uid", "-")))
     rows.append((t("Inventaire", "Inventory", "Inventario"),
                  datetime.datetime.fromtimestamp(scanned).isoformat(timespec="seconds") if scanned else t("jamais", "never", "nunca")))
+    job = upgrade_job()
+    if job:
+        rows.append((t("Mise à niveau", "Upgrade", "Actualización"), f"{job.get('from', '?')} -> {job['target'].get('name') or job['target'].get('version')} "
+                     f"({job.get('stage', '?')}, {UPGRADE_LOG})"))
     width = max(len(label) for label, _ in rows)
     for label, value in rows:
         print(f"{label.ljust(width)} : {value}")
@@ -4411,6 +5299,8 @@ def main(argv):
         return files_service()
     if cmd == "run":
         return service()
+    if cmd == "os-upgrade":
+        return os_upgrade_worker()
     if cmd == "enroll" and len(argv) == 5 and argv[1] == "--server" and argv[3] == "--key":
         return enroll(argv[2], argv[4])
     if cmd == "enroll" and len(argv) == 3 and argv[1] == "--server" and os.environ.get("LOCO_ENROLL_KEY"):

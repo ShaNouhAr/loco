@@ -1,4 +1,4 @@
-"""Planifications : mises à jour et exécutions de scripts, une fois ou récurrentes, à l'heure du serveur.
+"""Planifications : mises à jour, redémarrages et exécutions de scripts, une fois ou récurrentes, à l'heure du serveur.
 
 Une planification due devient des commandes d'agent au premier contact d'un poste (ou à l'ouverture de la page des
 planifications), puis passe à son occurrence suivante : les occurrences manquées (serveur ou postes éteints) ne
@@ -19,7 +19,7 @@ from .db import db
 from .util import safe_next, counted
 
 RECURRENCES = {"once": L_("Une fois"), "daily": L_("Chaque jour"), "weekly": L_("Chaque semaine"), "monthly": L_("Chaque mois")}
-ACTIONS = {"update": L_("Mise à jour"), "run-script": L_("Script")}
+ACTIONS = {"update": L_("Mise à jour"), "reboot": L_("Redémarrage"), "run-script": L_("Script")}
 DAYS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
 MONTHS = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre",
           "décembre")
@@ -252,6 +252,8 @@ def targets_text(conn, targets):
 def action_text(conn, action, params):
     if action == "update":
         return _("Mise à jour, redémarrage si nécessaire") if params.get("reboot") else _("Mise à jour")
+    if action == "reboot":
+        return _("Redémarrage")
     script = conn.execute("SELECT name FROM scripts WHERE id=?", (params.get("script_id"),)).fetchone()
     return _("Script « %(name)s »", name=script["name"]) if script else _("Script supprimé")
 
@@ -294,6 +296,10 @@ def _require(action, params, targets):
             require("fleet.reboot")
         if targets.get("all") or targets.get("groups") or len(targets.get("devices", [])) > 1:
             require("fleet.bulk_update")
+    elif action == "reboot":
+        require("fleet.reboot")
+        if targets.get("all") or targets.get("groups") or len(targets.get("devices", [])) > 1:
+            require("fleet.bulk_update")                # redémarrer plusieurs postes : même droit que les mettre à jour
     else:
         require("scripts.run")
 
@@ -339,6 +345,12 @@ def materialize(conn):
                         if fleet.queue(dev, "update", {"reboot": bool(params.get("reboot"))}, user=s["created_by"],
                                        run_after=s["next_run"]))
             # Résultat gardé en français dans la base, traduit à l'affichage (result_text).
+            result = (counted(added, "poste") if added else
+                      N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
+        elif s["action"] == "reboot":
+            # Android ne redémarre pas sur commande de loco.
+            added = sum(1 for dev in devices if dev["os_family"] != "android"
+                        and fleet.queue(dev, "reboot", {}, user=s["created_by"], run_after=s["next_run"]))
             result = (counted(added, "poste") if added else
                       N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
         else:
@@ -420,6 +432,8 @@ def _form_targets(form):
 def _form_params(conn, action, form):
     if action == "update":
         return {"reboot": form.get("reboot") == "1"}
+    if action == "reboot":
+        return {}
     try:
         script = conn.execute("SELECT * FROM scripts WHERE id=?", (int(form.get("script_id", "")),)).fetchone()
     except ValueError:

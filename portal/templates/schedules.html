@@ -8,7 +8,7 @@
     <h1>{{ _("Planifications") }}</h1>
     <p>{{ _("Mises à jour et scripts lancés automatiquement, une fois ou de façon récurrente, à l'heure du serveur (%(tz)s).", tz=tz) }}</p>
   </div>
-  {% if can_any('fleet.update', 'scripts.run') %}<div class="actions"><a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ icon('calendar') }}<span>{{ _("Nouvelle planification") }}</span></a></div>{% endif %}
+  {% if can_any('fleet.update', 'fleet.reboot', 'scripts.run') %}<div class="actions"><a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ icon('calendar') }}<span>{{ _("Nouvelle planification") }}</span></a></div>{% endif %}
 </div>
 
 <div class="stack">
@@ -19,7 +19,7 @@
         <thead><tr><th>{{ _("Planification") }}</th><th>{{ _("Quand") }}</th><th>{{ _("Prochaine exécution") }}</th><th class="hide-sm">{{ _("Dernière") }}</th><th>{{ _("État") }}</th><th aria-label="{{ _('Actions') }}"></th></tr></thead>
         <tbody>
         {% for p in items %}
-          {% set manage = can('fleet.update') if p.action == 'update' else can('scripts.run') %}
+          {% set manage = can('fleet.update') if p.action == 'update' else can('fleet.reboot') if p.action == 'reboot' else can('scripts.run') %}
           <tr id="planif-{{ p.id }}" class="{{ 'faded' if p.state != 'active' }}">
             <td><strong>{{ p.name or p.label }}</strong><span class="sub sans">{% if p.name %}{{ p.label }} · {% endif %}{{ p.targets }}</span></td>
             <td><span class="when">{{ icon('repeat' if p.recurrence != 'once' else 'calendar') }}<span>{{ p.when }}</span></span></td>
@@ -53,7 +53,7 @@
       {{ icon('calendar') }}
       <strong>{{ _("Aucune planification") }}</strong>
       <span>{{ _("Planifiez une mise à jour depuis la fiche d'un poste ou Mon parc, un script depuis sa page d'exécution, ou créez-en une ici : une fois, chaque jour, chaque semaine ou chaque mois.") }}</span>
-      {% if can_any('fleet.update', 'scripts.run') %}<a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ _("Nouvelle planification") }}</a>{% endif %}
+      {% if can_any('fleet.update', 'fleet.reboot', 'scripts.run') %}<a class="btn primary" href="{{ url_for('schedule_editor', sched_id=0) }}">{{ _("Nouvelle planification") }}</a>{% endif %}
     </div>
     {% endif %}
   </section>

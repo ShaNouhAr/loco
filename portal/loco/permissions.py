@@ -184,9 +184,9 @@ ENDPOINTS = {
     "syslog_settings": "syslog.configure", "syslog_save": "syslog.configure", "syslog_test": "syslog.configure",
     "fleet_cancel_command": "fleet.view", "fleet_search": "fleet.view", "fleet_windows_update": "fleet.update",
     "fleet_group_windows_update": "fleet.update",
-    "schedules": "fleet.view", "schedule_editor": ("fleet.update", "scripts.run"),
-    "schedule_save": ("fleet.update", "scripts.run"), "schedule_toggle": ("fleet.update", "scripts.run"),
-    "schedule_delete": ("fleet.update", "scripts.run"),
+    "schedules": "fleet.view", "schedule_editor": ("fleet.update", "fleet.reboot", "scripts.run"),
+    "schedule_save": ("fleet.update", "fleet.reboot", "scripts.run"), "schedule_toggle": ("fleet.update", "fleet.reboot", "scripts.run"),
+    "schedule_delete": ("fleet.update", "fleet.reboot", "scripts.run"),
     "fleet_update_all": "fleet.bulk_update", "fleet_update_selected": "fleet.update",
     "fleet_rotate_key": "fleet.settings", "fleet_group_rotate_key": "fleet.settings", "fleet_threshold": "fleet.settings",
     "fleet_server_address": "fleet.settings", "fleet_settings": "fleet.settings",
@@ -249,7 +249,8 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
                       "wake": "fleet.wake", "wake-relay": "fleet.wake",
-                      "install-apk": "fleet.install", "agent-update": "fleet.update", "wazuh": "wazuh.install"}
+                      "install-apk": "fleet.install", "agent-update": "fleet.update", "wazuh": "wazuh.install",
+                      "os-upgrade": "fleet.update"}
 
 
 def expand(values):

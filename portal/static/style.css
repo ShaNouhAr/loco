@@ -648,6 +648,25 @@ pre.log { margin: 0; padding: 12px 16px; max-height: 440px; overflow: auto; bord
 .sec-pill svg { width: 13px; height: 13px; flex: none; stroke-linecap: round; stroke-linejoin: round; }
 .reboot-note { flex-basis: 100%; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--warn); white-space: nowrap; }
 .reboot-note svg { width: 13px; height: 13px; flex: none; }
+/* Nouvelle version majeure du système : pastille de la liste, étiquette et bandeau de la fiche. */
+.release-note { flex-basis: 100%; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+a.release-note:hover { text-decoration: underline; }
+.release-note .ui-icon { width: 13px; height: 13px; flex: none; }
+.tag.up { gap: 4px; color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--bg-3)); }
+.tag.up .ui-icon { width: 12px; height: 12px; flex: none; }
+.release-offer { display: flex; align-items: center; gap: 14px; margin: 16px 20px 4px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.release-ico { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.release-ico .ui-icon { width: 20px; height: 20px; }
+.release-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.release-text strong { font-size: 14.5px; }
+.release-text .sub { display: block; font-size: 13px; color: var(--text-2); }
+.release-act { flex: none; }
+@media (max-width: 720px) {
+  .release-offer { flex-wrap: wrap; margin: 12px 12px 4px; }
+  .release-ico { display: none; }
+  .release-act { flex-basis: 100%; }
+  .release-act .btn { width: 100%; white-space: normal; }
+}
 /* Actions d'une ligne du parc : mise à jour et redémarrage côte à côte. */
 .row-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .row-acts form { display: inline; }

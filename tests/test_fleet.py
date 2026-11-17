@@ -1198,6 +1198,44 @@ class TestScheduling(FleetTest):
         self.assertIn("chaque mardi et jeudi à 02:00", page)
         self.assertIn('id="plan-update"', page)
 
+    def test_a_planned_reboot_runs_when_due(self):
+        self.assertEqual(self.plan(action="reboot").status_code, 302)
+        s = self.schedule()
+        self.assertEqual((s["action"], s["params"]), ("reboot", "{}"))
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])            # pas avant l'heure
+        self.due()
+        self.assertEqual([c["action"] for c in self.a.checkin().get_json()["commands"]], ["reboot"])
+        self.assertEqual(self.schedule()["last_result"], "1 poste")
+        page = self.admin.c.get("/fleet/schedules").get_data(as_text=True)
+        self.assertIn("Redémarrage", page)
+
+    def test_the_device_page_offers_reboot_next_to_update_with_its_planner(self):
+        page = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+        actions = page[page.index('class="device-actions"'):page.index('<details class="menu">')]
+        self.assertIn('value="reboot"', actions)                                 # à côté de « Mettre à jour »
+        self.assertIn('data-open="#plan-reboot"', actions)
+        self.assertIn('id="plan-reboot"', page)
+        menu = page[page.index('<details class="menu">'):page.index("</details>", page.index('<details class="menu">'))]
+        self.assertNotIn('value="reboot"', menu)                                 # plus dans « Plus »
+
+    def test_rebooting_several_devices_needs_the_whole_fleet_right(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        rebooter = test_permissions.TestPermissions.browser(
+            self, "plan-reboot", test_permissions.TestPermissions.profile(self, "plan-reboot", {"fleet.reboot"}))
+        tomorrow = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+        r = rebooter.post("/fleet/schedules/save", {"action": "reboot", "target": "all", "recurrence": "once",
+                          "at_time": "02:00", "start_date": tomorrow}, page="/account")
+        self.assertEqual(r.status_code, 403)
+        r = rebooter.post("/fleet/schedules/save", {"action": "reboot", "target": "selection", "device": str(self.dev),
+                          "recurrence": "once", "at_time": "02:00", "start_date": tomorrow}, page="/account")
+        self.assertEqual(r.status_code, 302)
+        updater = test_permissions.TestPermissions.browser(
+            self, "plan-maj", test_permissions.TestPermissions.profile(self, "plan-maj", {"fleet.update"}))
+        r = updater.post("/fleet/schedules/save", {"action": "reboot", "target": "selection", "device": str(self.dev),
+                         "recurrence": "once", "at_time": "02:00", "start_date": tomorrow}, page="/account")
+        self.assertEqual(r.status_code, 403)                                   # redémarrer : son propre droit
+
     def test_invalid_plans_create_nothing(self):
         yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
         self.plan(start_date=yesterday)                                        # instant passé
@@ -1431,3 +1469,113 @@ class TestFleetListWithoutInventory(FleetTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+DEBIAN12 = dict(LINUX, hostname="srv-ancien", os={"family": "debian", "name": "Debian GNU/Linux 12 (bookworm)"})
+TRIXIE = {"kind": "debian", "version": "13", "codename": "trixie", "name": "Debian 13 (trixie)"}
+
+
+class TestOsUpgrade(FleetTest):
+    """Version majeure suivante du système : annoncée par l'inventaire, proposée « Mettre à jour vers … », envoyée seule."""
+
+    def setUp(self):
+        super().setUp()
+        self.a = Agent(DEBIAN12, "192.168.45.10")
+        self.a.enroll()
+        self.a.checkin({"updates": [], "release": TRIXIE})
+        self.dev = device(self.a.uid)["id"]
+
+    def ask(self, browser=None):
+        return (browser or self.admin).post(f"/fleet/{self.dev}/action", {"action": "os-upgrade"}, page=f"/fleet/{self.dev}")
+
+    def command(self):
+        with transaction() as conn:
+            return conn.execute("SELECT * FROM device_commands WHERE action='os-upgrade' ORDER BY id DESC").fetchone()
+
+    def test_the_device_and_the_list_offer_to_update_to_the_version_by_name(self):
+        page = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+        self.assertIn("Mettre à jour vers Debian 13 (trixie)", page)               # étiquette et bouton
+        self.assertIn('value="os-upgrade"', page)
+        self.assertIn("passe ses dépôts à la nouvelle", page)
+        self.assertNotIn("Nouvelle version disponible", page)
+        listing = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Mettre à jour vers Debian 13 (trixie)", listing)
+        self.assertIn("Mise à jour vers une nouvelle version", listing)             # filtre « Situation »
+        self.assertIn("srv-ancien", self.admin.c.get("/fleet?voir=nouvelle-version").get_data(as_text=True))
+        color, reason = status_of(self.a.uid)
+        self.assertEqual(color, "green")                                            # une information, pas une alerte
+        self.assertIn("mise à jour vers Debian 13 (trixie) possible", reason)
+
+    def test_malformed_announcements_are_ignored(self):
+        for bad in ({"kind": "debian", "version": "13", "name": "Debian 13"},       # sans nom de code
+                    {"kind": "windows", "name": "Windows 11, version 25H2"},        # sans identifiant Windows Update
+                    {"kind": "solaris", "version": "12"}, {"kind": "ubuntu", "version": "26.04; reboot"}, "13"):
+            self.a.checkin({"updates": [], "release": bad})
+            self.assertNotIn("release", fleet.inventory(device(self.a.uid)), bad)
+        self.assertNotIn('value="os-upgrade"', self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True))
+
+    def test_needs_the_reboot_right_too(self):
+        import test_permissions
+        self.addCleanup(test_permissions.TestPermissions.cleanup_accounts, self)
+        updater = test_permissions.TestPermissions.browser(
+            self, "maj-seule", test_permissions.TestPermissions.profile(self, "maj-seule", {"fleet.update"}))
+        self.assertEqual(self.ask(updater).status_code, 403)
+        self.assertIsNone(self.command())
+
+    def test_sent_alone_with_its_target_then_holds_everything_until_the_reboot(self):
+        self.assertEqual(self.ask().status_code, 302)
+        self.assertEqual(json.loads(self.command()["params"]),
+                         {"reboot": True, "kind": "debian", "version": "13", "name": "Debian 13 (trixie)"})
+        self.admin.post(f"/fleet/{self.dev}/action", {"action": "scan"}, page=f"/fleet/{self.dev}")
+        commands = self.a.checkin().get_json()["commands"]
+        self.assertEqual([c["action"] for c in commands], ["os-upgrade"])         # seule dans sa réponse
+        self.assertEqual(commands[0]["target"], TRIXIE)
+        self.a.post("/agent/api/result", {"id": commands[0]["id"], "state": "running",
+                                          "progress": {"step": "os_upgrade", "phase": "sources", "percent": 11}}, self.a.token)
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])               # rien d'autre pendant ce temps
+        page = self.admin.c.get(f"/fleet/{self.dev}").get_data(as_text=True)
+        self.assertIn("Mise à jour vers Debian 13 (trixie) en cours", page)
+        self.assertIn("dépôts de la nouvelle version", page)                        # étape remontée par l’agent
+        actions = page[page.index('class="device-actions"'):page.index('<details class="menu">')]
+        self.assertNotIn('value="reboot"', actions)                                 # pas de redémarrage en plein milieu
+        self.ask()                                                                  # déjà en cours : pas de second envoi
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM device_commands WHERE action='os-upgrade'").fetchone()[0], 1)
+        self.a.result(commands[0]["id"], "success", "Passé à Debian GNU/Linux 13 (trixie). Redémarrage dans une minute.")
+        self.assertTrue(device(self.a.uid)["reboot_pending"])                       # la suite attend le redémarrage
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])
+        self.assertIn("Passé à Debian GNU/Linux 13 (trixie)", self.admin.c.get("/fleet/updates").get_data(as_text=True))
+
+    def test_a_long_upgrade_is_not_cut_at_six_hours(self):
+        self.ask()
+        cmd_id = self.a.checkin().get_json()["commands"][0]["id"]
+        self.a.result(cmd_id, "running")
+        for hours, state in ((7, "running"), (25, "failed")):
+            stamp = (datetime.datetime.now() - datetime.timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+            with transaction() as conn:
+                conn.execute("UPDATE device_commands SET sent_at=? WHERE id=?", (stamp, cmd_id))
+                fleet.expire_commands(conn)
+                self.assertEqual(conn.execute("SELECT state FROM device_commands WHERE id=?", (cmd_id,)).fetchone()[0], state)
+
+    def test_waits_for_a_recent_agent_and_fails_if_the_version_is_no_longer_offered(self):
+        self.ask()
+        self.a.ident["agent_version"] = "2.170.0"
+        self.assertEqual(self.a.checkin().get_json()["commands"], [])              # l'agent se met d'abord à jour
+        self.assertEqual(self.command()["state"], "queued")
+        self.a.ident["agent_version"] = config.VERSION
+        self.assertEqual(self.a.checkin({"updates": []}).get_json()["commands"], [])   # plus proposée par le poste
+        self.assertEqual(self.command()["state"], "failed")
+        self.assertIn("n'est plus proposée", self.command()["output"])
+
+    def test_windows_new_version_comes_from_windows_update(self):
+        w = Agent(WINDOWS, "192.168.45.11")
+        w.enroll()
+        offer = {"kind": "windows", "name": "Windows 11, version 25H2", "id": "6f1c2a3b-1111-4222-8333-444455556666", "version": "25H2"}
+        w.checkin({"updates": [], "apps": [], "release": offer})
+        dev_id = device(w.uid)["id"]
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("Mettre à jour vers Windows 11, version 25H2", page)
+        self.assertIn("Windows Update propose cette nouvelle version", page)
+        self.admin.post(f"/fleet/{dev_id}/action", {"action": "os-upgrade"}, page=f"/fleet/{dev_id}")
+        target = w.checkin().get_json()["commands"][0]["target"]
+        self.assertEqual(target, {"kind": "windows", "name": "Windows 11, version 25H2", "id": offer["id"], "version": "25H2"})

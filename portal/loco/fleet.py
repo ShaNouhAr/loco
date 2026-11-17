@@ -45,6 +45,9 @@ SENT_TIMEOUT_HOURS = 6          # action transmise sans résultat : échec
 MAX_ATTEMPTS = 3                # transmissions d'une action que le poste n'a jamais démarrée, avant de la dire en échec
 REBOOT_HOLD = 300               # redémarrage annoncé par l'agent : rien d'autre ne lui est transmis avant son retour, ou ce délai
 AGENT_UPDATE_MINUTES = 15       # mise à jour de l'agent demandée : échec si, prévenu, il n'annonce pas la version du serveur dans ce délai
+UPGRADE_TIMEOUT_HOURS = 24      # mise à niveau du système (version majeure) : longue, redémarrages compris ; échec au-delà
+UPGRADE_AGENT = (2, 171)        # agents qui savent passer leur poste à la version majeure suivante
+RELEASE_KINDS = ("debian", "ubuntu", "fedora", "windows")
 MAX_BODY = 4 * 1024 * 1024
 UID_RE = re.compile(r"^[0-9a-f]{32}$")
 FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L_("Red Hat"), "android": L_("Android")}
@@ -53,7 +56,7 @@ FORMS = {"phone": L_("Téléphone"), "tablet": L_("Tablette"), "tv": L_("Télév
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
-           "agent-update": L_("Mise à jour de l'agent"), "wazuh": L_("Agent Wazuh")}
+           "agent-update": L_("Mise à jour de l'agent"), "wazuh": L_("Agent Wazuh"), "os-upgrade": L_("Mise à jour vers une nouvelle version")}
 AGENT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
 
 
@@ -307,7 +310,8 @@ def _digest(dev):
     entry = _DIGESTS.get(dev["uid"]) if known else None
     if entry is None or entry[0] != dev["inv_rev"]:
         inv = inventory(dev)
-        entry = (dev["inv_rev"] if known else None, {"error": inv.get("error") or "", "warning": inv.get("warning") or ""}, {})
+        entry = (dev["inv_rev"] if known else None, {"error": inv.get("error") or "", "warning": inv.get("warning") or "",
+                                                     "release": inv.get("release") if isinstance(inv.get("release"), dict) else None}, {})
         if known:
             _DIGESTS[dev["uid"]] = entry
     return entry
@@ -319,6 +323,37 @@ def inventory_error(dev):
 
 def inventory_warning(dev):
     return _digest(dev)[1]["warning"]
+
+
+def release_offer(dev):
+    """Nouvelle version majeure du système annoncée par le dernier inventaire du poste ({kind, version, name…}), ou None."""
+    return _digest(dev)[1]["release"] if dev["os_family"] != "android" else None
+
+
+def upgrade_ready(dev):
+    """L'agent du poste sait-il le passer à la version majeure suivante ?"""
+    return version_key(dev["agent_version"]) >= UPGRADE_AGENT
+
+
+def _clean_release(value):
+    """Nouvelle version annoncée par l'agent, bornée : Debian, Ubuntu et Fedora donnent un numéro (et Debian son nom de
+    code), Windows l'identifiant Windows Update de la mise à niveau."""
+    if not isinstance(value, dict) or value.get("kind") not in RELEASE_KINDS:
+        return None
+    out = {"kind": value["kind"], "name": _text(value.get("name"), 120), "version": _text(value.get("version"), 20)}
+    if value["kind"] == "windows":
+        if not UPDATE_ID_RE.fullmatch(str(value.get("id") or "")):
+            return None
+        out["id"] = str(value["id"])
+    elif not re.fullmatch(r"\d{1,4}(\.\d{1,2})?", out["version"]):
+        return None
+    if value["kind"] == "debian":
+        if not re.fullmatch(r"[a-z][a-z0-9]{1,30}", str(value.get("codename") or "")):
+            return None
+        out["codename"] = value["codename"]
+    if not out["name"]:
+        out["name"] = {"debian": "Debian", "ubuntu": "Ubuntu", "fedora": "Fedora Linux", "windows": "Windows"}[value["kind"]] + " " + out["version"]
+    return out
 
 
 def _catalog_signature(apps):
@@ -406,6 +441,9 @@ def status(dev, apps=None):
         reasons.append(_("redémarrage nécessaire"))
     if dev["blocked_updates"]:
         reasons.append(n_("%(num)s mise à jour bloquée", "%(num)s mises à jour bloquées", dev["blocked_updates"]))
+    offer = release_offer(dev)
+    if offer:
+        reasons.append(_("mise à jour vers %(name)s possible", name=offer["name"]))     # information : le voyant ne change pas
     last = last_result(dev["id"])
     if last and last["state"] == "failed":
         reasons.append(_("échec : %(action)s", action=ACTIONS.get(last["action"], last["action"]).lower()))
@@ -455,6 +493,8 @@ def action_label(cmd):
     if only:
         count = len(only.get("packages") or only.get("updates") or []) + (1 if only.get("flatpak") else 0)
         label = n_("%(action)s : %(num)s sélectionnée", "%(action)s : %(num)s sélectionnées", count, action=label)
+    if cmd["action"] == "os-upgrade":
+        return _("Mise à jour vers %(name)s", name=params.get("name") or params.get("version") or "?")
     if params.get("reboot"):
         label = _("%(action)s (avec redémarrage)", action=label)
     if cmd["action"] == "wazuh":
@@ -520,10 +560,13 @@ def in_progress(dev, commands):
     """Ce qui est déjà lancé sur un poste, pour ne pas le proposer une seconde fois. Mise à jour : demandée et pas
     terminée (« queued » tant que le poste ne l'a pas prise, « running » ensuite). Redémarrage : demandé, ou annoncé
     par l'agent et pas encore constaté — l'action est alors terminée, mais le poste n'a pas encore redémarré."""
-    update = next((c for c in commands if c["action"] == "update"), None)
+    update = next((c for c in commands if c["action"] in ("update", "os-upgrade")), None)
     restart = any(c["action"] == "reboot" or (c["action"] == "update" and '"reboot": true' in (c["params"] or ""))
                   for c in commands) or reboot_held(dev)
-    return {"updating": "" if update is None else "queued" if update["state"] == "queued" else "running", "rebooting": restart}
+    upgrade = next((c for c in commands if c["action"] == "os-upgrade"), None)
+    # Mise à niveau du système : elle compte comme une mise à jour en cours (rien d'autre n'est lancé par-dessus).
+    return {"updating": "" if update is None else "queued" if update["state"] == "queued" else "running", "rebooting": restart,
+            "upgrading": "" if upgrade is None else "queued" if upgrade["state"] == "queued" else "running"}
 
 
 def _active_window(conn, dev, commands):
@@ -695,6 +738,9 @@ def _store_inventory(dev, inv):
         "error": _text(inv.get("error"), 500),
         "warning": _text(inv.get("warning"), 500),
     }
+    release = _clean_release(inv.get("release"))
+    if release:
+        clean["release"] = release                  # nouvelle version majeure du système (agents 2.171.0 et plus)
     from . import update_blocks
     total, security, blocked = update_blocks.counts(db(), dev, clean)
     db().execute("UPDATE devices SET inventory=?, inv_rev=?, last_scan=?, updates=?, security_updates=?, blocked_updates=?, "
@@ -748,8 +794,13 @@ def expire_commands(conn, dev_id=None):
     """Commandes envoyées restées sans réponse. Le fil de fond s'en charge aussi : un poste mort ne reviendrait jamais les solder."""
     limit = (datetime.datetime.now() - datetime.timedelta(hours=SENT_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output='Pas de réponse du poste.' "
-                 "WHERE state IN ('sent', 'running') AND action NOT IN ('wake', 'agent-update') AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
+                 "WHERE state IN ('sent', 'running') AND action NOT IN ('wake', 'agent-update', 'os-upgrade') AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
                  (_now(), limit, *([dev_id] if dev_id else [])))
+    longer = (datetime.datetime.now() - datetime.timedelta(hours=UPGRADE_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE device_commands SET state='failed', finished_at=?, output=? WHERE state IN ('sent', 'running') "
+                 "AND action='os-upgrade' AND sent_at < ?" + (" AND device_id=?" if dev_id else ""),
+                 (_now(), f"Pas de résultat du poste {UPGRADE_TIMEOUT_HOURS} h après le début de la mise à jour vers la nouvelle version.", longer,
+                  *([dev_id] if dev_id else [])))
     wake.expire(conn, dev_id)
     expire_agent_updates(conn, dev_id)
 
@@ -858,7 +909,8 @@ def deliverable(conn, dev, boot=0):
 def _ends_batch(cmd):
     """Action après laquelle rien d'autre ne part dans la même réponse : l'agent s'arrête là (retrait) ou redémarre le
     poste, et abandonnerait la suite sans rien en dire. Le reste part au contact suivant."""
-    return cmd["action"] in ("uninstall", "reboot") or cmd["action"] == "update" and bool(json.loads(cmd["params"] or "{}").get("reboot"))
+    return (cmd["action"] in ("uninstall", "reboot", "os-upgrade")
+            or cmd["action"] == "update" and bool(json.loads(cmd["params"] or "{}").get("reboot")))
 
 
 WAIT = object()        # commande pas encore prête (fichier en cours de téléchargement sur loco) : elle attend
@@ -914,6 +966,14 @@ def _payload(dev, cmd):
     if cmd["action"] == "wazuh":
         from . import wazuh
         return wazuh.payload(dev, params, out)
+    if cmd["action"] == "os-upgrade":
+        if not upgrade_ready(dev):
+            return WAIT             # l'agent se met à jour seul à ce contact : la mise à niveau part au suivant
+        offer = release_offer(dev)
+        if not offer or any(offer.get(k, "") != params.get(k, "") for k in ("kind", "version", "id")):
+            return "La nouvelle version n'est plus proposée par le poste (refaites l'inventaire) : rien n'a été lancé."
+        out["target"] = {k: offer[k] for k in ("kind", "version", "codename", "name", "id") if offer.get(k)}
+        return out
     if cmd["action"] == "install-package":
         if dev["os_family"] not in ("debian", "rhel"):
             return None
@@ -1083,9 +1143,14 @@ def agent_checkin():
 
 PROGRESS_STEPS = {"download": L_("Téléchargement"), "verify": L_("Vérification de l'empreinte"), "install": L_("Installation"),
                   "windows_update": L_("Mises à jour Windows"), "updates": L_("Mises à jour du système"),
-                  "flatpak": L_("Applications Flatpak"), "confirm": L_("En attente de confirmation sur l'appareil")}
+                  "flatpak": L_("Applications Flatpak"), "confirm": L_("En attente de confirmation sur l'appareil"),
+                  "os_upgrade": L_("Mise à jour vers une nouvelle version")}
 # Phases d'une mise à jour du système (étape « updates ») : préparation, téléchargement puis installation.
 UPDATE_PHASES = {"prepare": L_("Préparation"), "download": L_("Téléchargement"), "install": L_("Installation")}
+# Phases d'une mise à niveau vers la version majeure suivante (étape « os_upgrade »).
+UPGRADE_PHASES = {"prepare": L_("Mise à jour de la version actuelle"), "sources": L_("Dépôts de la nouvelle version"),
+                  "download": L_("Téléchargement"), "install": L_("Installation"),
+                  "reboot-first": L_("Redémarrage avant le changement de version"), "offline": L_("Installation au redémarrage")}
 
 
 def _progress(value):
@@ -1093,7 +1158,7 @@ def _progress(value):
     if not isinstance(value, dict) or value.get("step") not in PROGRESS_STEPS:
         return None
     out = {"step": value["step"], "app": _text(value.get("app"), 100)}
-    if value.get("phase") in UPDATE_PHASES:
+    if value.get("phase") in (UPGRADE_PHASES if value["step"] == "os_upgrade" else UPDATE_PHASES):
         out["phase"] = value["phase"]
     for key, low, high in (("index", 1, 5000), ("total", 1, 5000), ("percent", 0, 100)):
         number = value.get(key)
@@ -1122,6 +1187,11 @@ def progress_view(raw):
         return None
     extra = {k: p[k] for k in ("items", "counts") if k in p}      # liste des paquets et compteurs (affichage en direct)
     total, index = p.get("total") or 1, min(p.get("index") or 1, p.get("total") or 1)
+    if p["step"] == "os_upgrade":
+        phase = p.get("phase") if p.get("phase") in UPGRADE_PHASES else "install"
+        label = str(UPGRADE_PHASES[phase]) + (f" · {p['app']}" if p.get("app") and phase in ("prepare", "install") else "")
+        return {"label": label, "percent": max(1, min(99, p.get("percent") or 1)), "step": "os_upgrade", "app": p.get("app", ""),
+                "phase": phase, **extra}
     if p["step"] in ("updates", "flatpak"):
         # Mises à jour du système : pourcentage de l'agent s'il le connaît, sinon la part des éléments traités.
         phase = p.get("phase", "install")
@@ -1160,7 +1230,7 @@ def _activity_rows():
     """Commandes suivies par le déroulé, dans le parc du compte : (actives, terminées des dernières 24 h)."""
     base = ("SELECT c.*, d.hostname, d.os_family, d.os_name, d.form, d.state AS device_state, d.last_seen "
             "FROM device_commands c JOIN devices d ON d.id = c.device_id "
-            "WHERE c.action IN ('update', 'reboot') AND d.state != 'removed'" + scope.sql("d.id"))
+            "WHERE c.action IN ('update', 'reboot', 'os-upgrade') AND d.state != 'removed'" + scope.sql("d.id"))
     since = (datetime.datetime.now() - datetime.timedelta(hours=ACTIVITY_FINISHED_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     active = db().execute(base + " AND c.state IN ('queued', 'sent', 'running') ORDER BY c.id").fetchall()
     finished = db().execute(base + " AND c.state IN ('success', 'failed') AND c.finished_at >= ? "
@@ -1194,12 +1264,22 @@ def _success_summary(c, view):
     """Ce qu'une commande réussie a fait ; rien plutôt que la dernière ligne du journal, souvent sans rapport."""
     if c["action"] == "reboot":
         return (c["output"] or "").strip()[:160]
+    if c["action"] == "os-upgrade":
+        return upgrade_summary(c["output"])
     n = ((view or {}).get("counts") or {}).get("ok", 0)
     if not n:
         return ""
     if c["os_family"] == "windows":
         return _("%(n)s mise à jour installée", n=n) if n == 1 else _("%(n)s mises à jour installées", n=n)
     return _("%(n)s paquet installé", n=n) if n == 1 else _("%(n)s paquets installés", n=n)
+
+
+UPGRADE_DONE_RE = re.compile(r"^(Passé à|Upgraded to|Actualizado a|Windows Update ?: (nouvelle version installée|new version installed|nueva versión instalada))\b")
+
+
+def upgrade_summary(output):
+    """Ligne du compte rendu d'une mise à niveau réussie qui dit la version atteinte (« Passé à Debian GNU/Linux 13 »)."""
+    return next((line.strip()[:160] for line in (output or "").splitlines() if UPGRADE_DONE_RE.match(line.strip())), "")
 
 
 def update_activity(active, finished):
@@ -1215,7 +1295,7 @@ def update_activity(active, finished):
         item, online = line(c), _command_online(c)
         item["online"] = online
         if c["state"] == "running":
-            item["progress"] = progress_view(c["progress"]) if c["action"] == "update" else None
+            item["progress"] = progress_view(c["progress"]) if c["action"] in ("update", "os-upgrade") else None
             item["since"] = ago_text(c["sent_at"] or c["created_at"])
             item["seen"] = ago_text(c["last_seen"])
             running.append(item)
@@ -1235,7 +1315,7 @@ def update_activity(active, finished):
         waiting.append(item)
     waiting.sort(key=lambda r: not r["online"])         # d'abord ce qui va partir
     for c in finished:
-        item, view = line(c), progress_view(c["progress"]) if c["action"] == "update" else None
+        item, view = line(c), progress_view(c["progress"]) if c["action"] in ("update", "os-upgrade") else None
         item.update(ok=c["state"] == "success", view=view, since=ago_text(c["finished_at"]))
         item["detail"] = _success_summary(c, view) if item["ok"] else _failure_reason(view, c["output"])
         done.append(item)
@@ -1250,7 +1330,7 @@ def updating_count():
     alive = (now - datetime.timedelta(seconds=ONLINE_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     try:
         return db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
-                            "WHERE c.action IN ('update', 'reboot') AND c.state IN ('queued', 'sent', 'running') "
+                            "WHERE c.action IN ('update', 'reboot', 'os-upgrade') AND c.state IN ('queued', 'sent', 'running') "
                             "AND d.state != 'removed' AND d.last_seen >= ? AND (c.run_after = '' OR c.run_after <= ?)"
                             + scope.sql("d.id"), (alive, _now())).fetchone()[0]
     except Exception:  # noqa: BLE001 - une pastille de navigation ne doit jamais faire tomber une page
@@ -1294,7 +1374,7 @@ def agent_result():
                      (state, _now(), output, code, cmd_id))
     if isinstance(data.get("inventory"), dict):
         _store_inventory(dev, data["inventory"])
-    if state == "success" and (cmd["action"] == "reboot" or cmd["action"] == "update" and json.loads(cmd["params"] or "{}").get("reboot")
+    if state == "success" and (cmd["action"] in ("reboot", "os-upgrade") or cmd["action"] == "update" and json.loads(cmd["params"] or "{}").get("reboot")
                                and isinstance(data.get("inventory"), dict) and data["inventory"].get("reboot_required")):
         # L'agent redémarre le poste dans une minute (même condition que la sienne) : ses autres actions l'attendent.
         conn.execute("UPDATE devices SET reboot_pending=? WHERE id=?", (f"{_now()}|{dev['boot']}", dev["id"]))
@@ -1884,14 +1964,17 @@ def _enrich(rows, names=None):
                  os_short=short_os(d["os_name"]) or FAMILIES.get(d["os_family"], ""),
                  via=d["ip"] if d["ip"] and own and d["ip"] not in own else "",
                  system=d["updates"], security=d["security_updates"],
-                 linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []))
+                 linux=d["os_family"] != "windows", seen=ago_text(d["last_seen"]), groups=names.get(d["id"], []),
+                 release=release_offer(d))
     rows.sort(key=_urgency)
     return rows
 
 
 def _fleet_view(rows, view):
-    """Filtre « Hors ligne » ou « Redémarrage nécessaire » : (lignes gardées, filtre reconnu, nombre de postes de chacun)."""
-    tests = {"hors-ligne": lambda r: not is_online(r["d"]), "redemarrage": lambda r: bool(r["d"]["reboot_required"])}
+    """Filtre « Hors ligne », « Redémarrage nécessaire » ou « Mise à jour vers une nouvelle version » : (lignes gardées,
+    filtre reconnu, nombre de postes de chacun)."""
+    tests = {"hors-ligne": lambda r: not is_online(r["d"]), "redemarrage": lambda r: bool(r["d"]["reboot_required"]),
+             "nouvelle-version": lambda r: bool(release_offer(r["d"]))}
     extras = {key: sum(1 for r in rows if test(r)) for key, test in tests.items()}
     if view not in tests:
         return rows, "", extras
@@ -2138,6 +2221,9 @@ def fleet_device(dev_id):
                            apps=apps, families=FAMILIES, actions=ACTIONS, signature=signature,
                            soft=soft, pkg_updates=pkg_updates, pkg_stats=pkg_stats, boot_text=boot_text,
                            needs_update=needs_update(dev), pending=waiting, updating=busy["updating"], rebooting=busy["rebooting"], summary=summary,
+                           release=release_offer(dev), upgrading=busy["upgrading"], upgrade_ready=upgrade_ready(dev),
+                           upgrading_name=next((json.loads(c["params"] or "{}").get("name", "") for c in waiting if c["action"] == "os-upgrade"), ""),
+                           upgrade_blocked=dev["os_family"] != "windows" and bool(update_blocks.patterns_for(db(), dev)),
                            selectable=selectable(dev) and can("fleet.update") and dev["state"] == "active",
                            select_version=".".join(map(str, SELECT_UPDATES)),
                            label=status_label(dev, color), presence=availability,
@@ -2175,7 +2261,7 @@ def fleet_updates():
         live = []
         for c in active:
             if c["state"] == "running":
-                view = (progress_view(c["progress"]) if c["action"] == "update" else None) or {}
+                view = (progress_view(c["progress"]) if c["action"] in ("update", "os-upgrade") else None) or {}
                 live.append({"id": c["id"], "percent": view.get("percent", 0), "label": view.get("label", ""),
                              "items": view.get("items", []), "counts": view.get("counts")})
         return {"signature": signature, "running": live}, 200, {"Cache-Control": "no-store"}
@@ -2226,6 +2312,8 @@ def fleet_action(dev_id):
         else:
             flash(_('Action déjà en attente sur ce poste.'), "error")
         return _back_to_origin(dev_id)
+    if action == "os-upgrade":
+        return _queue_os_upgrade(dev)
     params = {}
     if action == "update":
         params["reboot"] = request.form.get("reboot") == "1"
@@ -2252,6 +2340,28 @@ def fleet_action(dev_id):
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
     return _back_to_origin(dev_id)
+
+
+def _queue_os_upgrade(dev):
+    """Passage du poste à la version majeure suivante, annoncée par son inventaire. Elle finit par un redémarrage."""
+    require("fleet.reboot")
+    offer = release_offer(dev)
+    if not offer:
+        abort(400)
+    busy = in_progress(dev, pending(dev["id"]))
+    if busy["updating"] or busy["rebooting"]:
+        flash(_("Une mise à jour ou un redémarrage est déjà en cours sur %(dev)s : la mise à jour vers la nouvelle version se demande après.", dev=dev["hostname"]), "error")
+        return _back_to_origin(dev["id"])
+    params = {"reboot": True, "kind": offer["kind"], "version": offer["version"], "name": offer["name"],
+              **({"id": offer["id"]} if offer.get("id") else {})}
+    if queue(dev, "os-upgrade", params):
+        db().commit()
+        audit("parc.os-upgrade", f"{dev['hostname']} : {dev['os_name'] or '?'} → {offer['name']}")
+        flash(_("Mise à jour vers %(name)s demandée sur %(dev)s : elle commence au prochain contact. Comptez de 20 minutes à plus d'une heure ; le poste redémarre à la fin.",
+                name=offer["name"], dev=dev["hostname"]), "ok")
+    else:
+        flash(_('Action déjà en attente sur ce poste.'), "error")
+    return _back_to_origin(dev["id"])
 
 
 @app.route("/fleet/<int:dev_id>/rename", methods=["POST"])

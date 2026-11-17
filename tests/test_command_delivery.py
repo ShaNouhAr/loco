@@ -396,7 +396,7 @@ class TestNothingTwice(DeliveryTest):
         self.assertNotIn('aria-label="Redémarrer', actions)
         self.assertIn("reboot-note pending", page)
         card = self.card()
-        self.assertIn('class="menu-item loading" disabled><span class="spin"></span>Redémarrage en cours', card)
+        self.assertIn('class="btn loading" disabled><span class="spin"></span>Redémarrage en cours', card)
         self.assertIn("le poste redémarre", card)
         self.act("reboot")                                                  # un second redémarrage est refusé
         self.assertEqual([c["action"] for c in self.commands().values()], ["reboot"])
