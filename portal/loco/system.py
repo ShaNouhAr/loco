@@ -934,13 +934,48 @@ def _tls_file(name):
 
 
 def csr_preview():
-    """Ce qu'une demande de certificat contiendra : le FQDN proposé, les SAN, et l'IP que l'autorité doit conserver."""
+    """Ce qu'une demande de certificat contiendra : le FQDN proposé, les SAN (noms DNS seulement, comme l'agent root les
+    demande), et l'IP des agents, servie par le certificat de l'autorité loco."""
     if not config.SERVER_UPDATES:
         return None
     portal = urllib.parse.urlsplit(config.portal_url()).hostname or ""
     fqdn = socket.getfqdn()
     suggested = portal if portal and not _is_ip(portal) else fqdn if "." in fqdn else ""
-    return {"fqdn": suggested, "san": [s.split(":", 1)[1] for s in locoadmin._agent_names()], "ip": config.HOST if _is_ip(config.HOST) else ""}
+    names = locoadmin._agent_names()
+    dns = [n.split(":", 1)[1] for n in names if n.startswith("DNS:")]
+    return {"fqdn": suggested, "san": dns or [n.split(":", 1)[1] for n in names], "ip": config.HOST if _is_ip(config.HOST) else ""}
+
+
+def _dns_names(cert):
+    from cryptography import x509
+    try:
+        return cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        return []
+
+
+def ip_constraint_conflict(certs):
+    """Le certificat (premier de la liste) porte une adresse IP alors qu'une autorité de la chaîne restreint les IP par des
+    contraintes de noms : BoringSSL (Claude Code, Chrome sous certaines versions…) refuse alors toute la chaîne
+    (« unsupported name constraint type »), même si OpenSSL la valide. Renvoie les autorités en cause."""
+    from cryptography import x509
+    if not certs:
+        return []
+    try:
+        ips = certs[0].extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.IPAddress)
+    except x509.ExtensionNotFound:
+        ips = []
+    if not ips:
+        return []
+    found = []
+    for ca in certs[1:]:
+        try:
+            nc = ca.extensions.get_extension_for_class(x509.NameConstraints).value
+        except x509.ExtensionNotFound:
+            continue
+        if any(isinstance(n, x509.IPAddress) for n in (nc.permitted_subtrees or []) + (nc.excluded_subtrees or [])):
+            found.append(_cert_summary(ca)["name"])
+    return list(dict.fromkeys(found))
 
 
 def _is_ip(text):
@@ -954,10 +989,15 @@ def _is_ip(text):
 def tls_state():
     """Autorité en service, autorité d'entreprise importée, certificat préparé et demande en attente."""
     from cryptography import x509
+    authority = _load_certs(_tls_file("enterprise-ca.pem"))
+    prepared = _load_certs(_tls_file("enterprise.crt"))
     state = {"mode": "enterprise" if _tls_file("mode").strip() == b"enterprise" else "loco",
-             "authority": [_cert_summary(c) for c in _load_certs(_tls_file("enterprise-ca.pem"))],
+             "authority": [_cert_summary(c) for c in authority],
              "prepared": cert_info(os.path.join(config.TLS_DIR, "enterprise.crt")) if _tls_file("enterprise.crt") else None,
-             "request": None, "host": config.HOST, "csr": csr_preview()}
+             "request": None, "host": config.HOST, "csr": csr_preview(),
+             # Certificat d'entreprise sans l'IP des agents : servi par nom, l'IP garde le certificat de l'autorité loco.
+             "by_name": bool(prepared) and _is_ip(config.HOST) and not _covers(prepared[0], config.HOST) and bool(_dns_names(prepared[0])),
+             "ip_conflict": ip_constraint_conflict(prepared[:1] + prepared[1:] + authority) if prepared else []}
     csr = _tls_file("enterprise.csr")
     if csr:
         try:
@@ -1113,6 +1153,9 @@ def system_enterprise_import():
             raise ValueError(_("certificat expiré"))
         portal = urllib.parse.urlsplit(config.portal_url()).hostname or ""
         for wanted, what in ((config.HOST, _("l'adresse utilisée par les agents du parc")), (portal, _("l'adresse du portail"))):
+            # Agents joints par IP : un certificat de noms seuls est servi par nom, l'IP garde celui de l'autorité loco.
+            if wanted == config.HOST and _is_ip(wanted) and _dns_names(leaf):
+                continue
             if wanted and not _covers(leaf, wanted):
                 from .sso_check import _san
                 raise ValueError(_("SAN absent : il couvre %(names)s, mais pas %(host)s, %(what)s. Votre autorité l'a peut-être retiré (certains profils, comme EJBCA, ne gardent pas les IP) : demandez un profil qui le conserve",

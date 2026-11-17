@@ -169,8 +169,16 @@ def evaluate(conn, cfg=None, devices=""):
             add("service_down", _("Services arrêtés : %(list)s.", list=", ".join(down)))
 
     if _rule_on(cfg, "cert_expiring"):
-        cert = cert_info(os.path.join(config.TLS_DIR, "server.crt"))
-        days = (cert or {}).get("end", {}).get("days")
+        # Le certificat du portail, et celui de l'autorité d'entreprise quand il est servi par nom (SNI).
+        paths = [os.path.join(config.TLS_DIR, "server.crt")]
+        try:
+            with open(os.path.join(config.TLS_DIR, "mode"), "rb") as f:
+                if f.read().strip() == b"enterprise":
+                    paths.append(os.path.join(config.TLS_DIR, "enterprise.crt"))
+        except OSError:
+            pass
+        found = [d for d in ((cert_info(p) or {}).get("end", {}).get("days") for p in paths) if d is not None]
+        days = min(found) if found else None
         if days is not None and days <= _threshold(cfg, "cert_expiring"):
             add("cert_expiring", _("Le certificat HTTPS expire dans %(n)s jour.", n=days) if days == 1 else _("Le certificat HTTPS expire dans %(n)s jours.", n=days),
                 "critical" if days <= 7 else "warning")

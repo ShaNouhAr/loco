@@ -1992,12 +1992,29 @@ def _https_block(text):
     return ""
 
 
+def _sni_sources():
+    """Certificats servis seulement pour leurs noms DNS : celui de l'autorité d'entreprise quand il ne couvre pas
+    l'adresse IP des agents, puis le certificat importé ; un nom n'est servi qu'une fois. [(certificat, clé, noms)]"""
+    sources, used = [], set()
+    candidates = []
+    if enterprise_by_name():
+        candidates.append((tls_path("ENTERPRISE_CRT"), tls_path("ENTERPRISE_KEY")))
+    candidates.append((os.path.join(TLS, "imported.crt"), os.path.join(TLS, "imported.key")))
+    for crt, key in candidates:
+        if not (os.path.isfile(crt) and os.path.isfile(key)):
+            continue
+        names = [n for n in _cert_dns_names(crt) if n.lower() not in used]
+        used.update(n.lower() for n in names)
+        if names:
+            sources.append((crt, key, names))
+    return sources
+
+
 def write_sni_site(log=print):
-    """(Re)génère le bloc nginx du certificat importé à partir du bloc du portail ; le retire s'il n'y en a pas.
-    Appelé après un import et par install.sh, pour ne jamais garder une copie périmée de la configuration."""
-    crt = os.path.join(TLS, "imported.crt")
-    names = _cert_dns_names(crt) if os.path.isfile(crt) and os.path.isfile(os.path.join(TLS, "imported.key")) else []
-    if not names:
+    """(Re)génère les blocs nginx des certificats servis par nom (SNI) à partir du bloc du portail ; les retire s'il
+    n'y en a pas. Appelé après un import ou une bascule, et par install.sh : jamais de copie périmée de la configuration."""
+    sources = _sni_sources()
+    if not sources:
         for path in (SNI_LINK, SNI_SITE):
             with contextlib.suppress(OSError):
                 os.unlink(path)
@@ -2010,11 +2027,13 @@ def write_sni_site(log=print):
     if not block:
         raise ValueError(t("configuration nginx du portail introuvable", "portal nginx configuration not found",
                            "configuración nginx del portal no encontrada"))
-    block = re.sub(r"server_name\s+[^;]*;", "server_name " + " ".join(names) + ";", block, count=1)
-    block = block.replace(os.path.join(TLS, "server.crt"), crt).replace(os.path.join(TLS, "server.key"),
-                                                                         os.path.join(TLS, "imported.key"))
-    _write_conf_file(SNI_SITE, "# Géré par loco : certificat importé, servi seulement pour ses noms (SNI).\n"
-                     "# Régénéré depuis loco-portal.conf ; ne pas modifier.\n" + block)
+    blocks = []
+    for crt, key, names in sources:
+        served = re.sub(r"server_name\s+[^;]*;", "server_name " + " ".join(names) + ";", block, count=1)
+        blocks.append(served.replace(os.path.join(TLS, "server.crt"), crt).replace(os.path.join(TLS, "server.key"), key))
+    _write_conf_file(SNI_SITE, "# Géré par loco : certificats servis seulement pour leurs noms (SNI) — certificat importé,\n"
+                     "# ou certificat d'entreprise sans l'adresse IP des agents. Régénéré depuis loco-portal.conf ; ne pas modifier.\n"
+                     + "\n".join(blocks))
     with contextlib.suppress(FileNotFoundError):
         os.unlink(SNI_LINK)
     os.symlink("../sites-available/loco-portal.sni.conf", SNI_LINK)
@@ -2069,7 +2088,7 @@ def renew_cert(params=None, log=print):
         raise ValueError(t("certificat fourni à l'installation (--tls-cert) : relancez install.sh avec le nouveau",
                            "certificate supplied at installation (--tls-cert): rerun install.sh with the new one",
                            "certificado proporcionado en la instalación (--tls-cert): vuelva a ejecutar install.sh con el nuevo"))
-    if tls_mode() == "enterprise":
+    if tls_mode() == "enterprise" and not enterprise_by_name():
         raise ValueError(t("certificat émis par votre autorité d'entreprise : importez le nouveau certificat",
                            "certificate issued by your enterprise authority: import the new certificate",
                            "certificado emitido por su autoridad de empresa: importe el nuevo certificado"))
@@ -2248,7 +2267,8 @@ PORTAL_URL_RE = re.compile(r"https://([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])
 
 def _served_cert_covers(host):
     """Le certificat présenté aux navigateurs couvre-t-il ce nom : celui du serveur, ou le certificat importé (SNI) ?"""
-    return any(_covers_host(pem, host) for pem in (_read(os.path.join(TLS, n)) for n in ("server.crt", "imported.crt")) if pem)
+    served = ["server.crt", "imported.crt"] + ([TLS_FILES["ENTERPRISE_CRT"]] if enterprise_by_name() else [])
+    return any(_covers_host(pem, host) for pem in (_read(os.path.join(TLS, n)) for n in served) if pem)
 
 
 def portal_params(params, conf=None):
@@ -2456,7 +2476,7 @@ def _check_enterprise_pair(crt_pem, key_path, log):
                            "la clave no corresponde al certificado"))
     host = read_conf().get("HOST", "")
     covered = ", ".join(re.findall(r"(?:DNS:|IP Address:)([^\s,]+)", _x509(leaf, "-ext", "subjectAltName")[1])) or "—"
-    if host and not _covers_host(leaf, host):
+    if host and not _covers_host(leaf, host) and not (_valid_ip(host) and _leaf_dns_names(leaf)):
         raise ValueError(t(f"SAN absent : il couvre {covered}, mais pas {host}, l'adresse utilisée par les agents. Votre autorité l'a peut-être retiré (certains profils, comme EJBCA, ne gardent pas les IP) : demandez un profil qui le conserve",
                            f"missing SAN: it covers {covered}, but not {host}, the address used by the agents. Your authority may have removed it (some profiles, such as EJBCA, drop IPs): ask for a profile that keeps it",
                            f"falta el SAN: cubre {covered}, pero no {host}, la dirección usada por los agentes. Puede que su autoridad lo haya retirado (algunos perfiles, como EJBCA, no conservan las IP): solicite un perfil que lo mantenga"))
@@ -2600,6 +2620,10 @@ def ca_csr(params, log=print):
     """Demande de certificat (CSR) à faire signer par l'autorité d'entreprise ; la clé privée ne quitte pas le serveur."""
     names = tls_params("ca-csr", params)["names"].split()
     san = _agent_names(names)
+    # Noms DNS seulement : une autorité qui restreint les adresses IP (contraintes de noms) rend sinon la chaîne
+    # inutilisable pour les clients BoringSSL (Claude Code…). Les accès par IP gardent le certificat de l'autorité loco.
+    by_ip = [s.split(":", 1)[1] for s in san if s.startswith("IP:")]
+    san = [s for s in san if s.startswith("DNS:")] or san
     cn = next((n for n in (s.split(":", 1)[1] for s in san if s.startswith("DNS:")) if len(n) <= 64), "") or _short_cn()
     with tempfile.TemporaryDirectory(dir=TLS, prefix=".csr-") as tmp:
         key, csr, cnf = (os.path.join(tmp, n) for n in ("request.key", "request.csr", "req.cnf"))
@@ -2619,6 +2643,10 @@ def ca_csr(params, log=print):
           "authority, then import the issued certificate.",
           f"Solicitud lista para {', '.join(s.split(':', 1)[1] for s in san)}: descárguela, hágala firmar por su "
           "autoridad e importe el certificado emitido."))
+    if by_ip and any(s.startswith("DNS:") for s in san):
+        log(t(f"Sans adresse IP : qui joint loco par {', '.join(by_ip)} garde le certificat de l'autorité loco.",
+              f"No IP address: whoever reaches loco by {', '.join(by_ip)} keeps the loco authority's certificate.",
+              f"Sin dirección IP: quien accede a loco por {', '.join(by_ip)} conserva el certificado de la autoridad loco."))
     return True
 
 
@@ -2688,32 +2716,75 @@ def _loco_cert(tmp, log, extra=()):
     return key, crt, san
 
 
+def _leaf_dns_names(pem):
+    return [n for n in re.findall(r"DNS:([^\s,]+)", _x509(pem, "-ext", "subjectAltName")[1]) if CERT_NAME_RE.fullmatch(n)]
+
+
+def enterprise_by_name(leaf=None):
+    """Certificat d'entreprise servi par nom (SNI) : il ne couvre pas l'adresse IP des agents, qui garde le certificat
+    de l'autorité loco (épinglée par les agents). Les clients qui viennent par nom reçoivent celui de l'entreprise."""
+    if leaf is None:
+        if tls_mode() != "enterprise":
+            return False
+        leaf = (_pem_blocks(_read(tls_path("ENTERPRISE_CRT"))) or [""])[0]
+    host = read_conf().get("HOST", "")
+    return bool(leaf) and _valid_ip(host) and not _covers_host(leaf, host) and bool(_leaf_dns_names(leaf))
+
+
+def _write_mode(mode):
+    if mode == "enterprise":
+        _write_public(tls_path("TLS_MODE"), "enterprise\n")
+    else:
+        with contextlib.suppress(OSError):
+            os.unlink(tls_path("TLS_MODE"))
+
+
 def set_tls_mode(params, log=print):
-    """Bascule le certificat du portail sur l'autorité choisie ; nginx rechargé, ou tout est rétabli."""
+    """Bascule le certificat du portail sur l'autorité choisie ; nginx rechargé, ou tout est rétabli. Un certificat
+    d'entreprise sans l'adresse IP des agents est servi pour ses noms (SNI) ; l'IP garde le certificat de l'autorité loco."""
     mode = tls_params("set-tls-mode", params)["mode"]
     if os.path.exists(os.path.join(TLS, "custom")):
         raise ValueError(t("certificat fourni à l'installation (--tls-cert)", "certificate supplied at installation (--tls-cert)",
                            "certificado proporcionado en la instalación (--tls-cert)"))
+    previous, by_name = tls_mode(), False
     with tempfile.TemporaryDirectory(dir=TLS, prefix=".mode-") as tmp:
         if mode == "enterprise":
             chain = _check_enterprise_pair(_read(tls_path("ENTERPRISE_CRT")), tls_path("ENTERPRISE_KEY"), log)
-            crt, key = os.path.join(tmp, "server.crt"), os.path.join(tmp, "server.key")
-            _write_public(crt, chain)
-            shutil.copyfile(tls_path("ENTERPRISE_KEY"), key)
-            names = [s.split(":", 1)[1] for s in _agent_names()]
+            by_name = enterprise_by_name(_pem_blocks(chain)[0])
+            if by_name:
+                key, crt, _san = _loco_cert(tmp, log)
+                names = _leaf_dns_names(_pem_blocks(chain)[0])
+            else:
+                crt, key = os.path.join(tmp, "server.crt"), os.path.join(tmp, "server.key")
+                _write_public(crt, chain)
+                shutil.copyfile(tls_path("ENTERPRISE_KEY"), key)
+                names = [s.split(":", 1)[1] for s in _agent_names()]
         else:
             key, crt, san = _loco_cert(tmp, log)
             names = [s.split(":", 1)[1] for s in san]
         write_trust(log)
-        _swap_tls({"server.key": key, "server.crt": crt}, log)
-    if mode == "enterprise":
-        _write_public(tls_path("TLS_MODE"), "enterprise\n")
+        _write_mode(mode)                         # avant le bloc SNI, qui en dépend
+        try:
+            _swap_tls({"server.key": key, "server.crt": crt}, log, after=write_sni_site)
+        except ValueError:
+            _write_mode(previous)
+            with contextlib.suppress(OSError, ValueError):
+                write_sni_site(log)
+                _reload_nginx(log)
+            raise
+    if mode == "enterprise" and by_name:
+        host = read_conf().get("HOST", "")
+        log(t(f"Le portail présente désormais le certificat de votre autorité d'entreprise pour {', '.join(names)} ; "
+              f"qui le joint par {host} garde celui de l'autorité loco.",
+              f"The portal now presents your enterprise authority's certificate for {', '.join(names)}; "
+              f"whoever reaches it by {host} keeps the loco authority's one.",
+              f"El portal presenta ahora el certificado de su autoridad de empresa para {', '.join(names)}; "
+              f"quien accede por {host} conserva el de la autoridad loco."))
+    elif mode == "enterprise":
         log(t("Le portail présente désormais le certificat de votre autorité d'entreprise (",
               "The portal now presents your enterprise authority's certificate (",
               "El portal presenta ahora el certificado de su autoridad de empresa (") + ", ".join(names) + ").")
     else:
-        with contextlib.suppress(OSError):
-            os.unlink(tls_path("TLS_MODE"))
         log(t("Retour à l'autorité loco : nouveau certificat pour ", "Back to the loco authority: new certificate for ",
               "Vuelta a la autoridad loco: nuevo certificado para ") + ", ".join(names) + ".")
     return True

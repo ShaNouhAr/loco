@@ -103,10 +103,16 @@ class TestImportErrors(Enterprise):
         message = self.refused(leaf_for(*self.GOOD), INTERMEDIATE[0])
         self.assertRegex(message, "(?i)mauvaise autorité|wrong authority|autoridad incorrecta")
 
-    def test_a_removed_ip_is_a_missing_san_and_lists_what_is_there(self):
-        message = self.refused(leaf_for("loco.lab.local"), INTERMEDIATE[0])
+    def test_without_the_agents_ip_the_certificate_is_served_by_name(self):
+        # Agents joints par IP : l'IP garde le certificat de l'autorité loco, celui de l'entreprise est servi par nom.
+        self.assertIn("BEGIN CERTIFICATE", self.check(leaf_for("loco.lab.local"), INTERMEDIATE[0]))
+        self.assertTrue(locoadmin.enterprise_by_name(pem(leaf_for("loco.lab.local"))))
+        self.assertFalse(locoadmin.enterprise_by_name(pem(leaf_for(*self.GOOD))))          # il couvre l'IP : servi à tous
+
+    def test_a_certificate_without_any_name_is_a_missing_san_and_lists_what_is_there(self):
+        message = self.refused(leaf_for("192.168.100.99", "192.168.100.98"), INTERMEDIATE[0])
         self.assertIn(HOST, message)
-        self.assertIn("loco.lab.local", message)
+        self.assertIn("192.168.100.99", message)
         self.assertIn("EJBCA", message)
 
     def test_a_missing_portal_name_is_a_missing_san(self):
@@ -116,7 +122,7 @@ class TestImportErrors(Enterprise):
 
     def test_the_three_errors_are_all_different(self):
         missing = self.refused(leaf_for(*self.GOOD))
-        san = self.refused(leaf_for("loco.lab.local"), INTERMEDIATE[0])
+        san = self.refused(leaf_for("autre.lab.local"), INTERMEDIATE[0])
         self.authority(OTHER_ROOT[0])
         wrong = self.refused(leaf_for(*self.GOOD), INTERMEDIATE[0])
         self.assertEqual(len({missing.split(":")[0], san.split(":")[0], wrong.split(":")[0]}), 3)
@@ -134,11 +140,15 @@ class TestNames(Enterprise):
                 locoadmin.tls_params("ca-csr", {"names": bad})
         self.assertEqual(locoadmin.tls_params("ca-csr", {"names": "*.lab.local"})["names"], "*.lab.local")
 
-    def test_a_real_request_contains_the_fqdn_the_portal_and_the_ip(self):
-        locoadmin.ca_csr({"names": "serveur.lab.local loco"}, log=lambda _t: None)
+    def test_a_real_request_contains_the_fqdn_and_the_portal_but_no_ip(self):
+        # Une autorité qui restreint les IP (contraintes de noms) rendrait sinon le certificat inutilisable pour BoringSSL.
+        said = []
+        locoadmin.ca_csr({"names": "serveur.lab.local loco"}, log=said.append)
         out = subprocess.run(["openssl", "req", "-in", os.path.join(self.tls, locoadmin.TLS_FILES["REQUEST_CSR"]), "-noout", "-text"], capture_output=True, text=True).stdout
-        for expected in (f"IP Address:{HOST}", "DNS:serveur.lab.local", "DNS:loco.lab.local", "DNS:loco"):
+        for expected in ("DNS:serveur.lab.local", "DNS:loco.lab.local", "DNS:loco"):
             self.assertIn(expected, out)
+        self.assertNotIn("IP Address", out)
+        self.assertTrue(any(HOST in line for line in said))
 
 
 class TestCertificatePage(FleetTest):
@@ -152,16 +162,39 @@ class TestCertificatePage(FleetTest):
         with mock.patch.object(system, "_tls_file", lambda name: pem(ROOT[0]).encode() if name == "enterprise-ca.pem" else b""):
             return html.unescape(self.admin.c.get("/system").get_data(as_text=True))
 
-    def test_the_request_asks_the_fqdn_and_shows_the_names_and_warns_about_the_ip(self):
+    def test_the_request_asks_the_fqdn_and_shows_the_names_without_the_ip(self):
         page = self.page()
         self.assertIn('name="fqdn"', page)
         self.assertIn('value="loco.lab.local"', page)
-        self.assertIn(f"{HOST}, loco.lab.local", page)
-        self.assertIn(f"conserver l'IP {HOST}", page)
+        self.assertIn('<span class="mono">loco.lab.local</span>', page)
+        self.assertIn(f"Qui joint loco par {HOST} garde le certificat de l'autorité loco", page)
 
-    def test_no_warning_when_the_agents_use_a_name(self):
+    def test_no_ip_note_when_the_agents_use_a_name(self):
         with mock.patch.object(config, "HOST", "loco.lab.local"):
-            self.assertNotIn("conserver l'IP", self.page())
+            self.assertNotIn("Pas d'adresse IP dans la demande", self.page())
+
+    def test_an_ip_under_name_constraints_of_the_authority_is_flagged(self):
+        """Le cas réel : intermédiaire qui restreint les IP, certificat qui en porte une → BoringSSL refuse la chaîne."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        key = ec.generate_private_key(ec.SECP256R1())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Lab Issuing CA")])
+        constraints = x509.NameConstraints(permitted_subtrees=[x509.DNSName("lab.local"),
+                                                               x509.IPAddress(ipaddress.ip_network("192.168.100.0/24"))],
+                                           excluded_subtrees=None)
+        issuing = (x509.CertificateBuilder().subject_name(name).issuer_name(ROOT[0].subject).public_key(key.public_key())
+                   .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(days=1))
+                   .not_valid_after(now + datetime.timedelta(days=30)).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+                   .add_extension(constraints, critical=True).sign(ROOT[1], hashes.SHA256()))
+        with_ip, by_name = leaf_for(HOST, "loco.lab.local", signer=(issuing, key)), leaf_for("loco.lab.local", signer=(issuing, key))
+        self.assertEqual(system.ip_constraint_conflict([with_ip, issuing, ROOT[0]]), ["Lab Issuing CA"])
+        self.assertEqual(system.ip_constraint_conflict([by_name, issuing, ROOT[0]]), [])
+        self.assertEqual(system.ip_constraint_conflict([with_ip, INTERMEDIATE[0], ROOT[0]]), [])          # sans contrainte : rien
+        prepared = pem(with_ip, issuing)
+        with mock.patch.object(system, "_tls_file", lambda n: prepared.encode() if n == "enterprise.crt" else pem(ROOT[0]).encode() if n == "enterprise-ca.pem" else b""), \
+                mock.patch.object(system, "cert_info", return_value={"san": [HOST, "loco.lab.local"], "issuer": "Lab Issuing CA",
+                                                                       "start": {"text": "hier"}, "end": {"text": "dans un mois", "days": 30}}):
+            page = html.unescape(self.admin.c.get("/system").get_data(as_text=True))
+        self.assertIn("alors que Lab Issuing CA restreint les adresses IP", page)
 
     def test_the_fqdn_and_extra_names_go_to_the_agent(self):
         token = self.admin.token("/account")
@@ -201,11 +234,15 @@ class TestCertificatePage(FleetTest):
             request.assert_called_once()
 
     def test_the_page_reports_a_missing_san_before_sending_anything(self):
-        page, request, _spool = self.upload(certificate=pem(leaf_for("loco.lab.local")))
+        page, request, _spool = self.upload(certificate=pem(leaf_for("192.168.100.99")))
         self.assertIn("SAN absent", page)
         self.assertIn(HOST, page)
         self.assertIn("EJBCA", page)
         request.assert_not_called()
+
+    def test_a_certificate_of_names_only_is_accepted_when_the_agents_use_the_ip(self):
+        _page, request, _spool = self.upload(certificate=pem(leaf_for("loco.lab.local")), intermediate=pem(INTERMEDIATE[0]))
+        request.assert_called_once()
 
 
 class LinkTest(OidcTest):

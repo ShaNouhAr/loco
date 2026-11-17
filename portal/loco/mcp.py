@@ -1000,6 +1000,13 @@ def _authority():
     """(adresse, empreinte SHA-256) de l'autorité de loco quand c'est elle qui a signé le certificat du portail —
     un poste ne la reconnaît pas d'office ; None pour un certificat d'une autre autorité (entreprise, publique)."""
     try:
+        # Certificat d'entreprise en service (pour tous, ou par nom) : ce n'est pas l'autorité loco qu'il faut reconnaître.
+        with open(os.path.join(config.TLS_DIR, "mode"), "rb") as f:
+            if f.read().strip() == b"enterprise":
+                return None
+    except OSError:
+        pass
+    try:
         from cryptography import x509
         from cryptography.hazmat.primitives import hashes
         with open(os.path.join(config.TLS_DIR, "ca.crt"), "rb") as f:

@@ -546,13 +546,18 @@
             <span class="ca-step-n" aria-hidden="true">{% if prepared_ok %}{{ ui_icon('check-circle') }}{% else %}2{% endif %}</span>
             <div class="ca-step-b">
               <h3>{{ _("Obtenir le certificat du serveur") }}</h3>
+              {% if tls.csr and tls.csr.ip %}
+              <p class="muted small">{{ _("Émis par votre autorité pour les noms du serveur. Les agents qui joignent loco par %(host)s gardent le certificat de l'autorité loco : cette adresse IP n'a pas à y figurer.", host=tls.host) }}</p>
+              {% else %}
               <p class="muted small">{{ _("Émis par votre autorité, il doit couvrir %(host)s : l'adresse qu'utilisent les agents.", host=tls.host) }}</p>
+              {% endif %}
               {% if prepared_ok %}
               <dl class="kv ca-prepared">
                 <dt>{{ _("Noms couverts") }}</dt><dd class="mono small">{{ tls.prepared.san|join(', ') }}</dd>
                 <dt>{{ _("Émis par") }}</dt><dd>{{ tls.prepared.issuer }}</dd>
                 <dt>{{ _("Validité") }}</dt><dd>{{ _("du %(text)s au %(text2)s", text=tls.prepared.start.text, text2=tls.prepared.end.text) }}{% if tls.prepared.end.days is not none and tls.prepared.end.days < 60 %} <span class="st warn">{{ _('expire dans %(n)s j', n=tls.prepared.end.days) }}</span>{% endif %}</dd>
               </dl>
+              {% if tls.ip_conflict %}<p class="note warn">{{ _("Ce certificat contient une adresse IP alors que %(ca)s restreint les adresses IP (contraintes de noms) : Claude Code et d'autres clients le refusent (« unsupported name constraint type »), même si OpenSSL le valide. Générez une nouvelle demande : loco n'y met plus d'adresse IP. Faites-la signer, puis importez le certificat émis.", ca=tls.ip_conflict|join(', ')) }}</p>{% endif %}
               {% endif %}
               {% if tls.request %}
               <div class="ca-request">
@@ -577,7 +582,7 @@
               {% if tls.csr %}
               <div class="ca-san stack-sm">
                 <p class="small">{{ _("La demande inclura ces noms (SAN) :") }} <span class="mono">{{ tls.csr.san|join(', ') }}</span></p>
-                {% if tls.csr.ip %}<p class="note warn">{{ _("Votre autorité doit conserver l'IP %(ip)s dans le certificat : les agents du parc s'y connectent. Certains profils, comme ceux d'EJBCA, retirent les IP : vérifiez le vôtre avant de soumettre la demande.", ip=tls.csr.ip) }}</p>{% endif %}
+                {% if tls.csr.ip %}<p class="hint">{{ _("Pas d'adresse IP dans la demande : une autorité qui restreint les IP rendrait sinon le certificat inutilisable pour Claude Code et d'autres clients. Qui joint loco par %(ip)s garde le certificat de l'autorité loco ; le certificat de votre autorité est présenté à qui vient par nom.", ip=tls.csr.ip) }}</p>{% endif %}
               </div>
               {% endif %}
               <form method="post" action="{{ url_for('system_csr') }}" class="ca-csr-form">
@@ -607,12 +612,14 @@
             </div>
           </li>
 
-          <li class="ca-step{{ ' done' if authority_ok and all_ready else (' doing' if authority_ok else '') }}">
-            <span class="ca-step-n" aria-hidden="true">{% if authority_ok and all_ready %}{{ ui_icon('check-circle') }}{% else %}3{% endif %}</span>
+          <li class="ca-step{{ ' done' if authority_ok and (all_ready or tls.by_name) else (' doing' if authority_ok else '') }}">
+            <span class="ca-step-n" aria-hidden="true">{% if authority_ok and (all_ready or tls.by_name) %}{{ ui_icon('check-circle') }}{% else %}3{% endif %}</span>
             <div class="ca-step-b">
               <h3>{{ _("Diffuser la confiance aux postes") }}</h3>
               {% if not authority_ok %}
               <p class="muted small">{{ _("Automatique dès l'étape 1 : chaque agent reçoit l'autorité à son prochain contact.") }}</p>
+              {% elif tls.by_name %}
+              <p class="muted small">{{ _("Rien à attendre : les agents joignent loco par %(host)s et gardent le certificat de l'autorité loco. Chacun reçoit tout de même l'autorité de l'entreprise à son prochain contact.", host=tls.host) }}</p>
               {% elif readiness %}
               <div class="ca-ready">
                 <p><strong class="ca-ready-n">{{ readiness.ready }} / {{ readiness.total }}</strong> <span class="muted">{{ _("postes font déjà confiance à votre autorité") }}</span></p>
@@ -637,12 +644,12 @@
             <div class="ca-step-b">
               <h3>{{ _("Basculer le portail") }}</h3>
               {% if corp %}
-              <p class="ca-ok">{{ _("En service : le portail présente le certificat de votre autorité. Un nouveau certificat importé à l'étape 2 le remplace aussitôt.") }}</p>
+              <p class="ca-ok">{% if tls.by_name %}{{ _("En service : le portail présente le certificat de votre autorité à qui vient par nom ; qui le joint par %(host)s garde celui de l'autorité loco. Un nouveau certificat importé à l'étape 2 le remplace aussitôt.", host=tls.host) }}{% else %}{{ _("En service : le portail présente le certificat de votre autorité. Un nouveau certificat importé à l'étape 2 le remplace aussitôt.") }}{% endif %}</p>
               {% else %}
               <p class="muted small">{{ _("Votre navigateur doit aussi faire confiance à cette autorité (c'est le cas des postes du domaine).") }}</p>
               {% if can('system.configure') %}
               {% set waiting = (readiness.total - readiness.ready) if readiness else 0 %}
-              <form method="post" action="{{ url_for('system_tls_mode') }}" data-confirm="{{ _('Utiliser l\'autorité d\'entreprise ?') }}" data-confirm-text="{{ _('Les %(n)s postes lui font déjà confiance. Retour à l\'autorité loco possible à tout moment.', n=readiness.total if readiness else 0) if not waiting else ngettext('%(num)s poste ne lui fait pas encore confiance : il ne pourra plus joindre loco tant que le portail l\'utilise. Attendez qu\'il se connecte, ou revenez à l\'autorité loco pour le rattraper.', '%(num)s postes ne lui font pas encore confiance : ils ne pourront plus joindre loco tant que le portail l\'utilise. Attendez qu\'ils se connectent, ou revenez à l\'autorité loco pour les rattraper.', waiting) }}" data-confirm-ok="{{ _('Basculer') }}">
+              <form method="post" action="{{ url_for('system_tls_mode') }}" data-confirm="{{ _('Utiliser l\'autorité d\'entreprise ?') }}" data-confirm-text="{{ _('Les agents, qui joignent loco par %(host)s, ne sont pas concernés : ils gardent le certificat de l\'autorité loco. Retour à l\'autorité loco possible à tout moment.', host=tls.host) if tls.by_name else _('Les %(n)s postes lui font déjà confiance. Retour à l\'autorité loco possible à tout moment.', n=readiness.total if readiness else 0) if not waiting else ngettext('%(num)s poste ne lui fait pas encore confiance : il ne pourra plus joindre loco tant que le portail l\'utilise. Attendez qu\'il se connecte, ou revenez à l\'autorité loco pour le rattraper.', '%(num)s postes ne lui font pas encore confiance : ils ne pourront plus joindre loco tant que le portail l\'utilise. Attendez qu\'ils se connectent, ou revenez à l\'autorité loco pour les rattraper.', waiting) }}" data-confirm-ok="{{ _('Basculer') }}">
                 <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="mode" value="enterprise">
                 <button class="btn primary" {{ 'disabled' if not (authority_ok and prepared_ok) }}><span class="spin"></span>{{ ui_icon('building') }}<span>{{ _("Utiliser l'autorité d'entreprise") }}</span></button>
               </form>

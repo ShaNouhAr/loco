@@ -180,7 +180,7 @@ class TestEnterpriseAuthority(CertTest):
         locoadmin.ca_csr({"names": "loco.corp.example"}, log=self.QUIET)
         csr = os.path.join(self.tls, "enterprise.csr")
         req = subprocess.run(["openssl", "req", "-in", csr, "-noout", "-text"], capture_output=True, text=True).stdout
-        self.assertIn("IP Address:192.168.42.208", req)                            # l'adresse des agents, toujours
+        self.assertNotIn("IP Address", req)                                       # noms seuls : pas d'IP (contraintes de noms)
         self.assertIn("DNS:loco.corp.example", req)
         self.assertEqual(oct(os.stat(os.path.join(self.tls, "enterprise-request.key")).st_mode & 0o777), "0o600")
 
@@ -213,7 +213,7 @@ class TestEnterpriseAuthority(CertTest):
         locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
         locoadmin.ca_csr({"names": ""}, log=self.QUIET)
         csr = os.path.join(self.tls, "enterprise.csr")
-        for issued, reason in ((self.sign(csr, corp, san="DNS:loco.corp.example"), "SAN absent"),
+        for issued, reason in ((self.sign(csr, corp, san="IP:10.9.9.9"), "SAN absent"),
                                (self.sign(csr, other), "intermédiaire manquant")):
             with self.assertRaises(ValueError) as e:
                 locoadmin.import_enterprise_cert({"upload": self.spool(issued, "3" * 32, ".crt")}, log=self.QUIET)
@@ -223,6 +223,52 @@ class TestEnterpriseAuthority(CertTest):
         with self.assertRaises(ValueError):                                       # rien de prêt : pas de bascule
             locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
         self.assertEqual(self.issuer(), "CN=old")
+
+    def test_a_certificate_of_names_only_is_served_by_name_and_the_ip_keeps_the_loco_one(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        locoadmin.ca_csr({"names": "loco.corp.example"}, log=self.QUIET)
+        issued = self.sign(os.path.join(self.tls, "enterprise.csr"), corp, san="DNS:loco.corp.example")
+        locoadmin.import_enterprise_cert({"upload": self.spool(issued, "8" * 32, ".crt")}, log=self.QUIET)
+        said = []
+        locoadmin.set_tls_mode({"mode": "enterprise"}, log=said.append)
+        self.assertEqual(locoadmin.tls_mode(), "enterprise")
+        self.assertTrue(locoadmin.enterprise_by_name())
+        self.assertEqual(self.issuer(), "CN=test CA")                             # par IP : certificat de l'autorité loco
+        subprocess.run(["openssl", "verify", "-CAfile", os.path.join(self.tls, "ca.crt"), os.path.join(self.tls, "server.crt")],
+                       check=True, capture_output=True)
+        sni = self.text(locoadmin.SNI_SITE)
+        self.assertIn("server_name loco.corp.example;", sni)                     # par nom : celui de l'entreprise
+        self.assertIn(os.path.join(self.tls, "enterprise.crt"), sni)
+        self.assertIn(os.path.join(self.tls, "enterprise.key"), sni)
+        self.assertTrue(os.path.islink(locoadmin.SNI_LINK))
+        self.assertTrue(locoadmin._served_cert_covers("loco.corp.example"))
+        self.assertTrue(any("192.168.42.208" in line for line in said))
+        locoadmin.renew_cert(log=self.QUIET)                                      # le certificat des IP se renouvelle
+        self.assertEqual(self.issuer(), "CN=test CA")
+        self.assertIn(os.path.join(self.tls, "enterprise.crt"), self.text(locoadmin.SNI_SITE))
+        # Un certificat importé pour un autre nom s'ajoute ; un nom n'est jamais servi deux fois.
+        locoadmin.import_cert({"upload": self.external(["web.example.org", "loco.corp.example"])}, log=self.QUIET)
+        sni = self.text(locoadmin.SNI_SITE)
+        self.assertIn("server_name loco.corp.example;", sni)
+        self.assertIn("server_name web.example.org;", sni)
+        locoadmin.remove_imported_cert(log=self.QUIET)
+        locoadmin.set_tls_mode({"mode": "loco"}, log=self.QUIET)                 # retour : plus de bloc par nom
+        self.assertFalse(os.path.exists(locoadmin.SNI_SITE))
+        self.assertFalse(locoadmin.enterprise_by_name())
+
+    def test_a_switch_by_name_refused_by_nginx_restores_everything(self):
+        corp = self.authority()
+        locoadmin.import_ca({"upload": self.spool(self.text(corp[1]), "1" * 32, ".pem")}, log=self.QUIET)
+        locoadmin.ca_csr({"names": "loco.corp.example"}, log=self.QUIET)
+        issued = self.sign(os.path.join(self.tls, "enterprise.csr"), corp, san="DNS:loco.corp.example")
+        locoadmin.import_enterprise_cert({"upload": self.spool(issued, "9" * 32, ".crt")}, log=self.QUIET)
+        self.reload_mock.return_value = False
+        with self.assertRaises(ValueError):
+            locoadmin.set_tls_mode({"mode": "enterprise"}, log=self.QUIET)
+        self.assertEqual(locoadmin.tls_mode(), "loco")
+        self.assertEqual(self.issuer(), "CN=old")
+        self.assertFalse(os.path.exists(locoadmin.SNI_SITE))
 
     def test_leaf_certificate_is_not_an_authority(self):
         key, csr = os.path.join(self.dir, "leaf.key"), os.path.join(self.dir, "leaf.csr")

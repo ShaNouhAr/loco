@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.170.0 — 2026-11-17
+
+- **Certificat d'entreprise sans adresse IP** : la demande de certificat (*Système › Certificat*) ne contient plus que les noms DNS du serveur. Quand les agents joignent loco par une adresse IP, ils gardent le certificat de l'autorité loco, et celui de votre autorité est présenté à qui vient par nom (SNI) — navigateurs, Claude Code, Codex. Avant, l'IP des agents y figurait : une autorité qui restreint les adresses IP (contraintes de noms, par exemple une autorité intermédiaire limitée à `lab.local` et à des plages d'IP) faisait alors refuser toute la chaîne par les clients BoringSSL, dont Claude Code (« unsupported name constraint type »), même quand OpenSSL la validait.
+- **Le cas est signalé** : si le certificat d'entreprise en service contient une adresse IP alors qu'une autorité de la chaîne restreint les IP, la page Système le dit et indique la marche à suivre (nouvelle demande, signature, import). Le certificat d'entreprise servi par nom est aussi surveillé par l'alerte d'expiration.
+- Rien ne change pour un certificat qui couvre déjà l'adresse des agents, ni quand ils joignent loco par un nom.
+
 ## 2.169.0 — 2026-11-17
 
 - **Claude et Codex : un installateur au lieu du message pré-rempli** : les tuiles Claude et Codex de la page *Serveur MCP* ouvrent une fenêtre — nom, durée et outils du jeton, système de l'ordinateur — puis téléchargent un installateur (Windows `.cmd`, macOS et Linux à lancer avec `sh`). Ouvert, il écrit la configuration MCP de l'application : `~/.claude.json` pour Claude Code (commande `claude` et onglet *Code* de l'application de bureau), `~/.codex/config.toml` pour Codex (application de bureau et commande `codex`), en gardant le reste du fichier et une copie de l'ancien. Il s'efface ensuite. Aucun lien ne permet d'ajouter un serveur MCP à ces applications, d'où l'installateur.
