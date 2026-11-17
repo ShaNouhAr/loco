@@ -179,8 +179,26 @@ def _argv(row, known, remote, tty=False):
             + (["-tt"] if tty else ["-T"]) + ["--", row["host"]] + ([remote] if remote else []))
 
 
+# Avant chaque script : le chemin des commandes et le jeton du superviseur, dont la commande ha a besoin. Pas de shell de
+# connexion : un module SSH dont un profil n'est pas compris par sh (syntaxe de bash ou de zsh) l'arrêterait avant le
+# script (« syntax error: unexpected "(" »). Le jeton vient de l'environnement du conteneur (s6), sinon de la ligne
+# « export SUPERVISOR_TOKEN=… » d'un profil (lue, pas exécutée), sinon d'un shell de connexion lancé à part, dont l'échec
+# ne coupe rien. Il ne passe jamais en argument d'une commande.
+PRELUDE = ('PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; export PATH; '
+           'if [ -z "${SUPERVISOR_TOKEN:-}" ]; then '
+           'for d in /run/s6/container_environment /var/run/s6/container_environment; do '
+           'if [ -r "$d/SUPERVISOR_TOKEN" ]; then SUPERVISOR_TOKEN=$(cat "$d/SUPERVISOR_TOKEN"); break; fi; done; fi; '
+           'if [ -z "${SUPERVISOR_TOKEN:-}" ]; then '
+           'SUPERVISOR_TOKEN=$(sed -n "s/^[[:space:]]*export[[:space:]]*SUPERVISOR_TOKEN=[\\"\']*\\([^\\"\'[:space:]]*\\).*/\\1/p" '
+           '/etc/profile.d/*.sh 2>/dev/null | tail -n 1); fi; '
+           'if [ -z "${SUPERVISOR_TOKEN:-}" ]; then '
+           'SUPERVISOR_TOKEN=$(sh -lc \'printf "\\n@@loco-token %s\\n" "${SUPERVISOR_TOKEN:-}"\' 2>/dev/null </dev/null '
+           '| sed -n "s/^@@loco-token //p" | tail -n 1); fi; '
+           'export SUPERVISOR_TOKEN; ')
+
+
 def run(row, script, timeout=QUICK):
-    """Lance un script dans un shell de connexion de Home Assistant : (code de sortie, sortie)."""
+    """Lance un script dans un shell de Home Assistant (sans shell de connexion, voir PRELUDE) : (code de sortie, sortie)."""
     if not ssh_binary():
         raise LinkError(_("Le client SSH (commande ssh) n'est pas installé sur ce serveur."))
     if not row["host_key"]:
@@ -188,7 +206,7 @@ def run(row, script, timeout=QUICK):
     public_key()
     with _Known(row) as known:
         try:
-            done = subprocess.run(_argv(row, known, "sh -lc " + shlex.quote(script)), stdin=subprocess.DEVNULL,
+            done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(PRELUDE + script)), stdin=subprocess.DEVNULL,
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
         except subprocess.TimeoutExpired as e:
             raise LinkError(_("Home Assistant n'a pas répondu dans le délai (%(n)s s).", n=timeout)) from e

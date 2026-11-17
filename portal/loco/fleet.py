@@ -1625,6 +1625,47 @@ def _ca_fingerprint():
     return hashlib.sha256(base64.b64decode("".join(m.group(1).split()))).hexdigest() if m else ""
 
 
+def served_pins():
+    """Empreintes SHA-256 des certificats que le portail présente en HTTPS (le sien, et ceux importés ou d'une autorité
+    d'entreprise), puis celle de l'autorité loco. La commande d'enrôlement Windows les reconnaît : elle fonctionne sur
+    un poste qui n'a pas encore l'autorité de loco, sans accepter pour autant n'importe quel certificat."""
+    pins = []
+    for name in ("server.crt", "imported.crt", "enterprise.crt"):
+        try:
+            with open(os.path.join(config.TLS_DIR, name), encoding="ascii", errors="replace") as f:
+                found = PEM_CERT_RE.search(f.read())
+        except OSError:
+            continue
+        if found:
+            try:
+                pins.append(hashlib.sha256(base64.b64decode("".join(found.group(1).split()))).hexdigest())
+            except ValueError:
+                continue
+    return list(dict.fromkeys(p for p in pins + [_ca_fingerprint()] if p))
+
+
+# Contrôle du certificat pour la commande d'enrôlement Windows : compilé à la volée, car Windows PowerShell vérifie le
+# certificat sur un autre fil d'exécution, où un bloc de script PowerShell ne peut pas s'exécuter (« aucune instance
+# d'exécution disponible sur ce thread »). Accepte un certificat déjà reconnu par Windows, ou l'un de ceux de loco.
+WINDOWS_PIN = ("Add-Type 'using System.Net;using System.Net.Security;public static class LocoPin{static string[] p;"
+               "public static void On(string[] pins){p=pins;ServicePointManager.SecurityProtocol|=(SecurityProtocolType)3072;"
+               "ServicePointManager.ServerCertificateValidationCallback=(s,c,h,e)=>e==SslPolicyErrors.None||(c!=null&&"
+               "System.Array.IndexOf(p,System.BitConverter.ToString(System.Security.Cryptography.SHA256.Create()"
+               ".ComputeHash(c.GetRawCertData())).Replace(\"-\",\"\"))>=0);}}';")
+
+
+def windows_command(base, key):
+    """Commande d'enrôlement Windows (Windows PowerShell, administrateur). Le certificat de loco est reconnu par son
+    empreinte : rien à importer avant, et un autre certificat (interception) reste refusé. Un certificat déjà reconnu par
+    le poste (autorité d'entreprise) passe comme d'habitude."""
+    url = f"{base}/agent/windows.ps1?key={key}"
+    pins = served_pins() if base.startswith("https://") else []
+    if not pins:
+        return f"irm '{url}' | iex"
+    listed = ",".join(f"'{p.upper()}'" for p in pins)
+    return f"{WINDOWS_PIN}[LocoPin]::On(@({listed}));irm '{url}' | iex"
+
+
 def _check_key():
     """Clé du serveur ou d'un groupe (403 sinon), reprise telle quelle dans le script ou le paquet servi."""
     key_group(request.args.get("key", ""))
@@ -1851,7 +1892,7 @@ def _commands(key):
     base, http = config.HTTPS_URL, config.HTTP_URL
     ca = _ca_fingerprint()
     commands = {
-        "windows": f"irm '{base}/agent/windows.ps1?key={key}' | iex",
+        "windows": windows_command(base, key),
         "windows_http": f"irm '{http}/agent/windows.ps1?key={key}' | iex" if http else "",
         # MSI téléchargé à la main : sans ces paramètres, il installe le service sans l'inscrire.
         "msiexec": (f'msiexec /i "%USERPROFILE%\\Downloads\\loco-client.msi" SERVER={base} KEY={key}'

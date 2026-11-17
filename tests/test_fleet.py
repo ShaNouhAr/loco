@@ -7,6 +7,7 @@ import hmac
 import json
 import os
 import re
+import shutil
 import sqlite3
 import tempfile
 import unittest
@@ -684,6 +685,36 @@ class TestInstallers(FleetTest):
             self.assertEqual(r.status_code, 503)
             self.assertIn("pas d'accès à GitHub", r.get_data(as_text=True))
             self.assertEqual(r.headers["Retry-After"], "30")
+
+    def test_windows_command_recognises_the_served_certificate_without_importing_it(self):
+        """Poste neuf : Windows ne reconnaît pas encore le certificat de loco. La commande de la page Enrôlement le
+        reconnaît par son empreinte (contrôle compilé, un bloc de script ne pouvant pas tourner sur le fil de TLS)."""
+        tls = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tls, True)
+        with open(os.path.join(tls, "server.crt"), "w") as f:
+            f.write(CA_PEM)
+        served = CA_SHA256.upper()                                                # certificat servi (ici, celui de l'autorité de test)
+        with mock.patch.object(config, "TLS_DIR", tls), mock.patch.object(fleet, "_ca_pem", return_value=CA_PEM):
+            page = self.admin.c.get("/enrollment").get_data(as_text=True)
+            command = re.search(r'data-agent="([^"]+)"', page).group(1)
+        import html
+        command = html.unescape(command)
+        self.assertTrue(command.startswith("Add-Type 'using System.Net;"), command[:60])
+        self.assertIn(f"[LocoPin]::On(@('{served}'));irm 'https://", command)
+        self.assertIn("e==SslPolicyErrors.None||", command)                    # un certificat déjà reconnu passe comme avant
+        self.assertNotIn("ServerCertificateValidationCallback={", command)     # pas de bloc de script PowerShell
+        self.assertTrue(command.endswith("| iex"))
+        self.assertIn("inutile d'importer son autorité avant", page)
+        with mock.patch.object(config, "TLS_DIR", os.path.join(tls, "absent")), mock.patch.object(fleet, "_ca_pem", return_value=""):
+            self.assertEqual(fleet.windows_command("https://loco:8443", "k"), "irm 'https://loco:8443/agent/windows.ps1?key=k' | iex")
+        self.assertEqual(fleet.windows_command("http://loco:8088", "k"), "irm 'http://loco:8088/agent/windows.ps1?key=k' | iex")
+        with tempfile.TemporaryDirectory() as tmp:
+            msi = os.path.join(tmp, "loco-client.msi")
+            with open(msi, "wb") as f:
+                f.write(b"MSI")
+            with mock.patch.object(fleet, "agent_msi", return_value=(msi, hashlib.sha256(b"MSI").hexdigest())):
+                ps1 = self.admin.c.get(f"/agent/windows.ps1?key={Agent.key()}").get_data(as_text=True)
+        self.assertLess(ps1.index("-OutFile $msi"), ps1.index("ServerCertificateValidationCallback = $null"))   # vérification rendue à Windows
 
     def test_update_offer_announces_the_fingerprint_of_the_msi_actually_served(self):
         """Régression 2.39 → 2.71 : le contact annonçait l'empreinte du MSI brut, alors que le téléchargement sert le

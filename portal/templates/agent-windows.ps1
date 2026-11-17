@@ -18,6 +18,9 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $msi = Join-Path $env:TEMP 'loco-client.msi'
 Invoke-WebRequest -UseBasicParsing -Uri '{{ msi_url }}' -OutFile $msi
+# Certificat de loco reconnu par son empreinte le temps du telechargement (commande d'enrolement) : la session revient
+# ensuite a la verification habituelle de Windows.
+[Net.ServicePointManager]::ServerCertificateValidationCallback = $null
 if ((Get-FileHash $msi -Algorithm SHA256).Hash -ne '{{ msi_sha256 }}') {
     Remove-Item $msi -Force
     throw {{ ps_t('Empreinte SHA-256 du MSI incorrecte : installation annulee.') }}

@@ -63,6 +63,7 @@
       </label>
       {% endif %}
       <div class="composer-out" data-composer-out aria-live="polite"></div>
+      {% if os == 'windows' %}<span class="hint">{{ _("À lancer dans Windows PowerShell, en administrateur. La commande reconnaît le certificat de loco par son empreinte SHA-256 : inutile d'importer son autorité avant, et un autre certificat reste refusé.") }}</span>{% endif %}
       <span class="hint">{{ _("Le poste apparaît dans <a href=\"%(v)s\">Mon parc</a> dès l'installation de l'agent ; il se met ensuite à jour seul.", v=url_for('fleet')) }}</span>
     </div>
   </div>
@@ -132,7 +133,7 @@
       {{ step(ns, _("Windows Update pour tout le réseau"), _("par DNS, sans rien sur les postes")) }}
       <div class="panel-b">
         <p class="muted">{{ _("Pour couvrir d'un coup les postes non gérés, le DNS du réseau répond") }} <span class="mono">{{ host }}</span> {{ _("pour les domaines redirigés (plutôt que la case « Rediriger Windows Update », qui vaut pour un seul poste).") }}</p>
-        <a class="btn sm" href="{{ url_for('windows_update') }}">{{ _("Script DNS et domaines : Windows › Windows Update") }}</a>
+        <a class="btn sm btn-wrap" href="{{ url_for('windows_update') }}">{{ _("Script DNS et domaines : Windows › Windows Update") }}</a>
       </div>
     </section>
     {% endif %}

@@ -6,6 +6,7 @@ le reste est le vrai : clé de loco, file des tâches, relais du terminal."""
 import base64
 import hashlib
 import json
+import subprocess
 import os
 import shutil
 import stat
@@ -202,7 +203,7 @@ class TestKeys(HomeAssistantTest):
         self.assertEqual(call["options"]["GlobalKnownHostsFile"], os.devnull)
         self.assertEqual(call["identity"], homeassistant.KEY_PATH)
         self.assertEqual((call["user"], call["host"], call["port"]), ("hassio", "192.168.43.80", "2222"))
-        self.assertTrue(call["command"].startswith("sh -lc "))        # shell de connexion : c'est lui qui donne son accès à ha
+        self.assertTrue(call["command"].startswith("sh -c "))         # pas de shell de connexion : un profil cassé l'arrêterait
         self.assertFalse(os.path.exists(call["options"]["UserKnownHostsFile"]))   # écrit pour la commande, puis effacé
         self.assertEqual([n for n in os.listdir(homeassistant.KEY_DIR) if n.startswith("known-")], [])
 
@@ -278,6 +279,26 @@ class TestReading(HomeAssistantTest):
             self.assertIn(text, page, text)
         for text in ("2026.11.0 disponible", "22.0.3 →", "2.6.3-1 →"):               # ce qui est à jour n'annonce rien
             self.assertNotIn(text, page, text)
+
+    def test_a_profile_written_for_bash_no_longer_stops_the_link(self):
+        """Retour réel : un module SSH dont un profil n'est pas compris par sh arrêtait le shell de connexion
+        (« sh: /dev/fd/64: line 14: syntax error: unexpected "(" ») avant toute commande. loco n'en lance plus."""
+        self.flag("broken-profile")
+        row = self.link()
+        self.assertEqual(row["error"], "")
+        self.assertEqual(json.loads(row["info"])["updates"][0]["version"], "2026.11.1")
+        self.assertTrue(all("jeton-du-module" not in c["command"] for c in self.calls()))   # jeton jamais dans la commande
+
+    def test_the_prelude_finds_the_token_without_a_login_shell_and_never_prints_it(self):
+        env = {"PATH": "/usr/bin:/bin", "HOME": tempfile.mkdtemp()}
+        self.addCleanup(shutil.rmtree, env["HOME"], True)
+        script = 'printf "%s|%s" "${SUPERVISOR_TOKEN:+jeton présent}" "$(command -v sh >/dev/null && echo chemin)"'
+        done = subprocess.run(["sh", "-c", homeassistant.PRELUDE + script], env=dict(env, SUPERVISOR_TOKEN="jeton-du-module"),
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        self.assertEqual(done.stdout.decode(), "jeton présent|chemin")          # déjà là : gardé tel quel
+        done = subprocess.run(["sh", "-c", homeassistant.PRELUDE + "echo suite"], env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        self.assertEqual((done.returncode, done.stdout.decode().strip().splitlines()[-1]), (0, "suite"))   # introuvable : le script tourne quand même
 
     def test_an_older_command_only_knows_addons_and_a_warning_does_not_hide_the_answer(self):
         self.flag("old-cli")

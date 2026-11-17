@@ -4828,5 +4828,6 @@
  "Accord avant le bureau distant exigé sur %(num)s poste du groupe %(name)s.": "Consent before remote desktop required on %(num)s machine of group %(name)s.",
  "Accord avant le bureau distant exigé sur %(num)s postes du groupe %(name)s.": "Consent before remote desktop required on %(num)s machines of group %(name)s.",
  "Accord avant le bureau distant retiré sur %(num)s poste du groupe %(name)s.": "Consent before remote desktop no longer required on %(num)s machine of group %(name)s.",
- "Accord avant le bureau distant retiré sur %(num)s postes du groupe %(name)s.": "Consent before remote desktop no longer required on %(num)s machines of group %(name)s."
+ "Accord avant le bureau distant retiré sur %(num)s postes du groupe %(name)s.": "Consent before remote desktop no longer required on %(num)s machines of group %(name)s.",
+ "À lancer dans Windows PowerShell, en administrateur. La commande reconnaît le certificat de loco par son empreinte SHA-256 : inutile d'importer son autorité avant, et un autre certificat reste refusé.": "Run in Windows PowerShell, as administrator. The command recognises loco's certificate by its SHA-256 fingerprint: no need to import its authority first, and any other certificate is still refused."
 }

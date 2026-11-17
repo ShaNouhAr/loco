@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.172.2 — 2026-11-17
+
+- **Enrôlement Windows sans importer l'autorité de loco** : la commande de la page *Enrôlement* échouait sur un poste neuf (« Impossible d'établir une relation de confiance pour le canal sécurisé SSL/TLS »), le certificat de loco n'étant pas encore reconnu. Elle reconnaît désormais ce certificat par son empreinte SHA-256, pour le script comme pour le téléchargement du MSI : elle fonctionne du premier coup, et tout autre certificat reste refusé. Un certificat déjà reconnu par le poste (autorité d'entreprise) passe comme avant. À lancer dans Windows PowerShell (pas PowerShell 7).
+- **Home Assistant : liaison qui échouait sur certains modules SSH** (« sh: /dev/fd/64: line 14: syntax error: unexpected "(" (expecting "}") ») : loco lançait ses commandes dans un shell de connexion, qui lit d'abord les profils du module ; un profil écrit pour bash ou zsh arrêtait `sh` avant toute commande. Les commandes passent maintenant par un shell simple, et le jeton du superviseur, dont la commande `ha` a besoin, est repris de l'environnement du module (sinon de son profil, lu sans être exécuté). Il n'apparaît jamais dans une commande.
+
 ## 2.172.1 — 2026-11-17
 
 - **Pages suivies en direct, plus jamais sous les doigts** : la fiche d'un poste s'actualise désormais en place (en-tête, actions en cours, onglets *Mises à jour*, *Historique* et *Détails*) au lieu de se recharger toute entière chaque minute ; une fenêtre ou un menu ouverts, un texte sélectionné, une saisie, des cases cochées ou un journal déplié ne sont plus perdus — l'actualisation attend, et un journal ouvert le reste. Même règle pour le suivi des mises à jour, le déroulé d'un script et le détail d'un déploiement, qui se rechargent seulement quand personne n'y fait rien.

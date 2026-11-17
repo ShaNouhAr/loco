@@ -4828,5 +4828,6 @@
  "Accord avant le bureau distant exigé sur %(num)s poste du groupe %(name)s.": "Consentimiento antes del escritorio remoto exigido en %(num)s equipo del grupo %(name)s.",
  "Accord avant le bureau distant exigé sur %(num)s postes du groupe %(name)s.": "Consentimiento antes del escritorio remoto exigido en %(num)s equipos del grupo %(name)s.",
  "Accord avant le bureau distant retiré sur %(num)s poste du groupe %(name)s.": "Consentimiento antes del escritorio remoto ya no exigido en %(num)s equipo del grupo %(name)s.",
- "Accord avant le bureau distant retiré sur %(num)s postes du groupe %(name)s.": "Consentimiento antes del escritorio remoto ya no exigido en %(num)s equipos del grupo %(name)s."
+ "Accord avant le bureau distant retiré sur %(num)s postes du groupe %(name)s.": "Consentimiento antes del escritorio remoto ya no exigido en %(num)s equipos del grupo %(name)s.",
+ "À lancer dans Windows PowerShell, en administrateur. La commande reconnaît le certificat de loco par son empreinte SHA-256 : inutile d'importer son autorité avant, et un autre certificat reste refusé.": "Ejecútelo en Windows PowerShell, como administrador. El comando reconoce el certificado de loco por su huella SHA-256: no hace falta importar antes su autoridad, y cualquier otro certificado sigue rechazado."
 }

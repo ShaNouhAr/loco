@@ -17,6 +17,11 @@ paquet, la commande reste disponible :
 irm 'https://<ip>:8443/agent/windows.ps1?key=<clé>' | iex
 ```
 
+Sur un poste qui n'a pas encore l'autorité de loco, cette commande échoue (« Impossible d'établir une relation de
+confiance pour le canal sécurisé SSL/TLS »). Celle de la page *Enrôlement* la précède donc d'un contrôle qui reconnaît
+le certificat de loco par son empreinte SHA-256 : elle fonctionne sans rien importer avant, et refuse tout autre
+certificat (interception). À lancer dans **Windows PowerShell** (pas PowerShell 7).
+
 ```bash
 # Debian, Ubuntu, Rocky Linux, AlmaLinux, RHEL (systemd) : agent Python et minuterie systemd
 curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh

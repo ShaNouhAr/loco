@@ -234,10 +234,11 @@ env = dict(os.environ, PATH=os.path.join(STATE, "bin") + ":" + os.environ.get("P
 if not command:                                                  # terminal : un vrai shell, sur place
     os.execve("/bin/sh", ["sh", "-i"], env)
 words = shlex.split(command)
-login = words[:2] == ["sh", "-lc"]
-if not login:
-    env.pop("SUPERVISOR_TOKEN")                                  # hors d'un shell de connexion, `ha` n'a pas son accès
-code = subprocess.call(["sh", "-c", words[2] if login else command], env=env)
+# Comme les modules SSH de Home Assistant : le jeton du superviseur vient de l'environnement du conteneur ; un shell de
+# connexion lit en plus les profils, dont un peut être écrit pour bash (drapeau « broken-profile ») et arrêter sh.
+if words[:2] == ["sh", "-lc"] and flag("broken-profile"):
+    refuse('sh: /dev/fd/64: line 14: syntax error: unexpected "(" (expecting "}")')
+code = subprocess.call(["sh", "-c", words[2]] if words[:1] == ["sh"] and len(words) > 2 else ["sh", "-c", command], env=env)
 if flag("reboot"):                                               # le système redémarre : la liaison tombe, puis revient
     os.unlink(os.path.join(STATE, "reboot"))
     open(down, "w").write("1000000" if flag("never-back") else "2")
