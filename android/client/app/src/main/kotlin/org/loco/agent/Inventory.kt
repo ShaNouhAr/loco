@@ -2,8 +2,11 @@ package org.loco.agent
 
 import android.app.UiModeManager
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
 import org.json.JSONArray
@@ -36,13 +39,33 @@ object Inventory {
         // Réseaux de confiance choisis sur l'appareil : loco sait ainsi pourquoi il le voit par intermittence. Le nom
         // des Wi-Fi reste sur l'appareil.
         Store(context).let { put("networks", JSONObject().put("mode", it.netMode).put("count", it.trustedWifi.size)) }
+        val system = JSONObject()
+            .put("sdk", Build.VERSION.SDK_INT)
+            .put("abis", JSONArray(Build.SUPPORTED_ABIS.toList()))
+            .put("can_install", context.packageManager.canRequestPackageInstalls())
+        battery(context)?.let { system.put("battery", it) }
         put("inventory", JSONObject()
             .put("updates", JSONArray())
             .put("apps", apps(context))
-            .put("system", JSONObject()
-                .put("sdk", Build.VERSION.SDK_INT)
-                .put("abis", JSONArray(Build.SUPPORTED_ABIS.toList()))
-                .put("can_install", context.packageManager.canRequestPackageInstalls())))
+            .put("system", system))
+    }
+
+    /** Niveau de batterie (0-100) et charge en cours, pour les appareils qui en ont une (rien pour un boîtier TV sans
+     *  batterie) : affiché sur la fiche de l'appareil. Lu sur l'état collant ACTION_BATTERY_CHANGED, sans permission. */
+    private fun battery(context: Context): JSONObject? {
+        val intent = try {
+            context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        if (!intent.getBooleanExtra(BatteryManager.EXTRA_PRESENT, true)) return null
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return null
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        return JSONObject()
+            .put("percent", (level * 100 / scale).coerceIn(0, 100))
+            .put("charging", status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
     }
 
     fun deviceName(context: Context): String {

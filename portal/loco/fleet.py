@@ -791,10 +791,14 @@ def _store_software(dev, inv):
             "cores": _int(system.get("cores")), "memory": _int(system.get("memory")),
             "memory_available": _int(system.get("memory_available")), "disk": _int(system.get("disk")),
             "disk_free": _int(system.get("disk_free")), "boot": _int(system.get("boot")),
-            # Android : niveau d'API, processeurs pris en charge, et si loco a le droit d'installer des applications.
+            # Android : niveau d'API, processeurs pris en charge, droit d'installer des applications, et batterie.
             **({"sdk": _int(system.get("sdk")),
                 "abis": [_text(a, 20) for a in system.get("abis") or [] if isinstance(a, str)][:8],
-                "can_install": bool(system.get("can_install"))} if system.get("sdk") else {}),
+                "can_install": bool(system.get("can_install")),
+                **({"battery": {"percent": max(0, min(100, _int(system["battery"].get("percent")))),
+                                "charging": bool(system["battery"].get("charging"))}}
+                   if isinstance(system.get("battery"), dict) and isinstance(system["battery"].get("percent"), (int, float)) else {})}
+               if system.get("sdk") else {}),
         },
     }
     db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "

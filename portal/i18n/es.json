@@ -5074,5 +5074,9 @@
  "tâche en cours": "tarea en curso",
  "%(n)s mise à jour": "%(n)s actualización",
  "%(n)s mises à jour": "%(n)s actualizaciones",
- "Ouvrir": "Abrir"
+ "Ouvrir": "Abrir",
+ "%(p)s %% de la mémoire utilisée": "%(p)s%% de memoria usada",
+ "occupation du processeur": "uso del procesador",
+ "Batterie %(p)s %%%(c)s": "Batería %(p)s %%%(c)s",
+ "en charge": "cargando"
 }

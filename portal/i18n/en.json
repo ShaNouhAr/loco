@@ -5074,5 +5074,9 @@
  "tâche en cours": "task running",
  "%(n)s mise à jour": "%(n)s update",
  "%(n)s mises à jour": "%(n)s updates",
- "Ouvrir": "Open"
+ "Ouvrir": "Open",
+ "%(p)s %% de la mémoire utilisée": "%(p)s%% of memory used",
+ "occupation du processeur": "processor usage",
+ "Batterie %(p)s %%%(c)s": "Battery %(p)s %%%(c)s",
+ "en charge": "charging"
 }

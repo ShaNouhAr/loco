@@ -41,6 +41,18 @@ SECTIONS = ("info", "core info", "os info", "supervisor info", "host info", "add
 # Les modules complémentaires s'appellent « apps » dans la commande ha récente, où « addons » n'est plus qu'un alias
 # déprécié (un avertissement précède alors la réponse) ; les versions plus anciennes ne connaissent que « addons ».
 ADDONS = 'if ha apps --help >/dev/null 2>&1; then ha apps {args}; else ha addons {args}; fi'
+# Ressources de l'hôte (surtout utiles sur Home Assistant OS) : mémoire par /proc/meminfo, cœurs par nproc, et deux
+# échantillons de /proc/stat (le pourcentage CPU est calculé côté serveur). Le disque vient déjà de « host info ». La
+# sortie imite une réponse `ha --raw-json` pour être relevée par le même analyseur ; valeurs manquantes -> null, sans gêne.
+RESOURCES = (
+    "echo '@@loco resources'; "
+    "MT=$(awk '/^MemTotal:/{print $2}' /proc/meminfo 2>/dev/null); "
+    "MA=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo 2>/dev/null); "
+    "NP=$(nproc 2>/dev/null); "
+    "S1=$(head -n1 /proc/stat 2>/dev/null); sleep 0.5; S2=$(head -n1 /proc/stat 2>/dev/null); "
+    "printf '{\"result\":\"ok\",\"data\":{\"mem_total_kb\":%s,\"mem_avail_kb\":%s,\"nproc\":%s,\"cpu1\":\"%s\",\"cpu2\":\"%s\"}}\\n' "
+    "\"${MT:-null}\" \"${MA:-null}\" \"${NP:-null}\" \"$S1\" \"$S2\"; echo"
+)
 STALE = 120                     # relevé plus ancien : refait en arrière-plan tant que la page est affichée
 OVERVIEW_STALE = 1800           # … et tant que la vue d'ensemble l'est, bien moins souvent
 QUICK, LONG = 40, 3600          # secondes : un relevé ; une mise à jour ou une sauvegarde
@@ -265,6 +277,7 @@ def _explain(output):
 def _collect(row):
     script = "; ".join("echo '@@loco %s'; %s 2>&1; echo" % (name, ADDONS.format(args="--raw-json") if name == "addons" else f"ha {name} --raw-json")
                        for name in SECTIONS)
+    script += "; " + RESOURCES
     code, output = run(row, script)
     found = {}
     for block in output.split("@@loco ")[1:]:
@@ -294,6 +307,22 @@ def _local(stamp):
         return datetime.datetime.fromisoformat(_text(stamp, 40).replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
     except ValueError:
         return _text(stamp, 16).replace("T", " ")
+
+
+def _cpu_percent(line1, line2):
+    """Occupation du processeur (%) entre deux lignes « cpu … » de /proc/stat (champs : user nice system idle iowait …)."""
+    try:
+        a = [int(x) for x in str(line1 or "").split()[1:8]]
+        b = [int(x) for x in str(line2 or "").split()[1:8]]
+        if len(a) < 5 or len(b) < 5:
+            return None
+        total = sum(b) - sum(a)
+        idle = (b[3] + b[4]) - (a[3] + a[4])
+        if total <= 0:
+            return None
+        return round(max(0.0, min(100.0, 100 * (total - idle) / total)), 1)
+    except (ValueError, TypeError, IndexError):
+        return None
 
 
 def summarize(found):
@@ -329,9 +358,19 @@ def summarize(found):
         return int(value * 1073741824) if isinstance(value, (int, float)) and value >= 0 else None
     health = found.get("resolution info") or {}
     supervisor_info = found.get("supervisor info") or {}
+    system_name = _text(host.get("operating_system"), 60)
+    # Ressources de l'hôte, relevées en plus sur Home Assistant OS (mémoire et processeur ; le disque vient de host info).
+    res = found.get("resources") or {}
+    mt, ma = res.get("mem_total_kb"), res.get("mem_avail_kb")
+    memory_total = int(mt) * 1024 if isinstance(mt, (int, float)) and mt > 0 else None
+    memory_used = ((int(mt) - int(ma)) * 1024 if memory_total and isinstance(ma, (int, float)) and 0 <= ma <= mt else None)
+    cores = int(res["nproc"]) if isinstance(res.get("nproc"), (int, float)) and res["nproc"] > 0 else None
     updates = [p for p in (supervisor, core, system) if p["outdated"] and p["version"]] + [a for a in addons if a["outdated"]]
     return {"core": core, "os": system, "supervisor": supervisor, "addons": addons, "backups": backups, "updates": updates,
-            "hostname": _text(host.get("hostname"), 60), "system": _text(host.get("operating_system"), 60),
+            "hostname": _text(host.get("hostname"), 60), "system": system_name,
+            "haos": system_name.startswith("Home Assistant OS"),
+            "memory_total": memory_total, "memory_used": memory_used,
+            "cpu_percent": _cpu_percent(res.get("cpu1"), res.get("cpu2")), "cores": cores,
             "disk_free": gigabytes(host.get("disk_free")), "disk_total": gigabytes(host.get("disk_total")),
             "healthy": supervisor_info.get("healthy") is not False, "supported": supervisor_info.get("supported") is not False,
             "issues": [{"type": _text(i.get("type"), 60), "context": _text(i.get("context"), 40)}

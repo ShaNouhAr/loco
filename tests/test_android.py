@@ -222,5 +222,44 @@ class TestDeviceKind(FleetTest):
         self.assertEqual(fleet.device_kind({}), "pc")
 
 
+class TestBattery(AndroidTest):
+    """La fiche d'un appareil Android qui a une batterie en montre le niveau (et la charge) ; rien sans batterie."""
+
+    def enrolled(self):
+        self.enable_android()
+        a = Agent(ANDROID, "192.168.43.70")
+        a.enroll()
+        return a, device(a.uid)["id"]
+
+    def system(self, **extra):
+        return {"updates": [], "apps": [], "system": dict({"sdk": 34, "abis": ["arm64-v8a"], "can_install": True}, **extra)}
+
+    def test_the_device_page_shows_the_battery_level_and_charging(self):
+        a, dev_id = self.enrolled()
+        a.checkin(self.system(battery={"percent": 72, "charging": True}))
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("72 %", page)
+        self.assertIn("battery-tag", page)
+        self.assertIn("en charge", page)
+
+    def test_a_low_battery_is_flagged(self):
+        a, dev_id = self.enrolled()
+        a.checkin(self.system(battery={"percent": 8, "charging": False}))
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("battery-tag low", page)
+
+    def test_no_battery_tag_without_a_battery(self):
+        a, dev_id = self.enrolled()
+        a.checkin(self.system())                         # appareil sans batterie (boîtier TV) : rien n'est annoncé
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertNotIn("battery-tag", page)
+
+    def test_an_out_of_range_percent_is_clamped(self):
+        a, dev_id = self.enrolled()
+        a.checkin(self.system(battery={"percent": 250, "charging": False}))
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("100 %", page)
+
+
 if __name__ == "__main__":
     unittest.main()

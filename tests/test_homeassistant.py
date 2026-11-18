@@ -283,6 +283,31 @@ class TestReading(HomeAssistantTest):
         for text in ("2026.11.0 disponible", "22.0.3 →", "2.6.3-1 →"):               # ce qui est à jour n'annonce rien
             self.assertNotIn(text, page, text)
 
+    def test_resources_and_haos_detection(self):
+        # summarize déduit « Home Assistant OS » du système, et calcule mémoire/processeur depuis le relevé /proc.
+        found = {
+            "core info": {"version": "2026.11.1"}, "os info": {"version": "18.4"},
+            "supervisor info": {"version": "2026.11.0", "healthy": True, "supported": True},
+            "host info": {"hostname": "homeassistant", "operating_system": "Home Assistant OS 18.4",
+                          "disk_total": 62.3, "disk_free": 40.2},
+            "addons": {"addons": []}, "backups": {"backups": []}, "resolution info": {"issues": []},
+            "resources": {"mem_total_kb": 3946540, "mem_avail_kb": 2560192, "nproc": 2,
+                          "cpu1": "cpu  100 0 50 1000 10 0 5 0 0", "cpu2": "cpu  130 0 50 1070 10 0 5 0 0"},
+        }
+        info = homeassistant.summarize(found)
+        self.assertTrue(info["haos"])
+        self.assertEqual(info["memory_total"], 3946540 * 1024)
+        self.assertEqual(info["memory_used"], (3946540 - 2560192) * 1024)
+        self.assertEqual(info["cores"], 2)
+        self.assertEqual(info["cpu_percent"], 30.0)                 # 30 occupés sur 100 de delta (70 oisifs)
+        found["host info"]["operating_system"] = "Debian GNU/Linux 12"       # installation sans Home Assistant OS
+        self.assertFalse(homeassistant.summarize(found)["haos"])
+        self.assertIsNone(homeassistant._cpu_percent("", ""))       # relevé absent : pas de pourcentage inventé
+
+    def test_the_resource_probe_is_valid_shell_and_part_of_the_reading(self):
+        self.assertEqual(subprocess.run(["sh", "-n", "-c", homeassistant.RESOURCES]).returncode, 0)
+        self.assertIn("RESOURCES", homeassistant._collect.__code__.co_names)   # ajouté au script de relevé
+
     def test_a_profile_written_for_bash_no_longer_stops_the_link(self):
         """Retour réel : un module SSH dont un profil n'est pas compris par sh arrêtait le shell de connexion
         (« sh: /dev/fd/64: line 14: syntax error: unexpected "(" ») avant toute commande. loco n'en lance plus."""

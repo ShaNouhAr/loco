@@ -275,7 +275,10 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn("static int? RunInActiveSession(", self.src)
         self.assertIn("uint WTSGetActiveConsoleSessionId()", self.src)
         self.assertIn("bool CreateProcessAsUser(", self.src)
-        self.assertIn("output.IndexOf(\"3221226505\") >= 0", self.src)
+        self.assertIn("output.IndexOf(\"exit code: 3221\", StringComparison.OrdinalIgnoreCase) >= 0", self.src)
+        # Le code de winget est repris tel quel (ses échecs sont de grands uint, négatifs en int) : pas de test « >= 0 ».
+        self.assertIn("if (sc.HasValue)", self.src)
+        self.assertNotIn("sc.Value >= 0", self.src)
         # (c) Faux positif : winget signale « OK » mais la version installée ne bouge pas (l'éditeur gère ses versions,
         #     Google Play Games) → mis de côté comme déjà à jour, plus reproposé sans fin.
         self.assertIn("before == InstalledWingetVersion(pid, winget, libraries)", self.src)

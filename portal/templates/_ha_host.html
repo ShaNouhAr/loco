@@ -111,6 +111,21 @@
             {% set addon_updates = info.addons|selectattr('outdated')|list|length %}
             <div class="s">{% if addon_updates %}<span class="st warn">{{ _("%(n)s à mettre à jour", n=addon_updates) }}</span>{% else %}{{ _("à jour") }}{% endif %}</div>
           </div>
+          {% if info.haos and info.memory_total %}
+          <div class="metric">
+            <div class="k">{{ titled('memory', _("Mémoire")) }}</div>
+            {% set memp = (info.memory_used or 0) * 100 // info.memory_total %}
+            <div class="v small-v">{{ (info.memory_used or 0)|human }} / {{ info.memory_total|human }}</div>
+            <div class="meter level {{ 'err' if memp >= 92 else 'warn' if memp >= 85 }}" title="{{ _('%(p)s %% de la mémoire utilisée', p=memp) }}"><i data-width="{{ memp }}"></i></div>
+          </div>
+          {% endif %}
+          {% if info.haos and info.cpu_percent is not none %}
+          <div class="metric">
+            <div class="k">{{ titled('cpu', _("Processeur")) }}</div>
+            <div class="v small-v">{{ info.cpu_percent }} %{% if info.cores %} · {{ _("%(n)s cœurs", n=info.cores) }}{% endif %}</div>
+            <div class="meter level {{ 'err' if info.cpu_percent >= 92 else 'warn' if info.cpu_percent >= 80 }}" title="{{ _('occupation du processeur') }}"><i data-width="{{ info.cpu_percent|round|int }}"></i></div>
+          </div>
+          {% endif %}
           <div class="metric">
             <div class="k">{{ titled('box', _("Stockage")) }}</div>
             {% if info.disk_total %}

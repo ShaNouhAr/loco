@@ -272,9 +272,12 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .nav.fit-3 > a > span, .nav.fit-3 > .nav-group > summary > span { display: none; }
 /* Administration n'a que son libellé sur un téléphone : sans lui, son icône revient. */
 .nav.fit-2 > .nav-admin:not(.on) > summary > .nav-icon:not(.nav-chevron), .nav.fit-3 > .nav-admin > summary > .nav-icon:not(.nav-chevron) { display: block; }
-.nav-dropdown { position: absolute; top: 100%; left: -4px; width: 300px; padding-top: 8px; z-index: 1; }
-.nav-dropdown.wide { width: 468px; }
-.nav-panel { padding: 6px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow-pop); }
+.nav-dropdown { position: absolute; top: 100%; left: -4px; width: 320px; padding-top: 8px; z-index: 1; }
+/* Menus longs (Système, Administration) : une colonne nette avec un ascenseur discret plutôt qu'un pavé qui déborde. */
+.nav-panel { padding: 6px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow-pop); max-height: min(74vh, 560px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.nav-panel::-webkit-scrollbar { width: 9px; }
+.nav-panel::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 5px; border: 2px solid var(--bg); }
+.nav-panel::-webkit-scrollbar-track { background: transparent; }
 .nav-group[open] .nav-panel { animation: nav-reveal .12s ease-out; }
 .nav-panel a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-sm); color: var(--text-2); }
 .nav-panel a:hover, .nav-panel a:focus-visible, .nav-panel a[aria-current="page"] { background: var(--bg-2); color: var(--text); text-decoration: none; }
@@ -681,6 +684,9 @@ a.release-note:hover { text-decoration: underline; }
 .release-note .ui-icon { width: 13px; height: 13px; flex: none; }
 .tag.up { gap: 4px; color: var(--text); background: color-mix(in srgb, var(--accent) 12%, var(--bg-3)); }
 .tag.up .ui-icon { width: 12px; height: 12px; flex: none; }
+.battery-tag { gap: 4px; }
+.battery-tag .ui-icon { width: 15px; height: 15px; flex: none; }
+.battery-tag.low { color: var(--err); background: color-mix(in srgb, var(--err) 14%, var(--bg-3)); }
 .release-offer { display: flex; align-items: center; gap: 14px; margin: 16px 20px 4px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
 .release-ico { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 50%; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .release-ico .ui-icon { width: 20px; height: 20px; }
@@ -1199,7 +1205,7 @@ html.no-enter .usage-list .bar .fill { animation: none; }
 .ha-card { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); box-shadow: var(--shadow-card); color: var(--text); transition: border-color .12s, background .12s; }
 .ha-card:hover { border-color: var(--line-2); background: var(--bg-2); text-decoration: none; }
 .ha-card-icon { flex: none; display: inline-flex; }
-.ha-card-icon .nav-icon { width: 22px; height: 22px; color: var(--accent); }
+.ha-card-icon .nav-icon { width: 22px; height: 22px; color: var(--text-2); }
 .ha-card-id { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .ha-card-id strong { font-size: 15px; }
 .ha-card-meta { flex: none; }
@@ -1207,7 +1213,7 @@ html.no-enter .usage-list .bar .fill { animation: none; }
 .ha-card-status .nav-icon { width: 16px; height: 16px; color: var(--text-3); }
 .hass-host-title { display: flex; align-items: center; gap: 10px; }
 .hass-host-title .nav-icon { width: 24px; height: 24px; color: var(--accent); }
-.ha-fleet-icon .nav-icon { width: 18px; height: 18px; color: var(--accent); }
+.ha-fleet-icon .nav-icon { width: 18px; height: 18px; color: var(--text-3); }
 
 /* ------------------------------------------------------------------ système */
 
@@ -1980,10 +1986,8 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 
 /* Navigation : administration rangée par sections (Accès, Serveur, Suivi). */
 .nav-admin .nav-dropdown { left: auto; right: -4px; width: 600px; }
-.nav-sections { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
-.nav-dropdown.wide .nav-sections { gap: 10px 10px; }
-.nav-dropdown.wide .nav-section { padding: 2px; }
-.nav-section-server { grid-column: 2; grid-row: 1 / span 2; }
+.nav-sections { display: flex; flex-direction: column; gap: 2px; }
+.nav-section + .nav-section { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 4px; }
 .nav-section-h { padding: 8px 10px 4px; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
 .nav-section + .nav-section-watch { margin-top: 2px; }
 
@@ -2008,8 +2012,6 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 @media (max-width: 1180px) { .user-chip .user-name { display: none; } }
 @media (max-width: 900px) {
   .nav-admin .nav-dropdown { width: min(340px, 100%); }
-  .nav-sections { grid-template-columns: 1fr; }
-  .nav-section-server { grid-column: auto; grid-row: auto; }
 }
 .page-tabs { margin-bottom: 0; }
 a.metric-link { display: block; color: inherit; transition: border-color .12s, background .12s; }

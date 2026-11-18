@@ -30,6 +30,7 @@
     {% if dev.label and dev.hostname and dev.label != dev.hostname %}<p class="small muted mono device-hostname">{{ dev.hostname }}</p>{% endif %}
     <p class="device-meta">
       <span>{{ dev.os_name or families.get(dev.os_family, '—') }}</span>
+      {% if soft.system and soft.system.battery %}<span class="tag battery-tag{{ ' low' if soft.system.battery.percent <= 15 and not soft.system.battery.charging }}" title="{{ _('Batterie %(p)s %%%(c)s', p=soft.system.battery.percent, c=(' · ' + _('en charge')) if soft.system.battery.charging else '') }}">{{ ui_icon('battery-charging' if soft.system.battery.charging else 'battery') }}{{ soft.system.battery.percent }} %</span>{% endif %}
       {% if release and active and not android %}<a class="tag up" href="#maj">{{ ui_icon('release') }}{{ _("Mettre à jour vers %(name)s", name=release.name) }}</a>{% endif %}
       <span class="mono">{{ address or '—' }}</span>
       <span title="{{ dev.last_seen }}">{{ _("vu %(seen)s", seen=summary.seen) }}</span>

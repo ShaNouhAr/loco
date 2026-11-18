@@ -35,7 +35,7 @@
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on }}">
         <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Système') }}" title="{{ _('Système') }}">{{ nav_icon('server') }}<span>{{ _("Système") }}</span>{{ nav_icon('chevron') }}</summary>
-        <div class="nav-dropdown wide" id="nav-system">
+        <div class="nav-dropdown" id="nav-system">
           <div class="nav-panel nav-sections">
             {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
             <div class="nav-section">

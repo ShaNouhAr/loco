@@ -1,5 +1,13 @@
 # Journal des versions
 
+## 2.181.0 — 2026-11-19
+
+- **Ressources de vos Home Assistant OS.** Sur la page d'une instance Home Assistant OS, loco affiche désormais la mémoire et le processeur en plus du stockage, relevés en direct.
+- **Batterie des appareils Android.** La fiche d'un téléphone ou d'une tablette affiche son niveau de batterie (et s'il est en charge) ; rien pour un appareil sans batterie (boîtier TV).
+- **Menus « Système » et « Administration » plus nets.** Ils s'affichent en une seule colonne avec un défilement discret quand ils sont longs, au lieu d'un pavé qui débordait.
+- **Icône Home Assistant accordée au reste.** Dans *Mon parc*, l'icône d'une instance reprend la couleur neutre des autres icônes d'appareil.
+- **Correctif : mise à jour d'un logiciel dans la session de l'utilisateur.** Quand un installeur doit tourner dans la session ouverte (comme iCUE), loco rapporte maintenant fidèlement le résultat réel au lieu d'un message trompeur. *(À noter : l'installeur de Corsair iCUE se termine parfois en erreur de son propre fait lors d'une mise à niveau ; c'est un défaut de cet installeur, pas de loco.)*
+
 ## 2.180.0 — 2026-11-18
 
 - **Windows : les logiciels récalcitrants se mettent enfin à jour (repli à winget).** Trois cas où winget échouait sur un vrai parc sont désormais pris en charge, chacun par la bonne méthode, depuis les sources officielles des éditeurs :

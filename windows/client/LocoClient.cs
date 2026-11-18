@@ -1324,9 +1324,9 @@ namespace Loco
                         CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, env, null, ref si, out pi)) return null;
                 try
                 {
-                    if (WaitForSingleObject(pi.hProcess, (uint)timeoutMs) != 0) return -1;   // délai dépassé : laissé en cours
+                    if (WaitForSingleObject(pi.hProcess, (uint)timeoutMs) != 0) return null;   // délai dépassé : laissé en cours
                     uint code; GetExitCodeProcess(pi.hProcess, out code);
-                    return unchecked((int)code);
+                    return unchecked((int)code);                      // code de winget tel quel (ses échecs sont de grands uint)
                 }
                 finally { CloseHandle(pi.hProcess); CloseHandle(pi.hThread); }
             }
@@ -1550,18 +1550,19 @@ namespace Loco
                     }
                 }
                 if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B)
-                    && output != null && (output.IndexOf("3221226505") >= 0 || output.IndexOf("C0000409", StringComparison.OrdinalIgnoreCase) >= 0))
+                    && output != null && (output.IndexOf("exit code: 3221", StringComparison.OrdinalIgnoreCase) >= 0 || output.IndexOf("C00004", StringComparison.OrdinalIgnoreCase) >= 0))
                 {
                     // L'installeur s'est terminé brutalement en session 0 (ex. Corsair iCUE : « Installer failed with exit
-                    // code: 3221226505 » = 0xC0000409). Ces installeurs n'aboutissent que dans une session interactive :
-                    // rejoué en SYSTEM dans la session console active. Sans personne de connecté, reporté à plus tard.
+                    // code: 3221226505 » = 0xC0000409, famille des exceptions fatales 0xC00004xx). Ces installeurs n'aboutissent
+                    // que dans une session interactive : rejoué en SYSTEM dans la session console active. Sans personne de
+                    // connecté, reporté à plus tard ; le résultat de la relance (succès ou échec de l'éditeur) est classé normalement.
                     string outFile = Path.Combine(Path.GetTempPath(), "loco-session-" + Guid.NewGuid().ToString("N") + ".txt");
                     string bat = Path.ChangeExtension(outFile, ".bat");
                     try
                     {
                         File.WriteAllText(bat, "@echo off\r\nset \"PATH=" + libraries + ";%PATH%\"\r\n\"" + winget + "\" " + arguments + " > \"" + outFile + "\" 2>&1\r\n", Encoding.Default);
                         int? sc = RunInActiveSession("cmd.exe /c \"\"" + bat + "\"\"", InstallerTimeout * 1000);
-                        if (sc.HasValue && sc.Value >= 0)
+                        if (sc.HasValue)        // la relance a eu lieu : on prend le code de winget tel quel (succès ou échec de l'éditeur)
                         {
                             try { output = File.ReadAllText(outFile); } catch (Exception) { }
                             code = sc.Value; result = unchecked((uint)code);
