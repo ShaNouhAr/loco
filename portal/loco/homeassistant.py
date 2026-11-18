@@ -587,7 +587,7 @@ def fleet_rows():
         else:
             color, label = "green", _("à jour")
         out.append({"id": row["id"], "name": row["name"],
-                    "address": row["username"] + "@" + row["host"] + ("" if row["port"] == 22 else ":%d" % row["port"]),
+                    "address": row["host"] + ("" if row["port"] == 22 else ":%d" % row["port"]),
                     "hostname": (info.get("hostname") if info else "") or "",
                     "updates": len(info["updates"]) if info else 0,
                     "online": bool(info) and not row["error"], "color": color, "label": label})

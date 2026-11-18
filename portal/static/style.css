@@ -252,7 +252,7 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 /* Logo : silhouette transparente teintée par la couleur d'accent (= couleur du texte du thème par défaut). */
 .brand-logo { flex: none; display: block; height: 30px; width: auto; color: var(--accent); }
 .brand span { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
-.nav { display: flex; align-items: center; height: 100%; gap: 2px; }
+.nav { display: flex; align-items: center; height: 100%; gap: 2px; flex: 1; justify-content: center; }
 .nav > a, .nav-group > summary { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 11px; border-radius: var(--r-sm); color: var(--text-2); font-size: 14px; white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color .12s, background .12s; }
 .nav > a:hover, .nav-group > summary:hover, .nav-group[open] > summary { color: var(--text); background: var(--bg-2); text-decoration: none; }
 .nav > a.on, .nav-group.on > summary { color: var(--text); background: var(--bg-3); font-weight: 500; }
@@ -1174,6 +1174,9 @@ a.fleet-state:hover { background: var(--bg-2); color: var(--text); }
 .usage-list .size { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
 .usage-list .bar { display: block; width: 100%; height: 6px; }
 .usage-list .bar .track { fill: var(--bg-3); }
+.usage-list .bar .fill { transform-box: fill-box; transform-origin: left center; animation: bar-grow .7s cubic-bezier(.2, .7, .2, 1) backwards; }
+@keyframes bar-grow { from { transform: scaleX(0); } }
+html.no-enter .usage-list .bar .fill { animation: none; }
 .usage-list .bar .fill { fill: var(--viz-1); }
 .usage-head + .meter { margin: 0 0 18px; }
 

@@ -1,5 +1,16 @@
 # Journal des versions
 
+## 2.180.0 — 2026-11-18
+
+- **Windows : les logiciels récalcitrants se mettent enfin à jour (repli à winget).** Trois cas où winget échouait sur un vrai parc sont désormais pris en charge, chacun par la bonne méthode, depuis les sources officielles des éditeurs :
+  - **HWiNFO** : le manifeste public de winget restait figé sur une version dont l'éditeur a retiré l'installeur (erreur 404). loco retrouve la version officielle courante et pose l'installeur de l'éditeur après avoir **vérifié sa signature numérique**.
+  - **Corsair iCUE** : son installeur se terminait brutalement lorsqu'il était lancé en arrière-plan. loco le relance dans la session de l'utilisateur connecté, où il aboutit.
+  - **Google Play Games** : il se met à jour tout seul (Google gère ses versions) et apparaissait pourtant sans fin comme « à mettre à jour ». loco applique la mise à jour puis cesse de la reproposer.
+- Rien de tout cela n'ajoute quoi que ce soit au catalogue de loco : ces logiciels restent simplement suivis.
+- **Barre de navigation plus équilibrée.** Les entrées sont centrées (fini l'impression de vide sur la droite) et *Vue d'ensemble* affiche de nouveau son nom à côté de l'icône. Les menus déroulants s'ouvrent et se ferment avec un court délai, plus agréables à parcourir.
+- **Home Assistant dans Mon parc, épuré.** La vraie icône « maison » de Home Assistant (accordée à la charte des autres icônes), seulement l'adresse de l'instance, et une ligne qui se comporte comme les autres postes.
+- **Petites finitions.** Les barres de stockage de la vue d'ensemble s'animent à l'affichage comme le reste du tableau de bord ; le texte d'accueil du terminal Home Assistant ne s'étire plus.
+
 ## 2.179.0 — 2026-11-18
 
 - **Home Assistant : une page par instance.** Chaque instance a désormais sa propre page (versions, mises à jour, modules, sauvegardes, journal, terminal et actions) ; la page *Home Assistant* est devenue une liste claire d'instances qui y mènent.

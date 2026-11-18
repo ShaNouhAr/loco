@@ -38,11 +38,16 @@
       e.preventDefault();
       openNav(group, !group.open);
     });
+    var hoverTimer;
     group.addEventListener("pointerenter", function (e) {
-      if (e.pointerType === "mouse") openNav(group, true);
+      if (e.pointerType !== "mouse") return;
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () { openNav(group, true); }, 90);        // petit délai : pas d'ouverture au survol fugace
     });
     group.addEventListener("pointerleave", function (e) {
-      if (e.pointerType === "mouse" && !group.contains(document.activeElement)) openNav(group, false);
+      if (e.pointerType !== "mouse") return;
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(function () { if (!group.contains(document.activeElement)) openNav(group, false); }, 220);   // grâce : on tolère le trajet en diagonale
     });
     group.addEventListener("focusout", function () {
       setTimeout(function () { if (!group.contains(document.activeElement)) openNav(group, false); }, 0);

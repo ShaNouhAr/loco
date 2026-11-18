@@ -190,6 +190,11 @@ def refresh_index(force=False):
             for path in (tmp, INDEX + ".new"):
                 if os.path.exists(path):
                     os.unlink(path)
+        try:
+            from . import winget_fallback           # replis (installeur officiel) résolus une fois par jour, cache chaud
+            winget_fallback.prewarm()
+        except Exception:
+            pass
         return INDEX
 
 

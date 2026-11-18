@@ -953,6 +953,13 @@ def _payload(dev, cmd):
         # Logiciels hors catalogue : mis à jour par winget sur le poste (agents 2.175.0 et plus ; les autres l'ignorent).
         out["software"] = [s["id"] for s in update_blocks.annotate_software(db(), dev, inventory(dev).get("software") or [])
                            if not s.get("blocked")]
+    if cmd["action"] == "update" and dev["os_family"] == "windows" and out.get("software"):
+        # Repli à winget : pour les logiciels dont l'installeur du manifeste a été retiré par l'éditeur (HWiNFO), loco
+        # résout l'installeur officiel courant ; l'agent le pose après vérification de signature (agents 2.180.0 et plus).
+        from . import winget_fallback
+        fallback = winget_fallback.descriptors(out["software"])
+        if fallback:
+            out["software_fallback"] = fallback
     if cmd["action"] == "wake-relay":
         out["wake"] = {"broadcast": params.get("broadcast", ""), "macs": params.get("macs", [])}
     if cmd["action"] == "run-script":

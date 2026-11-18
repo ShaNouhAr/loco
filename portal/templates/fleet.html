@@ -137,7 +137,7 @@
               <span class="fleet-updates">{% if ha.updates %}<span class="upd-pill sys" title="{{ ha.label }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ ha.label }}</span>{% else %}<span class="{{ 'muted' if ha.color in ('green', 'grey') else 'st ' + {'red': 'err', 'orange': 'warn'}.get(ha.color, '') }}">{{ ha.label }}</span>{% endif %}</span></span>
             </td>
             <td class="hide-sm" data-label="{{ _('Ressources') }}">—</td>
-            <td class="right nowrap"><a class="btn sm" href="{{ url_for('homeassistant_host', host_id=ha.id) }}">{{ _("Ouvrir") }}</a></td>
+            <td class="right nowrap"></td>
           </tr>
         {% endfor %}{% endif %}
         {% for r in rows %}{% set d = r.d %}{% set devname = d.label or d.hostname or d.uid[:8] %}

@@ -174,6 +174,50 @@ class TestUpdating(SoftwareTest):
         self.assertNotIn("7zip.7zip", [s["id"] for s in fleet.inventory(device(agent.uid))["software"]])
         self.assertEqual(device(agent.uid)["software_updates"], 4)
 
+    def test_a_fallback_installer_is_attached_when_winget_cannot(self):
+        # Repli à winget : pour un logiciel dont l'installeur du manifeste a été retiré (HWiNFO), loco joint au poste
+        # l'adresse de l'installeur officiel courant et l'éditeur attendu ; l'agent le vérifie par signature avant de poser.
+        agent = self.machine()
+        dev_id = device(agent.uid)["id"]
+        desc = {"REALiX.HWiNFO": {"url": "https://www.sac.sk/download/utildiag/hwi_860x.exe", "type": "inno",
+                                  "args": "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART", "signer": "REALiX", "version": "8.60"}}
+        with mock.patch("loco.winget_fallback.descriptors", return_value=desc):
+            self.admin.post(f"/fleet/{dev_id}/action", {"action": "update"}, page=f"/fleet/{dev_id}")
+            cmd, = self.commands(agent)       # le repli est joint quand l'agent récupère la commande (_payload)
+        self.assertEqual(cmd["software_fallback"]["REALiX.HWiNFO"]["signer"], "REALiX")
+        self.assertTrue(cmd["software_fallback"]["REALiX.HWiNFO"]["url"].endswith("hwi_860x.exe"))
+
+
+class WingetFallbackTest(unittest.TestCase):
+    """Repli à winget : l'installeur officiel de l'éditeur, résolu depuis une source ouverte (sans navigateur ni service
+    tiers), confié au poste pour les logiciels que winget ne sait pas (ou plus) mettre à jour."""
+
+    def test_resolves_hwinfo_from_the_official_feed_and_mirror(self):
+        from loco import winget_fallback
+        feed = ("<rss><channel>"
+                "<item><title>HWiNFO v8.60 released</title></item>"
+                "<item><title>HWiNFO v8.61-6125 Beta released</title></item>"
+                "<item><title>HWiNFO for DOS v6.2.7 released</title></item>"
+                "</channel></rss>")
+        with mock.patch("loco.winget_fallback._get", return_value=feed), \
+             mock.patch("loco.winget_fallback._head_ok", return_value=True):
+            winget_fallback._CACHE.clear()
+            d = winget_fallback.descriptor("REALiX.HWiNFO")
+        self.assertEqual(d["version"], "8.60")                        # la bêta 8.61 est ignorée
+        self.assertEqual(d["url"], "https://www.sac.sk/download/utildiag/hwi_860x.exe")
+        self.assertEqual((d["signer"], d["type"]), ("REALiX", "inno"))
+
+    def test_no_descriptor_when_the_official_mirror_lacks_the_file(self):
+        from loco import winget_fallback
+        with mock.patch("loco.winget_fallback._get", return_value="<item><title>HWiNFO v8.60 released</title></item>"), \
+             mock.patch("loco.winget_fallback._head_ok", return_value=False):
+            winget_fallback._CACHE.clear()
+            self.assertIsNone(winget_fallback.descriptor("REALiX.HWiNFO"))
+
+    def test_software_without_a_known_fallback_has_none(self):
+        from loco import winget_fallback
+        self.assertIsNone(winget_fallback.descriptor("7zip.7zip"))
+
 
 class TestWindowsAgentSource(unittest.TestCase):
     """L'agent Windows : winget pris dans App Installer avec ses bibliothèques VCLibs (compte SYSTEM), relevé par
@@ -194,11 +238,11 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn('"upgrade --id \\"" + pid + "\\" --exact --source winget --silent --accept-package-agreements', self.src)
         self.assertIn('new Regex(@"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$")', self.src)
         self.assertIn("result == 0x8A15002B", self.src)
-        self.assertIn('if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);', self.src)   # un échec logiciel ne fait pas échouer la commande
+        self.assertIn('if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);', self.src)   # un échec logiciel ne fait pas échouer la commande
         self.assertIn("if (!selection && !InstallCatalogApps(", self.src)
 
     def test_what_winget_cannot_update_is_set_aside_until_its_version_changes(self):
-        self.assertIn("if (result == 0x8A150014 || result == 0x8A15002B)", self.src)
+        self.assertIn("result == 0x8A150014 || result == 0x8A15002B", self.src)
         self.assertIn('RunCapture(winget, arguments + " --locale en-US"', self.src)     # installeur anglais sur un Windows français
         self.assertIn('Path.Combine(Root, "winget-skip.json")', self.src)
         self.assertIn("if (!lastExport.TryGetValue(pid, out now) || now != skip[pid]) skip.Remove(pid);", self.src)
@@ -207,7 +251,7 @@ class TestWindowsAgentSource(unittest.TestCase):
         # Un logiciel winget hors catalogue qui échoue (installeur MSI en échec 0x8A150049, souvent parce qu'il est ouvert)
         # ne fait pas échouer toute la mise à jour et n'est PAS abandonné. L'agent ferme ses processus sans confirmation,
         # réessaie une fois, et sinon le signale (réessayé plus tard). Rien n'est mis de côté pour un échec d'installeur.
-        self.assertIn('if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);', self.src)
+        self.assertIn('if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);', self.src)
         self.assertIn("static string InstallDir(string wingetId, string winget, string libraries)", self.src)
         self.assertIn("static int CloseApp(string dir)", self.src)
         self.assertIn("QueryFullProcessImageName", self.src)
@@ -218,6 +262,25 @@ class TestWindowsAgentSource(unittest.TestCase):
         # Garde-fous : on ne ferme que sous un dossier d'application précis (jamais une racine partagée), ni soi-même.
         self.assertIn("static bool SafeAppDir(string d)", self.src)
         self.assertIn("if (proc.Id == self) continue;", self.src)
+
+    def test_winget_fallback_mechanisms(self):
+        # (a) Descripteur de repli fourni par le serveur : installeur officiel téléchargé et vérifié par signature
+        #     Authenticode (l'éditeur attendu) avant d'être posé — utilisé quand le fichier du manifeste a été retiré.
+        self.assertIn("cmd.TryGetValue(\"software_fallback\", out softwareFallback);", self.src)
+        self.assertIn("static bool DirectInstall(string pid, Dictionary<string, object> desc", self.src)
+        self.assertIn("uint WinVerifyTrust(IntPtr hwnd, ref Guid action, IntPtr data)", self.src)
+        self.assertIn("PublisherTrusted(file, signer)", self.src)
+        # (b) Installeur qui se termine brutalement en session 0 (0xC0000409, « exit code: 3221226505 ») : rejoué en
+        #     SYSTEM dans la session console active, où il aboutit (iCUE). Sans personne de connecté, reporté.
+        self.assertIn("static int? RunInActiveSession(", self.src)
+        self.assertIn("uint WTSGetActiveConsoleSessionId()", self.src)
+        self.assertIn("bool CreateProcessAsUser(", self.src)
+        self.assertIn("output.IndexOf(\"3221226505\") >= 0", self.src)
+        # (c) Faux positif : winget signale « OK » mais la version installée ne bouge pas (l'éditeur gère ses versions,
+        #     Google Play Games) → mis de côté comme déjà à jour, plus reproposé sans fin.
+        self.assertIn("before == InstalledWingetVersion(pid, winget, libraries)", self.src)
+        # Installeur retiré par l'éditeur (404) sans repli : mis de côté avec sa raison, pas d'échec perpétuel.
+        self.assertIn("result == 0x8A150014 || result == 0x8A15002B || result == 0x80190194", self.src)
 
 
 if __name__ == "__main__":

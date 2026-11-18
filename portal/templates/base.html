@@ -25,7 +25,7 @@
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
     {% set android_nav = feature('android') and can('android.view') %}
     {% set homeassistant_nav = feature('homeassistant') and can('homeassistant.view') %}
-    <nav class="nav{{ ' nav-dense' if android_nav or homeassistant_nav }}{{ ' nav-crowded' if android_nav and homeassistant_nav }}" aria-label="{{ _('Navigation principale') }}">
+    <nav class="nav" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" title="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
       {# Le terminal d'un Home Assistant est une session distante hors du parc : il relève de son entrée, pas de Mon parc. #}
       {% set homeassistant_on = ep.startswith('homeassistant') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh') %}

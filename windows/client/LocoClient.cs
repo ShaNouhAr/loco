@@ -1277,10 +1277,202 @@ namespace Loco
             return list;
         }
 
+        // ---- Repli à winget : installeur officiel de l'éditeur, quand winget ne sait pas mettre à jour -----------
+        // Trois cas rencontrés sur un vrai parc : (1) le fichier du manifeste winget a été retiré par l'éditeur (HWiNFO,
+        // 0x80190194) → le serveur résout l'installeur courant sur un miroir officiel et l'agent le pose après avoir
+        // vérifié sa signature Authenticode ; (2) un installeur qui se termine brutalement hors session interactive
+        // (iCUE, 0xC0000409) → rejoué en SYSTEM dans la session console active ; (3) un logiciel que l'éditeur tient
+        // lui-même à jour et dont winget ne verra jamais la version bouger (Google Play Games) → mis de côté « à jour ».
+
+        const int TokenSessionId = 12;
+        const uint MaximumAllowed = 0x02000000;
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct STARTUPINFO { public int cb; public string lpReserved; public string lpDesktop; public string lpTitle;
+            public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+            public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError; }
+        [StructLayout(LayoutKind.Sequential)]
+        struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+        [DllImport("kernel32.dll")] static extern uint WTSGetActiveConsoleSessionId();
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool DuplicateTokenEx(IntPtr token, uint access, IntPtr attr, int impersonation, int type, out IntPtr dup);
+        [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetTokenInformation(IntPtr token, int cls, ref uint value, int length);
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        static extern bool CreateProcessAsUser(IntPtr token, string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string cwd, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
+        [DllImport("userenv.dll", SetLastError = true)] static extern bool CreateEnvironmentBlock(out IntPtr env, IntPtr token, bool inherit);
+        [DllImport("userenv.dll", SetLastError = true)] static extern bool DestroyEnvironmentBlock(IntPtr env);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern uint WaitForSingleObject(IntPtr handle, uint ms);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
+
+        // Lance une ligne de commande en tant que SYSTEM mais DANS la session console active (bureau interactif) :
+        // certains installeurs (Corsair iCUE) se terminent brutalement en session 0 et n'aboutissent que là. Renvoie le
+        // code de sortie, ou null si aucune session console n'est ouverte (personne de connecté) ou si le lancement échoue.
+        static int? RunInActiveSession(string commandLine, int timeoutMs)
+        {
+            uint session = WTSGetActiveConsoleSessionId();
+            if (session == 0xFFFFFFFF) return null;                      // aucune session console active
+            IntPtr token = IntPtr.Zero, dup = IntPtr.Zero, env = IntPtr.Zero;
+            try
+            {
+                if (!OpenProcessToken(Process.GetCurrentProcess().Handle, MaximumAllowed, out token)) return null;
+                if (!DuplicateTokenEx(token, MaximumAllowed, IntPtr.Zero, 2, 1, out dup)) return null;   // SecurityImpersonation, TokenPrimary
+                if (!SetTokenInformation(dup, TokenSessionId, ref session, sizeof(uint))) return null;
+                CreateEnvironmentBlock(out env, dup, false);
+                var si = new STARTUPINFO(); si.cb = Marshal.SizeOf(typeof(STARTUPINFO)); si.lpDesktop = "WinSta0\\Default";
+                PROCESS_INFORMATION pi;
+                const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400, CREATE_NO_WINDOW = 0x08000000;
+                if (!CreateProcessAsUser(dup, null, commandLine, IntPtr.Zero, IntPtr.Zero, false,
+                        CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, env, null, ref si, out pi)) return null;
+                try
+                {
+                    if (WaitForSingleObject(pi.hProcess, (uint)timeoutMs) != 0) return -1;   // délai dépassé : laissé en cours
+                    uint code; GetExitCodeProcess(pi.hProcess, out code);
+                    return unchecked((int)code);
+                }
+                finally { CloseHandle(pi.hProcess); CloseHandle(pi.hThread); }
+            }
+            catch (Exception) { return null; }
+            finally { if (env != IntPtr.Zero) DestroyEnvironmentBlock(env); if (dup != IntPtr.Zero) CloseHandle(dup); if (token != IntPtr.Zero) CloseHandle(token); }
+        }
+
+        // Vérifie la signature Authenticode du fichier (chaîne de confiance valide jusqu'à une racine du système) ET que
+        // l'éditeur attendu l'a bien signé (son nom dans le sujet du certificat). Fausse si l'un ou l'autre échoue.
+        static readonly Guid WINTRUST_ACTION_GENERIC_VERIFY_V2 = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
+        [StructLayout(LayoutKind.Sequential)]
+        struct WINTRUST_FILE_INFO { public uint cbStruct; public IntPtr pcwszFilePath; public IntPtr hFile; public IntPtr pgKnownSubject; }
+        [StructLayout(LayoutKind.Sequential)]
+        struct WINTRUST_DATA { public uint cbStruct; public IntPtr pPolicyCallbackData; public IntPtr pSIPClientData;
+            public uint dwUIChoice; public uint fdwRevocationChecks; public uint dwUnionChoice; public IntPtr pFile;
+            public uint dwStateAction; public IntPtr hWVTStateData; public IntPtr pwszURLReference; public uint dwProvFlags;
+            public uint dwUIContext; public IntPtr pSignatureSettings; }
+        [DllImport("wintrust.dll", CharSet = CharSet.Unicode)] static extern uint WinVerifyTrust(IntPtr hwnd, ref Guid action, IntPtr data);
+
+        static bool PublisherTrusted(string path, string signer)
+        {
+            bool valid = false;
+            IntPtr pPath = IntPtr.Zero, pFile = IntPtr.Zero, pData = IntPtr.Zero;
+            try
+            {
+                var fi = new WINTRUST_FILE_INFO { cbStruct = (uint)Marshal.SizeOf(typeof(WINTRUST_FILE_INFO)) };
+                pPath = Marshal.StringToCoTaskMemUni(path);
+                fi.pcwszFilePath = pPath;
+                pFile = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(WINTRUST_FILE_INFO)));
+                Marshal.StructureToPtr(fi, pFile, false);
+                var wd = new WINTRUST_DATA { cbStruct = (uint)Marshal.SizeOf(typeof(WINTRUST_DATA)),
+                    dwUIChoice = 2 /*WTD_UI_NONE*/, fdwRevocationChecks = 0 /*WTD_REVOKE_NONE*/,
+                    dwUnionChoice = 1 /*WTD_CHOICE_FILE*/, pFile = pFile, dwStateAction = 1 /*WTD_STATEACTION_VERIFY*/,
+                    dwProvFlags = 0x00000010 /*WTD_SAFER_FLAG*/ };
+                pData = Marshal.AllocCoTaskMem(Marshal.SizeOf(typeof(WINTRUST_DATA)));
+                Marshal.StructureToPtr(wd, pData, false);
+                var action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+                valid = WinVerifyTrust((IntPtr)(-1), ref action, pData) == 0;    // INVALID_HANDLE_VALUE : pas d'interface
+                wd = (WINTRUST_DATA)Marshal.PtrToStructure(pData, typeof(WINTRUST_DATA));
+                wd.dwStateAction = 2 /*WTD_STATEACTION_CLOSE*/;
+                Marshal.StructureToPtr(wd, pData, false);
+                WinVerifyTrust((IntPtr)(-1), ref action, pData);
+            }
+            catch (Exception) { valid = false; }
+            finally { if (pData != IntPtr.Zero) Marshal.FreeCoTaskMem(pData); if (pFile != IntPtr.Zero) Marshal.FreeCoTaskMem(pFile); if (pPath != IntPtr.Zero) Marshal.FreeCoTaskMem(pPath); }
+            if (!valid) return false;
+            try
+            {
+                string subject = X509Certificate.CreateFromSignedFile(path).Subject ?? "";
+                return string.IsNullOrEmpty(signer) || subject.IndexOf(signer, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch (Exception) { return false; }
+        }
+
+        // Version installée que winget connaît pour ce paquet (colonne « Version » de winget list), ou "".
+        static string InstalledWingetVersion(string pid, string winget, string libraries)
+        {
+            try
+            {
+                string outp;
+                RunCapture(winget, "list --id \"" + pid + "\" --exact --disable-interactivity --accept-source-agreements", 60, out outp, libraries);
+                foreach (string raw in (outp ?? "").Split('\n'))
+                {
+                    string line = raw.Replace("\r", "");
+                    int at = line.IndexOf(pid, StringComparison.OrdinalIgnoreCase);
+                    if (at < 0) continue;
+                    string ver = line.Substring(at + pid.Length).Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+                    if (Regex.IsMatch(ver, @"^\d")) return ver;
+                }
+            }
+            catch (Exception) { }
+            return "";
+        }
+
+        // Met un logiciel de côté avec sa raison : plus remonté par l'inventaire tant que sa version installée ne change
+        // pas (même mécanisme que « introuvable/rien d'applicable », étendu aux installeurs retirés et aux faux positifs).
+        static void SetAside(string pid, string reason, List<string> lines, Action<string, string> markPkg)
+        {
+            lines.Add(Lang.T("Non mis à jour : ", "Not updated: ", "No actualizado: ") + pid + " — " + reason
+                + Lang.T(" (plus proposé tant que sa version ne change pas)", " (no longer offered until its version changes)",
+                         " (ya no se propone mientras su versión no cambie)"));
+            var skip = LoadWingetSkip();
+            string seen;
+            skip[pid] = lastExport.TryGetValue(pid, out seen) ? seen : "";
+            SaveWingetSkip(skip);
+            if (markPkg != null) markPkg(pid, "ok");
+        }
+
+        // Repli : télécharge l'installeur officiel indiqué par le serveur, vérifie sa signature Authenticode (éditeur
+        // attendu), puis le pose en silence. Sert aux logiciels dont le fichier du manifeste winget a été retiré (HWiNFO).
+        static readonly Dictionary<string, string> DirectSilent = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            { "inno", "/SP- /VERYSILENT /SUPPRESSMSGBOXES /NORESTART" }, { "nullsoft", "/S" },
+            { "msi", "/qn /norestart" }, { "wix", "/qn /norestart" }, { "burn", "/quiet /norestart" } };
+
+        static bool DirectInstall(string pid, Dictionary<string, object> desc, List<string> lines, Action<string, string> markPkg)
+        {
+            string url = Str(desc, "url"), type = Str(desc, "type"), args = Str(desc, "args"), signer = Str(desc, "signer");
+            if (!(url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + Lang.T(" : source de repli invalide", " : invalid fallback source", " : origen de reserva no válido"));
+                if (markPkg != null) markPkg(pid, "failed");
+                return false;
+            }
+            string ext = Path.GetExtension(new Uri(url).AbsolutePath);
+            if (ext == "" || ext.Length > 5) ext = ".exe";
+            string file = Path.Combine(Path.GetTempPath(), "loco-dl-" + Guid.NewGuid().ToString("N") + ext);
+            try
+            {
+                Download(url, file, (s, cert, chain, errors) => errors == SslPolicyErrors.None);   // éditeur tiers : racines du système
+                if (!PublisherTrusted(file, signer))
+                {
+                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + Lang.T(" : signature de l'éditeur non vérifiée (installeur ignoré)",
+                        " : publisher signature not verified (installer skipped)", " : firma del editor no verificada (instalador ignorado)"));
+                    if (markPkg != null) markPkg(pid, "failed");
+                    return false;
+                }
+                if (args == "") { string d; args = DirectSilent.TryGetValue(type ?? "", out d) ? d : "/S"; }
+                string output;
+                int code = RunCapture(file, args, InstallerTimeout, out output, null);
+                uint r = unchecked((uint)code);
+                if (code == 0 || r == 0x8A15010D || r == 0x8A150109 || r == 0x8A15010B || code == 3010)   // 3010 : redémarrage MSI
+                {
+                    lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + Lang.T(" (installeur de l'éditeur)", " (publisher installer)", " (instalador del editor)"));
+                    if (markPkg != null) markPkg(pid, "ok");
+                    return true;
+                }
+                lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + WingetMessage(output, code)
+                    + Lang.T(" (installeur de l'éditeur ; réessayé à la prochaine mise à jour)", " (publisher installer; will be retried at the next update)",
+                             " (instalador del editor; se reintentará en la próxima actualización)"));
+                if (markPkg != null) markPkg(pid, "failed");
+                return false;
+            }
+            catch (Exception e)
+            {
+                lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + e.Message.Trim()
+                    + Lang.T(" (installeur de l'éditeur)", " (publisher installer)", " (instalador del editor)"));
+                if (markPkg != null) markPkg(pid, "failed");
+                return false;
+            }
+            finally { try { File.Delete(file); } catch (Exception) { } }
+        }
+
         // Logiciels hors catalogue choisis dans loco : mis à jour un à un par winget, en silence, au compte SYSTEM.
         // Codes de winget : 0x8A150014 (introuvable pour la mise à jour) et 0x8A15002B (rien d'applicable) : mis de côté,
         // sans échec ; 0x8A15010D (déjà installé) ; 0x8A150109 et 0x8A15010B : installé, un redémarrage termine l'installation.
-        static bool UpgradeSoftware(object idsValue, List<string> lines, Progress progress = null, Action<string, string> markPkg = null)
+        static bool UpgradeSoftware(object idsValue, Dictionary<string, object> fallback, List<string> lines, Progress progress = null, Action<string, string> markPkg = null)
         {
             var ids = new List<string>();
             if (idsValue is IEnumerable && !(idsValue is string))
@@ -1304,6 +1496,16 @@ namespace Loco
                 rank++;
                 if (progress != null) progress("install", pid, rank, ids.Count, -1);
                 if (markPkg != null) markPkg(pid, "running");
+
+                // Repli fourni par le serveur : winget ne peut pas mettre ce logiciel à jour sur ce poste (fichier du
+                // manifeste retiré par l'éditeur, ex. HWiNFO) → installeur officiel téléchargé et vérifié par signature.
+                object descObj;
+                if (fallback != null && fallback.TryGetValue(pid, out descObj) && descObj is Dictionary<string, object>)
+                {
+                    DirectInstall(pid, (Dictionary<string, object>)descObj, lines, markPkg);
+                    continue;
+                }
+
                 string output;
                 string arguments = "upgrade --id \"" + pid + "\" --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity";
                 int code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
@@ -1318,16 +1520,11 @@ namespace Loco
                     int retry = RunCapture(winget, arguments + " --locale en-US", InstallerTimeout, out again, libraries);
                     if (unchecked((uint)retry) != 0x8A15002B) { code = retry; output = again; result = unchecked((uint)retry); }
                 }
-                if (result == 0x8A150014 || result == 0x8A15002B)
+                if (result == 0x8A150014 || result == 0x8A15002B || result == 0x80190194)
                 {
-                    // Introuvable pour winget, ou rien d'applicable : il se met à jour autrement (son propre service, le Store).
-                    lines.Add(Lang.T("Non mis à jour : ", "Not updated: ", "No actualizado: ") + pid + " — " + WingetMessage(output, code) + Lang.T(" (winget ne peut pas le mettre à jour sur ce poste ; il n'est plus proposé tant que sa version ne change pas)",
-                        " (winget cannot update it on this machine; no longer offered until its version changes)", " (winget no puede actualizarlo en este equipo; ya no se propone mientras su versión no cambie)"));
-                    var skip = LoadWingetSkip();
-                    string seen;
-                    skip[pid] = lastExport.TryGetValue(pid, out seen) ? seen : "";
-                    SaveWingetSkip(skip);
-                    if (markPkg != null) markPkg(pid, "ok");
+                    // Introuvable pour winget, rien d'applicable, ou installeur retiré par l'éditeur (404, 0x80190194,
+                    // sans repli disponible) : mis de côté avec sa raison plutôt que de rester en échec sans fin.
+                    SetAside(pid, WingetMessage(output, code), lines, markPkg);
                     continue;
                 }
                 if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
@@ -1352,8 +1549,44 @@ namespace Loco
                         result = unchecked((uint)code);
                     }
                 }
+                if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B)
+                    && output != null && (output.IndexOf("3221226505") >= 0 || output.IndexOf("C0000409", StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    // L'installeur s'est terminé brutalement en session 0 (ex. Corsair iCUE : « Installer failed with exit
+                    // code: 3221226505 » = 0xC0000409). Ces installeurs n'aboutissent que dans une session interactive :
+                    // rejoué en SYSTEM dans la session console active. Sans personne de connecté, reporté à plus tard.
+                    string outFile = Path.Combine(Path.GetTempPath(), "loco-session-" + Guid.NewGuid().ToString("N") + ".txt");
+                    string bat = Path.ChangeExtension(outFile, ".bat");
+                    try
+                    {
+                        File.WriteAllText(bat, "@echo off\r\nset \"PATH=" + libraries + ";%PATH%\"\r\n\"" + winget + "\" " + arguments + " > \"" + outFile + "\" 2>&1\r\n", Encoding.Default);
+                        int? sc = RunInActiveSession("cmd.exe /c \"\"" + bat + "\"\"", InstallerTimeout * 1000);
+                        if (sc.HasValue && sc.Value >= 0)
+                        {
+                            try { output = File.ReadAllText(outFile); } catch (Exception) { }
+                            code = sc.Value; result = unchecked((uint)code);
+                            lines.Add(Lang.T("  rejoué dans la session de l'utilisateur connecté", "  retried in the signed-in user's session", "  reintentado en la sesión del usuario conectado"));
+                        }
+                        else
+                            lines.Add(Lang.T("  installeur à relancer quand un utilisateur sera connecté", "  installer to retry when a user is signed in", "  instalador a reintentar cuando haya un usuario conectado"));
+                    }
+                    catch (Exception) { }
+                    finally { try { File.Delete(bat); } catch (Exception) { } try { File.Delete(outFile); } catch (Exception) { } }
+                }
                 if (code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B)
                 {
+                    // Faux positif : winget signale une réussite mais la version installée n'a pas bougé → l'éditeur gère
+                    // lui-même ses versions (Google Play Games) ; déjà à jour, inutile de le reproposer indéfiniment.
+                    if (code == 0)
+                    {
+                        string before;
+                        lastExport.TryGetValue(pid, out before);
+                        if (!string.IsNullOrEmpty(before) && before == InstalledWingetVersion(pid, winget, libraries))
+                        {
+                            SetAside(pid, Lang.T("déjà à jour (l'éditeur gère lui-même ses versions)", "already up to date (the publisher manages its own versions)", "ya actualizado (el editor gestiona sus propias versiones)"), lines, markPkg);
+                            continue;
+                        }
+                    }
                     if (result == 0x8A150109 || result == 0x8A15010B)
                         lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + Lang.T(" (redémarrage nécessaire)", " (reboot required)", " (reinicio necesario)"));
                     else
@@ -2106,9 +2339,10 @@ namespace Loco
                         object apps;
                         cmd.TryGetValue("apps", out apps);
                         if (!selection && !InstallCatalogApps(Str(conf, "server"), apps, lines, progress)) ok = false;
-                        object software;
+                        object software, softwareFallback;
                         cmd.TryGetValue("software", out software);
-                        if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);   // au mieux : ne fait pas échouer la commande
+                        cmd.TryGetValue("software_fallback", out softwareFallback);
+                        if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);   // au mieux : ne fait pas échouer la commande
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;

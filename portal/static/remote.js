@@ -212,7 +212,7 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   } catch (e) { /* police de repli */ }
   terminal = new window.Terminal({
     cursorBlink: true, cursorStyle: 'block', cursorInactiveStyle: 'outline',
-    fontSize, fontFamily: FONT, fontWeight: 400, fontWeightBold: 700, lineHeight: 1.2, letterSpacing: 0,
+    fontSize, fontFamily: FONT, fontWeight: 400, fontWeightBold: 700, lineHeight: 1.0, letterSpacing: 0,
     scrollback: 10000, smoothScrollDuration: 0, fastScrollModifier: 'alt', minimumContrastRatio: 4.5,
     allowProposedApi: true, macOptionIsMeta: true, rightClickSelectsWord: false, theme: terminalTheme(),
   });
