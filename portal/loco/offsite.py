@@ -61,6 +61,7 @@ def defaults():
         "sftp": {"host": "", "port": 22, "username": "", "private_key": "", "base_dir": "loco-backups"},
         "folder": {"path": ""},
         "crypt": {"passphrase": ""},
+        "loco": {"include": True},          # copier aussi les sauvegardes de loco (Home Assistant : voir backups.py)
     }
 
 
@@ -124,12 +125,12 @@ def _set_state(conn, **changes):
 
 # --------------------------------------------------------------------------- S3 (SigV4, sans dépendance)
 
-def _sigv4(cfg, method, path, query, payload, now=None):
+def _sigv4(cfg, method, path, query, payload, now=None, payload_hash=None):
     s3 = cfg["s3"]
     host = s3["endpoint"].split("://")[-1].rstrip("/")
     now = now or datetime.datetime.now(datetime.timezone.utc)
     amzdate, datestamp = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
-    payload_hash = hashlib.sha256(payload).hexdigest()
+    payload_hash = payload_hash or hashlib.sha256(payload).hexdigest()
     canonical_headers = f"host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{amzdate}\n"
     signed = "host;x-amz-content-sha256;x-amz-date"
     canonical = f"{method}\n{path}\n{query}\n{canonical_headers}\n{signed}\n{payload_hash}"
@@ -156,16 +157,24 @@ def _s3_key(cfg, name):
     return f"{prefix}/{name}" if prefix else name
 
 
-def _s3_put(cfg, name, data):
+def _s3_put(cfg, name, source):
+    """Dépose un fichier, lu par morceaux : une sauvegarde de plusieurs gigaoctets ne passe jamais en mémoire (empreinte
+    calculée d'abord, puis envoi en flux avec sa taille). Un envoi S3 en une fois est limité à 5 Gio."""
+    digest = hashlib.sha256()
+    with open(source, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
     path = "/" + cfg["s3"]["bucket"] + "/" + urllib.parse.quote(_s3_key(cfg, name), safe="/")
-    headers = _sigv4(cfg, "PUT", path, "", data)
-    req = urllib.request.Request(_s3_url(cfg, path), data=data, headers=headers, method="PUT")
-    with urllib.request.urlopen(req, timeout=120) as r:
-        if r.status >= 300:
-            raise ValueError(f"S3 HTTP {r.status}")
+    headers = _sigv4(cfg, "PUT", path, "", b"", payload_hash=digest.hexdigest())
+    headers["Content-Length"] = str(os.path.getsize(source))
+    with open(source, "rb") as f:
+        req = urllib.request.Request(_s3_url(cfg, path), data=f, headers=headers, method="PUT")
+        with urllib.request.urlopen(req, timeout=120) as r:
+            if r.status >= 300:
+                raise ValueError(f"S3 HTTP {r.status}")
 
 
-def _s3_list(cfg):
+def _s3_list(cfg, pattern=NAME_RE):
     prefix = cfg["s3"]["prefix"].strip("/")
     query = "list-type=2&prefix=" + urllib.parse.quote(prefix + "/" if prefix else "", safe="")
     path = "/" + cfg["s3"]["bucket"]
@@ -178,7 +187,7 @@ def _s3_list(cfg):
         if el.tag.endswith("Contents"):
             key = next((c.text for c in el if c.tag.endswith("Key")), "")
             base = key.rsplit("/", 1)[-1]
-            if NAME_RE.fullmatch(base):
+            if pattern.fullmatch(base):
                 names.append(base)
     return names
 
@@ -199,7 +208,7 @@ def _sftp_options(key_file, port):
             "-o", "StrictHostKeyChecking=accept-new", "-o", f"UserKnownHostsFile={known}"]
 
 
-def _sftp_run(cfg, commands):
+def _sftp_run(cfg, commands, timeout=180):
     s = cfg["sftp"]
     if not s["private_key"]:
         raise ValueError(_("clé privée SSH manquante (SFTP par clé)"))
@@ -212,7 +221,7 @@ def _sftp_run(cfg, commands):
     batch.close()
     try:
         cmd = _sftp_options(key_path, s["port"]) + ["-b", batch.name, f"{s['username']}@{s['host']}"]
-        out = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         if out.returncode != 0:
             raise ValueError((out.stderr or out.stdout or "SFTP").strip().splitlines()[-1][:200])
         return out.stdout
@@ -223,16 +232,17 @@ def _sftp_run(cfg, commands):
 
 def _sftp_put(cfg, path, name):
     base = cfg["sftp"]["base_dir"].strip("/")
-    _sftp_run(cfg, ([f"-mkdir {base}"] if base else []) + [f"put {path} {(base + '/' if base else '') + name}"])
+    _sftp_run(cfg, ([f"-mkdir {base}"] if base else []) + [f"put {path} {(base + '/' if base else '') + name}"],
+              timeout=6 * 3600)                   # une sauvegarde de Home Assistant peut peser des gigaoctets
 
 
-def _sftp_list(cfg):
+def _sftp_list(cfg, pattern=NAME_RE):
     base = cfg["sftp"]["base_dir"].strip("/")
     out = _sftp_run(cfg, [f"ls -1 {base or '.'}"])
     names = []
     for line in out.splitlines():
         base_name = line.strip().rsplit("/", 1)[-1]
-        if NAME_RE.fullmatch(base_name):
+        if pattern.fullmatch(base_name):
             names.append(base_name)
     return names
 
@@ -252,9 +262,9 @@ def _folder_put(cfg, path, name):
     os.replace(tmp, os.path.join(dest, name))
 
 
-def _folder_list(cfg):
+def _folder_list(cfg, pattern=NAME_RE):
     try:
-        return [n for n in os.listdir(cfg["folder"]["path"]) if NAME_RE.fullmatch(n)]
+        return [n for n in os.listdir(cfg["folder"]["path"]) if pattern.fullmatch(n)]
     except OSError:
         return []
 
@@ -267,13 +277,14 @@ def _folder_delete(cfg, name):
 # --------------------------------------------------------------------------- transport commun
 
 def _put(cfg, path, name):
-    {"s3": lambda: _s3_put(cfg, name, open(path, "rb").read()),
+    {"s3": lambda: _s3_put(cfg, name, path),
      "sftp": lambda: _sftp_put(cfg, path, name),
      "folder": lambda: _folder_put(cfg, path, name)}[cfg["type"]]()
 
 
-def _list(cfg):
-    return {"s3": _s3_list, "sftp": _sftp_list, "folder": _folder_list}[cfg["type"]](cfg)
+def _list(cfg, pattern=NAME_RE):
+    """Noms présents sur la destination qui suivent « pattern » (par défaut : les sauvegardes de loco, et elles seules)."""
+    return {"s3": _s3_list, "sftp": _sftp_list, "folder": _folder_list}[cfg["type"]](cfg, pattern)
 
 
 def _delete(cfg, name):
@@ -285,7 +296,7 @@ def _encrypt(path, passphrase):
     enc = path + ".enc"
     rc = subprocess.run(["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-salt", "-pass", "env:LOCO_OFFSITE_PASS",
                          "-in", path, "-out", enc], env={**os.environ, "LOCO_OFFSITE_PASS": passphrase},
-                        capture_output=True, text=True, timeout=300)
+                        capture_output=True, text=True, timeout=3600)
     if rc.returncode != 0:
         raise ValueError((rc.stderr or "chiffrement").strip()[:200])
     return enc
@@ -299,7 +310,7 @@ def sync(conn):
     """Copie la sauvegarde la plus récente si elle n'est pas déjà hors-site, puis applique la rétention distante."""
     from .system import list_backups
     cfg = load(conn)
-    if not configured(cfg):
+    if not configured(cfg) or not cfg["loco"]["include"]:
         return
     backups = list_backups()
     if not backups:
@@ -392,6 +403,8 @@ def _form(cfg):
         cfg["s3"]["use_ssl"] = f.get("s3_use_ssl") == "1"
     if "sftp_port" in f:
         cfg["sftp"]["port"] = int(f["sftp_port"]) if f["sftp_port"].isdigit() else 22
+    if "loco_include_shown" in f:                 # case à cocher : présente seulement quand une destination est choisie
+        cfg["loco"]["include"] = f.get("loco_include") == "1"
     for section, fields in SECRETS.items():
         for field in fields:
             key = f"{section}_{field}"
@@ -410,6 +423,8 @@ def system_offsite():
     audit("systeme.sauvegarde.hors-site", _("Copie hors-site"))
     flash(_("Destination hors-site enregistrée."), "ok")
     from .util import back
+    if request.form.get("from") == "backups":
+        return back("backups", _anchor="destination")
     return back("system", _anchor="sauvegardes")
 
 

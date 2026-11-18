@@ -72,10 +72,15 @@ def flag(name):
 
 def backup(name, kind):
     data = load("backups")
-    data["backups"].append({"slug": "%08x" % (int(time.time() * 1000) & 0xffffffff), "name": name, "type": kind, "size": 1.5,
+    slug = "%08x" % (int(time.time() * 1000000) & 0xffffffff)
+    data["backups"].append({"slug": slug, "name": name, "type": kind, "size": 1.5,
                             "date": datetime.datetime.now(datetime.timezone.utc).isoformat(), "size_bytes": 1572864,
-                            "protected": False, "compressed": True})
+                            "protected": False, "compressed": True, "location": None, "locations": [None]})
     save("backups", data)
+    # L'archive elle-même, que la vraie API du Supervisor sert par /backups/<slug>/download.
+    os.makedirs(os.path.join(STATE, "files"), exist_ok=True)
+    with open(os.path.join(STATE, "files", slug + ".tar"), "wb") as f:
+        f.write((slug.encode() * 196608)[:1572864])
 
 
 def reboot():
@@ -166,6 +171,32 @@ if section == "core logs":
          "2026-11-13 09:00:04.512 WARNING (MainThread) [homeassistant.components.mqtt] Broker lent\n"
          "2026-11-13 09:00:09.004 INFO (MainThread) [homeassistant.bootstrap] Home Assistant initialized in 8.1s")
 fail("unknown command: " + section)
+'''
+
+# Le faux curl : sert les archives de l'état comme l'API du Supervisor (http://supervisor/backups/<slug>/download), si
+# l'en-tête Authorization porte le jeton du module. Ses arguments sont notés : le jeton ne doit jamais y figurer.
+CURL = r'''#!/usr/bin/env python3
+import json, os, sys
+STATE = "__STATE__"
+args = sys.argv[1:]
+headers = sys.stdin.read() if "@-" in args else ""
+url = [a for a in args if a.startswith("http")][0]
+granted = "Authorization: Bearer jeton-du-module" in headers.splitlines()
+with open(os.path.join(STATE, "curl.log"), "a") as f:
+    f.write(json.dumps({"args": args, "token": granted}) + "\n")
+if not granted:
+    sys.stderr.write("curl: (22) The requested URL returned error: 401\n")
+    sys.exit(22)
+slug = url.rstrip("/").split("/")[-2]
+path = os.path.join(STATE, "files", slug + ".tar")
+if os.path.exists(os.path.join(STATE, "download-fails")) or not os.path.exists(path):
+    sys.stderr.write("curl: (22) The requested URL returned error: 404\n")
+    sys.exit(22)
+with open(path, "rb") as f:
+    data = f.read()
+if os.path.exists(os.path.join(STATE, "download-short")):
+    data = data[: len(data) // 2]
+sys.stdout.buffer.write(data)
 '''
 
 # Le faux ssh : ne se connecte nulle part. Il applique ce que ferait un vrai (clé d'hôte connue ou non, clé acceptée ou
@@ -268,6 +299,7 @@ def install(folder):
     with open(os.path.join(state, "hostkey"), "w") as f:
         f.write(HOST_KEY + "\n")
     _script(os.path.join(state, "bin", "ha"), HA.replace("__STATE__", state))
+    _script(os.path.join(state, "bin", "curl"), CURL.replace("__STATE__", state))
     _script(os.path.join(folder, "ssh"), SSH.replace("__STATE__", state))
     return os.path.join(folder, "ssh")
 

@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Sauvegardes") }}{% endblock %}
+{% from "_nav_icons.html" import titled, ui_icon %}
+{% from "_macros.html" import cmd %}
+{% from "_offsite.html" import offsite_form with context %}
+{% from "_schedule.html" import planner, icon as sched_icon with context %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% set trash_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>{% endset %}
+{% set pve_manage = show_pve and can('proxmox.manage') %}
+{% set pve_backup = show_pve and can('proxmox.backup') %}
+{% set ha_backup = show_ha and can('homeassistant.backup') %}
+{% set dest_ready = destination and destination.configured %}
+{% set dest_failed = dest_ready and destination.state.last_error and (destination.state.last_failed or '') > (destination.state.last_ok or '') %}
+{# Les étapes de liaison de Proxmox : d'office tant qu'aucun n'est relié, puis à la demande (« Relier un autre Proxmox »). #}
+{% set pve_linked = pve|selectattr('row.fingerprint')|list %}
+{% set pve_linking = pve_manage and pve|length < max_hosts and (not pve or request.args.get('relier')) %}
+
+{% macro job_state(j) -%}
+{% if j.state == 'running' %}<span class="busy-note"><span class="spin"></span>{{ _("En cours") }}</span>
+{%- elif j.state == 'queued' %}<span class="st">{{ _("En attente") }}</span>
+{%- elif j.state == 'success' %}<span class="st ok">{{ _("Réussie") }}</span>
+{%- else %}<span class="st err">{{ _("Échec") }}</span>{% endif %}
+{%- endmacro %}
+
+{# Planifications d'une instance : quand, ce qui est fait, prochaine et dernière occurrence, pause et suppression. #}
+{% macro plan_list(items, kind, allowed) -%}
+{% if items %}
+<div class="panel-h sub"><h2>{{ _("Planifications") }} <span class="h-count">{{ items|length }}</span></h2><div class="aside">{{ _("heure du serveur loco") }}</div></div>
+<div class="table-wrap">
+  <table class="table-cards backup-plans">
+    <tbody>
+      {% for p in items %}
+      <tr>
+        <td><strong>{{ p.when }}</strong>
+          <span class="sub">{% if kind == 'proxmox' %}{{ _("toutes les machines") if p.row.guests == 'all' else p.guests|join(', ') }} → {{ p.row.storage }} · {{ _(modes[p.row.mode]) if p.row.mode in modes else p.row.mode }} · {{ _("garde la dernière") if p.row.keep == 1 else _("garde les %(n)s dernières", n=p.row.keep) if p.row.keep else _("aucune suppression") }}{% else %}{{ _("sauvegarde complète d'abord, puis copie") if p.row.fresh else _("copie de la dernière sauvegarde") }}{% endif %}</span></td>
+        <td data-label="{{ _('Prochaine') }}">{% if p.row.enabled and p.next %}{{ p.next }}{% elif p.row.next_run %}<span class="st warn">{{ _("en pause") }}</span>{% else %}<span class="st">{{ _("terminée") }}</span>{% endif %}</td>
+        <td class="muted" data-label="{{ _('Dernière') }}">{{ p.last or '—' }}</td>
+        <td class="right card-action">
+          {% if allowed %}
+          <div class="row-actions">
+            {% if p.row.next_run %}
+            <form method="post" action="{{ url_for('backup_plan_toggle', plan_id=p.row.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn sm">{{ _("Pause") if p.row.enabled else _("Reprendre") }}</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('backup_plan_delete', plan_id=p.row.id) }}" data-confirm="{{ _('Supprimer cette planification ?') }}" data-confirm-text="{{ _('Elle ne lancera plus rien. Les sauvegardes déjà faites restent où elles sont.') }}" data-confirm-ok="{{ _('Supprimer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn icon sm ghost danger" title="{{ _('Supprimer') }}" aria-label="{{ _('Supprimer la planification') }}">{{ trash_icon }}</button>
+            </form>
+          </div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Sauvegardes") }}</h1>
+    <p>{{ _("Ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox —, où, et quand.") }}</p>
+  </div>
+  {% if pve_manage and pve and pve|length < max_hosts and not pve_linking %}<div class="actions"><a class="btn" href="{{ url_for('backups', relier=1) }}#proxmox">{{ ui_icon('plus') }}<span>{{ _("Relier un autre Proxmox") }}</span></a></div>{% endif %}
+</div>
+
+<div class="stack" data-poll="{{ url_for('backups') }}" data-poll-kind="reload" data-poll-every="5000" data-signature="{{ signature }}">
+  {% if is_administrator() and not feature('homeassistant') and not feature('proxmox') %}
+  <p class="note">{{ _("Home Assistant et Proxmox VE se sauvegardent aussi d'ici une fois activés dans <a href=\"%(url)s\">Fonctionnalités</a> (section Facultatif).", url=url_for('features')) }}</p>
+  {% elif is_administrator() and not feature('homeassistant') %}
+  <p class="note">{{ _("Home Assistant se sauvegarde aussi d'ici une fois activé dans <a href=\"%(url)s\">Fonctionnalités</a> (section Facultatif).", url=url_for('features')) }}</p>
+  {% elif is_administrator() and not feature('proxmox') %}
+  <p class="note">{{ _("Proxmox VE se sauvegarde aussi d'ici une fois activé dans <a href=\"%(url)s\">Fonctionnalités</a> (section Facultatif).", url=url_for('features')) }}</p>
+  {% endif %}
+
+  <div class="metrics backup-metrics" data-refresh="backup-metrics">
+    {% if show_pve %}
+    <a class="metric metric-link" href="#proxmox">
+      <div class="k">{{ titled('server', "Proxmox") }}</div>
+      {% set guests = pve_linked|map(attribute='guests')|sum(start=[]) %}
+      <div class="v">{{ guests|length }}<span class="v-unit">{{ ngettext('machine', 'machines', guests|length) }}</span></div>
+      <div class="s">{% if not pve_linked %}{{ _("aucun serveur relié") }}{% else %}{% set saved = guests|selectattr('last')|list|length %}{{ _("%(n)s avec une sauvegarde", n=saved) }}{% endif %}</div>
+    </a>
+    {% endif %}
+    {% if show_ha %}
+    <a class="metric metric-link" href="#homeassistant">
+      <div class="k">{{ titled('home', "Home Assistant") }}</div>
+      <div class="v">{{ hass|length }}<span class="v-unit">{{ ngettext('instance', 'instances', hass|length) }}</span></div>
+      <div class="s">{% set copied = hass|selectattr('state.at')|list|length %}{% if not hass %}{{ _("aucune instance reliée") }}{% elif hass|selectattr('state.error')|list %}<span class="st err">{{ _("copie en échec") }}</span>{% else %}{{ copied }} {{ ngettext('copiée sur la destination', 'copiées sur la destination', copied) }}{% endif %}</div>
+    </a>
+    {% endif %}
+    {% if loco %}
+    <a class="metric metric-link" href="#loco">
+      <div class="k">{{ titled('save', "loco") }}</div>
+      <div class="v small-v">{{ loco.last.text if loco.last else _("aucune") }}</div>
+      <div class="s">{% if loco.last and loco.last.late %}<span class="st warn">{{ _("sauvegarde quotidienne en retard") }}</span>{% else %}{{ loco.backups|length }} {{ ngettext('conservée', 'conservées', loco.backups|length) }}{% endif %}</div>
+    </a>
+    {% endif %}
+    {% if destination %}
+    <a class="metric metric-link" href="#destination">
+      <div class="k">{{ titled('forward', _("Destination externe")) }}</div>
+      <div class="v small-v">{{ {'s3': _('S3 / Cloud'), 'sftp': 'SFTP', 'folder': _('Dossier / NAS')}.get(destination.cfg.type, _('aucune')) }}</div>
+      <div class="s">{% if not dest_ready %}<span class="st warn">{{ _("à choisir") }}</span>{% elif dest_failed %}<span class="st err">{{ _("dernière copie en échec") }}</span>{% elif destination.state.last_ok %}<span class="st ok">{{ _("loco copié") }}</span>{% else %}{{ _("prête") }}{% endif %}</div>
+    </a>
+    {% endif %}
+  </div>
+
+  <div class="tabs page-tabs" role="tablist" data-hash aria-label="{{ _('Sections des sauvegardes') }}">
+    {% set first = namespace(v=true) %}
+    {% if show_pve %}<button type="button" data-tab="proxmox" aria-selected="{{ 'true' if first.v else 'false' }}">Proxmox{% if pve_linked %} <span class="tab-count">{{ pve_linked|length }}</span>{% endif %}</button>{% set first.v = false %}{% endif %}
+    {% if show_ha %}<button type="button" data-tab="homeassistant" aria-selected="{{ 'true' if first.v else 'false' }}">Home Assistant{% if hass %} <span class="tab-count">{{ hass|length }}</span>{% endif %}</button>{% set first.v = false %}{% endif %}
+    {% if loco %}<button type="button" data-tab="loco" aria-selected="{{ 'true' if first.v else 'false' }}">loco{% if loco.last and loco.last.late %} <span class="st warn" aria-label="{{ _('en retard') }}"></span>{% endif %}</button>{% set first.v = false %}{% endif %}
+    {% if destination %}<button type="button" data-tab="destination" aria-selected="{{ 'true' if first.v else 'false' }}">{{ _("Destination") }}{% if not dest_ready %} <span class="st warn" aria-label="{{ _('à choisir') }}"></span>{% elif dest_failed %} <span class="st err" aria-label="{{ _('en échec') }}"></span>{% endif %}</button>{% set first.v = false %}{% endif %}
+  </div>
+  {% set first = namespace(v=true) %}
+
+  {# ------------------------------------------------------------------ Proxmox #}
+  {% if show_pve %}
+  <div class="tab-panel{{ ' on' if first.v }}" data-panel="proxmox"><div class="stack">{% set first.v = false %}
+    {% for v in pve %}
+    {% set p = v.row %}
+    {% if v.offered %}
+    {# Certificat relevé : le jeton n'est envoyé qu'une fois son empreinte confirmée. #}
+    <section class="panel pve-confirm" id="confirmer-{{ p.id }}">
+      <div class="panel-h"><h2>{{ _("Confirmer le certificat de %(name)s", name=p.name) }}</h2><div class="aside mono">{{ p.host }}:{{ p.port }}</div></div>
+      <div class="panel-b stack-sm">
+        <p>{{ _("Voici l'empreinte du certificat que présente cette adresse. Comparez-la à celle de votre Proxmox avant de confirmer : loco n'enverra son jeton qu'à un serveur qui présente ce certificat-là.") }}</p>
+        <dl class="kv-grid">
+          <div class="kv-wide"><dt>{{ _("Empreinte SHA-256") }}</dt><dd class="mono break-any">{{ v.offered.pretty }}</dd></div>
+          {% if v.offered.subject %}<div><dt>{{ _("Nom du certificat") }}</dt><dd class="break-any">{{ v.offered.subject }}</dd></div>{% endif %}
+          {% if v.offered.issuer %}<div><dt>{{ _("Émis par") }}</dt><dd class="break-any">{{ v.offered.issuer }}</dd></div>{% endif %}
+          {% if v.offered.until %}<div><dt>{{ _("Valable jusqu'au") }}</dt><dd>{{ v.offered.until|date_fr }}</dd></div>{% endif %}
+        </dl>
+        {% if p.fingerprint %}<p class="hint">{{ _("Ce certificat est le même que celui déjà confirmé.") if v.offered.fingerprint == p.fingerprint else _("Ce certificat diffère de celui confirmé jusqu'ici. C'est attendu s'il a été renouvelé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+        <p class="hint">{{ _("Dans Proxmox : le nœud › Système › Certificats, colonne « Empreinte ». Ou, dans le shell du nœud :") }}</p>
+        {{ cmd('pve-fp-' ~ p.id, 'openssl x509 -noout -fingerprint -sha256 -in /etc/pve/local/pveproxy-ssl.pem 2>/dev/null || openssl x509 -noout -fingerprint -sha256 -in /etc/pve/local/pve-ssl.pem', '#') }}
+      </div>
+      <div class="panel-f row-between">
+        <form method="post" action="{{ url_for('proxmox_confirm', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="cancel" value="1">
+          <button class="linkbtn">{{ _("Annuler") }}</button>
+        </form>
+        <form method="post" action="{{ url_for('proxmox_confirm', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="fingerprint" value="{{ v.offered.fingerprint }}">
+          <button class="btn primary"><span class="spin"></span>{{ _("L'empreinte est la bonne : confirmer") }}</button>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if p.fingerprint %}
+    {% set data = v.info %}
+    <section class="panel pve-host">
+      <div data-refresh="pve-{{ p.id }}">
+        <div class="panel-h">
+          <h2>{{ p.name }}{% if data and data.version %} <span class="h-count">Proxmox VE {{ data.version }}</span>{% endif %}</h2>
+          <div class="aside">
+            {% if v.running %}<span class="busy-note"><span class="spin"></span>{{ _("sauvegarde en cours") }}</span>
+            {% elif p.error %}<span class="pill err">{{ _("liaison en échec") }}</span>
+            {% elif not data %}<span class="pill">{{ _("relevé en cours") }}</span>
+            {% else %}<span class="pill ok">{{ _("relié") }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="panel-b stack-sm">
+          {% if p.error %}<div class="note err"><p>{{ p.error }}</p></div>{% endif %}
+          {% if data and data.missing %}<div class="note warn"><p>{{ _("Le jeton n'a pas tous les droits utiles : %(list)s. Ajoutez-les au rôle de son utilisateur (voir « Relier un Proxmox »).", list=data.missing|join(', ')) }}</p></div>{% endif %}
+          <div class="row-between pve-meta">
+            <span class="muted small">{{ p.token_id }} · {{ p.host }}:{{ p.port }}{% if v.checked %} · {{ _("relevé à %(t)s", t=v.checked) }}{% endif %}</span>
+          </div>
+        </div>
+
+        {% if data and v.guests %}
+        <form method="post" action="{{ url_for('proxmox_backup', host_id=p.id) }}" data-pick>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <div class="table-wrap">
+            <table class="table-cards pve-guests">
+              <thead><tr>
+                {% if pve_backup %}<th class="check-col"><input type="checkbox" data-check-all aria-label="{{ _('Tout cocher') }}"></th>{% endif %}
+                <th>{{ _("Machine") }}</th><th>{{ _("Nœud") }}</th><th>{{ _("État") }}</th><th>{{ _("Dernière sauvegarde") }}</th>
+              </tr></thead>
+              <tbody>
+                {% for gst in v.guests %}
+                <tr>
+                  {% if pve_backup %}<td class="check-col"><input type="checkbox" name="vmid" value="{{ gst.vmid }}" aria-label="{{ _('Choisir %(name)s', name=gst.name) }}"{% if gst.job %} disabled{% endif %}></td>{% endif %}
+                  <td><strong>{{ gst.name }}</strong> <span class="sub mono">{{ gst.vmid }}</span> <span class="badge-ro">{{ _("VM") if gst.type == 'qemu' else _("conteneur") }}</span>{% if gst.template %} <span class="badge-ro">{{ _("modèle") }}</span>{% endif %}</td>
+                  <td class="mono" data-label="{{ _('Nœud') }}">{{ gst.node }}</td>
+                  <td data-label="{{ _('État') }}">{% if gst.status == 'running' %}<span class="st ok">{{ _("allumée") }}</span>{% elif gst.status == 'stopped' %}<span class="st">{{ _("arrêtée") }}</span>{% else %}<span class="st">{{ gst.status or '—' }}</span>{% endif %}</td>
+                  <td data-label="{{ _('Dernière sauvegarde') }}">
+                    {% if gst.job %}<span class="busy-note"><span class="spin"></span>{{ _("en cours") if gst.job == 'running' else _("en attente") }}</span>
+                    {% elif gst.last %}{{ gst.last.when|date_fr }} <span class="sub">{{ gst.last.size|human }} · {{ gst.last.storage }}{% if gst.count > 1 %} · {{ _("%(n)s en tout", n=gst.count) }}{% endif %}</span>
+                    {% else %}<span class="st warn">{{ _("aucune") }}</span>{% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if pve_backup %}
+          <div class="panel-f pve-run">
+            {% if v.storages %}
+            <label class="f"><span>{{ _("Stockage de Proxmox") }}</span>
+              <select name="storage">{% for s in v.storages %}<option value="{{ s.storage }}"{{ ' selected' if loop.first }}>{{ s.storage }} · {{ s.type }}{% if s.total %} · {{ _("%(free)s libres", free=s.free|human) }}{% endif %}</option>{% endfor %}</select></label>
+            <label class="f"><span>{{ _("Mode") }}</span>
+              <select name="mode">{% for key, label in modes.items() %}<option value="{{ key }}"{{ ' selected' if loop.first }}>{{ _(label) }}</option>{% endfor %}</select></label>
+            <div class="row pve-run-buttons">
+              <button class="btn primary" data-pick-submit disabled><span class="spin"></span><span>{{ _("Sauvegarder maintenant") }} (<span data-pick-count>0</span>)</span></button>
+              <button type="button" class="btn" data-open="#pve-plan-{{ p.id }}">{{ sched_icon('calendar') }}<span>{{ _("Planifier…") }}</span></button>
+            </div>
+            {% else %}
+            <p class="note warn">{{ _("Aucun stockage de ce Proxmox n'accepte les sauvegardes : autorisez le contenu « VZDump backup file » sur l'un d'eux, ou déclarez un NAS (menu Plus).") }}</p>
+            {% endif %}
+          </div>
+          {# Dans le formulaire : la planification reprend les machines cochées et le stockage choisi. #}
+          <dialog id="pve-plan-{{ p.id }}" class="wide-dialog">
+            <div class="dlg-h"><h2>{{ _("Planifier la sauvegarde") }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button></div>
+            <div class="dlg-b dlg-stack">
+              <input type="hidden" name="kind" value="proxmox"><input type="hidden" name="host_id" value="{{ p.id }}">
+              <div class="seg" role="radiogroup" aria-label="{{ _('Machines') }}">
+                <label><input type="radio" name="scope" value="selected" checked><span>{{ _("Les machines cochées") }}</span></label>
+                <label><input type="radio" name="scope" value="all"><span>{{ _("Toutes, y compris les futures") }}</span></label>
+              </div>
+              <p class="hint">{{ _("« Toutes » reprend à chaque occurrence les machines de ce Proxmox, celles créées d'ici là comprises (hors modèles). Le stockage et le mode sont ceux choisis sous le tableau.") }}</p>
+              {{ planner({'recurrence': 'daily'}) }}
+              <label class="f"><span>{{ _("Sauvegardes gardées par machine") }}</span><input type="number" name="keep" value="7" min="0" max="{{ keep_max }}" class="field-xs"></label>
+              <p class="hint">{{ _("Au-delà, les plus anciennes de cette planification sont supprimées après chaque sauvegarde réussie (0 : aucune suppression). Celles faites autrement, et les sauvegardes protégées, ne sont jamais touchées.") }}</p>
+            </div>
+            <div class="dlg-f">
+              <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+              <button class="btn primary" formaction="{{ url_for('backup_plan_save') }}">{{ _("Planifier") }}</button>
+            </div>
+          </dialog>
+          {% endif %}
+        </form>
+        {% elif data %}
+        <div class="panel-b"><p class="empty">{{ _("Aucune machine visible avec ce jeton : il lui faut le droit VM.Audit.") }}</p></div>
+        {% endif %}
+
+        {{ plan_list(v.plans, 'proxmox', pve_backup) }}
+
+        {% if v.jobs %}
+        <div class="panel-h sub"><h2>{{ _("Activité") }}</h2><div class="aside">{{ _("les quinze dernières sauvegardes") }}</div></div>
+        <div class="table-wrap">
+          <table class="table-cards pve-jobs">
+            <tbody>
+              {% for j in v.jobs %}
+              <tr>
+                <td><strong>{{ j.guest or j.vmid }}</strong> <span class="sub mono">{{ j.vmid }}</span> <span class="sub">→ {{ j.storage }}</span>{% if j.plan_id %} <span class="badge-ro">{{ _("planifiée") }}</span>{% endif %}
+                  {% if j.output and j.state in ('failed', 'success') %}<details class="hass-output" data-key="pve-sortie-{{ j.id }}"><summary class="linkbtn">{{ _("Journal") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+                <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
+                <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
+                <td class="right card-action">{% if pve_backup and j.state in ('queued', 'running') %}
+                  <form method="post" action="{{ url_for('proxmox_cancel', task_id=j.id) }}" data-confirm="{{ _('Annuler la sauvegarde de %(name)s ?', name=j.guest or j.vmid) }}" data-confirm-text="{{ _('La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).') }}" data-confirm-ok="{{ _('Annuler la sauvegarde') }}">
+                    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Annuler") }}</button>
+                  </form>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="panel-f pve-actions">
+        <form method="post" action="{{ url_for('proxmox_refresh', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn sm" title="{{ _('Relever de nouveau les machines et les sauvegardes') }}"><span class="spin"></span>{{ _("Actualiser") }}</button>
+        </form>
+        {% if pve_manage %}
+        <button type="button" class="btn sm" data-open="#pve-nas-{{ p.id }}">{{ _("Déclarer un NAS…") }}</button>
+        <details class="menu">
+          <summary class="btn sm" aria-label="{{ _('Plus d’actions') }}">{{ _("Plus") }}</summary>
+          <div class="menu-list menu-left" role="menu">
+            <form method="post" action="{{ url_for('proxmox_certificate', host_id=p.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item" role="menuitem">{{ _("Relever de nouveau le certificat…") }}</button>
+            </form>
+            <hr>
+            <form method="post" action="{{ url_for('proxmox_delete', host_id=p.id) }}" data-confirm="{{ _('Retirer %(name)s de loco ?', name=p.name) }}" data-confirm-text="{{ _('loco oublie ce serveur, ses planifications et l’historique de ses sauvegardes. Les sauvegardes restent dans Proxmox ; pensez à y supprimer le jeton de loco.') }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item danger" role="menuitem">{{ _("Retirer de loco") }}</button>
+            </form>
+          </div>
+        </details>
+        {% endif %}
+      </div>
+    </section>
+
+    {% if pve_manage %}
+    <dialog id="pve-nas-{{ p.id }}" class="wide-dialog">
+      <form method="post" action="{{ url_for('proxmox_storage_add', host_id=p.id) }}">
+        <div class="dlg-h"><h2>{{ _("Déclarer un NAS dans %(name)s", name=p.name) }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button></div>
+        <div class="dlg-b dlg-stack">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <p class="muted">{{ _("Proxmox écrit lui-même ses sauvegardes : pour qu'elles aillent sur votre NAS, le NAS devient un stockage de Proxmox, proposé ensuite à côté des autres. Le jeton doit avoir en plus le droit Datastore.Allocate sur /storage.") }}</p>
+          <div class="seg" role="radiogroup" aria-label="{{ _('Protocole') }}">
+            {% for key, label in nas_types.items() %}<label><input type="radio" name="type" value="{{ key }}" {{ 'checked' if loop.first }}><span>{{ label }}</span></label>{% endfor %}
+          </div>
+          <div class="grid2">
+            <label class="f"><span>{{ _("Nom du stockage dans Proxmox") }}</span><input type="text" name="storage" placeholder="nas-sauvegardes" required maxlength="64" spellcheck="false" class="mono"></label>
+            <label class="f"><span>{{ _("Adresse du NAS") }}</span><input type="text" name="server" placeholder="192.168.1.20" required maxlength="253" spellcheck="false" class="mono"></label>
+          </div>
+          <div data-show-for="type:nfs" class="stack-sm">
+            <label class="f"><span>{{ _("Dossier exporté (NFS)") }}</span><input type="text" name="export" placeholder="/volume1/proxmox" maxlength="250" spellcheck="false" class="mono"></label>
+          </div>
+          <div data-show-for="type:cifs" class="stack-sm">
+            <div class="grid2">
+              <label class="f"><span>{{ _("Partage") }}</span><input type="text" name="share" placeholder="proxmox" maxlength="80" spellcheck="false" class="mono"></label>
+              <label class="f"><span>{{ _("Domaine") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="domain" maxlength="64" spellcheck="false" class="mono"></label>
+            </div>
+            <div class="grid2">
+              <label class="f"><span>{{ _("Utilisateur") }}</span><input type="text" name="username" maxlength="64" autocomplete="off" spellcheck="false" class="mono"></label>
+              <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" name="password" maxlength="256" autocomplete="new-password"></label>
+            </div>
+            <p class="hint">{{ _("Le mot de passe est remis à Proxmox, qui le garde ; loco ne le conserve pas.") }}</p>
+          </div>
+        </div>
+        <div class="dlg-f">
+          <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+          <button class="btn primary"><span class="spin"></span>{{ _("Déclarer") }}</button>
+        </div>
+      </form>
+    </dialog>
+    {% endif %}
+    {% endif %}
+    {% endfor %}
+
+    {% if not pve and not pve_manage %}
+    <div class="panel"><div class="panel-b"><p class="empty">{{ _("Aucun Proxmox n'est encore relié.") }} {{ _("Un administrateur peut en relier un depuis cette page.") }}</p></div></div>
+    {% endif %}
+
+    {% if pve_linking %}
+    {% set ns = namespace(n=0) %}
+    <div class="section-h" id="relier">
+      <div><h2>{{ _("Relier un Proxmox") }}</h2><p>{{ _("loco passe par l'API de Proxmox avec un jeton créé pour lui, aux droits limités à la sauvegarde. Deux étapes, une seule fois.") }}</p></div>
+    </div>
+    <section class="panel">
+      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Créer le jeton dans Proxmox") }}</h2><div class="aside">{{ _("dans le shell d'un nœud") }}</div></div>
+      <div class="panel-b stack-sm">
+        <p class="muted">{{ _("Un rôle qui ne permet que de voir les machines et les stockages et de sauvegarder, un utilisateur pour loco, puis son jeton. La dernière commande affiche le secret du jeton, une seule fois : copiez-le.") }}</p>
+        {{ cmd('pve-role', 'pveum role add ' ~ role ~ ' --privs "' ~ privileges|join(' ') ~ '"', '#') }}
+        {{ cmd('pve-user', 'pveum user add loco@pve --comment loco', '#') }}
+        {{ cmd('pve-acl', 'pveum acl modify / --users loco@pve --roles ' ~ role, '#') }}
+        {{ cmd('pve-token', 'pveum user token add loco@pve loco --privsep 0', '#') }}
+        <p class="hint">{{ _("Pour déclarer un NAS depuis loco, ajoutez Datastore.Allocate à la liste des droits du rôle. Dans l'interface de Proxmox, les mêmes réglages se trouvent dans Centre de données › Permissions.") }}</p>
+      </div>
+    </section>
+    <section class="panel">
+      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Indiquer l'adresse et le jeton") }}</h2></div>
+      <div class="panel-b stack-sm">
+        <form method="post" action="{{ url_for('proxmox_link') }}" class="stack-sm">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <div class="rollout-fields">
+            <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="address" placeholder="192.168.1.10:8006" spellcheck="false" autocomplete="off" required maxlength="270"></label>
+            <label class="f"><span>{{ _("Nom dans loco") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="name" placeholder="pve" autocomplete="off" maxlength="60"></label>
+            <label class="f"><span>{{ _("Identifiant du jeton") }}</span><input type="text" name="token_id" value="loco@pve!loco" spellcheck="false" autocomplete="off" required maxlength="200" class="mono"></label>
+            <label class="f"><span>{{ _("Secret du jeton") }}</span><input type="password" name="secret" spellcheck="false" autocomplete="new-password" required maxlength="128" class="mono"></label>
+          </div>
+          <p class="hint">{{ _("Le secret est gardé chiffré par loco et n'est plus jamais affiché. À l'étape suivante, loco vous montre l'empreinte du certificat de Proxmox : le jeton ne part qu'après votre confirmation.") }}</p>
+          <div><button class="btn primary"><span class="spin"></span>{{ _("Relever le certificat") }}</button></div>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+  </div></div>
+  {% endif %}
+
+  {# ------------------------------------------------------------------ Home Assistant #}
+  {% if show_ha %}
+  <div class="tab-panel{{ ' on' if first.v }}" data-panel="homeassistant"><div class="stack">{% set first.v = false %}
+    {% if not dest_ready %}<p class="note warn">{{ _("Choisissez d'abord une destination externe (onglet Destination) : c'est là que loco dépose les copies.") }}</p>{% endif %}
+    {% for h in hass %}
+    {% set r = h.row %}
+    {% set st = h.state %}
+    <section class="panel">
+      <div data-refresh="hass-copy-{{ r.id }}">
+        <div class="panel-h">
+          <h2>{{ r.name }}</h2>
+          <div class="aside">
+            {% if h.copying %}<span class="busy-note"><span class="spin"></span>{{ _("copie en cours") }}</span>
+            {% elif st.error and (st.failed or '') > (st.at or '') %}<span class="pill err">{{ _("copie en échec") }}</span>
+            {% elif st.at %}<span class="pill ok">{{ _("copiée") }}</span>
+            {% else %}<span class="pill">{{ _("jamais copiée") }}</span>{% endif %}
+          </div>
+        </div>
+        <div class="panel-b stack-sm">
+          {% if st.error and (st.failed or '') > (st.at or '') %}<div class="note err"><p>{{ st.error }}</p></div>{% endif %}
+          {% if not r.host_key %}<div class="note warn"><p>{{ _("La clé d'hôte de cette instance n'est pas confirmée : voyez la page Home Assistant.") }}</p></div>{% endif %}
+          <dl class="kv-grid">
+            <div><dt>{{ _("Dans Home Assistant") }}</dt><dd>{% if h.local %}{{ h.local[0].name or '—' }} <span class="sub">{{ h.local[0].date|date_fr }}{% if h.local[0].size is not none %} · {{ h.local[0].size|human }}{% endif %}</span>{% else %}<span class="st warn">{{ _("aucune sauvegarde") }}</span>{% endif %}</dd></div>
+            <div><dt>{{ _("Dernière copie") }}</dt><dd>{% if st.at %}{{ st.at|replace('T', ' ')|date_fr }} <span class="sub">{{ st.name }}{% if st.size %} · {{ st.size|human }}{% endif %}{% if st.encrypted %} · {{ _("chiffrée") }}{% endif %}</span>{% else %}—{% endif %}</dd></div>
+            <div><dt>{{ _("Sur la destination") }}</dt><dd>{{ _("%(n)s sur %(keep)s", n=st.copies or 0, keep=st.keep) }}</dd></div>
+          </dl>
+          {% if ha_backup %}
+          <div class="row hass-copy-actions">
+            <form method="post" action="{{ url_for('backups_homeassistant_copy', host_id=r.id) }}" class="row">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn primary"{% if h.copying or not dest_ready or not r.host_key %} disabled{% endif %}><span class="spin"></span>{{ _("Copier maintenant") }}</button>
+              <label class="check"><input type="checkbox" name="fresh" value="1"> {{ _("créer d'abord une sauvegarde complète") }}</label>
+            </form>
+            <button type="button" class="btn" data-open="#hass-plan-{{ r.id }}"{% if not dest_ready %} disabled{% endif %}>{{ sched_icon('calendar') }}<span>{{ _("Planifier…") }}</span></button>
+            <form method="post" action="{{ url_for('backups_homeassistant_keep', host_id=r.id) }}" class="row hass-keep">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <label class="f inline"><span>{{ _("Copies gardées") }}</span><input type="number" name="keep" min="1" max="{{ keep_max }}" value="{{ st.keep }}" class="field-xs" required></label>
+              <button class="btn sm">{{ _("Enregistrer") }}</button>
+            </form>
+          </div>
+          {% endif %}
+        </div>
+
+        {{ plan_list(h.plans, 'homeassistant', ha_backup) }}
+
+        {% if h.jobs %}
+        <div class="panel-h sub"><h2>{{ _("Activité") }}</h2><div class="aside">{{ _("les six dernières copies") }}</div></div>
+        <div class="table-wrap">
+          <table class="table-cards hass-table">
+            <tbody>
+              {% for j in h.jobs %}
+              <tr>
+                <td>{{ _("Copie vers la destination externe") }}{% if j.backup %} <span class="badge-ro">{{ _("sauvegarde avant") }}</span>{% endif %}
+                  {% if j.output and j.state in ('failed', 'success') %}<details class="hass-output" data-key="hass-copie-{{ j.id }}"><summary class="linkbtn">{{ _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+                <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
+                <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </section>
+    {% if ha_backup %}
+    <dialog id="hass-plan-{{ r.id }}" class="wide-dialog">
+      <form method="post" action="{{ url_for('backup_plan_save') }}">
+        <div class="dlg-h"><h2>{{ _("Planifier la copie de %(name)s", name=r.name) }}</h2><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button></div>
+        <div class="dlg-b dlg-stack">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="homeassistant"><input type="hidden" name="host_id" value="{{ r.id }}">
+          {{ planner({'recurrence': 'daily'}) }}
+          <label class="check"><input type="checkbox" name="fresh" value="1" checked> {{ _("Créer d'abord une sauvegarde complète dans Home Assistant") }}</label>
+          <p class="hint">{{ _("Sinon, loco copie la plus récente déjà faite (par exemple la sauvegarde automatique de Home Assistant), et rien si elle est déjà sur la destination.") }}</p>
+        </div>
+        <div class="dlg-f">
+          <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+          <button class="btn primary">{{ _("Planifier") }}</button>
+        </div>
+      </form>
+    </dialog>
+    {% endif %}
+    {% else %}
+    <div class="panel"><div class="panel-b"><p class="empty">{{ _("Aucun Home Assistant n'est relié.") }} <a href="{{ url_for('homeassistant') }}">{{ _("Relier un Home Assistant") }}</a></p></div></div>
+    {% endfor %}
+  </div></div>
+  {% endif %}
+
+  {# ------------------------------------------------------------------ loco #}
+  {% if loco %}
+  <div class="tab-panel{{ ' on' if first.v }}" data-panel="loco"><div class="stack">{% set first.v = false %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ titled('save', _("Sauvegardes de loco")) }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
+      <div class="panel-b stack-sm">
+        <dl class="kv-grid">
+          <div><dt>{{ _("Dernière") }}</dt><dd>{% if loco.last %}{{ loco.last.text }}{% if loco.last.late %} <span class="st warn">{{ _("en retard") }}</span>{% endif %}{% else %}{{ _("aucune pour l'instant") }}{% endif %}</dd></div>
+          <div><dt>{{ _("Conservées sur le serveur") }}</dt><dd>{{ _("%(n)s sur %(keep)s", n=loco.backups|length, keep=loco.keep) }}</dd></div>
+          {% if destination %}<div><dt>{{ _("Vers la destination externe") }}</dt><dd>{% if not dest_ready %}<span class="st warn">{{ _("aucune destination") }}</span>{% elif not destination.cfg.loco.include %}<span class="st">{{ _("non copiées") }}</span>{% elif dest_failed %}<span class="st err">{{ _("échec") }}</span>{% elif destination.state.last_ok %}<span class="st ok">{{ _("copiée le %(when)s", when=destination.state.last_ok|replace('T', ' ')|date_fr) }}</span>{% else %}<span class="st warn">{{ _("en attente") }}</span>{% endif %}</dd></div>{% endif %}
+        </dl>
+      </div>
+      {% if loco.backups %}
+      <div class="table-wrap">
+        <table class="table-cards">
+          <tbody>
+            {% for b in loco.backups[:5] %}
+            <tr><td class="mono break-any">{{ b.name }}</td><td data-label="{{ _('Date') }}">{{ b.when|date_fr }}</td><td class="right num" data-label="{{ _('Taille') }}">{{ b.size|human }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      <div class="panel-f"><a href="{{ url_for('system') }}#sauvegardes">{{ _("Télécharger, restaurer, régler la conservation : Système › Sauvegardes") }}</a></div>
+    </section>
+  </div></div>
+  {% endif %}
+
+  {# ------------------------------------------------------------------ destination #}
+  {% if destination %}
+  <div class="tab-panel{{ ' on' if first.v }}" data-panel="destination"><div class="stack">{% set first.v = false %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ titled('forward', _("Destination externe")) }}</h2><div class="aside">{% if dest_failed %}<span class="st err">{{ _("échec") }}</span>{% elif dest_ready %}<span class="st ok">{{ _("choisie") }}</span>{% else %}<span class="st warn">{{ _("à choisir") }}</span>{% endif %}</div></div>
+      <div class="panel-b">
+        {{ offsite_form(destination, 'backups') }}
+      </div>
+      {% if show_pve %}<div class="panel-f"><span class="hint">{{ _("Les machines Proxmox n'y passent pas : Proxmox écrit lui-même ses sauvegardes sur l'un de ses stockages. Pour viser ce NAS, déclarez-le dans Proxmox (onglet Proxmox, « Déclarer un NAS… »).") }}</span></div>{% endif %}
+    </section>
+  </div></div>
+  {% endif %}
+</div>
+{% endblock %}

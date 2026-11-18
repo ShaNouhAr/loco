@@ -27,6 +27,7 @@ FEATURES = {
     "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
     "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
     "homeassistant": (L_("Home Assistant"), L_("Votre Home Assistant relié par SSH avec une clé propre à loco : versions, mises à jour du cœur, du système et des modules complémentaires, sauvegardes, état de santé, redémarrages et terminal."), (), ""),
+    "proxmox": (L_("Proxmox VE"), L_("Vos serveurs Proxmox reliés par un jeton d'API : sauvegarde des machines virtuelles et des conteneurs, à la demande ou planifiée, sur le stockage de Proxmox de votre choix (disque, NAS, Proxmox Backup Server), avec la conservation voulue. Réunie avec les sauvegardes de loco et de Home Assistant dans Administration › Sauvegardes."), (), ""),
     "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco. Au retrait, loco peut aussi effacer l'entrée du poste sur le manager."), ("fleet",), ""),
 }
 
@@ -35,7 +36,7 @@ EXPERIMENTAL = {"android"}
 EXPERIMENTAL_SETTING = "features_experimental"
 # Fonctionnalités facultatives : abouties, mais hors du cœur de loco et sans intérêt pour tout le monde. Désactivées
 # par défaut elles aussi, à activer si l'on en a l'usage.
-OPTIONAL = {"homeassistant", "wazuh"}
+OPTIONAL = {"homeassistant", "proxmox", "wazuh"}
 OPTIONAL_SETTING = "features_optional"
 OPT_IN = {EXPERIMENTAL_SETTING: EXPERIMENTAL, OPTIONAL_SETTING: OPTIONAL}
 
@@ -45,7 +46,7 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
            "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"), "loco.schedules": ("fleet",),
            "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
-           "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh")}
+           "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -55,13 +56,14 @@ ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_reposito
              "software_groups": ("windows_apps",), "software_group_editor": ("windows_apps",),
              "software_group_save": ("windows_apps",), "software_group_delete": ("windows_apps",),
              "software_group_attach": ("windows_apps",), "store_group_attach": ("windows_apps",),
-             "deployment_compose_android": ("fleet", "android"), "deployment_preview_android": ("fleet", "android")}
+             "deployment_compose_android": ("fleet", "android"), "deployment_preview_android": ("fleet", "android"),
+             "backups_homeassistant_copy": ("homeassistant",), "backups_homeassistant_keep": ("homeassistant",)}
 # Droits rattachés à une fonctionnalité : coupée, elle rend ces droits inopérants (navigation, boutons, pages).
 PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu": ("wu",), "windows": ("windows_apps",),
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
                "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",),
                "mcp": ("mcp",), "android": ("fleet", "android"), "homeassistant": ("homeassistant",),
-               "wazuh": ("fleet", "wazuh")}
+               "wazuh": ("fleet", "wazuh"), "proxmox": ("proxmox",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca", "agent_android_apk",

@@ -2607,3 +2607,29 @@ details.hass-log:not(.menu):not(.nav-group):not(.panel) > summary { display: fle
   .hass-link { margin-left: 0; width: 100%; }
   .hass-table td:first-child { width: auto; }
 }
+
+/* Sauvegardes : machines Proxmox, copies de Home Assistant, planifications */
+.backup-plans td:first-child { width: 50%; }
+.backup-plans td:first-child .sub { display: block; margin-top: 2px; }
+.pve-guests td .sub, .pve-jobs td .sub { display: inline; margin: 0 0 0 4px; }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; }
+.check-col { width: 36px; }
+.check-col input { margin: 0; vertical-align: middle; }
+.pve-run { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 16px; }
+.pve-run label.f { margin: 0; min-width: 0; max-width: 100%; }
+.pve-run select { max-width: 100%; }
+.pve-run-buttons { margin-left: auto; }
+.pve-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pve-confirm dd.mono { font-size: 15px; }
+.kv-grid .kv-wide { grid-column: 1 / -1; }
+.hass-copy-actions { gap: 10px 14px; }
+.hass-keep { margin-left: auto; }
+.hass-keep label.f.inline { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; }
+@media (max-width: 720px) {
+  .backup-plans td:first-child { width: auto; }
+  .pve-run label.f { flex: 1 1 100%; }
+  .pve-run-buttons, .hass-keep { margin-left: 0; }
+  .pve-run-buttons { width: 100%; }
+  .table-cards.pve-guests td.check-col { float: left; width: auto; padding: 2px 10px 0 0; }
+  .backup-metrics .metric .v, .backup-metrics .metric .s { white-space: normal; overflow-wrap: anywhere; }
+}

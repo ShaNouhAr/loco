@@ -1830,6 +1830,25 @@
     afterRefresh.push(function (zone) { if (form.contains(zone)) sync(); });   // lignes remplacées en place
   });
 
+  /* ------------------------------------------- Sauvegardes › Proxmox : machines cochées */
+  (function () {
+    var sync = function (form) {
+      var boxes = $$("input[name=vmid]:not(:disabled)", form), n = boxes.filter(function (b) { return b.checked; }).length;
+      var all = $("[data-check-all]", form);
+      $$("[data-pick-count]", form).forEach(function (c) { c.textContent = n; });
+      $$("[data-pick-submit]", form).forEach(function (b) { b.disabled = !n; });
+      if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+    };
+    document.addEventListener("change", function (e) {
+      var form = e.target.closest && e.target.closest("[data-pick]");
+      if (!form) return;
+      if (e.target.matches("[data-check-all]")) $$("input[name=vmid]:not(:disabled)", form).forEach(function (b) { b.checked = e.target.checked; });
+      sync(form);
+    });
+    $$("[data-pick]").forEach(sync);
+    afterRefresh.push(function (zone) { $$("[data-pick]", zone).forEach(sync); });
+  })();
+
   /* ------------------------------------------- mises à jour d'un poste : sélection et avancement en direct */
   (function () {
     // Écoute déléguée : l'onglet des mises à jour peut être remplacé par l'actualisation en place.

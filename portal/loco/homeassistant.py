@@ -5,9 +5,10 @@ publique est à ajouter au module SSH de Home Assistant (« Terminal & SSH », �
 jeton de Home Assistant n'est demandé ni gardé. La clé d'hôte de Home Assistant n'est jamais acceptée d'office : son
 empreinte est montrée, et un administrateur la confirme avant tout échange.
 
-Tout passe par la commande `ha` de Home Assistant (`ha core info --raw-json`, `ha core update`…), lancée dans un shell de
-connexion : c'est lui qui donne à `ha` son accès au Supervisor. Les opérations longues (mise à jour, sauvegarde,
-redémarrage) sont des tâches suivies une à une ; le terminal est une session distante ordinaire, tenue par loco.
+Tout passe par la commande `ha` de Home Assistant (`ha core info --raw-json`, `ha core update`…), lancée par `sh -c`
+après un prélude qui lui donne son accès au Supervisor (voir PRELUDE). Les opérations longues (mise à jour, sauvegarde,
+redémarrage, copie d'une sauvegarde vers la destination externe) sont des tâches suivies une à une ; le terminal est une
+session distante ordinaire, tenue par loco.
 """
 import base64
 import datetime
@@ -55,6 +56,7 @@ ACTIONS = {
     "backup": (L_("Sauvegarde complète"), "ha backups new --name {name} --no-progress"),
     "restart-core": (L_("Redémarrage de Home Assistant"), "ha core restart --no-progress"),
     "reboot-host": (L_("Redémarrage du système"), "ha host reboot --no-progress"),
+    "copy": (L_("Copie vers la destination externe"), ""),       # faite par backups.copy_homeassistant
 }
 # Problèmes que signale le Supervisor (`ha resolution info`), dits en clair ; les autres gardent leur nom.
 ISSUES = {
@@ -197,6 +199,31 @@ PRELUDE = ('PATH="$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
            'export SUPERVISOR_TOKEN; ')
 
 
+def download(row, slug, path, timeout=LONG):
+    """Télécharge la sauvegarde « slug » dans le fichier « path » : par l'API du Supervisor (le jeton passe par l'entrée
+    de curl, jamais en argument), sinon en cherchant dans /backup l'archive dont le backup.json porte ce slug.
+    Renvoie (code de sortie, message d'erreur)."""
+    if not SLUG_RE.match(slug):
+        raise LinkError(_("Sauvegarde inconnue."))
+    if not row["host_key"]:
+        raise LinkError(_("La clé d'hôte de Home Assistant n'a pas encore été confirmée."))
+    script = PRELUDE + (
+        'if command -v curl >/dev/null 2>&1; then '
+        'printf "Authorization: Bearer %s\\n" "$SUPERVISOR_TOKEN" | curl -fsS -H @- "http://supervisor/backups/SLUG/download"; exit $?; fi; '
+        'for f in /backup/*.tar; do if tar -xOf "$f" ./backup.json 2>/dev/null | grep -q \'"slug": *"SLUG"\'; then exec cat "$f"; fi; done; '
+        'echo "backup SLUG not found" >&2; exit 3').replace("SLUG", slug)
+    public_key()
+    with _Known(row) as known, open(path, "wb") as out:
+        try:
+            done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(script)), stdin=subprocess.DEVNULL,
+                                  stdout=out, stderr=subprocess.PIPE, timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            raise LinkError(_("Home Assistant n'a pas répondu dans le délai (%(n)s s).", n=timeout)) from e
+        except OSError as e:
+            raise LinkError(str(e)[:200]) from e
+    return done.returncode, done.stderr.decode("utf-8", "replace")[-2000:]
+
+
 def run(row, script, timeout=QUICK):
     """Lance un script dans un shell de Home Assistant (sans shell de connexion, voir PRELUDE) : (code de sortie, sortie)."""
     if not ssh_binary():
@@ -291,8 +318,10 @@ def summarize(found):
         if isinstance(b, dict):
             size = b.get("size_bytes") if isinstance(b.get("size_bytes"), int) else (
                 int(b["size"] * 1048576) if isinstance(b.get("size"), (int, float)) else None)
+            locations = b.get("locations") if isinstance(b.get("locations"), list) else [b.get("location")]
             backups.append({"name": _text(b.get("name"), 80), "date": _local(b.get("date")), "type": _text(b.get("type"), 12),
-                            "size": size, "protected": bool(b.get("protected"))})
+                            "size": size, "protected": bool(b.get("protected")), "slug": _text(b.get("slug"), 64),
+                            "local": any(place in (None, ".local") for place in locations)})
     backups.sort(key=lambda b: b["date"], reverse=True)
     host = found.get("host info") or {}
 
@@ -419,17 +448,21 @@ def _work(host_id):
             try:
                 if row is None:
                     raise LinkError(_("Instance retirée."))
-                code, output = run(row, command(job) + " 2>&1", timeout=LONG)
-                if job["action"] in REBOOTS and (code == 0 or code == 255 and not UNREACHED.search(output)):
-                    # Le système redémarre et emporte la liaison (ssh sort alors en 255, sans que ce soit un refus) :
-                    # la tâche réussit s'il revient.
-                    state = "success" if _wait_back(conn, host_id) else "failed"
-                    output = (output.strip() + "\n" + (_("Home Assistant a redémarré et répond de nouveau.") if state == "success"
-                                                       else _("Home Assistant n'a pas répondu dans le quart d'heure qui a suivi."))).strip()
-                elif code == 0:
-                    state = "success"
-                elif code == 255:
-                    output = _explain(output)
+                if job["action"] == "copy":
+                    from . import backups
+                    state, output = backups.copy_homeassistant(conn, row, job)
+                else:
+                    code, output = run(row, command(job) + " 2>&1", timeout=LONG)
+                    if job["action"] in REBOOTS and (code == 0 or code == 255 and not UNREACHED.search(output)):
+                        # Le système redémarre et emporte la liaison (ssh sort alors en 255, sans que ce soit un refus) :
+                        # la tâche réussit s'il revient.
+                        state = "success" if _wait_back(conn, host_id) else "failed"
+                        output = (output.strip() + "\n" + (_("Home Assistant a redémarré et répond de nouveau.") if state == "success"
+                                                           else _("Home Assistant n'a pas répondu dans le quart d'heure qui a suivi."))).strip()
+                    elif code == 0:
+                        state = "success"
+                    elif code == 255:
+                        output = _explain(output)
             except LinkError as e:
                 output = str(e)
             with conn:
@@ -659,6 +692,7 @@ def homeassistant_delete(host_id):
     conn = db()
     for session_row in conn.execute("SELECT id FROM remote_sessions WHERE target=? AND state!='closed'", (f"homeassistant:{host_id}",)).fetchall():
         conn.execute("UPDATE remote_sessions SET state='closed', error='Instance retirée.' WHERE id=?", (session_row["id"],))
+    conn.execute("DELETE FROM backup_plans WHERE kind='homeassistant' AND host_id=?", (host_id,))
     conn.execute("DELETE FROM homeassistant_hosts WHERE id=?", (host_id,))
     audit("homeassistant.retrait", row["name"], commit=False)
     conn.commit()

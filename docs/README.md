@@ -11,6 +11,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | **Prendre la main** sur un poste | [Sessions distantes](sessions-distantes.md) |
 | **Donner des accès** : comptes, profils, annuaires, SSO | [Comptes, profils et SSO](comptes.md) |
 | **Faire tourner** loco : routine, sauvegardes, incidents | [Exploiter loco au quotidien](exploitation.md) |
+| **Sauvegarder** loco, Home Assistant et Proxmox vers un NAS | [Sauvegardes](sauvegardes.md) |
 | **Tracer** ce qui se passe | [Journal et syslog](journal.md) |
 | **Doubler** le serveur | [Haute disponibilité](haute-disponibilite.md) |
 | **Brancher un assistant IA** | [Serveur MCP](mcp.md) |

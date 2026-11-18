@@ -1483,5 +1483,116 @@ class TestMcpAppsPhone(McpApps):
         expect(self.page.locator("h1")).to_have_text("Autoriser Claude Code")
         self.assertLessEqual(self.overflow(), 0)
 
+class BackupsPages(BrowserTest):
+    """Page Sauvegardes, face à un faux Proxmox HTTPS (tests/fake_proxmox.py) et au faux Home Assistant ; destination
+    externe : un dossier temporaire."""
+
+    def setUp(self):
+        super().setUp()
+        import shutil
+        import tempfile
+        import fake_homeassistant
+        import fake_proxmox
+        from loco import backups, features, homeassistant, offsite, proxmox
+        self.hass, self.pve_module = homeassistant, proxmox
+        self.pve = fake_proxmox.FakeProxmox().start()
+        self.addCleanup(self.pve.stop)
+        self.folder = tempfile.mkdtemp(prefix="loco-backups-ui-")
+        self.addCleanup(shutil.rmtree, self.folder, True)
+        ssh = fake_homeassistant.install(self.folder)
+        for patch in (mock.patch("loco.homeassistant.ssh_binary", return_value=ssh), mock.patch.object(proxmox, "POLL", 0.05)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        state = Path(self.folder) / "state"
+        data = json.loads((state / "backups.json").read_text())
+        (state / "files").mkdir()
+        for b in data["backups"]:
+            b["size_bytes"] = 2048
+            (state / "files" / (b["slug"] + ".tar")).write_bytes(b"x" * 2048)
+        (state / "backups.json").write_text(json.dumps(data))
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.OPTIONAL_SETTING, '["homeassistant", "proxmox"]'))
+            for table in ("homeassistant_hosts", "proxmox_hosts", "backup_plans"):
+                conn.execute(f"DELETE FROM {table}")
+            cfg = offsite.defaults()
+            cfg.update(type="folder", folder={"path": str(Path(self.folder) / "nas")})
+            offsite.save(cfg, conn)
+            hass_id = conn.execute("INSERT INTO homeassistant_hosts (name, host, port, username, host_key, created_at, created_by) "
+                                   "VALUES ('Maison', '192.168.43.80', 22, 'root', ?, ?, 'admin')",
+                                   ("ssh-ed25519 " + fake_homeassistant.HOST_KEY, stamp())).lastrowid
+            with app.app_context():
+                secret = proxmox._seal(fake_proxmox.SECRET)
+            pve_id = conn.execute("INSERT INTO proxmox_hosts (name, host, port, token_id, secret, fingerprint, created_at, created_by) "
+                                  "VALUES ('pve', '127.0.0.1', ?, ?, ?, ?, ?, 'admin')",
+                                  (self.pve.port, fake_proxmox.TOKEN_ID, secret, self.pve.fingerprint, stamp())).lastrowid
+        self.assertEqual(homeassistant.refresh(hass_id), "")
+        self.assertEqual(proxmox.refresh(pve_id), "")
+        self.backups = backups
+        self.addCleanup(self.restore)
+
+    def restore(self):
+        from loco import features, offsite
+        deadline = time.time() + 20
+        while time.time() < deadline and (self.hass._WORKERS or self.hass._REFRESH or self.pve_module._WORKERS or self.pve_module._REFRESH):
+            time.sleep(0.05)
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key IN (?, ?, ?)", (features.OPTIONAL_SETTING, offsite.CONFIG, offsite.STATE))
+            for table in ("homeassistant_hosts", "proxmox_hosts", "backup_plans"):
+                conn.execute(f"DELETE FROM {table}")
+
+    def tearDown(self):
+        self.problems[:] = [p for p in self.problems if "Applying inline style violates" not in p]
+        super().tearDown()
+
+
+class TestBackupsDesktop(BackupsPages):
+    def test_back_up_checked_machines_then_plan_and_copy_home_assistant(self):
+        self.page.goto("/backups")
+        pve = self.page.locator(".pve-host")
+        expect(pve.locator(".pve-guests tbody tr")).to_have_count(3)
+        button = pve.locator("[data-pick-submit]")
+        expect(button).to_be_disabled()
+        pve.locator("input[name=vmid][value='106']").check()
+        expect(button).to_be_enabled()
+        expect(button).to_have_text(re.compile(r"Sauvegarder maintenant \(1\)"))
+        self.assertLessEqual(self.overflow(), 0)
+        button.click()
+        expect(pve.locator(".pve-jobs")).to_contain_text("Réussie", timeout=LONG)      # suivie en place jusqu'au bout
+        expect(pve.locator(".pve-guests tbody tr").nth(2)).to_contain_text("local")
+        pve.locator("button[data-open^='#pve-plan-']").click()
+        dialog = self.page.locator("dialog[open]")
+        dialog.locator("input[name=scope][value=all]").check()
+        dialog.locator("input[name=keep]").fill("2")
+        dialog.locator("button.primary").click()
+        expect(self.page.locator(".backup-plans")).to_contain_text("Chaque jour")
+        expect(self.page.locator(".backup-plans")).to_contain_text("toutes les machines")
+        self.page.locator("[data-tab=homeassistant]").click()
+        copy = self.page.locator("form[action$='/copy'] button.primary")
+        copy.click()
+        panel = self.page.locator("[data-refresh^='hass-copy-']")
+        expect(panel.locator(".pill.ok")).to_have_text("copiée", timeout=LONG)
+        expect(self.page.locator(".backup-metrics")).to_contain_text("1 copiée sur la destination", timeout=LONG)   # tuiles suivies aussi
+        self.assertEqual(len(list((Path(self.folder) / "nas").iterdir())), 1)
+        for tab in ("proxmox", "homeassistant", "loco", "destination"):
+            self.page.locator(f"[data-tab={tab}]").click()
+            self.assertLessEqual(self.overflow(), 0, tab)
+
+
+class TestBackupsPhone(BackupsPages):
+    viewport = PHONE
+
+    def test_every_tab_fits_on_a_phone(self):
+        for width in (360, 320):
+            self.page.set_viewport_size({"width": width, "height": 800})
+            self.page.goto("/backups")
+            for tab in ("proxmox", "homeassistant", "loco", "destination"):
+                self.page.locator(f"[data-tab={tab}]").click()
+                self.assertLessEqual(self.overflow(), 0, f"{tab} à {width} px")
+            self.page.locator("[data-tab=proxmox]").click()
+            self.page.locator("button[data-open^='#pve-plan-']").click()
+            self.assertLessEqual(self.page.evaluate("(() => { const d = document.querySelector('dialog[open]'); return d.scrollWidth - d.clientWidth })()"), 0)
+            self.page.keyboard.press("Escape")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

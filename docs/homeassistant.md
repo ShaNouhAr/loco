@@ -48,7 +48,8 @@ Jusqu'à huit instances peuvent être reliées.
   cœur et les modules).
 - **Activité** : les douze dernières tâches, leur état et leur sortie. Une tâche lancée se montre « en
   cours » et ne se relance pas ; les tâches d'une instance passent une par une.
-- **Modules complémentaires** et **Sauvegardes** (les huit plus récentes).
+- **Modules complémentaires** et **Sauvegardes** (les huit plus récentes). Pour copier ces sauvegardes vers
+  un NAS ou un stockage externe, à la demande ou planifié : [Sauvegardes](sauvegardes.md).
 - **Journal de Home Assistant** : ses 200 dernières lignes, lues à l'ouverture du volet.
 
 Le relevé est refait tout seul tant que la page est affichée (toutes les deux minutes) et après chaque tâche ;

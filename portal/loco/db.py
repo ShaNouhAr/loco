@@ -813,6 +813,69 @@ MIGRATIONS = [
     ALTER TABLE schedules_new RENAME TO schedules;
     CREATE INDEX schedules_due ON schedules(enabled, next_run);
     """,
+    # 54 : sauvegardes centralisées — Proxmox relié par un jeton d'API (secret scellé, certificat épinglé une fois son
+    # empreinte confirmée), ses sauvegardes suivies par l'identifiant de la tâche Proxmox (UPID), les planifications de
+    # sauvegarde (machines Proxmox ; copie des sauvegardes de Home Assistant vers la destination externe) et l'état de la
+    # dernière copie de chaque Home Assistant (avec le nombre de copies gardées sur la destination).
+    """
+    CREATE TABLE proxmox_hosts (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL DEFAULT 8006,
+        token_id TEXT NOT NULL,
+        secret TEXT NOT NULL DEFAULT '',
+        fingerprint TEXT NOT NULL DEFAULT '',
+        offered TEXT NOT NULL DEFAULT '',
+        offered_at REAL NOT NULL DEFAULT 0,
+        info TEXT NOT NULL DEFAULT '',
+        checked REAL NOT NULL DEFAULT 0,
+        error TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE proxmox_jobs (
+        id INTEGER PRIMARY KEY,
+        host_id INTEGER NOT NULL REFERENCES proxmox_hosts(id) ON DELETE CASCADE,
+        plan_id INTEGER,
+        node TEXT NOT NULL DEFAULT '',
+        vmid INTEGER NOT NULL,
+        guest TEXT NOT NULL DEFAULT '',
+        storage TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'snapshot',
+        keep INTEGER NOT NULL DEFAULT 0,
+        upid TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'queued',
+        output TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '',
+        finished_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX proxmox_jobs_host ON proxmox_jobs(host_id, id);
+    CREATE TABLE backup_plans (
+        id INTEGER PRIMARY KEY,
+        kind TEXT NOT NULL CHECK (kind IN ('proxmox', 'homeassistant')),
+        host_id INTEGER NOT NULL,
+        guests TEXT NOT NULL DEFAULT '',
+        storage TEXT NOT NULL DEFAULT '',
+        mode TEXT NOT NULL DEFAULT '',
+        fresh INTEGER NOT NULL DEFAULT 0,
+        keep INTEGER NOT NULL DEFAULT 0,
+        recurrence TEXT NOT NULL CHECK (recurrence IN ('once', 'daily', 'weekly', 'monthly')),
+        at_time TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        weekdays TEXT NOT NULL DEFAULT '',
+        monthday INTEGER NOT NULL DEFAULT 0,
+        next_run TEXT NOT NULL DEFAULT '',
+        last_run TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_by TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX backup_plans_due ON backup_plans(enabled, next_run);
+    ALTER TABLE homeassistant_hosts ADD COLUMN copy_state TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 
