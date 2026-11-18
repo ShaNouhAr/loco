@@ -68,6 +68,8 @@ PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "
                     # Serveur MCP : authentifié par son propre jeton (en-tête Authorization) ; connexion d'un client par
                     # OAuth (découverte, enregistrement, échange du code, révocation) — la page d'autorisation, elle, ne l'est pas.
                     "mcp_endpoint", "oauth_protected_resource", "oauth_authorization_server", "mcp_oauth_register",
+                    # API REST : mêmes jetons que le serveur MCP (en-tête Authorization), description OpenAPI publique.
+                    "api_v1",
                     "mcp_oauth_token", "mcp_oauth_revoke",
                     # Haute disponibilité : le serveur pair s'authentifie par l'en-tête X-Loco-HA.
                     "ha_join_api", "ha_state_api", "ha_bundle_api", "ha_db_api", "ha_manifest_api", "ha_file_api", "ha_leave_api",
@@ -164,12 +166,12 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, backups  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, backups, api  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
                  mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh,
-                 proxmox, backups)
+                 proxmox, backups, api)
 
 
 def startup():

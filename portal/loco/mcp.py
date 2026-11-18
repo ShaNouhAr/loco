@@ -167,7 +167,7 @@ def arguments(t, values):
 # --------------------------------------------------------------------------- aides communes aux outils
 
 def _via():
-    return f" · MCP « {g.mcp['token']['name']} »"
+    return f" · {g.mcp.get('via', 'MCP')} « {g.mcp['token']['name']} »"
 
 
 def _device(value):
@@ -301,8 +301,9 @@ def _list_devices(args):
       L_("Fiche d'un poste : système, mises à jour en attente, logiciels du catalogue, supervision, actions récentes."),
       ("fleet.view",),
       "Get one device in detail: identity and addresses, status, pending updates (with security flag), catalog software "
-      "versions (Windows), package counts (Linux), latest CPU / memory / disk measures, pending actions and the most "
-      "recent actions with their result and output.",
+      "versions (Windows), software updatable by winget outside the catalog (Windows, pending_software), package "
+      "counts (Linux), latest CPU / memory / disk measures, pending actions and the most recent actions with their "
+      "result and output. For memory and disk sizes in bytes and history, use get_device_resources.",
       {"device": DEVICE}, ("device",))
 def _get_device(args):
     from . import monitoring
@@ -329,6 +330,11 @@ def _get_device(args):
     if dev["os_family"] == "windows":
         out["windows_update_blocked"] = bool(dev["block_windows_update"])
         out["installed_programs"] = len(inv.get("apps") or [])
+        out["pending_software"] = [{"id": item.get("id"), "name": item.get("name"), "installed_version": item.get("version"),
+                                    "available_version": item.get("latest"), **({"blocked": True} if item.get("blocked") else {})}
+                                   for item in update_blocks.annotate_software(db(), dev, inv.get("software") or [])]
+        if inv.get("software_note"):
+            out["software_note"] = inv["software_note"]
         out["catalog_software"] = [{"slug": a["slug"], "name": a["name"], "catalog_version": a["version"],
                                     "installed_version": installed or None, "update_available": outdated}
                                    for a, installed, outdated in fleet.catalog_state(inv)]
@@ -345,6 +351,106 @@ def _get_device(args):
                            "disks": [{"mount": d.get("mount"), "used_percent": d.get("pct"), "total_bytes": d.get("total")}
                                      for d in now["disks"]]}
     return out
+
+
+HISTORY = {"none": 0, "1h": 3600, "24h": 86400, "7d": 7 * 86400}
+
+
+def _iso(stamp):
+    return datetime.datetime.fromtimestamp(stamp, datetime.timezone.utc).isoformat(timespec="seconds") if stamp else None
+
+
+def _resources(dev):
+    """Dernier relevé de supervision d'un poste, en valeurs (octets, pourcentages), ou None s'il n'en a pas encore."""
+    from . import monitoring
+    now = monitoring.latest(dev)
+    if not now:
+        return None
+    m = now["raw"]
+
+    def part(prefix):
+        total, used = m.get(prefix + "_total"), m.get(prefix + "_used")
+        if total is None or used is None:
+            return None
+        return {"total_bytes": total, "used_bytes": used, "available_bytes": max(0, total - used), "used_percent": now[prefix]}
+    return {"measured_at": _iso(m["at"]), "age_seconds": now["age"], "stale": now["stale"],
+            "cpu": {"used_percent": now["cpu"], "cores": m.get("cores"), "load_average": m.get("load")},
+            "memory": part("mem"), "swap": part("swap"),
+            "disks": [{"mount": d["mount"], "filesystem": d.get("fs") or None, "total_bytes": d["total"], "used_bytes": d["used"],
+                       "free_bytes": max(0, d["total"] - d["used"]), "used_percent": d["pct"]} for d in now["disks"]],
+            "network": {"received_bytes_per_second": m.get("net_rx"), "sent_bytes_per_second": m.get("net_tx")},
+            "uptime_seconds": m.get("uptime"), "booted_at": _iso(m["at"] - m["uptime"]) if m.get("uptime") else None}
+
+
+def _history(dev, period):
+    """Courbes d'un poste : relevés bruts sur une heure, moyennes par intervalle au-delà (240 points au plus)."""
+    from . import monitoring
+    span = HISTORY[period]
+    since = int(time.time()) - span
+    if span <= 3600:
+        rows = db().execute("SELECT at, cpu, mem, net_rx, net_tx FROM device_metrics WHERE device_id=? AND at>=? ORDER BY at",
+                            (dev["id"], since)).fetchall()
+        points = [{"at": r[0], "cpu": r[1], "mem": r[2], "net_rx": r[3], "net_tx": r[4]} for r in rows]
+    else:
+        points, _has = monitoring._buckets(db(), dev["id"], span)
+    rounded = lambda v, n=1: None if v is None else round(v, n)  # noqa: E731
+    return {"period": period, "points": [{"at": _iso(int(p["at"])), "cpu_percent": rounded(p["cpu"]), "memory_percent": rounded(p["mem"]),
+                                          "received_bytes_per_second": rounded(p["net_rx"], 0), "sent_bytes_per_second": rounded(p["net_tx"], 0)}
+                                         for p in points if p["cpu"] is not None or p["mem"] is not None]}
+
+
+@tool("get_device_resources", "fleet", "Get device resources", L_("Consulter les ressources d'un poste"),
+      L_("Processeur, mémoire, swap, disques, réseau et durée depuis le démarrage d'un poste, avec leur historique."),
+      ("fleet.view",),
+      "Get the resources of one device as measured by its agent at each contact: CPU usage, cores and load average, "
+      "memory and swap (total, used and available bytes, percent), every disk (mount, total, used and free bytes), "
+      "network throughput and uptime. history=1h, 24h or 7d adds the CPU / memory / network curve over that period "
+      "(raw samples for 1h, averages beyond). Measures older than 10 minutes are flagged stale (device off or offline).",
+      {"device": DEVICE, "history": {"type": "string", "enum": list(HISTORY), "description": "none (default), 1h, 24h or 7d."}},
+      ("device",))
+def _get_device_resources(args):
+    dev = _device(args["device"])
+    out = {"id": dev["id"], "hostname": dev["hostname"], "online": fleet.presence(dev)["online"], "measures": _resources(dev)}
+    if out["measures"] is None:
+        out["note"] = "No measure yet: the agent sends them at its next contact."
+    if args.get("history", "none") != "none":
+        out["history"] = _history(dev, args["history"])
+    return out
+
+
+@tool("list_resources", "fleet", "List device resources", L_("Lister les ressources du parc"),
+      L_("Processeur, mémoire, disques et durée depuis le démarrage de tous les postes, triables par usage."),
+      ("fleet.view",),
+      "List the latest resource measures of every device: CPU, memory and swap (bytes and percent), every disk, network "
+      "throughput and uptime. Sort by cpu, memory or disk (busiest first) to find saturated machines; filter by "
+      "operating system, group or online state.",
+      {"os": {"type": "string", "enum": ["windows", "linux", "android"]},
+       "group": {"type": "string", "maxLength": 255, "description": "Device group id or exact name."},
+       "online": {"type": "boolean", "description": "true: only devices whose agent answered recently."},
+       "sort": {"type": "string", "enum": ["hostname", "cpu", "memory", "disk"], "description": "Order (default hostname)."},
+       "limit": {"type": "integer", "minimum": 1, "maximum": 500, "description": "Maximum number of devices (default 200)."}})
+def _list_resources(args):
+    rows = [r["d"] for r in fleet._rows()]
+    if "group" in args:
+        group = _group(args["group"])
+        members = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group["id"],))}
+        rows = [d for d in rows if d["id"] in members]
+    if "os" in args:
+        rows = [d for d in rows if (d["os_family"] == args["os"]) or (args["os"] == "linux" and d["os_family"] not in ("windows", "android"))]
+    found = []
+    for d in rows:
+        online = fleet.is_online(d)
+        if "online" in args and online != args["online"]:
+            continue
+        found.append({"id": d["id"], "hostname": d["hostname"], "os": d["os_name"], "online": online, "measures": _resources(d)})
+
+    def key(item):
+        m = item["measures"] or {}
+        value = {"cpu": (m.get("cpu") or {}).get("used_percent"), "memory": (m.get("memory") or {}).get("used_percent"),
+                 "disk": max((x["used_percent"] or 0 for x in m.get("disks") or []), default=None)}.get(args.get("sort"))
+        return (value is None, -(value or 0), (item["hostname"] or "").lower())
+    found.sort(key=key if args.get("sort", "hostname") != "hostname" else (lambda item: (item["hostname"] or "").lower()))
+    return {"total": len(found), "devices": found[:args.get("limit", 200)]}
 
 
 @tool("find_installed_software", "fleet", "Find installed software", L_("Rechercher un logiciel installé"),
@@ -395,12 +501,15 @@ def _scan(args):
 @tool("update_device", "fleet", "Update a device", L_("Mettre à jour un poste"),
       L_("Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste."), ("fleet.update",),
       "Install the pending updates of one device (updates blocked in loco are never installed): operating system, Flatpak and, on Windows, the catalog software "
-      "already installed — or only some of them with `updates` (Linux package names; Windows update titles, KB numbers "
-      "or ids, as listed by get_device) and `flatpak`. reboot=true also restarts it afterwards (only if this access may "
+      "already installed and the software updatable by winget — or only some of them with `updates` (Linux package "
+      "names; Windows update titles, KB numbers or ids, as listed by get_device), `software` (winget ids of "
+      "pending_software, Windows) and `flatpak`. reboot=true also restarts it afterwards (only if this access may "
       "reboot devices). Follow the progress with get_device.",
       {"device": DEVICE, "reboot": {"type": "boolean", "description": "Restart the device after updating (default false)."},
        "updates": {"type": "array", "maxItems": 2000, "items": {"type": "string", "maxLength": 300},
                    "description": "Only these pending updates (default: all of them)."},
+       "software": {"type": "array", "maxItems": 300, "items": {"type": "string", "maxLength": 128},
+                    "description": "Only these software updates, by winget id as in pending_software (Windows)."},
        "flatpak": {"type": "boolean", "description": "With `updates`: also update the Flatpak applications (Linux)."}},
       ("device",), read_only=False)
 def _update(args):
@@ -410,9 +519,10 @@ def _update(args):
     if reboot and not can("fleet.reboot"):
         raise ToolError("This access may not reboot devices: call again without reboot.")
     params = {"reboot": reboot}
-    if args.get("updates") or args.get("flatpak"):
+    if args.get("updates") or args.get("flatpak") or args.get("software"):
         try:
-            params["only"] = fleet.select_updates(dev, args.get("updates") or [], args.get("flatpak", False))
+            params["only"] = fleet.select_updates(dev, args.get("updates") or [], args.get("flatpak", False),
+                                                  args.get("software") or [])
         except ValueError as e:
             raise ToolError(str(e))
     result = _queued(dev, "update", fleet.queue(dev, "update", params), " (avec redémarrage)" if reboot else "")
@@ -677,6 +787,27 @@ def _server_status(args):
         rows = fleet._rows()
         out["fleet"] = {"devices": len(rows), "online": sum(1 for r in rows if fleet.is_online(r["d"])),
                         **{STATUS[c]: sum(1 for r in rows if r["color"] == c) for c in STATUS}}
+    return out
+
+
+@tool("get_overview", "server", "Get the overview", L_("Consulter la vue d'ensemble"),
+      L_("Ce qui demande une action (alertes, échecs, sauvegardes…) et l'état du parc, comme la vue d'ensemble."),
+      ("dashboard.view",),
+      "Get what the loco overview shows: the items that need attention (services, disk, certificate, backups, failed "
+      "updates, devices, Home Assistant, Proxmox…, most serious first, limited to what this access may see) and the "
+      "fleet summary (devices by status, offline, reboot needed, updates running).")
+def _get_overview(args):
+    from . import dashboard
+    state = dashboard.overview_state(fresh=True)
+    base = config.portal_url()
+    out = {"loco_version": config.VERSION,
+           "attention": [{"level": "error" if row["tone"] == "err" else "warning", "text": str(row["text"]),
+                          "url": (base + row["url"]) if row.get("url") else None} for row in state["attention"]],
+           "checked": state["checked"]}
+    if state.get("fleet"):
+        f = state["fleet"]
+        out["fleet"] = {"devices": f["total"], "offline": f["offline"], "reboot_required": f["reboot"], "updating": f["updating"],
+                        **{STATUS[ring["key"]]: ring["count"] for ring in f["ring"]}}
     return out
 
 
@@ -1032,7 +1163,7 @@ def _page(created=None, status=200):
     checked = [t["name"] for grp in tools if grp["key"] != "remote" for t in grp["tools"] if t["available"] and t["read_only"]]
     return render_template("mcp.html", tools=tools, tokens=[_token_view(r, apps) for r in rows], endpoint=_endpoint_url(),
                            created=created, expiries=EXPIRIES, install_checked=checked, system=detect_system(),
-                           by_ip=by_ip()), status
+                           by_ip=by_ip(), api_url=config.portal_url() + "/api/v1"), status
 
 
 def _form_values():

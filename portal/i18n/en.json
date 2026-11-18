@@ -5056,5 +5056,13 @@
  "Système (Windows Update, APT, DNF, Flatpak) et logiciels installés (catalogue de loco, et winget sous Windows), sur chaque poste visé.": "System (Windows Update, APT, DNF, Flatpak) and installed software (loco catalog, and winget on Windows), on each targeted machine.",
  "Une mise à jour déjà en cours sur un poste n'est pas interrompue. Flatpak et logiciels du catalogue de loco ne sont pas concernés ; sous Windows, un logiciel mis à jour par winget se bloque par son nom ou son identifiant winget.": "An update already running on a machine is not interrupted. Flatpak and loco catalog software are not affected; on Windows, software updated by winget is blocked by its name or its winget ID.",
  "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste.": "System, Flatpak and installed software (loco catalog, and winget on Windows), on one machine.",
- "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "System, Flatpak and installed software (loco catalog, and winget on Windows)."
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "System, Flatpak and installed software (loco catalog, and winget on Windows).",
+ "API REST (scripts, supervision, tableaux de bord) : le même jeton, les mêmes outils": "REST API (scripts, monitoring, dashboards): the same token, the same tools",
+ "Toutes les routes, leurs paramètres et l’outil que chacune demande : %(url)s (description OpenAPI, lisible sans jeton).": "Every route, its parameters and the tool each one requires: %(url)s (OpenAPI description, readable without a token).",
+ "Les mêmes jetons ouvrent l’API REST de loco, %(url)s, pour vos scripts et vos outils de supervision.": "The same tokens open the loco REST API, %(url)s, for your scripts and monitoring tools.",
+ "Consulter les ressources d'un poste": "View a machine's resources",
+ "Processeur, mémoire, swap, disques, réseau et durée depuis le démarrage d'un poste, avec leur historique.": "CPU, memory, swap, disks, network and uptime of a machine, with their history.",
+ "Lister les ressources du parc": "List fleet resources",
+ "Processeur, mémoire, disques et durée depuis le démarrage de tous les postes, triables par usage.": "CPU, memory, disks and uptime of every machine, sortable by usage.",
+ "Ce qui demande une action (alertes, échecs, sauvegardes…) et l'état du parc, comme la vue d'ensemble.": "What needs action (alerts, failures, backups…) and the fleet status, as on the overview."
 }

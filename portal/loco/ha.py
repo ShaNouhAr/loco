@@ -74,7 +74,7 @@ def standby_guard():
     if endpoint in ACCOUNT_ENDPOINTS:
         return
     # Les agents et le serveur MCP visent l'IP virtuelle (le principal) : ici, invite à réessayer.
-    if endpoint.startswith(("agent_", "remote_agent", "mcp_endpoint")):
+    if endpoint.startswith(("agent_", "remote_agent", "mcp_endpoint", "api_v1")):
         return Response(_("Serveur de secours : adressez-vous à l'IP virtuelle."), status=503, headers={"Retry-After": "30"})
     if request.method != "GET":
         abort(503, _("Serveur de secours : les modifications se font sur le principal (IP virtuelle)."))

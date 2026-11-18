@@ -67,4 +67,41 @@ Le droit **Créer des jetons MCP** (administrateurs par défaut) permet de crée
 
 ---
 
+[← Retour à la présentation](../README.md) ·
+
+## API REST (HTTP)
+
+Les mêmes jetons ouvrent une **API REST** : chaque outil du serveur MCP est une route HTTP ordinaire, pour un script, une
+supervision (Zabbix, un tableau Grafana, un cron) ou un autre programme — sans client MCP. Base `https://<serveur>:8443/api/v1`,
+en-tête `Authorization: Bearer <jeton>`. Un jeton n’y donne que les outils cochés, avec les droits de son compte, sur le
+parc de son profil ; chaque action entre au journal avec son nom (« · API « nom du jeton » »).
+
+- **Lectures en GET**, arguments dans l’adresse : `GET /api/v1/resources`, `GET /api/v1/devices`, `GET /api/v1/devices/{id}`,
+  `GET /api/v1/groups`, `GET /api/v1/software?name=firefox`, `GET /api/v1/catalog`, `GET /api/v1/scripts`, `GET /api/v1/runs`,
+  `GET /api/v1/overview`, `GET /api/v1/server`, `GET /api/v1/journal`.
+- **Ressources des machines** (processeur, mémoire, disques, réseau, durée depuis le démarrage) :
+  - `GET /api/v1/devices/{id}/resources` — un poste, en octets et pourcentages ; `?history=1h|24h|7d` ajoute la courbe ;
+  - `GET /api/v1/resources?sort=memory&os=linux` — tout le parc, triable par `cpu`, `memory` ou `disk` (le plus chargé d’abord).
+
+  Un poste se désigne par son **numéro** ou son **nom exact**. Exemple :
+
+  ```bash
+  curl --cacert ca.crt -H "Authorization: Bearer $LOCO_TOKEN" \
+       "https://<serveur>:8443/api/v1/resources?sort=memory"
+  ```
+
+- **Actions en POST ou DELETE**, arguments en JSON : `POST /api/v1/devices/{id}/scan` (inventaire), `…/update`, `…/reboot`,
+  `…/wake`, `…/install`, `POST /api/v1/updates` (plusieurs postes), `DELETE /api/v1/devices/{id}/actions/{action}` (annuler),
+  `POST /api/v1/scripts/{id}/run`. Comme pour le serveur MCP, une action est **mise en file** : l’agent l’exécute à son
+  prochain contact ; relisez l’état avec `GET /api/v1/devices/{id}` plutôt que de le supposer.
+- **Réponses JSON.** Une erreur est `{"error": "…"}` avec le bon code : 400 (argument), 401 (jeton — en-tête
+  `WWW-Authenticate: Bearer`), 403 (outil non coché ou origine refusée), 404 (introuvable), 405 (méthode), 413 (requête
+  trop grande), 503 (fonction coupée ou serveur de secours).
+- **Description OpenAPI 3.1** servie **sans jeton** sur `GET /api/v1/openapi.json` (à importer dans Insomnia, Postman ou un
+  générateur de client) ; `GET /api/v1` liste les routes et indique celles que le jeton peut appeler. L’API suit les mêmes
+  réglages que le serveur MCP (même case **Serveur MCP** dans **Fonctionnalités**, mêmes réseaux autorisés, refus d’une
+  page web d’une autre origine).
+
+---
+
 [← Retour à la présentation](../README.md) · [Toute la documentation](README.md)

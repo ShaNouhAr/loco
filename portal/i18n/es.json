@@ -5056,5 +5056,13 @@
  "Système (Windows Update, APT, DNF, Flatpak) et logiciels installés (catalogue de loco, et winget sous Windows), sur chaque poste visé.": "Sistema (Windows Update, APT, DNF, Flatpak) y programas instalados (catálogo de loco, y winget en Windows), en cada equipo afectado.",
  "Une mise à jour déjà en cours sur un poste n'est pas interrompue. Flatpak et logiciels du catalogue de loco ne sont pas concernés ; sous Windows, un logiciel mis à jour par winget se bloque par son nom ou son identifiant winget.": "Una actualización ya en curso en un equipo no se interrumpe. Flatpak y los programas del catálogo de loco no se ven afectados; en Windows, un programa actualizado por winget se bloquea por su nombre o su identificador winget.",
  "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste.": "Sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows), en un equipo.",
- "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "Sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows)."
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "Sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows).",
+ "API REST (scripts, supervision, tableaux de bord) : le même jeton, les mêmes outils": "API REST (scripts, supervisión, paneles): el mismo token, las mismas herramientas",
+ "Toutes les routes, leurs paramètres et l’outil que chacune demande : %(url)s (description OpenAPI, lisible sans jeton).": "Todas las rutas, sus parámetros y la herramienta que requiere cada una: %(url)s (descripción OpenAPI, legible sin token).",
+ "Les mêmes jetons ouvrent l’API REST de loco, %(url)s, pour vos scripts et vos outils de supervision.": "Los mismos tokens abren la API REST de loco, %(url)s, para sus scripts y herramientas de supervisión.",
+ "Consulter les ressources d'un poste": "Consultar los recursos de un equipo",
+ "Processeur, mémoire, swap, disques, réseau et durée depuis le démarrage d'un poste, avec leur historique.": "Procesador, memoria, swap, discos, red y tiempo desde el arranque de un equipo, con su historial.",
+ "Lister les ressources du parc": "Listar los recursos del parque",
+ "Processeur, mémoire, disques et durée depuis le démarrage de tous les postes, triables par usage.": "Procesador, memoria, discos y tiempo desde el arranque de todos los equipos, ordenables por uso.",
+ "Ce qui demande une action (alertes, échecs, sauvegardes…) et l'état du parc, comme la vue d'ensemble.": "Lo que requiere una acción (alertas, fallos, copias de seguridad…) y el estado del parque, como en la vista general."
 }

@@ -89,6 +89,9 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
       <p class="hint">{{ _("VS Code : même contenu, sous la clé « servers » au lieu de « mcpServers ».") }}</p>
     </details>
     <p class="hint">{{ _("Le client vérifie le certificat de loco : installez l’autorité de loco (%(ca)s) sur le poste où il tourne. Les clients Node.js (Claude Code, Cursor…) la lisent aussi dans la variable NODE_EXTRA_CA_CERTS.", ca=https_url ~ '/ca.crt') }}</p>
+    <span class="cmd-label">{{ _("API REST (scripts, supervision, tableaux de bord) : le même jeton, les mêmes outils") }}</span>
+    <div class="cmd"><code>curl --cacert ca.crt -H "Authorization: Bearer {{ token }}" {{ api_url }}/resources</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+    <p class="hint">{{ _("Toutes les routes, leurs paramètres et l’outil que chacune demande : %(url)s (description OpenAPI, lisible sans jeton).", url=api_url ~ '/openapi.json') }}</p>
   </div>
 </section>
 {%- endmacro %}
@@ -97,7 +100,7 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
 <div class="head">
   <div>
     <h1>{{ _("Serveur MCP") }}</h1>
-    <p>{{ _("Permet à un LLM de consulter et de piloter loco par MCP (Model Context Protocol). Son client MCP (Claude Code, Cursor, VS Code…) se connecte avec un jeton, qui n’ouvre que les outils activés pour lui — état du parc, mises à jour, scripts, terminal, fichiers ou bureau d’un poste — sans dépasser les droits du compte qui l’a créé.") }}</p>
+    <p>{{ _("Permet à un LLM de consulter et de piloter loco par MCP (Model Context Protocol). Son client MCP (Claude Code, Cursor, VS Code…) se connecte avec un jeton, qui n’ouvre que les outils activés pour lui — état du parc, mises à jour, scripts, terminal, fichiers ou bureau d’un poste — sans dépasser les droits du compte qui l’a créé.") }} {{ _("Les mêmes jetons ouvrent l’API REST de loco, %(url)s, pour vos scripts et vos outils de supervision.", url=api_url) }}</p>
   </div>
   <div class="actions"><button type="button" class="btn primary" data-open="#mcp-add">{{ ui_icon('plus') }}<span>{{ _("Nouveau jeton") }}</span></button></div>
 </div>
