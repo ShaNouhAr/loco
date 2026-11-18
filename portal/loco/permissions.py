@@ -255,7 +255,8 @@ ENDPOINTS = {
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery",
                      "account_appearance", "account_appearance_background", "account_appearance_background_delete",
-                     "appearance_background", "sso_start", "sso_callback",
+                     "appearance_background", "account_appearance_logo", "account_appearance_logo_delete", "appearance_my_logo",
+                     "sso_start", "sso_callback",
                      "login_passkey_options", "login_passkey", "account_passkey_options", "account_passkey_add",
                      "account_passkey_rename", "account_passkey_delete"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",

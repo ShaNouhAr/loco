@@ -158,15 +158,28 @@ def _valid_bg(bg):
 
 
 def parse(raw):
-    """Apparence sûre à partir du JSON stocké (ou d'un dict de formulaire) ; valeurs inconnues ignorées."""
+    """Apparence sûre à partir du JSON stocké (ou d'un dict de formulaire) ; valeurs inconnues ignorées. Le choix du
+    logo (administrateurs, voir logo_for) n'est gardé que s'il en est un."""
     pol = policy()
-    return _clean(_loads(raw), pol["default"], pol["brand"], company_file() is not None)
+    data = _loads(raw)
+    out = _clean(data, pol["default"], pol["brand"], company_file() is not None)
+    if data.get("logo") in LOGO_CHOICES[1:]:
+        out["logo"] = data["logo"]
+    return out
+
+
+def free(user=None):
+    """Les comptes au profil Administrateur règlent leur apparence comme ils l'entendent : le cadre de l'entreprise
+    (thèmes proposés, couleur et fond imposés) ne s'applique pas à eux, et ils peuvent remplacer le logo pour eux seuls."""
+    from .features import is_administrator
+    return is_administrator(user)
 
 
 def constrain(appear):
     """Apparence ramenée dans le cadre de l'instance : thème proposé, couleur et fond imposés le cas échéant."""
     pol = policy()
     out, d = dict(appear), pol["default"]
+    out.pop("logo", None)                              # réservé aux administrateurs, qui échappent au cadre
     if out["theme"] not in pol["themes"]:
         out["theme"] = d["theme"]
     if not pol["accent_free"]:
@@ -181,7 +194,8 @@ def for_user(user):
         return login_look()
     if "appearance" not in user.keys():
         return default()
-    return constrain(parse(user["appearance"]))
+    look = parse(user["appearance"])
+    return look if free(user) else constrain(look)
 
 
 def brand_info():
@@ -216,7 +230,14 @@ def has_background(user):
 @app.route("/account/appearance", methods=["POST"])
 @login_required
 def account_appearance():
-    appear = constrain(parse(request.form))
+    appear = parse(request.form)
+    appear.pop("logo", None)
+    if not free():
+        appear = constrain(appear)
+    else:
+        kept = parse(g.user["appearance"]).get("logo")      # le logo a sa propre route : son choix est gardé
+        if kept:
+            appear["logo"] = kept
     if appear["bg"] == "u" and not _bg_file(g.user["id"]):
         appear["bg"] = ""                                 # pas d'image téléversée : revenir à aucun fond
     db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
@@ -343,6 +364,100 @@ def appearance_logo_delete():
         os.unlink(old)
     audit("apparence.logo", "retiré")
     return _done(_("Logo loco rétabli."))
+
+
+# --- logo personnel d'un administrateur : celui de l'instance (par défaut), celui de loco, ou son image ---
+
+LOGO_CHOICES = ("", "loco", "u")
+
+
+def _user_logo_file(uid):
+    found = glob.glob(os.path.join(BG_DIR, f"logo-u{int(uid)}.*"))
+    return found[0] if found else None
+
+
+def has_user_logo(user):
+    return bool(user) and free(user) and _user_logo_file(user["id"]) is not None
+
+
+def logo_for(user):
+    """Logo montré à ce compte : celui de l'instance, sauf choix contraire d'un administrateur (logo d'origine de loco,
+    ou image à lui, servie à lui seul). L'écran de connexion et les autres comptes gardent celui de l'instance."""
+    if user and "appearance" in user.keys() and free(user):
+        choice = parse(user["appearance"]).get("logo", "")
+        if choice == "loco":
+            return None
+        path = _user_logo_file(user["id"]) if choice == "u" else None
+        if path:
+            ext = os.path.splitext(path)[1].lstrip(".")
+            return {"url": f"/appearance/my-logo.img?v={int(os.path.getmtime(path))}", "ext": ext}
+    return logo_info()
+
+
+def _save_logo_choice(choice):
+    appear = parse(g.user["appearance"])
+    appear.pop("logo", None)
+    if choice:
+        appear["logo"] = choice
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().commit()
+
+
+@app.route("/account/appearance/logo", methods=["POST"])
+@login_required
+def account_appearance_logo():
+    """Logo d'un administrateur, pour lui seul : choix (« » instance, « loco », « u » son image) ou envoi d'une image."""
+    if not free():
+        abort(403)
+    upload = request.files.get("logo")
+    if upload:
+        blob = upload.read(MAX_LOGO + 1)
+        if len(blob) > MAX_LOGO:
+            return jsonify(error="trop-grand"), 413
+        ext = _detect_logo(blob)
+        if not ext:
+            return jsonify(error="format"), 415
+        os.makedirs(BG_DIR, exist_ok=True)
+        for old in glob.glob(os.path.join(BG_DIR, f"logo-u{g.user['id']}.*")):
+            os.unlink(old)
+        path = os.path.join(BG_DIR, f"logo-u{g.user['id']}.{ext}")
+        with open(path, "wb") as f:
+            f.write(blob)
+        os.chmod(path, 0o640)
+        audit("compte.logo", f"{ext}, {len(blob)} o")
+        choice = "u"
+    else:
+        choice = request.form.get("logo", "")
+        if choice not in LOGO_CHOICES:
+            abort(400)
+        if choice == "u" and not _user_logo_file(g.user["id"]):
+            return jsonify(error="absent"), 409
+    _save_logo_choice(choice)
+    return jsonify(logo=choice)
+
+
+@app.route("/account/appearance/logo/remove", methods=["POST"])
+@login_required
+def account_appearance_logo_delete():
+    for old in glob.glob(os.path.join(BG_DIR, f"logo-u{g.user['id']}.*")):
+        os.unlink(old)
+    choice = parse(g.user["appearance"]).get("logo", "")
+    _save_logo_choice("" if choice == "u" else choice)
+    return jsonify(logo="" if choice == "u" else choice)
+
+
+@app.route("/appearance/my-logo.img")
+@login_required
+def appearance_my_logo():
+    path = _user_logo_file(g.user["id"]) if free() else None
+    if not path:
+        abort(404)
+    ext = os.path.splitext(path)[1].lstrip(".")
+    resp = send_file(path, mimetype=_LOGO_MIME.get(ext, "application/octet-stream"), max_age=0)
+    resp.headers["Cache-Control"] = "private, no-cache"
+    resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
 
 
 def _done(message="", error=None, text="", status=200):

@@ -1,3 +1,4 @@
+{% from "_logo.html" import logo with context %}
 {% macro nav_icon(name) -%}
 <svg class="nav-icon{{ ' nav-chevron' if name == 'chevron' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
 {% if name == 'overview' %}
@@ -181,14 +182,18 @@
 
 {# Panneau Apparence complet : presets, thème, accent, transparence, fond. Enregistré par utilisateur (serveur). #}
 {% macro appearance_dialog() -%}
-{% set pol = appearance_policy %}{% set pol_free = pol.accent_free and pol.background_free %}
+{# Un compte au profil Administrateur échappe au cadre de l'entreprise (appearance_free) : tous les thèmes, couleurs et
+   fonds, et son propre logo. #}
+{% set pol = appearance_policy %}{% set ap_free = appearance_free %}
+{% set pol_free = ap_free or (pol.accent_free and pol.background_free) %}
+{% set framed = not (pol.accent_free and pol.background_free and pol.themes|length == appearance_catalog.themes|length) %}
 {% set theme_labels = {'oled': _('OLED'), 'dim': _('Sombre doux'), 'light': _('Clair'), 'midnight': _('Minuit'), 'sepia': _('Sépia'), 'sapin': _('Sapin')} %}
 {% set accent_labels = {'neutral': _('Neutre'), 'blue': _('Bleu'), 'green': _('Vert'), 'violet': _('Violet'), 'orange': _('Orange'), 'pink': _('Rose'), 'teal': _('Sarcelle'), 'amber': _('Ambre')} %}
 {% set gradient_labels = {'aurora': _('Aurore'), 'ocean': _('Océan'), 'forest': _('Forêt'), 'dusk': _('Crépuscule'), 'rose': _('Rose'), 'slate': _('Ardoise')} %}
 {% set wp_labels = {'montagne': _('Montagne'), 'foret': _('Forêt'), 'desert': _('Désert'), 'dunes': _('Dunes'), 'ocean': _('Océan'), 'aurore': _('Aurore'), 'nuit': _('Nuit étoilée'), 'hiver': _('Hiver'), 'brume': _('Brume')} %}
 <dialog id="appearance-dialog" class="ap-dialog" data-appearance data-csrf="{{ csrf }}" data-default='{{ appearance_default|tojson }}'{% if can('system.configure') %} data-login='{{ appearance_login|tojson }}'{% endif %}>
   <div class="dlg-h">
-    <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") if pol_free else _("Enregistrée sur votre compte, dans le cadre fixé pour toute l’organisation.") }}</p></div>
+    <div><h2>{{ _("Apparence") }}</h2><p>{{ _("Enregistrée sur votre compte. Profil Administrateur : le cadre fixé pour l’organisation ne s’applique pas à vous.") if ap_free and framed else _("Thème, couleur, transparence et fond — enregistrés sur votre compte.") if pol_free else _("Enregistrée sur votre compte, dans le cadre fixé pour toute l’organisation.") }}</p></div>
     <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button>
   </div>
   <div class="dlg-b ap-body">
@@ -196,7 +201,7 @@
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Presets") }}</h3>
       <div class="ap-presets">
-        {% for key, label, theme, accent, alpha, bg in appearance_catalog.presets if theme in pol.themes %}
+        {% for key, label, theme, accent, alpha, bg in appearance_catalog.presets if ap_free or theme in pol.themes %}
         <button type="button" class="ap-preset" data-preset data-theme="{{ theme }}" data-accent="{{ accent }}" data-alpha="{{ alpha }}" data-bg="{{ bg }}">
           <span class="ap-preview" data-theme="{{ theme }}" data-accent="{{ accent }}"{% if bg %} data-bg="{{ bg }}"{% endif %}><i></i></span><span>{{ _(label) }}</span>
         </button>
@@ -207,14 +212,14 @@
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Thème") }}</h3>
       <div class="ap-themes">
-        {% for key in appearance_catalog.themes if key in pol.themes %}
+        {% for key in appearance_catalog.themes if ap_free or key in pol.themes %}
         <button type="button" class="ap-theme" data-set-theme="{{ key }}" aria-checked="false" role="radio">
           <span class="ap-preview" data-theme="{{ key }}"><i></i></span><span>{{ theme_labels[key] }}</span>
         </button>
         {% endfor %}
       </div>
     </section>
-    {% if pol.accent_free %}
+    {% if ap_free or pol.accent_free %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Couleur d'accent") }}</h3>
       <div class="accent-row">
@@ -225,7 +230,7 @@
       </div>
     </section>
     {% endif %}
-    {% if pol.background_free %}
+    {% if ap_free or pol.background_free %}
     <section class="ap-sec">
       <h3 class="ap-label">{{ _("Transparence des panneaux") }} <span class="ap-alpha-val" data-alpha-val></span></h3>
       <input type="range" class="ap-range" min="{{ appearance_catalog.alpha_min }}" max="100" step="1" value="{{ appearance.alpha }}" data-set-alpha aria-label="{{ _('Transparence des panneaux') }}">
@@ -255,6 +260,23 @@
         <span class="hint" data-bg-msg></span>
       </div>
       <p class="hint">{{ _("Astuce : baissez la transparence pour mieux voir le fond ; le texte reste lisible dans tous les thèmes.") }}</p>
+    </section>
+    {% endif %}
+    {% if ap_free %}
+    {% set logo_choice = appearance.logo|default('') %}
+    <section class="ap-sec">
+      <h3 class="ap-label">{{ _("Logo") }}</h3>
+      <div class="ap-logos" role="radiogroup" aria-label="{{ _('Logo') }}">
+        {% if company_logo %}<button type="button" class="ap-logo" data-set-logo="" role="radio" aria-checked="{{ 'true' if logo_choice == '' or (logo_choice == 'u' and not my_logo) else 'false' }}"><span class="ap-logo-box"><img src="{{ company_logo.url }}" alt=""></span><span>{{ _("Entreprise") }}</span></button>{% endif %}
+        <button type="button" class="ap-logo" data-set-logo="{{ 'loco' if company_logo else '' }}" role="radio" aria-checked="{{ 'true' if logo_choice == 'loco' or (not company_logo and logo_choice == '') or (not company_logo and logo_choice == 'u' and not my_logo) else 'false' }}"><span class="ap-logo-box">{{ logo('ap-logo-svg', builtin=True) }}</span><span>loco</span></button>
+        {% if my_logo %}<button type="button" class="ap-logo" data-set-logo="u" role="radio" aria-checked="{{ 'true' if logo_choice == 'u' else 'false' }}"><span class="ap-logo-box"><img src="{{ url_for('appearance_my_logo') }}" alt=""></span><span>{{ _("Mon logo") }}</span></button>{% endif %}
+      </div>
+      <div class="ap-bg-actions">
+        <label class="btn sm"><span>{{ _("Importer un logo…") }}</span><input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,.svg" data-logo-upload hidden></label>
+        {% if my_logo %}<button type="button" class="btn sm danger" data-logo-remove>{{ _("Retirer mon logo") }}</button>{% endif %}
+        <span class="hint" data-logo-msg></span>
+      </div>
+      <p class="hint">{{ _("Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.") }}</p>
     </section>
     {% endif %}
     {% if can('system.configure') %}

@@ -1008,6 +1008,61 @@ class TestPageTools(BrowserTest):
             conn.execute("DELETE FROM settings WHERE key='appearance_policy'")
 
 
+class TestAdministratorAppearance(BrowserTest):
+    """Le profil Administrateur règle son apparence hors du cadre de l'entreprise, logo compris (pour lui seul)."""
+    COMPANY = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 10"><rect width="40" height="10" fill="#e30613"/></svg>'
+    MINE = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#0a7"/></svg>'
+
+    def setUp(self):
+        super().setUp()
+        from loco import appearance
+        self.appearance = appearance
+        os.makedirs(appearance.BG_DIR, exist_ok=True)
+        Path(appearance.BG_DIR, "logo.svg").write_bytes(self.COMPANY)
+        framed = {"brand": "#e30613", "themes": ["light", "oled"], "accent_free": False, "background_free": False,
+                  "default": {"theme": "light", "accent": "brand", "alpha": 100, "bg": ""}}
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('appearance_policy', ?)", (json.dumps(framed),))
+        self.addCleanup(self.restore)
+
+    def restore(self):
+        import glob
+        for path in glob.glob(os.path.join(self.appearance.BG_DIR, "logo*")):
+            os.unlink(path)
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key='appearance_policy'")
+            conn.execute("UPDATE users SET appearance='' WHERE username='admin'")
+
+    def open_dialog(self):
+        self.page.locator("[data-open-appearance]").first.evaluate("el => el.click()")
+        expect(self.page.locator("#appearance-dialog")).to_be_visible()
+
+    def test_every_choice_and_a_logo_of_his_own(self):
+        self.page.goto("/fleet")
+        self.open_dialog()
+        dialog = self.page.locator("#appearance-dialog")
+        expect(dialog.locator('[data-set-theme="midnight"]')).to_be_visible()          # hors des thèmes proposés
+        expect(dialog.locator('[data-set-accent="teal"]')).to_be_visible()             # couleur pourtant imposée
+        expect(dialog.locator('[data-set-logo=""]')).to_have_attribute("aria-checked", "true")
+        dialog.locator('[data-set-theme="midnight"]').click()
+        expect(self.page.locator("html")).to_have_attribute("data-theme", "midnight")
+        dialog.locator('[data-set-logo="loco"]').click()                               # la page se recharge…
+        expect(self.page.locator("#appearance-dialog")).to_be_visible()                 # …et la fenêtre se rouvre
+        expect(self.page.locator('[data-set-logo="loco"]')).to_have_attribute("aria-checked", "true")
+        expect(self.page.locator(".top .brand svg.brand-logo")).to_be_visible()
+        expect(self.page.locator("html")).to_have_attribute("data-theme", "midnight")    # gardé au rechargement
+        self.page.locator("[data-logo-upload]").set_input_files({"name": "moi.svg", "mimeType": "image/svg+xml", "buffer": self.MINE})
+        expect(self.page.locator('[data-set-logo="u"]')).to_have_attribute("aria-checked", "true")
+        expect(self.page.locator(".top .brand img.brand-logo")).to_have_attribute("src", re.compile(r"/appearance/my-logo\.img"))
+        self.page.set_viewport_size(PHONE)
+        self.assertLessEqual(self.overflow(), 0)
+        self.assertLessEqual(self.page.evaluate("(() => { const d = document.querySelector('#appearance-dialog'); return d.scrollWidth - d.clientWidth })()"), 0)
+        self.page.screenshot(path=str(ARTIFACTS / "admin-appearance-phone.png"))
+        self.page.locator("[data-logo-remove]").click()
+        expect(self.page.locator('[data-set-logo=""]')).to_have_attribute("aria-checked", "true")
+        expect(self.page.locator(".top .brand img.brand-logo")).to_have_attribute("src", re.compile(r"/appearance/logo\.img"))
+
+
 class AndroidAppsPages(BrowserTest):
     """Pages des applications Android (fonctionnalité expérimentale) : barre de navigation avec l'entrée de plus,
     pages sans ascenseur horizontal ni erreur, sur ordinateur et téléphone. Index local fabriqué : pas d'Internet."""

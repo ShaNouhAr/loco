@@ -5036,5 +5036,10 @@
  "Sur la destination": "En el destino",
  "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "La tarea se detiene en Proxmox. Puede quedar un archivo inacabado en el almacenamiento (elimínelo en Proxmox), y la máquina quedarse bloqueada — y apagada en modo «Parada»: compruébela después (pct unlock o qm unlock).",
  "Pour celles de loco, le nombre de « Sauvegardes conservées » (onglet loco) vaut aussi pour la destination.": "Para las de loco, el número de «Copias conservadas» (pestaña loco) también se aplica al destino.",
- "État, réseau, certificat, heure": "Estado, red, certificado, hora"
+ "État, réseau, certificat, heure": "Estado, red, certificado, hora",
+ "Enregistrée sur votre compte. Profil Administrateur : le cadre fixé pour l’organisation ne s’applique pas à vous.": "Guardada en su cuenta. Perfil Administrador: el marco fijado para la organización no se aplica a usted.",
+ "Mon logo": "Mi logo",
+ "Importer un logo…": "Importar un logo…",
+ "Retirer mon logo": "Quitar mi logo",
+ "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "Solo para usted: las demás cuentas y la pantalla de inicio de sesión conservan el logo de la instancia."
 }

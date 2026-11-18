@@ -362,3 +362,89 @@ class InstancePolicyTest(unittest.TestCase):
             self.assertEqual(appearance.policy()["themes"], list(appearance.THEMES))
         with connect() as conn:
             self.assertTrue(conn.execute("SELECT 1 FROM audit WHERE action='apparence.instance'").fetchone())
+
+
+class AdministratorFreedomTest(InstancePolicyTest):
+    """Un compte au profil Administrateur règle son apparence comme il l'entend, hors du cadre de l'entreprise, et peut
+    remplacer le logo pour lui seul ; les autres comptes et l'écran de connexion restent dans le cadre."""
+
+    def tearDown(self):
+        super().tearDown()
+        with connect() as conn:
+            conn.execute("DELETE FROM users WHERE username='chef_ia'")
+
+    def framed(self):
+        self.save(brand_on="1", brand="#E30613", themes=["light", "oled"], default_theme="light",
+                  default_accent="brand", default_bg="", default_alpha="100", accent_free="", background_free="")
+
+    def chief(self):
+        """Administrateur qui ne s'appelle pas « admin » : la liberté tient au profil, pas au nom du compte."""
+        with connect() as conn:
+            if not conn.execute("SELECT 1 FROM users WHERE username='chef_ia'").fetchone():
+                auth.create_user(conn, "chef_ia", "Chef-Pass-1234567", "admin", must_change=False)
+        b = Browser()
+        b.login("chef_ia", "Chef-Pass-1234567")
+        return b
+
+    def test_an_administrator_is_not_bound_by_the_company_frame(self):
+        self.framed()
+        for browser in (self.b, self.chief()):
+            saved = browser.post("/account/appearance", {"theme": "midnight", "accent": "pink", "alpha": "70", "bg": "w:foret"}).get_json()
+            self.assertEqual(saved, {"theme": "midnight", "accent": "pink", "alpha": 70, "bg": "w:foret"})
+            html = browser.c.get("/fleet").get_data(as_text=True)
+            self.assertIn('data-theme="midnight" data-accent="pink"', html)
+            for choice in ('data-set-theme="midnight"', 'data-set-accent="teal"', "data-bg-upload", "data-preset"):
+                self.assertIn(choice, html)
+            self.assertIn("le cadre fixé pour l’organisation ne s’applique pas à vous", html)
+        v = self.viewer()                                                   # les autres restent dans le cadre
+        self.assertEqual(v.post("/account/appearance", {"theme": "midnight", "accent": "pink", "alpha": "70", "bg": "w:foret"}).get_json(),
+                         {"theme": "light", "accent": "brand", "alpha": 100, "bg": ""})
+        self.assertNotIn('data-set-theme="midnight"', v.c.get("/fleet").get_data(as_text=True))
+        self.assertIn('data-theme="light" data-accent="brand"', Browser().c.get("/login").get_data(as_text=True))
+
+    def logo_post(self, browser, data):
+        return browser.c.post("/account/appearance/logo", data=dict(data, csrf=browser.token("/")), content_type="multipart/form-data")
+
+    def test_an_administrator_replaces_the_logo_for_himself_only(self):
+        self.b.c.post("/appearance/logo", data={"csrf": self.b.token("/"), "logo": (io.BytesIO(PNG), "company.png")},
+                      content_type="multipart/form-data")
+        v = self.viewer()
+        self.assertIn("/appearance/logo.img", self.b.c.get("/").get_data(as_text=True))
+        # Le logo d'origine de loco, pour lui seul.
+        self.assertEqual(self.logo_post(self.b, {"logo": "loco"}).get_json(), {"logo": "loco"})
+        header = self.b.c.get("/").get_data(as_text=True).split("</header>")[0]
+        self.assertNotIn("/appearance/logo.img", header)
+        self.assertIn('viewBox="0 0 1118 750"', header)
+        self.assertIn("/appearance/logo.img", v.c.get("/fleet").get_data(as_text=True).split("</header>")[0])
+        self.assertIn("/appearance/logo.img", Browser().c.get("/login").get_data(as_text=True))
+        # Son image, servie à lui seul ; le choix survit à l'enregistrement de l'apparence.
+        self.assertEqual(self.logo_post(self.b, {"logo": "u"}).status_code, 409)          # pas encore d'image
+        self.assertEqual(self.logo_post(self.b, {"logo": (io.BytesIO(SVG), "moi.svg")}).get_json(), {"logo": "u"})
+        self.b.post("/account/appearance", {"theme": "oled", "accent": "blue", "alpha": "100", "bg": ""})
+        header = self.b.c.get("/").get_data(as_text=True).split("</header>")[0]
+        self.assertIn("/appearance/my-logo.img", header)
+        img = self.b.c.get("/appearance/my-logo.img")
+        self.assertEqual(img.get_data(), SVG)
+        self.assertIn("default-src 'none'", img.headers["Content-Security-Policy"])
+        img.close()
+        self.assertEqual(v.c.get("/appearance/my-logo.img").status_code, 404)
+        self.assertNotIn("my-logo", v.c.get("/fleet").get_data(as_text=True))
+        self.assertNotIn("my-logo", Browser().c.get("/login").get_data(as_text=True))
+        # Retirée : retour au logo de l'instance.
+        self.assertEqual(self.b.post("/account/appearance/logo/remove", {}).get_json(), {"logo": ""})
+        self.assertIn("/appearance/logo.img", self.b.c.get("/").get_data(as_text=True).split("</header>")[0])
+        self.assertEqual(self.b.c.get("/appearance/my-logo.img").status_code, 404)
+
+    def test_other_accounts_cannot_choose_a_logo(self):
+        v = self.viewer()
+        self.assertEqual(self.logo_post(v, {"logo": "loco"}).status_code, 403)
+        self.assertEqual(self.logo_post(v, {"logo": (io.BytesIO(PNG), "v.png")}).status_code, 403)
+        self.assertEqual(glob.glob(os.path.join(appearance.BG_DIR, "logo-u*")), [])
+        self.assertNotIn("data-logo-upload", v.c.get("/fleet").get_data(as_text=True))
+        with connect() as conn:                                              # un choix forcé en base reste sans effet
+            conn.execute("UPDATE users SET appearance=? WHERE username='viewer_ia'", ('{"logo": "loco"}',))
+        self.b.c.post("/appearance/logo", data={"csrf": self.b.token("/"), "logo": (io.BytesIO(PNG), "company.png")},
+                      content_type="multipart/form-data")
+        self.assertIn("/appearance/logo.img", v.c.get("/fleet").get_data(as_text=True).split("</header>")[0])
+        self.assertEqual(self.logo_post(self.b, {"logo": "autre"}).status_code, 400)
+        self.assertEqual(self.logo_post(self.b, {"logo": (io.BytesIO(b"pas une image"), "x.bin")}).status_code, 415)

@@ -81,6 +81,7 @@ Les connexions OpenID Connect d’avant la 2.14 (retirées alors, revenues en 2.
 - **Apparence par défaut** : thème, couleur, fond et opacité des nouveaux comptes et du bouton *Réinitialiser*.
 - **Écran de connexion** : il suit l’apparence par défaut ou reçoit la sienne, y compris un thème non proposé aux comptes. *Appliquer à la connexion*, dans la fenêtre **Apparence**, lui donne celle que vous êtes en train d’essayer.
 - **Choix laissés à chacun** : les **thèmes proposés** (par exemple un clair et un sombre seulement), la couleur d’accent et le fond **au choix ou imposés**. Rien n’est supprimé : un thème décoché est seulement masqué, et ce qui n’est plus proposé est remplacé à l’affichage par l’apparence par défaut, sans toucher aux réglages enregistrés des comptes. *Réglages d’origine* rétablit tous les choix.
+- **Les administrateurs ne sont pas tenus par ce cadre** : un compte au profil *Administrateur* (quel que soit son nom) garde tous les thèmes, presets, couleurs et fonds dans sa fenêtre **Apparence**, et peut y choisir son **logo** — celui de l’entreprise, celui de loco, ou une image à lui (PNG, JPEG, GIF, WebP ou SVG, 2 Mo au plus). Ce logo n’est montré qu’à lui : les autres comptes et l’écran de connexion gardent celui de l’instance.
 
 ---
 

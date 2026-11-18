@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.174.0 — 2026-11-18
+
+- **Apparence libre pour les administrateurs** : un compte au profil *Administrateur* n'est plus tenu par le cadre de l'entreprise (*Administration › Apparence*) — sa fenêtre *Apparence* propose tous les thèmes et presets, toutes les couleurs et tous les fonds, même quand l'entreprise en limite ou en impose. Les autres comptes et l'écran de connexion restent dans le cadre.
+- **Son propre logo** : dans la même fenêtre, un administrateur choisit le logo qu'il voit — celui de l'entreprise, celui de loco, ou une image à lui (PNG, JPEG, GIF, WebP ou SVG, 2 Mo au plus), dans l'en-tête et l'icône de l'onglet. Ce choix ne vaut que pour lui. Changer de logo recharge la page, fenêtre rouverte, sans perdre le thème qu'on venait d'essayer.
+
 ## 2.173.1 — 2026-11-18
 
 - **Sauvegardes au même endroit** : l'onglet *Sauvegardes* de la page *Système* faisait doublon avec la nouvelle page *Sauvegardes* ; il la rejoint. Télécharger, restaurer ou supprimer une sauvegarde de loco, régler leur nombre et restaurer depuis un fichier se font désormais dans *Administration › Sauvegardes*, onglet *loco* ; la copie hors-site y est l'onglet *Destination*. La tuile « Dernière sauvegarde » de *Système*, les alertes de la vue d'ensemble (sauvegarde en retard, copie hors-site en échec) et les pages de la documentation mènent à la nouvelle page. Sur un serveur Windows, l'onglet *loco* montre les sauvegardes et les commandes, comme le faisait *Système*.

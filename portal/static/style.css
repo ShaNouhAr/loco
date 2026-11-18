@@ -2356,6 +2356,18 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 [data-bg-msg] { color: var(--text-3); }
 [data-bg-msg].err { color: var(--err); }
 
+/* Logo d'un administrateur (pour lui seul) : mêmes cartes que les thèmes, le logo centré dans sa vignette. */
+.ap-logos { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; }
+.ap-logo { display: grid; gap: 8px; padding: 8px; border: 1px solid var(--line-2); border-radius: var(--r); background: none; color: var(--text); font: 500 12.5px var(--sans); text-align: center; cursor: pointer; }
+.ap-logo:hover { background: var(--bg-2); }
+.ap-logo[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.ap-logo > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-logo-box { display: grid; place-items: center; aspect-ratio: 16 / 10; border-radius: 7px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text); overflow: hidden; }
+.ap-logo-box img, .ap-logo-box .ap-logo-svg { max-width: 72%; max-height: 64%; object-fit: contain; }
+.ap-logo-box .ap-logo-svg { width: 72%; height: auto; }
+[data-logo-msg] { color: var(--text-3); }
+[data-logo-msg].err { color: var(--err); }
+
 /* ------------------------------------------------------------------ fonds photo (nature) */
 [data-bg^="w:"] .bg-layer { background-size: cover; background-position: center; }
 [data-bg="w:montagne"] .bg-layer { background-image: url("wallpapers/montagne.jpg"); }

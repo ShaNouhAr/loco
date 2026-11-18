@@ -5036,5 +5036,10 @@
  "Sur la destination": "On the destination",
  "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "The task is stopped on Proxmox. An unfinished file may remain on the storage (delete it in Proxmox), and the machine may stay locked — and off in “Stop” mode: check it afterwards (pct unlock or qm unlock).",
  "Pour celles de loco, le nombre de « Sauvegardes conservées » (onglet loco) vaut aussi pour la destination.": "For loco's, the number of “Backups kept” (loco tab) also applies to the destination.",
- "État, réseau, certificat, heure": "Status, network, certificate, time"
+ "État, réseau, certificat, heure": "Status, network, certificate, time",
+ "Enregistrée sur votre compte. Profil Administrateur : le cadre fixé pour l’organisation ne s’applique pas à vous.": "Saved to your account. Administrator profile: the frame set for the organisation does not apply to you.",
+ "Mon logo": "My logo",
+ "Importer un logo…": "Import a logo…",
+ "Retirer mon logo": "Remove my logo",
+ "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "For you only: other accounts and the sign-in screen keep the instance logo."
 }

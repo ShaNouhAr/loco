@@ -181,17 +181,25 @@
     }
 
     var saveTimer = null;
+    function sendNow() {
+      saveTimer = null;
+      var c = current(), fd = new FormData();
+      fd.append("csrf", ap ? ap.dataset.csrf : "");
+      fd.append("theme", c.theme); fd.append("accent", c.accent);
+      fd.append("alpha", c.alpha); fd.append("bg", c.bg);
+      return fetch("/account/appearance", { method: "POST", body: fd, credentials: "same-origin" }).catch(function () {});
+    }
+    // Enregistrement en attente (dé-rebondi) envoyé tout de suite : avant un rechargement de la page.
+    function flushSave() {
+      if (!saveTimer) return Promise.resolve();
+      clearTimeout(saveTimer);
+      return sendNow();
+    }
     function persist() {
       var c = current();
       if (isUser()) {
         clearTimeout(saveTimer);
-        saveTimer = setTimeout(function () {
-          var fd = new FormData();
-          fd.append("csrf", ap ? ap.dataset.csrf : "");
-          fd.append("theme", c.theme); fd.append("accent", c.accent);
-          fd.append("alpha", c.alpha); fd.append("bg", c.bg);
-          fetch("/account/appearance", { method: "POST", body: fd, credentials: "same-origin" }).catch(function () {});
-        }, 250);
+        saveTimer = setTimeout(sendNow, 250);
       } else {
         try {
           localStorage.setItem("lr-theme", c.theme); localStorage.setItem("lr-accent", c.accent);
@@ -290,6 +298,38 @@
           .catch(function () { if (msg) { msg.classList.add("err"); msg.textContent = t("Échec de l'envoi."); } });
       });
 
+      // Logo d'un administrateur (pour lui seul) : il est dans l'en-tête et l'icône de l'onglet, la page est donc
+      // rechargée, et la fenêtre rouverte.
+      var logoMsg = ap.querySelector("[data-logo-msg]");
+      var logoSend = function (fd, url) {
+        fd.append("csrf", ap.dataset.csrf);
+        if (logoMsg) { logoMsg.classList.remove("err"); logoMsg.textContent = t("Envoi…"); }
+        fetch(url, { method: "POST", body: fd, credentials: "same-origin" })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: r.ok, j: {} }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              if (logoMsg) { logoMsg.classList.add("err"); logoMsg.textContent = res.j.error === "trop-grand" ? t("Logo trop lourd (2 Mo maximum).") : t("Format non reconnu (PNG, JPEG, GIF, WebP ou SVG)."); }
+              return;
+            }
+            try { sessionStorage.setItem("loco-reopen-appearance", "1"); } catch (err) { /* navigation privée */ }
+            flushSave().then(function () { location.reload(); });
+          })
+          .catch(function () { if (logoMsg) { logoMsg.classList.add("err"); logoMsg.textContent = t("Échec de l'envoi."); } });
+      };
+      ap.addEventListener("click", function (e) {
+        var choice = e.target.closest("[data-set-logo]"), remove = e.target.closest("[data-logo-remove]");
+        if (choice && choice.getAttribute("aria-checked") !== "true") {
+          var fd = new FormData(); fd.append("logo", choice.dataset.setLogo); logoSend(fd, "/account/appearance/logo");
+        } else if (remove) logoSend(new FormData(), "/account/appearance/logo/remove");
+      });
+      var logoUpload = ap.querySelector("[data-logo-upload]");
+      if (logoUpload) logoUpload.addEventListener("change", function () {
+        var file = this.files && this.files[0]; this.value = ""; if (!file) return;
+        var fd = new FormData(); fd.append("logo", file); logoSend(fd, "/account/appearance/logo");
+      });
+      try {
+        if (sessionStorage.getItem("loco-reopen-appearance")) { sessionStorage.removeItem("loco-reopen-appearance"); ap.showModal(); sync(); }
+      } catch (err) { /* navigation privée */ }
     }
   })();
 
