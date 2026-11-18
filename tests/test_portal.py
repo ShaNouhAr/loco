@@ -306,6 +306,20 @@ class TestBackups(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
         shutil.rmtree(os.path.join(config.STATE, "restore-uploads"), ignore_errors=True)
 
+    def test_they_are_on_the_backups_page_and_actions_come_back_to_it(self):
+        html = self.admin.c.get("/backups").get_data(as_text=True)
+        self.assertIn(self.name, html)
+        self.assertIn('href="/system/backups/' + self.name + '"', html)
+        self.assertIn('action="/system/restore"', html)
+        with mock.patch("loco.system.locoadmin") as la:
+            la.running_job.return_value = None
+            la.agent_running.return_value = True
+            r = self.admin.post("/system/restore", {"archive": self.name}, page="/backups")
+        self.assertTrue(r.headers["Location"].endswith("/backups#loco"), r.headers["Location"])
+        system = self.admin.c.get("/system").get_data(as_text=True)
+        self.assertNotIn(self.name, system)
+        self.assertIn('href="/backups#loco"', system)                  # la tuile « Dernière sauvegarde » y mène
+
     def test_download_rejects_bad_names_and_unknown_files(self):
         self.assertEqual(self.admin.c.get("/system/backups/..%2f..%2fetc%2fpasswd").status_code, 404)
         self.assertEqual(self.admin.c.get("/system/backups/loco-x.tar.gz").status_code, 404)
@@ -910,9 +924,10 @@ class TestNavigation(unittest.TestCase):
 
     def test_system_page_is_split_in_tabs(self):
         html = self.admin.c.get("/system").get_data(as_text=True)
-        for tab in ("etat", "sauvegardes", "reseau"):
+        for tab in ("etat", "reseau", "certificat"):
             self.assertIn(f'data-tab="{tab}"', html)
             self.assertIn(f'data-panel="{tab}"', html)
+        self.assertNotIn('data-panel="sauvegardes"', html)             # rejoint la page Sauvegardes
 
 
 if __name__ == "__main__":

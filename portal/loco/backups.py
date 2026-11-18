@@ -1,7 +1,7 @@
 """Sauvegardes : la page qui les réunit — loco, Home Assistant, Proxmox — avec la destination externe (NAS, S3, SFTP).
 
-- loco se sauvegarde chaque nuit (Système › Sauvegardes) ; la plus récente part vers la destination externe si on le
-  veut (offsite.py).
+- loco se sauvegarde chaque nuit : liste, téléchargement, restauration et conservation (routes dans system.py) ; la
+  plus récente part vers la destination externe si on le veut (offsite.py).
 - Home Assistant : sa sauvegarde la plus récente (créée juste avant si on le demande) est téléchargée par la liaison SSH,
   chiffrée avec la phrase de passe de la destination s'il y en a une, puis déposée sur la destination ; seules les
   dernières copies de chaque instance y sont gardées, en nombre choisi.
@@ -393,11 +393,13 @@ def _homeassistant_views():
 
 
 def _loco_view():
-    if config.WINDOWS or not can("system.view"):
+    """Sauvegardes quotidiennes de loco (autrefois l'onglet Sauvegardes de Système) : liste, conservation, restauration."""
+    if not can("system.view"):
         return None
     from .system import _age, backup_keep, list_backups
     found = list_backups()
-    return {"backups": found, "last": _age(found[0]["mtime"]) if found else None, "keep": backup_keep()}
+    return {"backups": found, "last": _age(found[0]["mtime"]) if found else None, "keep": backup_keep(),
+            "dir": config.BACKUP_DIR}
 
 
 @app.route("/backups")
@@ -409,7 +411,7 @@ def backups():
     for v in pve:
         v["plans"] = plans("proxmox", v["row"]["id"])
     hass = _homeassistant_views() if show_ha else []
-    destination = offsite.panel() if can("system.view") else None
+    destination = offsite.panel() if can("system.view") and not config.WINDOWS else None
     signature = hashlib.sha256(json.dumps([proxmox.signature(pve), [[h["row"]["id"], h["row"]["copy_state"],
                                                                      [(j["id"], j["state"]) for j in h["jobs"]]] for h in hass],
                                            (destination or {}).get("state")], default=str).encode()).hexdigest()[:16]

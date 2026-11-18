@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.173.1 — 2026-11-18
+
+- **Sauvegardes au même endroit** : l'onglet *Sauvegardes* de la page *Système* faisait doublon avec la nouvelle page *Sauvegardes* ; il la rejoint. Télécharger, restaurer ou supprimer une sauvegarde de loco, régler leur nombre et restaurer depuis un fichier se font désormais dans *Administration › Sauvegardes*, onglet *loco* ; la copie hors-site y est l'onglet *Destination*. La tuile « Dernière sauvegarde » de *Système*, les alertes de la vue d'ensemble (sauvegarde en retard, copie hors-site en échec) et les pages de la documentation mènent à la nouvelle page. Sur un serveur Windows, l'onglet *loco* montre les sauvegardes et les commandes, comme le faisait *Système*.
+- **Sauvegardes de loco sur téléphone** : chaque ligne écrasait le nom de l'archive (une lettre par ligne) et le choix d'un fichier à restaurer élargissait la page sur un petit écran ; le nom passe au-dessus des boutons et le champ se resserre.
+
 ## 2.173.0 — 2026-11-18
 
 - **Page Sauvegardes** (*Administration › Serveur › Sauvegardes*) : ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox —, où, et quand, au même endroit. La destination externe (NAS monté, S3, SFTP) s'y règle aussi, et l'on choisit ce qui y part : les sauvegardes de loco (case *Copier aussi les sauvegardes de loco*, cochée par défaut), et les Home Assistant un à un.

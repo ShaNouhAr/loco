@@ -5034,5 +5034,7 @@
  "Proxmox VE se sauvegarde aussi d'ici une fois activé dans <a href=\"%(url)s\">Fonctionnalités</a> (section Facultatif).": "Proxmox VE también se respalda desde aquí una vez activado en <a href=\"%(url)s\">Funcionalidades</a> (sección Opcional).",
  "garde la dernière": "conserva la última",
  "Sur la destination": "En el destino",
- "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "La tarea se detiene en Proxmox. Puede quedar un archivo inacabado en el almacenamiento (elimínelo en Proxmox), y la máquina quedarse bloqueada — y apagada en modo «Parada»: compruébela después (pct unlock o qm unlock)."
+ "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "La tarea se detiene en Proxmox. Puede quedar un archivo inacabado en el almacenamiento (elimínelo en Proxmox), y la máquina quedarse bloqueada — y apagada en modo «Parada»: compruébela después (pct unlock o qm unlock).",
+ "Pour celles de loco, le nombre de « Sauvegardes conservées » (onglet loco) vaut aussi pour la destination.": "Para las de loco, el número de «Copias conservadas» (pestaña loco) también se aplica al destino.",
+ "État, réseau, certificat, heure": "Estado, red, certificado, hora"
 }

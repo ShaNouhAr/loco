@@ -509,6 +509,7 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 /* Sauvegardes : liste compacte + réglages */
 .backups { padding-top: 4px; padding-bottom: 4px; }
 .backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 10px 0; border-top: 1px solid var(--line); }
+@media (max-width: 720px) { .backup-row { flex-wrap: wrap; } .backup-info { flex: 1 1 100%; } }   /* téléphone : le nom, puis les boutons dessous */
 .backups .backup-row:first-child { border-top: 0; }
 .backup-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .backup-when { display: flex; align-items: baseline; gap: 10px; font-size: 14px; font-weight: 600; color: var(--text); }
@@ -519,6 +520,8 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .backup-settings { display: flex; flex-direction: column; gap: 16px; }
 .backup-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; }
 .backup-setting-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.backup-setting .row { min-width: 0; max-width: 100%; }
+.backup-setting input[type=file] { min-width: 0; max-width: 100%; }
 .backup-setting-text .set-label { margin-bottom: 0; }
 .offsite-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .offsite-head h3 { margin: 0; font-size: 14px; }

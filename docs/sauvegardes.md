@@ -30,8 +30,10 @@ jamais les fichiers de l'autre.
 
 ## loco
 
-L'onglet résume les sauvegardes quotidiennes du serveur (la dernière, le nombre gardé, l'état de la copie
-externe). Télécharger, restaurer et régler leur nombre se fait dans **Système › Sauvegardes**, comme avant.
+Les sauvegardes quotidiennes du serveur (configuration, comptes, clés, dépôts et catalogue, hors caches) : la
+dernière, l'état de leur copie externe, et pour chacune *Télécharger*, *Restaurer* (le serveur redémarre dans
+l'état de la sauvegarde) et la suppression. On y règle aussi le nombre gardé — il vaut aussi pour la destination —
+et l'on restaure depuis un fichier. Cet onglet remplace l'ancien onglet Sauvegardes de la page Système.
 
 ## Home Assistant
 

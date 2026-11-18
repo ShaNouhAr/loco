@@ -423,9 +423,7 @@ def system_offsite():
     audit("systeme.sauvegarde.hors-site", _("Copie hors-site"))
     flash(_("Destination hors-site enregistrée."), "ok")
     from .util import back
-    if request.form.get("from") == "backups":
-        return back("backups", _anchor="destination")
-    return back("system", _anchor="sauvegardes")
+    return back("backups", _anchor="destination")
 
 
 @app.route("/system/offsite/test", methods=["POST"])
@@ -440,7 +438,7 @@ def system_offsite_test():
 
 
 def panel():
-    """Données pour le panneau « Copie hors-site » intégré à la page Système."""
+    """Données pour l'onglet Destination de la page Sauvegardes."""
     if config.WINDOWS:
         return None
     cfg = load()

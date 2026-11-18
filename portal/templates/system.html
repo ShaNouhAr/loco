@@ -1,11 +1,9 @@
 {% extends "base.html" %}
 {% from "_nav_icons.html" import titled %}
 {% from "_macros.html" import cmd, service %}
-{% from "_offsite.html" import offsite_form with context %}
 {% block title %}{{ _("Système") }}{% endblock %}
 {% block content %}
 {% from '_nav_icons.html' import ui_icon %}
-{% set backup_cmd = 'loco backup' if windows else ('loco-backup' if alpine else 'sudo loco-backup') %}
 {% set ca_url = (http_url or https_url) ~ '/ca.crt' %}
 <div class="head">
   <div>
@@ -40,7 +38,7 @@
       <div class="s">{{ _("libres sur %(total)s", total=disk.total|human) }}</div>
       <div class="meter level {{ 'err' if disk.pct >= 90 else 'warn' if disk.pct >= 80 }}"><i data-width="{{ disk.pct }}"></i></div>
     </div>
-    <a class="metric metric-link" href="#sauvegardes">
+    <a class="metric metric-link" href="{{ url_for('backups') }}#loco">
       <div class="k">{{ titled('save', _("Dernière sauvegarde")) }}</div>
       {% if last_backup %}
       <div class="v small-v">{{ last_backup.text }}</div>
@@ -59,7 +57,6 @@
 
   <div class="tabs page-tabs" role="tablist" data-hash aria-label="{{ _('Sections du système') }}">
     <button type="button" data-tab="etat" aria-selected="true">{{ _("État") }}</button>
-    <button type="button" data-tab="sauvegardes" aria-selected="false">{{ _("Sauvegardes") }}{% if backups %} <span class="tab-count">{{ backups|length }}</span>{% endif %}{% if last_backup and last_backup.late %} <span class="st warn" aria-label="{{ _('en retard') }}"></span>{% endif %}</button>
     <button type="button" data-tab="reseau" aria-selected="false">{{ _("Réseau") }}</button>
     <button type="button" data-tab="certificat" aria-selected="false">{{ _("Certificat") }}{% if tls and tls.mode == 'enterprise' %} <span class="tab-count">{{ _("entreprise") }}</span>{% endif %}{% if cert and cert.end.days is not none and cert.end.days < 30 %} <span class="st err" aria-label="{{ _('expire bientôt') }}"></span>{% endif %}</button>
     {% if time_info or (qemu and (qemu.qemu or qemu.installed)) %}<button type="button" data-tab="reglages" aria-selected="false">{{ _("Heure et matériel") }}</button>{% endif %}
@@ -94,79 +91,6 @@
       </dl>
     </section>
   </div>
-  </div></div>
-
-  <div class="tab-panel" data-panel="sauvegardes"><div class="stack">
-    <section class="panel">
-      <div class="panel-h"><h2>{{ titled('save', _("Sauvegardes")) }}</h2><div class="aside">{{ _("quotidiennes, hors caches") }}</div></div>
-      {% set can_backup = not windows and can('system.configure') %}
-      {% if backups %}
-      <div class="panel-b backups">
-        {% for b in backups %}
-        <div class="backup-row">
-          <div class="backup-info">
-            <div class="backup-when">{{ b.when|date_fr }}<span class="backup-size">{{ b.size|human }}</span></div>
-            <div class="backup-name mono">{{ b.name }}</div>
-          </div>
-          {% if can_backup %}
-          <div class="backup-actions">
-            <a class="btn sm" href="{{ url_for('system_backup_download', name=b.name) }}" download>{{ _("Télécharger") }}</a>
-            {% if server_updates %}
-            <form method="post" action="{{ url_for('system_restore') }}" data-confirm="{{ _('Restaurer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Le serveur va redémarrer ; comptes, base, clés et dépôts seront remplacés par ceux de cette sauvegarde. La configuration propre au serveur (adresse, ports, réseaux) est conservée.') }}" data-confirm-ok="{{ _('Restaurer') }}">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              <input type="hidden" name="archive" value="{{ b.name }}">
-              <button class="btn sm">{{ _("Restaurer") }}</button>
-            </form>
-            <form method="post" action="{{ url_for('system_backup_delete', name=b.name) }}" data-confirm="{{ _('Supprimer « %(name)s » ?', name=b.name) }}" data-confirm-text="{{ _('Cette sauvegarde sera définitivement supprimée du serveur.') }}" data-confirm-ok="{{ _('Supprimer') }}">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              <button class="btn icon sm ghost danger" title="{{ _('Supprimer') }}" aria-label="{{ _('Supprimer %(name)s', name=b.name) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg></button>
-            </form>
-            {% endif %}
-          </div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="empty">{{ _("Aucune sauvegarde pour l'instant.") }}</div>
-      {% endif %}
-      {% if can_backup and server_updates %}
-      <div class="panel-b backup-settings">
-        <form method="post" action="{{ url_for('system_backup_retention') }}" class="backup-setting">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <div class="backup-setting-text"><span class="set-label">{{ _("Sauvegardes conservées") }}</span><span class="muted small">{{ _("les plus anciennes au-delà sont supprimées") }}</span></div>
-          <div class="row">
-            <input type="number" name="keep" min="1" max="60" value="{{ backup_keep }}" class="field-xs" required>
-            <button class="btn sm">{{ _("Enregistrer") }}</button>
-          </div>
-        </form>
-        <form method="post" action="{{ url_for('system_restore_upload') }}" enctype="multipart/form-data" class="backup-setting" data-confirm="{{ _('Restaurer depuis ce fichier ?') }}" data-confirm-text="{{ _('Le fichier est vérifié, puis le serveur redémarre ; comptes, base, clés et dépôts sont remplacés par ceux de l\'archive.') }}" data-confirm-ok="{{ _('Vérifier et restaurer') }}">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <div class="backup-setting-text"><span class="set-label">{{ _("Restaurer depuis un fichier") }}</span><span class="muted small">{{ _("archive .tar.gz, vérifiée avant restauration") }}</span></div>
-          <div class="row">
-            <input type="file" name="archive" accept=".gz,.tgz" required>
-            <button class="btn sm danger">{{ _("Vérifier et restaurer") }}</button>
-          </div>
-        </form>
-      </div>
-      {% endif %}
-      <div class="panel-b system-commands">
-        {% if can_backup and server_updates %}
-        <p class="small muted">{{ _("Télécharger une sauvegarde pour la garder ailleurs ; <strong>Restaurer</strong> remet le serveur dans l'état de la sauvegarde choisie (il redémarre). Pour restaurer sur un <em>autre</em> serveur, utilisez la commande :") }}</p>
-        {% else %}
-        <p class="small muted">{{ _("Configuration, comptes, clés, dépôts et catalogue, dans <span class=\"mono\">%(backup_dir)s</span>. Sur le serveur :", backup_dir=backup_dir) }}</p>
-        {% endif %}
-        {{ cmd('backup-create', backup_cmd ~ ' create', '#' if not windows else 'PS>') }}
-        {{ cmd('backup-restore', backup_cmd ~ ' restore ARCHIVE', '#' if not windows else 'PS>') }}
-      </div>
-      {% if offsite %}
-      <div class="panel-b offsite-block">
-        <div class="offsite-head"><h3>{{ _("Copie hors-site") }}</h3><div class="aside">{% if offsite.configured and offsite.state.last_error and (offsite.state.last_failed or '') > (offsite.state.last_ok or '') %}<span class="st err">{{ _("échec") }}</span>{% elif offsite.configured and offsite.state.last_ok %}<span class="st ok">{{ _("copié") }}</span>{% elif offsite.configured %}<span class="st warn">{{ _("en attente") }}</span>{% endif %}</div></div>
-      {{ offsite_form(offsite) }}
-      </div>
-      {% endif %}
-    </section>
-
   </div></div>
 
   <div class="tab-panel" data-panel="reseau"><div class="stack">

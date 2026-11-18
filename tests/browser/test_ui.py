@@ -1528,6 +1528,11 @@ class BackupsPages(BrowserTest):
         self.assertEqual(homeassistant.refresh(hass_id), "")
         self.assertEqual(proxmox.refresh(pve_id), "")
         self.backups = backups
+        # Une sauvegarde de loco au nom long : sa ligne et ses boutons doivent tenir sur un téléphone.
+        os.makedirs(config.BACKUP_DIR, exist_ok=True)
+        archive = Path(config.BACKUP_DIR) / "loco-serveur-de-demonstration-20261118-035657.tar.gz"
+        archive.write_bytes(b"\x1f\x8b" + b"0" * 2048)
+        self.addCleanup(archive.unlink)
         self.addCleanup(self.restore)
 
     def restore(self):
@@ -1588,6 +1593,9 @@ class TestBackupsPhone(BackupsPages):
             for tab in ("proxmox", "homeassistant", "loco", "destination"):
                 self.page.locator(f"[data-tab={tab}]").click()
                 self.assertLessEqual(self.overflow(), 0, f"{tab} à {width} px")
+            self.page.locator("[data-tab=loco]").click()
+            row = self.page.locator(".backup-row").first
+            self.assertGreater(row.locator(".backup-name").bounding_box()["width"], 150)     # nom lisible, pas une lettre par ligne
             self.page.locator("[data-tab=proxmox]").click()
             self.page.locator("button[data-open^='#pve-plan-']").click()
             self.assertLessEqual(self.page.evaluate("(() => { const d = document.querySelector('dialog[open]'); return d.scrollWidth - d.clientWidth })()"), 0)

@@ -577,9 +577,6 @@ def system():
         disk=disk_usage(),
         stats=read_stats(),
         backups=backups,
-        backup_dir=config.BACKUP_DIR,
-        backup_keep=backup_keep(),
-        offsite=offsite_panel(),
         paths={_("Données"): config.DATA, _("État et base"): config.STATE, _("Configuration"): config.ETC,
                _("Certificats"): config.TLS_DIR, _("Sauvegardes"): config.BACKUP_DIR},
         time_info=time_info,
@@ -648,7 +645,7 @@ def system_backup_delete(name):
             flash(_("Sauvegarde supprimée : %(name)s.", name=name), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system", _anchor="sauvegardes")
+    return back("backups", _anchor="loco")
 
 
 @app.route("/system/restore", methods=["POST"])
@@ -671,16 +668,11 @@ def system_restore():
             flash(_("Restauration lancée : le serveur va redémarrer. Reconnectez-vous dans un instant."), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system", _anchor="sauvegardes")
+    return back("backups", _anchor="loco")
 
 
 UPLOAD_SPOOL = os.path.join(config.STATE, "restore-uploads")
 MAX_UPLOAD = 4 * 1024 ** 3                        # 4 Gio : une sauvegarde (hors caches) reste bien en dessous
-
-
-def offsite_panel():
-    from . import offsite
-    return offsite.panel() if config.SERVER_UPDATES and not config.WINDOWS else None
 
 
 def backup_keep():
@@ -705,14 +697,14 @@ def system_restore_upload():
         pass
     if locoadmin.running_job():
         flash(_("Une opération est déjà en cours sur le serveur. Réessayez à la fin."), "error")
-        return back("system", _anchor="sauvegardes")
+        return back("backups", _anchor="loco")
     if not locoadmin.agent_running():
         flash(_("L'agent d'administration ne répond pas : sur le serveur, %(cmd)s.", cmd="systemctl restart loco-agent"), "error")
-        return back("system", _anchor="sauvegardes")
+        return back("backups", _anchor="loco")
     upload = request.files.get("archive")
     if upload is None or not upload.filename:
         flash(_("Choisissez un fichier de sauvegarde (.tar.gz)."), "error")
-        return back("system", _anchor="sauvegardes")
+        return back("backups", _anchor="loco")
     os.makedirs(UPLOAD_SPOOL, exist_ok=True)
     name = secrets.token_hex(16) + ".tar.gz"
     path = os.path.join(UPLOAD_SPOOL, name)
@@ -723,11 +715,11 @@ def system_restore_upload():
     except ValueError as e:
         _discard(path)
         flash(_("Archive refusée : %(reason)s", reason=str(e)), "error")
-        return back("system", _anchor="sauvegardes")
+        return back("backups", _anchor="loco")
     except OSError:
         _discard(path)
         flash(_("Le téléversement a échoué."), "error")
-        return back("system", _anchor="sauvegardes")
+        return back("backups", _anchor="loco")
     try:
         locoadmin.request("restore", {"upload": name}, user=g.user["username"] if g.get("user") else "")
         audit("systeme.restauration", _("fichier téléversé"))
@@ -735,7 +727,7 @@ def system_restore_upload():
     except ValueError as e:
         _discard(path)
         flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system", _anchor="sauvegardes")
+    return back("backups", _anchor="loco")
 
 
 def _discard(path):
@@ -1281,7 +1273,7 @@ def system_backup_retention():
             flash(_("Conservation des sauvegardes : %(n)s. Les plus anciennes au-delà sont supprimées.", n=keep), "ok")
         except ValueError as e:
             flash(str(e)[:1].upper() + str(e)[1:] + ".", "error")
-    return back("system", _anchor="sauvegardes")
+    return back("backups", _anchor="loco")
 
 
 @app.route("/system/time", methods=["POST"])

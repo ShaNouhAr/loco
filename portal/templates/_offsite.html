@@ -1,14 +1,9 @@
-{# Destination externe des sauvegardes (S3, SFTP, dossier ou partage monté) : formulaire partagé par Système › Sauvegardes
-   et la page Sauvegardes (« origin » : page où revenir). À importer « with context » (jeton CSRF). #}
-{% macro offsite_form(offsite, origin='system') -%}
+{# Destination externe des sauvegardes (S3, SFTP, dossier ou partage monté) : formulaire de l'onglet Destination de la
+   page Sauvegardes. À importer « with context » (jeton CSRF). #}
+{% macro offsite_form(offsite) -%}
       <form method="post" action="{{ url_for('system_offsite') }}" class="stack-sm">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        {% if origin == 'backups' %}<input type="hidden" name="from" value="backups">{% endif %}
-        {% if origin == 'backups' %}
         <p class="muted small">{{ _("Un stockage hors de ce serveur — NAS, cloud compatible S3, serveur SFTP — où loco dépose les sauvegardes choisies : la seule copie qui survit si le serveur est perdu.") }}</p>
-        {% else %}
-        <p class="muted small">{{ _("Copie automatique de la dernière sauvegarde quotidienne vers un stockage externe — la seule copie qui survit si le serveur est perdu.") }}</p>
-        {% endif %}
       {% if offsite.configured and offsite.state.last_error and (offsite.state.last_failed or '') > (offsite.state.last_ok or '') %}<p class="note warn">{{ _("Dernière copie en échec : %(error)s", error=offsite.state.last_error) }}</p>{% endif %}
       <div class="seg" role="radiogroup" aria-label="{{ _('Destination') }}">
         {% for value, label in (('none', _('Aucune')), ('s3', _('S3 / Cloud')), ('sftp', 'SFTP'), ('folder', _('Dossier / point de montage'))) %}
@@ -52,13 +47,10 @@
 
       <div data-show-for="offsite_type:s3 sftp folder" class="stack-sm">
         <label class="f"><span>{{ _("Chiffrer avant envoi") }} <em class="faint">{{ _("(phrase de passe, optionnel)") }}</em></span><input type="password" name="crypt_passphrase" value="{{ offsite.cfg.crypt.passphrase }}" autocomplete="new-password" placeholder="{{ _('non chiffré') }}" class="field-md"></label>
-        {% if origin == 'backups' %}
         <p class="hint">{{ _("Sans phrase de passe, les archives partent telles quelles (celles de loco contiennent sa base et ses clés) ; avec, elles sont chiffrées en AES-256 — gardez la phrase, elle est nécessaire pour restaurer.") }}</p>
-        {% else %}
-        <p class="hint">{{ _("Le nombre de « Sauvegardes conservées » ci-dessus vaut aussi pour le stockage distant. Sans phrase de passe, l'archive part telle quelle (base et clés incluses) ; avec, elle est chiffrée en AES-256 — gardez la phrase, elle est nécessaire pour restaurer.") }}</p>
-        {% endif %}
         <input type="hidden" name="loco_include_shown" value="1">
         <label class="check"><input type="checkbox" name="loco_include" value="1" {{ 'checked' if offsite.cfg.loco.include }} {{ 'disabled' if not offsite.can_edit }}> {{ _("Copier aussi les sauvegardes de loco") }}</label>
+        <p class="hint">{{ _("Pour celles de loco, le nombre de « Sauvegardes conservées » (onglet loco) vaut aussi pour la destination.") }}</p>
       </div>
 
       {% if offsite.can_edit %}

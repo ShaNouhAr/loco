@@ -66,6 +66,11 @@ class TestAttention(OverviewTest):
         self.assertEqual(rows, [("/system", "err", "Services arrêtés : nginx."), ("/fleet", "warn", "Trois mises à jour."),
                                 ("/system#certificat", "warn", "Le certificat expire.")])
 
+    def test_backups_lead_to_the_backups_page(self):
+        page = self.page(firing=[alert("backup_overdue", "Sauvegarde vieille de 3 j."), alert("offsite_failed", "Copie ratée.")])
+        rows = re.findall(r'<a class="attention-row" href="([^"]+)"><span class="st (\w+)">([^<]+)', page)
+        self.assertEqual(sorted(rows), [("/backups#destination", "warn", "Copie ratée."), ("/backups#loco", "warn", "Sauvegarde vieille de 3 j.")])
+
     def test_each_row_follows_the_rights_of_the_account(self):
         page = self.page(self.viewer(), firing=[alert("service_down", "Services arrêtés : nginx.", "critical"),
                                                 alert("cert_expiring", "Le certificat expire."), alert("security_updates", "Trois mises à jour."),

@@ -5034,5 +5034,7 @@
  "Proxmox VE se sauvegarde aussi d'ici une fois activé dans <a href=\"%(url)s\">Fonctionnalités</a> (section Facultatif).": "Proxmox VE can also be backed up from here once turned on in <a href=\"%(url)s\">Features</a> (Optional section).",
  "garde la dernière": "keeps the last one",
  "Sur la destination": "On the destination",
- "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "The task is stopped on Proxmox. An unfinished file may remain on the storage (delete it in Proxmox), and the machine may stay locked — and off in “Stop” mode: check it afterwards (pct unlock or qm unlock)."
+ "La tâche est arrêtée sur Proxmox. Un fichier inachevé peut rester sur le stockage (à supprimer dans Proxmox), et la machine rester verrouillée — et éteinte en mode « Arrêt » : vérifiez-la ensuite (pct unlock ou qm unlock).": "The task is stopped on Proxmox. An unfinished file may remain on the storage (delete it in Proxmox), and the machine may stay locked — and off in “Stop” mode: check it afterwards (pct unlock or qm unlock).",
+ "Pour celles de loco, le nombre de « Sauvegardes conservées » (onglet loco) vaut aussi pour la destination.": "For loco's, the number of “Backups kept” (loco tab) also applies to the destination.",
+ "État, réseau, certificat, heure": "Status, network, certificate, time"
 }

@@ -9,7 +9,7 @@ from flask import g, render_template, url_for
 
 from . import app, features
 from .i18n import L_, _
-from .auth import login_required, can
+from .auth import login_required, can, can_any
 from .db import db
 from .permissions import ENDPOINTS
 from .linux import list_debs
@@ -20,8 +20,8 @@ STATUS_LABELS = {"ready": L_("prêt"), "downloading": L_("téléchargement"), "e
 # Règle d'alerte -> droit pour la voir (None : qui ouvre la page voit déjà cet état), page où agir, onglet.
 # « Postes hors contact » n'y figure pas : un poste éteint n'est pas un problème, le panneau Parc le compte.
 ATTENTION = {"service_down": (None, "system", ""), "disk_high": (None, "system", ""),
-             "cert_expiring": ("system.view", "system", "certificat"), "backup_overdue": ("system.view", "system", "sauvegardes"),
-             "offsite_failed": ("system.view", "system", "sauvegardes"), "syslog_failed": ("syslog.configure", "syslog_settings", ""),
+             "cert_expiring": ("system.view", "system", "certificat"), "backup_overdue": ("system.view", "backups", "loco"),
+             "offsite_failed": ("system.view", "backups", "destination"), "syslog_failed": ("syslog.configure", "syslog_settings", ""),
              "login_failures": ("audit.view", "journal", ""), "security_updates": ("fleet.view", "fleet", ""),
              "device_disk_high": ("fleet.view", "fleet", ""), "device_memory_high": ("fleet.view", "fleet", ""),
              "device_cpu_high": ("fleet.view", "fleet", "")}
@@ -123,7 +123,9 @@ def _attention():
         rule = ATTENTION.get(alert["key"])
         if not rule or (rule[0] and not can(rule[0])):
             continue
-        url = url_for(rule[1], _anchor=rule[2] or None) if can(ENDPOINTS[rule[1]]) else ""
+        needed = ENDPOINTS[rule[1]]
+        allowed = can_any(*needed) if isinstance(needed, tuple) else can(needed)
+        url = url_for(rule[1], _anchor=rule[2] or None) if allowed else ""
         rows.append({"tone": "err" if alert["severity"] == "critical" else "warn", "text": alert["body"], "url": url})
     if can("fleet.view") and "fleet" not in features.disabled():
         failed = failed_updates_count()
