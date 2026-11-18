@@ -32,29 +32,35 @@
       {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" aria-label="{{ _('Mon parc') }}" title="{{ _('Mon parc') }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
-      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
-      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm')) }}">
-        <summary aria-expanded="false" aria-controls="nav-linux" aria-label="Linux" title="Linux">{{ nav_icon('linux') }}<span>Linux</span>{{ nav_icon('chevron') }}</summary>
-        <div class="nav-dropdown" id="nav-linux">
-          <div class="nav-panel">
-            {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>{{ _("Paquets") }}</strong><small>{{ _('Debian, Ubuntu, Red Hat : caches et dépôts') if rpm_enabled and can('rpm.view') else _('Debian, Ubuntu : cache et dépôts') }}</small></span></a>{% endif %}
-            {% if flatpak_enabled and can("flatpak.view") %}<a href="{{ url_for('flatpak') }}" {% if ep.startswith('flatpak') %}aria-current="page"{% endif %}>{{ nav_icon('layers') }}<span><strong>Flatpak</strong><small>{{ _("Cache Flathub") if windows else _("Flathub et applications internes") }}</small></span></a>{% endif %}
+      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav %}
+      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) }}">
+        <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Système') }}" title="{{ _('Système') }}">{{ nav_icon('server') }}<span>{{ _("Système") }}</span>{{ nav_icon('chevron') }}</summary>
+        <div class="nav-dropdown" id="nav-system">
+          <div class="nav-panel nav-sections">
+            {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
+            <div class="nav-section">
+              <div class="nav-section-h">Linux</div>
+              {% if can("linux.view") or (rpm_enabled and can("rpm.view")) %}<a href="{{ url_for('linux' if can('linux.view') else 'rpm') }}" {% if ep.startswith(('linux', 'rpm')) %}aria-current="page"{% endif %}>{{ nav_icon('package') }}<span><strong>{{ _("Paquets") }}</strong><small>{{ _('Debian, Ubuntu, Red Hat : caches et dépôts') if rpm_enabled and can('rpm.view') else _('Debian, Ubuntu : cache et dépôts') }}</small></span></a>{% endif %}
+              {% if flatpak_enabled and can("flatpak.view") %}<a href="{{ url_for('flatpak') }}" {% if ep.startswith('flatpak') %}aria-current="page"{% endif %}>{{ nav_icon('layers') }}<span><strong>Flatpak</strong><small>{{ _("Cache Flathub") if windows else _("Flathub et applications internes") }}</small></span></a>{% endif %}
+            </div>
+            {% endif %}
+            {% if can_any("wu.view", "windows.view", "store.view") %}
+            <div class="nav-section">
+              <div class="nav-section-h">Windows</div>
+              {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>{{ _("Cache des mises à jour") }}</small></span></a>{% endif %}
+              {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>{{ _("Logiciels") }}</strong><small>{{ _("Catalogue, centre de logiciels, groupes de logiciels") }}</small></span></a>{% endif %}
+            </div>
+            {% endif %}
+            {% if android_nav %}
+            <div class="nav-section">
+              <div class="nav-section-h">Android</div>
+              <a href="{{ url_for('android_apps') }}" {% if ep.startswith('android_') %}aria-current="page"{% endif %}>{{ nav_icon('android') }}<span><strong>{{ _("Appareils et applications") }}</strong><small>{{ _("Catalogue, mises à jour, sources") }}</small></span></a>
+            </div>
+            {% endif %}
           </div>
         </div>
       </details>
       {% endif %}
-      {% if can_any("wu.view", "windows.view", "store.view") %}
-      <details class="nav-group {{ 'on' if ep.startswith(('windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail')) }}">
-        <summary aria-expanded="false" aria-controls="nav-windows" aria-label="Windows" title="Windows">{{ nav_icon('windows') }}<span>Windows</span>{{ nav_icon('chevron') }}</summary>
-        <div class="nav-dropdown" id="nav-windows">
-          <div class="nav-panel">
-            {% if can("wu.view") %}<a href="{{ url_for('windows_update') }}" {% if ep.startswith('windows_update') %}aria-current="page"{% endif %}>{{ nav_icon('update') }}<span><strong>Windows Update</strong><small>{{ _("Cache des mises à jour") }}</small></span></a>{% endif %}
-            {% if can_any('windows.view','store.view') %}<a href="{{ url_for('windows_apps' if can('windows.view') else 'software_store') }}" {% if ep.startswith(('windows_apps','winget','software_')) %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span><strong>{{ _("Logiciels") }}</strong><small>{{ _("Catalogue, centre de logiciels, groupes de logiciels") }}</small></span></a>{% endif %}
-          </div>
-        </div>
-      </details>
-      {% endif %}
-      {% if android_nav %}<a href="{{ url_for('android_apps') }}" class="nav-android {{ 'on' if ep.startswith('android_') }}" aria-label="Android" {% if ep.startswith('android_') %}aria-current="page"{% endif %}>{{ nav_icon('android') }}<span>Android</span></a>{% endif %}
       {% if homeassistant_nav %}<a href="{{ url_for('homeassistant') }}" class="nav-homeassistant {{ 'on' if homeassistant_on }}" aria-label="Home Assistant" title="Home Assistant" {% if homeassistant_on %}aria-current="page"{% endif %}>{{ nav_icon('home') }}<span>Home Assistant</span></a>{% endif %}
       {% set admin_items = [
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),

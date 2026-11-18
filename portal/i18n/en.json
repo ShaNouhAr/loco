@@ -5066,5 +5066,7 @@
  "Processeur, mémoire, disques et durée depuis le démarrage de tous les postes, triables par usage.": "CPU, memory, disks and uptime of every machine, sortable by usage.",
  "Ce qui demande une action (alertes, échecs, sauvegardes…) et l'état du parc, comme la vue d'ensemble.": "What needs action (alerts, failures, backups…) and the fleet status, as on the overview.",
  "Mises à jour du système à installer": "System updates to install",
- "Logiciels à mettre à jour": "Software to update"
+ "Logiciels à mettre à jour": "Software to update",
+ "Appareils et applications": "Devices and apps",
+ "Catalogue, mises à jour, sources": "Catalog, updates, sources"
 }

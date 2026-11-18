@@ -212,6 +212,8 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn("static int CloseApp(string dir)", self.src)
         self.assertIn("QueryFullProcessImageName", self.src)
         self.assertIn("int closed = CloseApp(InstallDir(pid, winget, libraries));", self.src)
+        # Installé « pour tout le monde » (ALLUSERS) : winget refuse (1603) ; réessai en passant ALLUSERS=1 à l'installeur.
+        self.assertIn('arguments + " --custom ALLUSERS=1"', self.src)
         self.assertNotIn("winget-fail.json", self.src)
         # Garde-fous : on ne ferme que sous un dossier d'application précis (jamais une racine partagée), ni soi-même.
         self.assertIn("static bool SafeAppDir(string d)", self.src)

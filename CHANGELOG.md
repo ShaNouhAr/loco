@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.178.0 — 2026-11-18
+
+- **Windows : les logiciels installés « pour tout le monde » se mettent enfin à jour.** Certains logiciels (PdfCraft, PhotoCraft, WordCraft…) sont installés pour tous les utilisateurs ; leur installeur refusait alors la mise à jour lancée par loco (« already installed for everyone, pass ALLUSERS=1 », erreur MSI 1603 / `0x8A150049`). L'agent réessaie désormais en passant `ALLUSERS=1` à l'installeur, ce qui met bien à jour la copie commune — sans personne de connecté.
+- **Barre de navigation : un seul menu « Système ».** Linux, Windows et Android ne sont plus trois entrées séparées en haut : ils sont regroupés dans un menu **Système** (sections Linux, Windows, Android), comme le menu Administration. La barre est plus claire.
+
 ## 2.177.0 — 2026-11-18
 
 - **Windows : les logiciels tiers se mettent à jour même ouverts, et un échec ne bloque plus la mise à jour.** Quand winget échoue à mettre à jour un logiciel hors catalogue parce qu'il est en cours d'utilisation (fichiers verrouillés, installeur MSI en échec `0x8A150049`), l'agent **ferme ce logiciel — sans confirmation — puis réessaie**. Si ça échoue quand même, la mise à jour du poste ne passe plus en échec pour autant : Windows Update et les logiciels du catalogue décident seuls du résultat ; le logiciel est simplement signalé et **reste proposé**, réessayé à la prochaine mise à jour. L'agent tournant en tant que service (compte SYSTEM), une mise à jour planifiée hors session met ces logiciels à jour sans personne de connecté.

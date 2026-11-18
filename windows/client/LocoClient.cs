@@ -1332,6 +1332,16 @@ namespace Loco
                 }
                 if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
                 {
+                    // Le logiciel est installé « pour tout le monde » (ALLUSERS=1) mais winget lance l'installeur pour le profil
+                    // par défaut : le MSI refuse (1603, « already installed for everyone, pass ALLUSERS=1 to msiexec »). On réessaie
+                    // en passant ALLUSERS=1 à l'installeur (--custom), ce qui met bien à jour la copie « pour tout le monde ».
+                    string again;
+                    int retry = RunCapture(winget, arguments + " --custom ALLUSERS=1", InstallerTimeout, out again, libraries);
+                    uint r = unchecked((uint)retry);
+                    if (r == 0 || r == 0x8A15010D || r == 0x8A150109 || r == 0x8A15010B) { code = retry; output = again; result = r; arguments += " --custom ALLUSERS=1"; }
+                }
+                if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
+                {
                     // L'installeur a échoué, le plus souvent parce que le logiciel était ouvert (fichiers verrouillés). On ferme
                     // ses processus SANS confirmation et on réessaie une fois ; l'agent est en SYSTEM, aucune session ouverte requise.
                     int closed = CloseApp(InstallDir(pid, winget, libraries));
