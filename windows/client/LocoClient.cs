@@ -1025,6 +1025,149 @@ namespace Loco
             catch (Exception e) { Log("winget-skip.json : " + e.Message); }
         }
 
+        // Fermer de force un logiciel pour qu'une mise à jour winget puisse remplacer ses fichiers verrouillés (sans confirmation).
+        const int PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern IntPtr OpenProcess(int access, bool inherit, int pid);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool CloseHandle(IntPtr handle);
+
+        // Dossier d'installation d'un paquet winget : son nom (winget list) retrouvé dans la base des programmes installés.
+        static string InstallDir(string wingetId, string winget, string libraries)
+        {
+            try
+            {
+                string outp;
+                RunCapture(winget, "list --id \"" + wingetId + "\" --exact --disable-interactivity --accept-source-agreements", 60, out outp, libraries);
+                string name = null;
+                foreach (string raw in (outp ?? "").Split('\n'))
+                {
+                    string line = raw.Replace("\r", "");
+                    int at = line.IndexOf(wingetId, StringComparison.OrdinalIgnoreCase);
+                    if (at > 0) { name = line.Substring(0, at).Trim(); break; }
+                }
+                if (string.IsNullOrEmpty(name)) return "";
+                // 1) InstallLocation de la base des programmes, quand elle est renseignée.
+                foreach (var vw in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+                    using (var root = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, vw).OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"))
+                    {
+                        if (root == null) continue;
+                        foreach (string sub in root.GetSubKeyNames())
+                            using (var k = root.OpenSubKey(sub))
+                            {
+                                if (k == null) continue;
+                                string dn = k.GetValue("DisplayName") as string;
+                                string loc = k.GetValue("InstallLocation") as string;
+                                if (dn != null && loc != null && string.Equals(dn.Trim(), name, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    string d = loc.Trim().TrimEnd('\\');
+                                    if (SafeAppDir(d)) return d;
+                                }
+                            }
+                    }
+                // 2) Beaucoup de ces logiciels n'ont pas d'InstallLocation (installés dans un profil) : le raccourci du menu
+                //    Démarrer pointe sur leur exécutable, ce qui donne leur dossier.
+                string exe = ShortcutTarget(name);
+                if (!string.IsNullOrEmpty(exe) && File.Exists(exe))
+                {
+                    string d = Path.GetDirectoryName(exe);
+                    if (SafeAppDir(d)) return d;
+                }
+            }
+            catch (Exception) { }
+            return "";
+        }
+
+        // Cible (exécutable) du raccourci « <name>*.lnk » des menus Démarrer (tous les utilisateurs et chaque profil), ou "".
+        static string ShortcutTarget(string name)
+        {
+            var menus = new List<string>();
+            try { menus.Add(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu)); } catch (Exception) { }
+            try { menus.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"System32\config\systemprofile\AppData\Roaming\Microsoft\Windows\Start Menu")); } catch (Exception) { }
+            try
+            {
+                string users = Path.Combine(Environment.GetEnvironmentVariable("SystemDrive") ?? "C:", "Users");
+                if (Directory.Exists(users))
+                    foreach (string u in Directory.GetDirectories(users))
+                        menus.Add(Path.Combine(u, @"AppData\Roaming\Microsoft\Windows\Start Menu"));
+            }
+            catch (Exception) { }
+            try
+            {
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null) return "";
+                object shell = Activator.CreateInstance(shellType);
+                foreach (string menu in menus)
+                {
+                    if (string.IsNullOrEmpty(menu) || !Directory.Exists(menu)) continue;
+                    string[] links;
+                    try { links = Directory.GetFiles(menu, name + "*.lnk", SearchOption.AllDirectories); }
+                    catch (Exception) { continue; }
+                    foreach (string lnk in links)
+                        try
+                        {
+                            object shortcut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { lnk });
+                            string target = shortcut.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, shortcut, null) as string;
+                            if (!string.IsNullOrEmpty(target) && target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(target))
+                                return target;
+                        }
+                        catch (Exception) { }
+                }
+            }
+            catch (Exception) { }
+            return "";
+        }
+
+        // Un dossier d'application assez précis pour qu'on puisse y fermer des processus sans risque : au moins deux
+        // niveaux sous la racine du disque, et jamais un dossier racine partagé (Program Files, Windows, C:\\...).
+        static bool SafeAppDir(string d)
+        {
+            if (string.IsNullOrEmpty(d) || d.Length < 6 || d.IndexOf(':') != 1) return false;
+            if (d.TrimEnd('\\').Split('\\').Length < 3) return false;
+            foreach (var bad in new[] {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                Environment.GetFolderPath(Environment.SpecialFolder.System) })
+                if (!string.IsNullOrEmpty(bad) && string.Equals(d.TrimEnd('\\'), bad.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
+        }
+
+        // Tue les processus lancés depuis ce dossier (et ses sous-dossiers) ; renvoie le nombre fermé. Chemin obtenu par
+        // QueryFullProcessImageName (fiable quelle que soit l'architecture du processus, en SYSTEM).
+        static int CloseApp(string dir)
+        {
+            if (string.IsNullOrEmpty(dir)) return 0;
+            string prefix = dir.EndsWith("\\") ? dir : dir + "\\";
+            int killed = 0;
+            int self = Process.GetCurrentProcess().Id;
+            foreach (var proc in Process.GetProcesses())
+            {
+                IntPtr h = IntPtr.Zero;
+                try
+                {
+                    if (proc.Id == self) continue;
+                    h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, proc.Id);
+                    if (h == IntPtr.Zero) continue;
+                    var sb = new StringBuilder(1024);
+                    int len = sb.Capacity;
+                    if (!QueryFullProcessImageName(h, 0, sb, ref len)) continue;
+                    if (sb.ToString().StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        proc.Kill();
+                        proc.WaitForExit(5000);
+                        killed++;
+                    }
+                }
+                catch (Exception) { }
+                finally { if (h != IntPtr.Zero) CloseHandle(h); try { proc.Dispose(); } catch (Exception) { } }
+            }
+            return killed;
+        }
+
         // winget n'est pas dans le PATH du compte SYSTEM : son exécutable est pris dans le paquet App Installer
         // (WindowsApps), dans sa version la plus récente pour l'architecture du poste. Lancé hors de toute session, il ne
         // trouve pas seul les bibliothèques Visual C++ de son paquet VCLibs (code 0xC0000135) : leur dossier va dans son PATH.
@@ -1187,14 +1330,31 @@ namespace Loco
                     if (markPkg != null) markPkg(pid, "ok");
                     continue;
                 }
-                if (code == 0 || result == 0x8A15010D)
-                    lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + (code == 0 ? "" : Lang.T(" (déjà à jour)", " (already up to date)", " (ya actualizado)")));
-                else if (result == 0x8A150109 || result == 0x8A15010B)
-                    lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + Lang.T(" (redémarrage nécessaire)", " (reboot required)", " (reinicio necesario)"));
+                if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
+                {
+                    // L'installeur a échoué, le plus souvent parce que le logiciel était ouvert (fichiers verrouillés). On ferme
+                    // ses processus SANS confirmation et on réessaie une fois ; l'agent est en SYSTEM, aucune session ouverte requise.
+                    int closed = CloseApp(InstallDir(pid, winget, libraries));
+                    if (closed > 0)
+                    {
+                        lines.Add(Lang.T("  logiciel fermé (" + closed + " processus), nouvel essai", "  software closed (" + closed + " processes), retrying", "  programa cerrado (" + closed + " procesos), reintentando"));
+                        code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+                        result = unchecked((uint)code);
+                    }
+                }
+                if (code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B)
+                {
+                    if (result == 0x8A150109 || result == 0x8A15010B)
+                        lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + Lang.T(" (redémarrage nécessaire)", " (reboot required)", " (reinicio necesario)"));
+                    else
+                        lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + (code == 0 ? "" : Lang.T(" (déjà à jour)", " (already up to date)", " (ya actualizado)")));
+                }
                 else
                 {
-                    ok = false;
-                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + WingetMessage(output, code));
+                    // Même après fermeture, winget n'a pas réussi : signalé à part, non abandonné (réessayé à la prochaine mise à jour,
+                    // par exemple planifiée hors session). Un logiciel hors catalogue ne fait pas échouer toute la mise à jour.
+                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + WingetMessage(output, code)
+                        + Lang.T(" (réessayé à la prochaine mise à jour)", " (will be retried at the next update)", " (se reintentará en la próxima actualización)"));
                     if (markPkg != null) markPkg(pid, "failed");
                     continue;
                 }
@@ -1938,7 +2098,7 @@ namespace Loco
                         if (!selection && !InstallCatalogApps(Str(conf, "server"), apps, lines, progress)) ok = false;
                         object software;
                         cmd.TryGetValue("software", out software);
-                        if (action == "update" && !UpgradeSoftware(software, lines, progress, markPkg)) ok = false;
+                        if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);   // au mieux : ne fait pas échouer la commande
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;

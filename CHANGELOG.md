@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.177.0 — 2026-11-18
+
+- **Windows : les logiciels tiers se mettent à jour même ouverts, et un échec ne bloque plus la mise à jour.** Quand winget échoue à mettre à jour un logiciel hors catalogue parce qu'il est en cours d'utilisation (fichiers verrouillés, installeur MSI en échec `0x8A150049`), l'agent **ferme ce logiciel — sans confirmation — puis réessaie**. Si ça échoue quand même, la mise à jour du poste ne passe plus en échec pour autant : Windows Update et les logiciels du catalogue décident seuls du résultat ; le logiciel est simplement signalé et **reste proposé**, réessayé à la prochaine mise à jour. L'agent tournant en tant que service (compte SYSTEM), une mise à jour planifiée hors session met ces logiciels à jour sans personne de connecté.
+- **Mon parc : les compteurs de mises à jour deviennent des pastilles.** « N système », « N logiciels » et « N de sécurité » s'affichent en pastilles assorties à la charte (icône écran, paquet, bouclier), au lieu d'un simple texte.
+
 ## 2.176.0 — 2026-11-18
 
 - **API REST (HTTP)** : les jetons du *Serveur MCP* ouvrent désormais une **API REST** — chaque outil devient une route HTTP ordinaire, pour un script, une supervision (Zabbix, Grafana, un cron) ou un autre programme, sans client MCP. Base `https://<serveur>:8443/api/v1`, en-tête `Authorization: Bearer …` ; mêmes jetons, mêmes droits, même parc et mêmes traces au journal (« · API « nom du jeton » ») que le serveur MCP. Les lectures sont des `GET` (postes, groupes, logiciels installés, catalogue, scripts et leurs exécutions, vue d'ensemble, état du serveur, journal), les actions des `POST` ou `DELETE` (inventaire, mise à jour, redémarrage, réveil, installation, annulation, lancer un script), mises en file comme pour le serveur MCP. La description **OpenAPI 3.1** est servie sans jeton sur `/api/v1/openapi.json`, et `GET /api/v1` liste les routes que le jeton peut appeler.

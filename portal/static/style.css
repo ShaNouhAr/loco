@@ -668,6 +668,10 @@ pre.log { margin: 0; padding: 12px 16px; max-height: 440px; overflow: auto; bord
 .count.err { color: var(--err); }
 .sec-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 7px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.5; color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent); white-space: nowrap; vertical-align: middle; }
 .sec-pill svg { width: 13px; height: 13px; flex: none; stroke-linecap: round; stroke-linejoin: round; }
+.upd-pill { display: inline-flex; align-items: center; gap: 5px; padding: 1px 10px 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.6; white-space: nowrap; vertical-align: middle; color: var(--text-2); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.upd-pill svg { width: 13px; height: 13px; flex: none; stroke-linecap: round; stroke-linejoin: round; }
+.upd-pill.sys { color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.upd-pill.sec { color: var(--err); background: color-mix(in srgb, var(--err) 13%, transparent); }
 .reboot-note { flex-basis: 100%; display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; color: var(--warn); white-space: nowrap; }
 .reboot-note svg { width: 13px; height: 13px; flex: none; }
 /* Nouvelle version majeure du système : pastille de la liste, étiquette et bandeau de la fiche. */

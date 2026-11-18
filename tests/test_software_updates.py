@@ -194,7 +194,7 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn('"upgrade --id \\"" + pid + "\\" --exact --source winget --silent --accept-package-agreements', self.src)
         self.assertIn('new Regex(@"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$")', self.src)
         self.assertIn("result == 0x8A15002B", self.src)
-        self.assertIn('if (action == "update" && !UpgradeSoftware(software, lines, progress, markPkg)) ok = false;', self.src)
+        self.assertIn('if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);', self.src)   # un échec logiciel ne fait pas échouer la commande
         self.assertIn("if (!selection && !InstallCatalogApps(", self.src)
 
     def test_what_winget_cannot_update_is_set_aside_until_its_version_changes(self):
@@ -202,6 +202,20 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn('RunCapture(winget, arguments + " --locale en-US"', self.src)     # installeur anglais sur un Windows français
         self.assertIn('Path.Combine(Root, "winget-skip.json")', self.src)
         self.assertIn("if (!lastExport.TryGetValue(pid, out now) || now != skip[pid]) skip.Remove(pid);", self.src)
+
+    def test_a_software_failure_does_not_fail_the_update_and_closes_the_app(self):
+        # Un logiciel winget hors catalogue qui échoue (installeur MSI en échec 0x8A150049, souvent parce qu'il est ouvert)
+        # ne fait pas échouer toute la mise à jour et n'est PAS abandonné. L'agent ferme ses processus sans confirmation,
+        # réessaie une fois, et sinon le signale (réessayé plus tard). Rien n'est mis de côté pour un échec d'installeur.
+        self.assertIn('if (action == "update") UpgradeSoftware(software, lines, progress, markPkg);', self.src)
+        self.assertIn("static string InstallDir(string wingetId, string winget, string libraries)", self.src)
+        self.assertIn("static int CloseApp(string dir)", self.src)
+        self.assertIn("QueryFullProcessImageName", self.src)
+        self.assertIn("int closed = CloseApp(InstallDir(pid, winget, libraries));", self.src)
+        self.assertNotIn("winget-fail.json", self.src)
+        # Garde-fous : on ne ferme que sous un dossier d'application précis (jamais une racine partagée), ni soi-même.
+        self.assertIn("static bool SafeAppDir(string d)", self.src)
+        self.assertIn("if (proc.Id == self) continue;", self.src)
 
 
 if __name__ == "__main__":

@@ -140,9 +140,9 @@
               {% if r.color == 'grey' %}<span class="muted">{{ r.label }}</span>
               {% elif not r.system and not r.apps %}<span class="muted">{{ _("à jour") }}</span>
               {% else %}
-                {% if r.system %}<span class="count">{{ _("%(system)s système", system=r.system) }}</span>{% endif %}
-                {% if r.apps %}<span class="count">{{ _("%(apps)s logiciel%(v)s", apps=r.apps, v='s' if r.apps > 1) }}</span>{% endif %}
-                {% if r.security %}<span class="sec-pill" title="{{ _('dont %(security)s de sécurité', security=r.security) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s sécurité", security=r.security) }}</span>{% endif %}
+                {% if r.system %}<span class="upd-pill sys" title="{{ _('Mises à jour du système à installer') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></svg>{{ _("%(system)s système", system=r.system) }}</span>{% endif %}
+                {% if r.apps %}<span class="upd-pill app" title="{{ _('Logiciels à mettre à jour') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ _("%(apps)s logiciel%(v)s", apps=r.apps, v='s' if r.apps > 1) }}</span>{% endif %}
+                {% if r.security %}<span class="upd-pill sec" title="{{ _('dont %(security)s de sécurité', security=r.security) }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6Z"/><path d="m9.5 12 2 2 3.5-4"/></svg>{{ _("%(security)s sécurité", security=r.security) }}</span>{% endif %}
               {% endif %}
               {% if r.upgrading %}<span class="release-note">{{ ui_icon('release') }}{{ _("mise à jour vers la nouvelle version en cours") }}</span>
               {% elif r.release %}<a class="release-note" href="{{ url_for('fleet_device', dev_id=d.id) }}#maj" title="{{ _('Nouvelle version majeure du système : la mise à jour se lance depuis la fiche du poste') }}">{{ ui_icon('release') }}{{ _("Mettre à jour vers %(name)s", name=r.release.name) }}</a>{% endif %}
