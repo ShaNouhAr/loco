@@ -1,0 +1,250 @@
+{# Détail d'une instance Home Assistant : bloc réutilisé (page par instance). Contexte : v, h, info, manage, actions, issues, terminal, ssh, csrf. #}
+{% from "_nav_icons.html" import titled, ui_icon %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% set tab_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>{% endset %}
+{% macro version(part) -%}
+<div class="v small-v">{{ part.version or '—' }}</div>
+<div class="s">{% if part.job %}<span class="busy-note"><span class="spin"></span>{{ _("mise à jour en cours") if part.job == 'running' else _("mise à jour en attente") }}</span>{% elif part.outdated %}<span class="st warn">{{ _("%(v)s disponible", v=part.latest) }}</span>{% else %}{{ _("à jour") }}{% endif %}</div>
+{%- endmacro %}
+
+{% macro job_state(j) -%}
+{% if j.state == 'running' %}<span class="busy-note"><span class="spin"></span>{{ _("En cours") }}</span>
+{%- elif j.state == 'queued' %}<span class="st">{{ _("En attente") }}</span>
+{%- elif j.state == 'success' %}<span class="st ok">{{ _("Réussie") }}</span>
+{%- else %}<span class="st err">{{ _("Échec") }}</span>{% endif %}
+{%- endmacro %}
+
+  <section class="panel hass-host">
+    <div data-refresh="ha-{{ h.id }}">
+      <div class="panel-h">
+        <h2>{{ h.name }}{% if info and info.hostname and info.hostname|lower != h.name|lower %} <span class="h-count">{{ info.hostname }}</span>{% endif %}</h2>
+        <div class="aside">
+          {% if v.running %}<span class="busy-note"><span class="spin"></span>{{ v.running[-1].label or actions[v.running[-1].action][0] }}{% if v.running|length > 1 %} · {{ _("%(n)s en attente", n=v.running|length - 1) }}{% endif %}</span>
+          {% elif h.error %}<span class="pill err">{{ _("liaison en échec") }}</span>
+          {% elif not info %}<span class="pill">{{ _("relevé en cours") }}</span>
+          {% else %}
+          {% if not info.healthy %}<span class="pill err">{{ _("installation dégradée") }}</span>{% elif not info.supported %}<span class="pill warn">{{ _("installation non prise en charge") }}</span>{% endif %}
+          {% if info.updates %}<span class="pill warn">{{ info.updates|length }} {{ ngettext('mise à jour', 'mises à jour', info.updates|length) }}</span>{% else %}<span class="pill ok">{{ _("à jour") }}</span>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+      <div class="panel-b stack-sm">
+        {% if h.error %}
+        <div class="note err"><p>{{ h.error }}</p></div>
+        {% endif %}
+
+        <div class="device-actions hass-actions">
+          {% if can('homeassistant.shell') and terminal %}
+          <form method="post" action="{{ url_for('homeassistant_shell', host_id=h.id) }}" class="split">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn" title="{{ _('Shell du module SSH de Home Assistant, session journalisée') }}"{% if not ssh or not h.host_key %} disabled{% endif %}>Terminal</button>
+            <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('Terminal dans un nouvel onglet') }}" title="{{ _('Ouvrir dans un nouvel onglet') }}"{% if not ssh or not h.host_key %} disabled{% endif %}>{{ tab_icon }}</button>
+          </form>
+          {% endif %}
+          {% if can('homeassistant.backup') %}
+          {% if v.saving %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Sauvegarde en cours") }}</button>
+          {% else %}
+          <form method="post" action="{{ url_for('homeassistant_backup', host_id=h.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn" title="{{ _('Sauvegarde complète, gardée dans Home Assistant') }}"><span class="spin"></span>{{ _("Sauvegarder") }}</button>
+          </form>
+          {% endif %}
+          {% endif %}
+          {% if can('homeassistant.restart') %}
+          {% if v.restarting or v.rebooting %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Redémarrage en cours") }}</button>
+          {% else %}
+          <details class="menu">
+            <summary class="btn">{{ _("Redémarrer") }}</summary>
+            <div class="menu-list menu-left" role="menu">
+              <form method="post" action="{{ url_for('homeassistant_restart', host_id=h.id) }}" data-confirm="{{ _('Redémarrer Home Assistant sur %(name)s ?', name=h.name) }}" data-confirm-text="{{ _('Home Assistant s’arrête puis repart : automatisations et tableaux de bord sont indisponibles une à deux minutes. Les modules complémentaires continuent de tourner.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="core">
+                <button class="menu-item" role="menuitem">Home Assistant</button>
+              </form>
+              <form method="post" action="{{ url_for('homeassistant_restart', host_id=h.id) }}" data-confirm="{{ _('Redémarrer le système de %(name)s ?', name=h.name) }}" data-confirm-text="{{ _('Toute la machine redémarre : Home Assistant et ses modules sont indisponibles quelques minutes. loco suit son retour.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="host">
+                <button class="menu-item" role="menuitem">{{ _("Le système (toute la machine)") }}</button>
+              </form>
+            </div>
+          </details>
+          {% endif %}
+          {% endif %}
+          <form method="post" action="{{ url_for('homeassistant_refresh', host_id=h.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn" title="{{ _('Relever de nouveau l’état de Home Assistant') }}"><span class="spin"></span>{{ _("Actualiser") }}</button>
+          </form>
+          {% if manage %}
+          <details class="menu">
+            <summary class="btn" aria-label="{{ _('Plus d’actions') }}">{{ _("Plus") }}</summary>
+            <div class="menu-list menu-left" role="menu">
+              <form method="post" action="{{ url_for('homeassistant_hostkey', host_id=h.id) }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="menu-item" role="menuitem">{{ _("Relever de nouveau la clé d'hôte…") }}</button>
+              </form>
+              <hr>
+              <form method="post" action="{{ url_for('homeassistant_delete', host_id=h.id) }}" data-confirm="{{ _('Retirer %(name)s de loco ?', name=h.name) }}" data-confirm-text="{{ _('loco oublie cette instance et l’historique de ses tâches. Rien n’est changé dans Home Assistant : pensez à y retirer la clé de loco des clés autorisées du module SSH.') }}" data-confirm-ok="{{ _('Retirer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="menu-item danger" role="menuitem">{{ _("Retirer de loco") }}</button>
+              </form>
+            </div>
+          </details>
+          {% endif %}
+          <span class="small muted hass-link">{{ h.username }}@{{ h.host }}{% if h.port != 22 %}:{{ h.port }}{% endif %}{% if v.checked %} · {{ _("relevé à %(t)s", t=v.checked) }}{% endif %}</span>
+        </div>
+
+        {% if info %}
+        <div class="metrics hass-metrics">
+          <div class="metric">
+            <div class="k">{{ titled('home', "Home Assistant") }}</div>
+            {{ version(info.core) }}
+          </div>
+          <div class="metric">
+            <div class="k">{{ titled('server', _("Système")) }}</div>
+            {% if info.os.version %}{{ version(info.os) }}{% else %}<div class="v small-v">—</div><div class="s" title="{{ info.system }}">{{ info.system or _("installation sans Home Assistant OS") }}</div>{% endif %}
+          </div>
+          <div class="metric">
+            <div class="k">{{ titled('shield', "Supervisor") }}</div>
+            {{ version(info.supervisor) }}
+          </div>
+          <div class="metric">
+            <div class="k">{{ titled('layers', _("Modules")) }}</div>
+            <div class="v small-v">{{ info.addons|length }}</div>
+            {% set addon_updates = info.addons|selectattr('outdated')|list|length %}
+            <div class="s">{% if addon_updates %}<span class="st warn">{{ _("%(n)s à mettre à jour", n=addon_updates) }}</span>{% else %}{{ _("à jour") }}{% endif %}</div>
+          </div>
+          <div class="metric">
+            <div class="k">{{ titled('box', _("Stockage")) }}</div>
+            {% if info.disk_total %}
+            {% set used = 100 - (info.disk_free or 0) * 100 // info.disk_total %}
+            <div class="v small-v">{{ _("%(v)s libres", v=(info.disk_free or 0)|human) }}</div>
+            <div class="meter level {{ 'err' if used >= 92 else 'warn' if used >= 80 }}" title="{{ _('%(p)s %% occupés sur %(v)s', p=used, v=info.disk_total|human) }}"><i data-width="{{ used }}"></i></div>
+            {% else %}<div class="v small-v">—</div><div class="s">{{ _("non communiqué") }}</div>{% endif %}
+          </div>
+          <div class="metric">
+            <div class="k">{{ titled('download', _("Sauvegardes")) }}</div>
+            <div class="v small-v">{{ info.backups|length }}</div>
+            <div class="s">{% if info.backups %}{{ _("dernière : %(d)s", d=info.backups[0].date|date_fr) }}{% else %}<span class="st warn">{{ _("aucune") }}</span>{% endif %}</div>
+          </div>
+        </div>
+
+        {% if info.issues or info.unhealthy or info.unsupported %}
+        <div class="note warn">
+          <p><strong>{{ _("Signalé par Home Assistant") }}</strong></p>
+          <ul>
+            {% for i in info.issues %}<li>{{ issues[i.type] if i.type in issues else i.type }}{% if i.context and i.type not in issues %} <span class="muted">· {{ i.context }}</span>{% endif %}</li>{% endfor %}
+            {% if info.unhealthy %}<li>{{ _("Installation dégradée : %(v)s", v=info.unhealthy|join(', ')) }}</li>{% endif %}
+            {% if info.unsupported %}<li>{{ _("Installation non prise en charge : %(v)s", v=info.unsupported|join(', ')) }}</li>{% endif %}
+          </ul>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+
+      {% if info and info.updates %}
+      <div class="panel-h sub">
+        <h2>{{ _("Mises à jour disponibles") }} <span class="h-count">{{ info.updates|length }}</span></h2>
+        {% if can('homeassistant.update') and v.pending > 1 %}<div class="aside"><button type="button" class="btn sm primary" data-open="#hass-update" data-fill='{{ {"host_id": h.id, "target": "", "what": _("%(name)s : les %(n)s mises à jour, l'une après l'autre — le Supervisor, les modules, Home Assistant, puis le système.", name=h.name, n=v.pending)}|tojson|forceescape }}'>{{ _("Tout mettre à jour") }}</button></div>{% endif %}
+      </div>
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <tbody>
+            {% for u in info.updates %}
+            <tr>
+              <td><strong>{{ u.name }}</strong></td>
+              <td class="mono" data-label="{{ _('Version') }}">{{ u.version }} → {{ u.latest }}</td>
+              <td class="right card-action">
+                {% if u.job %}<span class="busy-note"><span class="spin"></span>{{ _("en cours") if u.job == 'running' else _("en attente") }}</span>
+                {% elif can('homeassistant.update') %}<button type="button" class="btn sm" data-open="#hass-update" data-fill='{{ {"host_id": h.id, "target": u.target, "what": h.name ~ " : " ~ u.name ~ " " ~ u.version ~ " → " ~ u.latest}|tojson|forceescape }}'>{{ _("Mettre à jour") }}</button>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if v.jobs %}
+      <div class="panel-h sub"><h2>{{ _("Activité") }}</h2><div class="aside">{{ _("les douze dernières tâches") }}</div></div>
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <tbody>
+            {% for j in v.jobs %}
+            <tr>
+              <td>{{ j.label or actions[j.action][0] }}{% if j.backup %} <span class="badge-ro">{{ _("sauvegarde avant") }}</span>{% endif %}
+                {% if j.output and j.state in ('failed', 'success') %}<details class="hass-output" data-key="sortie-{{ j.id }}"><summary class="linkbtn">{{ _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+              <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
+              <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if info and info.addons %}
+      <div class="panel-h sub"><h2>{{ _("Modules complémentaires") }} <span class="h-count">{{ info.addons|length }}</span></h2></div>
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <thead><tr><th>{{ _("Module") }}</th><th>{{ _("Version") }}</th><th>{{ _("État") }}</th></tr></thead>
+          <tbody>
+            {% for a in info.addons %}
+            <tr>
+              <td><strong>{{ a.name }}</strong></td>
+              <td class="mono" data-label="{{ _('Version') }}">{{ a.version or '—' }}{% if a.outdated %} <span class="muted">→ {{ a.latest }}</span>{% endif %}</td>
+              <td data-label="{{ _('État') }}">{% if a.state == 'started' %}<span class="st ok">{{ _("démarré") }}</span>{% elif a.state == 'stopped' %}<span class="st">{{ _("arrêté") }}</span>{% elif a.state == 'error' %}<span class="st err">{{ _("en erreur") }}</span>{% else %}<span class="st">{{ a.state or '—' }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if info and info.backups %}
+      <div class="panel-h sub"><h2>{{ _("Sauvegardes") }} <span class="h-count">{{ info.backups|length }}</span></h2><div class="aside">{{ _("gardées dans Home Assistant") }}</div></div>
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <thead><tr><th>{{ _("Nom") }}</th><th>{{ _("Date") }}</th><th>{{ _("Contenu") }}</th><th class="right">{{ _("Taille") }}</th></tr></thead>
+          <tbody>
+            {% for b in info.backups[:8] %}
+            <tr>
+              <td><strong>{{ b.name or '—' }}</strong>{% if b.protected %} <span class="badge-ro">{{ _("chiffrée") }}</span>{% endif %}</td>
+              <td data-label="{{ _('Date') }}">{{ b.date|date_fr }}</td>
+              <td data-label="{{ _('Contenu') }}">{{ _("complète") if b.type == 'full' else _("partielle") if b.type == 'partial' else b.type }}</td>
+              <td class="right num" data-label="{{ _('Taille') }}">{{ b.size|human if b.size is not none else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if info.backups|length > 8 %}<div class="panel-f">{{ _("Les %(n)s plus récentes sur %(total)s.", n=8, total=info.backups|length) }}</div>{% endif %}
+      {% endif %}
+    </div>
+
+    {# Hors de la zone actualisée : le journal ouvert ne se referme pas à chaque relevé. #}
+    {% if h.host_key and ssh %}
+    <details class="hass-log" data-hass-log="{{ url_for('homeassistant_log', host_id=h.id) }}">
+      <summary class="panel-h sub"><h2>{{ _("Journal de Home Assistant") }}</h2><div class="aside">{{ _("les 200 dernières lignes, lues à l'ouverture") }}</div></summary>
+      <pre class="log" data-hass-log-text aria-live="polite">{{ _("Lecture du journal…") }}</pre>
+      <div class="panel-f"><button type="button" class="linkbtn" data-hass-log-reload>{{ _("Relire le journal") }}</button></div>
+    </details>
+    {% endif %}
+  </section>
+
+{% if can('homeassistant.update') %}
+<dialog id="hass-update">
+  <form method="post" action="{{ url_for('homeassistant_update') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="host_id" value=""><input type="hidden" name="target" value="">
+    <div class="dlg-h">
+      <div><h2>{{ _("Lancer la mise à jour ?") }}</h2><p data-fill-text="what"></p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <label class="check"><input type="checkbox" name="backup" value="1" checked> <span>{{ _("Créer une sauvegarde avant de mettre à jour") }}</span></label>
+      <p class="hint">{{ _("La sauvegarde précède la mise à jour de Home Assistant et de chaque module ; elle allonge l'opération de quelques minutes. Home Assistant redémarre pendant sa mise à jour, et toute la machine pendant celle du système.") }}</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}

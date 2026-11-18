@@ -522,7 +522,7 @@ class TestHomeAssistantCopy(HomeAssistantCopyTest):
         with transaction() as conn:
             job = conn.execute("SELECT * FROM homeassistant_jobs WHERE action='copy'").fetchone()
         self.assertEqual((job["backup"], job["created_by"]), (1, "planification"))
-        self.assertIn("Copie vers la destination externe", self.admin.c.get("/homeassistant").get_data(as_text=True))
+        self.assertIn("Copie vers la destination externe", self.admin.c.get("/homeassistant/%d" % self.ha["id"]).get_data(as_text=True))
 
     def test_removing_the_instance_removes_its_plans(self):
         self.destination()

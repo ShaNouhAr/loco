@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.179.0 — 2026-11-18
+
+- **Home Assistant : une page par instance.** Chaque instance a désormais sa propre page (versions, mises à jour, modules, sauvegardes, journal, terminal et actions) ; la page *Home Assistant* est devenue une liste claire d'instances qui y mènent.
+- **Vos Home Assistant dans Mon parc.** Les instances Home Assistant apparaissent comme des lignes de *Mon parc*, à côté des postes Windows, Linux et Android — avec leur état et les mises à jour disponibles ; un clic ouvre leur page.
+- **Menu « Système » revu.** Linux, Windows, Android et Home Assistant sont regroupés dans un seul menu *Système*, plus large et équilibré (sections Linux, Windows, Android, Home Assistant).
+- **Fiche d'un poste : respiration.** L'étiquette *Mises à jour · À jour* n'est plus collée au bloc des cartes.
+
 ## 2.178.0 — 2026-11-18
 
 - **Windows : les logiciels installés « pour tout le monde » se mettent enfin à jour.** Certains logiciels (PdfCraft, PhotoCraft, WordCraft…) sont installés pour tous les utilisateurs ; leur installeur refusait alors la mise à jour lancée par loco (« already installed for everyone, pass ALLUSERS=1 », erreur MSI 1603 / `0x8A150049`). L'agent réessaie désormais en passant `ALLUSERS=1` à l'installeur, ce qui met bien à jour la copie commune — sans personne de connecté.

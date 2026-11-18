@@ -5068,5 +5068,11 @@
  "Mises à jour du système à installer": "Actualizaciones del sistema por instalar",
  "Logiciels à mettre à jour": "Programas por actualizar",
  "Appareils et applications": "Dispositivos y aplicaciones",
- "Catalogue, mises à jour, sources": "Catálogo, actualizaciones, fuentes"
+ "Catalogue, mises à jour, sources": "Catálogo, actualizaciones, fuentes",
+ "Instances": "Instancias",
+ "Mises à jour, sauvegardes, journal": "Actualizaciones, copias, registro",
+ "tâche en cours": "tarea en curso",
+ "%(n)s mise à jour": "%(n)s actualización",
+ "%(n)s mises à jour": "%(n)s actualizaciones",
+ "Ouvrir": "Abrir"
 }

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ v.row.name }} · Home Assistant · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import ui_icon %}
+{% block content %}
+{% set manage = can('homeassistant.manage') %}
+{% set h = v.row %}
+{% set info = v.info %}
+<div class="head">
+  <div>
+    <p class="small muted"><a href="{{ url_for('homeassistant') }}" class="crumb-back">← Home Assistant</a></p>
+    <h1 class="hass-host-title">{{ ui_icon('ha') }}{{ v.row.name }}</h1>
+  </div>
+</div>
+<div class="stack" data-poll="{{ url_for('homeassistant_host', host_id=v.row.id) }}" data-poll-kind="reload" data-poll-every="4000" data-signature="{{ signature }}">
+{% include "_ha_host.html" %}
+</div>
+{% endblock %}

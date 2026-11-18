@@ -564,6 +564,36 @@ def attention():
     return rows
 
 
+def fleet_rows():
+    """Instances Home Assistant montrées comme des lignes de Mon parc (si la fonctionnalité est active et consultable)."""
+    from . import features
+    if not features.enabled("homeassistant") or not can("homeassistant.view"):
+        return []
+    out = []
+    for row in db().execute("SELECT * FROM homeassistant_hosts ORDER BY name COLLATE NOCASE, id").fetchall():
+        info = _info(row)
+        running = db().execute("SELECT 1 FROM homeassistant_jobs WHERE host_id=? AND state IN ('queued','running') LIMIT 1", (row["id"],)).fetchone()
+        if running:
+            color, label = "orange", _("tâche en cours")
+        elif row["error"]:
+            color, label = "red", _("liaison en échec")
+        elif info is None:
+            color, label = "grey", _("relevé en cours")
+        elif not info.get("healthy", True):
+            color, label = "red", _("installation dégradée")
+        elif info["updates"]:
+            n = len(info["updates"])
+            color, label = "orange", (_("%(n)s mise à jour", n=n) if n == 1 else _("%(n)s mises à jour", n=n))
+        else:
+            color, label = "green", _("à jour")
+        out.append({"id": row["id"], "name": row["name"],
+                    "address": row["username"] + "@" + row["host"] + ("" if row["port"] == 22 else ":%d" % row["port"]),
+                    "hostname": (info.get("hostname") if info else "") or "",
+                    "updates": len(info["updates"]) if info else 0,
+                    "online": bool(info) and not row["error"], "color": color, "label": label})
+    return out
+
+
 def _signature(views):
     return hashlib.sha256(json.dumps([[v["row"]["id"], v["row"]["checked"], v["row"]["error"], bool(v["row"]["host_key"]),
                                        [(j["id"], j["state"]) for j in v["jobs"]]] for v in views]).encode()).hexdigest()[:16]
@@ -586,6 +616,22 @@ def homeassistant():
                            pending=_pending() if can("homeassistant.manage") else None, max_hosts=MAX_HOSTS,
                            busy=any(v["running"] for v in views),
                            terminal=terminal_ready())
+
+
+@app.route("/homeassistant/<int:host_id>")
+@login_required
+def homeassistant_host(host_id):
+    row = db().execute("SELECT * FROM homeassistant_hosts WHERE id=?", (host_id,)).fetchone()
+    if row is None:
+        abort(404)
+    if row["host_key"] and (time.time() - (row["checked"] or 0) > STALE or (_info(row) is None and not row["error"])):
+        refresh_soon(row["id"])
+    v = _view(row)
+    signature = _signature([v])
+    if request.headers.get("X-Requested-With") == "fetch":
+        return {"signature": signature}
+    return render_template("homeassistant_host.html", v=v, signature=signature, ssh=bool(ssh_binary()),
+                           actions=ACTIONS, issues=ISSUES, terminal=terminal_ready())
 
 
 def terminal_ready():

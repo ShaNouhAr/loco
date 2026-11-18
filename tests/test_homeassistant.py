@@ -95,6 +95,9 @@ class HomeAssistantTest(unittest.TestCase):
     def page(self, browser=None):
         return (browser or self.admin).c.get("/homeassistant").get_data(as_text=True)
 
+    def page_host(self, row, browser=None):
+        return (browser or self.admin).c.get("/homeassistant/%d" % row["id"]).get_data(as_text=True)
+
     def link(self, host="192.168.43.80", port="22", username="root", name="Maison"):
         """Les deux étapes : adresse saisie, puis empreinte confirmée. Renvoie la ligne de l'instance."""
         self.post("/homeassistant/link", {"host": host, "port": port, "username": username, "name": name})
@@ -151,7 +154,7 @@ class TestOptionalFeature(HomeAssistantTest):
 
     def test_every_route_is_declared_and_follows_the_feature(self):
         routes = {e for e in fixture.loco.app.view_functions if e.startswith("homeassistant")}
-        self.assertEqual(len(routes), 11)
+        self.assertEqual(len(routes), 12)
         for endpoint in routes:
             self.assertTrue(permissions.ENDPOINTS[endpoint].startswith("homeassistant."), endpoint)
             with fixture.loco.app.test_request_context():
@@ -273,7 +276,7 @@ class TestReading(HomeAssistantTest):
         self.assertRegex(info["backups"][0]["date"], r"^2026-11-07 \d\d:00$")                          # à l'heure du serveur
         self.assertEqual(info["backups"][0]["size"], 432642457)
         self.assertEqual(info["issues"], [{"type": "no_current_backup", "context": "system"}])
-        page = self.page()
+        page = self.page_host(row)
         for text in ("2026.11.1", "2026.11.2 disponible", "18.5 disponible", "Mosquitto broker", "6.5.0 → 6.5.1", "Zigbee2MQTT",
                      "arrêté", "Automatique", "chiffrée", "Aucune sauvegarde récente", "3 mises à jour", "Tout mettre à jour"):
             self.assertIn(text, page, text)
@@ -387,7 +390,7 @@ class TestJobs(HomeAssistantTest):
         self.assertEqual((info["core"]["version"], info["core"]["outdated"]), ("2026.11.2", False))
         self.assertEqual(len(info["backups"]), 3)
         self.assertIn(("homeassistant.update-core", "Maison : Home Assistant Core 2026.11.1 → 2026.11.2, sauvegarde avant"), self.audit())
-        page = self.page()
+        page = self.page_host(row)
         self.assertIn("Réussie", page)
         self.assertIn("sauvegarde avant", page)
 
@@ -411,14 +414,14 @@ class TestJobs(HomeAssistantTest):
         self.post("/homeassistant/update", {"host_id": row["id"], "target": "core"})
         self.post("/homeassistant/update", {"host_id": row["id"], "target": ""})          # le reste seulement
         self.assertEqual([j["action"] for j in self.jobs()], ["update-core", "update-addon", "update-os"])
-        page = self.page()
+        page = self.page_host(row)
         self.assertIn("mise à jour en cours", page)
         self.assertIn("en attente", page)
         self.assertNotIn("Tout mettre à jour", page)                   # plus rien à lancer
         self.post(f"/homeassistant/{row['id']}/backup")
         self.post(f"/homeassistant/{row['id']}/backup")
         self.assertEqual([j["action"] for j in self.jobs()].count("backup"), 1)
-        self.assertIn("Sauvegarde en cours", self.page())
+        self.assertIn("Sauvegarde en cours", self.page_host(row))
         os.unlink(os.path.join(self.state, "slow"))
         self.idle(40)
         self.assertEqual({j["state"] for j in self.jobs()}, {"success"})
@@ -431,7 +434,7 @@ class TestJobs(HomeAssistantTest):
         job = self.jobs()[0]
         self.assertEqual(job["state"], "failed")
         self.assertIn("image pull failed", job["output"])
-        page = self.page()
+        page = self.page_host(row)
         self.assertIn("Échec", page)
         self.assertIn("image pull failed", page)
         self.assertIn("6.5.0 → 6.5.1", page)                           # toujours proposée
@@ -509,7 +512,7 @@ class TestRights(HomeAssistantTest):
         self.assertEqual(outsider.c.get("/homeassistant").status_code, 403)
         self.assertNotIn('href="/homeassistant"', outsider.c.get("/fleet").get_data(as_text=True))
         reader = self.member("lecture", {"homeassistant.view"})
-        page = self.page(reader)
+        page = self.page_host(row, reader)
         self.assertIn("2026.11.1", page)
         for text in ("Mettre à jour", "Sauvegarder", "Redémarrer", ">Terminal<", "Retirer de loco", "Relier un Home Assistant", "ssh-ed25519"):
             self.assertNotIn(text, page, text)
@@ -522,7 +525,7 @@ class TestRights(HomeAssistantTest):
         self.assertEqual(reader.c.get(f"/homeassistant/{row['id']}/log").status_code, 200)
         self.assertEqual(self.jobs(), [])
         updater = self.member("maj", {"homeassistant.update"})
-        page = self.page(updater)
+        page = self.page_host(row, updater)
         self.assertIn("Mettre à jour", page)
         self.assertNotIn("Sauvegarder", page)
         self.assertEqual(updater.post("/homeassistant/update", {"host_id": row["id"], "target": "core"}, page="/account").status_code, 302)

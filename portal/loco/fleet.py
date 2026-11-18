@@ -2067,6 +2067,14 @@ def _search(rows, query, names):
     return found
 
 
+def _ha_fleet_rows():
+    try:
+        from . import homeassistant
+        return homeassistant.fleet_rows()
+    except Exception:
+        return []
+
+
 @app.route("/fleet")
 @login_required
 def fleet():
@@ -2132,7 +2140,8 @@ def fleet():
                            fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
                            counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
-                           checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold())
+                           checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold(),
+                           ha_rows=_ha_fleet_rows())
 
 
 @app.route("/fleet/search.json")

@@ -5068,5 +5068,11 @@
  "Mises à jour du système à installer": "System updates to install",
  "Logiciels à mettre à jour": "Software to update",
  "Appareils et applications": "Devices and apps",
- "Catalogue, mises à jour, sources": "Catalog, updates, sources"
+ "Catalogue, mises à jour, sources": "Catalog, updates, sources",
+ "Instances": "Instances",
+ "Mises à jour, sauvegardes, journal": "Updates, backups, log",
+ "tâche en cours": "task running",
+ "%(n)s mise à jour": "%(n)s update",
+ "%(n)s mises à jour": "%(n)s updates",
+ "Ouvrir": "Open"
 }

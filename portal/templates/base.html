@@ -32,10 +32,10 @@
       {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" aria-label="{{ _('Mon parc') }}" title="{{ _('Mon parc') }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
-      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav %}
-      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) }}">
+      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav %}
+      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on }}">
         <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Système') }}" title="{{ _('Système') }}">{{ nav_icon('server') }}<span>{{ _("Système") }}</span>{{ nav_icon('chevron') }}</summary>
-        <div class="nav-dropdown" id="nav-system">
+        <div class="nav-dropdown wide" id="nav-system">
           <div class="nav-panel nav-sections">
             {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
             <div class="nav-section">
@@ -57,11 +57,16 @@
               <a href="{{ url_for('android_apps') }}" {% if ep.startswith('android_') %}aria-current="page"{% endif %}>{{ nav_icon('android') }}<span><strong>{{ _("Appareils et applications") }}</strong><small>{{ _("Catalogue, mises à jour, sources") }}</small></span></a>
             </div>
             {% endif %}
+            {% if homeassistant_nav %}
+            <div class="nav-section">
+              <div class="nav-section-h">Home Assistant</div>
+              <a href="{{ url_for('homeassistant') }}" {% if homeassistant_on %}aria-current="page"{% endif %}>{{ nav_icon('ha') }}<span><strong>{{ _("Instances") }}</strong><small>{{ _("Mises à jour, sauvegardes, journal") }}</small></span></a>
+            </div>
+            {% endif %}
           </div>
         </div>
       </details>
       {% endif %}
-      {% if homeassistant_nav %}<a href="{{ url_for('homeassistant') }}" class="nav-homeassistant {{ 'on' if homeassistant_on }}" aria-label="Home Assistant" title="Home Assistant" {% if homeassistant_on %}aria-current="page"{% endif %}>{{ nav_icon('home') }}<span>Home Assistant</span></a>{% endif %}
       {% set admin_items = [
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
         ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),
