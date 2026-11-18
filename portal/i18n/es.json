@@ -5041,5 +5041,20 @@
  "Mon logo": "Mi logo",
  "Importer un logo…": "Importar un logo…",
  "Retirer mon logo": "Quitar mi logo",
- "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "Solo para usted: las demás cuentas y la pantalla de inicio de sesión conservan el logo de la instancia."
+ "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "Solo para usted: las demás cuentas y la pantalla de inicio de sesión conservan el logo de la instancia.",
+ "Système et logiciels": "Sistema y programas",
+ "%(num)s logiciel": "%(num)s programa",
+ "%(num)s logiciels": "%(num)s programas",
+ "logiciel": "programa",
+ "Logiciels hors catalogue : %(note)s": "Programas fuera del catálogo: %(note)s",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.": "Sistema (Windows Update, APT, DNF, Flatpak) y programas (catálogo de loco, y winget en Windows), en el próximo contacto de cada equipo; los que lo necesiten se reinician después.",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.": "Sistema (Windows Update, APT, DNF, Flatpak) y programas (catálogo de loco, y winget en Windows), en el próximo contacto de cada equipo.",
+ "Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).": "Todos los equipos activos del grupo %(name)s en cada ejecución: sistema, Flatpak y programas (catálogo de loco, y winget en Windows).",
+ "Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).": "Todos los equipos activos del parque en cada ejecución: sistema, Flatpak y programas (catálogo de loco, y winget en Windows).",
+ "Mise à jour de %(name)s : système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "Actualización de %(name)s: sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows).",
+ "Couleur de la pastille d'un poste selon ses mises à jour en attente (système, Flatpak et logiciels).": "Color del indicador de un equipo según sus actualizaciones pendientes (sistema, Flatpak y programas).",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels installés (catalogue de loco, et winget sous Windows), sur chaque poste visé.": "Sistema (Windows Update, APT, DNF, Flatpak) y programas instalados (catálogo de loco, y winget en Windows), en cada equipo afectado.",
+ "Une mise à jour déjà en cours sur un poste n'est pas interrompue. Flatpak et logiciels du catalogue de loco ne sont pas concernés ; sous Windows, un logiciel mis à jour par winget se bloque par son nom ou son identifiant winget.": "Una actualización ya en curso en un equipo no se interrumpe. Flatpak y los programas del catálogo de loco no se ven afectados; en Windows, un programa actualizado por winget se bloquea por su nombre o su identificador winget.",
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste.": "Sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows), en un equipo.",
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "Sistema, Flatpak y programas instalados (catálogo de loco, y winget en Windows)."
 }

@@ -25,7 +25,7 @@
             {% if can_script %}<label><input type="radio" name="action" value="run-script" {{ 'checked' if action == 'run-script' or not (can_update or can_reboot) }}><span>{{ _("Exécuter un script") }}</span></label>{% endif %}
           </div>
           <div data-show-for="action:update" class="stack-sm">
-            <p class="small muted">{{ _("Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue déjà installés, sur chaque poste visé.") }}</p>
+            <p class="small muted">{{ _("Système (Windows Update, APT, DNF, Flatpak) et logiciels installés (catalogue de loco, et winget sous Windows), sur chaque poste visé.") }}</p>
             {% if can('fleet.reboot') %}<label class="check"><input type="checkbox" name="reboot" value="1" {{ 'checked' if params.reboot }}> {{ _("Redémarrer si une mise à jour l'exige") }}</label>{% endif %}
           </div>
           {% if can_reboot %}

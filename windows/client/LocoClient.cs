@@ -992,7 +992,215 @@ namespace Loco
             var inv = new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
                 { "reboot_required", RebootRequired() }, { "error", error } };
             if (release != null) inv["release"] = release;
+            string note;
+            inv["software"] = WingetInstalled(out note);
+            if (note != "") inv["software_note"] = note;
             return inv;
+        }
+
+        // ------------------------------------------------------------ logiciels hors catalogue (winget)
+
+        static readonly Regex WingetIdRe = new Regex(@"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$");
+
+        // Logiciels que winget relève mais ne sait pas mettre à jour sur ce poste (introuvable pour la mise à jour, ou rien
+        // d'applicable) : retenus avec la version alors installée, et plus remontés tant que cette version ne change pas.
+        static readonly string WingetSkipPath = Path.Combine(Root, "winget-skip.json");
+        static Dictionary<string, string> lastExport = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        static Dictionary<string, string> LoadWingetSkip()
+        {
+            var skip = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                var data = File.Exists(WingetSkipPath) ? new JavaScriptSerializer().DeserializeObject(File.ReadAllText(WingetSkipPath)) as Dictionary<string, object> : null;
+                if (data != null) foreach (var kv in data) skip[kv.Key] = Convert.ToString(kv.Value);
+            }
+            catch (Exception) { }
+            return skip;
+        }
+
+        static void SaveWingetSkip(Dictionary<string, string> skip)
+        {
+            try { File.WriteAllText(WingetSkipPath, new JavaScriptSerializer().Serialize(skip)); }
+            catch (Exception e) { Log("winget-skip.json : " + e.Message); }
+        }
+
+        // winget n'est pas dans le PATH du compte SYSTEM : son exécutable est pris dans le paquet App Installer
+        // (WindowsApps), dans sa version la plus récente pour l'architecture du poste. Lancé hors de toute session, il ne
+        // trouve pas seul les bibliothèques Visual C++ de son paquet VCLibs (code 0xC0000135) : leur dossier va dans son PATH.
+        static string WingetPath(out string libraries)
+        {
+            libraries = "";
+            try
+            {
+                string root = Path.Combine(Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WindowsApps");
+                string cpu = Environment.GetEnvironmentVariable("PROCESSOR_ARCHITEW6432") ?? Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") ?? "";
+                string arch = cpu.Equals("ARM64", StringComparison.OrdinalIgnoreCase) ? "arm64" : "x64";
+                string best = NewestPackage(root, "Microsoft.DesktopAppInstaller_*_" + arch + "__8wekyb3d8bbwe", "winget.exe");
+                if (best == null) return null;
+                var dirs = new List<string>();
+                foreach (string name in new[] { "Microsoft.VCLibs.140.00.UWPDesktop_*_" + arch + "__8wekyb3d8bbwe", "Microsoft.VCLibs.140.00_*_" + arch + "__8wekyb3d8bbwe" })
+                {
+                    string lib = NewestPackage(root, name, null);
+                    if (lib != null) dirs.Add(lib);
+                }
+                dirs.Add(Path.GetDirectoryName(best));
+                libraries = string.Join(";", dirs);
+                return best;
+            }
+            catch (Exception) { return null; }
+        }
+
+        // Dossier (ou fichier « file » dans ce dossier) du paquet WindowsApps le plus récent qui suit ce motif.
+        static string NewestPackage(string root, string pattern, string file)
+        {
+            string best = null; System.Version bestVersion = null;
+            foreach (string dir in Directory.GetDirectories(root, pattern))
+            {
+                string path = file == null ? dir : Path.Combine(dir, file);
+                string[] parts = Path.GetFileName(dir).Split('_');
+                System.Version v;
+                if ((file != null && !File.Exists(path)) || parts.Length < 2 || !System.Version.TryParse(parts[1], out v)) continue;
+                if (bestVersion == null || v > bestVersion) { best = path; bestVersion = v; }
+            }
+            return best;
+        }
+
+        // Dernière ligne utile d'une sortie de winget (sans barres de progression ni sablier), avec le code de sortie.
+        static string WingetMessage(string output, int code)
+        {
+            string last = "";
+            foreach (string raw in (output ?? "").Split('\n'))
+            {
+                string line = Regex.Replace(raw, @"[\u2580-\u259F]+|\r", "").Trim();
+                if (line.Length > 1 && !Regex.IsMatch(line, @"^[-\\|/ ]+$") && !Regex.IsMatch(line, @"\d ?[KMG]?B / \d")) last = line;
+            }
+            if (last.Length > 200) last = last.Substring(0, 200);
+            return (last + " (0x" + unchecked((uint)code).ToString("X8") + ")").Trim();
+        }
+
+        // Logiciels installés que winget sait suivre (identifiant winget et version installée), relevés par
+        // « winget export » : loco compare ces versions à son index winget. Rien n'est installé ni changé ici.
+        // note : pourquoi ce relevé n'a pas pu se faire (winget absent, échec), vide sinon.
+        static List<Dictionary<string, object>> WingetInstalled(out string note)
+        {
+            note = "";
+            var list = new List<Dictionary<string, object>>();
+            string libraries;
+            string winget = WingetPath(out libraries);
+            if (winget == null)
+            {
+                note = Lang.T("winget absent du poste (paquet App Installer de Microsoft)", "winget is not on this machine (Microsoft App Installer package)", "winget no está en el equipo (paquete App Installer de Microsoft)");
+                return list;
+            }
+            string file = Path.Combine(Path.GetTempPath(), "loco-winget-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                string output;
+                int code = RunCapture(winget, "export -o \"" + file + "\" --include-versions --source winget --accept-source-agreements --disable-interactivity", 300, out output, libraries);
+                if (!File.Exists(file)) { note = "winget export : " + WingetMessage(output, code); return list; }
+                var doc = new JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 }.DeserializeObject(File.ReadAllText(file, Encoding.UTF8)) as Dictionary<string, object>;
+                object sources;
+                if (doc == null || !doc.TryGetValue("Sources", out sources) || !(sources is IEnumerable)) return list;
+                foreach (object source in (IEnumerable)sources)
+                {
+                    var src = source as Dictionary<string, object>;
+                    object packages;
+                    if (src == null || !src.TryGetValue("Packages", out packages) || !(packages is IEnumerable)) continue;
+                    foreach (object one in (IEnumerable)packages)
+                    {
+                        var pkg = one as Dictionary<string, object>;
+                        if (pkg == null) continue;
+                        string pid = Str(pkg, "PackageIdentifier"), version = Str(pkg, "Version");
+                        if (WingetIdRe.IsMatch(pid) && version != "" && list.Count < 3000)
+                            list.Add(new Dictionary<string, object> { { "id", pid }, { "version", version.Length > 60 ? version.Substring(0, 60) : version } });
+                    }
+                }
+                // Ceux que winget n'a pas su mettre à jour restent de côté tant que leur version n'a pas changé.
+                var skip = LoadWingetSkip();
+                int before = skip.Count;
+                lastExport = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in list) lastExport[Str(item, "id")] = Str(item, "version");
+                foreach (string pid in skip.Keys.ToList())
+                {
+                    string now;
+                    if (!lastExport.TryGetValue(pid, out now) || now != skip[pid]) skip.Remove(pid);
+                }
+                if (skip.Count != before) SaveWingetSkip(skip);
+                list = list.Where(item => !skip.ContainsKey(Str(item, "id"))).ToList();
+            }
+            catch (Exception e) { note = "winget : " + e.Message; }
+            finally { try { File.Delete(file); } catch (Exception) { } }
+            return list;
+        }
+
+        // Logiciels hors catalogue choisis dans loco : mis à jour un à un par winget, en silence, au compte SYSTEM.
+        // Codes de winget : 0x8A150014 (introuvable pour la mise à jour) et 0x8A15002B (rien d'applicable) : mis de côté,
+        // sans échec ; 0x8A15010D (déjà installé) ; 0x8A150109 et 0x8A15010B : installé, un redémarrage termine l'installation.
+        static bool UpgradeSoftware(object idsValue, List<string> lines, Progress progress = null, Action<string, string> markPkg = null)
+        {
+            var ids = new List<string>();
+            if (idsValue is IEnumerable && !(idsValue is string))
+                foreach (object one in (IEnumerable)idsValue)
+                {
+                    string pid = Convert.ToString(one);
+                    if (WingetIdRe.IsMatch(pid) && !ids.Contains(pid)) ids.Add(pid);
+                }
+            if (ids.Count == 0) return true;
+            string libraries;
+            string winget = WingetPath(out libraries);
+            if (winget == null)
+            {
+                lines.Add(Lang.T("Logiciels : winget absent du poste, rien n'est mis à jour.", "Software: winget is not on this machine, nothing updated.", "Programas: winget no está en el equipo, nada actualizado."));
+                return false;
+            }
+            bool ok = true;
+            int rank = 0;
+            foreach (string pid in ids)
+            {
+                rank++;
+                if (progress != null) progress("install", pid, rank, ids.Count, -1);
+                if (markPkg != null) markPkg(pid, "running");
+                string output;
+                string arguments = "upgrade --id \"" + pid + "\" --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity";
+                int code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+                uint result = unchecked((uint)code);
+                if (result == 0x8A15002B)
+                {
+                    // Sur un Windows qui n'est pas en anglais, winget écarte les installeurs « en-US » quand il ne connaît pas la
+                    // langue de la version installée (« Installer locale does not match … Preferred Locales: [fr-FR] ») et ne
+                    // trouve rien d'applicable. Un second essai les accepte ; un logiciel publié dans la langue du poste a, lui,
+                    // déjà été mis à jour au premier.
+                    string again;
+                    int retry = RunCapture(winget, arguments + " --locale en-US", InstallerTimeout, out again, libraries);
+                    if (unchecked((uint)retry) != 0x8A15002B) { code = retry; output = again; result = unchecked((uint)retry); }
+                }
+                if (result == 0x8A150014 || result == 0x8A15002B)
+                {
+                    // Introuvable pour winget, ou rien d'applicable : il se met à jour autrement (son propre service, le Store).
+                    lines.Add(Lang.T("Non mis à jour : ", "Not updated: ", "No actualizado: ") + pid + " — " + WingetMessage(output, code) + Lang.T(" (winget ne peut pas le mettre à jour sur ce poste ; il n'est plus proposé tant que sa version ne change pas)",
+                        " (winget cannot update it on this machine; no longer offered until its version changes)", " (winget no puede actualizarlo en este equipo; ya no se propone mientras su versión no cambie)"));
+                    var skip = LoadWingetSkip();
+                    string seen;
+                    skip[pid] = lastExport.TryGetValue(pid, out seen) ? seen : "";
+                    SaveWingetSkip(skip);
+                    if (markPkg != null) markPkg(pid, "ok");
+                    continue;
+                }
+                if (code == 0 || result == 0x8A15010D)
+                    lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + (code == 0 ? "" : Lang.T(" (déjà à jour)", " (already up to date)", " (ya actualizado)")));
+                else if (result == 0x8A150109 || result == 0x8A15010B)
+                    lines.Add(Lang.T("OK : ", "OK: ", "OK: ") + pid + Lang.T(" (redémarrage nécessaire)", " (reboot required)", " (reinicio necesario)"));
+                else
+                {
+                    ok = false;
+                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + WingetMessage(output, code));
+                    if (markPkg != null) markPkg(pid, "failed");
+                    continue;
+                }
+                if (markPkg != null) markPkg(pid, "ok");
+            }
+            return ok;
         }
 
         // ------------------------------------------------------------ actions
@@ -1153,13 +1361,18 @@ namespace Loco
             return null;
         }
 
-        static int RunCapture(string file, string arguments, int timeoutSeconds, out string output)
+        static int RunCapture(string file, string arguments, int timeoutSeconds, out string output, string pathPrefix = null)
         {
             var psi = new ProcessStartInfo(file, arguments)
             {
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
                 StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
             };
+            if (pathPrefix != null)
+            {
+                psi.EnvironmentVariables["PATH"] = pathPrefix + ";" + (Environment.GetEnvironmentVariable("PATH") ?? "");
+                psi.WorkingDirectory = Path.GetDirectoryName(file);
+            }
             var text = new StringBuilder();
             DataReceivedEventHandler collect = (sender, e) => { if (e.Data != null) lock (text) if (text.Length < OutputLimit * 2) text.AppendLine(e.Data); };
             using (var p = new Process { StartInfo = psi })
@@ -1699,6 +1912,7 @@ namespace Loco
                             if (ok) { SaveState(lastScan, scanHours, true); Restart(Lang.T("redémarrage pour la nouvelle version de Windows", "reboot for the new Windows version", "reinicio para la nueva versión de Windows")); return true; }
                             continue;
                         }
+                        bool selection = false;
                         if (action == "update")
                         {
                             // Sélection faite dans loco (« only ») : seulement ces mises à jour Windows, sans les logiciels du catalogue.
@@ -1707,16 +1921,24 @@ namespace Loco
                             if (cmd.TryGetValue("only", out onlyValue) && onlyValue is Dictionary<string, object>)
                             {
                                 only = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                selection = true;
                                 object ids;
                                 if (((Dictionary<string, object>)onlyValue).TryGetValue("updates", out ids) && ids is System.Collections.IEnumerable)
                                     foreach (object one in (System.Collections.IEnumerable)ids) only.Add(Convert.ToString(one));
                             }
-                            try { ok = InstallWindowsUpdates(lines, only, progress, markPkg); }
-                            catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
+                            // Sélection sans mise à jour Windows (seulement des logiciels) : Windows Update n'est pas consulté.
+                            if (only == null || only.Count > 0)
+                            {
+                                try { ok = InstallWindowsUpdates(lines, only, progress, markPkg); }
+                                catch (Exception e) { ok = false; lines.Add(Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message); }
+                            }
                         }
                         object apps;
                         cmd.TryGetValue("apps", out apps);
-                        if (!InstallCatalogApps(Str(conf, "server"), apps, lines, progress)) ok = false;
+                        if (!selection && !InstallCatalogApps(Str(conf, "server"), apps, lines, progress)) ok = false;
+                        object software;
+                        cmd.TryGetValue("software", out software);
+                        if (action == "update" && !UpgradeSoftware(software, lines, progress, markPkg)) ok = false;
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;

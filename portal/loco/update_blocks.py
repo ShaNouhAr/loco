@@ -4,7 +4,8 @@ planifications, assistants IA).
 Un blocage désigne un paquet (Linux) ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un
 groupe de machines. Le serveur retire ces mises à jour de ses comptes et de ce qu'il demande ; l'agent les écarte aussi
 de son côté, car son inventaire a pu changer : Debian et Ubuntu les retiennent (apt-mark hold), Windows les masque, DNF
-les exclut à chaque mise à jour. Flatpak et logiciels du catalogue ne sont pas concernés."""
+les exclut à chaque mise à jour. Flatpak et logiciels du catalogue de loco ne sont pas concernés ; sous Windows, les
+logiciels mis à jour par winget le sont, par leur nom ou leur identifiant winget."""
 import functools
 import re
 
@@ -88,6 +89,31 @@ def counts(conn, dev, inv):
     return _counts(for_device(conn, dev), family_of(dev), inv)
 
 
+def software_rule(found, family, item):
+    """Blocage qui vise un logiciel hors catalogue (Windows), par son nom ou son identifiant winget."""
+    return rule_of(found, family, {"name": item.get("name")}) or rule_of(found, family, {"name": item.get("id")})
+
+
+def _software_counts(found, family, inv):
+    """(logiciels à mettre à jour, logiciels bloqués) d'un inventaire Windows."""
+    items = [s for s in inv.get("software") or [] if isinstance(s, dict)]
+    open_items = [s for s in items if not software_rule(found, family, s)]
+    return len(open_items), len(items) - len(open_items)
+
+
+def software_counts(conn, dev, inv):
+    return _software_counts(for_device(conn, dev), family_of(dev), inv)
+
+
+def annotate_software(conn, dev, items):
+    found, family = for_device(conn, dev), family_of(dev)
+    out = []
+    for item in items:
+        rule = software_rule(found, family, item) if isinstance(item, dict) else None
+        out.append(dict(item, blocked={"id": rule["id"], "pattern": rule["pattern"], "reason": rule["reason"]}) if rule else item)
+    return out
+
+
 def annotate(conn, dev, updates):
     """Mises à jour d'un inventaire, avec « blocked » (le blocage) pour celles qui sont bloquées."""
     found, family = for_device(conn, dev), family_of(dev)
@@ -105,8 +131,11 @@ def recount(conn):
         members.setdefault(device_id, set()).add(group_id)
     for dev in conn.execute("SELECT id, os_family, inventory FROM devices WHERE state != 'removed'").fetchall():
         family = family_of(dev)
-        total, security, blocked = _counts(_applicable(all_rules, family, members.get(dev["id"], set())), family, fleet.inventory(dev))
-        conn.execute("UPDATE devices SET updates=?, security_updates=?, blocked_updates=? WHERE id=?", (total, security, blocked, dev["id"]))
+        found, inv = _applicable(all_rules, family, members.get(dev["id"], set())), fleet.inventory(dev)
+        total, security, blocked = _counts(found, family, inv)
+        soft, soft_blocked = _software_counts(found, family, inv)
+        conn.execute("UPDATE devices SET updates=?, security_updates=?, blocked_updates=?, software_updates=? WHERE id=?",
+                     (total, security, blocked + soft_blocked, soft, dev["id"]))
 
 
 def recount_grouped(conn):
@@ -125,8 +154,13 @@ def trim(conn, dev, only):
     if not found:
         return only
     if family == "windows":
-        barred = {u.get("id") for u in fleet.inventory(dev).get("updates") or [] if rule_of(found, family, u)}
-        return dict(only, updates=[i for i in only.get("updates") or [] if i not in barred])
+        inv = fleet.inventory(dev)
+        barred = {u.get("id") for u in inv.get("updates") or [] if rule_of(found, family, u)}
+        barred_software = {s.get("id") for s in inv.get("software") or [] if isinstance(s, dict) and software_rule(found, family, s)}
+        kept = dict(only, updates=[i for i in only.get("updates") or [] if i not in barred])
+        if "software" in only:
+            kept["software"] = [i for i in only["software"] if i not in barred_software]
+        return kept
     return dict(only, packages=[n for n in only.get("packages") or [] if not rule_of(found, family, {"name": n})])
 
 

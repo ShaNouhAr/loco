@@ -393,7 +393,7 @@ def _scan(args):
 
 
 @tool("update_device", "fleet", "Update a device", L_("Mettre à jour un poste"),
-      L_("Système, Flatpak et logiciels du catalogue déjà installés, sur un poste."), ("fleet.update",),
+      L_("Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste."), ("fleet.update",),
       "Install the pending updates of one device (updates blocked in loco are never installed): operating system, Flatpak and, on Windows, the catalog software "
       "already installed — or only some of them with `updates` (Linux package names; Windows update titles, KB numbers "
       "or ids, as listed by get_device) and `flatpak`. reboot=true also restarts it afterwards (only if this access may "

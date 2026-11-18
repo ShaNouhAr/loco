@@ -876,6 +876,11 @@ MIGRATIONS = [
     CREATE INDEX backup_plans_due ON backup_plans(enabled, next_run);
     ALTER TABLE homeassistant_hosts ADD COLUMN copy_state TEXT NOT NULL DEFAULT '';
     """,
+    # 55 : logiciels hors catalogue des postes Windows à mettre à jour (winget, d'après l'inventaire), comptés à part des
+    # mises à jour du système pour le voyant et les listes, sans relire l'inventaire de chaque poste.
+    """
+    ALTER TABLE devices ADD COLUMN software_updates INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

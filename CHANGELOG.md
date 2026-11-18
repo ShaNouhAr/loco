@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.175.0 — 2026-11-18
+
+- **Windows : mises à jour des logiciels hors catalogue** : les logiciels installés que winget sait suivre (7-Zip, Notepad++, VLC, Remote Desktop Manager…) apparaissent dans l'onglet *Mises à jour* du poste, à côté des mises à jour Windows, avec la version installée et la nouvelle — sans les ajouter au catalogue de loco. On les coche une par une ou *Mettre à jour* les prend toutes (poste, tout le parc, planifications) ; l'agent les met à jour par winget, en silence, au compte SYSTEM. Ils comptent dans le voyant et dans Mon parc, et se bloquent comme une mise à jour Windows, par leur nom ou leur identifiant winget. Le relevé se fait par `winget export` sur le poste et la comparaison sur l'index winget de loco, renouvelé chaque jour. Sans winget sur le poste, la fiche le dit. Les logiciels installés pour un seul utilisateur ne sont pas vus.
+- **Sur un Windows en français, les logiciels publiés seulement en anglais se mettent à jour aussi** (Remote Desktop Manager, par exemple) : winget les jugeait « non applicables » faute d'installeur en français ; l'agent refait alors l'essai en acceptant l'installeur anglais. Ce que winget ne sait pas mettre à jour sur un poste est mis de côté, avec sa raison, tant que sa version ne change pas, et les composants que Windows ou leur éditeur tiennent à jour eux-mêmes (App Installer, Edge, WebView2, Teams, OneDrive, Terminal, bibliothèques du Store) ne sont jamais proposés.
+- **Mettre à jour la sélection** ne consulte plus Windows Update quand seuls des logiciels sont cochés.
+
 ## 2.174.0 — 2026-11-18
 
 - **Apparence libre pour les administrateurs** : un compte au profil *Administrateur* n'est plus tenu par le cadre de l'entreprise (*Administration › Apparence*) — sa fenêtre *Apparence* propose tous les thèmes et presets, toutes les couleurs et tous les fonds, même quand l'entreprise en limite ou en impose. Les autres comptes et l'écran de connexion restent dans le cadre.

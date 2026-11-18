@@ -193,6 +193,69 @@ def refresh_index(force=False):
         return INDEX
 
 
+# --------------------------------------------------------------------------- logiciels des postes
+
+_REFRESHING = threading.Event()
+# Tenus à jour par Windows, le Store ou leur propre service, et que winget ne met pas à jour au compte SYSTEM (paquets
+# MSIX du Store, composants d'Edge, applications installées pour chaque utilisateur) : jamais proposés.
+SELF_MANAGED = re.compile(r"^Microsoft\.(AppInstaller|DesktopAppInstaller|Edge|EdgeWebView2Runtime|EdgeWebView2|Teams|"
+                          r"Teams\.Free|OneDrive|WindowsTerminal|UI\.Xaml\..+|VCLibs\..+|NET\.Native\..+|"
+                          r"WindowsAppRuntime\..+)$", re.I)
+
+
+def refresh_later():
+    """Index trop ancien (ou absent) : renouvelé en arrière-plan, sans retenir la requête en cours."""
+    if _REFRESHING.is_set():
+        return
+    _REFRESHING.set()
+
+    def run():
+        try:
+            refresh_index()
+        except Exception:
+            pass
+        finally:
+            _REFRESHING.clear()
+    threading.Thread(target=run, name="loco-winget-index", daemon=True).start()
+
+
+def upgrades(installed, skip=()):
+    """Logiciels installés sur un poste (identifiants winget et versions, relevés par « winget export » de l'agent)
+    qui ont une version plus récente dans l'index winget : [{id, name, version, latest}]. L'index est lu tel qu'il est,
+    jamais téléchargé ici (il se renouvelle à part) ; les logiciels du catalogue de loco (skip) suivent leur voie."""
+    wanted = {}
+    for item in installed or []:
+        if not isinstance(item, dict):
+            continue
+        pid, version = str(item.get("id") or ""), str(item.get("version") or "").strip()
+        if ID_RE.match(pid) and pid.lower() not in skip and not SELF_MANAGED.match(pid) and re.match(r"\d", version):
+            wanted[pid] = version[:60]
+    if not os.path.isfile(INDEX) or time.time() - os.path.getmtime(INDEX) >= MAX_AGE:
+        refresh_later()
+    if not wanted or not os.path.isfile(INDEX):
+        return []
+    latest = {}
+    ids = sorted(wanted)
+    try:
+        with sqlite3.connect(f"file:{INDEX}?mode=ro", uri=True) as conn:
+            for start in range(0, len(ids), 400):
+                part = ids[start:start + 400]
+                rows = conn.execute("SELECT i.id, n.name, v.version FROM manifest m JOIN ids i ON i.rowid = m.id "
+                                    "JOIN names n ON n.rowid = m.name JOIN versions v ON v.rowid = m.version "
+                                    f"WHERE i.id IN ({','.join('?' * len(part))})", part).fetchall()
+                for pid, name, version in rows:
+                    if pid not in latest or _version_key(version) > _version_key(latest[pid][1]):
+                        latest[pid] = (name, version)
+    except sqlite3.Error:
+        return []
+    out = []
+    for pid, version in wanted.items():
+        found = latest.get(pid)
+        if found and _version_key(found[1]) > _version_key(version):
+            out.append({"id": pid, "name": str(found[0])[:120], "version": version, "latest": str(found[1])[:60]})
+    return sorted(out, key=lambda s: s["name"].lower())
+
+
 def _connect():
     try:
         path = refresh_index()

@@ -110,12 +110,12 @@
         <details class="menu">
           <summary class="btn sm" aria-label="{{ _('Autres actions sur la sélection') }}">{{ _("Plus") }}</summary>
           <div class="menu-list" role="menu">
-            {% if can('fleet.update') and can('fleet.reboot') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-reboot data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés, puis les redémarrer si nécessaire ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">{{ _("Mettre à jour puis redémarrer si nécessaire") }}</button>{% endif %}
+            {% if can('fleet.update') and can('fleet.reboot') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-reboot data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés, puis les redémarrer si nécessaire ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">{{ _("Mettre à jour puis redémarrer si nécessaire") }}</button>{% endif %}
             {% if can('fleet.wake') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-action="{{ url_for('fleet_wake_policy_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Activer le réveil à distance sur les postes sélectionnés ?') }}" data-confirm-text="{{ _('L’agent active le réveil sur leurs cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}">{{ _("Activer le réveil à distance…") }}</button>{% endif %}
           </div>
         </details>
         {% endif %}
-        {% if can('fleet.update') %}<button type="button" class="btn sm primary" data-select-submit data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}" data-confirm-ok="{{ _('Mettre à jour') }}"><span class="spin"></span>{{ _("Mettre à jour") }}</button>{% endif %}
+        {% if can('fleet.update') %}<button type="button" class="btn sm primary" data-select-submit data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.') }}" data-confirm-ok="{{ _('Mettre à jour') }}"><span class="spin"></span>{{ _("Mettre à jour") }}</button>{% endif %}
       </div>
     </div>
     {% endif %}
@@ -208,7 +208,7 @@
   </section>
 </div>
 
-{% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels du catalogue.', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels du catalogue.')) }}{% endif %}
+{% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).')) }}{% endif %}
 {% if can('fleet.bulk_update') and total and to_update %}
 <dialog id="update-all">
   {# Zone rafraîchie avec la liste : le nombre de postes du titre et les vagues suivent le bouton qui ouvre la fenêtre. #}
@@ -217,7 +217,7 @@
     <div class="dlg-b stack-sm">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
-      <p class="muted">{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels du catalogue, au prochain contact de chaque poste.') }}{% if selected_group %} {{ _('Seuls les postes du groupe %(name)s sont concernés.', name=selected_group.name) }}{% endif %}</p>
+      <p class="muted">{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.') }}{% if selected_group %} {{ _('Seuls les postes du groupe %(name)s sont concernés.', name=selected_group.name) }}{% endif %}</p>
       {% if can("fleet.reboot") %}
       <label class="switch-row">
         <span class="switch"><input type="checkbox" name="reboot" value="1" role="switch"><i aria-hidden="true"></i></span>

@@ -17,7 +17,7 @@ GROUPS = [
         ("fleet.enroll", L_("Inscrire des appareils"), L_("Afficher la clé et les commandes d'installation de l'agent."), ("fleet.view",), True),
         ("fleet.scan", L_("Demander un inventaire"), L_("Actualiser les informations d'un appareil."), ("fleet.view",), False),
         ("fleet.rename", L_("Nommer les appareils"), L_("Donner un nom personnalisé à un appareil, affiché à la place de son nom d'hôte."), ("fleet.view",), False),
-        ("fleet.update", L_("Mettre à jour un appareil"), L_("Système, Flatpak et logiciels du catalogue déjà installés."), ("fleet.view",), True),
+        ("fleet.update", L_("Mettre à jour un appareil"), L_("Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows)."), ("fleet.view",), True),
         ("fleet.bulk_update", L_("Mettre à jour tout le parc"), L_("Lancer les mises à jour sur tous les appareils concernés."), ("fleet.update",), True),
         ("fleet.install", L_("Déployer un logiciel"), L_("Installer ou mettre à jour un logiciel du catalogue sur un appareil."), ("fleet.view", "windows.view"), True),
         ("fleet.bulk_install", L_("Déployer sur des groupes ou plusieurs postes"), L_("Déploiements de logiciels sur plusieurs appareils ou sur un groupe."), ("fleet.install",), True),

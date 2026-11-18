@@ -5041,5 +5041,20 @@
  "Mon logo": "My logo",
  "Importer un logo…": "Import a logo…",
  "Retirer mon logo": "Remove my logo",
- "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "For you only: other accounts and the sign-in screen keep the instance logo."
+ "Pour vous seul : les autres comptes et l’écran de connexion gardent le logo de l’instance.": "For you only: other accounts and the sign-in screen keep the instance logo.",
+ "Système et logiciels": "System and software",
+ "%(num)s logiciel": "%(num)s software update",
+ "%(num)s logiciels": "%(num)s software updates",
+ "logiciel": "software",
+ "Logiciels hors catalogue : %(note)s": "Software outside the catalog: %(note)s",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.": "System (Windows Update, APT, DNF, Flatpak) and software (loco catalog, and winget on Windows), at each machine's next contact; those that need it restart afterwards.",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.": "System (Windows Update, APT, DNF, Flatpak) and software (loco catalog, and winget on Windows), at each machine's next contact.",
+ "Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).": "All active machines of group %(name)s at each run: system, Flatpak and software (loco catalog, and winget on Windows).",
+ "Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).": "All active machines of the fleet at each run: system, Flatpak and software (loco catalog, and winget on Windows).",
+ "Mise à jour de %(name)s : système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "Update of %(name)s: system, Flatpak and installed software (loco catalog, and winget on Windows).",
+ "Couleur de la pastille d'un poste selon ses mises à jour en attente (système, Flatpak et logiciels).": "Colour of a machine's badge according to its pending updates (system, Flatpak and software).",
+ "Système (Windows Update, APT, DNF, Flatpak) et logiciels installés (catalogue de loco, et winget sous Windows), sur chaque poste visé.": "System (Windows Update, APT, DNF, Flatpak) and installed software (loco catalog, and winget on Windows), on each targeted machine.",
+ "Une mise à jour déjà en cours sur un poste n'est pas interrompue. Flatpak et logiciels du catalogue de loco ne sont pas concernés ; sous Windows, un logiciel mis à jour par winget se bloque par son nom ou son identifiant winget.": "An update already running on a machine is not interrupted. Flatpak and loco catalog software are not affected; on Windows, software updated by winget is blocked by its name or its winget ID.",
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows), sur un poste.": "System, Flatpak and installed software (loco catalog, and winget on Windows), on one machine.",
+ "Système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).": "System, Flatpak and installed software (loco catalog, and winget on Windows)."
 }

@@ -427,7 +427,7 @@ def status(dev, apps=None):
     if dev["state"] == "removing":
         return "grey", _("retrait de l'agent demandé")
     seen = _ago(dev["last_seen"])
-    pending_apps = len(app_updates(dev, apps))
+    pending_apps = len(app_updates(dev, apps)) + software_count(dev)
     reasons = []
     if dev["security_updates"]:
         reasons.append(n_("%(num)s mise à jour de sécurité en attente", "%(num)s mises à jour de sécurité en attente", dev["security_updates"]))
@@ -491,7 +491,8 @@ def action_label(cmd):
         label = _("%(action)s : %(name)s", action=label, name=", ".join(names[:3]) + ("…" if len(names) > 3 else ""))
     only = params.get("only") if isinstance(params.get("only"), dict) else None
     if only:
-        count = len(only.get("packages") or only.get("updates") or []) + (1 if only.get("flatpak") else 0)
+        count = (len(only.get("packages") or only.get("updates") or []) + len(only.get("software") or [])
+                 + (1 if only.get("flatpak") else 0))
         label = n_("%(action)s : %(num)s sélectionnée", "%(action)s : %(num)s sélectionnées", count, action=label)
     if cmd["action"] == "os-upgrade":
         return _("Mise à jour vers %(name)s", name=params.get("name") or params.get("version") or "?")
@@ -516,9 +517,10 @@ def selectable(dev):
     return dev["os_family"] != "windows" or all(u.get("id") for u in updates)
 
 
-def select_updates(dev, wanted, flatpak=False):
+def select_updates(dev, wanted, flatpak=False, software=()):
     """Mises à jour choisies une par une, limitées à celles que l'inventaire du poste annonce : paquets (Linux) ou
-    identifiants Windows Update, désignés par identifiant, nom, ou numéro KB. ValueError si rien ne correspond."""
+    identifiants Windows Update, désignés par identifiant, nom, ou numéro KB, et logiciels hors catalogue (Windows,
+    identifiants winget). ValueError si rien ne correspond."""
     if not selectable(dev):
         raise ValueError(_("Choisir les mises à jour une par une demande l'agent %(v)s.0 ou plus récent sur ce poste.",
                            v=".".join(map(str, SELECT_UPDATES))))
@@ -529,12 +531,15 @@ def select_updates(dev, wanted, flatpak=False):
         def matches(u, w):
             return w.lower() in (u.get("id", "").lower(), u.get("name", "").lower()) or w.upper() in u.get("version", "").split()
         chosen = [u["id"] for u in updates if u.get("id") and any(matches(u, w) for w in wanted)]
-        only = {"updates": chosen}
+        asked = {str(w).strip().lower() for w in software if str(w).strip()}
+        picked = [item["id"] for item in update_blocks.annotate_software(db(), dev, inventory(dev).get("software") or [])
+                  if not item.get("blocked") and item.get("id", "").lower() in asked]
+        only = dict({"updates": chosen}, **({"software": picked} if picked else {}))
     else:
         names = set(wanted)
         chosen = [u["name"] for u in updates if u.get("name") in names]
         only = {"packages": chosen, "flatpak": bool(flatpak) and bool(inventory(dev).get("flatpak"))}
-    if not chosen and not only.get("flatpak"):
+    if not chosen and not only.get("flatpak") and not only.get("software"):
         raise ValueError(_("Aucune mise à jour en attente ne correspond à la sélection."))
     return only
 
@@ -542,13 +547,19 @@ def select_updates(dev, wanted, flatpak=False):
 def update_selection(dev, form):
     """Mises à jour cochées sur la fiche du poste (400 si aucune ne correspond à l'inventaire)."""
     try:
-        return select_updates(dev, form.getlist("only"), form.get("only_flatpak") == "1")
+        return select_updates(dev, form.getlist("only"), form.get("only_flatpak") == "1", form.getlist("only_software"))
     except ValueError as e:
         abort(400, str(e))
 
 
+def software_count(dev):
+    """Logiciels hors catalogue à mettre à jour (Windows, winget), comptés à l'enregistrement de l'inventaire."""
+    return dev["software_updates"] if "software_updates" in dev.keys() else 0
+
+
 def needs_update(dev, apps=None):
-    return dev["state"] == "active" and bool(dev["updates"] or dev["security_updates"] or app_updates(dev, apps))
+    return dev["state"] == "active" and bool(dev["updates"] or dev["security_updates"] or software_count(dev)
+                                             or app_updates(dev, apps))
 
 
 def pending(dev_id):
@@ -741,11 +752,21 @@ def _store_inventory(dev, inv):
     release = _clean_release(inv.get("release"))
     if release:
         clean["release"] = release                  # nouvelle version majeure du système (agents 2.171.0 et plus)
+    if dev["os_family"] == "windows" and isinstance(inv.get("software"), list):
+        # Logiciels hors catalogue (agents 2.175.0 et plus) : relevés par winget sur le poste, comparés ici à l'index
+        # winget. Ceux du catalogue de loco suivent leur propre voie (app_updates).
+        from . import winget
+        skip = {r[0].lower() for r in db().execute("SELECT winget_id FROM win_apps WHERE winget_id != ''")}
+        clean["software"] = winget.upgrades(inv["software"][:3000], skip)[:300]
+    if inv.get("software_note"):
+        clean["software_note"] = _text(inv.get("software_note"), 300)
     from . import update_blocks
     total, security, blocked = update_blocks.counts(db(), dev, clean)
+    soft, soft_blocked = update_blocks.software_counts(db(), dev, clean)
     db().execute("UPDATE devices SET inventory=?, inv_rev=?, last_scan=?, updates=?, security_updates=?, blocked_updates=?, "
-                 "reboot_required=? WHERE id=?", (json.dumps(clean), time.time_ns(), _now(), total, security, blocked,
-                                int(bool(inv.get("reboot_required"))), dev["id"]))
+                 "software_updates=?, reboot_required=? WHERE id=?",
+                 (json.dumps(clean), time.time_ns(), _now(), total, security, blocked + soft_blocked, soft,
+                  int(bool(inv.get("reboot_required"))), dev["id"]))
     _store_software(dev, inv)
 
 
@@ -925,8 +946,13 @@ def _payload(dev, cmd):
         out["blocks"] = update_blocks.patterns_for(db(), dev)
     if cmd["action"] == "update" and isinstance(params.get("only"), dict):
         out["only"] = update_blocks.trim(db(), dev, params["only"])   # mises à jour choisies une par une (agents 2.120.0 et plus)
+        if dev["os_family"] == "windows":
+            out["software"] = out["only"].get("software") or []
     elif cmd["action"] == "update" and dev["os_family"] == "windows":
         out["apps"] = [app_payload(a) for a in app_updates(dev)]
+        # Logiciels hors catalogue : mis à jour par winget sur le poste (agents 2.175.0 et plus ; les autres l'ignorent).
+        out["software"] = [s["id"] for s in update_blocks.annotate_software(db(), dev, inventory(dev).get("software") or [])
+                           if not s.get("blocked")]
     if cmd["action"] == "wake-relay":
         out["wake"] = {"broadcast": params.get("broadcast", ""), "macs": params.get("macs", [])}
     if cmd["action"] == "run-script":
@@ -1883,7 +1909,7 @@ def _rows(apps=None):
         color, reason = status(d, apps)
         cmds = waiting.get(d["id"], [])
         # Mise à jour ou redémarrage déjà lancés : montrés comme tels, et plus proposés tant qu'ils ne sont pas finis.
-        out.append(dict({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)),
+        out.append(dict({"d": d, "color": color, "reason": reason, "apps": len(app_updates(d, apps)) + software_count(d),
                          "pending": cmds, "needs_update": needs_update(d, apps)}, **in_progress(d, cmds)))
     return out
 
@@ -2227,6 +2253,7 @@ def fleet_device(dev_id):
     apps = catalog_state(inv) if dev["os_family"] == "windows" else []
     from . import update_blocks
     updates = inv["updates"] = update_blocks.annotate(db(), dev, inv.get("updates") or [])
+    inv["software"] = update_blocks.annotate_software(db(), dev, inv.get("software") or [])
     soft = software(dev) if dev["os_family"] != "windows" else {}
     pkg_updates = {u.get("name"): u.get("version") for u in updates if u.get("name")}
     pkgs = soft.get("packages") or []
@@ -2238,7 +2265,7 @@ def fleet_device(dev_id):
     except (OverflowError, OSError, ValueError):                              # horodatage de démarrage incohérent
         boot_text = ""
     summary = {"updates": dev["updates"], "security": dev["security_updates"], "blocked": dev["blocked_updates"],
-               "apps": sum(1 for _, _, outdated in apps if outdated), "seen": ago_text(dev["last_seen"]),
+               "apps": sum(1 for _, _, outdated in apps if outdated) + software_count(dev), "seen": ago_text(dev["last_seen"]),
                "scanned": ago_text(dev["last_scan"]), "enrolled": ago_text(dev["enrolled_at"])}
     from . import groups, schedules
     from . import monitoring

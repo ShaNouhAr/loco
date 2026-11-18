@@ -44,7 +44,8 @@ distribués ; supprimer le groupe aussi.
   s'affiche sur la fiche du poste dans Mon parc. À l'inscription d'un poste Linux, ses logiciels et caractéristiques
   s'affichent dès le premier contact, le décompte des mises à jour suivant une fois le premier scan réseau terminé.
 - **Voyants** : vert, aucune mise à jour ; orange, 1 à 9 mises à jour ; rouge, 10 mises à jour ou plus.
-  Le total additionne système, Flatpak et logiciels du catalogue. Le seuil rouge est réglable dans Mon parc.
+  Le total additionne système, Flatpak et logiciels (catalogue de loco, et winget sous Windows). Le seuil rouge est
+  réglable dans Mon parc.
   Un inventaire manquant, incomplet ou un poste sans contact récent est gris, sans fausser le comptage.
 - **Actions** : *Mettre à jour* (un poste) ou *Tout mettre à jour* (tout le parc, tous systèmes), avec redémarrage
   facultatif ; installer ou mettre à jour un logiciel du catalogue ; inventaire ; redémarrage ; retrait de l'agent.
@@ -67,6 +68,19 @@ distribués ; supprimer le groupe aussi.
   progression, et dans le tableau les éléments terminés (✓) et celui en cours. Sous Windows, les mises à jour
   s'installent une par une (pile de maintenance d'abord) et une erreur n'arrête plus les suivantes. Agents 2.120.0 et
   plus (ils se mettent à jour seuls) ; l'outil MCP `update_device` accepte la même sélection (`updates`, `flatpak`).
+- **Logiciels hors catalogue (Windows)** : les logiciels installés que winget sait suivre (7-Zip, Notepad++, VLC,
+  Remote Desktop Manager…) s'affichent dans l'onglet *Mises à jour*, à côté des mises à jour Windows, avec leur
+  version installée et la nouvelle (« 25.01 → 26.06 »), sans entrer dans le catalogue de loco. L'agent relève les
+  logiciels installés par `winget export` (compte SYSTEM, avec le winget du paquet App Installer de Microsoft) ; loco
+  compare leurs versions à son index winget, renouvelé chaque jour. Ils se cochent comme les mises à jour Windows, et
+  *Mettre à jour* (un poste, tout le parc, planifications) les met tous à jour ; l'agent lance `winget upgrade` pour
+  chacun, en silence, et le téléchargement vient de l'éditeur, comme avec winget. Un logiciel aussi présent dans le
+  catalogue de loco suit la voie du catalogue. Un logiciel publié seulement en anglais se met à jour aussi sur un Windows
+  en français (l'agent refait l'essai en acceptant l'installeur anglais). Ce que winget ne sait pas mettre à jour sur un
+  poste est mis de côté, avec sa raison, tant que sa version ne change pas ; les composants que Windows ou leur éditeur
+  tiennent à jour (App Installer, Edge, WebView2, Teams, OneDrive, Terminal) ne sont jamais proposés. Limites : les
+  logiciels installés pour un seul utilisateur (dans son profil) ne sont pas vus par le compte SYSTEM ; sans App Installer (certaines éditions de Windows Server), la fiche le
+  dit et seules les mises à jour Windows restent. Agents 2.175.0 et plus.
 - **Mettre à jour vers une nouvelle version du système** : quand la version majeure suivante est publiée, la fiche du
   poste le dit (« Mettre à jour vers Debian 13 (trixie) », à côté du nom du système et en tête de l'onglet *Mises à
   jour*), comme Mon parc, qui a aussi le filtre *Situation › Mise à jour vers une nouvelle version*. Le voyant ne
@@ -170,7 +184,8 @@ s'ouvre sans demande. Sous Linux, il faut zenity ou kdialog. Le terminal et les 
 ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe. loco ne l'installe plus, quel que soit le
 chemin : poste, tout le parc, vagues, planifications, assistants IA. Sur le poste, Debian et Ubuntu retiennent le paquet
 (`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques, et Windows masque la mise à jour, sauf celles qu'il
-impose. Avec DNF, seules les mises à jour lancées par loco sont concernées. Flatpak et logiciels du catalogue ne le sont pas.
+impose. Avec DNF, seules les mises à jour lancées par loco sont concernées. Un logiciel mis à jour par winget (Windows) se bloque
+par son nom ou son identifiant winget (« VLC* », « 7zip.* »). Flatpak et logiciels du catalogue de loco ne sont pas concernés.
 
 **Réveiller un poste éteint** (Wake-on-LAN) : bouton *Réveiller* dans Mon parc et sur la fiche du poste. Il n'apparaît que si
 le poste a une carte Ethernet branchée à son dernier contact, jamais en Wi-Fi, et si le serveur ou un poste allumé est sur le

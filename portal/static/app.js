@@ -1895,7 +1895,7 @@
     var sync = function () {
       var form = $("[data-update-select]");
       if (!form) { hold("updates", false); return; }
-      var list = $$("input[name=only], input[name=only_flatpak]", form), n = list.filter(function (b) { return b.checked; }).length;
+      var list = $$("input[name=only], input[name=only_flatpak], input[name=only_software]", form), n = list.filter(function (b) { return b.checked; }).length;
       var all = $("[data-check-all]", form), btn = $("[data-select-submit]", form), count = $("[data-select-count]", form);
       if (count) count.textContent = n;
       if (btn) btn.disabled = !n;
@@ -1906,7 +1906,7 @@
     document.addEventListener("change", function (e) {
       var form = e.target.closest && e.target.closest("[data-update-select]");
       if (!form) return;
-      if (e.target.matches("[data-check-all]")) $$("input[name=only], input[name=only_flatpak]", form).forEach(function (b) { b.checked = e.target.checked; });
+      if (e.target.matches("[data-check-all]")) $$("input[name=only], input[name=only_flatpak], input[name=only_software]", form).forEach(function (b) { b.checked = e.target.checked; });
       sync();
     });
     sync();

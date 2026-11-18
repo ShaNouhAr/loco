@@ -200,11 +200,13 @@
       </div>
       {% endif %}
       {# Mise à jour déjà lancée : plus de cases à cocher, on ne lance pas une seconde mise à jour par-dessus. #}
-      {% set sel = selectable and not updating and (inv.updates or (inv.flatpak and not windows)) %}
+      {# Logiciels hors catalogue (Windows, winget) : mêmes lignes, même sélection que les mises à jour du système. #}
+      {% set soft_list = inv.software or [] if windows else [] %}
+      {% set sel = selectable and not updating and (inv.updates or (inv.flatpak and not windows) or soft_list|rejectattr('blocked')|list) %}
       {% if sel %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-update-select>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="update"><input type="hidden" name="scope" value="selection">{% endif %}
-      <div class="panel-h sub"><h2>{{ _("Système") }}</h2>{% if inv.flatpak %}<div class="aside">{{ _("+ %(flatpak)s Flatpak", flatpak=inv.flatpak) }}</div>{% endif %}</div>
-      {% if inv.updates or (sel and inv.flatpak) %}
+      <div class="panel-h sub"><h2>{{ _("Système et logiciels") if soft_list else _("Système") }}</h2>{% if inv.flatpak %}<div class="aside">{{ _("+ %(flatpak)s Flatpak", flatpak=inv.flatpak) }}</div>{% elif soft_list %}<div class="aside">{{ ngettext("%(num)s logiciel", "%(num)s logiciels", soft_list|length) }}</div>{% endif %}</div>
+      {% if inv.updates or soft_list or (sel and inv.flatpak) %}
       <div class="table-wrap">
         <table class="update-table">
           {% if sel %}<thead><tr><th class="check"><input type="checkbox" data-check-all aria-label="{{ _('Tout cocher') }}"></th><th>{{ _("Mise à jour") }}</th><th class="right">{{ _("Version") }}</th>{% if can('fleet.block') %}<th></th>{% endif %}</tr></thead>{% endif %}
@@ -212,6 +214,9 @@
           {% for u in inv.updates|sort(attribute='security', reverse=true) %}
             {% set block_target = u.version.split()|first if windows and u.version else u.name.split(':')|first %}
             <tr data-update-row="{{ u.name }}"{% if u.blocked %} class="upd-blocked"{% endif %}>{% if sel %}<td class="check">{% if not u.blocked %}<input type="checkbox" name="only" value="{{ u.id if windows else u.name }}" aria-label="{{ u.name }}">{% endif %}</td>{% endif %}<td class="upd-name">{{ u.name }}{% if u.security %} <span class="tag">{{ _("sécurité") }}</span>{% endif %}{% if u.driver %} <span class="tag">{{ _("pilote") }}</span>{% endif %}{% if u.blocked %} <span class="tag">{{ _("bloquée") }}</span>{% if u.blocked.reason %}<span class="sub">{{ u.blocked.reason }}</span>{% endif %}{% endif %}</td><td class="mono muted right">{{ u.version }}</td>{% if can('fleet.block') %}<td class="right nowrap small">{% if u.blocked %}<a href="{{ url_for('update_blocks') }}">{{ _("Voir le blocage") }}</a>{% else %}<a href="{{ url_for('update_blocks', family='windows' if windows else 'linux', pattern=block_target) }}#bloquer">{{ _("Bloquer") }}</a>{% endif %}</td>{% endif %}</tr>
+          {% endfor %}
+          {% for s in soft_list %}
+            <tr data-update-row="{{ s.id }}"{% if s.blocked %} class="upd-blocked"{% endif %}>{% if sel %}<td class="check">{% if not s.blocked %}<input type="checkbox" name="only_software" value="{{ s.id }}" aria-label="{{ s.name }}">{% endif %}</td>{% endif %}<td class="upd-name">{{ s.name }} <span class="tag">{{ _("logiciel") }}</span>{% if s.blocked %} <span class="tag">{{ _("bloquée") }}</span>{% if s.blocked.reason %}<span class="sub">{{ s.blocked.reason }}</span>{% endif %}{% endif %}<span class="sub mono">{{ s.id }}</span></td><td class="mono muted right">{{ s.version }} → {{ s.latest }}</td>{% if can('fleet.block') %}<td class="right nowrap small">{% if s.blocked %}<a href="{{ url_for('update_blocks') }}">{{ _("Voir le blocage") }}</a>{% else %}<a href="{{ url_for('update_blocks', family='windows', pattern=s.name) }}#bloquer">{{ _("Bloquer") }}</a>{% endif %}</td>{% endif %}</tr>
           {% endfor %}
           {% if sel and inv.flatpak and not windows %}
             <tr data-update-row=""><td class="check"><input type="checkbox" name="only_flatpak" value="1" aria-label="{{ _('Applications Flatpak') }}"></td><td class="upd-name">{{ _("Applications Flatpak") }}</td><td class="muted right">{{ ngettext("%(num)s mise à jour", "%(num)s mises à jour", inv.flatpak) }}</td>{% if can('fleet.block') %}<td></td>{% endif %}</tr>
@@ -231,6 +236,7 @@
       {% else %}
       <div class="empty">{{ _('Aucune mise à jour du système en attente.') if dev.last_scan else _('Inventaire en cours.') }}</div>
       {% endif %}
+      {% if windows and inv.software_note %}<p class="hint update-select-hint">{{ _("Logiciels hors catalogue : %(note)s", note=inv.software_note) }}</p>{% endif %}
       {% if sel %}</form>{% endif %}
 
       {% if windows and can('windows.view') %}
@@ -722,7 +728,7 @@
 </dialog>
 {% endif %}
 {% if active and can('fleet.reboot') and not android %}{{ schedule_dialog('plan-reboot', _('Planifier un redémarrage'), 'reboot', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), intro=_('Redémarrage de %(name)s : il a lieu une minute après la remise de la commande au poste ; un message prévient la personne connectée.', name=devname)) }}{% endif %}
-{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels du catalogue déjà installés.', name=devname)) }}{% endif %}
+{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).', name=devname)) }}{% endif %}
 {% if can('fleet.rename') %}
 <dialog id="rename" class="app-dialog">
   <div class="dlg-h">
