@@ -271,6 +271,17 @@ class TestState(WazuhTest):
             self.assertIn(label, html)
         self.assertIn("Mettre à jour", html)                             # bouton du poste en retard
 
+    def test_the_page_renders_with_an_installed_agent(self):
+        """Régression (2.186.0) : la ligne d'un agent installé affiche un menu d'actions (kebab) qui utilise la macro
+        ui_icon ; wazuh.html doit l'importer, sinon la page plante (500) dès qu'un poste a l'agent."""
+        self.configure()
+        self.machine(state=CONNECTED)                                    # version 4.14.9 = version réglée : à jour (pas « Mettre à jour »)
+        r = self.admin.c.get("/fleet/wazuh")
+        self.assertEqual(r.status_code, 200)
+        html = r.get_data(as_text=True)
+        self.assertIn("Réappliquer", html)                               # item du menu kebab : rendu seulement si ui_icon est résolu
+        self.assertIn("Retirer l'agent Wazuh", html)
+
     def test_only_computers_are_listed(self):
         self.machine(family="android", hostname="tel-wazuh", ip="192.168.43.130")
         self.machine(family="rhel", hostname="srv-rocky", ip="192.168.43.131")

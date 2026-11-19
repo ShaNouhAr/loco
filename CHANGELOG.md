@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.186.1 — 2026-11-19
+
+- **Correctif : page Wazuh.** La page *Wazuh* ne s'affichait plus (erreur interne) dès qu'un poste avait l'agent Wazuh installé. C'est corrigé.
+
 ## 2.186.0 — 2026-11-19
 
 - **Analyse de l'espace disque (type TreeSize), à la demande.** Dans l'onglet *Fichiers* d'un poste, un bouton *Espace disque* bascule la vue pour montrer, dans le dossier affiché, chaque élément avec sa **taille réelle (contenu compris)** et une barre proportionnelle, du plus gros au plus petit. On clique un dossier pour descendre dedans, exactement comme pour naviguer. (Postes Windows et Linux, une fois l'agent à jour.)

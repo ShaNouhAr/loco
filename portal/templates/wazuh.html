@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}Wazuh · {{ host }}{% endblock %}
 {% from "_macros.html" import cmd %}
+{% from "_nav_icons.html" import ui_icon %}
 {% block content %}
 {% include '_fleet_nav.html' %}
 {% set manage = can('wazuh.manage') %}
