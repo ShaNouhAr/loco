@@ -67,11 +67,69 @@ HACS_COLLECT = (
     "{id:.entity_id, name:(.attributes.friendly_name // .entity_id), outdated:(.state==\"on\"), "
     "version:.attributes.installed_version, latest:.attributes.latest_version}]}}'; echo"
 )
-# Installation d'une mise à jour HACS : le service update.install du cœur, appelé par l'API du Superviseur ({slug} = l'entité,
-# validée par HACS_ENTITY_RE dans command()). Le jeton passe par l'entrée de curl.
-HACS_INSTALL = ('printf "Authorization: Bearer %s\\n" "$SUPERVISOR_TOKEN" | '
-                'curl -fsS -H @- -H "Content-Type: application/json" '
-                '-d \'{{"entity_id":"{slug}"}}\' http://supervisor/core/api/services/update/install')
+# Depuis Home Assistant 2026.11, HACS est devenu le « Marketplace » intégré : il BLOQUE install/update tant qu'un
+# avertissement n'a pas été accepté, et cette acceptation est enregistrée PAR UTILISATEUR. loco appelle le cœur avec le
+# jeton du Superviseur, qui est un utilisateur à part (une acceptation faite dans le navigateur ne vaut donc pas pour lui) :
+# il doit accepter pour lui-même. La seule voie est la commande WebSocket « marketplace/warning/accept » (pas de service
+# REST). C'est persistant et idempotent ; on le fait au mieux (si python3 est là) juste avant chaque installation HACS, via
+# un petit client WebSocket en python pur (l'addon SSH n'a ni websocat ni la bibliothèque websockets). Le jeton vient de
+# l'environnement (PRELUDE), jamais d'un argument. Sans python3, l'installation échouera avec le message clair de HA.
+MARKETPLACE_ACCEPT = r'''command -v python3 >/dev/null 2>&1 && python3 - <<'LOCO_WS' 2>/dev/null || true
+import os, socket, base64, struct, json
+tok = os.environ.get("SUPERVISOR_TOKEN", "")
+if not tok:
+    raise SystemExit
+s = socket.create_connection(("supervisor", 80), timeout=20)
+key = base64.b64encode(os.urandom(16)).decode()
+s.sendall(("GET /core/websocket HTTP/1.1\r\nHost: supervisor\r\nUpgrade: websocket\r\n"
+           "Connection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n" % key).encode())
+head = b""
+while b"\r\n\r\n" not in head:
+    part = s.recv(4096)
+    if not part:
+        raise SystemExit
+    head += part
+buf = bytearray(head.split(b"\r\n\r\n", 1)[1])
+def read(n):
+    while len(buf) < n:
+        part = s.recv(4096)
+        if not part:
+            raise SystemExit
+        buf.extend(part)
+    out = bytes(buf[:n]); del buf[:n]; return out
+def recv():
+    _, b1 = read(2); n = b1 & 0x7f
+    if n == 126: n = struct.unpack(">H", read(2))[0]
+    elif n == 127: n = struct.unpack(">Q", read(8))[0]
+    data = read(n) if n else b""
+    return json.loads(data) if data else {}
+def send(obj):
+    data = json.dumps(obj).encode(); n = len(data); mask = os.urandom(4)
+    frame = bytearray([0x81])
+    if n < 126: frame.append(0x80 | n)
+    elif n < 65536: frame += bytes([0x80 | 126]) + struct.pack(">H", n)
+    else: frame += bytes([0x80 | 127]) + struct.pack(">Q", n)
+    frame += mask
+    s.sendall(bytes(frame) + bytes(c ^ mask[i % 4] for i, c in enumerate(data)))
+while True:
+    msg = recv(); kind = msg.get("type")
+    if kind == "auth_required": send({"type": "auth", "access_token": tok})
+    elif kind == "auth_ok": send({"id": 1, "type": "marketplace/warning/accept"}); break
+    elif kind == "auth_invalid": raise SystemExit
+while True:
+    msg = recv()
+    if msg.get("id") == 1 and msg.get("type") == "result": break
+LOCO_WS
+'''
+# Installation d'une mise à jour HACS : le service update.install du cœur, par l'API du Superviseur (__SLUG__ = l'entité,
+# validée par HACS_ENTITY_RE dans command()). Le jeton passe par l'entrée de curl. On relève le code HTTP et, en cas
+# d'échec, on renvoie le corps de la réponse de HA (message lisible) plutôt qu'un « erreur 500 » opaque.
+HACS_INSTALL = (
+    'C=$(printf "Authorization: Bearer %s\\n" "$SUPERVISOR_TOKEN" | '
+    'curl -sS -o /tmp/loco-hacs-$$.json -w "%{http_code}" -H @- -H "Content-Type: application/json" '
+    '-d \'{"entity_id":"__SLUG__"}\' http://supervisor/core/api/services/update/install); '
+    'B=$(cat /tmp/loco-hacs-$$.json 2>/dev/null); rm -f /tmp/loco-hacs-$$.json; '
+    '[ "$C" = 200 ] || { echo "$B" >&2; exit 1; }')
 STALE = 120                     # relevé plus ancien : refait en arrière-plan tant que la page est affichée
 OVERVIEW_STALE = 1800           # … et tant que la vue d'ensemble l'est, bien moins souvent
 QUICK, LONG = 40, 3600          # secondes : un relevé ; une mise à jour ou une sauvegarde
@@ -458,8 +516,12 @@ def command(job):
     slug = job["target"].partition(":")[2]
     if job["action"] == "update-addon" and not SLUG_RE.match(slug):
         raise LinkError(_("Module inconnu."))
-    if job["action"] == "update-hacs" and not HACS_ENTITY_RE.match(slug):
-        raise LinkError(_("Dépôt HACS inconnu."))
+    if job["action"] == "update-hacs":
+        if not HACS_ENTITY_RE.match(slug):
+            raise LinkError(_("Dépôt HACS inconnu."))
+        # On accepte d'abord l'avertissement du Marketplace (voir MARKETPLACE_ACCEPT), puis on installe. Pas de .format
+        # ici : la commande embarque un script python aux accolades littérales ; l'entité est validée, on la pose telle quelle.
+        return MARKETPLACE_ACCEPT + HACS_INSTALL.replace("__SLUG__", slug)
     return ACTIONS[job["action"]][1].format(backup=backup, slug=slug, name=name)
 
 
@@ -663,7 +725,7 @@ def fleet_rows():
         out.append({"id": row["id"], "name": row["name"],
                     "address": row["host"] + ("" if row["port"] == 22 else ":%d" % row["port"]),
                     "hostname": (info.get("hostname") if info else "") or "",
-                    "updates": len(info["updates"]) if info else 0,
+                    "updates": len(info["updates"]) if info else 0, "busy": bool(running),
                     "online": bool(info) and not row["error"], "color": color, "label": label})
     return out
 
@@ -894,6 +956,18 @@ def homeassistant_update():
     flash(_("Mise à jour lancée.") if count == 1 else _("%(n)s mises à jour lancées, l'une après l'autre.", n=count) if count
           else _("Cette mise à jour est déjà en cours."), "ok" if count else "error")
     return back("homeassistant")
+
+
+@app.route("/homeassistant/<int:host_id>/fleet-update", methods=["POST"])
+@login_required
+def homeassistant_fleet_update(host_id):
+    """Bouton « Mettre à jour » de la ligne Home Assistant dans Mon parc : lance les mises à jour disponibles de l'instance,
+    puis revient sur Mon parc (à la différence de la fenêtre commune de la page Home Assistant)."""
+    _host(host_id)                       # 404 si l'instance n'existe pas ; le droit est vérifié par la carte des endpoints
+    count = update_host(host_id)
+    flash(_("Mise à jour lancée.") if count == 1 else _("%(n)s mises à jour lancées, l'une après l'autre.", n=count) if count
+          else _("Aucune mise à jour à lancer : actualisez l'état de Home Assistant."), "ok" if count else "error")
+    return back("fleet")
 
 
 @app.route("/homeassistant/<int:host_id>/backup", methods=["POST"])

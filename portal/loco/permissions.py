@@ -202,7 +202,7 @@ ENDPOINTS = {
     "wazuh_install": "wazuh.install", "wazuh_remove": "wazuh.install", "wazuh_access": "wazuh.manage",
     "wazuh_access_confirm": "wazuh.manage", "wazuh_access_test": "wazuh.manage", "wazuh_access_delete": "wazuh.manage",
     "homeassistant": "homeassistant.view", "homeassistant_host": "homeassistant.view", "homeassistant_refresh": "homeassistant.view", "homeassistant_log": "homeassistant.view",
-    "homeassistant_update": "homeassistant.update", "homeassistant_backup": "homeassistant.backup",
+    "homeassistant_update": "homeassistant.update", "homeassistant_fleet_update": "homeassistant.update", "homeassistant_backup": "homeassistant.backup",
     "homeassistant_restart": "homeassistant.restart", "homeassistant_shell": "homeassistant.shell",
     "homeassistant_link": "homeassistant.manage", "homeassistant_confirm": "homeassistant.manage",
     "homeassistant_hostkey": "homeassistant.manage", "homeassistant_delete": "homeassistant.manage",

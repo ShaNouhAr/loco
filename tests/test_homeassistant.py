@@ -428,11 +428,13 @@ class TestHacs(HomeAssistantTest):
         self.assertIn(("hacs:update.hacs_mushroom_update", "5.2.3", "5.3.0"), updates)
         self.assertNotIn("hacs:update.hacs_card_mod_update", [u["target"] for u in info["updates"]])   # à jour : rien
 
-    def test_an_update_installs_through_the_core_service_and_an_unknown_one_is_refused(self):
+    def test_an_update_accepts_the_marketplace_warning_then_installs_and_refuses_an_unknown_one(self):
         cmd = homeassistant.command({"action": "update-hacs", "target": "hacs:update.hacs_mushroom_update", "backup": 0})
+        self.assertIn("marketplace/warning/accept", cmd)           # HA 2026.11 bloque sans l'acceptation (par utilisateur)
         self.assertIn('"entity_id":"update.hacs_mushroom_update"', cmd)
         self.assertIn("core/api/services/update/install", cmd)
         self.assertIn("$SUPERVISOR_TOKEN", cmd)                    # le jeton vient de l'environnement, jamais en argument
+        self.assertNotIn("__SLUG__", cmd)                          # l'entité a bien remplacé le gabarit
         for bad in ("hacs:update.Mushroom", "hacs:rm -rf /", "hacs:sensor.x", "hacs:"):
             with self.assertRaises(homeassistant.LinkError):
                 homeassistant.command({"action": "update-hacs", "target": bad, "backup": 0})
@@ -452,10 +454,14 @@ class TestHacs(HomeAssistantTest):
         one = homeassistant._update_items(info, "hacs:update.hacs_mushroom_update")
         self.assertEqual([(a, t) for a, t, _l in one], [("update-hacs", "hacs:update.hacs_mushroom_update")])
 
-    def test_the_hacs_probe_and_install_are_valid_shell_and_part_of_the_reading(self):
+    def test_the_hacs_probe_and_install_are_valid_shell_and_the_embedded_client_is_valid_python(self):
         self.assertEqual(subprocess.run(["sh", "-n", "-c", homeassistant.HACS_COLLECT]).returncode, 0)
-        install = homeassistant.HACS_INSTALL.format(slug="update.hacs_mushroom_update", backup="", name="'loco'")
-        self.assertEqual(subprocess.run(["sh", "-n", "-c", install]).returncode, 0)
+        # La commande complète d'une mise à jour HACS (acceptation WebSocket embarquée + installation) est du shell valide.
+        cmd = homeassistant.command({"action": "update-hacs", "target": "hacs:update.mushroom_update", "backup": 0})
+        self.assertEqual(subprocess.run(["sh", "-n", "-c", cmd]).returncode, 0)
+        # Le petit client WebSocket en python pur (entre les marqueurs du heredoc) compile sans erreur.
+        body = homeassistant.MARKETPLACE_ACCEPT.split("<<'LOCO_WS'", 1)[1].split("\n", 1)[1].split("\nLOCO_WS", 1)[0]
+        compile(body, "<marketplace-accept>", "exec")
         self.assertIn("HACS_COLLECT", homeassistant._collect.__code__.co_names)   # ajouté au script de relevé
 
     def test_the_page_lists_the_repositories_and_offers_the_update(self):
@@ -509,6 +515,19 @@ class TestFleetSelection(HomeAssistantTest):
                             content_type="multipart/form-data")
         self.assertEqual(got.get_json().get("count"), 0)             # peut voir, pas gérer : rien n'est lancé
         self.idle()
+
+    def test_a_row_offers_a_direct_update_button(self):
+        row = self.link()                                             # instance avec des mises à jour disponibles
+        parc = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("/homeassistant/%d/fleet-update" % row["id"], parc)   # bouton « Mettre à jour » sur la ligne HA
+        self.assertEqual(self.post("/homeassistant/%d/fleet-update" % row["id"]).status_code, 302)   # revient sur Mon parc
+        self.idle()
+        self.assertTrue(any(j["action"].startswith("update-") for j in self.jobs()))   # ses mises à jour sont lancées
+        # sans le droit de mettre à jour : pas de bouton, et la route refuse
+        viewer = self.member("ro", ["homeassistant.view", "fleet.view"])
+        self.assertNotIn("/homeassistant/%d/fleet-update" % row["id"], viewer.c.get("/fleet").get_data(as_text=True))
+        refused = viewer.c.post("/homeassistant/%d/fleet-update" % row["id"], data={"csrf": viewer.token("/fleet")})
+        self.assertEqual(refused.status_code, 403)
 
 
 class TestJobs(HomeAssistantTest):

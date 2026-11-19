@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.185.0 — 2026-11-19
+
+- **Mises à jour HACS : fonctionnent de nouveau avec Home Assistant 2026.11.** Depuis la version 2026.11, Home Assistant a remplacé HACS par un *Marketplace* intégré qui bloque les mises à jour tant qu'un avertissement n'a pas été accepté — une acceptation enregistrée séparément pour chaque utilisateur. Comme loco agit avec son propre accès, ses mises à jour échouaient (« erreur 500 »). loco accepte désormais cet avertissement pour lui-même avant d'installer, et la mise à jour aboutit. En cas d'autre souci, le message exact de Home Assistant est maintenant affiché à la place d'un « erreur 500 » opaque.
+- **Bouton « Mettre à jour » sur la ligne Home Assistant de Mon parc.** Quand une instance Home Assistant a des mises à jour disponibles, un bouton *Mettre à jour* apparaît directement sur sa ligne dans *Mon parc*, comme pour les autres postes.
+
 ## 2.184.0 — 2026-11-19
 
 - **Mises à jour HACS (Home Assistant Community Store).** Sur la page d'une instance Home Assistant, loco liste maintenant les dépôts HACS installés (cartes, intégrations et thèmes de la communauté), signale ceux pour lesquels une mise à jour est disponible, et permet de les mettre à jour — individuellement, depuis la sélection de *Mon parc*, ou avec *Tout mettre à jour* — au même endroit que le cœur et les modules complémentaires.
