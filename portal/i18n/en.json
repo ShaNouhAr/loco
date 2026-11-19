@@ -5097,5 +5097,10 @@
  "Dépôt": "Repository",
  "dépôts de la communauté": "community repositories",
  "Dépôt HACS inconnu.": "Unknown HACS repository.",
- "Mise à jour d'un dépôt HACS": "HACS repository update"
+ "Mise à jour d'un dépôt HACS": "HACS repository update",
+ "Espace disque : voir ce qui occupe le plus": "Disk space: see what takes the most",
+ "Analyse de l’espace disque…": "Analysing disk space…",
+ "Revenir aux fichiers": "Back to files",
+ "%(total)s au total%(partial)s": "%(total)s total%(partial)s",
+ " · relevé partiel (trop volumineux)": " · partial scan (too large)"
 }

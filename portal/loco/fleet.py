@@ -2303,6 +2303,7 @@ def fleet_device(dev_id):
                            consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
+                           disk_usage=version_key(dev["agent_version"]) >= (2, 186) and dev["os_family"] in ("windows", "linux"),
                            action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,
                            wazuh=_wazuh_panel(dev),
                            net_policy=net_policy_text(dev),

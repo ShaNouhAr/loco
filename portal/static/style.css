@@ -1763,6 +1763,7 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .when { display: inline-flex; align-items: center; gap: 8px; }
 .when .ui-icon { color: var(--text-3); }
 .empty-rich { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; }
+.empty-rich::before { content: none; }    /* variant avec sa propre icône : pas aussi l'icône générique de .empty */
 .empty-rich .ui-icon { width: 28px; height: 28px; color: var(--text-3); }
 .empty-rich strong { color: var(--text); font-size: 15px; }
 .empty-rich span { max-width: 520px; }
@@ -1871,8 +1872,16 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 button.files-name { cursor: pointer; }
 button.files-name:hover span { text-decoration: underline; text-underline-offset: 3px; }
 button.files-name:hover svg { color: var(--accent); }
-.files-menu > summary.btn::after { content: none; }
-.files-menu > summary.btn.icon { color: var(--text-3); }
+/* Bouton « plus d'actions » (points verticaux) d'une ligne : discret, rond, halo au survol/ouverture. */
+.kebab { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 999px; color: var(--text-3); cursor: pointer; transition: background .12s, color .12s; }
+.kebab svg { width: 18px; height: 18px; display: block; }
+.kebab:hover, .kebab:focus-visible, details.menu[open] > .kebab { background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--text); outline: none; }
+/* Vue « espace disque » (type TreeSize) : barre proportionnelle, du plus gros au plus petit. */
+.files-usage-colbar { width: 46%; }
+.files-table.usage td.files-usage-bar { padding-right: 18px; }
+.files-usage-bar .meter { margin: 0; height: 8px; background: var(--bg-3); }
+.files-usage-bar .meter > i { background: var(--accent); transition: width .3s ease-out; }
+.files-table.usage td:last-child { width: 1%; white-space: nowrap; }
 .files-drop { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 10px; background: color-mix(in srgb, var(--bg) 80%, transparent); border-radius: var(--r); z-index: 5; pointer-events: none; }
 .files-pane.dropping .files-drop { display: flex; }
 .files-drop-in { padding: 24px 32px; border: 1.5px dashed var(--accent); border-radius: var(--r); color: var(--text); font-weight: 500; background: var(--bg); }

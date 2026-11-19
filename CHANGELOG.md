@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.186.0 — 2026-11-19
+
+- **Analyse de l'espace disque (type TreeSize), à la demande.** Dans l'onglet *Fichiers* d'un poste, un bouton *Espace disque* bascule la vue pour montrer, dans le dossier affiché, chaque élément avec sa **taille réelle (contenu compris)** et une barre proportionnelle, du plus gros au plus petit. On clique un dossier pour descendre dedans, exactement comme pour naviguer. (Postes Windows et Linux, une fois l'agent à jour.)
+- **Menus d'actions plus nets.** Le bouton « trois points » des fichiers devient un petit menu discret et rond ; sur la page *Wazuh*, les actions *Réappliquer* et *Retirer* d'un poste sont désormais rangées dans ce même menu plutôt qu'affichées en liens collés.
+- **Finitions.** L'écran « Aucune planification » n'affiche plus qu'une seule icône.
+
 ## 2.185.0 — 2026-11-19
 
 - **Mises à jour HACS : fonctionnent de nouveau avec Home Assistant 2026.11.** Depuis la version 2026.11, Home Assistant a remplacé HACS par un *Marketplace* intégré qui bloque les mises à jour tant qu'un avertissement n'a pas été accepté — une acceptation enregistrée séparément pour chaque utilisateur. Comme loco agit avec son propre accès, ses mises à jour échouaient (« erreur 500 »). loco accepte désormais cet avertissement pour lui-même avant d'installer, et la mise à jour aboutit. En cas d'autre souci, le message exact de Home Assistant est maintenant affiché à la place d'un « erreur 500 » opaque.

@@ -74,6 +74,7 @@ namespace Loco
             {
                 case "hello": return Hello(reply);
                 case "list": return List(Str(h, "path"), reply);
+                case "usage": return Usage(Str(h, "path"), reply);
                 case "stat": return Stat(Str(h, "path"), reply);
                 case "mkdir": Directory.CreateDirectory(Str(h, "path")); return Empty;
                 case "rename": return Rename(Str(h, "path"), Str(h, "name"), reply);
@@ -143,6 +144,67 @@ namespace Loco
             {
                 return new Dictionary<string, object> { { "name", name }, { "type", "other" }, { "size", 0 }, { "mtime", 0 }, { "mode", 0 }, { "link", false } };
             }
+        }
+
+        // Espace disque : taille RÉCURSIVE de chaque élément du dossier, du plus gros au plus petit. Lecture seule, bornée
+        // dans le temps (un arbre énorme rend « partiel »). Les liens/jonctions ne sont pas suivis (pas de double comptage).
+        byte[] Usage(string path, Dictionary<string, object> reply)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(25);
+            var entries = new List<object>();
+            long total = 0; bool partial = false; int count = 0;
+            foreach (var full in Directory.EnumerateFileSystemEntries(path))
+            {
+                if (count++ >= 5000) { partial = true; break; }
+                string kind = "other"; long size = 0;
+                try
+                {
+                    var attr = File.GetAttributes(full);
+                    bool link = (attr & FileAttributes.ReparsePoint) != 0;
+                    if ((attr & FileAttributes.Directory) != 0)
+                    {
+                        kind = "dir";
+                        if (!link) { bool part; size = TreeSize(full, deadline, out part); partial = partial || part; }
+                    }
+                    else { kind = "file"; if (!link) size = new FileInfo(full).Length; }
+                }
+                catch (Exception) { kind = "other"; size = 0; }
+                total += size;
+                entries.Add(new Dictionary<string, object> { { "name", Path.GetFileName(full) }, { "type", kind }, { "size", size } });
+            }
+            entries.Sort((a, b) => ((long)((Dictionary<string, object>)b)["size"]).CompareTo((long)((Dictionary<string, object>)a)["size"]));
+            var parent = Directory.GetParent(path.TrimEnd('\\', '/'));
+            reply["path"] = path; reply["parent"] = parent == null ? null : parent.FullName;
+            reply["total"] = total; reply["entries"] = entries; reply["partial"] = partial;
+            return Empty;
+        }
+
+        static long TreeSize(string root, DateTime deadline, out bool partial)
+        {
+            partial = false;
+            long total = 0;
+            var stack = new Stack<string>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                if (DateTime.UtcNow > deadline) { partial = true; break; }
+                try
+                {
+                    foreach (var full in Directory.EnumerateFileSystemEntries(stack.Pop()))
+                    {
+                        try
+                        {
+                            var attr = File.GetAttributes(full);
+                            if ((attr & FileAttributes.ReparsePoint) != 0) continue;   // ne pas suivre liens et jonctions
+                            if ((attr & FileAttributes.Directory) != 0) stack.Push(full);
+                            else total += new FileInfo(full).Length;
+                        }
+                        catch (Exception) { }
+                    }
+                }
+                catch (Exception) { }
+            }
+            return total;
         }
 
         byte[] Stat(string path, Dictionary<string, object> reply)

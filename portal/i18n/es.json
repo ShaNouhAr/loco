@@ -5097,5 +5097,10 @@
  "Dépôt": "Repositorio",
  "dépôts de la communauté": "repositorios de la comunidad",
  "Dépôt HACS inconnu.": "Repositorio HACS desconocido.",
- "Mise à jour d'un dépôt HACS": "Actualización de un repositorio HACS"
+ "Mise à jour d'un dépôt HACS": "Actualización de un repositorio HACS",
+ "Espace disque : voir ce qui occupe le plus": "Espacio en disco: ver qué ocupa más",
+ "Analyse de l’espace disque…": "Analizando el espacio en disco…",
+ "Revenir aux fichiers": "Volver a los archivos",
+ "%(total)s au total%(partial)s": "%(total)s en total%(partial)s",
+ " · relevé partiel (trop volumineux)": " · análisis parcial (demasiado grande)"
 }

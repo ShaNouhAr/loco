@@ -139,12 +139,16 @@ const truncEl = root.querySelector('.files-truncated');
 const transfersEl = root.querySelector('.files-transfers');
 const pasteBtn = root.querySelector('[data-files="paste"]');
 const hiddenToggle = root.querySelector('[data-files="hidden"]');
+const usageToggle = root.querySelector('[data-files="usage"]');
 const fileInput = root.querySelector('input[type="file"]');
 const editor = root.querySelector('.files-editor');
 const editorArea = editor.querySelector('textarea');
 const editorPath = editor.querySelector('.files-editor-path');
 const editorNote = editor.querySelector('.files-editor-note');
-let info = null, current = null, showHidden = false, clip = null, listing = [];
+const filesTable = root.querySelector('.files-table');
+const theadRow = filesTable.querySelector('thead tr');
+const theadNormal = theadRow.innerHTML;
+let info = null, current = null, showHidden = false, clip = null, listing = [], usageMode = false;
 
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function setStatus(text, kind) { statusEl.textContent = text || ''; statusEl.dataset.kind = kind || ''; }
@@ -213,7 +217,7 @@ function renderList(entries, truncated) {
     // Droits Unix : sans objet sous Windows et sur le stockage partagé d'Android.
     const chmod = root.dataset.chmod ? root.dataset.chmod === '1' : Number(root.dataset.windows) !== 1;
     const menu =
-      '<details class="menu files-menu"><summary class="btn icon sm" aria-label="' + esc(tr('Actions')) + '"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></summary>' +
+      '<details class="menu files-menu row-menu"><summary class="kebab" aria-label="' + esc(tr('Actions')) + '" title="' + esc(tr('Actions')) + '"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></summary>' +
       '<div class="menu-list" role="menu">' +
       (type === 'file' ? '<button type="button" class="menu-item" data-act="download">' + esc(tr('Télécharger')) + '</button>' : '') +
       (canEdit ? '<button type="button" class="menu-item" data-act="edit">' + esc(tr('Modifier le texte')) + '</button>' : '') +
@@ -233,16 +237,51 @@ function renderList(entries, truncated) {
 }
 
 async function navigate(path) {
-  setStatus(tr('Chargement…'));
+  setStatus(usageMode ? tr('Analyse de l’espace disque…') : tr('Chargement…'));
   try {
-    const { header } = await request('list', { path });
+    const { header } = await request(usageMode ? 'usage' : 'list', { path });
     current = header.path;
     renderCrumbs(header.path, header.parent);
-    renderList(header.entries, header.truncated);
-    setStatus('');
+    if (usageMode) renderUsage(header); else renderList(header.entries, header.truncated);
+    setStatus(usageMode && header.total != null
+      ? tr('%(total)s au total%(partial)s', { total: human(header.total), partial: header.partial ? tr(' · relevé partiel (trop volumineux)') : '' })
+      : '');
   } catch (e) { setStatus(e.message, 'err'); }
 }
 function refresh() { if (current) navigate(current); }
+
+// Espace disque (type TreeSize) : taille récursive de chaque élément, du plus gros au plus petit, avec une barre.
+function renderUsage(header) {
+  listing = header.entries;
+  const top = header.entries.reduce((m, e) => Math.max(m, e.size), 0) || 1;
+  emptyEl.classList.toggle('hidden', header.entries.length > 0);
+  emptyEl.textContent = tr('Dossier vide.');
+  truncEl.classList.add('hidden');
+  tbody.innerHTML = header.entries.map(e => {
+    const type = ['dir', 'file', 'other'].includes(e.type) ? e.type : 'other';
+    const pct = Math.round(100 * e.size / top);
+    const name = type === 'dir'
+      ? '<button type="button" class="files-name link" data-open-dir>' + icon('dir', false) + '<span>' + esc(e.name) + '</span></button>'
+      : '<span class="files-name">' + icon(type, false) + '<span>' + esc(e.name) + '</span></span>';
+    return '<tr data-name="' + esc(e.name) + '" data-type="' + type + '">' +
+      '<td>' + name + '</td>' +
+      '<td class="files-usage-bar"><div class="meter"><i style="width:' + pct + '%"></i></div></td>' +
+      '<td class="num mono">' + human(e.size) + '</td></tr>';
+  }).join('');
+}
+
+function toggleUsage() {
+  usageMode = !usageMode;
+  const label = usageMode ? tr('Revenir aux fichiers') : tr('Espace disque : voir ce qui occupe le plus');
+  usageToggle.setAttribute('aria-pressed', String(usageMode));
+  usageToggle.title = label; usageToggle.setAttribute('aria-label', label);
+  filesTable.classList.toggle('usage', usageMode);
+  hiddenToggle.disabled = usageMode;           // le filtre des fichiers cachés n'a pas de sens dans cette vue
+  theadRow.innerHTML = usageMode
+    ? '<th>' + esc(tr('Nom')) + '</th><th class="files-usage-colbar" aria-hidden="true"></th><th class="num">' + esc(tr('Taille')) + '</th>'
+    : theadNormal;
+  if (current) navigate(current);
+}
 
 // ---------------------------------------------------------------- transferts (barre de progression par fichier)
 function transfer(label) {
@@ -394,6 +433,7 @@ root.addEventListener('click', async e => {
     else if (act === 'up') { if (!nav.disabled) navigateUp(); }
     else if (act === 'mkdir') makeDir();
     else if (act === 'paste') doPaste();
+    else if (act === 'usage') toggleUsage();
     return;
   }
   const dir = e.target.closest('[data-open-dir]');

@@ -5137,6 +5137,7 @@ FILE_HEADER_MAX = 64 * 1024
 FILE_DATA_MAX = 1024 * 1024
 FILE_CHUNK = 256 * 1024
 FILE_LIST_MAX = 5000
+USAGE_BUDGET = 25               # secondes : temps max d'un relevé d'espace disque (un très gros arbre rend un résultat partiel)
 
 
 def _readn(fd, n):
@@ -5236,6 +5237,56 @@ class FileSession:
         if reply["exists"]:
             reply.update(self._entry(os.path.basename(path), path))
         return reply, b""
+
+    def op_usage(self, h, data):
+        """Espace disque : taille RÉCURSIVE de chaque élément du dossier, du plus gros au plus petit. Lecture seule,
+        bornée dans le temps (un arbre énorme rend « partiel »). Les liens ne sont pas suivis (pas de double comptage)."""
+        path = os.path.abspath(h["path"])
+        deadline = time.monotonic() + USAGE_BUDGET
+        try:
+            with os.scandir(path) as it:
+                kids = list(it)
+        except OSError as e:
+            raise ValueError(str(e))
+        entries, total, partial = [], 0, len(kids) > FILE_LIST_MAX
+        for child in kids[:FILE_LIST_MAX]:
+            try:
+                if child.is_symlink():
+                    kind, size = ("dir" if child.is_dir() else "file"), 0
+                elif child.is_dir(follow_symlinks=False):
+                    size, part = self._tree_size(child.path, deadline)
+                    kind, partial = "dir", partial or part
+                else:
+                    kind, size = "file", child.stat(follow_symlinks=False).st_size
+            except OSError:
+                kind, size = "other", 0
+            total += size
+            entries.append({"name": child.name, "type": kind, "size": size})
+        entries.sort(key=lambda c: c["size"], reverse=True)
+        return {"path": path, "parent": None if path == "/" else os.path.dirname(path),
+                "total": total, "entries": entries, "partial": partial}, b""
+
+    def _tree_size(self, root, deadline):
+        """Somme des tailles de fichiers sous « root » (octets), arrêtée au budget ; renvoie (taille, partiel)."""
+        total, stack = 0, [root]
+        while stack:
+            if time.monotonic() > deadline:
+                return total, True
+            try:
+                with os.scandir(stack.pop()) as it:
+                    for e in it:
+                        try:
+                            if e.is_symlink():
+                                continue
+                            if e.is_dir(follow_symlinks=False):
+                                stack.append(e.path)
+                            else:
+                                total += e.stat(follow_symlinks=False).st_size
+                        except OSError:
+                            pass
+            except OSError:
+                pass
+        return total, False
 
     # ------------------------------------------------------------------ modifications
     def op_mkdir(self, h, data):

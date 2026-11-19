@@ -145,14 +145,22 @@
             <td data-label="{{ _('Agent Wazuh') }}">{% if r.busy %}<span class="busy-note"><span class="spin"></span>{{ _("retrait demandé") if r.busy == 'remove' else _("installation demandée") }}</span>{% else %}<span class="st {{ w.level if w.level != 'off' }}">{{ w.label }}</span>{% endif %}{% if w.detail %}<span class="sub">{{ w.detail }}</span>{% endif %}</td>
             <td class="{{ 'hide-sm' if not w.version }}" data-label="{{ _('Version') }}"><span class="mono">{{ w.version or '—' }}</span></td>
             <td class="{{ 'hide-sm' if not (w.state and w.state.installed and w.state.id) }}" data-label="{{ _('Identité chez Wazuh') }}">{% if w.state and w.state.installed and w.state.id %}<span class="mono">{{ w.state.id }}</span> · {{ w.state.name }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            {% if install %}<td class="right nowrap card-action">
+            {% if install %}<td class="right nowrap card-action"><div class="row-acts">
               {% if not r.busy and ready and not w.server %}
               {% if not w.installed %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Installer") }}</button>
-              {% elif w.outdated %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Mettre à jour") }}</button>
-              {% else %}<button class="linkbtn" name="only" value="{{ r.d.id }}" title="{{ _('Réinstalle l\'agent avec les réglages actuels (manager, groupe, mot de passe)') }}">{{ _("Réappliquer") }}</button>{% endif %}
+              {% elif w.outdated %}<button class="btn sm" name="only" value="{{ r.d.id }}">{{ _("Mettre à jour") }}</button>{% endif %}
               {% endif %}
-              {% if not r.busy and w.installed %}<button class="linkbtn danger" name="only" value="{{ r.d.id }}" formaction="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=r.d.label or r.d.hostname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste, puis loco efface son entrée sur le manager.') if linked else _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">{{ _("Retirer") }}</button>{% endif %}
-            </td>{% endif %}
+              {# Actions secondaires d'un agent installé rangées dans un menu (réappliquer, retirer) plutôt qu'en liens nus. #}
+              {% if not r.busy and w.installed %}
+              <details class="menu row-menu">
+                <summary class="kebab" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></summary>
+                <div class="menu-list" role="menu">
+                  {% if ready and not w.server and not w.outdated %}<button class="menu-item" name="only" value="{{ r.d.id }}" title="{{ _('Réinstalle l\'agent avec les réglages actuels (manager, groupe, mot de passe)') }}">{{ ui_icon('refresh') }}<span>{{ _("Réappliquer") }}</span></button>{% endif %}
+                  <button class="menu-item danger" name="only" value="{{ r.d.id }}" formaction="{{ url_for('wazuh_remove') }}" data-confirm="{{ _('Retirer l\'agent Wazuh de %(name)s ?', name=r.d.label or r.d.hostname) }}" data-confirm-text="{{ _('Au prochain contact, l\'agent Wazuh est désinstallé du poste, puis loco efface son entrée sur le manager.') if linked else _('Au prochain contact, l\'agent Wazuh est désinstallé du poste. Son entrée reste sur le manager : retirez-la là-bas si le poste ne doit plus y figurer.') }}" data-confirm-ok="{{ _('Retirer') }}">{{ ui_icon('unplug') }}<span>{{ _("Retirer") }}</span></button>
+                </div>
+              </details>
+              {% endif %}
+            </div></td>{% endif %}
           </tr>
           {% endfor %}
         </tbody>
