@@ -1047,7 +1047,9 @@ def screen_frames(serial, bitrate=4000000):
 
 
 _KEYS = {"back": 4, "home": 3, "recents": 187, "power": 26, "wake": 224, "enter": 66, "del": 67,
-         "volup": 24, "voldown": 25}
+         "volup": 24, "voldown": 25,
+         # Pavé directionnel (télécommande) : indispensable sur Android TV / Google TV, qui se pilotent au D-pad.
+         "dpad_up": 19, "dpad_down": 20, "dpad_left": 21, "dpad_right": 22, "dpad_center": 23}
 
 # Appareils sous contrôle adb en ce moment (identifiant → dernier geste/flux) : l'agent l'apprend au check-in et
 # affiche « contrôle à distance en cours » sur l'appareil (garde-fou visible, l'écran étant piloté sans dialogue).

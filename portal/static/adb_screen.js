@@ -113,4 +113,15 @@
   function sendText() { if (text.value) { send({ action: "text", text: text.value }); text.value = ""; } }
   dlg.querySelector("[data-adb-screen-send]").addEventListener("click", sendText);
   text.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); sendText(); } });
+
+  // --- télécommande : flèches physiques = D-pad, Entrée = OK, Retour arrière = Retour (hors champ texte) ---------
+  // Indispensable pour Android TV / Google TV, qui se pilotent au pavé directionnel et non au toucher.
+  var DPAD = { ArrowUp: "dpad_up", ArrowDown: "dpad_down", ArrowLeft: "dpad_left", ArrowRight: "dpad_right", Enter: "dpad_center", Backspace: "back" };
+  document.addEventListener("keydown", function (e) {
+    if (!dlg.open || e.target === text || e.ctrlKey || e.metaKey || e.altKey) return;
+    var k = DPAD[e.key];
+    if (!k) return;
+    e.preventDefault();
+    send({ action: "key", key: k });
+  });
 })();

@@ -404,7 +404,7 @@
         <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer les paquets') }}" aria-label="{{ _('Filtrer les paquets') }}"></div></div>
       <div class="table-wrap">
         <table id="packages">
-          <thead><tr><th>{{ _("Paquet") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Architecture") }}</th><th class="num">{{ _("Taille") }}</th></tr></thead>
+          <thead><tr><th>{{ _("Paquet") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Architecture") }}</th><th class="num">{{ _("Taille") }}</th>{% if remove_pkg %}<th aria-label="{{ _('Actions') }}"></th>{% endif %}</tr></thead>
           <tbody>
           {% for p in soft.packages|sort(attribute='name') %}
             <tr{% if p.manual %} data-manual="1"{% endif %}{% if p.name in pkg_updates %} data-update="1"{% endif %}>
@@ -412,6 +412,10 @@
               <td class="mono muted">{{ p.version }}{% if p.name in pkg_updates %} <span class="tag">→ {{ pkg_updates[p.name] }}</span>{% endif %}</td>
               <td class="muted hide-sm">{{ p.arch }}</td>
               <td class="num muted">{{ p.size|human if p.size else '—' }}</td>
+              {% if remove_pkg %}<td class="right nowrap">{% if p.manual %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax data-confirm="{{ _('Désinstaller %(name)s ?', name=p.name) }}" data-confirm-text="{{ _('Le paquet (et ce qui en dépend) est retiré du poste à son prochain contact.') }}" data-confirm-ok="{{ _('Désinstaller') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove-package"><input type="hidden" name="package" value="{{ p.name }}"><input type="hidden" name="kind" value="pkg">
+                <button class="btn sm icon-only danger" title="{{ _('Désinstaller') }}" aria-label="{{ _('Désinstaller %(name)s', name=p.name) }}"><span class="spin"></span>{{ ui_icon('unplug') }}</button>
+              </form>{% endif %}</td>{% endif %}
             </tr>
           {% endfor %}
           </tbody>
@@ -426,10 +430,13 @@
       <div class="panel-h sub"><h2>{{ _("Applications Flatpak") }}</h2>
         <div class="aside"><input type="search" class="search-sm" placeholder="{{ _('Filtrer') }}" data-filter="#flatpaks tbody tr" aria-label="{{ _('Filtrer les applications Flatpak') }}"></div></div>
       <div class="table-wrap"><table id="flatpaks">
-        <thead><tr><th>{{ _("Application") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Origine") }}</th></tr></thead>
+        <thead><tr><th>{{ _("Application") }}</th><th>{{ _("Version") }}</th><th class="hide-sm">{{ _("Origine") }}</th>{% if remove_pkg %}<th aria-label="{{ _('Actions') }}"></th>{% endif %}</tr></thead>
         <tbody>
         {% for f in soft.flatpaks|sort(attribute='name') %}
-          <tr><td>{{ f.name or f.id }}<span class="sub mono">{{ f.id }}</span></td><td class="mono muted">{{ f.version }}{% if f.branch %} <span class="faint">({{ f.branch }})</span>{% endif %}</td><td class="muted hide-sm">{{ f.origin }}</td></tr>
+          <tr><td>{{ f.name or f.id }}<span class="sub mono">{{ f.id }}</span></td><td class="mono muted">{{ f.version }}{% if f.branch %} <span class="faint">({{ f.branch }})</span>{% endif %}</td><td class="muted hide-sm">{{ f.origin }}</td>{% if remove_pkg %}<td class="right nowrap"><form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax data-confirm="{{ _('Désinstaller %(name)s ?', name=f.name or f.id) }}" data-confirm-text="{{ _('L’application Flatpak est retirée du poste à son prochain contact.') }}" data-confirm-ok="{{ _('Désinstaller') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="remove-package"><input type="hidden" name="package" value="{{ f.id }}"><input type="hidden" name="kind" value="flatpak">
+            <button class="btn sm icon-only danger" title="{{ _('Désinstaller') }}" aria-label="{{ _('Désinstaller %(name)s', name=f.name or f.id) }}"><span class="spin"></span>{{ ui_icon('unplug') }}</button>
+          </form></td>{% endif %}</tr>
         {% endfor %}
         </tbody></table></div>
     </div>
@@ -728,6 +735,13 @@
       <button type="button" class="btn icon" data-key="home" aria-label="{{ _('Accueil') }}" title="{{ _('Accueil') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg></button>
       <button type="button" class="btn icon" data-key="recents" aria-label="{{ _('Applications récentes') }}" title="{{ _('Applications récentes') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
       <button type="button" class="btn icon" data-key="power" aria-label="{{ _('Marche / veille') }}" title="{{ _('Marche / veille') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0"/></svg></button>
+      <div class="adb-dpad" role="group" aria-label="{{ _('Pavé directionnel (télécommande)') }}" title="{{ _('Pavé directionnel : flèches du clavier et Entrée = OK') }}">
+        <button type="button" class="btn icon dpad-up" data-key="dpad_up" aria-label="{{ _('Haut') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button type="button" class="btn icon dpad-left" data-key="dpad_left" aria-label="{{ _('Gauche') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <button type="button" class="btn dpad-ok" data-key="dpad_center" aria-label="{{ _('OK (sélectionner)') }}">{{ _("OK") }}</button>
+        <button type="button" class="btn icon dpad-right" data-key="dpad_right" aria-label="{{ _('Droite') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        <button type="button" class="btn icon dpad-down" data-key="dpad_down" aria-label="{{ _('Bas') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      </div>
       <input type="text" class="adb-screen-text" data-adb-screen-text autocomplete="off" spellcheck="false" placeholder="{{ _('Taper du texte…') }}">
       <button type="button" class="btn" data-adb-screen-send>{{ _("Envoyer") }}</button>
     </div>

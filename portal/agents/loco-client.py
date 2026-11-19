@@ -1333,6 +1333,24 @@ def install_package(cmd):
     return code, "\n".join(logs)
 
 
+def remove_package(cmd):
+    """Désinstalle des paquets nommés : paquet système (apt/dnf selon la famille) ou application Flatpak (kind=flatpak).
+    apt/dnf retirent aussi ce qui dépend du paquet ; Flatpak enlève l'application. Opérations locales, sans réseau."""
+    names = [n for n in cmd.get("packages", []) if isinstance(n, str) and n]
+    if not names:
+        return 1, t("Aucun paquet indiqué.", "No package given.", "Ningún paquete indicado.")
+    if cmd.get("kind") == "flatpak":
+        if not shutil.which("flatpak"):
+            return 1, t("flatpak n'est pas installé.", "flatpak is not installed.", "flatpak no está instalado.")
+        return run(["flatpak", "uninstall", "-y", "--system", *names], timeout=600)
+    fam = family()
+    if fam == "debian":
+        return run(["apt-get", "-y", "-q", "-o", "DPkg::Lock::Timeout=300", "remove", *names], timeout=600)
+    if fam == "rhel":
+        return run(["dnf" if shutil.which("dnf") else "yum", "-y", "remove", *names], timeout=600)
+    return 1, t("gestionnaire de paquets non reconnu", "unrecognised package manager", "gestor de paquetes no reconocido")
+
+
 # --------------------------------------------------------------------------- nouvelle version majeure du système
 
 # Debian, Ubuntu et Fedora : l'inventaire signale la version majeure suivante dès qu'elle est publiée, et loco la pose
@@ -1343,7 +1361,7 @@ UPGRADE_DIR = "/var/lib/loco-client/os-upgrade"
 UPGRADE_JOB = os.path.join(UPGRADE_DIR, "job.json")
 UPGRADE_LOG = os.path.join(UPGRADE_DIR, "upgrade.log")
 UPGRADE_KINDS = ("debian", "ubuntu", "fedora")
-UPGRADE_EXCLUSIVE = ("scan", "update", "install-package", "wazuh", "reboot", "uninstall")   # refusées pendant une mise à niveau
+UPGRADE_EXCLUSIVE = ("scan", "update", "install-package", "remove-package", "wazuh", "reboot", "uninstall")   # refusées pendant une mise à niveau
 RELEASE_CHECK_HOURS = 24        # nouvelle version cherchée une fois par jour (résultat gardé entre deux inventaires)
 UPGRADE_REBOOT_WAIT = 3600      # redémarrage demandé en cours de mise à niveau : au-delà, elle est dite en échec
 DEBIAN_CODENAMES = {11: "bullseye", 12: "bookworm", 13: "trixie", 14: "forky", 15: "duke"}
@@ -2650,6 +2668,11 @@ def _run_commands(conf, answer, state):
                 return True
         elif action == "install-package":
             code, out = install_package(cmd)
+            inv = scan(state)
+            state["last_scan"] = time.time()
+            report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, inv)
+        elif action == "remove-package":
+            code, out = remove_package(cmd)
             inv = scan(state)
             state["last_scan"] = time.time()
             report(conf, cmd["id"], "success" if code == 0 else "failed", out, code, inv)

@@ -2647,8 +2647,14 @@ label.check.inline { display: inline-flex; align-items: center; gap: 6px; margin
 .adb-screen-wrap { position: relative; display: flex; justify-content: center; align-items: center; min-height: 200px; background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
 .adb-screen-wrap img, .adb-screen-wrap canvas { max-width: 100%; max-height: 62vh; display: block; touch-action: none; cursor: crosshair; background: #000; }
 .adb-screen-msg { position: absolute; color: var(--text-2); font-size: 13.5px; padding: 0 16px; text-align: center; }
-.adb-screen-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-.adb-screen-text { flex: 1 1 auto; min-width: 0; }
+.adb-screen-bar { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.adb-screen-text { flex: 1 1 160px; min-width: 0; }
+/* Pavé directionnel du contrôle d'écran adb (Android TV / Google TV surtout) : croix compacte ↑ / ← OK → / ↓. */
+.adb-dpad { flex: none; display: grid; grid-template-columns: repeat(3, auto); grid-template-areas: ". up ." "left ok right" ". down ."; gap: 3px; }
+.adb-dpad .btn { width: 32px; height: 28px; min-width: 32px; padding: 0; }
+.adb-dpad .btn svg { width: 16px; height: 16px; }
+.adb-dpad .dpad-up { grid-area: up; } .adb-dpad .dpad-left { grid-area: left; } .adb-dpad .dpad-ok { grid-area: ok; } .adb-dpad .dpad-right { grid-area: right; } .adb-dpad .dpad-down { grid-area: down; }
+.adb-dpad .dpad-ok { font-size: 11px; font-weight: 600; }
 
 /* Home Assistant (fonctionnalité facultative) : une instance par panneau — actions, tuiles, mises à jour, activité, journal. */
 .hass-actions { align-self: stretch; }

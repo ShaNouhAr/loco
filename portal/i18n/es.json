@@ -5102,5 +5102,18 @@
  "Analyse de l’espace disque…": "Analizando el espacio en disco…",
  "Revenir aux fichiers": "Volver a los archivos",
  "%(total)s au total%(partial)s": "%(total)s en total%(partial)s",
- " · relevé partiel (trop volumineux)": " · análisis parcial (demasiado grande)"
+ " · relevé partiel (trop volumineux)": " · análisis parcial (demasiado grande)",
+ "Pavé directionnel (télécommande)": "Cruceta (mando)",
+ "Pavé directionnel : flèches du clavier et Entrée = OK": "Cruceta: flechas del teclado y Entrar = OK",
+ "Haut": "Arriba",
+ "Bas": "Abajo",
+ "Gauche": "Izquierda",
+ "Droite": "Derecha",
+ "OK (sélectionner)": "OK (seleccionar)",
+ "Désinstaller": "Desinstalar",
+ "Désinstaller %(name)s ?": "¿Desinstalar %(name)s?",
+ "Désinstaller %(name)s": "Desinstalar %(name)s",
+ "Le paquet (et ce qui en dépend) est retiré du poste à son prochain contact.": "El paquete (y lo que dependa de él) se elimina del equipo en su próximo contacto.",
+ "L’application Flatpak est retirée du poste à son prochain contact.": "La aplicación Flatpak se elimina del equipo en su próximo contacto.",
+ "Désinstallation": "Desinstalación"
 }

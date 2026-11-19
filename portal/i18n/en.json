@@ -5102,5 +5102,18 @@
  "Analyse de l’espace disque…": "Analysing disk space…",
  "Revenir aux fichiers": "Back to files",
  "%(total)s au total%(partial)s": "%(total)s total%(partial)s",
- " · relevé partiel (trop volumineux)": " · partial scan (too large)"
+ " · relevé partiel (trop volumineux)": " · partial scan (too large)",
+ "Pavé directionnel (télécommande)": "D-pad (remote)",
+ "Pavé directionnel : flèches du clavier et Entrée = OK": "D-pad: keyboard arrows and Enter = OK",
+ "Haut": "Up",
+ "Bas": "Down",
+ "Gauche": "Left",
+ "Droite": "Right",
+ "OK (sélectionner)": "OK (select)",
+ "Désinstaller": "Uninstall",
+ "Désinstaller %(name)s ?": "Uninstall %(name)s?",
+ "Désinstaller %(name)s": "Uninstall %(name)s",
+ "Le paquet (et ce qui en dépend) est retiré du poste à son prochain contact.": "The package (and anything that depends on it) is removed from the machine at its next contact.",
+ "L’application Flatpak est retirée du poste à son prochain contact.": "The Flatpak app is removed from the machine at its next contact.",
+ "Désinstallation": "Uninstall"
 }

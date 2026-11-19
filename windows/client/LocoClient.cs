@@ -2447,6 +2447,33 @@ namespace Loco
                         Uninstall();
                         return true;
                     }
+                    else if (action == "remove-package")
+                    {
+                        // Désinstallation d'un logiciel suivi par winget (son identifiant winget), demandée depuis la fiche du poste.
+                        var names = new List<string>();
+                        object pkgs;
+                        if (cmd.TryGetValue("packages", out pkgs) && pkgs is System.Collections.IEnumerable)
+                            foreach (object one in (System.Collections.IEnumerable)pkgs) { string s = Convert.ToString(one); if (!string.IsNullOrEmpty(s)) names.Add(s); }
+                        var lines = new List<string>();
+                        bool ok = names.Count > 0;
+                        if (names.Count == 0) lines.Add(Lang.T("Aucun logiciel indiqué.", "No software given.", "Ningún software indicado."));
+                        else
+                        {
+                            string libraries;
+                            string winget = WingetPath(out libraries);
+                            if (winget == null) { ok = false; lines.Add(Lang.T("winget absent du poste (paquet App Installer de Microsoft).", "winget is not on this machine (Microsoft App Installer package).", "winget no está en el equipo (paquete App Installer de Microsoft).")); }
+                            else foreach (string pid in names)
+                            {
+                                string output;
+                                int code = RunCapture(winget, "uninstall --id \"" + pid + "\" --exact --silent --accept-source-agreements --disable-interactivity", InstallerTimeout, out output, libraries);
+                                lines.Add(pid + " : " + WingetMessage(output, code));
+                                if (code != 0) ok = false;
+                            }
+                        }
+                        var inv = Inventory();
+                        lastScan = now;
+                        Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, inv);
+                    }
                     else Report(conf, id, "failed", Lang.T("Action non prise en charge : ", "Action not supported: ", "Acción no admitida: ") + action, 1, null);
                 }
                 SaveState(lastScan, scanHours, rescan);

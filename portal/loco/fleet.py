@@ -54,6 +54,7 @@ FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L
 # Type d'un appareil Android, annoncé par l'application d'après son écran et son système.
 FORMS = {"phone": L_("Téléphone"), "tablet": L_("Tablette"), "tv": L_("Téléviseur")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
+           "remove-package": L_("Désinstallation"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
            "agent-update": L_("Mise à jour de l'agent"), "wazuh": L_("Agent Wazuh"), "os-upgrade": L_("Mise à jour vers une nouvelle version")}
@@ -1018,6 +1019,13 @@ def _payload(dev, cmd):
         if not packages:
             return None
         out["packages"] = packages
+    if cmd["action"] == "remove-package":
+        packages = [p for p in params.get("packages", []) if isinstance(p, str) and p]
+        kind = params.get("kind", "")
+        linux = dev["os_family"] in ("debian", "rhel")
+        if not packages or not ((kind in ("pkg", "flatpak") and linux) or (kind == "winget" and dev["os_family"] == "windows")):
+            return None
+        out["packages"], out["kind"] = packages, kind
     return out
 
 
@@ -2304,6 +2312,7 @@ def fleet_device(dev_id):
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            disk_usage=version_key(dev["agent_version"]) >= (2, 186) and dev["os_family"] in ("windows", "linux"),
+                           remove_pkg=can("fleet.remove") and version_key(dev["agent_version"]) >= (2, 187) and dev["os_family"] in ("debian", "rhel"),
                            action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,
                            wazuh=_wazuh_panel(dev),
                            net_policy=net_policy_text(dev),
@@ -2414,6 +2423,18 @@ def fleet_action(dev_id):
                 "SELECT 1 FROM win_apps WHERE slug=? AND status='ready'", (slug,)).fetchone():
             abort(400)
         params["slug"] = slug
+    if action == "remove-package":
+        name = request.form.get("package", "").strip()
+        kind = request.form.get("kind", "")
+        linux = dev["os_family"] in ("debian", "rhel")
+        # Nom borné à un jeu sûr (démarre par une lettre/chiffre : pas d'option « -… » ni d'injection d'arguments
+        # winget/apt) ; couvre un nom de paquet apt/dnf, un identifiant Flatpak et un identifiant winget.
+        if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+:-]{0,299}", name)
+                or not ((kind in ("pkg", "flatpak") and linux) or (kind == "winget" and dev["os_family"] == "windows"))):
+            abort(400)
+        params["packages"] = [name]
+        params["kind"] = kind
+        params["label"] = name
     # Déjà lancé sur ce poste (même demandé autrement : avec ou sans redémarrage, autre sélection) : pas de doublon.
     busy = in_progress(dev, pending(dev_id))
     if action == "update" and busy["updating"]:
@@ -2424,7 +2445,7 @@ def fleet_action(dev_id):
         return _back_to_origin(dev_id)
     if queue(dev, action, params):
         db().commit()
-        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + params['slug'] if 'slug' in params else ''}")
+        audit(f"parc.{action}", f"{dev['hostname']}{' : ' + (params.get('slug') or params.get('label')) if params.get('slug') or params.get('label') else ''}")
         flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")

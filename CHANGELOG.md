@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.187.0 — 2026-11-19
+
+- **Contrôle facile d'un Android TV / Google TV.** Dans *Contrôler l'écran* d'un appareil Android, un pavé directionnel (↑ ← OK → ↓) permet de naviguer à la télécommande, et les flèches du clavier (avec Entrée = OK) font de même — indispensable sur un téléviseur, qui se pilote au pavé directionnel et non au toucher.
+- **Désinstaller un paquet ou un logiciel (Linux).** Sur un poste Linux, l'onglet *Paquets installés* permet de désinstaller un paquet installé volontairement, et l'onglet *Flatpak* une application Flatpak, sous confirmation. (Les dépendances système ne sont pas proposées à la désinstallation.)
+
 ## 2.186.1 — 2026-11-19
 
 - **Correctif : page Wazuh.** La page *Wazuh* ne s'affichait plus (erreur interne) dès qu'un poste avait l'agent Wazuh installé. C'est corrigé.

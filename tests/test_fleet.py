@@ -610,6 +610,26 @@ class TestActions(FleetTest):
         linux.enroll()
         self.assertEqual(self.queue(linux.uid, "install-app", slug="notepad").status_code, 400)
 
+    def test_remove_package_targets_the_right_manager_and_refuses_bad_input(self):
+        linux = Agent(LINUX, "192.168.43.70"); linux.enroll()
+        win = Agent(WINDOWS, "192.168.43.71"); win.enroll()
+        # Linux : paquet système (apt/dnf, kind=pkg) puis application Flatpak (kind=flatpak).
+        self.queue(linux.uid, "remove-package", package="firefox-esr", kind="pkg")
+        cmd = linux.checkin().get_json()["commands"][0]
+        self.assertEqual((cmd["action"], cmd["packages"], cmd["kind"]), ("remove-package", ["firefox-esr"], "pkg"))
+        self.queue(linux.uid, "remove-package", package="org.videolan.VLC", kind="flatpak")
+        cmd = linux.checkin().get_json()["commands"][0]
+        self.assertEqual((cmd["packages"], cmd["kind"]), (["org.videolan.VLC"], "flatpak"))
+        # Windows : logiciel winget (identifiant).
+        self.queue(win.uid, "remove-package", package="Mozilla.Firefox", kind="winget")
+        cmd = win.checkin().get_json()["commands"][0]
+        self.assertEqual((cmd["action"], cmd["packages"], cmd["kind"]), ("remove-package", ["Mozilla.Firefox"], "winget"))
+        # Refusés (400) : nom dangereux (injection d'arguments) et mauvais couple gestionnaire/OS.
+        for bad in ("-rf", "x; reboot", "a b", "", "x" * 301):
+            self.assertEqual(self.queue(linux.uid, "remove-package", package=bad, kind="pkg").status_code, 400, bad)
+        self.assertEqual(self.queue(linux.uid, "remove-package", package="Mozilla.Firefox", kind="winget").status_code, 400)   # winget sur Linux
+        self.assertEqual(self.queue(win.uid, "remove-package", package="firefox-esr", kind="pkg").status_code, 400)            # pkg sur Windows
+
     def test_uninstall_detaches_the_device_only_when_pushed(self):
         a = Agent(LINUX, "192.168.43.60")
         a.enroll()

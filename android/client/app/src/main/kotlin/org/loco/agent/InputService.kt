@@ -155,11 +155,19 @@ class InputService : AccessibilityService(), InputSink {
             XF86_TASKPANE -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             XF86_MENUKB -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
             0xff08L -> if (!deleteBack()) performGlobalAction(GLOBAL_ACTION_BACK) // Retour arrière
-            0xff0dL, 0xff8dL -> enter()                                         // Entrée
+            0xff52L -> dpad(16)                                                 // Flèche haut  -> D-pad haut
+            0xff54L -> dpad(17)                                                 // Flèche bas   -> D-pad bas
+            0xff51L -> dpad(18)                                                 // Flèche gauche -> D-pad gauche
+            0xff53L -> dpad(19)                                                 // Flèche droite -> D-pad droite
+            0xff0dL, 0xff8dL -> if (!enter()) dpad(20)                          // Entrée : valide un champ, sinon OK (D-pad centre)
             0xff09L, 0xff89L -> insert("\t")
             else -> (keypad(keysym) ?: character(keysym))?.let { insert(it) }
         }
     }
+
+    // D-pad par accessibilité (Android 11+/API 30 ; GLOBAL_ACTION_DPAD_UP..CENTER = 16..20). Indispensable pour piloter
+    // un Android TV / Google TV, qui se navigue à la télécommande ; ignoré avant Android 11 (où le D-pad n'existe pas ainsi).
+    private fun dpad(action: Int) { if (Build.VERSION.SDK_INT >= 30) performGlobalAction(action) }
 
     // --- Écran de verrouillage ------------------------------------------------
     // Android masque l'écran de saisie du code dans l'image transmise (surface protégée) : la personne qui prend la main
@@ -402,12 +410,15 @@ class InputService : AccessibilityService(), InputSink {
         return true
     }
 
-    private fun enter() {
-        val n = focusedEditable()
-        if (n != null && Build.VERSION.SDK_INT >= 30 &&
-            n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) return
-        if (n != null && !n.isMultiLine) return
+    /** Entrée sur un champ éditable : valide (IME) ou saute une ligne. Renvoie faux s'il n'y a aucun champ focalisé —
+     *  l'appelant fait alors « OK » (D-pad centre), ce qu'attend un Android TV. */
+    private fun enter(): Boolean {
+        val n = focusedEditable() ?: return false
+        if (Build.VERSION.SDK_INT >= 30 &&
+            n.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) return true
+        if (!n.isMultiLine) return true
         insert("\n")
+        return true
     }
 
     private fun setText(n: AccessibilityNodeInfo, value: String, cursor: Int) {
