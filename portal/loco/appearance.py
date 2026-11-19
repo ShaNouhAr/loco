@@ -460,6 +460,117 @@ def appearance_my_logo():
     return resp
 
 
+# --------------------------------------------------------------------------- photo de profil d'un compte
+
+MAX_AVATAR = 2 * 1024 * 1024               # 2 Mo
+
+
+def user_avatar(user):
+    """Extension de la photo de profil de ce compte (png, jpg…), ou None s'il n'en a pas (son initiale est montrée)."""
+    if not user:
+        return None
+    try:
+        return _loads(user["appearance"]).get("avatar") or None
+    except (KeyError, TypeError):
+        return None
+
+
+def _avatar_file(uid):
+    found = glob.glob(os.path.join(BG_DIR, f"avatar-u{int(uid)}.*"))
+    return found[0] if found else None
+
+
+@app.route("/account/avatar", methods=["POST"])
+@login_required
+def account_avatar():
+    """Photo de profil du compte : image raster envoyée, gardée pour ce compte et montrée à la place de son initiale."""
+    upload = request.files.get("avatar")
+    if not upload or not upload.filename:
+        flash(_("Choisissez une image."), "error")
+        return redirect(url_for("account") + "#apparence")
+    blob = upload.read(MAX_AVATAR + 1)
+    if len(blob) > MAX_AVATAR:
+        flash(_("Image trop lourde (2 Mo maximum)."), "error")
+        return redirect(url_for("account") + "#apparence")
+    ext = _detect(blob)                    # images raster seulement (pas de SVG pour une photo de profil)
+    if not ext:
+        flash(_("Format non reconnu : PNG, JPEG, GIF ou WebP."), "error")
+        return redirect(url_for("account") + "#apparence")
+    os.makedirs(BG_DIR, exist_ok=True)
+    for old in glob.glob(os.path.join(BG_DIR, f"avatar-u{g.user['id']}.*")):
+        os.unlink(old)
+    path = os.path.join(BG_DIR, f"avatar-u{g.user['id']}.{ext}")
+    with open(path, "wb") as f:
+        f.write(blob)
+    os.chmod(path, 0o640)
+    appear = _loads(g.user["appearance"])
+    appear["avatar"] = ext
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().commit()
+    audit("compte.photo", f"{ext}, {len(blob)} o")
+    flash(_("Photo de profil enregistrée."), "ok")
+    return redirect(url_for("account") + "#apparence")
+
+
+@app.route("/account/avatar/remove", methods=["POST"])
+@login_required
+def account_avatar_delete():
+    for old in glob.glob(os.path.join(BG_DIR, f"avatar-u{g.user['id']}.*")):
+        os.unlink(old)
+    appear = _loads(g.user["appearance"])
+    appear.pop("avatar", None)
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().commit()
+    flash(_("Photo de profil retirée."), "ok")
+    return redirect(url_for("account") + "#apparence")
+
+
+@app.route("/account/avatar/<int:uid>.img")
+@login_required
+def account_avatar_img(uid):
+    """Photo de profil d'un compte (visible par tout utilisateur connecté : elle n'a rien de secret)."""
+    path = _avatar_file(uid)
+    if not path:
+        abort(404)
+    ext = os.path.splitext(path)[1].lstrip(".")
+    resp = send_file(path, mimetype=_LOGO_MIME.get(ext, "application/octet-stream"), max_age=0)
+    resp.headers["Cache-Control"] = "private, no-cache"
+    resp.headers["Content-Security-Policy"] = "default-src 'none'"
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
+
+
+# --------------------------------------------------------------------------- encadrés d'information masqués (« ne plus afficher »)
+
+_NOTE_KEY = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def dismissed_notes(user):
+    """Clés des encadrés d'information que ce compte a choisi de ne plus afficher (empreintes calculées côté navigateur)."""
+    if not user:
+        return []
+    try:
+        data = _loads(user["appearance"]).get("dismissed")
+    except (KeyError, TypeError):
+        return []
+    return [k for k in data if isinstance(k, str)][:300] if isinstance(data, list) else []
+
+
+@app.route("/account/dismiss", methods=["POST"])
+@login_required
+def account_dismiss_note():
+    """« Ne plus afficher » un encadré d'information : sa clé est gardée pour ce compte (et renvoyée aux pages suivantes)."""
+    key = (request.form.get("key") or "").strip()
+    if not _NOTE_KEY.match(key):
+        abort(400)
+    appear = _loads(g.user["appearance"])
+    kept = [k for k in (appear.get("dismissed") or []) if isinstance(k, str) and k != key]
+    appear["dismissed"] = (kept + [key])[-300:]
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().commit()
+    return jsonify(ok=True)
+
+
 def _done(message="", error=None, text="", status=200):
     """Réponse d'un envoi : la page d'administration (formulaire avec « next ») revient sur elle-même avec un
     message ; les appels en JavaScript reçoivent du JSON (code d'erreur)."""

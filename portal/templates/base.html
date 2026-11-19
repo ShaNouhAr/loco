@@ -34,7 +34,7 @@
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
       {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav %}
       <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on }}">
-        <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Système') }}" title="{{ _('Système') }}">{{ nav_icon('server') }}<span>{{ _("Système") }}</span>{{ nav_icon('chevron') }}</summary>
+        <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Systèmes') }}" title="{{ _('Systèmes') }}">{{ nav_icon('server') }}<span>{{ _("Systèmes") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-system">
           <div class="nav-panel nav-sections">
             {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) %}
@@ -115,7 +115,7 @@
       {% if current_user %}
       <div class="userbox">
         <details class="menu user-menu">
-          <summary class="user-chip {{ 'on' if ep == 'account' }}" aria-label="{{ _('Compte, langue et apparence') }}"><span class="user-avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span><span class="user-name">{{ current_user.username }}</span>{{ nav_icon('chevron') }}</summary>
+          <summary class="user-chip {{ 'on' if ep == 'account' }}" aria-label="{{ _('Compte, langue et apparence') }}">{% if my_avatar %}<img class="user-avatar-img" src="{{ url_for('account_avatar_img', uid=current_user.id) }}" alt="" aria-hidden="true">{% else %}<span class="user-avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>{% endif %}<span class="user-name">{{ current_user.username }}</span>{{ nav_icon('chevron') }}</summary>
           <div class="menu-list" role="menu">
             <div class="menu-user"><strong>{{ current_user.username }}</strong><small>{{ _(roles.get(current_user.role, _("Profil indisponible"))) }}</small></div>
             <a class="menu-item" role="menuitem" href="{{ url_for('account') }}">{{ nav_icon('user') }}<span>{{ _("Mon compte") }}</span></a>
@@ -203,6 +203,7 @@
 {% endblock %}
 <div class="toasts" aria-live="polite"></div>
 {% if js_i18n %}<script type="application/json" id="i18n-js">{{ js_i18n|tojson }}</script>{% endif %}
+{% if current_user %}<script type="application/json" id="notes-dismissed" data-csrf="{{ csrf }}">{{ notes_dismissed|tojson }}</script>{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}?v={{ asset_v }}"></script>
 {% block scripts %}{% endblock %}
 </body>

@@ -124,6 +124,45 @@ class AppearanceRouteTest(unittest.TestCase):
                           content_type="multipart/form-data")
         self.assertEqual(r.status_code, 413)
 
+    def _uid(self):
+        with connect() as conn:
+            return conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()[0]
+
+    def test_avatar_upload_serve_and_remove(self):
+        tok = self.b.token("/")
+        r = self.b.c.post("/account/avatar", data={"csrf": tok, "avatar": (io.BytesIO(PNG), "me.png")},
+                          content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 302)                      # formulaire simple : redirection avec message
+        html = self.b.c.get("/").get_data(as_text=True)
+        self.assertIn("user-avatar-img", html)                   # la pastille montre la photo, plus l'initiale
+        img = self.b.c.get(f"/account/avatar/{self._uid()}.img")
+        self.assertEqual(img.status_code, 200)
+        self.assertEqual(img.get_data(), PNG)
+        img.close()
+        self.b.c.post("/account/avatar/remove", data={"csrf": tok}, content_type="multipart/form-data")
+        self.assertNotIn("user-avatar-img", self.b.c.get("/").get_data(as_text=True))
+        self.assertEqual(self.b.c.get(f"/account/avatar/{self._uid()}.img").status_code, 404)
+
+    def test_avatar_rejects_non_image(self):
+        tok = self.b.token("/")
+        self.b.c.post("/account/avatar", data={"csrf": tok, "avatar": (io.BytesIO(b"pas une image"), "x.txt")},
+                      content_type="multipart/form-data")
+        self.assertNotIn("avatar", json.loads(self._appearance() or "{}"))   # rien d'enregistré
+
+    def _appearance(self):
+        with connect() as conn:
+            return conn.execute("SELECT appearance FROM users WHERE username='admin'").fetchone()[0]
+
+    def test_dismiss_note_is_kept_for_the_account(self):
+        tok = self.b.token("/")
+        r = self.b.c.post("/account/dismiss", data={"csrf": tok, "key": "n1a2b3c"}, content_type="multipart/form-data")
+        self.assertEqual(r.status_code, 200)
+        html = self.b.c.get("/").get_data(as_text=True)
+        self.assertIn('id="notes-dismissed"', html)              # la liste part au navigateur
+        self.assertIn("n1a2b3c", html)
+        bad = self.b.c.post("/account/dismiss", data={"csrf": tok, "key": "clé invalide !"}, content_type="multipart/form-data")
+        self.assertEqual(bad.status_code, 400)
+
     def test_appearance_requires_login(self):
         anon = Browser()
         self.assertIn(anon.c.post("/account/appearance", data={"csrf": anon.token(), "theme": "light"}).status_code, (302, 401, 403))

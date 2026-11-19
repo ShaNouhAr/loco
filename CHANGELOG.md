@@ -1,5 +1,14 @@
 # Journal des versions
 
+## 2.182.0 — 2026-11-19
+
+- **Carte graphique dans la supervision.** Les postes équipés d'une carte graphique (NVIDIA, et AMD sous Linux) affichent son occupation, sa mémoire et sa température dans l'onglet *Supervision*, à côté du processeur et de la mémoire.
+- **Home Assistant dans la sélection de Mon parc.** On peut cocher les instances Home Assistant comme les autres postes et lancer leurs mises à jour disponibles, ou les redémarrer, depuis la barre de sélection.
+- **Rafraîchir un poste à la demande.** Un bouton sur la fiche d'un poste rappelle l'agent pour refaire l'inventaire tout de suite, sans attendre le prochain contact.
+- **Photo de profil.** Chaque compte peut ajouter une photo (dans *Mon compte › Apparence*), montrée dans la barre du haut à la place de son initiale.
+- **« Ne plus afficher » sur les encadrés d'information.** Les encadrés d'information orange ont désormais une croix pour ne plus les revoir ; ce choix est gardé pour votre compte.
+- **Barre de navigation : « Systèmes ».** Le menu qui regroupe Linux, Windows, Android et Home Assistant s'appelle maintenant *Systèmes*.
+
 ## 2.181.0 — 2026-11-19
 
 - **Ressources de vos Home Assistant OS.** Sur la page d'une instance Home Assistant OS, loco affiche désormais la mémoire et le processeur en plus du stockage, relevés en direct.

@@ -5078,5 +5078,18 @@
  "%(p)s %% de la mémoire utilisée": "%(p)s%% of memory used",
  "occupation du processeur": "processor usage",
  "Batterie %(p)s %%%(c)s": "Battery %(p)s %%%(c)s",
- "en charge": "charging"
+ "en charge": "charging",
+ "Photo de profil": "Profile picture",
+ "montrée dans la barre du haut": "shown in the top bar",
+ "PNG, JPEG, GIF ou WebP, 2 Mo maximum. L’image est enregistrée dès que vous la choisissez.": "PNG, JPEG, GIF or WebP, 2 MB maximum. The image is saved as soon as you choose it.",
+ "Systèmes": "Systems",
+ "Rafraîchir : appeler l’agent pour refaire l’inventaire maintenant": "Refresh: call the agent to redo the inventory now",
+ "Rafraîchir l’inventaire": "Refresh the inventory",
+ "Carte graphique": "Graphics card",
+ "Photo de profil enregistrée.": "Profile picture saved.",
+ "Photo de profil retirée.": "Profile picture removed.",
+ "Choisissez une image.": "Choose an image.",
+ "Image trop lourde (2 Mo maximum).": "Image too large (2 MB maximum).",
+ "Format non reconnu : PNG, JPEG, GIF ou WebP.": "Unrecognized format: PNG, JPEG, GIF or WebP.",
+ "Ne plus afficher": "Don’t show again"
 }

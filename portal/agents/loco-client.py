@@ -829,6 +829,70 @@ def _net_bytes():
     return rx, tx
 
 
+def _gpu_num(value):
+    try:
+        return round(float(value), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _gpus():
+    """Cartes graphiques et leur usage : NVIDIA par nvidia-smi, sinon AMD par /sys. Liste vide si aucune n'est détectée
+    (le poste n'affiche alors pas de GPU). Nom, occupation (%), mémoire utilisée/totale (octets) et température (°C)."""
+    cards = []
+    try:
+        res = subprocess.run(["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                              "--format=csv,noheader,nounits"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5)
+        if res.returncode == 0:
+            for line in res.stdout.decode("utf-8", "replace").splitlines():
+                p = [x.strip() for x in line.split(",")]
+                if len(p) >= 5 and p[0]:
+                    mu, mt = _gpu_num(p[2]), _gpu_num(p[3])
+                    cards.append({"name": p[0][:60], "usage": _gpu_num(p[1]), "temp": _gpu_num(p[4]),
+                                  "mem_used": int(mu * 1048576) if mu is not None else None,
+                                  "mem_total": int(mt * 1048576) if mt is not None else None})
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    if cards:
+        return cards[:8]
+    try:                                                      # AMD (cartes DRM qui exposent leur occupation)
+        for dev in sorted(glob.glob("/sys/class/drm/card[0-9]*/device")):
+            if not os.path.exists(os.path.join(dev, "gpu_busy_percent")):
+                continue
+            card = {"name": "GPU", "usage": None, "mem_used": None, "mem_total": None, "temp": None}
+            try:
+                with open(os.path.join(dev, "gpu_busy_percent")) as f:
+                    card["usage"] = _gpu_num(f.read())
+            except OSError:
+                pass
+            for key, src in (("mem_used", "mem_info_vram_used"), ("mem_total", "mem_info_vram_total")):
+                try:
+                    with open(os.path.join(dev, src)) as f:
+                        card[key] = int(f.read().strip())
+                except (OSError, ValueError):
+                    pass
+            try:
+                with open(os.path.join(dev, "product_name")) as f:
+                    name = f.read().strip()
+                    if name:
+                        card["name"] = name[:60]
+            except OSError:
+                pass
+            for hw in glob.glob(os.path.join(dev, "hwmon", "hwmon*", "temp1_input")):
+                try:
+                    with open(hw) as f:
+                        card["temp"] = round(int(f.read().strip()) / 1000, 1)
+                    break
+                except (OSError, ValueError):
+                    pass
+            cards.append(card)
+            if len(cards) >= 8:
+                break
+    except OSError:
+        pass
+    return cards
+
+
 def metrics(state):
     """Relevé de supervision joint à chaque contact : processeur et réseau en moyenne depuis le contact précédent
     (relevés gardés dans l'état), mémoire, swap, disques locaux, charge et durée depuis le démarrage."""
@@ -896,6 +960,9 @@ def metrics(state):
         seen.add(m[0])
         disks.append({"mount": mount, "fs": m[2], "total": total, "used": total - st.f_bfree * st.f_frsize})
     out["disks"] = disks
+    gpus = _gpus()
+    if gpus:
+        out["gpus"] = gpus
     return out
 
 

@@ -138,6 +138,8 @@ def inject_globals():
         "company_logo": appearance.logo_info(),
         "appearance_free": appearance.free(user),
         "my_logo": appearance.has_user_logo(user),
+        "my_avatar": appearance.user_avatar(user),
+        "notes_dismissed": appearance.dismissed_notes(user),
         "appearance_default": appearance.default(),
         "appearance_login": appearance.login_look(),
         "appearance_policy": appearance.policy(),

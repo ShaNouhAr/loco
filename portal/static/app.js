@@ -669,6 +669,45 @@
     selSync();
   }
 
+  /* Photo de profil : l'image est envoyée dès qu'elle est choisie (pas de bouton séparé). */
+  $$("[data-avatar-input]").forEach(function (input) {
+    input.addEventListener("change", function () { if (input.files && input.files.length && input.form) input.form.submit(); });
+  });
+
+  /* Encadrés d'information orange : « ne plus afficher », gardé par compte. La clé est l'empreinte du texte (stable tant
+     que le message ne change pas) ; aucun gabarit à modifier. Les boîtes déjà masquées par ce compte sont retirées. */
+  var notesHolder = $("#notes-dismissed");
+  if (notesHolder) {
+    var notesDismissed, notesCsrf = notesHolder.dataset.csrf || "";
+    try { notesDismissed = JSON.parse(notesHolder.textContent) || []; } catch (e) { notesDismissed = []; }
+    var noteKey = function (el) {
+      var s = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 400), h = 5381, i;
+      for (i = 0; i < s.length; i++) { h = (((h << 5) + h) + s.charCodeAt(i)) >>> 0; }
+      return "n" + h.toString(36);
+    };
+    var enhanceNotes = function () {
+      $$(".note.warn").forEach(function (el) {
+        if (el.dataset.noteDone || el.hasAttribute("data-no-dismiss")) return;
+        el.dataset.noteDone = "1";
+        var key = noteKey(el);
+        if (notesDismissed.indexOf(key) >= 0) { el.remove(); return; }
+        var btn = document.createElement("button");
+        btn.type = "button"; btn.className = "note-dismiss"; btn.title = t("Ne plus afficher"); btn.setAttribute("aria-label", t("Ne plus afficher"));
+        btn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+        btn.addEventListener("click", function () {
+          el.remove();
+          if (notesDismissed.indexOf(key) < 0) notesDismissed.push(key);
+          var fd = new FormData(); fd.set("csrf", notesCsrf); fd.set("key", key);
+          fetch("/account/dismiss", { method: "POST", body: fd }).catch(function () { /* au pire, réapparaît au rechargement */ });
+        });
+        el.classList.add("note-dismissable");
+        el.appendChild(btn);
+      });
+    };
+    enhanceNotes();
+    afterRefresh.push(enhanceNotes);
+  }
+
   /* Recherche de postes côté serveur (la liste est paginée) : envoi à la pause de frappe, le curseur reste dans le champ. */
   $$("[data-search-form]").forEach(function (form) {
     var input = $("input[type=search]", form), wait = null;

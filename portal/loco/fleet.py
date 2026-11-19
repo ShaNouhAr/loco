@@ -2565,17 +2565,43 @@ def fleet_group_windows_update(group_id):
     return back("fleet_groups", _anchor=f"group-{group_id}")
 
 
+def _split_selection(raw_ids):
+    """Sépare la sélection de Mon parc : ids de postes (entiers) et ids d'instances Home Assistant (« ha-<id> »)."""
+    devices, ha = set(), set()
+    for i in raw_ids:
+        target = ha if str(i).startswith("ha-") else devices
+        try:
+            target.add(int(str(i)[3:] if str(i).startswith("ha-") else i))
+        except (ValueError, TypeError):
+            pass
+    return devices, ha
+
+
+def _ha_bulk(ha_ids, what):
+    """Applique une action (« update » ou « reboot ») aux instances Home Assistant cochées, si le compte peut les gérer
+    et que la fonction est active. Renvoie le nombre de tâches lancées."""
+    if not ha_ids or not features.enabled("homeassistant") or not can("homeassistant.manage"):
+        return 0
+    from . import homeassistant
+    count = 0
+    for hid in ha_ids:
+        try:
+            count += homeassistant.update_host(hid) if what == "update" else homeassistant.reboot_host(hid)
+        except Exception:                                     # une instance injoignable ne doit pas faire échouer le lot
+            pass
+    return count
+
+
 @app.route("/fleet/update-selected", methods=["POST"])
 @login_required
 def fleet_update_selected():
-    """Met à jour les postes cochés dans la liste (ids). Mêmes droits qu'une mise à jour de poste."""
+    """Met à jour les postes cochés dans la liste (ids). Mêmes droits qu'une mise à jour de poste ; les instances Home
+    Assistant cochées (« ha-<id> ») lancent leurs mises à jour disponibles, si le compte peut les gérer."""
     require("fleet.update")
-    try:
-        ids = {int(i) for i in request.form.getlist("ids")}
-    except ValueError:
+    raw = request.form.getlist("ids")
+    if not raw or len(raw) > 5000:
         abort(400)
-    if not ids or len(ids) > 5000:
-        abort(400)
+    ids, ha_ids = _split_selection(raw)
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
@@ -2585,9 +2611,10 @@ def fleet_update_selected():
         r = rows.get(dev_id)
         if r and r["d"]["state"] == "active" and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
+    ha_count = _ha_bulk(ha_ids, "update")
     db().commit()
-    audit("parc.mise-a-jour-selection", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
-    return {"ok": True, "count": count}
+    audit("parc.mise-a-jour-selection", f"{counted(count + ha_count, 'poste')}{', avec redémarrage' if reboot else ''}")
+    return {"ok": True, "count": count + ha_count}
 
 
 @app.route("/fleet/reboot-selected", methods=["POST"])
@@ -2596,12 +2623,10 @@ def fleet_reboot_selected():
     """Redémarre les postes cochés dans la liste. Mêmes droits qu'un redémarrage de poste ; ceux qui redémarrent déjà,
     qui changent de version du système, ou les appareils Android, sont laissés et comptés."""
     require("fleet.reboot")
-    try:
-        ids = {int(i) for i in request.form.getlist("ids")}
-    except ValueError:
+    raw = request.form.getlist("ids")
+    if not raw or len(raw) > 5000:
         abort(400)
-    if not ids or len(ids) > 5000:
-        abort(400)
+    ids, ha_ids = _split_selection(raw)
     rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
     count = 0
     for dev_id in ids:
@@ -2609,16 +2634,18 @@ def fleet_reboot_selected():
         if (r and r["d"]["state"] == "active" and r["d"]["os_family"] != "android" and not r["rebooting"] and not r["upgrading"]
                 and queue(r["d"], "reboot", {})):
             count += 1
+    count += _ha_bulk(ha_ids, "reboot")
     db().commit()
-    audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(len(ids), 'sélectionné')}")
+    total = len(ids) + len(ha_ids)
+    audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(total, 'sélectionné')}")
     if count:
         flash(n_("Redémarrage demandé sur %(num)s poste : il redémarre une minute après son prochain contact.",
                  "Redémarrage demandé sur %(num)s postes : chacun redémarre une minute après son prochain contact.", count), "ok")
-    if len(ids) > count:
+    if total > count:
         flash(n_("%(num)s poste laissé tel quel : redémarrage déjà en cours, mise à jour de version en cours, appareil Android ou poste retiré.",
                  "%(num)s postes laissés tels quels : redémarrage déjà en cours, mise à jour de version en cours, appareils Android ou postes retirés.",
-                 len(ids) - count), "error")
-    return {"ok": True, "count": count, "skipped": len(ids) - count}
+                 total - count), "error")
+    return {"ok": True, "count": count, "skipped": total - count}
 
 
 def _report_wake(result):

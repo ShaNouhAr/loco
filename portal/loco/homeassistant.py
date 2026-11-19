@@ -820,6 +820,23 @@ def _update_items(info, target):
     return [item[:3] for item in found if not target or item[3] == target]
 
 
+def update_host(host_id):
+    """Lance toutes les mises à jour disponibles d'une instance (sélection de Mon parc). Renvoie le nombre lancé, 0 si
+    rien à faire ou instance absente. À appeler dans un contexte de requête (l'auteur est pris sur g.user)."""
+    row = db().execute("SELECT * FROM homeassistant_hosts WHERE id=?", (host_id,)).fetchone()
+    if row is None:
+        return 0
+    info = _info(row)
+    items = _update_items(info, "") if info else []
+    return _launch(row, items) if items else 0
+
+
+def reboot_host(host_id):
+    """Redémarre le système d'une instance (sélection de Mon parc). Renvoie le nombre lancé (0 si déjà en cours/absente)."""
+    row = db().execute("SELECT * FROM homeassistant_hosts WHERE id=?", (host_id,)).fetchone()
+    return _launch(row, [("reboot-host", "", "")]) if row is not None else 0
+
+
 @app.route("/homeassistant/update", methods=["POST"])
 @login_required
 def homeassistant_update():

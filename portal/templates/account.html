@@ -136,6 +136,22 @@
 
 <div class="tab-panel" data-panel="apparence">
   <section class="panel">
+    <div class="panel-h"><h2>{{ _("Photo de profil") }}</h2><div class="aside">{{ _("montrée dans la barre du haut") }}</div></div>
+    <div class="panel-b avatar-row">
+      {% if my_avatar %}<img class="avatar-preview" src="{{ url_for('account_avatar_img', uid=current_user.id) }}" alt="">{% else %}<span class="avatar-preview avatar-initial" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>{% endif %}
+      <div class="avatar-actions">
+        <div class="row">
+          <form method="post" action="{{ url_for('account_avatar') }}" enctype="multipart/form-data">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <label class="btn sm"><input type="file" name="avatar" accept="image/png,image/jpeg,image/gif,image/webp" hidden data-avatar-input>{{ _("Choisir une image…") }}</label>
+          </form>
+          {% if my_avatar %}<form method="post" action="{{ url_for('account_avatar_delete') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm" type="submit">{{ _("Retirer") }}</button></form>{% endif %}
+        </div>
+        <p class="sub">{{ _("PNG, JPEG, GIF ou WebP, 2 Mo maximum. L’image est enregistrée dès que vous la choisissez.") }}</p>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
     <div class="panel-h"><h2>{{ _("Thème") }}</h2><div class="aside">{{ _("mémorisé dans ce navigateur") }}</div></div>
     <div class="panel-b theme-cards">
       {% for key, label, hint in [('oled', 'OLED', _('Noir pur, idéal pour les écrans OLED et le soir')), ('dim', _('Sombre doux'), _('Anthracite, moins contrasté, reposant sur un écran classique')), ('light', 'Clair', _('Fond blanc, pour les pièces lumineuses'))] %}

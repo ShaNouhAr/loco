@@ -52,6 +52,26 @@ def sanitize(raw):
         if total and used is not None and mount and all(ord(c) >= 32 for c in mount):
             disks.append({"mount": mount, "fs": str(d.get("fs") or "")[:20], "total": int(total), "used": int(min(used, total))})
     out["disks"] = disks
+    gpus = []
+    for g in raw.get("gpus") or [] if isinstance(raw.get("gpus"), list) else []:
+        if not isinstance(g, dict) or len(gpus) >= 8:
+            continue
+        name = str(g.get("name") or "")[:60]
+        if not name or not all(ord(c) >= 32 for c in name):
+            continue
+        card = {"name": name}
+        usage = _num(g.get("usage"), 0, 100)
+        if usage is not None:
+            card["usage"] = round(usage, 1)
+        total, used = _num(g.get("mem_total"), 0, 1e15), _num(g.get("mem_used"), 0, 1e15)
+        if total and used is not None:
+            card["mem_total"], card["mem_used"] = int(total), int(min(used, total))
+        temp = _num(g.get("temp"), -50, 200)
+        if temp is not None:
+            card["temp"] = round(temp, 1)
+        gpus.append(card)
+    if gpus:
+        out["gpus"] = gpus
     return out
 
 
@@ -76,6 +96,8 @@ def summary(m):
     s["levels"] = {k: level(k, s[k]) for k in LEVELS}
     for d in disks:
         d["level"] = level("disk", d["pct"])
+    s["gpus"] = [{**g, "mem_pct": _pct(g.get("mem_used", 0), g.get("mem_total", 0)), "level": level("cpu", g.get("usage"))}
+                 for g in m.get("gpus", [])]
     return s
 
 

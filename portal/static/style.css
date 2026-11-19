@@ -380,6 +380,12 @@ main { max-width: var(--w); margin: 0 auto; padding: 36px 32px 96px; }
 .v { margin-top: 8px; font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .s { margin-top: 2px; font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .v.small-v { font-size: 18px; line-height: 30px; letter-spacing: -.01em; }
+.metric .k.inv-k { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inv-refresh { flex: none; margin: -4px -4px -4px 0; }
+.inv-refresh .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); color: var(--text-3); cursor: pointer; transition: color .12s, background .12s; }
+.inv-refresh .icon-btn:hover { background: var(--bg-3); color: var(--text); }
+.inv-refresh .icon-btn .ui-icon { width: 15px; height: 15px; }
+.inv-refresh .icon-btn.loading .ui-icon { display: none; }
 .v-unit { margin-left: 5px; font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-3); }
 
 .meter { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; margin-top: 12px; }
@@ -427,6 +433,9 @@ a.tag:hover { border-color: var(--line-2); color: var(--text); text-decoration: 
 .note.err { border-color: color-mix(in srgb, var(--err) 35%, var(--line)); background: color-mix(in srgb, var(--err) 8%, var(--bg)); color: var(--text); }
 .note.err a, .note.warn a { color: var(--text); }
 .note ul { margin: 6px 0 0; padding-left: 20px; }
+.note.note-dismissable { position: relative; padding-right: 42px; }
+.note-dismiss { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-3); cursor: pointer; opacity: .55; transition: opacity .12s, background .12s, color .12s; }
+.note-dismiss:hover { opacity: 1; background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--text); }
 
 /* ------------------------------------------------------------------ boutons */
 
@@ -1999,6 +2008,14 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 .user-chip .nav-chevron { transition: transform .16s; }
 .user-menu[open] .nav-chevron { transform: rotate(180deg); }
 .user-avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: color-mix(in srgb, var(--accent) 16%, var(--bg-3)); color: var(--text); font-size: 12px; font-weight: 600; }
+.user-avatar-img { flex: none; width: 26px; height: 26px; border-radius: 50%; object-fit: cover; background: var(--bg-3); }
+.avatar-row { display: flex; align-items: center; gap: 18px; }
+.avatar-preview { flex: none; width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--bg-3); }
+.avatar-preview.avatar-initial { display: grid; place-items: center; font-size: 28px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--accent) 16%, var(--bg-3)); }
+.avatar-actions { min-width: 0; }
+.avatar-actions .row { gap: 8px; }
+.avatar-actions .sub { margin-top: 8px; }
+.avatar-actions label.btn { cursor: pointer; }
 .user-menu .menu-list { min-width: 250px; }
 .user-menu .menu-item .nav-icon { color: var(--text-3); }
 .menu-user { padding: 8px 10px 10px; }

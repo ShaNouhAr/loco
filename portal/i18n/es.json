@@ -5078,5 +5078,18 @@
  "%(p)s %% de la mémoire utilisée": "%(p)s%% de memoria usada",
  "occupation du processeur": "uso del procesador",
  "Batterie %(p)s %%%(c)s": "Batería %(p)s %%%(c)s",
- "en charge": "cargando"
+ "en charge": "cargando",
+ "Photo de profil": "Foto de perfil",
+ "montrée dans la barre du haut": "mostrada en la barra superior",
+ "PNG, JPEG, GIF ou WebP, 2 Mo maximum. L’image est enregistrée dès que vous la choisissez.": "PNG, JPEG, GIF o WebP, 2 MB máximo. La imagen se guarda en cuanto la eliges.",
+ "Systèmes": "Sistemas",
+ "Rafraîchir : appeler l’agent pour refaire l’inventaire maintenant": "Actualizar: llamar al agente para rehacer el inventario ahora",
+ "Rafraîchir l’inventaire": "Actualizar el inventario",
+ "Carte graphique": "Tarjeta gráfica",
+ "Photo de profil enregistrée.": "Foto de perfil guardada.",
+ "Photo de profil retirée.": "Foto de perfil eliminada.",
+ "Choisissez une image.": "Elige una imagen.",
+ "Image trop lourde (2 Mo maximum).": "Imagen demasiado pesada (2 MB máximo).",
+ "Format non reconnu : PNG, JPEG, GIF ou WebP.": "Formato no reconocido: PNG, JPEG, GIF o WebP.",
+ "Ne plus afficher": "No volver a mostrar"
 }

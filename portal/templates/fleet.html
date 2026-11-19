@@ -126,7 +126,7 @@
         <tbody data-refresh="rows">
         {% if ha_rows and page == 1 %}{% for ha in ha_rows %}
           <tr class="ha-row">
-            {% if can_select %}<td class="select-col"></td>{% endif %}
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if can('homeassistant.manage') %}<label class="row-select-label"><input type="checkbox" data-select data-id="ha-{{ ha.id }}" aria-label="{{ _('Sélectionner %(host)s', host=ha.name) }}"></label>{% endif %}</td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if ha.online else 'err' }} device-availability" role="img" aria-label="Home Assistant"></span>
               <span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon('ha') }}</span><a href="{{ url_for('homeassistant_host', host_id=ha.id) }}" class="host nowrap">{{ ha.name }}</a></span>
               <span class="sub">Home Assistant{% if ha.hostname and ha.hostname|lower != ha.name|lower %} · {{ ha.hostname }}{% endif %}</span></td>

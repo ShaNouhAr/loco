@@ -402,6 +402,34 @@ class TestReading(HomeAssistantTest):
         self.assertEqual(r.headers["Cache-Control"], "no-store")
 
 
+class TestFleetSelection(HomeAssistantTest):
+    """Les instances Home Assistant se cochent dans Mon parc comme les autres postes : mise à jour et redémarrage groupés."""
+
+    def test_instances_are_selectable_and_acted_on(self):
+        row = self.link()                                             # instance avec des mises à jour disponibles
+        parc = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn('data-id="ha-%d"' % row["id"], parc)           # case à cocher sur la ligne de l'instance
+        tok = self.admin.token("/fleet")
+        up = self.admin.c.post("/fleet/update-selected", data={"csrf": tok, "ids": "ha-%d" % row["id"]},
+                               content_type="multipart/form-data")
+        self.assertEqual(up.status_code, 200)
+        self.assertGreaterEqual(up.get_json()["count"], 1)           # ses mises à jour disponibles sont lancées
+        self.idle()
+        reb = self.admin.c.post("/fleet/reboot-selected", data={"csrf": tok, "ids": "ha-%d" % row["id"]},
+                                content_type="multipart/form-data")
+        self.assertEqual(reb.get_json()["count"], 1)                 # redémarrage du système lancé
+        self.idle()
+
+    def test_without_the_right_to_manage_nothing_runs(self):
+        row = self.link()
+        viewer = self.member("viewer", ["homeassistant.view", "fleet.view", "fleet.update"])
+        got = viewer.c.post("/fleet/update-selected",
+                            data={"csrf": viewer.token("/fleet"), "ids": "ha-%d" % row["id"]},
+                            content_type="multipart/form-data")
+        self.assertEqual(got.get_json().get("count"), 0)             # peut voir, pas gérer : rien n'est lancé
+        self.idle()
+
+
 class TestJobs(HomeAssistantTest):
     def test_one_update_with_a_backup_first(self):
         row = self.link()

@@ -36,6 +36,22 @@ class SanitizeTest(unittest.TestCase):
         self.assertFalse(any("\x07" in d["mount"] for d in m["disks"]))
         self.assertEqual(monitoring.sanitize("n'importe quoi"), {})
 
+    def test_gpus_are_bounded_and_summarized(self):
+        m = monitoring.sanitize({"gpus": [
+            {"name": "NVIDIA RTX 4080", "usage": 150, "mem_used": 9000000000, "mem_total": 16000000000, "temp": 62},
+            {"name": "sans mémoire", "usage": 30},                         # gardé même sans mémoire ni température
+            {"name": "x" * 200},                                          # nom borné
+            "pas un objet",                                               # ignoré
+        ]})
+        self.assertEqual(len(m["gpus"]), 3)
+        self.assertEqual(m["gpus"][0]["usage"], 100)                      # occupation plafonnée à 100 %
+        self.assertEqual((m["gpus"][0]["mem_used"], m["gpus"][0]["mem_total"]), (9000000000, 16000000000))
+        self.assertEqual(m["gpus"][0]["temp"], 62)
+        self.assertEqual(len(m["gpus"][2]["name"]), 60)
+        s = monitoring.summary(m)
+        self.assertEqual(s["gpus"][0]["level"], "err")                    # 100 % -> seuil critique
+        self.assertAlmostEqual(s["gpus"][0]["mem_pct"], 56.2, delta=0.3)
+
     def test_summary_levels(self):
         s = monitoring.summary(monitoring.sanitize(reading(cpu=97, mem=0.9, disk=0.5)))
         self.assertEqual((s["levels"]["cpu"], s["levels"]["mem"], s["levels"]["disk"]), ("err", "warn", "ok"))
@@ -142,6 +158,15 @@ class FleetMonitoringTest(unittest.TestCase):
         listing = self.admin.c.get("/fleet").get_data(as_text=True)
         self.assertIn('class="res"', listing)
         self.assertIn("93 %", listing)
+
+    def test_device_page_shows_the_graphics_card(self):
+        self.checkin(self.agent, dict(reading(), gpus=[{"name": "NVIDIA GeForce RTX 4080", "usage": 42,
+                                                        "mem_used": 3221225472, "mem_total": 17179869184, "temp": 55}]))
+        dev = device(self.agent.uid)
+        page = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
+        self.assertIn("Carte graphique", page)
+        self.assertIn("NVIDIA GeForce RTX 4080", page)                    # nom complet dans l'infobulle
+        self.assertIn("55 °C", page)
 
     def test_device_without_readings(self):
         other = Agent(dict(WINDOWS, hostname="mon-ancien"), "192.168.43.71")

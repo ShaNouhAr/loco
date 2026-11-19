@@ -540,6 +540,72 @@ namespace Loco
 
         // Relevé joint à chaque contact : processeur et réseau en moyenne depuis le contact précédent, mémoire, fichier
         // d'échange, disques fixes et durée depuis le démarrage.
+        // Cartes graphiques et leur usage : NVIDIA par nvidia-smi (nom, occupation, mémoire, température), sinon le nom par
+        // WMI et l'occupation par le compteur de performance « GPU Engine » (toutes marques). Liste vide si rien de pertinent.
+        static List<object> Gpus()
+        {
+            var cards = new List<object>();
+            try
+            {
+                string output;
+                int code = RunCapture("nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits", 8, out output, null);
+                if (code == 0)
+                    foreach (string line in (output ?? "").Replace("\r", "").Split('\n'))
+                    {
+                        string[] p = line.Split(',');
+                        if (p.Length < 5 || p[0].Trim() == "") continue;
+                        var card = new Dictionary<string, object> { { "name", p[0].Trim() } };
+                        int v;
+                        if (int.TryParse(p[1].Trim(), out v)) card["usage"] = v;
+                        if (int.TryParse(p[2].Trim(), out v)) card["mem_used"] = (long)v * 1048576;
+                        if (int.TryParse(p[3].Trim(), out v)) card["mem_total"] = (long)v * 1048576;
+                        if (int.TryParse(p[4].Trim(), out v)) card["temp"] = v;
+                        cards.Add(card);
+                        if (cards.Count >= 8) break;
+                    }
+            }
+            catch (Exception) { }
+            if (cards.Count > 0) return cards;
+            double usage = GpuEngineUsage();                 // -1 si indisponible
+            try
+            {
+                using (var q = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController"))
+                    foreach (ManagementObject o in q.Get())
+                    {
+                        string name = Convert.ToString(o["Name"]);
+                        if (string.IsNullOrEmpty(name) || name.IndexOf("Basic Display", StringComparison.OrdinalIgnoreCase) >= 0
+                            || name.IndexOf("Remote Display", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                        var card = new Dictionary<string, object> { { "name", name } };
+                        if (usage >= 0) card["usage"] = (int)Math.Round(usage);
+                        cards.Add(card);
+                        if (cards.Count >= 8) break;
+                    }
+            }
+            catch (Exception) { }
+            return cards;
+        }
+
+        // Occupation globale du GPU par le compteur « GPU Engine \ Utilization Percentage » (deux relevés à 150 ms, moteur
+        // 3D sommé puis plafonné à 100). -1 si le compteur n'existe pas (pas de carte ou compteurs absents).
+        static double GpuEngineUsage()
+        {
+            try
+            {
+                var category = new System.Diagnostics.PerformanceCounterCategory("GPU Engine");
+                var counters = new List<System.Diagnostics.PerformanceCounter>();
+                foreach (string inst in category.GetInstanceNames())
+                    if (inst.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0)
+                        counters.Add(new System.Diagnostics.PerformanceCounter("GPU Engine", "Utilization Percentage", inst, true));
+                if (counters.Count == 0) return -1;
+                foreach (var c in counters) { try { c.NextValue(); } catch (Exception) { } }
+                System.Threading.Thread.Sleep(150);
+                double sum = 0;
+                foreach (var c in counters) { try { sum += c.NextValue(); } catch (Exception) { } c.Dispose(); }
+                return Math.Min(100, sum);
+            }
+            catch (Exception) { return -1; }
+        }
+
         static Dictionary<string, object> Metrics()
         {
             var m = new Dictionary<string, object> { { "cores", Environment.ProcessorCount } };
@@ -575,6 +641,7 @@ namespace Loco
             }
             catch (Exception) { }
             m["disks"] = disks;
+            try { var gpus = Gpus(); if (gpus.Count > 0) m["gpus"] = gpus; } catch (Exception) { }
             return m;
         }
 
