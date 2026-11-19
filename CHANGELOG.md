@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.183.0 — 2026-11-19
+
+- **Transferts de fichiers plus clairs, et annulables.** Dans l'onglet *Fichiers* d'un poste, chaque envoi ou téléchargement montre la taille transférée (Mo / Go), le pourcentage et le débit, et une croix permet de l'annuler en cours de route.
+
 ## 2.182.0 — 2026-11-19
 
 - **Carte graphique dans la supervision.** Les postes équipés d'une carte graphique (NVIDIA, et AMD sous Linux) affichent son occupation, sa mémoire et sa température dans l'onglet *Supervision*, à côté du processeur et de la mémoire.

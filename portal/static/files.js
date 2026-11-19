@@ -248,21 +248,32 @@ function refresh() { if (current) navigate(current); }
 function transfer(label) {
   const el = document.createElement('div');
   el.className = 'files-xfer';
-  el.innerHTML = '<div class="files-xfer-row"><span class="files-xfer-name mono small"></span><span class="files-xfer-pct small muted"></span></div><div class="meter"><i></i></div>';
+  el.innerHTML = '<div class="files-xfer-row"><span class="files-xfer-name mono small"></span>'
+    + '<button type="button" class="files-xfer-cancel" title="' + esc(tr('Annuler le transfert')) + '" aria-label="' + esc(tr('Annuler le transfert')) + '">'
+    + '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>'
+    + '<div class="meter"><i></i></div><div class="files-xfer-pct small muted"></div>';
   el.querySelector('.files-xfer-name').textContent = label;
   transfersEl.appendChild(el);
-  return {
+  const start = Date.now();
+  const api = {
+    cancelled: false,
     set(done, total) {
       const pct = total ? Math.min(100, Math.round(100 * done / total)) : 0;
       el.querySelector('i').style.width = pct + '%';
-      el.querySelector('.files-xfer-pct').textContent = total ? human(done) + ' / ' + human(total) : human(done);
+      const elapsed = (Date.now() - start) / 1000;
+      const rate = elapsed > 0.4 && done > 0 ? ' · ' + human(done / elapsed) + '/s' : '';
+      el.querySelector('.files-xfer-pct').textContent = (total ? human(done) + ' / ' + human(total) + ' · ' + pct + ' %' : human(done)) + rate;
     },
     done(text, kind) {
+      const cancel = el.querySelector('.files-xfer-cancel');
+      if (cancel) cancel.remove();
       el.querySelector('.files-xfer-pct').textContent = text;
       if (kind) el.classList.add(kind);
       setTimeout(() => el.remove(), kind === 'err' ? 6000 : 2500);
     }
   };
+  el.querySelector('.files-xfer-cancel').addEventListener('click', () => { api.cancelled = true; });
+  return api;
 }
 async function download(name) {
   const path = join(current, name);
@@ -270,6 +281,7 @@ async function download(name) {
   const parts = []; let offset = 0, size = 0;
   try {
     for (;;) {
+      if (t.cancelled) { t.done(tr('annulé')); return; }
       const { header, data } = await request('read', { path, offset, length: CHUNK });
       size = header.size; parts.push(data); offset += data.length;
       t.set(offset, size);
@@ -289,6 +301,7 @@ async function upload(file) {
   let offset = 0;
   try {
     while (offset < file.size || offset === 0) {
+      if (t.cancelled) { request('write_cancel', { path }).catch(() => {}); t.done(tr('annulé')); refresh(); return; }
       const slice = file.slice(offset, offset + CHUNK);
       const buf = new Uint8Array(await slice.arrayBuffer());
       const final = offset + buf.length >= file.size;

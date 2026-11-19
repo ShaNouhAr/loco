@@ -1886,8 +1886,11 @@ button.files-name:hover svg { color: var(--accent); }
 .files-status[data-kind="err"] { color: var(--err); }
 .files-transfers { display: flex; flex-direction: column; gap: 8px; width: min(340px, 100%); margin-left: auto; }
 .files-xfer { font-size: 12.5px; }
-.files-xfer-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-.files-xfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-xfer-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.files-xfer-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-xfer-pct { display: block; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.files-xfer-cancel { flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 2px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-3); cursor: pointer; transition: color .12s, background .12s; }
+.files-xfer-cancel:hover { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
 .files-xfer .meter { margin-top: 0; }
 .files-xfer.err .meter > i { background: var(--err); }
 .files-xfer.err .files-xfer-pct { color: var(--err); }

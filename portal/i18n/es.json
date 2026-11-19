@@ -5091,5 +5091,7 @@
  "Choisissez une image.": "Elige una imagen.",
  "Image trop lourde (2 Mo maximum).": "Imagen demasiado pesada (2 MB máximo).",
  "Format non reconnu : PNG, JPEG, GIF ou WebP.": "Formato no reconocido: PNG, JPEG, GIF o WebP.",
- "Ne plus afficher": "No volver a mostrar"
+ "Ne plus afficher": "No volver a mostrar",
+ "Annuler le transfert": "Cancelar la transferencia",
+ "annulé": "cancelado"
 }
