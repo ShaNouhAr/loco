@@ -53,6 +53,25 @@ RESOURCES = (
     "printf '{\"result\":\"ok\",\"data\":{\"mem_total_kb\":%s,\"mem_avail_kb\":%s,\"nproc\":%s,\"cpu1\":\"%s\",\"cpu2\":\"%s\"}}\\n' "
     "\"${MT:-null}\" \"${MA:-null}\" \"${NP:-null}\" \"$S1\" \"$S2\"; echo"
 )
+# Dépôts HACS (Home Assistant Community Store) : ses mises à jour ne passent pas par la commande ha (add-ons/cœur), mais par
+# des entités « update.* » du cœur dont le registre indique platform=marketplace. On lit le registre (/config, via le module
+# SSH) pour les repérer, puis leur état par l'API Core du Superviseur (jeton par l'entrée de curl, jamais en argument). La
+# sortie imite une réponse ha --raw-json pour le même analyseur ; rien si HACS est absent.
+HACS_ENTITY_RE = re.compile(r"^update\.[a-z0-9_]{1,120}$")
+HACS_COLLECT = (
+    "echo '@@loco hacs'; "
+    "HIDS=$(jq -c '[.data.entities[]? | select((.entity_id|startswith(\"update.\")) and .platform==\"marketplace\") | .entity_id]' "
+    "/config/.storage/core.entity_registry 2>/dev/null); "
+    "printf 'Authorization: Bearer %s\\n' \"$SUPERVISOR_TOKEN\" | curl -fsS -H @- http://supervisor/core/api/states 2>/dev/null | "
+    "jq -c --argjson ids \"${HIDS:-[]}\" '{result:\"ok\",data:{hacs:[.[] | select(.entity_id as $e | ($ids|index($e))) | "
+    "{id:.entity_id, name:(.attributes.friendly_name // .entity_id), outdated:(.state==\"on\"), "
+    "version:.attributes.installed_version, latest:.attributes.latest_version}]}}'; echo"
+)
+# Installation d'une mise à jour HACS : le service update.install du cœur, appelé par l'API du Superviseur ({slug} = l'entité,
+# validée par HACS_ENTITY_RE dans command()). Le jeton passe par l'entrée de curl.
+HACS_INSTALL = ('printf "Authorization: Bearer %s\\n" "$SUPERVISOR_TOKEN" | '
+                'curl -fsS -H @- -H "Content-Type: application/json" '
+                '-d \'{{"entity_id":"{slug}"}}\' http://supervisor/core/api/services/update/install')
 STALE = 120                     # relevé plus ancien : refait en arrière-plan tant que la page est affichée
 OVERVIEW_STALE = 1800           # … et tant que la vue d'ensemble l'est, bien moins souvent
 QUICK, LONG = 40, 3600          # secondes : un relevé ; une mise à jour ou une sauvegarde
@@ -65,6 +84,7 @@ ACTIONS = {
     "update-os": (L_("Mise à jour du système"), "ha os update --no-progress"),
     "update-supervisor": (L_("Mise à jour du Supervisor"), "ha supervisor update --no-progress"),
     "update-addon": (L_("Mise à jour d'un module"), ADDONS.format(args="update {slug}{backup} --no-progress")),
+    "update-hacs": (L_("Mise à jour d'un dépôt HACS"), HACS_INSTALL),
     "backup": (L_("Sauvegarde complète"), "ha backups new --name {name} --no-progress"),
     "restart-core": (L_("Redémarrage de Home Assistant"), "ha core restart --no-progress"),
     "reboot-host": (L_("Redémarrage du système"), "ha host reboot --no-progress"),
@@ -277,7 +297,7 @@ def _explain(output):
 def _collect(row):
     script = "; ".join("echo '@@loco %s'; %s 2>&1; echo" % (name, ADDONS.format(args="--raw-json") if name == "addons" else f"ha {name} --raw-json")
                        for name in SECTIONS)
-    script += "; " + RESOURCES
+    script += "; " + RESOURCES + "; " + HACS_COLLECT
     code, output = run(row, script)
     found = {}
     for block in output.split("@@loco ")[1:]:
@@ -342,6 +362,13 @@ def summarize(found):
                            "version": _text(a.get("version"), 40), "latest": _text(a.get("version_latest"), 40),
                            "outdated": bool(a.get("update_available")), "state": _text(a.get("state"), 20)})
     addons.sort(key=lambda a: a["name"].lower())
+    hacs = []
+    for h in (found.get("hacs") or {}).get("hacs") or []:
+        if isinstance(h, dict) and HACS_ENTITY_RE.match(_text(h.get("id"), 130)):
+            hacs.append({"target": "hacs:" + h["id"], "slug": h["id"], "name": _text(h.get("name"), 80) or h["id"],
+                         "version": _text(h.get("version"), 40), "latest": _text(h.get("latest"), 40),
+                         "outdated": bool(h.get("outdated"))})
+    hacs.sort(key=lambda h: h["name"].lower())
     backups = []
     for b in (found.get("backups") or {}).get("backups") or []:
         if isinstance(b, dict):
@@ -365,8 +392,9 @@ def summarize(found):
     memory_total = int(mt) * 1024 if isinstance(mt, (int, float)) and mt > 0 else None
     memory_used = ((int(mt) - int(ma)) * 1024 if memory_total and isinstance(ma, (int, float)) and 0 <= ma <= mt else None)
     cores = int(res["nproc"]) if isinstance(res.get("nproc"), (int, float)) and res["nproc"] > 0 else None
-    updates = [p for p in (supervisor, core, system) if p["outdated"] and p["version"]] + [a for a in addons if a["outdated"]]
-    return {"core": core, "os": system, "supervisor": supervisor, "addons": addons, "backups": backups, "updates": updates,
+    updates = ([p for p in (supervisor, core, system) if p["outdated"] and p["version"]]
+               + [a for a in addons if a["outdated"]] + [h for h in hacs if h["outdated"]])
+    return {"core": core, "os": system, "supervisor": supervisor, "addons": addons, "hacs": hacs, "backups": backups, "updates": updates,
             "hostname": _text(host.get("hostname"), 60), "system": system_name,
             "haos": system_name.startswith("Home Assistant OS"),
             "memory_total": memory_total, "memory_used": memory_used,
@@ -430,6 +458,8 @@ def command(job):
     slug = job["target"].partition(":")[2]
     if job["action"] == "update-addon" and not SLUG_RE.match(slug):
         raise LinkError(_("Module inconnu."))
+    if job["action"] == "update-hacs" and not HACS_ENTITY_RE.match(slug):
+        raise LinkError(_("Dépôt HACS inconnu."))
     return ACTIONS[job["action"]][1].format(backup=backup, slug=slug, name=name)
 
 
@@ -570,8 +600,13 @@ def _view(row):
     busy = {j["action"] + "|" + j["target"]: j["state"] for j in running}
     if info:
         # Ce qui est déjà lancé se montre comme tel et ne se relance pas : état de la tâche sur chaque mise à jour.
-        for u in [info["core"], info["os"], info["supervisor"]] + info["updates"] + info["addons"]:
-            key = ("update-addon|" + u["target"]) if u["target"].startswith("addon:") else ("update-" + u["target"] + "|")
+        for u in [info["core"], info["os"], info["supervisor"]] + info["updates"] + info["addons"] + info.get("hacs", []):
+            if u["target"].startswith("addon:"):
+                key = "update-addon|" + u["target"]
+            elif u["target"].startswith("hacs:"):
+                key = "update-hacs|" + u["target"]
+            else:
+                key = "update-" + u["target"] + "|"
             u["job"] = busy.get(key, "")
     return {"row": row, "info": info, "jobs": jobs, "running": running,
             "updating": any(j["action"].startswith("update-") for j in running),
@@ -813,9 +848,15 @@ def _update_items(info, target):
     le Supervisor, les modules, le cœur, puis le système, qui redémarre."""
     found = []
     for u in info["updates"]:
-        action = "update-addon" if u["target"].startswith("addon:") else "update-" + u["target"]
-        found.append((action, u["target"] if action == "update-addon" else "", f"{u['name']} {u['version']} → {u['latest']}", u["target"]))
-    order = {"update-supervisor": 0, "update-addon": 1, "update-core": 2, "update-os": 3}
+        if u["target"].startswith("addon:"):
+            action = "update-addon"
+        elif u["target"].startswith("hacs:"):
+            action = "update-hacs"
+        else:
+            action = "update-" + u["target"]
+        slug = u["target"] if action in ("update-addon", "update-hacs") else ""
+        found.append((action, slug, f"{u['name']} {u['version']} → {u['latest']}", u["target"]))
+    order = {"update-supervisor": 0, "update-addon": 1, "update-hacs": 1, "update-core": 2, "update-os": 3}
     found.sort(key=lambda item: order[item[0]])
     return [item[:3] for item in found if not target or item[3] == target]
 

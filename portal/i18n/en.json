@@ -5093,5 +5093,9 @@
  "Format non reconnu : PNG, JPEG, GIF ou WebP.": "Unrecognized format: PNG, JPEG, GIF or WebP.",
  "Ne plus afficher": "Don’t show again",
  "Annuler le transfert": "Cancel the transfer",
- "annulé": "cancelled"
+ "annulé": "cancelled",
+ "Dépôt": "Repository",
+ "dépôts de la communauté": "community repositories",
+ "Dépôt HACS inconnu.": "Unknown HACS repository.",
+ "Mise à jour d'un dépôt HACS": "HACS repository update"
 }

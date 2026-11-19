@@ -402,6 +402,87 @@ class TestReading(HomeAssistantTest):
         self.assertEqual(r.headers["Cache-Control"], "no-store")
 
 
+class TestHacs(HomeAssistantTest):
+    """Dépôts HACS : repérés par le registre des entités (platform=marketplace), mis à jour par le service update.install."""
+
+    FOUND = {
+        "core info": {"version": "2026.11.1", "version_latest": "2026.11.1", "update_available": False},
+        "os info": {"version": "18.4", "version_latest": "18.4", "update_available": False},
+        "supervisor info": {"version": "2026.11.0", "version_latest": "2026.11.0", "update_available": False,
+                            "healthy": True, "supported": True},
+        "host info": {"hostname": "maison", "operating_system": "Home Assistant OS 18.4",
+                      "disk_total": 62.3, "disk_free": 40.2},
+        "addons": {"addons": []}, "backups": {"backups": []}, "resolution info": {"issues": []},
+        "hacs": {"hacs": [
+            {"id": "update.hacs_mushroom_update", "name": "Mushroom", "outdated": True, "version": "5.2.3", "latest": "5.3.0"},
+            {"id": "update.hacs_card_mod_update", "name": "card-mod", "outdated": False, "version": "3.4.3", "latest": "3.4.3"},
+        ]},
+    }
+
+    def test_repositories_are_read_sorted_and_the_outdated_ones_become_updates(self):
+        info = homeassistant.summarize(self.FOUND)
+        self.assertEqual([h["name"] for h in info["hacs"]], ["card-mod", "Mushroom"])      # triés, insensibles à la casse
+        self.assertEqual([(h["target"], h["outdated"]) for h in info["hacs"]],
+                         [("hacs:update.hacs_card_mod_update", False), ("hacs:update.hacs_mushroom_update", True)])
+        updates = [(u["target"], u["version"], u["latest"]) for u in info["updates"]]
+        self.assertIn(("hacs:update.hacs_mushroom_update", "5.2.3", "5.3.0"), updates)
+        self.assertNotIn("hacs:update.hacs_card_mod_update", [u["target"] for u in info["updates"]])   # à jour : rien
+
+    def test_an_update_installs_through_the_core_service_and_an_unknown_one_is_refused(self):
+        cmd = homeassistant.command({"action": "update-hacs", "target": "hacs:update.hacs_mushroom_update", "backup": 0})
+        self.assertIn('"entity_id":"update.hacs_mushroom_update"', cmd)
+        self.assertIn("core/api/services/update/install", cmd)
+        self.assertIn("$SUPERVISOR_TOKEN", cmd)                    # le jeton vient de l'environnement, jamais en argument
+        for bad in ("hacs:update.Mushroom", "hacs:rm -rf /", "hacs:sensor.x", "hacs:"):
+            with self.assertRaises(homeassistant.LinkError):
+                homeassistant.command({"action": "update-hacs", "target": bad, "backup": 0})
+
+    def test_a_hacs_update_runs_with_the_addons_before_the_core(self):
+        info = {"updates": [
+            {"target": "os", "name": "OS", "version": "18.4", "latest": "18.5"},
+            {"target": "hacs:update.hacs_mushroom_update", "name": "Mushroom", "version": "5.2.3", "latest": "5.3.0"},
+            {"target": "core", "name": "Core", "version": "a", "latest": "b"},
+            {"target": "addon:core_mosquitto", "name": "Mosquitto", "version": "1", "latest": "2"},
+            {"target": "supervisor", "name": "Supervisor", "version": "1", "latest": "2"},
+        ]}
+        actions = [a for a, _t, _l in homeassistant._update_items(info, "")]
+        self.assertEqual(actions[0], "update-supervisor")
+        self.assertEqual(actions[-2:], ["update-core", "update-os"])
+        self.assertEqual(set(actions[1:3]), {"update-addon", "update-hacs"})
+        one = homeassistant._update_items(info, "hacs:update.hacs_mushroom_update")
+        self.assertEqual([(a, t) for a, t, _l in one], [("update-hacs", "hacs:update.hacs_mushroom_update")])
+
+    def test_the_hacs_probe_and_install_are_valid_shell_and_part_of_the_reading(self):
+        self.assertEqual(subprocess.run(["sh", "-n", "-c", homeassistant.HACS_COLLECT]).returncode, 0)
+        install = homeassistant.HACS_INSTALL.format(slug="update.hacs_mushroom_update", backup="", name="'loco'")
+        self.assertEqual(subprocess.run(["sh", "-n", "-c", install]).returncode, 0)
+        self.assertIn("HACS_COLLECT", homeassistant._collect.__code__.co_names)   # ajouté au script de relevé
+
+    def test_the_page_lists_the_repositories_and_offers_the_update(self):
+        row = self.link()
+        info = homeassistant.summarize(self.FOUND)
+        with transaction() as conn:                                  # relevé déjà frais : la fiche ne relance rien en fond
+            conn.execute("UPDATE homeassistant_hosts SET info=?, checked=? WHERE id=?",
+                         (json.dumps(info), time.time(), row["id"]))
+        page = self.page_host(self.host())
+        for text in ("HACS", "Mushroom", "card-mod", "5.2.3 → 5.3.0", "à mettre à jour",
+                     "hacs:update.hacs_mushroom_update", "dépôts de la communauté"):
+            self.assertIn(text, page, text)
+        self.assertIn('data-open="#hass-update"', page)             # la mise à jour du dépôt est proposée
+
+    def test_a_running_update_is_shown_as_busy_and_not_offered_again(self):
+        row = self.link()
+        info = homeassistant.summarize(self.FOUND)
+        with transaction() as conn:
+            conn.execute("UPDATE homeassistant_hosts SET info=?, checked=? WHERE id=?",
+                         (json.dumps(info), time.time(), row["id"]))
+            conn.execute("INSERT INTO homeassistant_jobs (host_id, action, target, state, created_at) VALUES (?,?,?,?,?)",
+                         (row["id"], "update-hacs", "hacs:update.hacs_mushroom_update", "running", homeassistant._stamp()))
+        page = self.page_host(self.host())
+        self.assertIn("en cours", page)                             # la tâche lancée s'affiche comme telle
+        self.assertNotIn('data-open="#hass-update"', page)          # … et son bouton ne se reclique pas
+
+
 class TestFleetSelection(HomeAssistantTest):
     """Les instances Home Assistant se cochent dans Mon parc comme les autres postes : mise à jour et redémarrage groupés."""
 

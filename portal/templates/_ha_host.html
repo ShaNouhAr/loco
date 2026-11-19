@@ -111,6 +111,14 @@
             {% set addon_updates = info.addons|selectattr('outdated')|list|length %}
             <div class="s">{% if addon_updates %}<span class="st warn">{{ _("%(n)s à mettre à jour", n=addon_updates) }}</span>{% else %}{{ _("à jour") }}{% endif %}</div>
           </div>
+          {% if info.hacs %}
+          <div class="metric">
+            <div class="k">{{ titled('download', "HACS") }}</div>
+            <div class="v small-v">{{ info.hacs|length }}</div>
+            {% set hacs_updates = info.hacs|selectattr('outdated')|list|length %}
+            <div class="s">{% if hacs_updates %}<span class="st warn">{{ _("%(n)s à mettre à jour", n=hacs_updates) }}</span>{% else %}{{ _("à jour") }}{% endif %}</div>
+          </div>
+          {% endif %}
           {% if info.haos and info.memory_total %}
           <div class="metric">
             <div class="k">{{ titled('memory', _("Mémoire")) }}</div>
@@ -206,6 +214,24 @@
               <td><strong>{{ a.name }}</strong></td>
               <td class="mono" data-label="{{ _('Version') }}">{{ a.version or '—' }}{% if a.outdated %} <span class="muted">→ {{ a.latest }}</span>{% endif %}</td>
               <td data-label="{{ _('État') }}">{% if a.state == 'started' %}<span class="st ok">{{ _("démarré") }}</span>{% elif a.state == 'stopped' %}<span class="st">{{ _("arrêté") }}</span>{% elif a.state == 'error' %}<span class="st err">{{ _("en erreur") }}</span>{% else %}<span class="st">{{ a.state or '—' }}</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if info and info.hacs %}
+      <div class="panel-h sub"><h2>HACS <span class="h-count">{{ info.hacs|length }}</span></h2><div class="aside">{{ _("dépôts de la communauté") }}</div></div>
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <thead><tr><th>{{ _("Dépôt") }}</th><th>{{ _("Version") }}</th><th>{{ _("État") }}</th></tr></thead>
+          <tbody>
+            {% for a in info.hacs %}
+            <tr>
+              <td><strong>{{ a.name }}</strong></td>
+              <td class="mono" data-label="{{ _('Version') }}">{{ a.version or '—' }}{% if a.outdated %} <span class="muted">→ {{ a.latest }}</span>{% endif %}</td>
+              <td data-label="{{ _('État') }}">{% if a.outdated %}<span class="st warn">{{ _("à mettre à jour") }}</span>{% else %}<span class="st ok">{{ _("à jour") }}</span>{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>

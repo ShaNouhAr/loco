@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.184.0 — 2026-11-19
+
+- **Mises à jour HACS (Home Assistant Community Store).** Sur la page d'une instance Home Assistant, loco liste maintenant les dépôts HACS installés (cartes, intégrations et thèmes de la communauté), signale ceux pour lesquels une mise à jour est disponible, et permet de les mettre à jour — individuellement, depuis la sélection de *Mon parc*, ou avec *Tout mettre à jour* — au même endroit que le cœur et les modules complémentaires.
+
 ## 2.183.1 — 2026-11-19
 
 - **Correctif : fiche d'un poste avec carte graphique.** La page d'un poste dont la carte graphique ne communique pas sa température (ou son occupation) ne s'ouvrait plus (erreur interne). C'est corrigé.
