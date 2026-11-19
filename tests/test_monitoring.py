@@ -168,6 +168,15 @@ class FleetMonitoringTest(unittest.TestCase):
         self.assertIn("NVIDIA GeForce RTX 4080", page)                    # nom complet dans l'infobulle
         self.assertIn("55 °C", page)
 
+    def test_a_graphics_card_without_temperature_does_not_break_the_page(self):
+        # Vrai cas (RTX 4080 sous nvidia-smi) : ni température ni occupation chiffrée remontées — la fiche doit tenir.
+        self.checkin(self.agent, dict(reading(), gpus=[{"name": "NVIDIA GeForce RTX 4080",
+                                                        "mem_used": 251658240, "mem_total": 17171480576}]))
+        dev = device(self.agent.uid)
+        page = self.admin.c.get(f"/fleet/{dev['id']}")
+        self.assertEqual(page.status_code, 200)                           # plus d'erreur interne
+        self.assertIn("NVIDIA GeForce RTX 4080", page.get_data(as_text=True))
+
     def test_device_without_readings(self):
         other = Agent(dict(WINDOWS, hostname="mon-ancien"), "192.168.43.71")
         other.enroll()

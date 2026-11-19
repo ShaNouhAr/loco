@@ -96,7 +96,11 @@ def summary(m):
     s["levels"] = {k: level(k, s[k]) for k in LEVELS}
     for d in disks:
         d["level"] = level("disk", d["pct"])
-    s["gpus"] = [{**g, "mem_pct": _pct(g.get("mem_used", 0), g.get("mem_total", 0)), "level": level("cpu", g.get("usage"))}
+    # Toujours les mêmes clés (None si l'agent ne les donne pas) : dans un gabarit, « g.temp is not none » sur une clé
+    # absente vaut Undefined (vrai) et casse le rendu — une carte sans température ou sans occupation ne doit pas planter.
+    s["gpus"] = [{"name": g.get("name"), "usage": g.get("usage"), "temp": g.get("temp"),
+                  "mem_used": g.get("mem_used"), "mem_total": g.get("mem_total"),
+                  "mem_pct": _pct(g.get("mem_used", 0), g.get("mem_total", 0)), "level": level("cpu", g.get("usage"))}
                  for g in m.get("gpus", [])]
     return s
 

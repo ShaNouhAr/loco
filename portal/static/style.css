@@ -380,12 +380,6 @@ main { max-width: var(--w); margin: 0 auto; padding: 36px 32px 96px; }
 .v { margin-top: 8px; font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -.025em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .s { margin-top: 2px; font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric .v.small-v { font-size: 18px; line-height: 30px; letter-spacing: -.01em; }
-.metric .k.inv-k { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.inv-refresh { flex: none; margin: -4px -4px -4px 0; }
-.inv-refresh .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); color: var(--text-3); cursor: pointer; transition: color .12s, background .12s; }
-.inv-refresh .icon-btn:hover { background: var(--bg-3); color: var(--text); }
-.inv-refresh .icon-btn .ui-icon { width: 15px; height: 15px; }
-.inv-refresh .icon-btn.loading .ui-icon { display: none; }
 .v-unit { margin-left: 5px; font-size: 14px; font-weight: 500; letter-spacing: 0; color: var(--text-3); }
 
 .meter { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; margin-top: 12px; }
@@ -456,6 +450,7 @@ a.tag:hover { border-color: var(--line-2); color: var(--text); text-decoration: 
 .btn.sm { height: 30px; padding: 0 11px; font-size: 13px; }
 .btn.icon { width: var(--h); padding: 0; }
 .btn.icon svg { width: 15px; height: 15px; display: block; }
+.btn.icon.loading svg { display: none; }           /* pendant le chargement, le spinner remplace l'icône (pas les deux) */
 .btn .spin { display: none; }
 .btn.loading { pointer-events: none; }
 .btn.loading .spin { display: inline-block; }

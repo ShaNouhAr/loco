@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.183.1 — 2026-11-19
+
+- **Correctif : fiche d'un poste avec carte graphique.** La page d'un poste dont la carte graphique ne communique pas sa température (ou son occupation) ne s'ouvrait plus (erreur interne). C'est corrigé.
+- **Bouton « Rafraîchir » mieux placé.** Le bouton qui rappelle l'agent pour refaire l'inventaire tout de suite est passé dans la barre d'actions, en haut de la fiche (il était mal placé et s'affichait en double sur la tuile Inventaire).
+
 ## 2.183.0 — 2026-11-19
 
 - **Transferts de fichiers plus clairs, et annulables.** Dans l'onglet *Fichiers* d'un poste, chaque envoi ou téléchargement montre la taille transférée (Mo / Go), le pourcentage et le débit, et une croix permet de l'annuler en cours de route.
