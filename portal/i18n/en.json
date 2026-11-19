@@ -5115,5 +5115,18 @@
  "Désinstaller %(name)s": "Uninstall %(name)s",
  "Le paquet (et ce qui en dépend) est retiré du poste à son prochain contact.": "The package (and anything that depends on it) is removed from the machine at its next contact.",
  "L’application Flatpak est retirée du poste à son prochain contact.": "The Flatpak app is removed from the machine at its next contact.",
- "Désinstallation": "Uninstall"
+ "Désinstallation": "Uninstall",
+ "Carte mère": "Motherboard",
+ "Barrettes de mémoire": "Memory modules",
+ "Emplacement": "Slot",
+ "Vitesse": "Speed",
+ "Fabricant": "Manufacturer",
+ "Disques": "Disks",
+ "disque mécanique": "hard drive",
+ "%(num)s socket": "%(num)s socket",
+ "%(num)s sockets": "%(num)s sockets",
+ "%(num)s fil": "%(num)s thread",
+ "%(num)s fils": "%(num)s threads",
+ "%(num)s barrette": "%(num)s module",
+ "%(num)s barrettes": "%(num)s modules"
 }

@@ -55,5 +55,26 @@ class TestUsage(unittest.TestCase):
             agent.FileSession().handle({"op": "nope", "path": self.dir}, b"")
 
 
+class TestHardware(unittest.TestCase):
+    """Inventaire matériel : structure stable (clés toujours là), quel que soit ce que le poste expose, sans planter."""
+
+    def test_hardware_info_has_a_stable_shape(self):
+        hw = agent.hardware_info()
+        self.assertIsInstance(hw, dict)
+        for key in ("vendor", "model", "serial", "bios", "board", "cpu", "memory_modules", "disks"):
+            self.assertIn(key, hw)
+        for key in ("bios", "board", "cpu"):
+            self.assertIsInstance(hw[key], dict)
+        for key in ("memory_modules", "disks"):
+            self.assertIsInstance(hw[key], list)
+        # Les disques relevés portent bien leurs champs (les cartes réseau sont déjà vues ailleurs, pas ici).
+        for d in hw["disks"]:
+            self.assertGreaterEqual(set(d), {"name", "model", "size", "ssd"})
+
+    def test_dmi_ignores_factory_placeholders(self):
+        self.assertEqual(agent._dmi.__code__.co_argcount, 1)   # (name) -> valeur nettoyée
+        self.assertIn("default string", agent._DMI_NOISE)       # les valeurs d'usine sont écartées
+
+
 if __name__ == "__main__":
     unittest.main()

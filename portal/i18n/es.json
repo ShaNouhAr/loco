@@ -5115,5 +5115,18 @@
  "Désinstaller %(name)s": "Desinstalar %(name)s",
  "Le paquet (et ce qui en dépend) est retiré du poste à son prochain contact.": "El paquete (y lo que dependa de él) se elimina del equipo en su próximo contacto.",
  "L’application Flatpak est retirée du poste à son prochain contact.": "La aplicación Flatpak se elimina del equipo en su próximo contacto.",
- "Désinstallation": "Desinstalación"
+ "Désinstallation": "Desinstalación",
+ "Carte mère": "Placa base",
+ "Barrettes de mémoire": "Módulos de memoria",
+ "Emplacement": "Ranura",
+ "Vitesse": "Velocidad",
+ "Fabricant": "Fabricante",
+ "Disques": "Discos",
+ "disque mécanique": "disco mecánico",
+ "%(num)s socket": "%(num)s zócalo",
+ "%(num)s sockets": "%(num)s zócalos",
+ "%(num)s fil": "%(num)s hilo",
+ "%(num)s fils": "%(num)s hilos",
+ "%(num)s barrette": "%(num)s módulo",
+ "%(num)s barrettes": "%(num)s módulos"
 }

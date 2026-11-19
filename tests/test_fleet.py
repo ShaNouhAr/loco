@@ -113,6 +113,20 @@ class TestRepositoryWarning(FleetTest):
         agent.checkin(dict({"updates": []}, **inventory))
         return device(agent.uid)
 
+    def test_the_details_tab_shows_the_hardware_configuration(self):
+        dev = self.machine(system={"cpu": "Test CPU", "cores": 4, "memory": 8589934592, "kernel": "6.1", "virtualization": "kvm"}, hardware={
+            "vendor": "ACME", "model": "Box 3000", "serial": "SN123",
+            "bios": {"vendor": "ACME", "version": "1.2", "date": "2026-01-01"},
+            "board": {"vendor": "ACME", "name": "MB1"},
+            "cpu": {"model": "Test CPU", "sockets": 1, "threads": 8},
+            "memory_modules": [{"size": "8 GB", "type": "DDR4", "speed": "3200 MT/s", "vendor": "Kingston", "part": "KX1", "slot": "DIMM0"}],
+            "disks": [{"name": "sda", "model": "SSD 500G", "size": 500107862016, "ssd": True}]})
+        html = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
+        # Enrichit la section « Caractéristiques » existante (onglet Détails), pas d'onglet séparé.
+        for text in ("Caractéristiques", "Box 3000", "SN123", "MB1", "1.2", "8 fils", "DIMM0", "DDR4", "SSD 500G"):
+            self.assertIn(text, html, text)
+        self.assertNotIn('data-tab="materiel"', html)
+
     def test_one_repository_down_keeps_the_light_and_is_shown_on_the_card(self):
         dev = self.machine(warning="Dépôt injoignable, ses mises à jour ne sont pas comptées : http://ppa.example.org noble")
         color, reason = fleet_status(dev)

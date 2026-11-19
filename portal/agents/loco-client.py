@@ -807,6 +807,77 @@ def system_info():
     return info
 
 
+# Valeurs d'usine sans intérêt que les fabricants laissent dans le DMI : traitées comme vides.
+_DMI_NOISE = {"to be filled by o.e.m.", "default string", "none", "not specified", "not available",
+              "system manufacturer", "system product name", "unknown", "o.e.m.", "", "0"}
+
+
+def _readfile(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _dmi(name):
+    value = _readfile("/sys/class/dmi/id/" + name)
+    return "" if value.lower() in _DMI_NOISE else value[:120]
+
+
+def hardware_info():
+    """Configuration matérielle du poste : modèle/série, BIOS, carte mère, barrettes de mémoire, disques, cartes réseau.
+    Lecture locale (DMI dans /sys, dmidecode pour le détail des barrettes, /sys/block et /sys/class/net). Rien n'est changé."""
+    hw = {"vendor": _dmi("sys_vendor"), "model": _dmi("product_name"), "serial": _dmi("product_serial"),
+          "bios": {"vendor": _dmi("bios_vendor"), "version": _dmi("bios_version"), "date": _dmi("bios_date")},
+          "board": {"vendor": _dmi("board_vendor"), "name": _dmi("board_name")}}
+    # Processeur : fils et sockets (le modèle vient de system_info). lscpu si présent, sinon /proc/cpuinfo.
+    cpu = {}
+    if shutil.which("lscpu"):
+        code, out = run(["lscpu"], timeout=30)
+        if code == 0:
+            fields = {k.strip(): v.strip() for k, _, v in (l.partition(":") for l in out.splitlines()) if v.strip()}
+            for key, label in (("CPU(s)", "threads"), ("Socket(s)", "sockets"), ("Thread(s) per core", "threads_per_core")):
+                if fields.get(key, "").isdigit():
+                    cpu[label] = int(fields[key])
+            cpu["model"] = fields.get("Model name", "")[:120]
+    hw["cpu"] = cpu
+    # Barrettes de mémoire (dmidecode, root) : emplacement rempli seulement.
+    modules = []
+    if shutil.which("dmidecode"):
+        code, out = run(["dmidecode", "-t", "memory"], timeout=30)
+        if code == 0:
+            for block in out.split("Memory Device")[1:]:
+                field = lambda name: (re.search(r"\n\s*" + name + r":\s*(.+)", block) or [None, ""])[1].strip()
+                size = field("Size")
+                if not size or "No Module" in size or size.lower() == "unknown":
+                    continue
+                modules.append({"size": size[:30], "type": field("Type")[:20], "speed": field("Speed")[:30],
+                                "vendor": field("Manufacturer")[:40], "part": field("Part Number")[:40],
+                                "slot": field("Locator")[:30]})
+                if len(modules) >= 64:
+                    break
+    hw["memory_modules"] = modules
+    # Disques physiques (/sys/block) : modèle, taille, SSD ou disque mécanique.
+    disks = []
+    try:
+        for name in sorted(os.listdir("/sys/block")):
+            if name.startswith(("loop", "ram", "zram", "dm-", "sr", "fd", "md")):
+                continue
+            base = "/sys/block/" + name
+            sectors = _readfile(base + "/size")
+            if not sectors.isdigit():
+                continue
+            disks.append({"name": name, "model": _readfile(base + "/device/model")[:60],
+                          "size": int(sectors) * 512, "ssd": _readfile(base + "/queue/rotational") == "0"})
+            if len(disks) >= 64:
+                break
+    except OSError:
+        pass
+    hw["disks"] = disks
+    return hw
+
+
 # Systèmes de fichiers locaux supervisés (les pseudo-systèmes, réseaux et images en lecture seule sont ignorés).
 LOCAL_FS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "jfs", "reiserfs", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk"}
 
@@ -1172,7 +1243,7 @@ def scan_local(fam=None):
     Collectée en premier à l'arrivée d'un poste pour peupler sa fiche tout de suite, avant le comptage des mises à jour."""
     fam = fam or family()
     return {"reboot_required": reboot_required(), "packages": installed_packages(fam),
-            "flatpaks": installed_flatpaks(), "system": system_info()}
+            "flatpaks": installed_flatpaks(), "system": system_info(), "hardware": hardware_info()}
 
 
 def scan(state=None, local=None):

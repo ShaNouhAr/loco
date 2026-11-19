@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.188.0 — 2026-11-20
+
+- **Plus de détails matériels sur un poste Linux.** La section *Caractéristiques* (onglet *Détails*) montre maintenant la marque, le modèle et le numéro de série de la machine, la carte mère, le BIOS, les sockets et fils d'exécution du processeur, les barrettes de mémoire (emplacement, taille, type, vitesse, fabricant) et les disques (modèle, taille, SSD ou disque mécanique). *(Les postes Windows suivront.)*
+- **Icône de désinstallation plus claire.** Le bouton pour désinstaller un paquet ou une application utilise maintenant une corbeille.
+
 ## 2.187.0 — 2026-11-19
 
 - **Contrôle facile d'un Android TV / Google TV.** Dans *Contrôler l'écran* d'un appareil Android, un pavé directionnel (↑ ← OK → ↓) permet de naviguer à la télécommande, et les flèches du clavier (avec Entrée = OK) font de même — indispensable sur un téléviseur, qui se pilote au pavé directionnel et non au toucher.

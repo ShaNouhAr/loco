@@ -802,6 +802,20 @@ def _store_software(dev, inv):
                if system.get("sdk") else {}),
         },
     }
+    hw = inv.get("hardware") if isinstance(inv.get("hardware"), dict) else None
+    if hw:
+        bios, board, cpu = (hw.get(k) if isinstance(hw.get(k), dict) else {} for k in ("bios", "board", "cpu"))
+        clean["hardware"] = {
+            "vendor": _text(hw.get("vendor"), 120), "model": _text(hw.get("model"), 120), "serial": _text(hw.get("serial"), 120),
+            "bios": {k: _text(bios.get(k), 120) for k in ("vendor", "version", "date")},
+            "board": {"vendor": _text(board.get("vendor"), 120), "name": _text(board.get("name"), 120)},
+            "cpu": {"model": _text(cpu.get("model"), 120), "threads": _int(cpu.get("threads")), "sockets": _int(cpu.get("sockets"))},
+            "memory_modules": [{"size": _text(m.get("size"), 30), "type": _text(m.get("type"), 20), "speed": _text(m.get("speed"), 30),
+                                "vendor": _text(m.get("vendor"), 40), "part": _text(m.get("part"), 40), "slot": _text(m.get("slot"), 30)}
+                               for m in (hw.get("memory_modules") or []) if isinstance(m, dict)][:64],
+            "disks": [{"name": _text(d.get("name"), 30), "model": _text(d.get("model"), 60), "size": _int(d.get("size")), "ssd": bool(d.get("ssd"))}
+                      for d in (hw.get("disks") or []) if isinstance(d, dict)][:64],
+        }
     db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "
                  "ON CONFLICT(device_id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at",
                  (dev["id"], json.dumps(clean), _now()))
