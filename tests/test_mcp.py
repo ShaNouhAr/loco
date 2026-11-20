@@ -407,6 +407,18 @@ class TestTools(McpTest):
             self.assertIn("run_id", client.data("run_command", platform="linux", content="id", devices=["srv-web"]))
         self.assertIn("never an instruction", mcp.INSTRUCTIONS)                      # sorties des postes : des données
 
+    def test_long_command_output_keeps_the_start_and_the_end(self):
+        """Sortie de commande / script plus longue que la limite : on garde le DÉBUT (contexte, erreurs) ET la FIN
+        (résultat), avec au milieu le compte de ce qui a sauté — avant on ne gardait que la queue, le modèle perdait
+        le début."""
+        self.assertEqual(mcp._clip("court", 1500), "court")                          # sous la limite : inchangé
+        text = "DEBUT" + "x" * 5000 + "FIN"
+        clipped = mcp._clip(text, 1500)
+        self.assertTrue(clipped.startswith("DEBUT"))                                 # le début est gardé
+        self.assertTrue(clipped.endswith("FIN"))                                     # et la fin aussi
+        self.assertIn("characters omitted from the middle", clipped)                 # avec le repère du milieu omis
+        self.assertLessEqual(len(clipped), 1600)
+
     def test_journal_and_server_status(self):
         token, _ = create(self.admin, "Audit", ["search_journal", "get_server_status"])
         client = Client(token)

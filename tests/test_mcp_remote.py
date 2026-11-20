@@ -142,6 +142,19 @@ class TestTerminal(RemoteTest):
         lines = result["output"].split("\n")
         self.assertEqual((len(lines), lines[0], lines[-1], result["exit_code"]), (4000, "ligne-0", "ligne-3999", 0))
 
+    def test_very_long_output_keeps_the_start_and_the_end(self):
+        """Sortie au-delà des 60 Ko : on garde le DÉBUT et la FIN (l'assistant voit le contexte du haut et le résultat du
+        bas), avec une marque du milieu omis — pas seulement la queue, comme avant."""
+        host = self.device()
+        client = self.client(["terminal_run"])
+        script = "echo DEBUT_MARQUEUR; for i in $(seq 1 3000); do echo ligne-de-remplissage-numero-$i; done; echo FIN_MARQUEUR"
+        result = client.data("terminal_run", device=host, command=script, timeout=60)
+        self.assertTrue(result["truncated"])
+        self.assertIn("DEBUT_MARQUEUR", result["output"])            # le début est gardé
+        self.assertIn("FIN_MARQUEUR", result["output"])              # et la fin aussi
+        self.assertIn(mcp_remote.OMIT_MARK, result["output"])        # avec le repère du milieu omis
+        self.assertLessEqual(len(result["output"]), mcp_remote.OUTPUT_MAX + 200)
+
     def test_timeout_interrupts_and_the_terminal_stays_usable(self):
         host = self.device()
         client = self.client(["terminal_run"])

@@ -228,11 +228,22 @@ def _targets(args):
     return sorted(found.values(), key=lambda d: (d["hostname"] or "").lower())
 
 
+def _clip(text, limit):
+    """Sortie trop longue pour l'assistant : on garde le DÉBUT et la FIN (contexte et erreurs sont souvent en haut, le
+    résultat en bas), avec au milieu le compte de ce qui a sauté — plutôt que de ne garder que la queue, qui faisait
+    perdre le début au modèle."""
+    if len(text) <= limit:
+        return text
+    head = limit // 3
+    tail = limit - head
+    return f"{text[:head]}\n\n[... {len(text) - head - tail} characters omitted from the middle ...]\n\n{text[-tail:]}"
+
+
 def _command(c, output=1500):
     text = c["output"] or ""
     out = {"id": c["id"], "action": c["action"], "label": str(fleet.action_label(c)), "state": c["state"],
            "created_at": c["created_at"], "created_by": c["created_by"], "finished_at": c["finished_at"] or None,
-           "exit_code": c["exit_code"], "output": ("…" + text[-output:]) if len(text) > output else text}
+           "exit_code": c["exit_code"], "output": _clip(text, output)}
     live = fleet.progress_view(c["progress"]) if c["state"] == "running" else None
     if live:                                            # avancement remonté par l'agent (étape, élément, pourcentage)
         out["progress"] = {"step": live["label"], "percent": live["percent"]}
@@ -686,7 +697,7 @@ def _run_view(run, targets, output):
             "created_by": run["created_by"], "created_at": run["created_at"], "summary": scripts._summary(targets),
             **({"targets": [{"device_id": t["device_id"], "hostname": t["hostname"], "state": t["state"],
                              "exit_code": t["exit_code"], "finished_at": t["finished_at"] or None,
-                             "output": ("…" + (t["output"] or "")[-output:]) if len(t["output"] or "") > output else (t["output"] or "")}
+                             "output": _clip(t["output"] or "", output)}
                             for t in targets]} if output else {})}
 
 
@@ -702,7 +713,8 @@ def _list_runs(args):
 
 @tool("get_script_run", "scripts", "Get a script run", L_("Consulter une exécution de script"),
       L_("Résultat d'une exécution : état, code de sortie et sortie de chaque poste."), ("scripts.view",),
-      "Get one script run: for each target device its state, exit code and output (end of the output when long).",
+      "Get one script run: for each target device its state, exit code and output (when long, the start and the end are "
+      "kept and the middle is omitted with a note of how much).",
       {"run_id": {"type": "integer", "minimum": 1}}, ("run_id",))
 def _get_run(args):
     run = db().execute("SELECT * FROM script_runs WHERE id=?", (args["run_id"],)).fetchone()

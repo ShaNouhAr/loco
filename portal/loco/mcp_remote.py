@@ -37,6 +37,7 @@ TERMINAL_COLS, TERMINAL_ROWS = 300, 200
 TTY_COLS, TTY_ROWS = 120, 40
 COMMAND_MAX = 64_000
 OUTPUT_MAX = 60_000
+OMIT_MARK = "characters omitted from the middle"   # repère d'une sortie écourtée (gardée au début ET à la fin)
 FILE_READ_MAX = 1024 * 1024
 FILE_CHUNK = 256 * 1024
 SCREEN_WIDTH = 1440                     # au-delà, la capture est réduite d'un facteur entier (lisible par l'assistant)
@@ -264,7 +265,8 @@ def _powershell_lines(command, nonce):
         "$s = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($__l)); "
         "try { $r = & ([scriptblock]::Create($s)) 2>&1; $ok = $?; $o = $r | Out-String -Width 250; "
         "$c = if (-not $ok) { 1 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 0 } } catch { $o = $_ | Out-String; $c = 1 }; "
-        f"if ($o.Length -gt {OUTPUT_MAX}) {{ $o = '[...]' + $o.Substring($o.Length - {OUTPUT_MAX}) }}; "
+        f"if ($o.Length -gt {OUTPUT_MAX}) {{ $h = [int]({OUTPUT_MAX}/3); $om = $o.Length - {OUTPUT_MAX}; "
+        f"$o = $o.Substring(0,$h) + [char]10+[char]10 + '[... ' + $om + ' {OMIT_MARK} ...]' + [char]10+[char]10 + $o.Substring($o.Length - ({OUTPUT_MAX}-$h)) }}; "
         "$b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($o)); "
         "Write-Host ('@' + '@LOCO:' + $n + ':B'); "
         "for ($i = 0; $i -lt $b.Length; $i += 240) { Write-Host $b.Substring($i, [Math]::Min(240, $b.Length - $i)); "
@@ -302,6 +304,16 @@ def clean(text):
     return ANSI_RE.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
 
 
+def _clip(text):
+    """Sortie trop longue pour l'assistant : on garde le DÉBUT et la FIN (contexte et erreurs sont souvent en haut, le
+    résultat en bas), avec au milieu le compte de ce qui a sauté — plutôt que de ne garder que la queue. (texte, écourté)."""
+    if len(text) <= OUTPUT_MAX:
+        return text, False
+    head = OUTPUT_MAX // 3
+    tail = OUTPUT_MAX - head
+    return f"{text[:head]}\n\n[... {len(text) - head - tail} {OMIT_MARK} ...]\n\n{text[-tail:]}", True
+
+
 def bash_result(raw, nonce):
     """(sortie, code) ou None tant que le marqueur de fin n'est pas arrivé."""
     text = raw.decode("utf-8", "replace")
@@ -334,7 +346,7 @@ def _partial(raw, nonce, windows):
     if windows:
         return ""                                          # sortie PowerShell rendue seulement à la fin
     marker = f"LOCO:{nonce}:B"
-    return text[text.find(marker) + len(marker):].strip("\x1e\n")[-OUTPUT_MAX:] if marker in text else ""
+    return _clip(text[text.find(marker) + len(marker):].strip("\x1e\n"))[0] if marker in text else ""
 
 
 @tool("terminal_run", "remote", "Run a terminal command", L_("Commandes dans le terminal"),
@@ -345,7 +357,7 @@ def _partial(raw, nonce, windows):
       "return its output and exit code within seconds (no agent check-in wait). Each call is independent: no working "
       "directory or variable is kept between calls. The command must not wait for keyboard input (use terminal_interact "
       "for interactive programs); it is interrupted after the timeout. For tasks longer than a few minutes, start them in "
-      "the background (nohup … & / Start-Process) and check back. Scripts up to 64 KB; output limited to the last 60 KB.",
+      "the background (nohup … & / Start-Process) and check back. Scripts up to 64 KB. If the output is longer than 60 KB, the start and the end are kept (the middle is omitted, with a note of how much).",
       {"device": DEVICE,
        "command": {"type": "string", "minLength": 1, "maxLength": COMMAND_MAX, "description": "Command or script (bash on Linux, PowerShell on Windows)."},
        "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait (default 30)."}},
@@ -364,7 +376,7 @@ def _terminal_run(args):
       "terminal_run on Android: pm (install, list, grant, uninstall), am/cmd (start activities, force-stop), settings, "
       "input (tap x y, swipe, text, keyevent), screencap, dumpsys, logcat -d, getprop. Returns the output and exit code. "
       "Each call is independent (no working directory or variable kept). It must not wait for keyboard input; it is "
-      "interrupted after the timeout. Output limited to the last 60 KB.",
+      "interrupted after the timeout. If the output is longer than 60 KB, the start and the end are kept (the middle is omitted).",
       {"device": DEVICE,
        "command": {"type": "string", "minLength": 1, "maxLength": COMMAND_MAX, "description": "Shell command or script (Android sh)."},
        "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait (default 30)."}},
@@ -434,9 +446,10 @@ def _run(dev, kind, args):
         start = time.monotonic()
         if chan.wait(ready, timeout):
             output, code = found[0]
-            truncated = len(output) > OUTPUT_MAX
+            # Linux/adb : la sortie complète arrive ici, on garde début+fin. Windows : PowerShell l'a déjà écourtée au poste.
+            out, truncated = (output, OMIT_MARK in output) if windows else _clip(output)
             return {"device_id": dev["id"], "hostname": dev["hostname"], "exit_code": code,
-                    "output": output[-OUTPUT_MAX:], "truncated": truncated, "seconds": round(time.monotonic() - start, 1)}
+                    "output": out, "truncated": truncated, "seconds": round(time.monotonic() - start, 1)}
         partial = _partial(bytes(chan.buffer), nonce, windows)
         chan.send(b"\x03")                                  # Ctrl+C : le terminal redevient disponible
         chan.wait(lambda: False, 1.0)

@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.189.0 — 2026-11-20
+
+- **Sorties longues entièrement lisibles pour les assistants (MCP).** Quand une commande, un script ou le terminal distant produit une sortie plus longue que la limite, l'assistant reçoit désormais le **début** *et* la fin du texte (avec, au milieu, le compte des caractères omis) au lieu de la seule fin : le contexte et les erreurs, souvent en tête, ne sont plus perdus. S'applique au terminal (`terminal_run`), aux commandes et scripts (`get_script_run`, actions récentes d'un poste). La sortie reste signalée comme écourtée.
+
 ## 2.188.0 — 2026-11-20
 
 - **Plus de détails matériels sur un poste Linux.** La section *Caractéristiques* (onglet *Détails*) montre maintenant la marque, le modèle et le numéro de série de la machine, la carte mère, le BIOS, les sockets et fils d'exécution du processeur, les barrettes de mémoire (emplacement, taille, type, vitesse, fabricant) et les disques (modèle, taille, SSD ou disque mécanique). *(Les postes Windows suivront.)*
