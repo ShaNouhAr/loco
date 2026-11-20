@@ -375,7 +375,7 @@ class TestLinuxAgent(unittest.TestCase):
     def test_inventory_reports_what_is_held_back_for_the_portal(self):
         self.agent.family = lambda: "debian"
         self.agent.apt_update = lambda: (0, "")
-        for name in ("flatpak_updates", "reboot_required", "installed_packages", "installed_flatpaks", "system_info"):
+        for name in ("flatpak_updates", "reboot_required", "installed_packages", "installed_flatpaks", "system_info", "hardware_info"):
             setattr(self.agent, name, lambda *a: 0)
         outputs = {(): [{"name": "curl", "version": "8", "security": False}],
                    ("--ignore-hold",): [{"name": "curl", "version": "8", "security": False}, {"name": "openssl", "version": "3", "security": True},

@@ -154,7 +154,7 @@ class TestOptionalFeature(HomeAssistantTest):
 
     def test_every_route_is_declared_and_follows_the_feature(self):
         routes = {e for e in fixture.loco.app.view_functions if e.startswith("homeassistant")}
-        self.assertEqual(len(routes), 12)
+        self.assertEqual(len(routes), 13)
         for endpoint in routes:
             self.assertTrue(permissions.ENDPOINTS[endpoint].startswith("homeassistant."), endpoint)
             with fixture.loco.app.test_request_context():
