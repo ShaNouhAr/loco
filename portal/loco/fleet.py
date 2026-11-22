@@ -772,8 +772,8 @@ def _store_inventory(dev, inv):
 
 
 def _store_software(dev, inv):
-    """Inventaire détaillé des postes Linux (paquets, Flatpak, caractéristiques) rangé à part : la liste du parc relit
-    l'inventaire de chaque appareil et n'a pas à porter des milliers de paquets. Les postes Windows n'en remontent pas."""
+    """Inventaire détaillé (paquets et Flatpak sous Linux, caractéristiques et matériel sous Linux et Windows) rangé à
+    part : la liste du parc relit l'inventaire de chaque appareil et n'a pas à porter des milliers de paquets."""
     packages = [p for p in (inv.get("packages") or []) if isinstance(p, dict)][:10000]
     flatpaks = [f for f in (inv.get("flatpaks") or []) if isinstance(f, dict)][:500]
     system = inv.get("system") if isinstance(inv.get("system"), dict) else {}
@@ -809,11 +809,14 @@ def _store_software(dev, inv):
             "vendor": _text(hw.get("vendor"), 120), "model": _text(hw.get("model"), 120), "serial": _text(hw.get("serial"), 120),
             "bios": {k: _text(bios.get(k), 120) for k in ("vendor", "version", "date")},
             "board": {"vendor": _text(board.get("vendor"), 120), "name": _text(board.get("name"), 120)},
-            "cpu": {"model": _text(cpu.get("model"), 120), "threads": _int(cpu.get("threads")), "sockets": _int(cpu.get("sockets"))},
+            "cpu": {"model": _text(cpu.get("model"), 120), "threads": _int(cpu.get("threads")), "sockets": _int(cpu.get("sockets")),
+                    "cores": _int(cpu.get("cores"))},
             "memory_modules": [{"size": _text(m.get("size"), 30), "type": _text(m.get("type"), 20), "speed": _text(m.get("speed"), 30),
                                 "vendor": _text(m.get("vendor"), 40), "part": _text(m.get("part"), 40), "slot": _text(m.get("slot"), 30)}
                                for m in (hw.get("memory_modules") or []) if isinstance(m, dict)][:64],
-            "disks": [{"name": _text(d.get("name"), 30), "model": _text(d.get("model"), 60), "size": _int(d.get("size")), "ssd": bool(d.get("ssd"))}
+            # ssd : vrai, faux (disque mécanique) ou None quand le poste ne le sait pas (disque d'une machine virtuelle sous Windows).
+            "disks": [{"name": _text(d.get("name"), 30), "model": _text(d.get("model"), 60), "size": _int(d.get("size")),
+                       "ssd": d.get("ssd") if isinstance(d.get("ssd"), bool) else None}
                       for d in (hw.get("disks") or []) if isinstance(d, dict)][:64],
         }
     db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "
@@ -2304,7 +2307,7 @@ def fleet_device(dev_id):
     from . import update_blocks
     updates = inv["updates"] = update_blocks.annotate(db(), dev, inv.get("updates") or [])
     inv["software"] = update_blocks.annotate_software(db(), dev, inv.get("software") or [])
-    soft = software(dev) if dev["os_family"] != "windows" else {}
+    soft = software(dev)            # Windows : caractéristiques et matériel seulement (agents 2.191.0 et plus), ni paquets ni Flatpak
     pkg_updates = {u.get("name"): u.get("version") for u in updates if u.get("name")}
     pkgs = soft.get("packages") or []
     pkg_stats = {"total": len(pkgs), "manual": sum(1 for p in pkgs if p.get("manual")),

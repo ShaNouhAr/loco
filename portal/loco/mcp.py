@@ -313,7 +313,8 @@ def _list_devices(args):
       ("fleet.view",),
       "Get one device in detail: identity and addresses, status, pending updates (with security flag), catalog software "
       "versions (Windows), software updatable by winget outside the catalog (Windows, pending_software), package "
-      "counts (Linux), latest CPU / memory / disk measures, pending actions and the most recent actions with their "
+      "counts (Linux), system characteristics and hardware configuration (model, BIOS, mainboard, memory modules, disks), "
+      "latest CPU / memory / disk measures, pending actions and the most recent actions with their "
       "result and output. For memory and disk sizes in bytes and history, use get_device_resources.",
       {"device": DEVICE}, ("device",))
 def _get_device(args):
@@ -350,11 +351,13 @@ def _get_device(args):
                                     "installed_version": installed or None, "update_available": outdated}
                                    for a, installed, outdated in fleet.catalog_state(inv)]
     else:
-        soft = fleet.software(dev)
-        packages = soft.get("packages") or []
+        packages = fleet.software(dev).get("packages") or []
         out["packages"] = {"total": len(packages), "manually_installed": sum(1 for p in packages if isinstance(p, dict) and p.get("manual"))}
-        if soft.get("system"):
-            out["system"] = soft["system"]
+    details = fleet.software(dev)            # caractéristiques et matériel : Linux, et Windows (agents 2.191.0 et plus)
+    if details.get("system"):
+        out["system"] = details["system"]
+    if details.get("hardware"):
+        out["hardware"] = details["hardware"]
     now = monitoring.latest(dev)
     if now:
         out["measures"] = {"age_seconds": now["age"], "cpu_percent": now["cpu"], "memory_percent": now["mem"],

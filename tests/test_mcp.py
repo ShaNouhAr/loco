@@ -330,7 +330,7 @@ class TestPermissions(McpTest):
 
 class TestTools(McpTest):
     def test_fleet_queries(self):
-        self.agents()
+        win, _lin = self.agents()
         token, _ = create(self.admin, "Lecture", ["list_devices", "get_device", "find_installed_software", "list_device_groups"])
         client = Client(token)
         listing = client.data("list_devices")
@@ -341,6 +341,16 @@ class TestTools(McpTest):
         self.assertEqual(linux["pending_updates_total"], 2)
         self.assertTrue(next(u for u in linux["pending_updates"] if u["name"] == "openssl")["security"])
         self.assertEqual((linux["packages"]["total"], linux["system"]["kernel"]), (2, "6.12.0-amd64"))
+        self.assertNotIn("hardware", client.data("get_device", device="pc-compta"))       # ancien agent Windows : rien de plus
+        win.checkin({"updates": [], "apps": [{"name": "7-Zip 24.08 (x64)", "version": "24.08", "publisher": "Igor Pavlov"}],
+                     "system": {"kernel": "10.0.26300.9974", "cpu": "Intel(R) Core(TM) i7-14700KF", "cores": 28},
+                     "hardware": {"vendor": "ASUS", "board": {"vendor": "ASUSTeK COMPUTER INC.", "name": "TUF GAMING B760M-PLUS D4"},
+                                  "cpu": {"cores": 20, "threads": 28, "sockets": 1},
+                                  "memory_modules": [{"size": "16 GB", "type": "DDR4", "slot": "DIMM0"}],
+                                  "disks": [{"name": "PhysicalDrive0", "model": "NVMe Samsung SSD 990 PRO 4TB", "size": 4000787030016, "ssd": True}]}})
+        windows = client.data("get_device", device="pc-compta")
+        self.assertEqual((windows["system"]["kernel"], windows["hardware"]["board"]["name"], windows["hardware"]["cpu"]["cores"],
+                          windows["hardware"]["disks"][0]["ssd"]), ("10.0.26300.9974", "TUF GAMING B760M-PLUS D4", 20, True))
         by_id = client.data("get_device", device=str(linux["id"]))
         self.assertEqual(by_id["hostname"], "srv-web")
         self.assertTrue(client.call("get_device", device="inconnu")["isError"])

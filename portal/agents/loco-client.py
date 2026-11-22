@@ -840,6 +840,8 @@ def hardware_info():
             for key, label in (("CPU(s)", "threads"), ("Socket(s)", "sockets"), ("Thread(s) per core", "threads_per_core")):
                 if fields.get(key, "").isdigit():
                     cpu[label] = int(fields[key])
+            if fields.get("Core(s) per socket", "").isdigit() and cpu.get("sockets"):
+                cpu["cores"] = int(fields["Core(s) per socket"]) * cpu["sockets"]       # cœurs physiques (sans l'hyperthreading)
             cpu["model"] = fields.get("Model name", "")[:120]
     hw["cpu"] = cpu
     # Barrettes de mémoire (dmidecode, root) : emplacement rempli seulement.

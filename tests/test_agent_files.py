@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,6 +71,14 @@ class TestHardware(unittest.TestCase):
         # Les disques relevés portent bien leurs champs (les cartes réseau sont déjà vues ailleurs, pas ici).
         for d in hw["disks"]:
             self.assertGreaterEqual(set(d), {"name", "model", "size", "ssd"})
+
+    def test_physical_cores_come_from_lscpu(self):
+        """« Cœurs » de la fiche : cœurs physiques (cœurs par socket × sockets), distincts des processeurs logiques."""
+        lscpu = "CPU(s):                  28\nThread(s) per core:      2\nCore(s) per socket:      20\nSocket(s):               1\nModel name:              Intel(R) Core(TM) i7-14700KF\n"
+        with mock.patch.object(agent.shutil, "which", lambda name: "/usr/bin/" + name if name == "lscpu" else None), \
+                mock.patch.object(agent, "run", lambda cmd, timeout=30: (0, lscpu)):
+            cpu = agent.hardware_info()["cpu"]
+        self.assertEqual((cpu["threads"], cpu["cores"], cpu["sockets"], cpu["model"]), (28, 20, 1, "Intel(R) Core(TM) i7-14700KF"))
 
     def test_dmi_ignores_factory_placeholders(self):
         self.assertEqual(agent._dmi.__code__.co_argcount, 1)   # (name) -> valeur nettoyée

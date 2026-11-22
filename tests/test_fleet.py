@@ -127,6 +127,33 @@ class TestRepositoryWarning(FleetTest):
             self.assertIn(text, html, text)
         self.assertNotIn('data-tab="materiel"', html)
 
+    def test_windows_machines_get_the_same_details(self):
+        """L'agent Windows (2.191.0 et plus) remonte aussi caractéristiques et matériel ; cœurs physiques et processeurs
+        logiques distingués, type de disque inconnu dit « — » et non « disque mécanique »."""
+        agent = Agent(WINDOWS, "192.168.43.96")
+        agent.enroll()
+        agent.checkin({"updates": [], "apps": [], "system": {
+            "kernel": "10.0.26300.9974", "arch": "x86_64", "cpu": "Intel(R) Core(TM) i7-14700KF", "cores": 28,
+            "memory": 34104127488, "memory_available": 15529037824, "disk": 3992436166656, "disk_free": 1321805160448,
+            "boot": 1795249586, "virtualization": "none"}, "hardware": {
+            "vendor": "ASUS", "model": "", "serial": "", "bios": {"vendor": "American Megatrends Inc.", "version": "1836", "date": "04/16/2026"},
+            "board": {"vendor": "ASUSTeK COMPUTER INC.", "name": "TUF GAMING B760M-PLUS D4"},
+            "cpu": {"model": "Intel(R) Core(TM) i7-14700KF", "sockets": 1, "cores": 20, "threads": 28},
+            "memory_modules": [{"size": "16 GB", "type": "DDR4", "speed": "2933 MT/s", "vendor": "Corsair", "part": "CMW32GX4M2E3200C16",
+                                "slot": "Controller0-ChannelA-DIMM0"}],
+            "disks": [{"name": "PhysicalDrive0", "model": "NVMe Samsung SSD 990 PRO 4TB", "size": 4000787030016, "ssd": True},
+                      {"name": "PhysicalDrive1", "model": "QEMU HARDDISK", "size": 161061273600, "ssd": None}]}})
+        dev = device(agent.uid)
+        html = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
+        for text in ("Caractéristiques", "TUF GAMING B760M-PLUS D4", "American Megatrends Inc. 1836", "— 20 cœurs", "28 fils",
+                     "CMW32GX4M2E3200C16", "NVMe Samsung SSD 990 PRO 4TB", "Version de Windows", "10.0.26300.9974", "Disque système"):
+            self.assertIn(text, html, text)
+        self.assertNotIn("Noyau", html)
+        disks = html[html.index("PhysicalDrive0"):html.index("PhysicalDrive1") + 400]
+        self.assertIn('data-label="Type">SSD</td>', disks)
+        self.assertIn('data-label="Type">—</td>', disks)                      # type inconnu : ni SSD ni « mécanique »
+        self.assertNotIn("disque mécanique", disks)
+
     def test_one_repository_down_keeps_the_light_and_is_shown_on_the_card(self):
         dev = self.machine(warning="Dépôt injoignable, ses mises à jour ne sont pas comptées : http://ppa.example.org noble")
         color, reason = fleet_status(dev)

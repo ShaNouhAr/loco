@@ -586,23 +586,23 @@
         {% if h.vendor or h.model %}<dt>{{ _("Machine") }}</dt><dd>{{ (h.vendor ~ ' ' ~ h.model)|trim or '—' }}{% if h.serial %} <span class="muted small mono">{{ h.serial }}</span>{% endif %}</dd>{% endif %}
         {% if h.board and (h.board.vendor or h.board.name) %}<dt>{{ _("Carte mère") }}</dt><dd>{{ (h.board.vendor ~ ' ' ~ h.board.name)|trim }}</dd>{% endif %}
         {% if h.bios and h.bios.version %}<dt>BIOS</dt><dd>{{ h.bios.vendor }} {{ h.bios.version }}{% if h.bios.date %} <span class="muted small">({{ h.bios.date }})</span>{% endif %}</dd>{% endif %}
-        {% if soft.system.cpu %}<dt>{{ _("Processeur") }}</dt><dd>{{ soft.system.cpu }}{% if soft.system.cores %} <span class="muted small">{{ _("— %(cores)s cœur%(v)s", cores=soft.system.cores, v='s' if soft.system.cores > 1) }}</span>{% endif %}{% if h.cpu and h.cpu.threads %} <span class="muted small">· {{ ngettext("%(num)s fil", "%(num)s fils", h.cpu.threads) }}{% if h.cpu.sockets and h.cpu.sockets > 1 %}, {{ ngettext("%(num)s socket", "%(num)s sockets", h.cpu.sockets) }}{% endif %}</span>{% endif %}</dd>{% endif %}
+        {% if soft.system.cpu %}<dt>{{ _("Processeur") }}</dt><dd>{{ soft.system.cpu }}{% set cores = h.cpu.cores if h.cpu and h.cpu.cores else soft.system.cores %}{% if cores %} <span class="muted small">{{ _("— %(cores)s cœur%(v)s", cores=cores, v='s' if cores > 1) }}</span>{% endif %}{% if h.cpu and h.cpu.threads %} <span class="muted small">· {{ ngettext("%(num)s fil", "%(num)s fils", h.cpu.threads) }}{% if h.cpu.sockets and h.cpu.sockets > 1 %}, {{ ngettext("%(num)s socket", "%(num)s sockets", h.cpu.sockets) }}{% endif %}</span>{% endif %}</dd>{% endif %}
         {% if soft.system.memory %}<dt>{{ _("Mémoire") }}</dt><dd>{{ soft.system.memory|human }}{% if soft.system.memory_available %} <span class="muted small">{{ _("— %(memory_available)s disponible", memory_available=soft.system.memory_available|human) }}</span>{% endif %}{% if h.memory_modules %} <span class="muted small">· {{ ngettext("%(num)s barrette", "%(num)s barrettes", h.memory_modules|length) }}</span>{% endif %}</dd>{% endif %}
-        {% if soft.system.disk %}<dt>{{ _("Disque (racine)") }}</dt><dd>{{ soft.system.disk|human }}{% if soft.system.disk_free %} <span class="muted small">{{ _("— %(disk_free)s libre", disk_free=soft.system.disk_free|human) }}</span>{% endif %}</dd>{% endif %}
-        {% if soft.system.kernel %}<dt>{{ _("Noyau") }}</dt><dd class="mono small">{{ soft.system.kernel }}{% if soft.system.arch %} · {{ soft.system.arch }}{% endif %}</dd>{% endif %}
+        {% if soft.system.disk %}<dt>{{ _("Disque système") if windows else _("Disque (racine)") }}</dt><dd>{{ soft.system.disk|human }}{% if soft.system.disk_free %} <span class="muted small">{{ _("— %(disk_free)s libre", disk_free=soft.system.disk_free|human) }}</span>{% endif %}</dd>{% endif %}
+        {% if soft.system.kernel %}<dt>{{ _("Version de Windows") if windows else _("Noyau") }}</dt><dd class="mono small">{{ soft.system.kernel }}{% if soft.system.arch %} · {{ soft.system.arch }}{% endif %}</dd>{% endif %}
         {% if soft.system.virtualization and soft.system.virtualization != 'none' %}<dt>{{ _("Virtualisation") }}</dt><dd>{{ soft.system.virtualization }}</dd>{% endif %}
         {% if boot_text %}<dt>{{ _("Démarré") }}</dt><dd>{{ boot_text }}</dd>{% endif %}
       </dl>
       {% if h.memory_modules %}
       <div class="panel-h sub"><h3>{{ _("Barrettes de mémoire") }}</h3></div>
-      <div class="table-wrap"><table><thead><tr><th>{{ _("Emplacement") }}</th><th>{{ _("Taille") }}</th><th>{{ _("Type") }}</th><th>{{ _("Vitesse") }}</th><th class="hide-sm">{{ _("Fabricant") }}</th></tr></thead><tbody>
-        {% for m in h.memory_modules %}<tr><td>{{ m.slot or '—' }}</td><td class="mono">{{ m.size }}</td><td>{{ m.type or '—' }}</td><td class="muted">{{ m.speed or '—' }}</td><td class="muted hide-sm">{{ m.vendor or '—' }}{% if m.part %} <span class="sub mono">{{ m.part }}</span>{% endif %}</td></tr>{% endfor %}
+      <div class="table-wrap"><table class="table-cards"><thead><tr><th>{{ _("Emplacement") }}</th><th>{{ _("Taille") }}</th><th>{{ _("Type") }}</th><th>{{ _("Vitesse") }}</th><th>{{ _("Fabricant") }}</th></tr></thead><tbody>
+        {% for m in h.memory_modules %}<tr><td>{{ m.slot or '—' }}</td><td class="mono nowrap" data-label="{{ _('Taille') }}">{{ m.size }}</td><td data-label="{{ _('Type') }}">{{ m.type or '—' }}</td><td class="muted nowrap" data-label="{{ _('Vitesse') }}">{{ m.speed or '—' }}</td><td class="muted" data-label="{{ _('Fabricant') }}">{{ m.vendor or '—' }}{% if m.part %} <span class="sub mono">{{ m.part }}</span>{% endif %}</td></tr>{% endfor %}
       </tbody></table></div>
       {% endif %}
       {% if h.disks %}
       <div class="panel-h sub"><h3>{{ _("Disques") }}</h3></div>
-      <div class="table-wrap"><table><thead><tr><th>{{ _("Disque") }}</th><th>{{ _("Modèle") }}</th><th class="num">{{ _("Taille") }}</th><th>{{ _("Type") }}</th></tr></thead><tbody>
-        {% for d in h.disks %}<tr><td class="mono">{{ d.name }}</td><td>{{ d.model or '—' }}</td><td class="num mono">{{ d.size|human if d.size else '—' }}</td><td>{{ 'SSD' if d.ssd else _('disque mécanique') }}</td></tr>{% endfor %}
+      <div class="table-wrap"><table class="table-cards"><thead><tr><th>{{ _("Disque") }}</th><th>{{ _("Modèle") }}</th><th class="num">{{ _("Taille") }}</th><th>{{ _("Type") }}</th></tr></thead><tbody>
+        {% for d in h.disks %}<tr><td class="mono">{{ d.name }}</td><td data-label="{{ _('Modèle') }}">{{ d.model or '—' }}</td><td class="num mono nowrap" data-label="{{ _('Taille') }}">{{ d.size|human if d.size else '—' }}</td><td data-label="{{ _('Type') }}">{{ 'SSD' if d.ssd else '—' if d.ssd is none else _('disque mécanique') }}</td></tr>{% endfor %}
       </tbody></table></div>
       {% endif %}
       {% endif %}

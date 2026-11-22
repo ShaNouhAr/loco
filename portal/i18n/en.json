@@ -5242,5 +5242,6 @@
  "Redémarrage prévu": "Restart planned",
  "Il suivra la mise à jour, si elle réussit": "It follows the upgrade, if it succeeds",
  "terminal de Proxmox": "Proxmox terminal",
- "Shell root de Proxmox · via le serveur loco": "Proxmox root shell · via the loco server"
+ "Shell root de Proxmox · via le serveur loco": "Proxmox root shell · via the loco server",
+ "Version de Windows": "Windows version"
 }

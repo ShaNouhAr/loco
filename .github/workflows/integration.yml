@@ -251,6 +251,7 @@ jobs:
             apt-get update -q >/dev/null
             DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends mono-devel wixl msitools python3 >/dev/null
             python3 -m unittest discover -s tests -p test_desktop_encoding.py -v
+            python3 -m unittest discover -s tests -p test_windows_hardware.py -v
             windows/client/build.sh "$VERSION" test-results/windows-client
             msiinfo export test-results/windows-client/loco-client.msi File | tr -d "\\r" | grep -P "^ClientExe\\tService\\t[^\\t]+\\t[0-9]+\\t$VERSION.0\\t"
             msiinfo export test-results/windows-client/loco-client.msi File | tr -d "\\r" | grep -P "^TrayExe\\tService\\t[^\\t]+\\t[0-9]+\\t$VERSION.0\\t"

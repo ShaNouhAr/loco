@@ -1059,6 +1059,9 @@ namespace Loco
             var inv = new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
                 { "reboot_required", RebootRequired() }, { "error", error } };
             if (release != null) inv["release"] = release;
+            // Caractéristiques et configuration matérielle (fiche du poste), comme l'agent Linux.
+            try { inv["system"] = HardwareInfo.SystemInfo(); } catch (Exception e) { Log("caractéristiques : " + e.Message); }
+            try { inv["hardware"] = HardwareInfo.Hardware(); } catch (Exception e) { Log("matériel : " + e.Message); }
             string note;
             inv["software"] = WingetInstalled(out note);
             if (note != "") inv["software_note"] = note;

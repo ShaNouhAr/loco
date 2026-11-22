@@ -1,5 +1,12 @@
 # Journal des versions
 
+## 2.191.0 — 2026-11-22
+
+- **Les détails matériels aussi pour Windows.** La fiche d'un poste Windows montre maintenant la section *Caractéristiques* (onglet *Détails*), comme sous Linux : processeur, mémoire, disque système, version de Windows, virtualisation, démarrage, et la configuration matérielle — machine et numéro de série, carte mère, BIOS, barrettes de mémoire (emplacement, taille, type, vitesse, fabricant, référence) et disques physiques (modèle, taille, SSD ou disque mécanique). Relevé par l'agent Windows (lecture seule de WMI) au prochain inventaire, une fois l'agent à jour.
+- **Cœurs physiques et processeurs logiques distingués** : « 20 cœurs · 28 fils » pour un processeur à hyperthreading, au lieu de compter les processeurs logiques comme des cœurs (Linux et Windows).
+- **Type de disque inconnu** (disque d'une machine virtuelle sous Windows) affiché « — » au lieu de « disque mécanique ».
+- Le serveur MCP (`get_device`) donne aussi ces caractéristiques et la configuration matérielle, pour Linux et Windows.
+
 ## 2.190.0 — 2026-11-22
 
 - **Proxmox dans Mon parc, comme Home Assistant : mises à jour, redémarrage et terminal.** Un serveur Proxmox relié pour ses sauvegardes peut l'être aussi par SSH, avec une clé propre à loco (clé d'hôte confirmée par son empreinte) — l'API de Proxmox ne sait pas installer de mises à jour. Il apparaît alors dans Mon parc avec ses mises à jour, ses ressources et un bouton *Mettre à jour*, et il a sa page : version, noyau (*redémarrage requis* quand un plus récent est installé), paquets à mettre à jour (sécurité en tête), machines, processeur, mémoire, disque, activité avec journal en direct, terminal root.

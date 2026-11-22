@@ -5242,5 +5242,6 @@
  "Redémarrage prévu": "Reinicio previsto",
  "Il suivra la mise à jour, si elle réussit": "Seguirá a la actualización, si tiene éxito",
  "terminal de Proxmox": "terminal de Proxmox",
- "Shell root de Proxmox · via le serveur loco": "Shell root de Proxmox · a través del servidor loco"
+ "Shell root de Proxmox · via le serveur loco": "Shell root de Proxmox · a través del servidor loco",
+ "Version de Windows": "Versión de Windows"
 }
