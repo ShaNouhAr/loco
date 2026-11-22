@@ -140,8 +140,8 @@ def _attention():
         from . import homeassistant
         rows += homeassistant.attention()
     if can("proxmox.view") and "proxmox" not in features.disabled():
-        from . import proxmox
-        rows += proxmox.attention()
+        from . import proxmox, proxmox_system
+        rows += proxmox.attention() + proxmox_system.attention()
     rows.sort(key=lambda row: row["tone"] != "err")
     return rows
 

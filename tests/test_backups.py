@@ -119,7 +119,7 @@ class TestFeature(BackupTest):
     def test_every_route_has_a_policy(self):
         routes = {r.endpoint for r in fixture.loco.app.url_map.iter_rules()
                   if r.endpoint.startswith(("proxmox_", "backup_plan", "backups"))}
-        self.assertEqual(len(routes), 14)
+        self.assertEqual(len(routes), 24)
         self.assertEqual(routes - set(permissions.ENDPOINTS), set())
         with fixture.loco.app.test_request_context():
             for endpoint in routes:

@@ -881,6 +881,32 @@ MIGRATIONS = [
     """
     ALTER TABLE devices ADD COLUMN software_updates INTEGER NOT NULL DEFAULT 0;
     """,
+    # 56 : gestion du système d'un Proxmox relié (mises à jour, redémarrage, terminal) par SSH, avec une clé propre à
+    # loco et la clé d'hôte confirmée — en plus du jeton d'API des sauvegardes. Relevé du système à part de celui de
+    # l'API, et tâches suivies une à une (une mise à jour tourne détachée sur l'hôte : elle survit à la liaison).
+    """
+    ALTER TABLE proxmox_hosts ADD COLUMN ssh_host TEXT NOT NULL DEFAULT '';
+    ALTER TABLE proxmox_hosts ADD COLUMN ssh_port INTEGER NOT NULL DEFAULT 22;
+    ALTER TABLE proxmox_hosts ADD COLUMN ssh_user TEXT NOT NULL DEFAULT 'root';
+    ALTER TABLE proxmox_hosts ADD COLUMN host_key TEXT NOT NULL DEFAULT '';
+    ALTER TABLE proxmox_hosts ADD COLUMN sys_info TEXT NOT NULL DEFAULT '';
+    ALTER TABLE proxmox_hosts ADD COLUMN sys_checked REAL NOT NULL DEFAULT 0;
+    ALTER TABLE proxmox_hosts ADD COLUMN sys_error TEXT NOT NULL DEFAULT '';
+    CREATE TABLE proxmox_system_jobs (
+        id INTEGER PRIMARY KEY,
+        host_id INTEGER NOT NULL REFERENCES proxmox_hosts(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        label TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'queued',
+        output TEXT NOT NULL DEFAULT '',
+        boot_id TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '',
+        finished_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX proxmox_system_jobs_host ON proxmox_system_jobs(host_id, id);
+    """,
 ]
 
 

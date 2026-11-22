@@ -4,14 +4,15 @@
 {% set android = remote.os_family == 'android' %}
 {# Terminal d'un Home Assistant (SSH tenu par le serveur) : même page et même terminal que celui d'un poste. #}
 {% set ssh = remote.kind == 'ssh' %}
+{% set pve = ssh and remote.target.startswith('proxmox:') %}
 {% set term = remote.kind in ('terminal', 'adb', 'ssh') %}
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_macros.html' import term_help %}
-<div id="remote-session" class="remote-session" data-kind="{{ 'terminal' if ssh else remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}" data-csrf="{{ csrf }}" data-device="{{ remote.device_id or '' }}"{% if ssh %} data-label="{{ _("terminal de Home Assistant") }}"{% elif android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
+<div id="remote-session" class="remote-session" data-kind="{{ 'terminal' if ssh else remote.kind }}" data-io="{{ url_for('remote_io', sid=remote.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}" data-csrf="{{ csrf }}" data-device="{{ remote.device_id or '' }}"{% if pve %} data-label="{{ _("terminal de Proxmox") }}"{% elif ssh %} data-label="{{ _("terminal de Home Assistant") }}"{% elif android %} data-label="{{ _("terminal de l'appareil") if remote.kind in ('terminal', 'adb') else _("écran de l'appareil") }}"{% endif %}>
   <div class="head">
     <div><p class="small"><a href="{{ origin.back }}">{{ origin.label }}</a></p>
       <h1>{{ _('Terminal adb') if remote.kind == 'adb' else 'Terminal' if remote.kind in ('terminal', 'ssh') else (_('Écran') if android else _('Console noVNC')) }} <span class="muted">{{ remote.hostname }}</span> <span id="remote-status" class="remote-pill" data-state="connecting" role="status">{{ _("Connexion…") }}</span></h1>
-      <p class="small muted remote-description">{% if ssh %}{{ _("Shell du module SSH de Home Assistant · via le serveur loco") }}{% elif remote.kind == 'adb' %}{{ _("Shell adb · utilisateur shell d'Android · via le serveur loco") }}{% else %}{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}{% endif %}</p>
+      <p class="small muted remote-description">{% if pve %}{{ _("Shell root de Proxmox · via le serveur loco") }}{% elif ssh %}{{ _("Shell du module SSH de Home Assistant · via le serveur loco") }}{% elif remote.kind == 'adb' %}{{ _("Shell adb · utilisateur shell d'Android · via le serveur loco") }}{% else %}{{ _("%(v)s · Via l'agent loco", v=(_('PowerShell · SYSTEM') if remote.os_family == 'windows' else (_("Shell · droits de l'application") if android else _('Shell · root'))) if remote.kind == 'terminal' else (_("Écran de l'appareil · toucher, clavier et souris") if android else (_('Bureau du poste, ou console texte root si aucun bureau graphique') if remote.terminal_fallback else _('Session graphique du poste · clavier et souris')))) }}{% endif %}</p>
     </div>
     <div class="actions">
       {% if term %}<div class="remote-fontsize" role="group" aria-label="{{ _('Taille du texte') }}">

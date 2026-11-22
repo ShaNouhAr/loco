@@ -2670,7 +2670,11 @@ details.hass-log:not(.menu):not(.nav-group):not(.panel) > summary { display: fle
 .hass-log:not([open]) > summary { border-bottom: 0; }
 .hass-log pre.log { max-height: 520px; }
 .hass-confirm dd.mono { font-size: 15px; }
+.px-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.px-more { margin: 0 var(--pad, 18px) 14px; }
+.px-more > .table-wrap { margin-top: 8px; }
 @media (max-width: 1100px) { .hass-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .px-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .hass-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hass-metrics .metric .v, .hass-metrics .metric .s { white-space: normal; }

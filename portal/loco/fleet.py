@@ -2108,6 +2108,14 @@ def _ha_fleet_rows():
         return []
 
 
+def _px_fleet_rows():
+    try:
+        from . import proxmox_system
+        return proxmox_system.fleet_rows()
+    except Exception:
+        return []
+
+
 @app.route("/fleet")
 @login_required
 def fleet():
@@ -2174,7 +2182,7 @@ def fleet():
                            counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold(),
-                           ha_rows=_ha_fleet_rows())
+                           ha_rows=_ha_fleet_rows(), px_rows=_px_fleet_rows())
 
 
 @app.route("/fleet/search.json")
@@ -2602,15 +2610,32 @@ def fleet_group_windows_update(group_id):
 
 
 def _split_selection(raw_ids):
-    """Sépare la sélection de Mon parc : ids de postes (entiers) et ids d'instances Home Assistant (« ha-<id> »)."""
-    devices, ha = set(), set()
+    """Sépare la sélection de Mon parc : ids de postes (entiers), d'instances Home Assistant (« ha-<id> ») et de serveurs
+    Proxmox (« px-<id> »)."""
+    devices, ha, px = set(), set(), set()
     for i in raw_ids:
-        target = ha if str(i).startswith("ha-") else devices
+        text = str(i)
+        target, text = (ha, text[3:]) if text.startswith("ha-") else (px, text[3:]) if text.startswith("px-") else (devices, text)
         try:
-            target.add(int(str(i)[3:] if str(i).startswith("ha-") else i))
+            target.add(int(text))
         except (ValueError, TypeError):
             pass
-    return devices, ha
+    return devices, ha, px
+
+
+def _px_bulk(px_ids):
+    """Lance la mise à jour des serveurs Proxmox cochés, si le compte peut les mettre à jour. Renvoie le nombre lancé.
+    Jamais de redémarrage groupé : un hyperviseur s'arrête avec toutes ses machines, cela se décide depuis sa page."""
+    if not px_ids or not features.enabled("proxmox") or not can("proxmox.update"):
+        return 0
+    from . import proxmox_system
+    count = 0
+    for hid in px_ids:
+        try:
+            count += proxmox_system.update_host(hid)
+        except Exception:                                     # un serveur injoignable ne doit pas faire échouer le lot
+            pass
+    return count
 
 
 def _ha_bulk(ha_ids, what):
@@ -2637,7 +2662,7 @@ def fleet_update_selected():
     raw = request.form.getlist("ids")
     if not raw or len(raw) > 5000:
         abort(400)
-    ids, ha_ids = _split_selection(raw)
+    ids, ha_ids, px_ids = _split_selection(raw)
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
@@ -2647,7 +2672,7 @@ def fleet_update_selected():
         r = rows.get(dev_id)
         if r and r["d"]["state"] == "active" and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
-    ha_count = _ha_bulk(ha_ids, "update")
+    ha_count = _ha_bulk(ha_ids, "update") + _px_bulk(px_ids)
     db().commit()
     audit("parc.mise-a-jour-selection", f"{counted(count + ha_count, 'poste')}{', avec redémarrage' if reboot else ''}")
     return {"ok": True, "count": count + ha_count}
@@ -2662,7 +2687,7 @@ def fleet_reboot_selected():
     raw = request.form.getlist("ids")
     if not raw or len(raw) > 5000:
         abort(400)
-    ids, ha_ids = _split_selection(raw)
+    ids, ha_ids, px_ids = _split_selection(raw)
     rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
     count = 0
     for dev_id in ids:
@@ -2681,7 +2706,9 @@ def fleet_reboot_selected():
         flash(n_("%(num)s poste laissé tel quel : redémarrage déjà en cours, mise à jour de version en cours, appareil Android ou poste retiré.",
                  "%(num)s postes laissés tels quels : redémarrage déjà en cours, mise à jour de version en cours, appareils Android ou postes retirés.",
                  total - count), "error")
-    return {"ok": True, "count": count, "skipped": total - count}
+    if px_ids:
+        flash(_("Un serveur Proxmox ne se redémarre pas avec une sélection : toutes ses machines s'arrêtent avec lui. Redémarrez-le depuis sa page."), "error")
+    return {"ok": True, "count": count, "skipped": total - count + len(px_ids)}
 
 
 def _report_wake(result):
@@ -2716,10 +2743,7 @@ def fleet_wake_policy(dev_id):
 def fleet_wake_policy_selected():
     """Active le réveil sur les postes sélectionnés dont l'agent en est capable ; les autres sont comptés."""
     require("fleet.wake")
-    try:
-        ids = {int(i) for i in request.form.getlist("ids")}
-    except ValueError:
-        abort(400)
+    ids = _split_selection(request.form.getlist("ids"))[0]      # Home Assistant et Proxmox cochés : sans objet ici
     if not ids or len(ids) > 5000:
         abort(400)
     devices = [d for d in db().execute("SELECT * FROM devices WHERE state='active'" + scope.sql()).fetchall() if d["id"] in ids]
@@ -2739,10 +2763,7 @@ def fleet_wake_policy_selected():
 def fleet_wake_selected():
     """Réveille les postes sélectionnés ; ceux qui ne peuvent pas l'être sont comptés, sans bloquer les autres."""
     require("fleet.wake")
-    try:
-        ids = {int(i) for i in request.form.getlist("ids")}
-    except ValueError:
-        abort(400)
+    ids = _split_selection(request.form.getlist("ids"))[0]      # Home Assistant et Proxmox cochés : sans objet ici
     if not ids or len(ids) > 5000:
         abort(400)
     devices = [d for d in db().execute("SELECT * FROM devices WHERE state='active'" + scope.sql()).fetchall() if d["id"] in ids]

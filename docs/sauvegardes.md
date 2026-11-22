@@ -114,6 +114,11 @@ utilisateur, mot de passe, domaine) comme stockage de Proxmox réservé aux sauv
 *Consulter Proxmox*, *Sauvegarder les machines Proxmox* (lancer, planifier, annuler), *Relier des serveurs
 Proxmox* (jeton, certificat, NAS).
 
+### Mises à jour, redémarrage et terminal
+
+Relié aussi par SSH, le serveur apparaît dans **Mon parc** : voir [Proxmox VE : système, mises à jour,
+terminal](proxmox.md).
+
 ## Planifications
 
 À l'heure du serveur loco. Une occurrence manquée (serveur éteint) n'est pas rattrapée : la suivante a lieu

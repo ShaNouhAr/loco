@@ -215,6 +215,21 @@ def _collect(row):
                 privileges.update(k for k, v in privs.items() if v)
         found["missing"] = [p for p in PRIVILEGES if p not in privileges]
     nodes, listed = set(), set()
+    # Ressources des nœuds (processeur, mémoire, disque système), montrées dans Mon parc : un seul appel pour tous.
+    try:
+        listed_nodes = request_api(row, "GET", "/nodes") or []
+    except ProxmoxError:
+        listed_nodes = []
+    found["node_status"] = {}
+    for n in listed_nodes if isinstance(listed_nodes, list) else []:
+        if not isinstance(n, dict) or not NODE_RE.match(str(n.get("node", ""))):
+            continue
+        cpu = n.get("cpu")
+        found["node_status"][n["node"]] = {
+            "online": n.get("status") == "online", "cpu": round(float(cpu) * 100, 1) if isinstance(cpu, (int, float)) else None,
+            "cpus": _int(n.get("maxcpu")), "mem": _int(n.get("mem")), "mem_total": _int(n.get("maxmem")),
+            "disk": _int(n.get("disk")), "disk_total": _int(n.get("maxdisk")), "uptime": _int(n.get("uptime"))}
+        nodes.add(n["node"])
     for s in storages:
         if not isinstance(s, dict) or not STORAGE_RE.match(str(s.get("storage", ""))) or not NODE_RE.match(str(s.get("node", ""))):
             continue
@@ -645,13 +660,16 @@ def proxmox_certificate(host_id):
 @app.route("/backups/proxmox/<int:host_id>/delete", methods=["POST"])
 @login_required
 def proxmox_delete(host_id):
+    from . import proxmox_system
     row = _host(host_id)
     conn = db()
+    proxmox_system.close_sessions(conn, host_id, "Serveur retiré.")
     conn.execute("DELETE FROM backup_plans WHERE kind='proxmox' AND host_id=?", (host_id,))
     conn.execute("DELETE FROM proxmox_hosts WHERE id=?", (host_id,))
     audit("proxmox.retrait", row["name"], commit=False)
     conn.commit()
-    flash(_("%(name)s retiré de loco. Le jeton reste valable dans Proxmox tant que vous ne l'y supprimez pas.", name=row["name"]), "ok")
+    flash(_("%(name)s retiré de loco. Le jeton reste valable dans Proxmox tant que vous ne l'y supprimez pas.", name=row["name"]) if not row["host_key"]
+          else _("%(name)s retiré de loco. Le jeton et la clé de loco restent valables dans Proxmox tant que vous ne les y supprimez pas.", name=row["name"]), "ok")
     return back("backups", _anchor="proxmox")
 
 

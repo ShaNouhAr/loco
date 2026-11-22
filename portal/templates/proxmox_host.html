@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}{{ v.row.name }} · Proxmox · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import titled, ui_icon, nav_icon %}
+{% from "_macros.html" import cmd %}
+{% block content %}
+{% set p = v.row %}
+{% set info = v.info %}
+{% set node = v.node %}
+{% set manage = can('proxmox.manage') %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% set tab_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>{% endset %}
+{% macro job_state(j) -%}
+{% if j.state == 'running' %}<span class="busy-note"><span class="spin"></span>{{ _("En cours") }}</span>
+{%- elif j.state == 'queued' %}<span class="st">{{ _("En attente") }}</span>
+{%- elif j.state == 'success' %}<span class="st ok">{{ _("Réussie") }}</span>
+{%- else %}<span class="st err">{{ _("Échec") }}</span>{% endif %}
+{%- endmacro %}
+{% macro pkg_row(u) -%}
+<tr>
+  <td><strong class="mono">{{ u.name }}</strong>{% if u.security %} <span class="pill warn">{{ _("sécurité") }}</span>{% endif %}{% if u.fresh %} <span class="badge-ro">{{ _("nouveau") }}</span>{% endif %}</td>
+  <td class="mono" data-label="{{ _('Version') }}">{% if u.old %}{{ u.old }} → {% endif %}{{ u.new }}</td>
+</tr>
+{%- endmacro %}
+<div class="head">
+  <div>
+    <p class="small muted"><a href="{{ url_for('fleet') }}" class="crumb-back">← {{ _("Mon parc") }}</a></p>
+    <h1 class="hass-host-title">{{ nav_icon('server') }}{{ p.name }}</h1>
+  </div>
+</div>
+<div class="stack" data-poll="{{ url_for('proxmox_system_host', host_id=p.id) }}" data-poll-kind="reload" data-poll-every="4000" data-signature="{{ signature }}">
+{% if not ssh %}
+<div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas gérer le système de Proxmox. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
+{% endif %}
+
+{% if pending %}
+{# Clé d'hôte relevée : rien n'est enregistré ni échangé tant qu'un administrateur ne l'a pas confirmée. #}
+<section class="panel hass-confirm" id="ssh">
+  <div class="panel-h"><h2>{{ _("Confirmer la clé d'hôte de %(name)s", name=p.name) }}</h2><div class="aside">{{ pending.username }}@{{ pending.host }}{% if pending.port != 22 %}:{{ pending.port }}{% endif %}</div></div>
+  <div class="panel-b stack-sm">
+    <p>{{ _("Voici l'empreinte de la clé que présente cette adresse. Comparez-la à celle de votre Proxmox avant de confirmer : c'est ce qui garantit que loco parle bien à lui, et à lui seul.") }}</p>
+    <dl class="kv-grid">
+      <div><dt>{{ _("Empreinte (%(type)s)", type=pending.type) }}</dt><dd class="mono">{{ pending.fingerprint }}</dd></div>
+    </dl>
+    {% if p.host_key %}<p class="hint">{{ _("Cette clé est la même que celle déjà confirmée.") if pending.same else _("Cette clé diffère de celle confirmée jusqu'ici. C'est attendu si Proxmox a été réinstallé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+    <p class="hint">{{ _("Pour la lire sur Proxmox, ouvrez le shell du nœud (interface de Proxmox › le nœud › Shell) et lancez :") }}</p>
+    {{ cmd('px-hostkey', 'for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done', '#') }}
+  </div>
+  <div class="panel-f row-between">
+    <form method="post" action="{{ url_for('proxmox_ssh_confirm', host_id=p.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="cancel" value="1">
+      <button class="linkbtn">{{ _("Annuler") }}</button>
+    </form>
+    <form method="post" action="{{ url_for('proxmox_ssh_confirm', host_id=p.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="nonce" value="{{ pending.nonce }}">
+      <button class="btn primary"><span class="spin"></span>{{ _("L'empreinte est la bonne : confirmer") }}</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel hass-host">
+  <div data-refresh="px-{{ p.id }}">
+    <div class="panel-h">
+      <h2>{{ p.name }}{% if info and info.pve or v.api and v.api.version %} <span class="h-count">Proxmox VE {{ info.pve if info and info.pve else v.api.version }}</span>{% endif %}</h2>
+      <div class="aside">
+        {% if v.running %}<span class="busy-note"><span class="spin"></span>{{ v.label }}{% if v.running|length > 1 %} · {{ _("%(n)s en attente", n=v.running|length - 1) }}{% endif %}</span>
+        {% elif not p.host_key %}<span class="pill">{{ _("sauvegardes seulement") }}</span>
+        {% elif p.sys_error %}<span class="pill err">{{ _("liaison SSH en échec") }}</span>
+        {% elif not info %}<span class="pill">{{ _("relevé en cours") }}</span>
+        {% else %}
+        {% if info.updates %}<span class="pill warn">{{ info.updates|length }} {{ ngettext('mise à jour', 'mises à jour', info.updates|length) }}</span>{% endif %}
+        {% if info.reboot_required %}<span class="pill warn">{{ _("redémarrage requis") }}</span>{% endif %}
+        {% if not info.updates and not info.reboot_required %}<span class="pill ok">{{ _("à jour") }}</span>{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% if p.host_key or info or node or p.error %}
+    <div class="panel-b stack-sm">
+      {% if p.sys_error %}<div class="note err"><p>{{ p.sys_error }}</p></div>{% endif %}
+      {% if p.error %}<div class="note warn"><p>{{ _("Jeton d'API : %(e)s", e=p.error) }}</p></div>{% endif %}
+      {% if info and info.sim_error %}<div class="note warn"><p>{{ _("apt-get ne peut pas préparer la mise à jour : %(e)s", e=info.sim_error) }}</p></div>{% endif %}
+      {% if v.blocked %}<div class="note err"><p>{{ _("La mise à jour retirerait le paquet proxmox-ve : les dépôts de Proxmox sont sans doute mal réglés. loco ne la lancera pas ; vérifiez-les (nœud › Mises à jour › Dépôts).") }}</p></div>{% endif %}
+
+      {% if p.host_key %}
+      <div class="device-actions hass-actions">
+        {% if can('proxmox.shell') and terminal %}
+        <form method="post" action="{{ url_for('proxmox_shell', host_id=p.id) }}" class="split">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn" title="{{ _('Shell root de Proxmox, session journalisée') }}"{% if not ssh %} disabled{% endif %}>Terminal</button>
+          <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('Terminal dans un nouvel onglet') }}" title="{{ _('Ouvrir dans un nouvel onglet') }}"{% if not ssh %} disabled{% endif %}>{{ tab_icon }}</button>
+        </form>
+        {% endif %}
+        {% if can('proxmox.update') %}
+        {% if v.updating %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Mise à jour en cours") }}</button>
+        {% elif info and info.updates and not v.blocked %}<button type="button" class="btn primary" data-open="#px-update">{{ _("Mettre à jour") }}</button>{% endif %}
+        {% if v.checking %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Recherche en cours") }}</button>
+        {% elif not v.updating %}
+        <form method="post" action="{{ url_for('proxmox_system_check', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn" title="{{ _('Relire les dépôts de Proxmox (apt-get update)') }}"><span class="spin"></span>{{ _("Rechercher les mises à jour") }}</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if can('proxmox.restart') %}
+        {% if v.rebooting %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Redémarrage en cours") }}</button>
+        {% elif v.reboot_planned %}<button type="button" class="btn" disabled title="{{ _('Il suivra la mise à jour, si elle réussit') }}">{{ _("Redémarrage prévu") }}</button>
+        {% else %}
+        {% set reboot_text = _('Toutes les machines virtuelles et les conteneurs de ce serveur s’arrêtent pendant le redémarrage ; ceux réglés pour démarrer avec lui repartent ensuite. loco suit son retour.') %}
+        {% if v.self %}{% set reboot_text = reboot_text ~ ' ' ~ _('loco tourne sur ce Proxmox (machine %(id)s) : il s’arrête lui aussi quelques minutes et reprend le suivi à son retour.', id=v.self.vmid) %}{% endif %}
+        {% if v.backing_up %}{% set reboot_text = reboot_text ~ ' ' ~ _('Une sauvegarde est en cours : elle sera interrompue.') %}{% endif %}
+        <form method="post" action="{{ url_for('proxmox_system_reboot', host_id=p.id) }}" data-confirm="{{ _('Redémarrer %(name)s ?', name=p.name) }}" data-confirm-text="{{ reboot_text }}" data-confirm-ok="{{ _('Redémarrer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn{{ ' primary' if info and info.reboot_required and not info.updates }}"><span class="spin"></span>{{ _("Redémarrer") }}</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        <form method="post" action="{{ url_for('proxmox_system_refresh', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn" title="{{ _('Relever de nouveau l’état du système') }}"><span class="spin"></span>{{ _("Actualiser") }}</button>
+        </form>
+        <details class="menu">
+          <summary class="btn" aria-label="{{ _('Plus d’actions') }}">{{ _("Plus") }}</summary>
+          <div class="menu-list menu-left" role="menu">
+            {% if can('proxmox.view') %}<a class="menu-item" role="menuitem" href="{{ url_for('backups') }}#proxmox">{{ _("Sauvegardes de ce serveur") }}</a>{% endif %}
+            {% if manage %}
+            <form method="post" action="{{ url_for('proxmox_ssh_link', host_id=p.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="ssh_host" value="{{ p.ssh_host or p.host }}">
+              <input type="hidden" name="ssh_port" value="{{ p.ssh_port }}"><input type="hidden" name="ssh_user" value="{{ p.ssh_user }}">
+              <button class="menu-item" role="menuitem">{{ _("Relever de nouveau la clé d'hôte…") }}</button>
+            </form>
+            <hr>
+            <form method="post" action="{{ url_for('proxmox_ssh_unlink', host_id=p.id) }}" data-confirm="{{ _('Retirer la liaison SSH de %(name)s ?', name=p.name) }}" data-confirm-text="{{ _('loco ne gère plus le système de ce serveur (mises à jour, redémarrage, terminal) ; ses sauvegardes continuent par le jeton d’API. Retirez aussi la clé de loco de /root/.ssh/authorized_keys sur Proxmox.') }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item danger" role="menuitem">{{ _("Retirer la liaison SSH") }}</button>
+            </form>
+            {% endif %}
+          </div>
+        </details>
+        <span class="small muted hass-link">{{ p.ssh_user }}@{{ p.ssh_host or p.host }}{% if p.ssh_port != 22 %}:{{ p.ssh_port }}{% endif %}{% if v.checked %} · {{ _("relevé à %(t)s", t=v.checked) }}{% endif %}</span>
+      </div>
+      {% endif %}
+
+      {% if v.self %}<p class="hint">{{ _("loco tourne sur ce Proxmox (machine %(id)s%(name)s) : un redémarrage de l'hôte l'arrête lui aussi quelques minutes ; il reprend le suivi à son retour.", id=v.self.vmid, name=(' « ' ~ v.self.name ~ ' »') if v.self.name else '') }}</p>{% endif %}
+
+      {% if info or node %}
+      <div class="metrics hass-metrics px-metrics">
+        <div class="metric">
+          <div class="k">{{ titled('server', "Proxmox VE") }}</div>
+          <div class="v small-v">{{ (info.pve if info and info.pve else (v.api.version if v.api else '')) or '—' }}</div>
+          <div class="s">{% if info and info.hostname %}{{ _("nœud %(n)s", n=info.hostname) }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('layers', _("Noyau")) }}</div>
+          <div class="v small-v mono">{{ info.kernel if info and info.kernel else '—' }}</div>
+          <div class="s">{% if info and info.reboot_required %}<span class="st warn">{{ _("%(v)s installé : redémarrage requis", v=info.newest_kernel) }}</span>{% elif info and info.newest_kernel %}{{ _("le plus récent installé") }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('update', _("Mises à jour")) }}</div>
+          {% if info %}
+          <div class="v small-v">{{ info.updates|length }}</div>
+          <div class="s">{% if info.security %}<span class="st warn">{{ _("dont %(n)s de sécurité", n=info.security) }}</span>{% elif info.updates %}{{ _("aucune de sécurité") }}{% else %}{{ _("à jour") }}{% endif %}</div>
+          {% else %}<div class="v small-v">—</div><div class="s">{{ _("liaison SSH requise") }}</div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('box', _("Machines")) }}</div>
+          <div class="v small-v">{{ v.guests|length }}</div>
+          <div class="s">{{ _("%(n)s en marche", n=v.running_guests) }}</div>
+        </div>
+        {% if node %}
+        <div class="metric">
+          <div class="k">{{ titled('cpu', _("Processeur")) }}</div>
+          <div class="v small-v">{{ node.cpu if node.cpu is not none else '—' }} %{% if node.cpus %} · {{ _("%(n)s cœurs", n=node.cpus) }}{% endif %}</div>
+          {% if node.cpu is not none %}<div class="meter level {{ 'err' if node.cpu >= 92 else 'warn' if node.cpu >= 80 }}" title="{{ _('occupation du processeur') }}"><i data-width="{{ node.cpu|round|int }}"></i></div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('memory', _("Mémoire")) }}</div>
+          {% if node.mem_total %}{% set memp = node.mem * 100 // node.mem_total %}
+          <div class="v small-v">{{ node.mem|human }} / {{ node.mem_total|human }}</div>
+          <div class="meter level {{ 'err' if memp >= 92 else 'warn' if memp >= 85 }}" title="{{ _('%(p)s %% de la mémoire utilisée', p=memp) }}"><i data-width="{{ memp }}"></i></div>
+          {% else %}<div class="v small-v">—</div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('disk', _("Disque système")) }}</div>
+          {% if node.disk_total %}{% set used = node.disk * 100 // node.disk_total %}
+          <div class="v small-v">{{ _("%(v)s libres", v=(node.disk_total - node.disk)|human) }}</div>
+          <div class="meter level {{ 'err' if used >= 92 else 'warn' if used >= 80 }}" title="{{ _('%(p)s %% occupés sur %(v)s', p=used, v=node.disk_total|human) }}"><i data-width="{{ used }}"></i></div>
+          {% else %}<div class="v small-v">—</div>{% endif %}
+        </div>
+        {% endif %}
+        <div class="metric">
+          <div class="k">{{ titled('clock', _("Allumé depuis")) }}</div>
+          {% set up = (info.uptime if info and info.uptime else (node.uptime if node else 0)) %}
+          <div class="v small-v">{% if up %}{{ _("%(d)s j %(h)s h", d=up // 86400, h=up % 86400 // 3600) }}{% else %}—{% endif %}</div>
+          <div class="s">{% if node and not node.online %}<span class="st err">{{ _("nœud hors ligne") }}</span>{% elif node %}{{ _("en ligne") }}{% elif info and p.sys_error %}<span class="st err">{{ _("injoignable") }}</span>{% elif info %}{{ _("en ligne") }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
+      {% endif %}
+      {% if info and info.removals %}<div class="note warn"><p>{{ _("La mise à jour retirera aussi : %(list)s.", list=info.removals|join(', ')) }}</p></div>{% endif %}
+      {% if info and info.kernel_update %}<p class="hint">{{ _("Un nouveau noyau fait partie des mises à jour : il ne servira qu'après un redémarrage du serveur.") }}</p>{% endif %}
+    </div>
+    {% endif %}
+
+    {% if info and info.updates %}
+    <div class="panel-h sub">
+      <h2>{{ _("Mises à jour disponibles") }} <span class="h-count">{{ info.updates|length }}</span></h2>
+      <div class="aside">{% if v.lists %}{{ _("dépôts relus le %(d)s", d=v.lists|date_fr) }}{% endif %}{% if v.lists and info.held %} · {% endif %}{% if info.held %}{{ ngettext('%(num)s paquet retenu', '%(num)s paquets retenus', info.held) }}{% endif %}</div>
+    </div>
+    <div class="table-wrap">
+      <table class="table-cards hass-table">
+        <tbody>{% for u in info.updates[:15] %}{{ pkg_row(u) }}{% endfor %}</tbody>
+      </table>
+    </div>
+    {% if info.updates|length > 15 %}
+    <details class="hass-output px-more" data-key="px-paquets-{{ p.id }}">
+      <summary class="linkbtn">{{ ngettext('Voir l’autre paquet', 'Voir les %(num)s autres paquets', info.updates|length - 15) }}</summary>
+      <div class="table-wrap"><table class="table-cards hass-table"><tbody>{% for u in info.updates[15:] %}{{ pkg_row(u) }}{% endfor %}</tbody></table></div>
+    </details>
+    {% endif %}
+    {% endif %}
+
+    {% if v.jobs %}
+    <div class="panel-h sub"><h2>{{ _("Activité") }}</h2><div class="aside">{{ _("les douze dernières tâches") }}</div></div>
+    <div class="table-wrap">
+      <table class="table-cards hass-table">
+        <tbody>
+          {% for j in v.jobs %}
+          <tr>
+            <td>{{ actions[j.action] }}
+              {% if j.output %}<details class="hass-output" data-key="px-sortie-{{ j.id }}"{% if j.state == 'running' %} open{% endif %}><summary class="linkbtn">{{ _("Journal") if j.state == 'running' else _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+            <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
+            <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if not p.host_key and not pending %}
+{% if manage %}
+{% set ns = namespace(n=0) %}
+<div class="section-h" id="ssh">
+  <div><h2>{{ _("Gérer aussi le système de ce Proxmox") }}</h2><p>{{ _("Le jeton d'API ne permet que les sauvegardes : l'API de Proxmox n'installe pas de mises à jour. Pour les mises à jour, le redémarrage et le terminal, loco entre par SSH avec sa propre clé. Deux étapes, une seule fois.") }}</p></div>
+</div>
+<div class="stack">
+<section class="panel">
+  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Autoriser la clé de loco sur Proxmox") }}</h2><div class="aside">{{ _("clé publique : elle peut être montrée") }}</div></div>
+  <div class="panel-b stack-sm">
+    <p class="muted">{{ _("Dans l'interface de Proxmox, ouvrez le shell du nœud (le nœud › Shell) et lancez cette commande : elle ajoute la clé de loco aux clés autorisées de root. La clé privée correspondante ne quitte jamais ce serveur.") }}</p>
+    <div class="cmd wrap"><code id="px-authorize" data-prompt="#">{{ authorized }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+  </div>
+</section>
+<section class="panel">
+  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Relever la clé d'hôte") }}</h2></div>
+  <div class="panel-b stack-sm">
+    <form method="post" action="{{ url_for('proxmox_ssh_link', host_id=p.id) }}" class="stack-sm">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Adresse SSH") }}</span><input type="text" name="ssh_host" value="{{ p.ssh_host or p.host }}" spellcheck="false" autocomplete="off" required maxlength="253"></label>
+        <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="ssh_port" value="{{ p.ssh_port or 22 }}" min="1" max="65535" required></label>
+        <label class="f"><span>{{ _("Utilisateur SSH") }}</span><input type="text" name="ssh_user" value="{{ p.ssh_user or 'root' }}" spellcheck="false" autocomplete="off" required maxlength="32"></label>
+      </div>
+      <p class="hint">{{ _("D'ordinaire, la même adresse que l'API, le port 22 et root. loco vous montre ensuite l'empreinte de la clé d'hôte de Proxmox : rien n'est échangé avant que vous l'ayez confirmée.") }}</p>
+      <div><button class="btn primary"{% if not ssh %} disabled{% endif %}><span class="spin"></span>{{ _("Relever la clé d'hôte") }}</button></div>
+    </form>
+  </div>
+</section>
+</div>
+{% else %}
+<div class="note"><p>{{ _("Ce serveur n'est relié que pour ses sauvegardes. Un administrateur peut le relier aussi par SSH pour en gérer les mises à jour, le redémarrage et le terminal.") }}</p></div>
+{% endif %}
+{% endif %}
+</div>
+
+{% if can('proxmox.update') and info and info.updates and not v.blocked %}
+<dialog id="px-update">
+  <form method="post" action="{{ url_for('proxmox_system_update', host_id=p.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Mettre à jour %(name)s ?", name=p.name) }}</h2>
+        <p>{{ ngettext('%(num)s paquet', '%(num)s paquets', info.updates|length) }}{% if info.security %} · {{ _("dont %(n)s de sécurité", n=info.security) }}{% endif %}{% if info.removals %} · {{ ngettext('%(num)s retiré', '%(num)s retirés', info.removals|length) }}{% endif %}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <p class="hint">{{ _("loco relit d'abord les dépôts, puis installe tout avec apt-get dist-upgrade, comme le bouton « Upgrade » de Proxmox. La mise à jour tourne sur le serveur lui-même : elle va au bout même si la liaison tombe. Les machines virtuelles continuent de tourner ; l'interface web de Proxmox peut se recharger.") }}</p>
+      {% if can('proxmox.restart') %}
+      <label class="check"><input type="checkbox" name="reboot" value="1"> <span>{{ _("Redémarrer le serveur ensuite, si la mise à jour réussit") }}</span></label>
+      <p class="hint">{{ _("Utile quand un nouveau noyau arrive. Toutes les machines de ce serveur s'arrêtent pendant le redémarrage.") }}{% if v.self %} {{ _("loco aussi, qui tourne dessus : il reprend le suivi à son retour.") }}{% endif %}</p>
+      {% endif %}
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

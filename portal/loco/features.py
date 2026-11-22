@@ -27,7 +27,7 @@ FEATURES = {
     "mcp": (L_("Serveur MCP"), L_("Un LLM, par un client MCP (Claude Code, Cursor, VS Code…), consulte et pilote loco avec les outils activés un à un pour son jeton."), (), ""),
     "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
     "homeassistant": (L_("Home Assistant"), L_("Votre Home Assistant relié par SSH avec une clé propre à loco : versions, mises à jour du cœur, du système et des modules complémentaires, sauvegardes, état de santé, redémarrages et terminal."), (), ""),
-    "proxmox": (L_("Proxmox VE"), L_("Vos serveurs Proxmox reliés par un jeton d'API : sauvegarde des machines virtuelles et des conteneurs, à la demande ou planifiée, sur le stockage de Proxmox de votre choix (disque, NAS, Proxmox Backup Server), avec la conservation voulue. Réunie avec les sauvegardes de loco et de Home Assistant dans Administration › Sauvegardes."), (), ""),
+    "proxmox": (L_("Proxmox VE"), L_("Vos serveurs Proxmox reliés par un jeton d'API : sauvegarde des machines virtuelles et des conteneurs, à la demande ou planifiée, sur le stockage de Proxmox de votre choix (disque, NAS, Proxmox Backup Server), avec la conservation voulue, réunie avec les sauvegardes de loco et de Home Assistant dans Administration › Sauvegardes. Relié aussi par SSH avec une clé propre à loco, le serveur apparaît dans Mon parc : mises à jour, redémarrage et terminal."), (), ""),
     "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco. Au retrait, loco peut aussi effacer l'entrée du poste sur le manager."), ("fleet",), ""),
 }
 
@@ -46,7 +46,8 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
            "loco.fleet": ("fleet",), "loco.remote": ("fleet", "remote"), "loco.scripts": ("fleet", "scripts"), "loco.schedules": ("fleet",),
            "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
-           "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",)}
+           "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",),
+           "loco.proxmox_system": ("proxmox",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),

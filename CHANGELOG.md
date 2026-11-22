@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.190.0 — 2026-11-22
+
+- **Proxmox dans Mon parc, comme Home Assistant : mises à jour, redémarrage et terminal.** Un serveur Proxmox relié pour ses sauvegardes peut l'être aussi par SSH, avec une clé propre à loco (clé d'hôte confirmée par son empreinte) — l'API de Proxmox ne sait pas installer de mises à jour. Il apparaît alors dans Mon parc avec ses mises à jour, ses ressources et un bouton *Mettre à jour*, et il a sa page : version, noyau (*redémarrage requis* quand un plus récent est installé), paquets à mettre à jour (sécurité en tête), machines, processeur, mémoire, disque, activité avec journal en direct, terminal root.
+- **Mise à jour sûre de l'hyperviseur.** `apt-get dist-upgrade` comme le bouton *Upgrade* de Proxmox (jamais `apt-get upgrade`), lancé sur le serveur lui-même : la mise à jour va au bout même si la liaison tombe ou si loco redémarre — y compris quand loco tourne sur ce Proxmox, ce que la page signale. Redémarrage ensuite en option, seulement si la mise à jour a réussi ; refus d'une mise à jour qui retirerait `proxmox-ve`. Un Proxmox ne se redémarre jamais par une sélection de Mon parc.
+- **Mon parc montre Home Assistant et Proxmox même sans aucun poste inscrit** (ils restaient cachés derrière « Aucun poste pour l'instant »).
+
 ## 2.189.0 — 2026-11-20
 
 - **Sorties longues entièrement lisibles pour les assistants (MCP).** Quand une commande, un script ou le terminal distant produit une sortie plus longue que la limite, l'assistant reçoit désormais le **début** *et* la fin du texte (avec, au milieu, le compte des caractères omis) au lieu de la seule fin : le contexte et les erreurs, souvent en tête, ne sont plus perdus. S'applique au terminal (`terminal_run`), aux commandes et scripts (`get_script_run`, actions récentes d'un poste). La sortie reste signalée comme écourtée.

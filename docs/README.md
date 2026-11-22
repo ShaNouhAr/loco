@@ -17,6 +17,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | **Brancher un assistant IA** ou un **script / une supervision** | [Serveur MCP et API REST](mcp.md) |
 | Gérer des appareils **Android** | [Android](android.md) |
 | Suivre **Home Assistant** | [Home Assistant](homeassistant.md) |
+| Mettre à jour un **Proxmox VE** et ouvrir son terminal | [Proxmox VE](proxmox.md) |
 | Poser l'**agent Wazuh** sur les postes | [Agent Wazuh](wazuh.md) |
 | **Contribuer** | [Développement](developpement.md) |
 

@@ -15,6 +15,8 @@
 {% from '_charts.html' import resources %}
 {% include '_fleet_nav.html' %}
 {% set can_select = can('fleet.update') or can('fleet.wake') %}
+{# Home Assistant et Proxmox reliés : montrés même quand aucun poste n'est encore inscrit (hors recherche et filtres). #}
+{% set extra_only = not rows and page == 1 and not query and not total and not selected_group and (ha_rows or px_rows) %}
 <div class="head">
   <div>
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
@@ -97,7 +99,7 @@
   </div>
 
   <section class="panel">
-    {% if rows and can_select %}
+    {% if (rows or extra_only) and can_select %}
     <div class="fleet-select-bar" data-select-bar hidden>
       {# Actions sur les postes cochés : le nombre choisi d'abord, puis les actions, la plus courante en dernier. #}
       <span class="fleet-select-count"><strong data-select-count>0</strong> <span data-select-noun data-one="{{ _('poste sélectionné') }}" data-many="{{ _('postes sélectionnés') }}">{{ _('postes sélectionnés') }}</span>
@@ -119,7 +121,7 @@
       </div>
     </div>
     {% endif %}
-    {% if rows %}
+    {% if rows or extra_only %}
     <div class="table-wrap">
       <table id="fleet-table" class="fleet-table table-cards" data-row-links>
         <thead><tr>{% if can_select %}<th class="select-col"><label class="row-select-label"><input type="checkbox" data-select-all aria-label="{{ _('Tout sélectionner sur cette page') }}" title="{{ _('Tout sélectionner sur cette page') }}"></label></th>{% endif %}<th>{{ _("Poste") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("Mises à jour") }}</th><th class="hide-sm">{{ _("Ressources") }}</th><th></th></tr></thead>
@@ -139,6 +141,26 @@
             <td class="hide-sm" data-label="{{ _('Ressources') }}">—</td>
             <td class="right nowrap card-action">{% if ha.updates and not ha.busy and can('homeassistant.update') %}<div class="row-acts">
               <form method="post" action="{{ url_for('homeassistant_fleet_update', host_id=ha.id) }}" data-ajax>
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn sm"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
+              </form></div>{% endif %}</td>
+          </tr>
+        {% endfor %}{% endif %}
+        {% if px_rows and page == 1 %}{% for px in px_rows %}
+          <tr class="ha-row px-row">
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if px.ssh and can('proxmox.update') %}<label class="row-select-label"><input type="checkbox" data-select data-id="px-{{ px.id }}" aria-label="{{ _('Sélectionner %(host)s', host=px.name) }}"></label>{% endif %}</td>{% endif %}
+            <td><span class="nowrap"><span class="st {{ 'ok' if px.online else 'err' }} device-availability" role="img" aria-label="Proxmox VE"></span>
+              <span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon('server') }}</span><a href="{{ url_for('proxmox_system_host', host_id=px.id) }}" class="host nowrap">{{ px.name }}</a></span>
+              <span class="sub">Proxmox VE{% if px.version %} {{ px.version }}{% endif %}{% if px.node and px.node|lower != px.name|lower %} · {{ px.node }}{% endif %}</span></td>
+            <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ px.address }}</span></td>
+            <td data-label="{{ _('Mises à jour') }}">
+              <span class="fleet-update-state">
+              <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(px.color, '') }}" role="img" aria-label="{{ px.label }}"></span>
+              <span class="fleet-updates">{% if px.updates and not px.busy %}<span class="upd-pill sys" title="{{ px.label }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ px.label }}</span>{% elif px.busy %}<span class="busy-note"><span class="spin"></span>{{ px.label }}</span>{% elif not px.ssh and can('proxmox.manage') %}<a class="muted" href="{{ url_for('proxmox_system_host', host_id=px.id) }}#ssh">{{ px.label }}</a>{% else %}<span class="{{ 'muted' if px.color in ('green', 'grey') else 'st ' + {'red': 'err', 'orange': 'warn'}.get(px.color, '') }}">{{ px.label }}</span>{% endif %}</span></span>
+            </td>
+            <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(px.mon) }}</td>
+            <td class="right nowrap card-action">{% if px.updates and not px.busy and px.ssh and can('proxmox.update') %}<div class="row-acts">
+              <form method="post" action="{{ url_for('proxmox_fleet_update', host_id=px.id) }}" data-ajax data-confirm="{{ _('Mettre à jour %(name)s ?', name=px.name) }}" data-confirm-text="{{ _('loco relit les dépôts puis installe toutes les mises à jour (apt-get dist-upgrade, comme le bouton « Upgrade » de Proxmox). Les machines virtuelles continuent de tourner ; un nouveau noyau ne servira qu’au prochain redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <button class="btn sm"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
               </form></div>{% endif %}</td>
@@ -210,6 +232,7 @@
         </tbody>
       </table>
     </div>
+    {% if extra_only %}<div class="empty">{{ _("Aucun poste pour l'instant") }}{% if can('fleet.enroll') %} : <a href="{{ url_for('enrollment') }}">{{ _("ajoutez-en un") }}</a>{% endif %}.</div>{% endif %}
     {% if pages > 1 %}
     <nav class="row store-pagination fleet-pager" aria-label="{{ _('Pages du parc') }}" data-refresh="pager">
       {% if page > 1 %}<a class="btn sm" href="{{ filter_url(page=page - 1) }}">{{ _("Précédente") }}</a>{% endif %}
