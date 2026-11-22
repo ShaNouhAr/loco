@@ -45,7 +45,12 @@ distribués ; supprimer le groupe aussi.
   mémoire, le disque système, la version du noyau ou de Windows, la virtualisation, et la configuration matérielle :
   machine et numéro de série, carte mère, BIOS, barrettes de mémoire (emplacement, taille, type, vitesse, fabricant)
   et disques physiques (modèle, taille, SSD ou disque mécanique — « — » quand le poste ne le sait pas, sur une machine
-  virtuelle par exemple). À l'inscription d'un poste Linux, ses logiciels et caractéristiques
+  virtuelle par exemple), cartes graphiques (nom, mémoire vidéo, version du pilote).
+- **Pilote NVIDIA (Windows)** : l'onglet *Mises à jour* d'un poste équipé d'une carte NVIDIA compare son pilote au
+  dernier *Game Ready* publié par NVIDIA pour cette carte ; *Mettre à jour le pilote* le fait télécharger par l'agent
+  depuis download.nvidia.com (1 Go environ), vérifier (signature NVIDIA) et installer sans fenêtre ni redémarrage —
+  l'écran clignote quelques secondes. Jamais compris dans *Mettre à jour* ni *Tout mettre à jour*. Droit : *Mettre à
+  jour les postes*. Sous Linux, le pilote est un paquet du système. À l'inscription d'un poste Linux, ses logiciels et caractéristiques
   s'affichent dès le premier contact, le décompte des mises à jour suivant une fois le premier scan réseau terminé.
 - **Voyants** : vert, aucune mise à jour ; orange, 1 à 9 mises à jour ; rouge, 10 mises à jour ou plus.
   Le total additionne système, Flatpak et logiciels (catalogue de loco, et winget sous Windows). Le seuil rouge est

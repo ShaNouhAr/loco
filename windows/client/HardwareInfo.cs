@@ -134,6 +134,101 @@ namespace Loco
             return null;
         }
 
+        // Vraie carte graphique : un périphérique PCI (les adaptateurs d'affichage virtuels — bureau à distance, écrans
+        // virtuels — ne le sont pas), hors pilote d'affichage de base de Windows.
+        public static bool IsPhysicalGpu(string pnp, string name)
+        {
+            return (pnp ?? "").StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(name)
+                && name.IndexOf("Basic Display", StringComparison.OrdinalIgnoreCase) < 0;
+        }
+
+        // Valeur numérique du registre, quel que soit son type (QWORD, DWORD, ou octets bruts).
+        public static long RegLong(object value)
+        {
+            if (value is long) return (long)value;
+            if (value is int) return (uint)(int)value;
+            var bytes = value as byte[];
+            if (bytes != null && bytes.Length >= 8) return BitConverter.ToInt64(bytes, 0);
+            if (bytes != null && bytes.Length >= 4) return BitConverter.ToUInt32(bytes, 0);
+            return 0;
+        }
+
+        // Version NVIDIA d'après celle de Windows : 32.0.16.2124 → 621.24 (les cinq derniers chiffres). "" si autre forme.
+        public static string NvidiaVersion(string wmi)
+        {
+            if (string.IsNullOrEmpty(wmi) || !System.Text.RegularExpressions.Regex.IsMatch(wmi, @"^\d+\.\d+\.\d+\.\d+$")) return "";
+            string digits = wmi.Replace(".", "");
+            if (digits.Length < 5) return "";
+            string last = digits.Substring(digits.Length - 5);
+            return int.Parse(last.Substring(0, 3)) + "." + last.Substring(3);
+        }
+
+        // Pilote NVIDIA en place (première carte NVIDIA présente), en numérotation NVIDIA ; "" s'il n'y en a pas.
+        public static string NvidiaInstalled()
+        {
+            foreach (var v in Rows(@"root\cimv2", "Win32_VideoController", "PNPDeviceID", "DriverVersion"))
+                if ((Convert.ToString(v["PNPDeviceID"]) ?? "").StartsWith(@"PCI\VEN_10DE", StringComparison.OrdinalIgnoreCase))
+                    return NvidiaVersion(Convert.ToString(v["DriverVersion"]));
+            return "";
+        }
+
+        // Mémoire vidéo par pilote, lue dans la classe « Display » du registre : (nom, identifiant matériel, octets). C'est la
+        // vraie taille — AdapterRAM de WMI plafonne à 4 Go. Des entrées d'anciennes cartes peuvent y rester : on n'en retient
+        // que celles d'une carte présente (voir Gpus).
+        static List<KeyValuePair<string, KeyValuePair<string, long>>> GpuMemory()
+        {
+            var found = new List<KeyValuePair<string, KeyValuePair<string, long>>>();
+            try
+            {
+                using (var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+                using (var cls = hklm.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"))
+                    if (cls != null)
+                        foreach (string sub in cls.GetSubKeyNames())
+                        {
+                            if (sub.Length != 4 || !sub.All(char.IsDigit)) continue;
+                            try
+                            {
+                                using (var k = cls.OpenSubKey(sub))
+                                {
+                                    if (k == null) continue;
+                                    long size = RegLong(k.GetValue("HardwareInformation.qwMemorySize"));
+                                    if (size <= 0) size = RegLong(k.GetValue("HardwareInformation.MemorySize"));
+                                    found.Add(new KeyValuePair<string, KeyValuePair<string, long>>(Convert.ToString(k.GetValue("DriverDesc")) ?? "",
+                                        new KeyValuePair<string, long>(Convert.ToString(k.GetValue("MatchingDeviceId")) ?? "", size)));
+                                }
+                            }
+                            catch (Exception) { }
+                        }
+            }
+            catch (Exception) { }
+            return found;
+        }
+
+        static List<Dictionary<string, object>> Gpus()
+        {
+            var memory = GpuMemory();
+            var gpus = new List<Dictionary<string, object>>();
+            foreach (var v in Rows(@"root\cimv2", "Win32_VideoController", "Name", "AdapterRAM", "DriverVersion", "PNPDeviceID"))
+            {
+                string pnp = Convert.ToString(v["PNPDeviceID"]) ?? "", name = Text(v["Name"], 120);
+                if (!IsPhysicalGpu(pnp, name)) continue;
+                long vram = 0;
+                foreach (var m in memory)
+                    if (m.Key == name && (m.Value.Key == "" || pnp.StartsWith(m.Value.Key, StringComparison.OrdinalIgnoreCase)) && m.Value.Value > 0)
+                    {
+                        vram = m.Value.Value;
+                        break;
+                    }
+                long adapter = Long(v["AdapterRAM"]);
+                if (vram <= 0 && adapter > 0 && adapter < 4293918720L) vram = adapter;
+                var ids = System.Text.RegularExpressions.Regex.Match(pnp, @"VEN_([0-9A-Fa-f]{4})&DEV_([0-9A-Fa-f]{4})");
+                gpus.Add(new Dictionary<string, object> { { "name", name }, { "vram", vram }, { "driver", Text(v["DriverVersion"], 60) },
+                    { "pci", ids.Success ? (ids.Groups[1].Value + ":" + ids.Groups[2].Value).ToLowerInvariant() : "" } });
+                if (gpus.Count >= 8) break;
+            }
+            return gpus;
+        }
+
         public static Dictionary<string, object> SystemInfo()
         {
             var info = new Dictionary<string, object>();
@@ -215,6 +310,7 @@ namespace Loco
                     disks.Add(new Dictionary<string, object> { { "name", "PhysicalDrive" + Long(d["Index"]) },
                         { "model", Text(d["Model"], 60) }, { "size", Long(d["Size"]) }, { "ssd", null } });
             hw["disks"] = disks;
+            hw["gpus"] = Gpus();
             return hw;
         }
     }

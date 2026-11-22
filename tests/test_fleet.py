@@ -142,11 +142,13 @@ class TestRepositoryWarning(FleetTest):
             "memory_modules": [{"size": "16 GB", "type": "DDR4", "speed": "2933 MT/s", "vendor": "Corsair", "part": "CMW32GX4M2E3200C16",
                                 "slot": "Controller0-ChannelA-DIMM0"}],
             "disks": [{"name": "PhysicalDrive0", "model": "NVMe Samsung SSD 990 PRO 4TB", "size": 4000787030016, "ssd": True},
-                      {"name": "PhysicalDrive1", "model": "QEMU HARDDISK", "size": 161061273600, "ssd": None}]}})
+                      {"name": "PhysicalDrive1", "model": "QEMU HARDDISK", "size": 161061273600, "ssd": None}],
+            "gpus": [{"name": "NVIDIA GeForce RTX 4080", "vram": 17171480576, "driver": "32.0.16.2124"}]}})
         dev = device(agent.uid)
         html = self.admin.c.get(f"/fleet/{dev['id']}").get_data(as_text=True)
         for text in ("Caractéristiques", "TUF GAMING B760M-PLUS D4", "American Megatrends Inc. 1836", "— 20 cœurs", "28 fils",
-                     "CMW32GX4M2E3200C16", "NVMe Samsung SSD 990 PRO 4TB", "Version de Windows", "10.0.26300.9974", "Disque système"):
+                     "CMW32GX4M2E3200C16", "NVMe Samsung SSD 990 PRO 4TB", "Version de Windows", "10.0.26300.9974", "Disque système",
+                     "Carte graphique", "NVIDIA GeForce RTX 4080", "pilote 621.24"):            # numérotation NVIDIA
             self.assertIn(text, html, text)
         self.assertNotIn("Noyau", html)
         disks = html[html.index("PhysicalDrive0"):html.index("PhysicalDrive1") + 400]

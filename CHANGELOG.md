@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 2.192.0 — 2026-11-22
+
+- **La carte graphique dans les caractéristiques du poste** (onglet *Détails*), sous Windows et sous Linux : nom, mémoire vidéo et version du pilote, pour chaque carte présente. Sous Windows, la mémoire vidéo est lue dans le registre — WMI la plafonne à 4 Go — et les adaptateurs d'affichage virtuels (bureau à distance, écrans virtuels) ne sont pas comptés ; sous Linux, les cartes sont celles du bus PCI, nommées par nvidia-smi, le pilote AMD ou lspci.
+- **Mettre à jour le pilote NVIDIA depuis loco (Windows).** loco compare le pilote de chaque carte NVIDIA au dernier pilote *Game Ready* publié par NVIDIA pour cette carte et cette version de Windows (service public de NVIDIA, relu en arrière-plan) : la fiche le montre dans l'onglet *Mises à jour* (section *Pilote graphique*) et dans *Caractéristiques*, avec un bouton *Mettre à jour le pilote*. L'agent télécharge l'installeur officiel depuis download.nvidia.com, refuse tout fichier qui ne serait pas signé par NVIDIA, l'installe sans fenêtre ni redémarrage, puis vérifie la version réellement en place. Jamais lancé par *Mettre à jour* ni *Tout mettre à jour* : seulement à la demande. Sous Linux, le pilote NVIDIA est un paquet du système, mis à jour avec lui.
+
 ## 2.191.0 — 2026-11-22
 
 - **Les détails matériels aussi pour Windows.** La fiche d'un poste Windows montre maintenant la section *Caractéristiques* (onglet *Détails*), comme sous Linux : processeur, mémoire, disque système, version de Windows, virtualisation, démarrage, et la configuration matérielle — machine et numéro de série, carte mère, BIOS, barrettes de mémoire (emplacement, taille, type, vitesse, fabricant, référence) et disques physiques (modèle, taille, SSD ou disque mécanique). Relevé par l'agent Windows (lecture seule de WMI) au prochain inventaire, une fois l'agent à jour.

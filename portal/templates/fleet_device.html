@@ -6,10 +6,10 @@
 {% from "_nav_icons.html" import device_icon, ui_icon %}
 {% from "_macros.html" import pkg_progress with context %}
 {# busy : l'action est déjà lancée sur ce poste — le bouton le dit (témoin, libellé) et ne se clique plus. #}
-{% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='') -%}
+{% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='', fields=none) -%}
 {% if busy %}<button type="button" class="{{ cls or 'menu-item' }} loading" disabled><span class="spin"></span>{{ busy }}</button>{% else %}
 <form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
-  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}{% for k, v in (fields or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <button class="{{ cls or 'menu-item' }}"><span class="spin"></span>{{ label }}</button>
 </form>
 {% endif %}
@@ -240,6 +240,29 @@
       {% endif %}
       {% if windows and inv.software_note %}<p class="hint update-select-hint">{{ _("Logiciels hors catalogue : %(note)s", note=inv.software_note) }}</p>{% endif %}
       {% if sel %}</form>{% endif %}
+
+      {% if gpu_offers %}
+      {# Pilote NVIDIA : comparé au dernier publié par NVIDIA (Game Ready, WHQL) ; posé seulement à la demande, jamais avec « Mettre à jour ». #}
+      <div class="panel-h sub"><h2>{{ _("Pilote graphique") }}</h2><div class="aside">NVIDIA Game Ready</div></div>
+      <div class="table-wrap">
+        <table class="table-cards">
+          <thead><tr><th>{{ _("Carte") }}</th><th>{{ _("Installé") }}</th><th>{{ _("Dernier publié") }}</th><th></th></tr></thead>
+          <tbody>
+          {% for o in gpu_offers %}
+            <tr>
+              <td>{{ o.name }}</td>
+              <td class="mono" data-label="{{ _('Installé') }}">{% if o.outdated %}<span class="st warn">{{ o.installed }}</span>{% elif o.installed %}<span class="st ok">{{ o.installed }}</span>{% else %}—{% endif %}</td>
+              <td data-label="{{ _('Dernier publié') }}">{% if o.latest %}<span class="mono">{{ o.latest.version }}</span> <span class="sub">{{ o.latest.date }}{% if o.latest.size %} · {{ o.latest.size }}{% endif %}</span>{% else %}<span class="faint">{{ _("recherche auprès de NVIDIA…") }}</span>{% endif %}</td>
+              <td class="right card-action">
+                {% if o.outdated and can('fleet.update') and active %}{{ action('gpu-driver', _('Mettre à jour le pilote'), 'btn sm', confirm=_('Mettre à jour le pilote de %(gpu)s ?', gpu=o.name), text=_('L’agent télécharge le pilote %(v)s depuis NVIDIA (%(size)s), vérifie qu’il est signé par NVIDIA, puis l’installe sans fenêtre. L’écran du poste clignote quelques secondes pendant l’installation ; il redémarre seulement si vous le faites ensuite.', v=o.latest.version, size=o.latest.size or '?'), ok=_('Mettre à jour'), busy=_('Installation du pilote en cours') if gpu_busy else '', fields={'gpu': o.name}) }}
+                {% elif o.latest and not o.outdated and o.installed %}<span class="st ok">{{ _("à jour") }}</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
 
       {% if windows and can('windows.view') %}
       <div class="panel-h sub"><h2>{{ _("Logiciels du catalogue") }}</h2><div class="aside"><a href="{{ url_for('windows_apps') }}">{{ _("Catalogue") }}</a></div></div>
@@ -587,6 +610,7 @@
         {% if h.board and (h.board.vendor or h.board.name) %}<dt>{{ _("Carte mère") }}</dt><dd>{{ (h.board.vendor ~ ' ' ~ h.board.name)|trim }}</dd>{% endif %}
         {% if h.bios and h.bios.version %}<dt>BIOS</dt><dd>{{ h.bios.vendor }} {{ h.bios.version }}{% if h.bios.date %} <span class="muted small">({{ h.bios.date }})</span>{% endif %}</dd>{% endif %}
         {% if soft.system.cpu %}<dt>{{ _("Processeur") }}</dt><dd>{{ soft.system.cpu }}{% set cores = h.cpu.cores if h.cpu and h.cpu.cores else soft.system.cores %}{% if cores %} <span class="muted small">{{ _("— %(cores)s cœur%(v)s", cores=cores, v='s' if cores > 1) }}</span>{% endif %}{% if h.cpu and h.cpu.threads %} <span class="muted small">· {{ ngettext("%(num)s fil", "%(num)s fils", h.cpu.threads) }}{% if h.cpu.sockets and h.cpu.sockets > 1 %}, {{ ngettext("%(num)s socket", "%(num)s sockets", h.cpu.sockets) }}{% endif %}</span>{% endif %}</dd>{% endif %}
+        {% if h.gpus %}<dt>{{ ngettext("Carte graphique", "Cartes graphiques", h.gpus|length) }}</dt><dd>{% for c in h.gpus %}{% set o = (gpu_offers or [])|selectattr('name', 'equalto', c.name)|first %}{{ c.name }}{% if c.vram %} <span class="muted small">— {{ c.vram|human }}</span>{% endif %}{% if o and o.installed %} <span class="muted small">· {{ _("pilote %(v)s", v=o.installed) }}</span>{% if o.outdated %} <span class="st warn small">{{ _("%(v)s disponible", v=o.latest.version) }}</span>{% endif %}{% elif c.driver %} <span class="muted small">· {{ _("pilote %(v)s", v=c.driver) }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</dd>{% endif %}
         {% if soft.system.memory %}<dt>{{ _("Mémoire") }}</dt><dd>{{ soft.system.memory|human }}{% if soft.system.memory_available %} <span class="muted small">{{ _("— %(memory_available)s disponible", memory_available=soft.system.memory_available|human) }}</span>{% endif %}{% if h.memory_modules %} <span class="muted small">· {{ ngettext("%(num)s barrette", "%(num)s barrettes", h.memory_modules|length) }}</span>{% endif %}</dd>{% endif %}
         {% if soft.system.disk %}<dt>{{ _("Disque système") if windows else _("Disque (racine)") }}</dt><dd>{{ soft.system.disk|human }}{% if soft.system.disk_free %} <span class="muted small">{{ _("— %(disk_free)s libre", disk_free=soft.system.disk_free|human) }}</span>{% endif %}</dd>{% endif %}
         {% if soft.system.kernel %}<dt>{{ _("Version de Windows") if windows else _("Noyau") }}</dt><dd class="mono small">{{ soft.system.kernel }}{% if soft.system.arch %} · {{ soft.system.arch }}{% endif %}</dd>{% endif %}

@@ -269,6 +269,7 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_passkey_rename", "account_passkey_delete"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "remove-package": "fleet.remove",
+                      "gpu-driver": "fleet.update",
                       "run-script": "scripts.run", "reboot": "fleet.reboot", "uninstall": "fleet.remove", "forget": "fleet.remove",
                       "wake": "fleet.wake", "wake-relay": "fleet.wake",
                       "install-apk": "fleet.install", "agent-update": "fleet.update", "wazuh": "wazuh.install",

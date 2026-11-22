@@ -80,6 +80,27 @@ class TestHardware(unittest.TestCase):
             cpu = agent.hardware_info()["cpu"]
         self.assertEqual((cpu["threads"], cpu["cores"], cpu["sockets"], cpu["model"]), (28, 20, 1, "Intel(R) Core(TM) i7-14700KF"))
 
+    def test_graphics_cards_are_the_pci_display_devices(self):
+        with tempfile.TemporaryDirectory() as root:
+            for slot, cls, vendor, device, driver in (("0000:01:00.0", "0x030000", "0x10de", "0x2704", "nvidia"),
+                                                      ("0000:00:01.0", "0x030000", "0x1234", "0x1111", "bochs-drm"),
+                                                      ("0000:00:1f.0", "0x060100", "0x8086", "0x7a06", "lpc_ich")):
+                path = Path(root, slot)
+                path.mkdir()
+                for name, value in (("class", cls), ("vendor", vendor), ("device", device)):
+                    (path / name).write_text(value + "\n")
+                Path(root, "drivers", driver).mkdir(parents=True)
+                (path / "driver").symlink_to(Path(root, "drivers", driver))
+            outputs = {"nvidia-smi": "00000000:01:00.0, NVIDIA GeForce RTX 4080, 16376, 561.24\n",
+                       "lspci": '0000:01:00.0 "VGA compatible controller" "NVIDIA Corporation" "AD103 [GeForce RTX 4080]" -ra1 -p00 "Micro-Star" "Device 5111"\n'
+                                '0000:00:01.0 "VGA compatible controller" "Vendor 1234" "Device 1111" -r02 -p00 "Red Hat, Inc." "Device 1100"\n'}
+            with mock.patch.object(agent.shutil, "which", lambda name: "/usr/bin/" + name), \
+                    mock.patch.object(agent, "run", lambda cmd, timeout=30: (0, outputs[cmd[0]])):
+                gpus = agent.gpu_inventory(root)
+        self.assertEqual(gpus, [{"name": "QEMU Standard VGA", "vram": 0, "driver": "bochs-drm", "pci": "1234:1111"},
+                                {"name": "NVIDIA GeForce RTX 4080", "vram": 16376 * 1048576, "driver": "nvidia 561.24", "pci": "10de:2704"}])
+        self.assertEqual(agent._gpu_label("Advanced Micro Devices, Inc. [AMD/ATI]", "Navi 31 [Radeon RX 7900 XTX]"), "AMD/ATI Radeon RX 7900 XTX")
+
     def test_dmi_ignores_factory_placeholders(self):
         self.assertEqual(agent._dmi.__code__.co_argcount, 1)   # (name) -> valeur nettoyée
         self.assertIn("default string", agent._DMI_NOISE)       # les valeurs d'usine sont écartées

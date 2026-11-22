@@ -5243,5 +5243,17 @@
  "Il suivra la mise à jour, si elle réussit": "It follows the upgrade, if it succeeds",
  "terminal de Proxmox": "Proxmox terminal",
  "Shell root de Proxmox · via le serveur loco": "Proxmox root shell · via the loco server",
- "Version de Windows": "Windows version"
+ "Version de Windows": "Windows version",
+ "Cartes graphiques": "Graphics cards",
+ "pilote %(v)s": "driver %(v)s",
+ "Pilote graphique": "Graphics driver",
+ "Dernier publié": "Latest released",
+ "recherche auprès de NVIDIA…": "checking with NVIDIA…",
+ "Mettre à jour le pilote": "Update the driver",
+ "Mettre à jour le pilote de %(gpu)s ?": "Update the driver of %(gpu)s?",
+ "L’agent télécharge le pilote %(v)s depuis NVIDIA (%(size)s), vérifie qu’il est signé par NVIDIA, puis l’installe sans fenêtre. L’écran du poste clignote quelques secondes pendant l’installation ; il redémarre seulement si vous le faites ensuite.": "The agent downloads driver %(v)s from NVIDIA (%(size)s), checks that it is signed by NVIDIA, then installs it without any window. The machine's screen flickers for a few seconds during installation; it restarts only if you do it afterwards.",
+ "Installation du pilote en cours": "Driver installation in progress",
+ "Mise à jour du pilote graphique": "Graphics driver update",
+ "Vérification de la signature": "Signature check",
+ "Aucun pilote plus récent à installer pour cette carte : actualisez l'inventaire du poste.": "No newer driver to install for this card: refresh the machine's inventory."
 }

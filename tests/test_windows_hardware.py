@@ -22,6 +22,13 @@ namespace Loco {
                 + "|" + HardwareInfo.Virtualization("Microsoft Corporation", "Virtual Machine") + "|" + HardwareInfo.Virtualization("Microsoft Corporation", "Surface Pro 9")
                 + "|" + HardwareInfo.Virtualization("VMware, Inc.", "VMware20,1") + "|" + HardwareInfo.Virtualization("innotek GmbH", "VirtualBox"));
             Console.WriteLine(HardwareInfo.Ssd(4) + "|" + HardwareInfo.Ssd(3) + "|" + (HardwareInfo.Ssd(0) == null));
+            Console.WriteLine(HardwareInfo.IsPhysicalGpu(@"PCI\VEN_10DE&DEV_2704&SUBSYS_51111462&REV_A1\4&256A0AA8&0&0008", "NVIDIA GeForce RTX 4080")
+                + "|" + HardwareInfo.IsPhysicalGpu(@"ROOT\DISPLAY\0000", "SudoMaker Virtual Display Adapter")
+                + "|" + HardwareInfo.IsPhysicalGpu(@"PCI\VEN_1234&DEV_1111", "Microsoft Basic Display Adapter") + "|" + HardwareInfo.IsPhysicalGpu(null, ""));
+            Console.WriteLine(HardwareInfo.RegLong(17171480576L) + "|" + HardwareInfo.RegLong(-1) + "|" + HardwareInfo.RegLong(BitConverter.GetBytes(17171480576L))
+                + "|" + HardwareInfo.RegLong(BitConverter.GetBytes(268435456)) + "|" + HardwareInfo.RegLong(null) + "|" + HardwareInfo.RegLong("x"));
+            Console.WriteLine(HardwareInfo.NvidiaVersion("32.0.16.2124") + "|" + HardwareInfo.NvidiaVersion("31.0.15.5222") + "|"
+                + HardwareInfo.NvidiaVersion("27.21.14.5671") + "|" + HardwareInfo.NvidiaVersion("10.0.0.18000") + "|" + HardwareInfo.NvidiaVersion("abc") + "|");
             Console.WriteLine(HardwareInfo.Text("To be filled by O.E.M.", 120) + "|" + HardwareInfo.Text("System Serial Number", 120) + "|"
                 + HardwareInfo.Text("  ASUSTeK COMPUTER INC.  ", 120) + "|" + HardwareInfo.Text("0123456789", 4));
         }
@@ -45,6 +52,9 @@ class TestHardwareInfo(unittest.TestCase):
             "04/16/2026|||",
             "kvm|none|microsoft|none|vmware|oracle",       # une Surface (Microsoft, physique) n'est pas une machine virtuelle
             "True|False|True",                             # SSD, disque mécanique, inconnu (machine virtuelle)
+            "True|False|False|False",                      # carte PCI ; adaptateur virtuel, pilote de base : non
+            "17171480576|4294967295|17171480576|268435456|0|0",   # QWORD, DWORD (non signé), octets bruts 8 ou 4
+            "621.24|552.22|456.71|180.00||",               # version NVIDIA : les cinq derniers chiffres de celle de Windows
             "||ASUSTeK COMPUTER INC.|0123",                # valeurs d'usine écartées, espaces retirés, longueur bornée
         ])
 

@@ -31,6 +31,7 @@ import pty
 import pwd
 import re
 import select
+import shlex
 import shutil
 import signal
 import socket
@@ -877,7 +878,64 @@ def hardware_info():
     except OSError:
         pass
     hw["disks"] = disks
+    hw["gpus"] = gpu_inventory()
     return hw
+
+
+def _gpu_label(vendor, device):
+    """Nom lisible d'après lspci : « NVIDIA Corporation » « AD103 [GeForce RTX 4080] » → « NVIDIA GeForce RTX 4080 »."""
+    model = (re.search(r"\[([^\]]+)\]", device) or [None, device])[1]
+    short = (re.search(r"\[([^\]]+)\]", vendor) or [None, ""])[1] or re.sub(r",?\s+(Corporation|Corp\.?|Inc\.?|Co\., Ltd\.?|Ltd\.?|Limited)$", "", vendor)
+    return (short.strip() + " " + model.strip()).strip()
+
+
+# Cartes graphiques des machines virtuelles, que les anciennes bases lspci ne nomment pas (fabricant:modèle PCI).
+_VIRTUAL_GPUS = {"1234:1111": "QEMU Standard VGA", "1b36:0100": "QXL", "1af4:1050": "VirtIO GPU", "15ad:0405": "VMware SVGA II",
+                 "80ee:beef": "VirtualBox Graphics Adapter", "1414:5353": "Hyper-V Video"}
+
+
+def gpu_inventory(root="/sys/bus/pci/devices"):
+    """Cartes graphiques présentes (périphériques PCI de classe « affichage ») : nom, mémoire vidéo, pilote. Nom par
+    nvidia-smi, product_name (AMD) ou lspci ; mémoire par nvidia-smi ou mem_info_vram_total (AMD). Lecture seule."""
+    nvidia, names = {}, {}
+    if shutil.which("nvidia-smi"):
+        code, out = run(["nvidia-smi", "--query-gpu=pci.bus_id,name,memory.total,driver_version", "--format=csv,noheader,nounits"], timeout=15)
+        if code == 0:
+            for line in out.splitlines():
+                p = [x.strip() for x in line.split(",")]
+                if len(p) >= 4 and p[1]:
+                    total = _gpu_num(p[2])
+                    nvidia[p[0].lower()[-12:]] = {"name": p[1], "vram": int(total * 1048576) if total else 0, "version": p[3]}
+    if shutil.which("lspci"):
+        code, out = run(["lspci", "-mm", "-D"], timeout=30)
+        if code == 0:
+            for line in out.splitlines():
+                try:
+                    f = shlex.split(line)
+                except ValueError:
+                    continue
+                if len(f) >= 4 and f[1] in ("VGA compatible controller", "3D controller", "Display controller"):
+                    names[f[0].lower()] = _gpu_label(f[2], f[3])
+    gpus = []
+    for path in sorted(glob.glob(os.path.join(root, "*"))):
+        if not _readfile(os.path.join(path, "class")).startswith(("0x0300", "0x0302", "0x0380")):
+            continue
+        slot = os.path.basename(path).lower()
+        found = nvidia.get(slot, {})
+        driver = os.path.basename(os.path.realpath(os.path.join(path, "driver"))) if os.path.exists(os.path.join(path, "driver")) else ""
+        vram = found.get("vram") or 0
+        if not vram and _readfile(os.path.join(path, "mem_info_vram_total")).isdigit():
+            vram = int(_readfile(os.path.join(path, "mem_info_vram_total")))
+        ids = "%s:%s" % (_readfile(os.path.join(path, "vendor"))[2:].lower(), _readfile(os.path.join(path, "device"))[2:].lower())
+        label = names.get(slot, "")
+        if not label or re.match(r"^Vendor [0-9a-f]{4}\b", label):
+            label = _VIRTUAL_GPUS.get(ids, label)
+        name = found.get("name") or _readfile(os.path.join(path, "product_name")) or label or "PCI " + ids
+        gpus.append({"name": name[:120], "vram": vram, "driver": (driver + " " + found["version"]).strip() if found.get("version") else driver,
+                     "pci": ids})
+        if len(gpus) >= 8:
+            break
+    return gpus
 
 
 # Systèmes de fichiers locaux supervisés (les pseudo-systèmes, réseaux et images en lecture seule sont ignorés).

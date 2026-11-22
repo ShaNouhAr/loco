@@ -54,7 +54,7 @@ FAMILIES = {"windows": L_("Windows"), "debian": L_("Debian / Ubuntu"), "rhel": L
 # Type d'un appareil Android, annoncé par l'application d'après son écran et son système.
 FORMS = {"phone": L_("Téléphone"), "tablet": L_("Tablette"), "tv": L_("Téléviseur")}
 ACTIONS = {"scan": L_("Inventaire"), "update": L_("Mise à jour"), "install-app": L_("Installation"), "install-package": L_("Installation de paquet"),
-           "remove-package": L_("Désinstallation"),
+           "remove-package": L_("Désinstallation"), "gpu-driver": L_("Mise à jour du pilote graphique"),
            "run-script": L_("Script"), "reboot": L_("Redémarrage"), "uninstall": L_("Retrait de l'agent"),
            "wake": L_("Réveil"), "wake-relay": L_("Envoi d'un réveil"), "install-apk": L_("Installation d'application"),
            "agent-update": L_("Mise à jour de l'agent"), "wazuh": L_("Agent Wazuh"), "os-upgrade": L_("Mise à jour vers une nouvelle version")}
@@ -501,6 +501,8 @@ def action_label(cmd):
         label = _("%(action)s (avec redémarrage)", action=label)
     if cmd["action"] == "wazuh":
         label = _("Retrait de l'agent Wazuh") if params.get("op") == "remove" else _("Installation de l'agent Wazuh")
+    if cmd["action"] == "gpu-driver" and params.get("label"):
+        label = _("%(action)s : %(name)s", action=label, name=params["label"])
     return label
 
 
@@ -818,10 +820,21 @@ def _store_software(dev, inv):
             "disks": [{"name": _text(d.get("name"), 30), "model": _text(d.get("model"), 60), "size": _int(d.get("size")),
                        "ssd": d.get("ssd") if isinstance(d.get("ssd"), bool) else None}
                       for d in (hw.get("disks") or []) if isinstance(d, dict)][:64],
+            "gpus": [{"name": _text(c.get("name"), 120), "vram": _int(c.get("vram")), "driver": _text(c.get("driver"), 60),
+                      "pci": c["pci"].lower() if re.fullmatch(r"[0-9a-fA-F]{4}:[0-9a-fA-F]{4}", str(c.get("pci") or "")) else ""}
+                     for c in (hw.get("gpus") or []) if isinstance(c, dict) and c.get("name")][:8]
         }
     db().execute("INSERT INTO device_software (device_id, data, updated_at) VALUES (?, ?, ?) "
                  "ON CONFLICT(device_id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at",
                  (dev["id"], json.dumps(clean), _now()))
+
+
+def gpu_driver_offers(dev):
+    """Pilotes NVIDIA d'un poste Windows : installé, dernier publié, à mettre à jour (agents 2.192.0 et plus)."""
+    if dev["os_family"] != "windows" or version_key(dev["agent_version"]) < (2, 192):
+        return []
+    from . import nvidia
+    return nvidia.offers(dev, software(dev).get("hardware"))
 
 
 def software(dev):
@@ -1036,6 +1049,12 @@ def _payload(dev, cmd):
         if not packages:
             return None
         out["packages"] = packages
+    if cmd["action"] == "gpu-driver":
+        from . import nvidia
+        url, version = str(params.get("url", "")), str(params.get("version", ""))
+        if dev["os_family"] != "windows" or not nvidia.URL_RE.match(url) or not nvidia.VERSION_RE.match(version):
+            return None
+        out.update(url=url, version=version, signer=nvidia.SIGNER, name=str(params.get("gpu", ""))[:120])
     if cmd["action"] == "remove-package":
         packages = [p for p in params.get("packages", []) if isinstance(p, str) and p]
         kind = params.get("kind", "")
@@ -1204,6 +1223,7 @@ def agent_checkin():
 
 
 PROGRESS_STEPS = {"download": L_("Téléchargement"), "verify": L_("Vérification de l'empreinte"), "install": L_("Installation"),
+                  "signature": L_("Vérification de la signature"),
                   "windows_update": L_("Mises à jour Windows"), "updates": L_("Mises à jour du système"),
                   "flatpak": L_("Applications Flatpak"), "confirm": L_("En attente de confirmation sur l'appareil"),
                   "os_upgrade": L_("Mise à jour vers une nouvelle version")}
@@ -1266,7 +1286,7 @@ def progress_view(raw):
         return {"label": label, "percent": max(1, min(99, percent)), "step": p["step"], "app": p.get("app", ""),
                 "phase": phase, **extra}
     # Part de chaque logiciel : téléchargement 0-60 %, vérification 60-70 %, installation 70-100 %.
-    within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "install": 0.7, "confirm": 0.8,
+    within = {"download": 0.6 * (p.get("percent") or 0) / 100, "verify": 0.6, "signature": 0.6, "install": 0.7, "confirm": 0.8,
               "windows_update": 0.0}[p["step"]]
     overall = round(100 * ((index - 1) + within) / total)
     if p["step"] == "confirm":
@@ -2337,6 +2357,7 @@ def fleet_device(dev_id):
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
                            disk_usage=version_key(dev["agent_version"]) >= (2, 186) and dev["os_family"] in ("windows", "linux"),
+                           gpu_offers=gpu_driver_offers(dev), gpu_busy=any(c["action"] == "gpu-driver" for c in waiting),
                            remove_pkg=can("fleet.remove") and version_key(dev["agent_version"]) >= (2, 187) and dev["os_family"] in ("debian", "rhel"),
                            action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,
                            wazuh=_wazuh_panel(dev),
@@ -2448,6 +2469,15 @@ def fleet_action(dev_id):
                 "SELECT 1 FROM win_apps WHERE slug=? AND status='ready'", (slug,)).fetchone():
             abort(400)
         params["slug"] = slug
+    if action == "gpu-driver":
+        # Pilote NVIDIA (agents Windows 2.192.0 et plus) : version et adresse viennent du relevé de NVIDIA fait par le
+        # serveur, jamais du formulaire ; seulement si la carte a un pilote plus ancien que le dernier publié.
+        offer = next((o for o in gpu_driver_offers(dev) if o["name"] == request.form.get("gpu", "") and o["outdated"]), None)
+        if offer is None:
+            flash(_("Aucun pilote plus récent à installer pour cette carte : actualisez l'inventaire du poste."), "error")
+            return _back_to_origin(dev_id)
+        params.update(url=offer["latest"]["url"], version=offer["latest"]["version"], gpu=offer["name"],
+                      label=f"{offer['name']} {offer['installed']} → {offer['latest']['version']}")
     if action == "remove-package":
         name = request.form.get("package", "").strip()
         kind = request.form.get("kind", "")

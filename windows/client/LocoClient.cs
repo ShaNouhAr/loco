@@ -1539,6 +1539,95 @@ namespace Loco
             finally { try { File.Delete(file); } catch (Exception) { } }
         }
 
+        // Pilote NVIDIA demandé depuis loco : installeur officiel (adresse download.nvidia.com donnée par le serveur), signé par
+        // NVIDIA (Authenticode vérifié), posé sans fenêtre ni redémarrage. Réussi quand Windows rapporte la version voulue.
+        static readonly Regex NvidiaUrl = new Regex(@"^https://(?:[a-z]{2}|international)\.download\.nvidia\.com/Windows/\d{3}\.\d{2}/[A-Za-z0-9._-]+\.exe$");
+        static readonly Regex NvidiaVer = new Regex(@"^\d{3}\.\d{2}$");
+
+        static bool InstallGpuDriver(Dictionary<string, object> cmd, List<string> lines, Action<string, int> step)
+        {
+            string url = Str(cmd, "url"), version = Str(cmd, "version"), signer = Str(cmd, "signer");
+            if (signer == "") signer = "NVIDIA Corporation";
+            if (!NvidiaUrl.IsMatch(url) || !NvidiaVer.IsMatch(version) || !url.Contains("/" + version + "/"))
+            {
+                lines.Add(Lang.T("Adresse ou version du pilote invalide : rien n'est installé.", "Invalid driver address or version: nothing installed.",
+                                 "Dirección o versión del controlador no válida: no se instala nada."));
+                return false;
+            }
+            string before = HardwareInfo.NvidiaInstalled();
+            if (before == "")
+            {
+                lines.Add(Lang.T("Aucune carte NVIDIA sur ce poste : rien n'est installé.", "No NVIDIA card on this machine: nothing installed.",
+                                 "Ninguna tarjeta NVIDIA en este equipo: no se instala nada."));
+                return false;
+            }
+            string drive = Path.GetPathRoot(Environment.GetFolderPath(Environment.SpecialFolder.Windows));
+            try
+            {
+                if (new DriveInfo(drive).AvailableFreeSpace < (4L << 30))
+                {
+                    lines.Add(Lang.T("Moins de 4 Go libres sur ", "Less than 4 GB free on ", "Menos de 4 GB libres en ") + drive
+                        + Lang.T(" : l'installeur (1 Go) et ses fichiers n'y tiendraient pas.", ": the installer (1 GB) and its files would not fit.",
+                                 ": el instalador (1 GB) y sus archivos no cabrían."));
+                    return false;
+                }
+            }
+            catch (Exception) { }
+            string dir = Path.Combine(Root, "gpu-driver");
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, version + ".exe");
+            try
+            {
+                step("download", 0);
+                Download(url, file, (s, cert, chain, errors) => errors == SslPolicyErrors.None, percent => step("download", percent));   // racines du système
+                step("signature", -1);
+                if (!PublisherTrusted(file, signer))
+                {
+                    lines.Add(Lang.T("ÉCHEC : installeur non signé par ", "FAILED: installer not signed by ", "FALLO: instalador no firmado por ") + signer
+                        + Lang.T(" (rien n'est installé).", " (nothing installed).", " (no se instala nada)."));
+                    return false;
+                }
+                step("install", -1);
+                int code = RunInstaller(file, "-s -noreboot -noeula -nofinish");
+                string after = HardwareInfo.NvidiaInstalled();
+                if (after == version)
+                {
+                    lines.Add(Lang.T("OK : pilote NVIDIA ", "OK: NVIDIA driver ", "OK: controlador NVIDIA ") + version
+                        + Lang.T(" installé (avant : ", " installed (before: ", " instalado (antes: ") + before + ").");
+                    return true;
+                }
+                if (code == 0)
+                {
+                    lines.Add(Lang.T("Installeur terminé sans erreur, mais Windows rapporte encore le pilote ", "Installer finished without error, but Windows still reports driver ",
+                                     "El instalador terminó sin error, pero Windows aún indica el controlador ") + after
+                        + Lang.T(" : redémarrez le poste pour charger le ", ": restart the machine to load ", ": reinicie el equipo para cargar el ") + version + ".");
+                    return true;
+                }
+                lines.Add(Lang.T("ÉCHEC : l'installeur NVIDIA s'est arrêté avec le code 0x", "FAILED: the NVIDIA installer stopped with code 0x",
+                                 "FALLO: el instalador de NVIDIA se detuvo con el código 0x") + unchecked((uint)code).ToString("X8")
+                    + Lang.T(" ; pilote en place : ", "; driver in place: ", "; controlador actual: ") + after
+                    + Lang.T(". Journaux de l'installeur : C:\\ProgramData\\NVIDIA Corporation\\Installer2.", ". Installer logs: C:\\ProgramData\\NVIDIA Corporation\\Installer2.",
+                             ". Registros del instalador: C:\\ProgramData\\NVIDIA Corporation\\Installer2."));
+                return false;
+            }
+            catch (Exception e)
+            {
+                lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + e.Message.Trim());
+                return false;
+            }
+            finally
+            {
+                try { File.Delete(file); } catch (Exception) { }
+                // L'installeur s'extrait dans C:\NVIDIA\DisplayDriver\<version> et l'y laisse (plus d'un gigaoctet).
+                try
+                {
+                    string extracted = Path.Combine(drive, "NVIDIA", "DisplayDriver", version);
+                    if (Directory.Exists(extracted)) Directory.Delete(extracted, true);
+                }
+                catch (Exception) { }
+            }
+        }
+
         // Logiciels hors catalogue choisis dans loco : mis à jour un à un par winget, en silence, au compte SYSTEM.
         // Codes de winget : 0x8A150014 (introuvable pour la mise à jour) et 0x8A15002B (rien d'applicable) : mis de côté,
         // sans échec ; 0x8A15010D (déjà installé) ; 0x8A150109 et 0x8A15010B : installé, un redémarrage termine l'installation.
@@ -2420,6 +2509,28 @@ namespace Loco
                         if (reboot) lines.Add(Lang.T("Redémarrage dans une minute.", "Rebooting in one minute.", "Reinicio en un minuto."));
                         Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, inv);
                         if (reboot) { SaveState(lastScan, scanHours, false); Restart(Lang.T("redémarrage après mise à jour", "reboot after update", "reinicio tras la actualización")); return true; }
+                    }
+                    else if (action == "gpu-driver")
+                    {
+                        // Pilote graphique NVIDIA : téléchargement (avec son avancement), signature, installation silencieuse.
+                        var lines = new List<string>();
+                        string app = "NVIDIA " + Str(cmd, "version"), lastKey = "";
+                        var lastSent = DateTime.MinValue;
+                        Action<string, int> step = (stage, percent) =>
+                        {
+                            string key = stage + "|" + percent;
+                            if (key == lastKey || (stage == "download" && (DateTime.UtcNow - lastSent).TotalSeconds < 1)) return;
+                            lastKey = key; lastSent = DateTime.UtcNow;
+                            var detail = new Dictionary<string, object> { { "step", stage }, { "app", app } };
+                            if (percent >= 0) detail["percent"] = percent;
+                            var report = new Dictionary<string, object> { { "id", id }, { "state", "running" }, { "output", "" }, { "exit_code", null }, { "progress", detail } };
+                            try { Post(Str(conf, "server"), "/agent/api/result", report, Str(conf, "token")); }
+                            catch (Exception) { }
+                        };
+                        bool ok = InstallGpuDriver(cmd, lines, step);
+                        var inv = Inventory();
+                        lastScan = now;
+                        Report(conf, id, ok ? "success" : "failed", string.Join("\n", lines), ok ? 0 : 1, inv);
                     }
                     else if (action == "run-script")
                     {
