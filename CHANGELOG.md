@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.194.0 — 2026-11-23
+
+- **Nouvelle police : Outfit**, à la place de Bricolage Grotesque, dans tout le portail et dans l'application Android. Formes rondes et géométriques, dessin épuré, et compacte : les colonnes de Mon parc et des tableaux restent lisibles. Livrée avec loco (aucun appel à un site extérieur), licence SIL OFL ; IBM Plex Mono reste la police des adresses, versions et commandes.
+
 ## 2.193.0 — 2026-11-23
 
 - **Équipements réseau (expérimental) : switchs Cisco et Extreme, pare-feu Stormshield.** loco se relie sans agent à vos équipements, avec un compte de l'équipement : Cisco IOS / IOS-XE (Catalyst, routeurs), Cisco Small Business (CBS, SG), Extreme EXOS / Switch Engine, Extreme VOSS / Fabric Engine — en SSH et par la ligne de commande —, et Stormshield SNS par son API HTTPS (SSH pour le terminal). Le mot de passe est chiffré dans la base et remis à ssh sans passer par ses arguments ; la clé d'hôte SSH et le certificat du pare-feu ne sont acceptés qu'une fois leur empreinte confirmée. Les vieux équipements qui ne parlent que les algorithmes SSH d'avant 2015 (ssh-rsa, Diffie-Hellman groupe 14 en SHA-1, CBC) sont joints aussi. Une fonctionnalité expérimentale, à activer dans *Fonctionnalités*.

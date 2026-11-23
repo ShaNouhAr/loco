@@ -23,7 +23,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /** Composants de l'application, à l'image du portail loco : mêmes couleurs (thème clair, ou « sombre doux » de
- *  l'apparence Brume quand l'appareil est en mode sombre), même police (Bricolage Grotesque, et IBM Plex Mono pour les
+ *  l'apparence Brume quand l'appareil est en mode sombre), même police (Outfit, et IBM Plex Mono pour les
  *  adresses, empreintes et versions), mêmes panneaux, boutons, champs et pastilles d'état. */
 class Ui(private val context: Context) {
     enum class Tone { OK, WARN, ERR, NEUTRAL }
@@ -200,23 +200,20 @@ class Ui(private val context: Context) {
         (Color.blue(a) * p + Color.blue(b) * (1 - p)).toInt())
 }
 
-/** Polices du portail, livrées dans l'APK (licence SIL OFL, voir assets/fonts). Bricolage Grotesque est variable :
- *  graisse et taille optique sont fixées à l'usage, comme le fait un navigateur. */
+/** Polices du portail, livrées dans l'APK (licence SIL OFL, voir assets/fonts). Outfit est variable : la graisse est
+ *  fixée à l'usage, comme le fait un navigateur (la taille n'y change rien, elle reste dans la signature d'appel). */
 object Fonts {
     private val cache = HashMap<String, Typeface>()
 
     @Synchronized
-    fun sans(context: Context, weight: Int, size: Float): Typeface {
-        val opsz = size.coerceIn(12f, 96f).toInt()
-        return cache.getOrPut("sans/$weight/$opsz") {
+    fun sans(context: Context, weight: Int, @Suppress("UNUSED_PARAMETER") size: Float): Typeface =
+        cache.getOrPut("sans/$weight") {
             try {
-                Typeface.Builder(context.assets, "fonts/BricolageGrotesque-loco.ttf")
-                    .setFontVariationSettings("'wght' $weight, 'opsz' $opsz, 'wdth' 100").build()
+                Typeface.Builder(context.assets, "fonts/Outfit-loco.ttf").setFontVariationSettings("'wght' $weight").build()
             } catch (_: Exception) {
                 Typeface.create(Typeface.SANS_SERIF, if (weight >= 600) Typeface.BOLD else Typeface.NORMAL)
             }
         }
-    }
 
     @Synchronized
     fun mono(context: Context, medium: Boolean): Typeface = cache.getOrPut("mono/$medium") {

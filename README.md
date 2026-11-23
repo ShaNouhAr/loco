@@ -421,7 +421,7 @@ Le détail, et ce que loco ne protège pas : **[SECURITY.md](SECURITY.md)**.
 
 ## Licence
 
-[MIT](LICENSE). Polices IBM Plex, Bricolage Grotesque et JetBrains Mono sous licence SIL OFL 1.1 (`portal/static/fonts/`) ; photos des fonds d'écran créditées dans `portal/static/wallpapers/CREDITS.txt`.
+[MIT](LICENSE). Polices IBM Plex, Outfit et JetBrains Mono sous licence SIL OFL 1.1 (`portal/static/fonts/`) ; photos des fonds d'écran créditées dans `portal/static/wallpapers/CREDITS.txt`.
 
 <br>
 

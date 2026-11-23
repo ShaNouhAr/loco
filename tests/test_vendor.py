@@ -25,6 +25,14 @@ class VendorTest(unittest.TestCase):
         for name in fonts["files"]:
             self.assertTrue(os.path.isfile(os.path.join(STATIC, name)), name)
         self.assertTrue(os.path.isfile(os.path.join(STATIC, "fonts", "JetBrainsMono-LICENSE.txt")))
+        sans = next(e for e in sources if e["name"].startswith("Outfit"))                 # police du portail
+        for name in sans["files"]:
+            self.assertTrue(os.path.isfile(os.path.join(STATIC, name)), name)
+        self.assertTrue(os.path.isfile(os.path.join(STATIC, "fonts", "Outfit-LICENSE.txt")))
+        with open(os.path.join(STATIC, "style.css"), encoding="utf-8") as f:
+            css = f.read()
+        for name in sans["files"]:
+            self.assertIn(name, css)
 
 
 if __name__ == "__main__":
