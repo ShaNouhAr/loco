@@ -35,12 +35,12 @@ class FakePve:
     def __init__(self):
         self.boot, self.sim, self.kernels = str(uuid.uuid4()), SIM, ["7.0.14-15-pve", "7.0.14-23-pve"]
         self.upgrade_rc, self.unreachable, self.calls, self.polls, self.started = 0, False, [], {}, set()
-        self.uptime, self.same_boot_id = 3547934, False
+        self.uptime, self.same_boot_id, self.pin = 3547934, False, ""
 
     def collect(self):
         return "\n".join(["@@host pve", "@@kernel 7.0.14-15-pve", f"@@boot {self.boot}", "@@uptime 3547934.26",
                           "@@pve pve-manager/9.2.21/4f6e0ac86f9e8c7f (running kernel: 7.0.14-15-pve)"]
-                         + [f"@@kernelfile {k}" for k in self.kernels]
+                         + [f"@@kernelfile {k}" for k in self.kernels] + [f"@@pin {self.pin}", "@@nextpin "]
                          + ["@@lists 1795295284", "@@self 109.conf", "@@sim", self.sim, "@@simrc 0"]) + "\n"
 
     def run(self, row, script, timeout=40):
@@ -166,6 +166,16 @@ class TestSummary(unittest.TestCase):
         log = "(Reading database ... 5%\r(Reading database ... 95%\r(Reading database ... 18937 files installed.)\r\nSetting up apt (3.0.4) ...\r\n"
         self.assertEqual(proxmox_system.tidy(log), "(Reading database ... 18937 files installed.)\nSetting up apt (3.0.4) ...\n")
 
+    def test_a_pinned_kernel_is_the_one_that_boots(self):
+        """proxmox-boot-tool kernel pin : le serveur redémarre toujours sur ce noyau. Il tourne déjà : aucun redémarrage
+        requis, même si un plus récent est installé ; un autre noyau épinglé, lui, en demande un."""
+        pve = FakePve()
+        pve.pin = "7.0.14-15-pve"
+        info = proxmox_system.summarize(pve.collect())
+        self.assertEqual((info["pinned"], info["boot_kernel"], info["reboot_required"]), ("7.0.14-15-pve", "7.0.14-15-pve", False))
+        pve.pin = "7.0.14-23-pve"
+        self.assertTrue(proxmox_system.summarize(pve.collect())["reboot_required"])
+
     def test_the_collect_script_only_reads(self):
         script = proxmox_system.collect_script(["bc:24:11:41:65:50", "pas-une-mac; rm -rf /"])
         self.assertIn("apt-get -s -q -o Debug::NoLocking=1 dist-upgrade", script)
@@ -223,6 +233,14 @@ class TestPage(ProxmoxSystemTest):
                      "loco tourne sur ce Proxmox (machine 109", "libssl3t64", "Un nouveau noyau fait partie des mises à jour",
                      "Rechercher les mises à jour", 'id="px-update"', "1 paquet retenu"):
             self.assertIn(text, html)
+
+    def test_a_pinned_kernel_is_said(self):
+        self.pve.pin = "7.0.14-15-pve"
+        row = self.host()
+        html = self.page(row["id"])
+        self.assertIn("épinglé · 7.0.14-23-pve installé", html)
+        self.assertNotIn("redémarrage requis", html)
+        self.assertIn("le noyau 7.0.14-15-pve est épinglé", html)
 
     def test_an_upgrade_that_would_remove_proxmox_is_refused(self):
         self.pve.sim = SIM + "Remv proxmox-ve [9.2.0]\n"
@@ -319,6 +337,16 @@ class TestFleet(ProxmoxSystemTest):
         self.assertEqual(self.admin.post(f"/proxmox/{row['id']}/fleet-update", page="/fleet").status_code, 302)
         self.idle()
         self.assertEqual(self.jobs()[0]["action"], "update")
+
+    def test_one_status_dot_per_row(self):
+        """Une seule pastille : le libellé d'état (« redémarrage requis ») n'en ajoute pas une seconde."""
+        self.pve.sim = "Reading package lists...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n"
+        self.host()
+        html = self.admin.c.get("/fleet").get_data(as_text=True)
+        row = html[html.index('<tr class="ha-row px-row">'):]
+        cell = row[row.index('data-label="Mises à jour"'):row.index('data-label="Ressources"')]
+        self.assertIn("<span>redémarrage requis</span>", cell)
+        self.assertEqual(cell.count('class="st '), 1)
 
     def test_selection_updates_but_never_reboots_a_hypervisor(self):
         row = self.host()

@@ -52,8 +52,10 @@ def human(n):
 
 
 def date_fr(value):
-    """« 2026-10-12 20:57 » -> « 12/10 20:57 » (en anglais : « Oct 12 20:57 »)."""
+    """« 2026-10-12 20:57 » -> « 12/10 20:57 » (en anglais : « Oct 12 20:57 »). Un horodatage (secondes) est accepté."""
     from .i18n import locale
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        value = time.strftime("%Y-%m-%d %H:%M", time.localtime(value)) if value > 0 else ""
     m = re.match(r"\d{4}-(\d{2})-(\d{2}) (\d{2}:\d{2})", value or "")
     if not m:
         return value or ""

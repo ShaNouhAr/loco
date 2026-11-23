@@ -1764,7 +1764,7 @@ dialog.account-dialog { width: min(760px, calc(100vw - 32px)); }
 .when .ui-icon { color: var(--text-3); }
 .empty-rich { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; }
 .empty-rich::before { content: none; }    /* variant avec sa propre icône : pas aussi l'icône générique de .empty */
-.empty-rich .ui-icon { width: 28px; height: 28px; color: var(--text-3); }
+.empty-rich .ui-icon, .empty-rich .nav-icon { width: 28px; height: 28px; color: var(--text-3); }
 .empty-rich strong { color: var(--text); font-size: 15px; }
 .empty-rich span { max-width: 520px; }
 .empty-rich .btn { margin-top: 8px; }
@@ -2673,6 +2673,18 @@ details.hass-log:not(.menu):not(.nav-group):not(.panel) > summary { display: fle
 .px-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .px-more { margin: 0 var(--pad, 18px) 14px; }
 .px-more > .table-wrap { margin-top: 8px; }
+/* Équipements réseau (fonctionnalité facultative) : configurations gardées et leurs différences. */
+.diff-count { font: 12.5px var(--mono); white-space: nowrap; }
+.diff-count .add, .nd-diff .add { color: var(--ok, #2e7d32); }
+.diff-count .del, .nd-diff .del { color: var(--err, #c62828); }
+.nd-diff .hunk { color: var(--text-3); }
+.nd-diff .add { background: color-mix(in srgb, var(--ok, #2e7d32) 10%, transparent); }
+.nd-diff .del { background: color-mix(in srgb, var(--err, #c62828) 10%, transparent); }
+.nd-diff span { display: block; }
+.nd-diff, .nd-text { max-height: 70vh; border-top: 1px solid var(--line); }
+.nd-config-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.nd-against select { max-width: 260px; }
+.nd-hints { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
 @media (max-width: 1100px) { .hass-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1100px) { .px-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {

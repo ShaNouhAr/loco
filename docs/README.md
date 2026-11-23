@@ -19,6 +19,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | Suivre **Home Assistant** | [Home Assistant](homeassistant.md) |
 | Mettre à jour un **Proxmox VE** et ouvrir son terminal | [Proxmox VE](proxmox.md) |
 | Poser l'**agent Wazuh** sur les postes | [Agent Wazuh](wazuh.md) |
+| Gérer les **switchs** Cisco et Extreme et les **pare-feu** Stormshield (expérimental) | [Équipements réseau](reseau.md) |
 | **Contribuer** | [Développement](developpement.md) |
 
 À côté : [politique de sécurité](../SECURITY.md) · [changelog](../CHANGELOG.md) · [appliance ISO](../linux/iso/README.md).

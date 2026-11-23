@@ -152,7 +152,7 @@
         <div class="metric">
           <div class="k">{{ titled('layers', _("Noyau")) }}</div>
           <div class="v small-v mono">{{ info.kernel if info and info.kernel else '—' }}</div>
-          <div class="s">{% if info and info.reboot_required %}<span class="st warn">{{ _("%(v)s installé : redémarrage requis", v=info.newest_kernel) }}</span>{% elif info and info.newest_kernel %}{{ _("le plus récent installé") }}{% else %}—{% endif %}</div>
+          <div class="s">{% if info and info.reboot_required %}<span class="st warn">{{ _("%(v)s installé : redémarrage requis", v=info.boot_kernel or info.newest_kernel) }}</span>{% elif info and info.pinned and info.newest_kernel and info.newest_kernel != info.pinned %}<span title="{{ _('Épinglé avec proxmox-boot-tool : le serveur redémarre toujours sur ce noyau, même si un plus récent est installé (proxmox-boot-tool kernel unpin pour revenir au plus récent).') }}">{{ _("épinglé · %(v)s installé", v=info.newest_kernel) }}</span>{% elif info and info.pinned %}{{ _("épinglé") }}{% elif info and info.newest_kernel %}{{ _("le plus récent installé") }}{% else %}—{% endif %}</div>
         </div>
         <div class="metric">
           <div class="k">{{ titled('update', _("Mises à jour")) }}</div>
@@ -196,7 +196,7 @@
       </div>
       {% endif %}
       {% if info and info.removals %}<div class="note warn"><p>{{ _("La mise à jour retirera aussi : %(list)s.", list=info.removals|join(', ')) }}</p></div>{% endif %}
-      {% if info and info.kernel_update %}<p class="hint">{{ _("Un nouveau noyau fait partie des mises à jour : il ne servira qu'après un redémarrage du serveur.") }}</p>{% endif %}
+      {% if info and info.kernel_update %}<p class="hint">{% if info.pinned %}{{ _("Un nouveau noyau fait partie des mises à jour, mais le noyau %(v)s est épinglé (proxmox-boot-tool) : le serveur continuera de démarrer dessus tant que l'épinglage reste en place.", v=info.pinned) }}{% else %}{{ _("Un nouveau noyau fait partie des mises à jour : il ne servira qu'après un redémarrage du serveur.") }}{% endif %}</p>{% endif %}
     </div>
     {% endif %}
 

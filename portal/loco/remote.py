@@ -101,8 +101,8 @@ def _prune():
     for row in conn.execute("SELECT s.id,s.kind,s.terminal_fallback,s.device_id,s.target,u.role FROM remote_sessions s "
                             "JOIN users u ON u.id=s.user_id WHERE s.state IN ('waiting','active')").fetchall():
         grants = permissions.role_permissions(conn, row["role"])
-        if row["device_id"] is None:            # session hors du parc : terminal d'un Home Assistant ou d'un Proxmox
-            feature = "proxmox" if row["target"].startswith("proxmox:") else "homeassistant"
+        if row["device_id"] is None:            # session hors du parc : terminal d'un Home Assistant, d'un Proxmox, d'un équipement réseau
+            feature = target_feature(row["target"])
             if not {feature + ".view", feature + ".shell"} <= grants or not features.enabled(feature):
                 _close(row["id"], "Droit d'accès distant révoqué.")
             continue
@@ -197,17 +197,23 @@ def _read(row, direction, ack):
     return packets
 
 
+def target_feature(target):
+    """Fonctionnalité dont relève une session hors du parc, d'après sa cible (« proxmox:3 », « net:5 »…)."""
+    return {"proxmox": "proxmox", "net": "network"}.get((target or "").partition(":")[0], "homeassistant")
+
+
 def _browser_session(sid):
-    row = db().execute("SELECT s.*,COALESCE(d.hostname, h.name, p.name, '') AS hostname,COALESCE(d.os_family, '') AS os_family "
+    row = db().execute("SELECT s.*,COALESCE(d.hostname, h.name, p.name, n.name, '') AS hostname,COALESCE(d.os_family, '') AS os_family "
                        "FROM remote_sessions s LEFT JOIN devices d ON d.id=s.device_id "
                        "LEFT JOIN homeassistant_hosts h ON s.target = 'homeassistant:' || h.id "
                        "LEFT JOIN proxmox_hosts p ON s.target = 'proxmox:' || p.id "
+                       "LEFT JOIN net_devices n ON s.target = 'net:' || n.id "
                        "WHERE s.id=? AND s.user_id=? AND s.owner=? AND s.pw_version=?",
                        (sid, g.user["id"], _owner(), g.user["pw_version"])).fetchone()
     if row is None:
         abort(404)
     if row["kind"] == "ssh":
-        require("proxmox.shell" if row["target"].startswith("proxmox:") else "homeassistant.shell")
+        require(target_feature(row["target"]) + ".shell")
     else:
         require("remote." + row["kind"])
     return row
@@ -216,6 +222,12 @@ def _browser_session(sid):
 def _origin(row):
     """D'où vient une session, et la route qui en ouvre une autre : la fiche du poste — ou, pour une session hors du
     parc, la page Home Assistant."""
+    if row["device_id"] is None and row["target"].startswith("net:"):
+        dev_id = row["target"].partition(":")[2]
+        if dev_id.isdigit():
+            return {"back": url_for("network_device", dev_id=int(dev_id)), "label": _("Retour à l'équipement"), "page": _("Équipements réseau"),
+                    "open": url_for("network_shell", dev_id=int(dev_id))}
+        return {"back": url_for("network"), "label": _("Retour aux équipements"), "page": _("Équipements réseau"), "open": url_for("network")}
     if row["device_id"] is None and row["target"].startswith("proxmox:"):
         host_id = row["target"].partition(":")[2]
         if host_id.isdigit():

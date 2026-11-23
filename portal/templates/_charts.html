@@ -92,7 +92,7 @@
 {% macro resources(m) -%}
 {% if m %}
 <div class="res{{ ' stale' if m.stale }}" title="{{ _('Relevé : %(age)s', age=m.age_text) }}{% if m.disk_mount %} · {{ _('disque le plus rempli : %(mount)s', mount=m.disk_mount) }}{% endif %}">
-  {% for key, label in (('cpu', _('CPU')), ('mem', _('RAM')), ('disk', _('Disque'))) %}{% set v = m[key] %}
+  {% for key, label in (('cpu', _('CPU')), ('mem', _('RAM')), ('disk', _('Disque'))) if key in (m.only or ('cpu', 'mem', 'disk')) %}{% set v = m[key] %}
   <span class="res-row"><span class="res-k">{{ label }}</span><svg class="res-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="track" width="100" height="6" rx="3"/>{% if v %}<rect class="fill lvl-{{ m.levels[key] }}" width="{{ [v, 3]|max }}" height="6" rx="3"/>{% endif %}</svg><span class="res-v{{ ' lvl-' ~ m.levels[key] if m.levels[key] in ('warn', 'err') }}">{{ '%d %%'|format(v|round) if v is not none else '—' }}</span></span>
   {% endfor %}
 </div>

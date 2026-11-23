@@ -2139,6 +2139,14 @@ def _px_fleet_rows():
         return []
 
 
+def _net_fleet_rows():
+    try:
+        from . import network
+        return network.fleet_rows()
+    except Exception:
+        return []
+
+
 @app.route("/fleet")
 @login_required
 def fleet():
@@ -2205,7 +2213,7 @@ def fleet():
                            counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold(),
-                           ha_rows=_ha_fleet_rows(), px_rows=_px_fleet_rows())
+                           ha_rows=_ha_fleet_rows(), px_rows=_px_fleet_rows(), net_rows=_net_fleet_rows())
 
 
 @app.route("/fleet/search.json")

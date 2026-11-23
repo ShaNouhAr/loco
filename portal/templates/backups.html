@@ -63,7 +63,7 @@
 <div class="head">
   <div>
     <h1>{{ _("Sauvegardes") }}</h1>
-    <p>{{ _("Ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox —, où, et quand.") }}</p>
+    <p>{{ _("Ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox, la configuration de vos équipements réseau —, où, et quand.") }}</p>
   </div>
   {% if pve_manage and pve and pve|length < max_hosts and not pve_linking %}<div class="actions"><a class="btn" href="{{ url_for('backups', relier=1) }}#proxmox">{{ ui_icon('plus') }}<span>{{ _("Relier un autre Proxmox") }}</span></a></div>{% endif %}
 </div>
@@ -93,6 +93,14 @@
       <div class="s">{% set copied = hass|selectattr('state.at')|list|length %}{% if not hass %}{{ _("aucune instance reliée") }}{% elif hass|selectattr('state.error')|list %}<span class="st err">{{ _("copie en échec") }}</span>{% else %}{{ copied }} {{ ngettext('copiée sur la destination', 'copiées sur la destination', copied) }}{% endif %}</div>
     </a>
     {% endif %}
+    {% if show_net %}
+    <a class="metric metric-link" href="#reseau">
+      <div class="k">{{ titled('network', _("Réseau")) }}</div>
+      {% set kept = net|map(attribute='count')|sum %}
+      <div class="v">{{ net|length }}<span class="v-unit">{{ ngettext('équipement', 'équipements', net|length) }}</span></div>
+      <div class="s">{% if net|selectattr('row.backup_error')|list %}<span class="st err">{{ _("sauvegarde en échec") }}</span>{% else %}{{ ngettext('%(num)s configuration gardée', '%(num)s configurations gardées', kept) }}{% endif %}</div>
+    </a>
+    {% endif %}
     {% if loco %}
     <a class="metric metric-link" href="#loco">
       <div class="k">{{ titled('save', "loco") }}</div>
@@ -113,6 +121,7 @@
     {% set first = namespace(v=true) %}
     {% if show_pve %}<button type="button" data-tab="proxmox" aria-selected="{{ 'true' if first.v else 'false' }}">Proxmox{% if pve_linked %} <span class="tab-count">{{ pve_linked|length }}</span>{% endif %}</button>{% set first.v = false %}{% endif %}
     {% if show_ha %}<button type="button" data-tab="homeassistant" aria-selected="{{ 'true' if first.v else 'false' }}">Home Assistant{% if hass %} <span class="tab-count">{{ hass|length }}</span>{% endif %}</button>{% set first.v = false %}{% endif %}
+    {% if show_net %}<button type="button" data-tab="reseau" aria-selected="{{ 'true' if first.v else 'false' }}">{{ _("Réseau") }}{% if net %} <span class="tab-count">{{ net|length }}</span>{% endif %}</button>{% set first.v = false %}{% endif %}
     {% if loco %}<button type="button" data-tab="loco" aria-selected="{{ 'true' if first.v else 'false' }}">loco{% if loco.last and loco.last.late %} <span class="st warn" aria-label="{{ _('en retard') }}"></span>{% endif %}</button>{% set first.v = false %}{% endif %}
     {% if destination %}<button type="button" data-tab="destination" aria-selected="{{ 'true' if first.v else 'false' }}">{{ _("Destination") }}{% if not dest_ready %} <span class="st warn" aria-label="{{ _('à choisir') }}"></span>{% elif dest_failed %} <span class="st err" aria-label="{{ _('en échec') }}"></span>{% endif %}</button>{% set first.v = false %}{% endif %}
   </div>
@@ -453,6 +462,33 @@
     {% else %}
     <div class="panel"><div class="panel-b"><p class="empty">{{ _("Aucun Home Assistant n'est relié.") }} <a href="{{ url_for('homeassistant') }}">{{ _("Relier un Home Assistant") }}</a></p></div></div>
     {% endfor %}
+  </div></div>
+  {% endif %}
+
+  {# ------------------------------------------------------------------ équipements réseau #}
+  {% if show_net %}
+  <div class="tab-panel{{ ' on' if first.v }}" data-panel="reseau"><div class="stack">{% set first.v = false %}
+    <section class="panel">
+      <div class="panel-h"><h2>{{ titled('network', _("Configurations des équipements réseau")) }}</h2><div class="aside">{{ _("gardées quand elles changent, chiffrées, incluses dans la sauvegarde de loco") }}</div></div>
+      {% if net %}
+      <div class="table-wrap">
+        <table class="table-cards hass-table">
+          <tbody>
+          {% for n in net %}{% set r = n.row %}
+            <tr>
+              <td><a href="{{ url_for('network_device', dev_id=r.id) }}#sauvegardes">{{ r.name }}</a><span class="sub">{{ n.family }}</span></td>
+              <td data-label="{{ _('Dernière') }}">{% if r.backup_error %}<span class="st err">{{ _("en échec") }}</span>{% elif r.last_backup %}{{ r.last_backup|date_fr }}{% else %}<span class="muted">{{ _("aucune") }}</span>{% endif %}</td>
+              <td data-label="{{ _('Gardées') }}">{{ ngettext('%(num)s version', '%(num)s versions', n.count) }}</td>
+              <td class="muted" data-label="{{ _('Quand') }}">{{ n.every }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="panel-b"><p class="muted">{{ _("Aucun équipement relié. Ajoutez vos switchs et pare-feu dans Équipements réseau : leur configuration est alors sauvegardée ici, chaque jour par défaut.") }} {% if can('network.manage') %}<a href="{{ url_for('network') }}">{{ _("Équipements réseau") }}</a>{% endif %}</p></div>
+      {% endif %}
+    </section>
   </div></div>
   {% endif %}
 

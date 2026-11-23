@@ -907,6 +907,75 @@ MIGRATIONS = [
     );
     CREATE INDEX proxmox_system_jobs_host ON proxmox_system_jobs(host_id, id);
     """,
+    # 57 : équipements réseau (switchs Cisco et Extreme, pare-feu Stormshield) — reliés par SSH avec un compte et son
+    # mot de passe (scellé), clé d'hôte confirmée ; Stormshield aussi par son API HTTPS, certificat épinglé. Relevé de
+    # l'état, tâches suivies une à une, sauvegardes de la configuration (fichiers chiffrés dans l'état de loco, gardés
+    # quand ils changent) et bibliothèque de firmwares déposés par un administrateur.
+    """
+    CREATE TABLE net_devices (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        family TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL DEFAULT 22,
+        username TEXT NOT NULL DEFAULT '',
+        secret TEXT NOT NULL DEFAULT '',
+        enable_secret TEXT NOT NULL DEFAULT '',
+        host_key TEXT NOT NULL DEFAULT '',
+        api_port INTEGER NOT NULL DEFAULT 443,
+        api_cert TEXT NOT NULL DEFAULT '',
+        info TEXT NOT NULL DEFAULT '',
+        error TEXT NOT NULL DEFAULT '',
+        checked REAL NOT NULL DEFAULT 0,
+        seen REAL NOT NULL DEFAULT 0,
+        backup_every INTEGER NOT NULL DEFAULT 86400,
+        backup_keep INTEGER NOT NULL DEFAULT 30,
+        last_backup REAL NOT NULL DEFAULT 0,
+        backup_error TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE net_jobs (
+        id INTEGER PRIMARY KEY,
+        device_id INTEGER NOT NULL REFERENCES net_devices(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        params TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'queued',
+        output TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT '',
+        finished_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX net_jobs_device ON net_jobs(device_id, id);
+    CREATE TABLE net_backups (
+        id INTEGER PRIMARY KEY,
+        device_id INTEGER NOT NULL REFERENCES net_devices(id) ON DELETE CASCADE,
+        taken_at REAL NOT NULL,
+        sha256 TEXT NOT NULL,
+        size INTEGER NOT NULL DEFAULT 0,
+        binary INTEGER NOT NULL DEFAULT 0,
+        added INTEGER NOT NULL DEFAULT 0,
+        removed INTEGER NOT NULL DEFAULT 0,
+        reason TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT '',
+        file TEXT NOT NULL
+    );
+    CREATE INDEX net_backups_device ON net_backups(device_id, id);
+    CREATE TABLE net_firmware (
+        id INTEGER PRIMARY KEY,
+        family TEXT NOT NULL,
+        version TEXT NOT NULL,
+        models TEXT NOT NULL DEFAULT '',
+        filename TEXT NOT NULL,
+        size INTEGER NOT NULL DEFAULT 0,
+        sha256 TEXT NOT NULL,
+        md5 TEXT NOT NULL DEFAULT '',
+        file TEXT NOT NULL,
+        uploaded_at TEXT NOT NULL DEFAULT '',
+        uploaded_by TEXT NOT NULL DEFAULT ''
+    );
+    """,
 ]
 
 

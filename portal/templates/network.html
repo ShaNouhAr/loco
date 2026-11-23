@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Équipements réseau") }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import ui_icon, nav_icon %}
+{% from "_charts.html" import resources %}
+{% set manage = can('network.manage') %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Équipements réseau") }}</h1>
+    <p>{{ _("Switchs Cisco et Extreme, pare-feu Stormshield : état, sauvegarde de la configuration, terminal et firmware, sans agent, avec un compte de l'équipement.") }}</p>
+  </div>
+  {% if manage %}<div class="actions"><button type="button" class="btn primary" data-open="#net-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un équipement") }}</span></button></div>{% endif %}
+</div>
+
+<div class="stack" data-poll="{{ url_for('network') }}" data-poll-kind="reload" data-poll-every="8000" data-signature="{{ signature }}">
+{% if not ssh %}
+<div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas se relier aux switchs. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-h"><h2>{{ _("Équipements") }}{% if rows %} <span class="h-count">{{ rows|length }}</span>{% endif %}</h2><div class="aside">{{ _("relevés toutes les quinze minutes") }}</div></div>
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="table-cards fleet-table" data-row-links>
+      <thead><tr><th>{{ _("Équipement") }}</th><th>{{ _("Adresse") }}</th><th>{{ _("État") }}</th><th class="hide-sm">{{ _("Ressources") }}</th></tr></thead>
+      <tbody>
+      {% for nd in rows %}
+        <tr>
+          <td><span class="nowrap"><span class="st {{ 'ok' if nd.online else 'err' }} device-availability" role="img" aria-label="{{ nd.family }}"></span>
+            <span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon('shield' if nd.kind == 'firewall' else 'network') }}</span><a href="{{ url_for('network_device', dev_id=nd.id) }}" class="host nowrap">{{ nd.name }}</a></span>
+            <span class="sub">{{ nd.family }}{% if nd.model %} · {{ nd.model }}{% endif %}{% if nd.version %} · {{ nd.version }}{% endif %}</span></td>
+          <td class="nowrap" data-label="{{ _('Adresse') }}"><span class="mono">{{ nd.address }}</span></td>
+          <td data-label="{{ _('État') }}"><span class="fleet-update-state"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(nd.color, '') }}" role="img" aria-label="{{ nd.label }}"></span><span{% if nd.color in ('green', 'grey') %} class="muted"{% endif %}>{% if nd.busy %}<span class="spin"></span>{% endif %}{{ nd.label }}</span></span></td>
+          <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(nd.mon) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty empty-rich">
+    {{ nav_icon('network') }}
+    <strong>{{ _("Aucun équipement relié") }}</strong>
+    <span>{{ _("Ajoutez un switch ou un pare-feu avec son adresse et un compte d'administration : loco relève sa clé d'hôte, vous la confirmez, puis il apparaît ici et dans Mon parc.") }}</span>
+    {% if manage %}<button type="button" class="btn primary" data-open="#net-add">{{ _("Ajouter un équipement") }}</button>{% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel" id="firmwares">
+  <div class="panel-h"><h2>{{ _("Bibliothèque de firmwares") }}{% if firmware %} <span class="h-count">{{ firmware|length }}</span>{% endif %}</h2>
+    {% if can('network.firmware') %}<div class="aside"><button type="button" class="btn sm" data-open="#net-firmware">{{ ui_icon('plus') }}<span>{{ _("Déposer un firmware") }}</span></button></div>{% endif %}</div>
+  {% if firmware %}
+  <div class="table-wrap">
+    <table class="table-cards hass-table">
+      <thead><tr><th>{{ _("Firmware") }}</th><th>{{ _("Modèles") }}</th><th>{{ _("Fichier") }}</th><th>{{ _("Plus récent sur") }}</th><th></th></tr></thead>
+      <tbody>
+      {% for fw in firmware %}
+        <tr>
+          <td><strong>{{ families[fw.family].label if fw.family in families else fw.family }}</strong> <span class="mono">{{ fw.version }}</span>
+            <span class="sub">{{ _("déposé le %(d)s par %(who)s", d=fw.uploaded_at|date_fr, who=fw.uploaded_by) }}</span></td>
+          <td data-label="{{ _('Modèles') }}">{% if fw.models %}<span class="mono">{{ fw.models }}</span>{% else %}<span class="muted">{{ _("tous") }}</span>{% endif %}</td>
+          <td data-label="{{ _('Fichier') }}"><span class="mono">{{ fw.filename }}</span><span class="sub">{{ fw.size|human }} · <span class="mono" title="SHA-256 {{ fw.sha256 }}">SHA-256 {{ fw.sha256[:16] }}…</span></span></td>
+          <td data-label="{{ _('Plus récent sur') }}">{% if used.get(fw.id) %}{{ ngettext('%(num)s équipement', '%(num)s équipements', used[fw.id]) }}{% else %}<span class="muted">{{ _("aucun") }}</span>{% endif %}</td>
+          <td class="right">{% if can('network.firmware') %}
+            <form method="post" action="{{ url_for('network_firmware_delete', fw_id=fw.id) }}" data-confirm="{{ _('Retirer ce firmware de la bibliothèque ?') }}" data-confirm-text="{{ _('Le fichier est supprimé de loco ; les équipements qui l’ont déjà gardent leur version.') }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn sm icon danger" aria-label="{{ _('Retirer') }}" title="{{ _('Retirer') }}">{{ ui_icon('trash') }}</button>
+            </form>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="panel-b"><p class="muted">{{ _("Déposez ici les firmwares téléchargés chez le constructeur (Cisco, Extreme, Stormshield) : loco signale les équipements qui ont une version plus ancienne et peut l'installer, la configuration sauvegardée juste avant.") }}</p></div>
+  {% endif %}
+</section>
+</div>
+
+{% if manage %}
+<dialog id="net-add">
+  <form method="post" action="{{ url_for('network_add') }}" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Ajouter un équipement") }}</h2><p>{{ _("loco s'y connecte en SSH (et par l'API HTTPS pour Stormshield) avec ce compte.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="name" required maxlength="64" placeholder="SW-CORE-01"></label>
+        <label class="f"><span>{{ _("Famille") }}</span><select name="family" required>
+          {% for key, f in families.items() %}<option value="{{ key }}">{{ f.label }}</option>{% endfor %}
+        </select></label>
+      </div>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="host" required maxlength="253" spellcheck="false" placeholder="192.168.1.2"></label>
+        <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="port" value="22" min="1" max="65535" required></label>
+        <label class="f"><span>{{ _("Port HTTPS (Stormshield)") }}</span><input type="number" name="api_port" value="443" min="1" max="65535"></label>
+      </div>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Compte") }}</span><input type="text" name="username" required maxlength="64" spellcheck="false" autocomplete="off" placeholder="admin"></label>
+        <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" name="password" required maxlength="256" autocomplete="new-password"></label>
+        <label class="f"><span>{{ _("Mot de passe enable (Cisco IOS)") }}</span><input type="password" name="enable" maxlength="256" autocomplete="new-password" placeholder="{{ _('facultatif') }}"></label>
+      </div>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Sauvegarde de la configuration") }}</span><select name="backup_every">
+          {% for s in every %}<option value="{{ s }}"{% if s == 86400 %} selected{% endif %}>{{ every_label(s) }}</option>{% endfor %}
+        </select></label>
+        <label class="f"><span>{{ _("Conserver") }}</span><select name="backup_keep">
+          {% for k in keep %}<option value="{{ k }}"{% if k == 30 %} selected{% endif %}>{{ ngettext('%(num)s version', '%(num)s versions', k) }}</option>{% endfor %}
+        </select></label>
+      </div>
+      <ul class="hint nd-hints">
+        <li>{{ _("Cisco IOS / IOS-XE : SSH activé (ip ssh version 2), un compte de niveau 15 — ou le mot de passe enable. Pour le firmware : ip scp server enable.") }}</li>
+        <li>{{ _("Cisco Small Business : SSH activé (ip ssh server), un compte de niveau 15.") }}</li>
+        <li>{{ _("Extreme EXOS / Switch Engine : SSH activé (enable ssh2), un compte admin.") }}</li>
+        <li>{{ _("Extreme VOSS / Fabric Engine : SSH activé (boot config flags sshd), un compte rwa ; SFTP pour le firmware.") }}</li>
+        <li>{{ _("Stormshield SNS : un compte d'administration sans second facteur ; SSH facultatif, pour le terminal.") }}</li>
+      </ul>
+      <p class="hint">{{ _("Le mot de passe est chiffré dans la base de loco et ne s'affiche plus ensuite. loco montre l'empreinte de la clé d'hôte (et du certificat du pare-feu) : rien d'autre n'est échangé avant que vous l'ayez confirmée.") }}</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"{% if not ssh %} disabled{% endif %}><span class="spin"></span>{{ _("Ajouter et relever la clé") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+
+{% if can('network.firmware') %}
+<dialog id="net-firmware">
+  <form method="post" action="{{ url_for('network_firmware_upload') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Déposer un firmware") }}</h2><p>{{ _("Le fichier tel que fourni par le constructeur.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <label class="f"><span>{{ _("Famille") }}</span><select name="family" required>
+        {% for key, f in families.items() %}<option value="{{ key }}">{{ f.label }}{% if not f.firmware %} — {{ _("installation sur l'équipement") }}{% endif %}</option>{% endfor %}
+      </select></label>
+      <label class="f"><span>{{ _("Fichier") }}</span><input type="file" name="file" required accept=".bin,.pkg,.xos,.tgz,.maj,.ros"></label>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Version") }}</span><input type="text" name="version" maxlength="40" spellcheck="false" placeholder="{{ _('lue dans le nom du fichier') }}"></label>
+        <label class="f"><span>{{ _("Modèles concernés") }}</span><input type="text" name="models" maxlength="200" spellcheck="false" placeholder="C9300-*, X440G2*"></label>
+      </div>
+      <p class="hint">{{ _("Modèles : vide pour tous ceux de la famille, sinon des noms ou des motifs séparés par des virgules (le modèle tel que loco le relève). Après le dépôt, comparez l'empreinte SHA-256 affichée à celle publiée par le constructeur.") }}</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Déposer") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

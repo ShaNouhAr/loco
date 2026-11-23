@@ -195,6 +195,7 @@ def collect_script(macs=()):
              'echo "@@host $(hostname)"', 'echo "@@kernel $(uname -r)"', 'echo "@@boot $(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"',
              'echo "@@uptime $(cut -d" " -f1 /proc/uptime)"', 'echo "@@pve $(pveversion 2>/dev/null | head -n 1)"',
              'for f in /boot/vmlinuz-*; do [ -e "$f" ] && echo "@@kernelfile ${f#/boot/vmlinuz-}"; done',
+             'echo "@@pin $(cat /etc/kernel/proxmox-boot-pin 2>/dev/null)"', 'echo "@@nextpin $(cat /etc/kernel/next-boot-pin 2>/dev/null)"',
              'echo "@@lists $(stat -c %Y /var/lib/apt/lists/*Release 2>/dev/null | sort -n | tail -n 1)"']
     if macs:
         lines.append('for f in /etc/pve/qemu-server/*.conf /etc/pve/lxc/*.conf; do [ -f "$f" ] && grep -qiE '
@@ -213,7 +214,7 @@ def _clean(value, limit=200):
 
 def summarize(text):
     """Relevé lisible d'après la sortie de collect_script."""
-    out = {"hostname": "", "kernel": "", "boot": "", "uptime": 0, "pve": "", "kernels": [], "lists": 0, "self": None,
+    out = {"hostname": "", "kernel": "", "boot": "", "uptime": 0, "pve": "", "kernels": [], "lists": 0, "self": None, "pinned": "", "next_pin": "",
            "updates": [], "removals": [], "held": 0, "sim_error": ""}
     sim, simrc, in_sim = [], 0, False
     for line in text.splitlines():
@@ -243,6 +244,8 @@ def summarize(text):
         elif key == "@@pve":
             m = re.search(r"pve-manager/([0-9][^/\s]*)", value)
             out["pve"] = m.group(1)[:32] if m else ""
+        elif key in ("@@pin", "@@nextpin") and re.fullmatch(r"[0-9][A-Za-z0-9.+~_-]{0,63}", value):
+            out["pinned" if key == "@@pin" else "next_pin"] = value
         elif key == "@@kernelfile" and re.fullmatch(r"[0-9][A-Za-z0-9.+~_-]{0,63}", value):
             out["kernels"].append(value)
         elif key == "@@lists" and value.isdigit():
@@ -271,7 +274,14 @@ def summarize(text):
     out["kernels"].sort(key=_vkey)
     newest = out["kernels"][-1] if out["kernels"] else ""
     out["newest_kernel"] = newest
-    out["reboot_required"] = bool(newest and out["kernel"] and newest != out["kernel"] and _vkey(newest) > _vkey(out["kernel"]))
+    # Noyau du prochain démarrage : celui épinglé (proxmox-boot-tool kernel pin, éventuellement pour ce seul démarrage),
+    # sinon le plus récent. Un noyau épinglé qui tourne déjà ne demande aucun redémarrage, même si un plus récent est installé.
+    pin = out.get("next_pin") or out.get("pinned") or ""
+    out["boot_kernel"] = pin or newest
+    if pin:
+        out["reboot_required"] = bool(out["kernel"] and pin != out["kernel"])
+    else:
+        out["reboot_required"] = bool(newest and out["kernel"] and newest != out["kernel"] and _vkey(newest) > _vkey(out["kernel"]))
     out["security"] = sum(1 for u in out["updates"] if u["security"])
     out["kernel_update"] = any(KERNEL_PKG.match(u["name"]) for u in out["updates"])
     out["updates"].sort(key=lambda u: (not u["security"], u["name"]))
@@ -680,7 +690,7 @@ def attention():
                              _("Proxmox « %(name)s » : %(n)s mise à jour disponible.", name=row["name"], n=count) if count == 1
                              else _("Proxmox « %(name)s » : %(n)s mises à jour disponibles.", name=row["name"], n=count)})
             if info["reboot_required"]:
-                rows.append({"tone": "warn", "url": url, "text": _("Proxmox « %(name)s » : redémarrage requis (noyau %(k)s installé).", name=row["name"], k=info["newest_kernel"])})
+                rows.append({"tone": "warn", "url": url, "text": _("Proxmox « %(name)s » : redémarrage requis (noyau %(k)s installé).", name=row["name"], k=info.get("boot_kernel") or info["newest_kernel"])})
     return rows
 
 

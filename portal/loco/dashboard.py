@@ -142,6 +142,9 @@ def _attention():
     if can("proxmox.view") and "proxmox" not in features.disabled():
         from . import proxmox, proxmox_system
         rows += proxmox.attention() + proxmox_system.attention()
+    if can("network.view") and "network" not in features.disabled():
+        from . import network
+        rows += network.attention()
     rows.sort(key=lambda row: row["tone"] != "err")
     return rows
 

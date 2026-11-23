@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Configuration") }} · {{ row.name }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import ui_icon, nav_icon %}
+{% block content %}
+<div class="head">
+  <div>
+    <p class="small muted"><a href="{{ url_for('network_device', dev_id=row.id) }}#sauvegardes" class="crumb-back">← {{ row.name }}</a></p>
+    <h1>{{ _("Configuration du %(d)s", d=b.taken_at|date_fr) }}</h1>
+    <p>{{ b.reason }}{% if b.created_by %} · {{ _("par %(who)s", who=b.created_by) }}{% endif %} · {{ b.size|human }} · <span class="mono" title="SHA-256 {{ b.sha256 }}">SHA-256 {{ b.sha256[:16] }}…</span></p>
+  </div>
+  <div class="actions"><a class="btn" href="{{ url_for('network_config_download', dev_id=row.id, backup_id=b.id) }}">{{ ui_icon('download') }}<span>{{ _("Télécharger") }}</span></a></div>
+</div>
+
+<div class="stack">
+{% if b.binary %}
+<div class="note"><p>{{ _("Sauvegarde complète du pare-feu (fichier .na de Stormshield) : elle se restaure depuis son interface d'administration (Configuration › Système › Maintenance › Sauvegarder / Restaurer). Elle ne se lit pas ici.") }}</p></div>
+{% else %}
+<section class="panel">
+  <div class="panel-h">
+    <h2>{% if view == 'diff' and base %}{{ _("Changements depuis le %(d)s", d=base.taken_at|date_fr) }}{% else %}{{ _("Configuration complète") }}{% endif %}</h2>
+    <div class="aside nd-config-tools">
+      <div class="seg" role="group" aria-label="{{ _('Affichage') }}">
+        {% if base %}<a class="seg-btn{{ ' on' if view == 'diff' }}" href="{{ url_for('network_config', dev_id=row.id, backup_id=b.id, vue='diff', contre=request.args.get('contre')) }}">{{ _("Différences") }}</a>{% endif %}
+        <a class="seg-btn{{ ' on' if view != 'diff' or not base }}" href="{{ url_for('network_config', dev_id=row.id, backup_id=b.id, vue='texte') }}">{{ _("Texte") }}</a>
+      </div>
+      {% if others|length > 1 %}
+      <form method="get" action="{{ url_for('network_config', dev_id=row.id, backup_id=b.id) }}" class="nd-against">
+        <input type="hidden" name="vue" value="diff">
+        <select name="contre" data-autosubmit aria-label="{{ _('Comparer à') }}">
+          {% for o in others if o.id != b.id %}<option value="{{ o.id }}"{% if base and o.id == base.id %} selected{% endif %}>{{ _("comparer au %(d)s", d=o.taken_at|date_fr) }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn sm">{{ _("Comparer") }}</button></noscript>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% if view == 'diff' and base %}
+  {% if diff %}
+  <pre class="log nd-diff">{% for kind, line in diff %}<span class="{{ kind }}">{{ line }}</span>{% endfor %}</pre>
+  {% else %}<div class="panel-b"><p class="muted">{{ _("Aucune différence.") }}</p></div>{% endif %}
+  {% else %}
+  <pre class="log nd-text">{{ text }}</pre>
+  {% endif %}
+</section>
+<p class="hint">{{ _("Une configuration contient souvent des secrets de l'équipement (mots de passe chiffrés, communautés SNMP, clés) : chaque consultation et chaque téléchargement est inscrit au journal de loco.") }}</p>
+{% endif %}
+</div>
+{% endblock %}

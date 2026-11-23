@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}{{ v.row.name }} · {{ _("Équipements réseau") }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import titled, ui_icon, nav_icon %}
+{% from "_macros.html" import cmd %}
+{% block content %}
+{% set d = v.row %}
+{% set info = v.info %}
+{% set f = v.family %}
+{% set manage = can('network.manage') %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% set tab_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>{% endset %}
+{% macro job_state(j) -%}
+{% if j.state == 'running' %}<span class="busy-note"><span class="spin"></span>{{ _("En cours") }}</span>
+{%- elif j.state == 'queued' %}<span class="st">{{ _("En attente") }}</span>
+{%- elif j.state == 'success' %}<span class="st ok">{{ _("Réussie") }}</span>
+{%- else %}<span class="st err">{{ _("Échec") }}</span>{% endif %}
+{%- endmacro %}
+{% macro duration(s) -%}{% if s is not none %}{% if s >= 86400 %}{{ _("%(d)s j %(h)s h", d=s // 86400, h=s % 86400 // 3600) }}{% elif s >= 3600 %}{{ _("%(h)s h %(m)s min", h=s // 3600, m=s % 3600 // 60) }}{% else %}{{ _("%(m)s min", m=s // 60) }}{% endif %}{% else %}—{% endif %}{%- endmacro %}
+<div class="head">
+  <div>
+    <p class="small muted"><a href="{{ url_for('network') }}" class="crumb-back">← {{ _("Équipements réseau") }}</a></p>
+    <h1 class="hass-host-title">{{ nav_icon('shield' if f.kind == 'firewall' else 'network') }}{{ d.name }}</h1>
+  </div>
+</div>
+<div class="stack" data-poll="{{ url_for('network_device', dev_id=d.id) }}" data-poll-kind="reload" data-poll-every="4000" data-signature="{{ signature }}">
+{% if not ssh %}
+<div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas se relier aux switchs. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
+{% endif %}
+
+{% if pending and manage %}
+{# Empreintes relevées : rien n'est enregistré ni échangé tant qu'un administrateur ne les a pas confirmées. #}
+<section class="panel hass-confirm" id="liaison">
+  <div class="panel-h"><h2>{{ _("Confirmer l'identité de %(name)s", name=d.name) }}</h2><div class="aside">{{ d.username }}@{{ d.host }}</div></div>
+  <div class="panel-b stack-sm">
+    <p>{{ _("Voici ce que présente cette adresse. Comparez avec votre équipement avant de confirmer : c'est ce qui garantit que loco parle bien à lui, et à lui seul — et qu'il ne remet le mot de passe à personne d'autre.") }}</p>
+    <dl class="kv-grid">
+      {% if pending.key %}<div><dt>{{ _("Clé d'hôte SSH (%(type)s)", type=pending.type) }}</dt><dd class="mono">{{ pending.fingerprint }}</dd></div>{% endif %}
+      {% if pending.cert %}<div><dt>{{ _("Certificat HTTPS (SHA-256)") }}</dt><dd class="mono wrap-anywhere">{{ pending.cert_pretty }}</dd></div>
+      {% if pending.cert_details %}<div><dt>{{ _("Certificat") }}</dt><dd>{{ pending.cert_details.subject or '—' }}{% if pending.cert_details.issuer %} · {{ _("émis par %(i)s", i=pending.cert_details.issuer) }}{% endif %}{% if pending.cert_details.until %} · {{ _("jusqu'au %(d)s", d=pending.cert_details.until) }}{% endif %}</dd></div>{% endif %}{% endif %}
+    </dl>
+    {% if f.api and not pending.key %}<p class="hint">{{ _("SSH ne répond pas sur ce pare-feu : le terminal ne sera pas disponible, le reste passe par l'API HTTPS. Activez SSH sur le pare-feu puis relevez de nouveau, si vous voulez le terminal.") }}</p>{% endif %}
+    {% if d.host_key and pending.key %}<p class="hint">{{ _("Cette clé est la même que celle déjà confirmée.") if pending.same else _("Cette clé diffère de celle confirmée jusqu'ici. C'est attendu si l'équipement a été réinitialisé ou remplacé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+    <p class="hint">{{ _("Depuis un poste qui s'y est déjà connecté en SSH, cette commande affiche l'empreinte qu'il connaît :") }}</p>
+    {{ cmd('nd-hostkey', 'ssh-keygen -lF ' ~ (d.host if d.port == 22 else '[' ~ d.host ~ ']:' ~ d.port), '$') }}
+  </div>
+  <div class="panel-f row-between">
+    <form method="post" action="{{ url_for('network_confirm', dev_id=d.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="cancel" value="1">
+      <button class="linkbtn">{{ _("Annuler") }}</button>
+    </form>
+    <form method="post" action="{{ url_for('network_confirm', dev_id=d.id) }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="nonce" value="{{ pending.nonce }}">
+      <button class="btn primary"><span class="spin"></span>{{ _("C'est bien lui : confirmer") }}</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel hass-host">
+  <div data-refresh="nd-{{ d.id }}">
+    <div class="panel-h">
+      <h2>{{ d.name }} <span class="h-count">{{ f.label }}</span></h2>
+      <div class="aside">
+        {% if v.running %}<span class="busy-note"><span class="spin"></span>{{ v.label }}{% if v.running|length > 1 %} · {{ _("%(n)s en attente", n=v.running|length - 1) }}{% endif %}</span>
+        {% else %}<span class="pill {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(v.color, '') }}">{{ v.label }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="panel-b stack-sm">
+      {% if d.error %}<div class="note err"><p>{{ d.error }}</p></div>{% endif %}
+      {% if not v.linked and not pending %}
+      <div class="note warn"><p>{{ _("L'identité de cet équipement n'est pas encore confirmée : loco ne s'y connecte pas.") }}</p></div>
+      {% endif %}
+      {% if info and f.elevate and not info.privileged %}<div class="note warn"><p>{{ _("Le compte n'a pas obtenu le mode privilégié (enable) : la configuration ne peut pas être lue. Enregistrez le mot de passe enable dans les réglages, ou utilisez un compte de niveau 15.") }}</p></div>{% endif %}
+
+      <div class="device-actions hass-actions">
+        {% if can('network.shell') and terminal and d.host_key %}
+        <form method="post" action="{{ url_for('network_shell', dev_id=d.id) }}" class="split">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn" title="{{ _('Ligne de commande de l’équipement, session journalisée') }}"{% if not ssh %} disabled{% endif %}>Terminal</button>
+          <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('Terminal dans un nouvel onglet') }}" title="{{ _('Ouvrir dans un nouvel onglet') }}"{% if not ssh %} disabled{% endif %}>{{ tab_icon }}</button>
+        </form>
+        {% endif %}
+        {% if v.linked and can('network.backup') %}
+        {% if 'backup' in v.busy %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Sauvegarde en cours") }}</button>
+        {% else %}
+        <form method="post" action="{{ url_for('network_backup', dev_id=d.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn"><span class="spin"></span>{{ _("Sauvegarder la configuration") }}</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if v.linked and can('network.firmware') and v.offers and f.firmware %}
+        {% if 'firmware' in v.busy %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Installation en cours") }}</button>
+        {% else %}<button type="button" class="btn primary" data-open="#nd-firmware">{{ _("Installer le firmware %(v)s", v=v.offers[0].version) }}</button>{% endif %}
+        {% endif %}
+        {% if v.linked and can('network.restart') %}
+        {% if 'reboot' in v.busy %}<button type="button" class="btn loading" disabled><span class="spin"></span>{{ _("Redémarrage en cours") }}</button>
+        {% elif not v.busy %}
+        <form method="post" action="{{ url_for('network_reboot', dev_id=d.id) }}" data-confirm="{{ _('Redémarrer %(name)s ?', name=d.name) }}" data-confirm-text="{{ _('Le trafic qui traverse l’équipement est coupé le temps du redémarrage (souvent plusieurs minutes). Les modifications de configuration non enregistrées sont perdues : loco n’enregistre rien à votre place. loco suit son retour.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn"><span class="spin"></span>{{ _("Redémarrer") }}</button>
+        </form>
+        {% endif %}
+        {% endif %}
+        {% if v.linked %}
+        <form method="post" action="{{ url_for('network_refresh', dev_id=d.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn" title="{{ _('Relever de nouveau l’état de l’équipement') }}"><span class="spin"></span>{{ _("Actualiser") }}</button>
+        </form>
+        {% endif %}
+        {% if manage %}
+        <details class="menu">
+          <summary class="btn" aria-label="{{ _('Plus d’actions') }}">{{ _("Plus") }}</summary>
+          <div class="menu-list menu-left" role="menu">
+            <a class="menu-item" role="menuitem" href="#reglages">{{ _("Réglages et mot de passe") }}</a>
+            <form method="post" action="{{ url_for('network_link', dev_id=d.id) }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item" role="menuitem">{{ _("Relever de nouveau la clé d'hôte…") if not f.api else _("Relever de nouveau le certificat et la clé…") }}</button>
+            </form>
+            <hr>
+            <form method="post" action="{{ url_for('network_delete', dev_id=d.id) }}" data-confirm="{{ _('Retirer %(name)s de loco ?', name=d.name) }}" data-confirm-text="{{ _('loco oublie son compte et son mot de passe, et supprime ses sauvegardes de configuration. Rien ne change sur l’équipement.') }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item danger" role="menuitem">{{ _("Retirer l'équipement") }}</button>
+            </form>
+          </div>
+        </details>
+        {% endif %}
+        <span class="small muted hass-link">{{ d.username }}@{{ d.host }}{% if d.port != 22 %}:{{ d.port }}{% endif %}{% if v.checked %} · {{ _("relevé à %(t)s", t=v.checked) }}{% endif %}</span>
+      </div>
+
+      {% if info %}
+      <div class="metrics hass-metrics nd-metrics">
+        <div class="metric">
+          <div class="k">{{ titled('shield' if f.kind == 'firewall' else 'network', _("Modèle")) }}</div>
+          <div class="v small-v" title="{{ info.model or '' }}">{{ info.model or '—' }}</div>
+          <div class="s" title="{{ _('Numéro de série') }}">{% if info.serial %}<span class="mono">{{ info.serial }}</span>{% else %}{{ v.kind }}{% endif %}</div>
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('layers', _("Version")) }}</div>
+          <div class="v small-v mono" title="{{ info.version or '' }}">{{ info.version or '—' }}</div>
+          <div class="s" title="{{ info.image or '' }}">{{ info.os or f.label }}{% if info.hostname %} · {{ info.hostname }}{% endif %}</div>
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('network', _("Ports")) }}</div>
+          {% if info.ports %}
+          <div class="v small-v">{{ _("%(up)s actifs", up=info.ports_up) }}</div>
+          <div class="s">{{ _("sur %(n)s", n=info.ports) }}</div>
+          {% else %}<div class="v small-v">—</div><div class="s">{{ _("non relevés") }}</div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('cpu', _("Processeur")) }}</div>
+          <div class="v small-v">{{ ('%d %%'|format(info.get('cpu'))) if info.get('cpu') is not none else '—' }}</div>
+          {% if info.get('cpu') is not none %}<div class="meter level {{ 'err' if info.get('cpu') >= 92 else 'warn' if info.get('cpu') >= 80 }}" title="{{ _('occupation du processeur') }}"><i data-width="{{ info.get('cpu')|round|int }}"></i></div>{% else %}<div class="s">{{ _("non relevé") }}</div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('memory', _("Mémoire")) }}</div>
+          <div class="v small-v">{{ ('%d %%'|format(info.get('mem')|round)) if info.get('mem') is not none else '—' }}</div>
+          {% if info.get('mem') is not none %}<div class="meter level {{ 'err' if info.get('mem') >= 92 else 'warn' if info.get('mem') >= 85 }}" title="{{ _('mémoire utilisée') }}"><i data-width="{{ info.get('mem')|round|int }}"></i></div>{% else %}<div class="s">{{ _("non relevée") }}</div>{% endif %}
+        </div>
+        <div class="metric">
+          <div class="k">{{ titled('clock', _("Allumé depuis")) }}</div>
+          <div class="v small-v">{{ duration(info.get('uptime')) }}</div>
+          <div class="s">{% if info.get('temperature') is not none %}{{ _("%(t)s °C", t=info.get('temperature')) }}{% elif d.error %}<span class="st err">{{ _("injoignable") }}</span>{% else %}{{ _("en ligne") }}{% endif %}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if info and (f.firmware or f.key == 'cisco-sb') %}
+    <div class="panel-h sub" id="firmware"><h2>{{ _("Firmware") }}</h2><div class="aside">
+      {% if info.primary and info.secondary %}{{ _("primaire %(p)s · secondaire %(s)s", p=info.primary, s=info.secondary) }}{% if info.image_booted %} · {{ _("démarré sur %(i)s", i=info.image_booted) }}{% endif %}
+      {% elif info.primary %}{{ _("en service %(p)s", p=info.primary) }}{% if info.backup %} · {{ _("de secours %(b)s", b=info.backup) }}{% endif %}
+      {% elif info.inactive %}{{ _("image inactive %(v)s", v=info.inactive) }}
+      {% elif info.staged %}{{ _("déposé, non activé : %(v)s", v=info.staged) }}
+      {% elif info.install_mode is defined and info.os != 'Cisco Business' %}{{ _("mode INSTALL") if info.install_mode else _("mode BUNDLE") }}{% endif %}
+    </div></div>
+    <div class="panel-b stack-sm">
+      {% if v.offers %}
+      <p>{{ ngettext('Une version plus récente est dans la bibliothèque de loco :', 'Des versions plus récentes sont dans la bibliothèque de loco :', v.offers|length) }}
+        {% for fw in v.offers %}<span class="mono">{{ fw.version }}</span>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+      {% if not f.firmware %}<p class="hint">{{ _("Un Cisco Small Business ne charge un firmware qu'en TFTP depuis sa ligne de commande : installez-le depuis son interface web (Administration › Opérations sur les fichiers), puis redémarrez-le depuis loco.") }}</p>{% endif %}
+      {% else %}
+      <p class="muted">{% if can('network.firmware') %}{{ _("Aucune version plus récente dans la bibliothèque de loco. Pour en installer une, déposez d'abord le fichier du constructeur dans la bibliothèque.") }} <a href="{{ url_for('network') }}#firmwares">{{ _("Bibliothèque de firmwares") }}</a>{% else %}{{ _("Aucune version plus récente dans la bibliothèque de loco.") }}{% endif %}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if can('network.backup') and (v.linked or v.backups) %}
+    <div class="panel-h sub" id="sauvegardes"><h2>{{ _("Sauvegardes de la configuration") }}{% if v.backups %} <span class="h-count">{{ v.backups|length }}</span>{% endif %}</h2>
+      <div class="aside">{{ every_label(d.backup_every) }} · {{ ngettext('%(num)s version gardée au plus', '%(num)s versions gardées au plus', d.backup_keep) }}</div></div>
+    {% if d.backup_error %}<div class="panel-b"><div class="note warn"><p>{{ _("Dernière sauvegarde en échec : %(e)s", e=d.backup_error) }}</p></div></div>{% endif %}
+    {% if v.backups %}
+    <div class="table-wrap">
+      <table class="table-cards hass-table">
+        <tbody>
+        {% for b in v.backups %}
+          <tr>
+            <td><a href="{{ url_for('network_config', dev_id=d.id, backup_id=b.id) }}">{{ b.taken_at|date_fr }}</a>
+              <span class="sub">{{ b.reason }}{% if b.created_by %} · {{ _("par %(who)s", who=b.created_by) }}{% endif %}</span></td>
+            <td data-label="{{ _('Changements') }}">{% if b.binary %}<span class="muted">{{ b.size|human }}</span>{% else %}<span class="diff-count" title="{{ _('lignes ajoutées et retirées depuis la précédente') }}"><span class="add">+{{ b.added }}</span> <span class="del">−{{ b.removed }}</span></span>{% endif %}</td>
+            <td class="right nowrap">
+              {% if not b.binary %}<a class="btn sm" href="{{ url_for('network_config', dev_id=d.id, backup_id=b.id) }}">{{ _("Voir") }}</a>{% endif %}
+              <a class="btn sm icon" href="{{ url_for('network_config_download', dev_id=d.id, backup_id=b.id) }}" aria-label="{{ _('Télécharger') }}" title="{{ _('Télécharger') }}">{{ ui_icon('download') }}</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif v.linked %}
+    <div class="panel-b"><p class="muted">{{ _("Aucune sauvegarde pour l'instant. La première a lieu dans la minute qui suit la liaison si une planification est réglée, ou maintenant avec « Sauvegarder la configuration ».") }}</p></div>
+    {% endif %}
+    {% endif %}
+
+    {% if v.jobs %}
+    <div class="panel-h sub"><h2>{{ _("Activité") }}</h2><div class="aside">{{ _("les douze dernières tâches") }}</div></div>
+    <div class="table-wrap">
+      <table class="table-cards hass-table">
+        <tbody>
+          {% for j in v.jobs %}
+          <tr>
+            <td>{{ actions[j.action] }}
+              {% if j.output %}<details class="hass-output" data-key="nd-sortie-{{ j.id }}"{% if j.state == 'running' %} open{% endif %}><summary class="linkbtn">{{ _("Journal") if j.state == 'running' else _("Sortie") }}</summary><pre class="log">{{ j.output }}</pre></details>{% endif %}</td>
+            <td data-label="{{ _('État') }}">{{ job_state(j) }}</td>
+            <td class="muted" data-label="{{ _('Quand') }}">{{ (j.finished_at or j.started_at or j.created_at)|date_fr }}{% if j.created_by %} <span class="sub">{{ _("par %(who)s", who=j.created_by) }}</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if manage %}
+<section class="panel" id="reglages">
+  <div class="panel-h"><h2>{{ _("Réglages") }}</h2><div class="aside">{{ f.label }}</div></div>
+  <form method="post" action="{{ url_for('network_settings', dev_id=d.id) }}" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="panel-b stack-sm">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Nom") }}</span><input type="text" name="name" value="{{ d.name }}" required maxlength="64"></label>
+        <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="host" value="{{ d.host }}" required maxlength="253" spellcheck="false"></label>
+        <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="port" value="{{ d.port }}" min="1" max="65535" required></label>
+        {% if f.api %}<label class="f"><span>{{ _("Port HTTPS") }}</span><input type="number" name="api_port" value="{{ d.api_port }}" min="1" max="65535" required></label>{% else %}<input type="hidden" name="api_port" value="{{ d.api_port }}">{% endif %}
+      </div>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Compte") }}</span><input type="text" name="username" value="{{ d.username }}" required maxlength="64" spellcheck="false"></label>
+        <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" name="password" value="{{ mask if d.secret else '' }}" maxlength="256" autocomplete="new-password"></label>
+        {% if f.elevate == 'enable' and f.key == 'cisco-ios' %}<label class="f"><span>{{ _("Mot de passe enable") }}</span><input type="password" name="enable" value="{{ mask if d.enable_secret else '' }}" maxlength="256" autocomplete="new-password" placeholder="{{ _('celui du compte') }}"></label>{% endif %}
+      </div>
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Sauvegarde de la configuration") }}</span><select name="backup_every">
+          {% for s in every %}<option value="{{ s }}"{% if s == d.backup_every %} selected{% endif %}>{{ every_label(s) }}</option>{% endfor %}
+        </select></label>
+        <label class="f"><span>{{ _("Conserver") }}</span><select name="backup_keep">
+          {% for k in keep %}<option value="{{ k }}"{% if k == d.backup_keep %} selected{% endif %}>{{ ngettext('%(num)s version', '%(num)s versions', k) }}</option>{% endfor %}
+        </select></label>
+      </div>
+      {% if d.enable_secret %}<label class="check"><input type="checkbox" name="clear_enable" value="1"> <span>{{ _("Oublier le mot de passe enable (celui du compte servira)") }}</span></label>{% endif %}
+      <p class="hint">{{ _("Laissez les mots de passe tels quels pour garder ceux enregistrés. Changer l'adresse ou un port demande de confirmer de nouveau l'identité de l'équipement.") }}</p>
+    </div>
+    <div class="panel-f"><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>
+  </form>
+</section>
+{% endif %}
+</div>
+
+{% if v.linked and can('network.firmware') and v.offers and f.firmware %}
+<dialog id="nd-firmware">
+  <form method="post" action="{{ url_for('network_firmware', dev_id=d.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Installer un firmware sur %(name)s ?", name=d.name) }}</h2>
+        <p>{{ _("Version en service : %(v)s", v=info.version or '?') }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <label class="f"><span>{{ _("Firmware") }}</span><select name="firmware_id">
+        {% for fw in v.offers %}<option value="{{ fw.id }}">{{ fw.version }} — {{ fw.filename }} ({{ fw.size|human }})</option>{% endfor %}
+      </select></label>
+      <p class="hint">{% if f.firmware == 'ios' %}{{ _("loco sauvegarde la configuration, copie l'image dans la mémoire flash (scp), la fait vérifier par le switch (MD5), puis règle le démarrage dessus et enregistre la configuration. En mode INSTALL (Catalyst 9000…), l'activation redémarre le switch d'elle-même.") }}
+        {% elif f.firmware == 'exos' %}{{ _("loco sauvegarde la configuration, copie l'image (scp), l'installe sur la partition de secours (install image) et y règle le prochain démarrage.") }}
+        {% elif f.firmware == 'voss' %}{{ _("loco sauvegarde la configuration, copie l'archive dans /intflash (SFTP), l'ajoute et l'active (software add, software activate). Après le redémarrage, il valide la version (software commit) : sans cela, le switch reviendrait de lui-même à l'ancienne.") }}
+        {% elif f.firmware == 'sns' %}{{ _("loco sauvegarde la configuration, envoie le fichier au pare-feu par son API (SYSTEM UPDATE UPLOAD) puis l'active (SYSTEM UPDATE ACTIVATE) : le pare-feu installe le firmware et redémarre.") }}{% endif %}</p>
+      {% if can('network.restart') %}
+      <label class="check"><input type="checkbox" name="reboot" value="1"{% if f.firmware == 'sns' or info.install_mode %} checked{% endif %}> <span>{{ _("Redémarrer ensuite et vérifier la nouvelle version") }}</span></label>
+      <p class="hint">{{ _("Le trafic qui traverse l'équipement est coupé pendant le redémarrage. Sans redémarrage, la nouvelle version ne servira qu'au prochain.") }}{% if f.firmware == 'sns' %} {{ _("Sans « Redémarrer », le fichier est seulement déposé sur le pare-feu.") }}{% endif %}</p>
+      {% endif %}
+      <p class="hint">{{ _("Vérifiez d'abord dans les notes de version du constructeur que cette version convient à ce modèle et que la mise à jour est possible depuis la version en service.") }}</p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Installer") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}

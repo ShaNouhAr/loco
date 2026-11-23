@@ -28,11 +28,12 @@ FEATURES = {
     "android": (L_("Appareils Android"), L_("Vos appareils Android équipés de l'application agent : écran distant, fichiers, assistant IA, et applications des dépôts F-Droid ou de Google Play installées depuis loco."), ("fleet",), ""),
     "homeassistant": (L_("Home Assistant"), L_("Votre Home Assistant relié par SSH avec une clé propre à loco : versions, mises à jour du cœur, du système et des modules complémentaires, sauvegardes, état de santé, redémarrages et terminal."), (), ""),
     "proxmox": (L_("Proxmox VE"), L_("Vos serveurs Proxmox reliés par un jeton d'API : sauvegarde des machines virtuelles et des conteneurs, à la demande ou planifiée, sur le stockage de Proxmox de votre choix (disque, NAS, Proxmox Backup Server), avec la conservation voulue, réunie avec les sauvegardes de loco et de Home Assistant dans Administration › Sauvegardes. Relié aussi par SSH avec une clé propre à loco, le serveur apparaît dans Mon parc : mises à jour, redémarrage et terminal."), (), ""),
+    "network": (L_("Équipements réseau"), L_("Vos switchs Cisco (IOS, IOS-XE, Small Business) et Extreme (EXOS / Switch Engine, VOSS / Fabric Engine) et vos pare-feu Stormshield, reliés sans agent avec un compte de l'équipement : état et ports dans Mon parc, sauvegarde planifiée de la configuration avec l'historique de ses changements, terminal, redémarrage et installation d'un firmware déposé dans loco."), (), ""),
     "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco. Au retrait, loco peut aussi effacer l'entrée du poste sur le manager."), ("fleet",), ""),
 }
 
 # Fonctionnalités expérimentales : désactivées par défaut, activables par un administrateur.
-EXPERIMENTAL = {"android"}
+EXPERIMENTAL = {"android", "network"}
 EXPERIMENTAL_SETTING = "features_experimental"
 # Fonctionnalités facultatives : abouties, mais hors du cœur de loco et sans intérêt pour tout le monde. Désactivées
 # par défaut elles aussi, à activer si l'on en a l'usage.
@@ -47,7 +48,7 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
            "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
            "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",),
-           "loco.proxmox_system": ("proxmox",)}
+           "loco.proxmox_system": ("proxmox",), "loco.network": ("network",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -64,7 +65,7 @@ PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu"
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
                "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",),
                "mcp": ("mcp",), "android": ("fleet", "android"), "homeassistant": ("homeassistant",),
-               "wazuh": ("fleet", "wazuh"), "proxmox": ("proxmox",)}
+               "wazuh": ("fleet", "wazuh"), "proxmox": ("proxmox",), "network": ("network",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca", "agent_android_apk",

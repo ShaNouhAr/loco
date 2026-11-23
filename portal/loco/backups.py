@@ -411,14 +411,21 @@ def backups():
     for v in pve:
         v["plans"] = plans("proxmox", v["row"]["id"])
     hass = _homeassistant_views() if show_ha else []
+    show_net = features.enabled("network") and can("network.view")
+    net = []
+    if show_net:
+        from . import network
+        net = network.backups_summary()
     destination = offsite.panel() if can("system.view") and not config.WINDOWS else None
     signature = hashlib.sha256(json.dumps([proxmox.signature(pve), [[h["row"]["id"], h["row"]["copy_state"],
                                                                      [(j["id"], j["state"]) for j in h["jobs"]]] for h in hass],
-                                           (destination or {}).get("state")], default=str).encode()).hexdigest()[:16]
+                                           (destination or {}).get("state"),
+                                           [[n["row"]["id"], n["row"]["last_backup"], n["row"]["backup_error"], n["count"]] for n in net]],
+                                          default=str).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     return render_template("backups.html", loco=_loco_view(), destination=destination, hass=hass, pve=pve,
-                           show_ha=show_ha, show_pve=show_pve, signature=signature, modes=proxmox.MODES,
+                           show_ha=show_ha, show_pve=show_pve, show_net=show_net, net=net, signature=signature, modes=proxmox.MODES,
                            nas_types=proxmox.NAS_TYPES, privileges=proxmox.PRIVILEGES, role=proxmox.ROLE,
                            max_hosts=proxmox.MAX_HOSTS, keep_max=KEEP_MAX,
                            busy=any(v["running"] for v in pve) or any(h["copying"] for h in hass))

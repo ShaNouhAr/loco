@@ -25,15 +25,17 @@
     <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
     {% set android_nav = feature('android') and can('android.view') %}
     {% set homeassistant_nav = feature('homeassistant') and can('homeassistant.view') %}
+    {% set network_nav = feature('network') and can('network.view') %}
     <nav class="nav" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" title="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
       {# Le terminal d'un Home Assistant est une session distante hors du parc : il relève de son entrée, pas de Mon parc. #}
-      {% set homeassistant_on = ep.startswith('homeassistant') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh') %}
-      {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on %}
+      {% set network_on = ep.startswith('network') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh' and remote.target.startswith('net:')) %}
+      {% set homeassistant_on = ep.startswith('homeassistant') or (ep == 'remote_session' and remote is defined and remote.kind == 'ssh' and not network_on) %}
+      {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on and not network_on %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" aria-label="{{ _('Mon parc') }}" title="{{ _('Mon parc') }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
-      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav %}
-      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on }}">
+      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav or network_nav %}
+      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on or network_on }}">
         <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Systèmes') }}" title="{{ _('Systèmes') }}">{{ nav_icon('server') }}<span>{{ _("Systèmes") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-system">
           <div class="nav-panel nav-sections">
@@ -63,6 +65,12 @@
               <a href="{{ url_for('homeassistant') }}" {% if homeassistant_on %}aria-current="page"{% endif %}>{{ nav_icon('ha') }}<span><strong>{{ _("Instances") }}</strong><small>{{ _("Mises à jour, sauvegardes, journal") }}</small></span></a>
             </div>
             {% endif %}
+            {% if network_nav %}
+            <div class="nav-section">
+              <div class="nav-section-h">{{ _("Réseau") }}</div>
+              <a href="{{ url_for('network') }}" {% if network_on %}aria-current="page"{% endif %}>{{ nav_icon('network') }}<span><strong>{{ _("Équipements réseau") }}</strong><small>{{ _("Switchs et pare-feu, configurations, firmwares") }}</small></span></a>
+            </div>
+            {% endif %}
           </div>
         </div>
       </details>
@@ -73,7 +81,7 @@
         ('access', can('sso.manage'), 'sso_settings', ep.startswith(('sso', 'directory')), 'user', _('Annuaires et SSO'), _('Connexion avec les comptes de l’entreprise')),
         ('access', can('mcp.manage'), 'mcp_settings', ep.startswith('mcp'), 'plug', _('Serveur MCP'), _('Connecter un LLM à loco par MCP')),
         ('server', can('system.view'), 'system', ep == 'system', 'server', _('Système'), _('État, réseau, certificat, heure')),
-        ('server', can('system.view') or (feature('homeassistant') and can('homeassistant.view')) or (feature('proxmox') and can('proxmox.view')), 'backups', ep == 'backups', 'save', _('Sauvegardes'), _('Ce qui est sauvegardé, où et quand')),
+        ('server', can('system.view') or (feature('homeassistant') and can('homeassistant.view')) or (feature('proxmox') and can('proxmox.view')) or (feature('network') and can('network.view')), 'backups', ep == 'backups', 'save', _('Sauvegardes'), _('Ce qui est sauvegardé, où et quand')),
         ('server', server_updates and can('system.view'), 'appliance_updates', ep.startswith('appliance_updates') or ep == 'appliance_job', 'update', _('Mises à jour'), _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité')),
         ('server', appliance and can('system.configure'), 'appliance_settings', ep.startswith('appliance_settings'), 'settings', _('Configuration'), _('Accès, fonctions et stockage')),
         ('server', is_administrator(), 'features', ep.startswith('features'), 'layers', _('Fonctionnalités'), _('Activer ou désactiver les fonctions')),
