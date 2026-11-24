@@ -1,7 +1,10 @@
 """Fonctions utilitaires sans état."""
 
+import base64
+import collections
 import datetime
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -9,6 +12,7 @@ import shutil
 import ssl
 import subprocess
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -50,6 +54,28 @@ def human(n):
         n /= 1024
     return ""
 
+
+def cipher(label):
+    """Chiffrement symétrique (Fernet) dérivé de la clé du serveur pour un seul usage (label : b"loco-…-v1") : un
+    secret scellé pour un usage ne s'ouvre pas avec la clé d'un autre."""
+    from cryptography.fernet import Fernet
+    from . import app
+    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
+    return Fernet(base64.urlsafe_b64encode(hmac.new(key, label, hashlib.sha256).digest()))
+
+
+def sealer(label):
+    """(sceller, ouvrir) pour un usage : texte chiffré, vide pour une valeur vide ; ouvrir rend une chaîne vide si la clé
+    du serveur a changé ou si la valeur est altérée (secret à ressaisir)."""
+    def seal(value):
+        return cipher(label).encrypt(value.encode()).decode() if value else ""
+
+    def unseal(value):
+        try:
+            return cipher(label).decrypt(value.encode()).decode() if value else ""
+        except Exception:
+            return ""
+    return seal, unseal
 
 def date_fr(value):
     """« 2026-10-12 20:57 » -> « 12/10 20:57 » (en anglais : « Oct 12 20:57 »). Un horodatage (secondes) est accepté."""
@@ -201,22 +227,39 @@ def _cpu_times():
     return sum(fields), idle
 
 
-_cpu_last = None        # dernier relevé : (instant, total, inactif)
+_cpu_samples = collections.deque(maxlen=4)      # relevés de fond (instant, total, inactif), toutes les CPU_EVERY s
+_cpu_guard = threading.Lock()
+_cpu_sampler = None
+CPU_EVERY = 5
+
+
+def _sample_cpu():
+    while True:
+        try:
+            _cpu_samples.append((time.monotonic(), *_cpu_times()))
+        except (OSError, ValueError, IndexError):
+            pass
+        time.sleep(CPU_EVERY)
 
 
 def cpu_usage(interval=0.12):
     """Charge processeur du serveur loco : pourcentage, charge sur 1 min, cœurs. {} si indisponible (p. ex. serveur Windows).
-    Moyenne depuis le relevé précédent s'il est récent (actualisation de la page) : 120 ms de mesure donnent un chiffre instable."""
-    global _cpu_last
+    Moyenne depuis un relevé de fond de quelques secondes (lancé au premier appel) : la page ne mesure elle-même, en
+    attendant 120 ms, que la toute première fois ; un écart trop court donnerait un chiffre instable."""
+    global _cpu_sampler
     if config.WINDOWS:
         return {}
     try:
-        previous = _cpu_last
-        if previous is None or not 1 <= time.monotonic() - previous[0] <= 60:
-            previous = (time.monotonic(), *_cpu_times())
+        with _cpu_guard:
+            if _cpu_sampler is None:
+                _cpu_sampler = threading.Thread(target=_sample_cpu, name="loco-cpu", daemon=True)
+                _cpu_sampler.start()
+        now = time.monotonic()
+        previous = next((p for p in reversed(_cpu_samples) if 1 <= now - p[0] <= 60), None)
+        if previous is None:
+            previous = (now, *_cpu_times())
             time.sleep(interval)
         total2, idle2 = _cpu_times()
-        _cpu_last = (time.monotonic(), total2, idle2)
         delta_total, delta_idle = total2 - previous[1], idle2 - previous[2]
         pct = round(100 * (delta_total - delta_idle) / delta_total) if delta_total > 0 else 0
         return {"pct": max(0, min(100, pct)), "load1": round(os.getloadavg()[0], 2), "cores": os.cpu_count() or 1}
@@ -350,6 +393,60 @@ def download(url, dest_dir, progress_key=None, insecure=False):
             os.unlink(tmp)
             raise
     return tmp, name
+
+
+def upload_packages(add, repository, action, endpoint):
+    """Paquets reçus pour un dépôt local (lien, puis fichiers envoyés) ajoutés par add(chemin, dépôt), qui rend le nom
+    du paquet ; chaque ajout est journalisé (action), chaque erreur montrée, puis retour à la page du dépôt."""
+    from flask import flash
+    from .auth import audit
+    os.makedirs(config.TMP_DIR, exist_ok=True)
+    added, errors = [], []
+    url = request.form.get("url", "").strip()
+    try:
+        if url:
+            tmp, _sha = download(url, config.TMP_DIR)
+            try:
+                added.append(add(tmp, repository))
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+        for f in request.files.getlist("files"):
+            if not f.filename:
+                continue
+            fd, tmp = tempfile.mkstemp(dir=config.TMP_DIR, prefix=".up-")
+            os.close(fd)
+            try:
+                f.save(tmp)
+                added.append(add(tmp, repository))
+            except (ValueError, subprocess.SubprocessError) as e:
+                errors.append(f"{f.filename} : {e}")
+            finally:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+    except Exception as e:  # noqa: BLE001 - toute erreur est remontée à l'utilisateur
+        errors.append(explain(e))
+    for name in added:
+        audit(action, f"{repository}: {name}")
+        flash(_('Paquet ajouté : %(name)s', name=name), "ok")
+    for err in errors:
+        flash(err, "error")
+    if not added and not errors:
+        flash(_('Aucun fichier ni lien fourni.'), "error")
+    return back(endpoint, repository=repository)
+
+
+def store_args(categories):
+    """Recherche, catégorie et page demandées à un catalogue d'applications (Android, Windows)."""
+    query = request.args.get("q", "").strip()[:100]
+    category = request.args.get("category", "all" if query else "selection")
+    if category not in categories:
+        category = "all"
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except ValueError:
+        page = 1
+    return query, category, page
 
 
 def back(endpoint, **values):

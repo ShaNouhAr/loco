@@ -14,7 +14,7 @@ from . import app, config, debpkg, signing
 from .i18n import _
 from .auth import audit, login_required
 from .db import transaction
-from .util import back, download, explain, read_stats, service_active, sha256_of
+from .util import back, explain, read_stats, service_active, sha256_of, upload_packages
 
 _apt_lock = threading.RLock()
 LEGACY = "legacy"
@@ -288,40 +288,7 @@ def linux_upload():
         require_repository(repository)
     except ValueError as e:
         abort(400, str(e))
-    os.makedirs(config.TMP_DIR, exist_ok=True)
-    added, errors = [], []
-    url = request.form.get("url", "").strip()
-    try:
-        if url:
-            tmp, _sha = download(url, config.TMP_DIR)
-            try:
-                added.append(add_deb(tmp, repository))
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-        for f in request.files.getlist("files"):
-            if not f.filename:
-                continue
-            fd, tmp = tempfile.mkstemp(dir=config.TMP_DIR, prefix=".up-")
-            os.close(fd)
-            try:
-                f.save(tmp)
-                added.append(add_deb(tmp, repository))
-            except (ValueError, subprocess.SubprocessError) as e:
-                errors.append(f"{f.filename} : {e}")
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-    except Exception as e:
-        errors.append(explain(e))
-    for name in added:
-        audit("linux.ajout", f"{repository}: {name}")
-        flash(_('Paquet ajouté : %(name)s', name=name), "ok")
-    for err in errors:
-        flash(err, "error")
-    if not added and not errors:
-        flash(_('Aucun fichier ni lien fourni.'), "error")
-    return back("linux", repository=repository)
+    return upload_packages(add_deb, repository, "linux.ajout", "linux")
 
 
 @app.route("/linux/delete", methods=["POST"])

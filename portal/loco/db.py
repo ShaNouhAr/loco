@@ -976,6 +976,11 @@ MIGRATIONS = [
         uploaded_by TEXT NOT NULL DEFAULT ''
     );
     """,
+    # 58 : mises à jour en échec des dernières 24 h (vue d'ensemble, alertes) retrouvées par un index partiel, au lieu
+    # de parcourir tout l'historique des actions, qui n'est jamais purgé.
+    """
+    CREATE INDEX device_commands_failed_updates ON device_commands(finished_at) WHERE action='update' AND state='failed';
+    """,
 ]
 
 

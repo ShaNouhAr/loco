@@ -28,18 +28,7 @@ def available():
     return _agent() is not None
 
 
-def visible_areas():
-    """Caches que l'utilisateur peut consulter et dont le cache existe sur ce serveur."""
-    agent = _agent()
-    if agent is None:
-        return {}
-    caches = agent.cache_index().get("caches", {})
-    out = {}
-    for area, (view_perm, purge_perm) in AREAS.items():
-        data = caches.get(area)
-        if data and data.get("present") and can(view_perm):
-            out[area] = {"can_purge": can(purge_perm)}
-    return out
+
 
 
 @app.route("/cache/state")

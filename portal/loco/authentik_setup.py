@@ -4,7 +4,6 @@ Avec un jeton API temporaire : loco crée ou met à jour le fournisseur et l'app
 Le jeton n'est jamais stocké, ni journalisé, ni passé en argument de commande : entre deux étapes il reste chez le navigateur, chiffré
 et limité à dix minutes. Il n'est envoyé qu'une fois le certificat d'Authentik reconnu, ou son autorité confirmée par l'empreinte.
 Sans jeton : un blueprint prêt à coller et les valeurs à saisir."""
-import base64
 import datetime
 import hashlib
 import hmac
@@ -23,6 +22,7 @@ from .db import db
 from .i18n import _
 from .oidc import OIDCError, SCOPES, _json, _tls, callback_url, https_url, metadata
 from .sso_check import FAIL, _common_name, _explain_certificate, _served_chain, _sha256, _step_dns, _step_tcp, chain_gap
+from .util import cipher
 
 TOKEN_TTL = 600
 AUTH_FLOW, INVALIDATION_FLOW = "default-provider-authorization-implicit-consent", "default-provider-invalidation-flow"
@@ -74,9 +74,7 @@ def clean_token(value):
 
 
 def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-authentik-setup-v1", hashlib.sha256).digest()))
+    return cipher(b"loco-authentik-setup-v1")
 
 
 def seal_token(token):

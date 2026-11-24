@@ -24,7 +24,7 @@ import tempfile
 import threading
 import time
 
-from flask import abort, flash, g, redirect, render_template, request, url_for
+from flask import abort, flash, g, render_template, request, url_for
 
 from . import app, config
 from .i18n import L_, _
@@ -247,16 +247,17 @@ def probe_host_key(host, port, unreachable=None):
         raise LinkError(unreachable((reason[-1] if reason else "?")[:160]))
 
 
-class _Known:
-    """Fichier des clés d'hôte d'une instance, écrit depuis la base (c'est elle qui fait foi) le temps d'une commande."""
-    def __init__(self, row):
-        self.row = row
+class KnownHosts:
+    """Fichier des clés d'hôte, écrit depuis la base (c'est elle qui fait foi) le temps d'une commande, dans un dossier
+    d'état privé : une seule clé, celle confirmée par un administrateur. Sert aussi à Proxmox et aux équipements réseau."""
+    def __init__(self, key_dir, host, port, host_key):
+        self.key_dir, self.line = key_dir, f"{_pattern(host, port)} {host_key}\n"
 
     def __enter__(self):
-        os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-        fd, self.path = tempfile.mkstemp(prefix="known-", dir=KEY_DIR)
+        os.makedirs(self.key_dir, mode=0o700, exist_ok=True)
+        fd, self.path = tempfile.mkstemp(prefix="known-", dir=self.key_dir)
         with os.fdopen(fd, "w", encoding="ascii") as f:
-            f.write(f"{_pattern(self.row['host'], self.row['port'])} {self.row['host_key']}\n")
+            f.write(self.line)
         return self.path
 
     def __exit__(self, *_exc):
@@ -264,6 +265,10 @@ class _Known:
             os.unlink(self.path)
         except OSError:
             pass
+
+
+def _known(row):
+    return KnownHosts(KEY_DIR, row["host"], row["port"], row["host_key"])
 
 
 def _argv(row, known, remote, tty=False):
@@ -303,7 +308,7 @@ def download(row, slug, path, timeout=LONG):
         'for f in /backup/*.tar; do if tar -xOf "$f" ./backup.json 2>/dev/null | grep -q \'"slug": *"SLUG"\'; then exec cat "$f"; fi; done; '
         'echo "backup SLUG not found" >&2; exit 3').replace("SLUG", slug)
     public_key()
-    with _Known(row) as known, open(path, "wb") as out:
+    with _known(row) as known, open(path, "wb") as out:
         try:
             done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(script)), stdin=subprocess.DEVNULL,
                                   stdout=out, stderr=subprocess.PIPE, timeout=timeout)
@@ -321,7 +326,7 @@ def run(row, script, timeout=QUICK):
     if not row["host_key"]:
         raise LinkError(_("La clé d'hôte de Home Assistant n'a pas encore été confirmée."))
     public_key()
-    with _Known(row) as known:
+    with _known(row) as known:
         try:
             done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(PRELUDE + script)), stdin=subprocess.DEVNULL,
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
@@ -872,8 +877,8 @@ def homeassistant_hostkey(host_id):
 def homeassistant_delete(host_id):
     row = _host(host_id)
     conn = db()
-    for session_row in conn.execute("SELECT id FROM remote_sessions WHERE target=? AND state!='closed'", (f"homeassistant:{host_id}",)).fetchall():
-        conn.execute("UPDATE remote_sessions SET state='closed', error='Instance retirée.' WHERE id=?", (session_row["id"],))
+    from . import remote
+    remote.close_server_sessions(conn, f"homeassistant:{host_id}", "Instance retirée.")
     conn.execute("DELETE FROM backup_plans WHERE kind='homeassistant' AND host_id=?", (host_id,))
     conn.execute("DELETE FROM homeassistant_hosts WHERE id=?", (host_id,))
     audit("homeassistant.retrait", row["name"], commit=False)
@@ -1008,29 +1013,13 @@ def homeassistant_log(host_id):
 @login_required
 def homeassistant_shell(host_id):
     """Terminal SSH : une session distante tenue par loco, comme le terminal adb d'un appareil Android."""
-    from . import adb, remote
+    from . import remote
     row = _host(host_id)
     require("homeassistant.shell")
     if not ssh_binary() or not row["host_key"] or not terminal_ready():
         abort(409, _("La liaison SSH avec Home Assistant n'est pas prête."))
     public_key()
-    conn = db()
-    conn.execute("BEGIN IMMEDIATE")
-    remote._prune()
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= remote.SERVER_SESSIONS:
-        abort(409, _('Huit sessions sont déjà ouvertes.'))
-    target = f"homeassistant:{host_id}"
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE target=? AND state IN ('waiting','active')", (target,)).fetchone()[0] >= remote.KIND_SESSIONS:
-        abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
-    sid, now = secrets.token_hex(16), time.time()
-    conn.execute("INSERT INTO remote_sessions (id,user_id,owner,pw_version,kind,created,browser_seen,expires,target) VALUES (?,?,?,?,?,?,?,?,?)",
-                 (sid, g.user["id"], remote._owner(), g.user["pw_version"], "ssh", now, now, now + 3600, target))
-    audit("homeassistant.terminal", f"{row['name']}, {sid}")
-    # Fichier des clés d'hôte de la session : écrit depuis la base (dossier d'état privé), retiré à la fin de la session.
-    os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-    known = os.path.join(KEY_DIR, "session-" + sid)
-    with open(os.open(known, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="ascii") as f:
-        f.write(f"{_pattern(row['host'], row['port'])} {row['host_key']}\n")
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": config.STATE, "TERM": "xterm-256color", "LANG": "C.UTF-8"}
-    adb.start_command(sid, _argv(row, known, "", tty=True), env, "ssh", after=lambda: os.unlink(known))
-    return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
+    return remote.open_server_session(f"homeassistant:{host_id}", row["name"], "homeassistant.terminal", KEY_DIR,
+                                      f"{_pattern(row['host'], row['port'])} {row['host_key']}\n",
+                                      lambda known: _argv(row, known, "", tty=True), env)

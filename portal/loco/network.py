@@ -13,7 +13,6 @@ la configuration sauvegardée juste avant. Chaque famille a sa façon de faire (
 reçoivent l'image par scp/sftp puis l'activent eux-mêmes, Stormshield par son API ; un Cisco Small Business ne charge
 un firmware qu'en TFTP depuis sa ligne de commande — loco le signale, et l'installation se fait sur l'équipement.
 """
-import base64
 import difflib
 import fnmatch
 import hashlib
@@ -32,6 +31,7 @@ from .auth import audit, can, login_required, require
 from .db import connect, db, lease
 from .i18n import L_, _
 from .netfamilies import FAMILIES
+from .util import cipher, sealer
 
 CONFIG_DIR = os.path.join(config.STATE, "network", "configs")
 FIRMWARE_DIR = os.path.join(config.DATA, "network-firmware")
@@ -58,21 +58,11 @@ _WORKERS, _REFRESH, _TRIED, _GUARD = {}, set(), {}, threading.Lock()
 
 # --------------------------------------------------------------------------- secrets
 
+seal, unseal = sealer(b"loco-network-v1")             # mot de passe scellé avec la clé du serveur
+
+
 def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-network-v1", hashlib.sha256).digest()))
-
-
-def seal(value):
-    return _cipher().encrypt(value.encode()).decode() if value else ""
-
-
-def unseal(value):
-    try:
-        return _cipher().decrypt(value.encode()).decode() if value else ""
-    except Exception:                           # clé du serveur changée ou valeur altérée : mot de passe à ressaisir
-        return ""
+    return cipher(b"loco-network-v1")
 
 
 def _password(row):
@@ -1179,8 +1169,8 @@ def network_firmware_delete(fw_id):
 
 
 def close_sessions(conn, dev_id, reason):
-    for s in conn.execute("SELECT id FROM remote_sessions WHERE target=? AND state!='closed'", (f"net:{dev_id}",)).fetchall():
-        conn.execute("UPDATE remote_sessions SET state='closed', error=? WHERE id=?", (reason, s["id"]))
+    from . import remote
+    remote.close_server_sessions(conn, f"net:{dev_id}", reason)
 
 
 @app.route("/network/<int:dev_id>/shell", methods=["POST"])
@@ -1188,27 +1178,13 @@ def close_sessions(conn, dev_id, reason):
 def network_shell(dev_id):
     """Terminal de l'équipement : une session distante tenue par loco (ssh dans un pseudo-terminal), mot de passe remis
     par loco — l'élévation des droits (enable) se tape dans le terminal."""
-    from . import adb, remote
+    from . import remote
     row = _device(dev_id)
     if not homeassistant.ssh_binary() or not row["host_key"] or not homeassistant.terminal_ready():
         abort(409, _("La liaison SSH avec cet équipement n'est pas prête."))
     password = _password(row)
-    conn = db()
-    conn.execute("BEGIN IMMEDIATE")
-    remote._prune()
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= remote.SERVER_SESSIONS:
-        abort(409, _('Huit sessions sont déjà ouvertes.'))
-    target = f"net:{dev_id}"
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE target=? AND state IN ('waiting','active')", (target,)).fetchone()[0] >= remote.KIND_SESSIONS:
-        abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
-    sid, now = secrets.token_hex(16), time.time()
-    conn.execute("INSERT INTO remote_sessions (id,user_id,owner,pw_version,kind,created,browser_seen,expires,target) VALUES (?,?,?,?,?,?,?,?,?)",
-                 (sid, g.user["id"], remote._owner(), g.user["pw_version"], "ssh", now, now, now + 3600, target))
-    audit("network.terminal", f"{row['name']}, {sid}")
-    os.makedirs(netcli.KEY_DIR, mode=0o700, exist_ok=True)
-    known = os.path.join(netcli.KEY_DIR, "session-" + sid)
-    with open(os.open(known, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="ascii") as f:
-        f.write(f"{homeassistant._pattern(row['host'], row['port'])} {row['host_key']}\n")
-    argv = netcli.base_argv(row["host"], row["port"], row["username"], known) + ["-tt", "--", row["host"]]
-    adb.start_command(sid, argv, netcli.environment(password, term="xterm-256color"), "ssh", after=lambda: netcli.remove(known))
-    return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
+    return remote.open_server_session(
+        f"net:{dev_id}", row["name"], "network.terminal", netcli.KEY_DIR,
+        f"{homeassistant._pattern(row['host'], row['port'])} {row['host_key']}\n",
+        lambda known: netcli.base_argv(row["host"], row["port"], row["username"], known) + ["-tt", "--", row["host"]],
+        netcli.environment(password, term="xterm-256color"))

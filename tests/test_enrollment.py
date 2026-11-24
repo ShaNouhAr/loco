@@ -214,9 +214,17 @@ class TestKeyStaysOutOfTheAccessLog(unittest.TestCase):
             self.assertEqual(re.findall(r"^\s*access_log\s+(.*);", text, re.M), ["/var/log/nginx/loco-portal.log loco_portal"], name)
         self.assertLess(portal.index("log_format loco_portal"), portal.index("server {"))   # défini avant les blocs
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_static_files_are_compressed(self):
+        """CSS et JS compressés à l'envoi par le bloc des fichiers statiques, et par lui seul."""
+        import re
+        root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "conf")
+        with open(os.path.join(root, "nginx-portal.conf"), encoding="utf-8") as f:
+            portal = f.read()
+        static = re.search(r"location /static/ \{(.*?)\n    \}", portal, re.S).group(1)
+        self.assertIn("gzip on;", static)
+        for kind in ("text/css", "application/javascript"):
+            self.assertIn(kind, re.search(r"gzip_types ([^;]+);", static).group(1))
+        self.assertEqual(portal.count("gzip on;"), 1)                                   # nulle part ailleurs
 
 
 class TestDnsThenIp(FleetTest):
@@ -317,3 +325,7 @@ class TestDnsThenIp(FleetTest):
         long_name = "https://" + "a" * 130 + ".lan:8443"                              # 147 car. : l'IP ne tient plus (160)
         self.assertEqual(fleet.msi_servers([self.NAME, self.IP]), f"{self.NAME},{self.IP}")
         self.assertEqual(fleet.msi_servers([long_name, self.IP]), long_name)
+
+
+if __name__ == "__main__":
+    unittest.main()

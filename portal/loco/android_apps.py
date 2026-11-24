@@ -31,7 +31,7 @@ from . import app, config, features
 from .i18n import L_, _, locale, n_
 from .auth import audit, lock_access, login_required
 from .db import db, lease, transaction
-from .util import back, now
+from .util import back, now, store_args
 
 ROOT = os.path.join(config.DATA, "android")      # cache régénérable : hors des sauvegardes (STATE)
 INDEX_DB = os.path.join(ROOT, "index.db")
@@ -1017,14 +1017,7 @@ def android_apps():
 @app.route("/android/store")
 @login_required
 def android_store():
-    query = request.args.get("q", "").strip()[:100]
-    category = request.args.get("category", "all" if query else "selection")
-    if category not in CATEGORIES:
-        category = "all"
-    try:
-        page = max(1, int(request.args.get("page", "1")))
-    except ValueError:
-        page = 1
+    query, category, page = store_args(CATEGORIES)
     results, total, page, pages = browse(query, category, page)
     all_sources = sources()
     busy = running()

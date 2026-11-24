@@ -4,7 +4,7 @@ Le parc limite ce qu'un compte voit et vise partout où il est question de poste
 d'ensemble, groupes, déploiements, scripts, planifications, sessions distantes et outils MCP (dont les droits sont
 ceux du compte qui a créé le jeton). Les profils intégrés couvrent tout le parc ; les tâches de fond, sans compte,
 aussi. Le journal reste global (droit « Consulter le journal »)."""
-from flask import abort, g
+from flask import g
 
 from .db import db
 
@@ -68,12 +68,6 @@ def keep(rows, key=lambda r: r["id"]):
     """Lignes dont le poste est dans le parc."""
     ids = visible()
     return list(rows) if ids is None else [r for r in rows if key(r) in ids]
-
-
-def require_whole():
-    """Actions qui touchent des postes hors parc (groupes, clé d'inscription…) : réservées à tout le parc."""
-    if not whole():
-        abort(403)
 
 
 def within(conn, role_id):

@@ -17,7 +17,7 @@ from . import app, config, rpmpkg, signing
 from .i18n import _
 from .auth import audit, login_required
 from .db import transaction
-from .util import back, download, explain, sha256_of
+from .util import back, explain, sha256_of, upload_packages
 
 _lock = threading.RLock()
 # Sans rpm ni createrepo_c (serveur Windows), lecture des paquets et métadonnées en Python (rpmpkg).
@@ -234,40 +234,7 @@ def rpm_upload():
         require_repository(name)
     except ValueError as e:
         abort(400, str(e))
-    os.makedirs(config.TMP_DIR, exist_ok=True)
-    added, errors = [], []
-    url = request.form.get("url", "").strip()
-    try:
-        if url:
-            tmp, _sha = download(url, config.TMP_DIR)
-            try:
-                added.append(add_rpm(tmp, name))
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-        for f in request.files.getlist("files"):
-            if not f.filename:
-                continue
-            fd, tmp = tempfile.mkstemp(dir=config.TMP_DIR, prefix=".up-")
-            os.close(fd)
-            try:
-                f.save(tmp)
-                added.append(add_rpm(tmp, name))
-            except (ValueError, subprocess.SubprocessError) as e:
-                errors.append(f"{f.filename} : {e}")
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-    except Exception as e:  # noqa: BLE001 - toute erreur est remontée à l'utilisateur
-        errors.append(explain(e))
-    for filename in added:
-        audit("rpm.ajout", f"{name}: {filename}")
-        flash(_('Paquet ajouté : %(filename)s', filename=filename), "ok")
-    for err in errors:
-        flash(err, "error")
-    if not added and not errors:
-        flash(_('Aucun fichier ni lien fourni.'), "error")
-    return back("rpm", repository=name)
+    return upload_packages(add_rpm, name, "rpm.ajout", "rpm")
 
 
 @app.route("/rpm/delete", methods=["POST"])

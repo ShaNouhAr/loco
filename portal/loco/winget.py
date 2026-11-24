@@ -25,7 +25,7 @@ from . import app, config
 from .i18n import L_, _
 from .auth import audit, login_required, can, lock_access, require
 from .db import db
-from .util import back, now, slugify
+from .util import back, now, slugify, store_args
 
 SOURCE = "https://cdn.winget.microsoft.com/cache/"
 INDEX_DIR = os.path.join(config.DATA, "winget")   # cache régénérable : hors des sauvegardes (STATE)
@@ -562,14 +562,7 @@ def browse(query="", category="all", page=1, size=24):
 @app.route("/windows-apps/store")
 @login_required
 def software_store():
-    query = request.args.get("q", "").strip()[:100]
-    category = request.args.get("category", "all" if query else "selection")
-    if category not in CATEGORIES:
-        category = "all"
-    try:
-        page = max(1, int(request.args.get("page", "1")))
-    except ValueError:
-        page = 1
+    query, category, page = store_args(CATEGORIES)
     results, total, pages, error = [], 0, 1, ""
     try:
         results, total, page, pages = browse(query, category, page)

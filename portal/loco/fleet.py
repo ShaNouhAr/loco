@@ -387,11 +387,29 @@ def app_updates(dev, apps=None):
     return [a for a in apps if a["slug"] in slugs] if slugs else []
 
 
+LAST_RESULT = ("SELECT id FROM device_commands INDEXED BY device_commands_recent WHERE device_id={} "
+               "AND state IN ('success', 'failed') AND action != 'scan' ORDER BY id DESC LIMIT 1")
+
+
 def last_result(dev_id):
     # Index par poste imposé : SQLite remonte les actions du poste depuis la plus récente et s'arrête à la première
-    # qui convient, au lieu de trier tout son historique (la liste du parc pose la question pour chaque poste).
-    return db().execute("SELECT * FROM device_commands INDEXED BY device_commands_recent WHERE device_id=? "
-                        "AND state IN ('success', 'failed') AND action != 'scan' ORDER BY id DESC LIMIT 1", (dev_id,)).fetchone()
+    # qui convient, au lieu de trier tout son historique. Liste du parc : réponses lues d'avance (last_results).
+    try:
+        known = g.get("last_results")
+    except RuntimeError:                                         # hors requête (tâche de fond)
+        known = None
+    if known is not None:
+        return known.get(dev_id)
+    return db().execute(f"SELECT * FROM device_commands WHERE id=({LAST_RESULT.format('?')})", (dev_id,)).fetchone()
+
+
+def last_results():
+    """Dernière action terminée (hors relevés) de chaque poste, en une seule requête : la liste du parc la demande
+    pour chaque poste. Gardée le temps de la requête ; last_result() la consulte ensuite."""
+    rows = db().execute(f"SELECT c.* FROM devices d JOIN device_commands c ON c.id=({LAST_RESULT.format('d.id')}) "
+                        "WHERE d.state != 'removed'").fetchall()
+    g.last_results = {r["device_id"]: r for r in rows}
+    return g.last_results
 
 
 def is_online(dev, seen=False):
@@ -456,11 +474,24 @@ def status(dev, apps=None):
         reasons.append(warning)     # un dépôt en panne parmi d'autres : le voyant reste celui du reste des mises à jour
     if seen is None or seen > datetime.timedelta(days=STALE_DAYS):
         reasons.append(_("poste sans contact récent"))
+    color = _colour(dev, seen, error, pending_apps)
+    return color, ", ".join(reasons) or (_("inventaire en cours") if color == "grey" else _("à jour"))
+
+
+def _colour(dev, seen, error, pending_apps):
+    """Couleur du voyant : gris sans inventaire exploitable, sinon d'après le nombre de mises à jour en attente."""
     if error or not dev["last_scan"] or seen is None or seen > datetime.timedelta(days=STALE_DAYS):
-        return "grey", ", ".join(reasons) or _("inventaire en cours")
+        return "grey"
     total = dev["updates"] + pending_apps
-    color = "green" if total == 0 else "red" if total >= red_threshold() else "orange"
-    return color, ", ".join(reasons) or _("à jour")
+    return "green" if total == 0 else "red" if total >= red_threshold() else "orange"
+
+
+def status_color(dev, apps=None):
+    """Couleur du voyant seule (anneau de la vue d'ensemble, métriques) : la même que status(), sans en construire
+    l'explication ni relire la dernière action du poste — une requête de moins par poste."""
+    if dev["state"] == "removing":
+        return "grey"
+    return _colour(dev, _ago(dev["last_seen"]), inventory_error(dev), len(app_updates(dev, apps)) + software_count(dev))
 
 
 def status_label(dev, color):
@@ -1994,6 +2025,7 @@ def _rows(apps=None):
         waiting.setdefault(c["device_id"], []).append(c)
     # Sans la colonne « inventory » : ce que la liste en tire est gardé en mémoire (_digest), l'inventaire n'est relu
     # que pour un poste dont il a changé.
+    last_results()
     for d in db().execute(f"SELECT {list_columns()} FROM devices WHERE state != 'removed'" + scope.sql() + " ORDER BY hostname COLLATE NOCASE"):
         color, reason = status(d, apps)
         cmds = waiting.get(d["id"], [])

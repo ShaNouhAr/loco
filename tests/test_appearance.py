@@ -171,10 +171,6 @@ class AppearanceRouteTest(unittest.TestCase):
         missing.close()
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class LogoTest(unittest.TestCase):
     """Logo global de l'instance : admin seulement, servi publiquement, reflété partout."""
 
@@ -487,3 +483,7 @@ class AdministratorFreedomTest(InstancePolicyTest):
         self.assertIn("/appearance/logo.img", v.c.get("/fleet").get_data(as_text=True).split("</header>")[0])
         self.assertEqual(self.logo_post(self.b, {"logo": "autre"}).status_code, 400)
         self.assertEqual(self.logo_post(self.b, {"logo": (io.BytesIO(b"pas une image"), "x.bin")}).status_code, 415)
+
+
+if __name__ == "__main__":
+    unittest.main()

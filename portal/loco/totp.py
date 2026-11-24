@@ -14,28 +14,14 @@ import urllib.parse
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import app
+from .util import sealer
 
 DIGITS = 6
 PERIOD = 30
 RECOVERY_COUNT = 10
 
 
-def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-mfa-v1", hashlib.sha256).digest()))
-
-
-def seal(secret):
-    return _cipher().encrypt(secret.encode()).decode() if secret else ""
-
-
-def unseal(value):
-    try:
-        return _cipher().decrypt(value.encode()).decode() if value else ""
-    except Exception:
-        return ""
+seal, unseal = sealer(b"loco-mfa-v1")                # secret TOTP scellé avec la clé du serveur
 
 
 # --------------------------------------------------------------------------- TOTP

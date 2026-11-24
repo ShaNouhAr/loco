@@ -106,21 +106,9 @@ def base_argv(host, port, username, known, program="ssh"):
             + legacy_options() + (["-p", str(int(port)), "-l", username] if program == "ssh" else ["-P", str(int(port))]))
 
 
-class Known:
-    """Fichier des clés d'hôte, écrit depuis la base (c'est elle qui fait foi) le temps d'une liaison."""
-    def __init__(self, host, port, host_key, keep=False):
-        self.line, self.keep = f"{homeassistant._pattern(host, port)} {host_key}\n", keep
-
-    def __enter__(self):
-        os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-        fd, self.path = tempfile.mkstemp(prefix="known-", dir=KEY_DIR)
-        with os.fdopen(fd, "w", encoding="ascii") as f:
-            f.write(self.line)
-        return self.path
-
-    def __exit__(self, *_exc):
-        if not self.keep:
-            remove(self.path)
+def Known(host, port, host_key):
+    """Fichier des clés d'hôte de l'équipement, le temps d'une liaison (dossier d'état privé des équipements)."""
+    return homeassistant.KnownHosts(KEY_DIR, host, port, host_key)
 
 
 def remove(path):

@@ -97,14 +97,14 @@ def chart_data(d):
 
 
 def _fleet_summary():
-    from .fleet import catalog, is_online, list_columns, status, updating_count
+    from .fleet import catalog, is_online, list_columns, status_color, updating_count
     from . import scope
     apps = catalog()
     counts = {"green": 0, "orange": 0, "red": 0, "grey": 0}
     reboot = offline = 0
     # Comme la liste du parc : sans la colonne de l'inventaire, dont le voyant ne relit rien tant qu'il n'a pas changé.
     for dev in db().execute(f"SELECT {list_columns()} FROM devices WHERE state != 'removed'" + scope.sql()):
-        counts[status(dev, apps)[0]] += 1
+        counts[status_color(dev, apps)] += 1
         reboot += bool(dev["reboot_required"])
         offline += not is_online(dev)
     ring = [{"key": key, "label": label, "count": counts[key]}

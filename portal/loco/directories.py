@@ -1,9 +1,6 @@
 """Annuaires LDAP et RADIUS (formulaire de loco) et fournisseurs OpenID Connect comme Authentik (bouton de connexion) :
 nouvelles identités en attente d'approbation."""
-import base64
 import datetime
-import hashlib
-import hmac
 import json
 import re
 import secrets
@@ -17,6 +14,7 @@ from .i18n import L_, _
 from .auth import audit, can, can_assign, lock_access, login_required, require
 from .db import db
 from .directory_protocols import DirectoryError, USERNAME_RE, ldap_authenticate, radius_authenticate
+from .util import sealer
 
 KINDS = {"ldap": L_("LDAP / Active Directory"), "radius": "RADIUS", "oidc": L_("OpenID Connect")}
 # OpenID Connect : Authentik (émetteur par application) ou tout autre fournisseur (Keycloak, Zitadel, Authelia…).
@@ -29,19 +27,8 @@ LDAP_PRESETS = {
 SECRET_FIELDS = ("bind_password", "secret", "client_secret")
 
 
-def _cipher():
-    # Clé stable du serveur, déjà incluse dans les sauvegardes ; dérivée comme pour l'ancien SSO (secrets relisibles).
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-sso-v1", hashlib.sha256).digest()))
-
-
-def _seal(value):
-    return _cipher().encrypt(value.encode()).decode()
-
-
-def _open(value):
-    return _cipher().decrypt(value.encode()).decode() if value else ""
+# Clé stable du serveur, déjà incluse dans les sauvegardes ; dérivée comme pour l'ancien SSO (secrets relisibles).
+_seal, _open = sealer(b"loco-sso-v1")
 
 
 def config_of(row):

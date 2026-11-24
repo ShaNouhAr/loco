@@ -8,6 +8,7 @@ import base64
 import binascii
 import datetime
 import hashlib
+import os
 import secrets
 import time
 
@@ -195,6 +196,42 @@ def _read(row, direction, ack):
         packets.append({"seq": packet["seq"], "data": base64.b64encode(packet["data"]).decode()})
         size += len(packet["data"])
     return packets
+
+
+def open_server_session(target, label, audit_action, key_dir, known_line, argv_for, env):
+    """Terminal tenu par le serveur loco lui-même (Home Assistant, Proxmox, équipement réseau) : session distante
+    « ssh » vers target (« proxmox:3 »…), dans les mêmes limites que les autres. Le fichier des clés d'hôte de la
+    session est écrit depuis la base (dossier d'état privé) et retiré à la fin ; argv_for(chemin) donne la commande."""
+    from . import adb
+    conn = db()
+    conn.execute("BEGIN IMMEDIATE")
+    _prune()
+    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= SERVER_SESSIONS:
+        abort(409, _('Huit sessions sont déjà ouvertes.'))
+    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE target=? AND state IN ('waiting','active')", (target,)).fetchone()[0] >= KIND_SESSIONS:
+        abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
+    sid, now = secrets.token_hex(16), time.time()
+    conn.execute("INSERT INTO remote_sessions (id,user_id,owner,pw_version,kind,created,browser_seen,expires,target) VALUES (?,?,?,?,?,?,?,?,?)",
+                 (sid, g.user["id"], _owner(), g.user["pw_version"], "ssh", now, now, now + 3600, target))
+    audit(audit_action, f"{label}, {sid}")
+    os.makedirs(key_dir, mode=0o700, exist_ok=True)
+    known = os.path.join(key_dir, "session-" + sid)
+    with open(os.open(known, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="ascii") as f:
+        f.write(known_line)
+
+    def tidy():
+        try:
+            os.unlink(known)
+        except OSError:
+            pass
+    adb.start_command(sid, argv_for(known), env, "ssh", after=tidy)
+    return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
+
+
+def close_server_sessions(conn, target, reason):
+    """Sessions ouvertes vers target fermées (liaison retirée, équipement oublié…)."""
+    for row in conn.execute("SELECT id FROM remote_sessions WHERE target=? AND state!='closed'", (target,)).fetchall():
+        conn.execute("UPDATE remote_sessions SET state='closed', error=? WHERE id=?", (reason, row["id"]))
 
 
 def target_feature(target):

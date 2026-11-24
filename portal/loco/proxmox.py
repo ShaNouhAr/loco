@@ -11,7 +11,6 @@ SMB) ou Proxmox Backup Server. loco lance une tâche par machine, la suit par so
 redémarrage de loco, la tâche continuant sur Proxmox — et applique la conservation d'une planification aux seules
 sauvegardes de cette planification, repérées par leur note : celles faites autrement ne sont jamais supprimées.
 """
-import base64
 import datetime
 import hashlib
 import hmac
@@ -30,7 +29,7 @@ from . import app, config
 from .i18n import L_, _, n_
 from .auth import audit, login_required
 from .db import connect, db
-from .util import back
+from .util import back, sealer
 
 DEFAULT_PORT = 8006
 HOST_RE = re.compile(r"^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?|[0-9A-Fa-f:]{2,45})$")     # nom, IPv4 ou IPv6
@@ -69,21 +68,7 @@ def _stamp():
 
 # --------------------------------------------------------------------------- secret du jeton
 
-def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-proxmox-v1", hashlib.sha256).digest()))
-
-
-def _seal(value):
-    return _cipher().encrypt(value.encode()).decode() if value else ""
-
-
-def _unseal(value):
-    try:
-        return _cipher().decrypt(value.encode()).decode() if value else ""
-    except Exception:
-        return ""
+_seal, _unseal = sealer(b"loco-proxmox-v1")        # secret du jeton scellé avec la clé du serveur
 
 
 # --------------------------------------------------------------------------- liaison HTTPS épinglée

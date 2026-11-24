@@ -3,7 +3,6 @@
 Simple à configurer (une page, des interrupteurs, un bouton « Tester ») et sans spam : chaque condition a une
 clé et un délai de répétition. L'évaluation tourne côté serveur, dans un fil de fond lancé au démarrage du portail.
 """
-import base64
 import datetime
 import hashlib
 import hmac
@@ -23,6 +22,7 @@ from . import app, config, features
 from .i18n import _, n_
 from .auth import audit, can, login_required, require
 from .db import db, transaction, lease
+from .util import sealer
 
 SETTING = "alerts_config"
 SEVERITY = {"info": 0, "warning": 1, "critical": 2}
@@ -64,21 +64,7 @@ GROUPS = (("server", lambda: _("Serveur")), ("fleet", lambda: _("Parc")), ("secu
 
 # --------------------------------------------------------------------------- configuration
 
-def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-alerts-v1", hashlib.sha256).digest()))
-
-
-def _seal(value):
-    return _cipher().encrypt(value.encode()).decode() if value else ""
-
-
-def _open(value):
-    try:
-        return _cipher().decrypt(value.encode()).decode() if value else ""
-    except Exception:                           # clé changée ou valeur altérée : secret à ressaisir
-        return ""
+_seal, _open = sealer(b"loco-alerts-v1")          # secrets scellés avec la clé du serveur
 
 
 def defaults():

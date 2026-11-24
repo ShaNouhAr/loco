@@ -1561,10 +1561,6 @@ class TestFleetListWithoutInventory(FleetTest):
             self.assertNotIn("TEMP B-TREE", last)                         # pas de tri : remontée depuis la fin
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestSelectionBar(FleetTest):
     """Barre des postes cochés dans Mon parc : nombre en clair, Redémarrer, options rangées dans « Plus »."""
 
@@ -1708,3 +1704,34 @@ class TestOsUpgrade(FleetTest):
         self.admin.post(f"/fleet/{dev_id}/action", {"action": "os-upgrade"}, page=f"/fleet/{dev_id}")
         target = w.checkin().get_json()["commands"][0]["target"]
         self.assertEqual(target, {"kind": "windows", "name": "Windows 11, version 25H2", "id": offer["id"], "version": "25H2"})
+
+
+class TestStatusColour(FleetTest):
+    """La couleur seule (vue d'ensemble, métriques) est toujours celle du voyant complet : à jour, quelques ou beaucoup
+    de mises à jour, inventaire en erreur, jamais relevé, retrait demandé, échec de la dernière action."""
+
+    def test_the_colour_alone_is_the_full_status_colour(self):
+        from loco.db import transaction as tx
+        cases = [{"updates": []}, {"updates": [{"name": "a", "version": "1", "security": True}]},
+                 {"updates": [{"name": f"p{k}", "version": "1"} for k in range(12)]}, {"updates": [], "error": "dépôt injoignable"}]
+        for k, inventory in enumerate(cases):
+            agent = Agent(dict(LINUX, hostname=f"couleur-{k}"), f"192.168.43.{150 + k}")
+            agent.enroll()
+            agent.checkin(inventory)
+        silent = Agent(dict(LINUX, hostname="jamais-releve"), "192.168.43.160")
+        silent.enroll()
+        with tx() as conn:
+            first = conn.execute("SELECT id FROM devices ORDER BY id LIMIT 1").fetchone()[0]
+            conn.execute("INSERT INTO device_commands (device_id, action, params, state, created_at, finished_at) "
+                         "VALUES (?, 'update', '{}', 'failed', '2026-11-24 08:00:00', '2026-11-24 08:05:00')", (first,))
+            conn.execute("UPDATE devices SET state='removing' WHERE hostname='couleur-3'")
+        with fixture.loco.app.test_request_context("/"):
+            from loco.db import db as current
+            rows = current().execute("SELECT * FROM devices").fetchall()
+            colours = {(fleet.status(r)[0], fleet.status_color(r)) for r in rows}
+        self.assertTrue(all(full == alone for full, alone in colours), colours)
+        self.assertGreaterEqual(len({full for full, _alone in colours}), 3)               # plusieurs couleurs essayées
+
+
+if __name__ == "__main__":
+    unittest.main()

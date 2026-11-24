@@ -150,10 +150,6 @@ class TestSoftwareCatalog(FleetTest):
         self.assertNotIn("Enregistrer", page)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestInsecureSource(FleetTest):
     """Ignorer le certificat du site source : seulement avec une empreinte de référence, et l'intégrité reste vérifiée."""
     def setUp(self):
@@ -234,3 +230,7 @@ class TestInsecureSource(FleetTest):
             self.assertFalse(seen["context"].check_hostname)
             util.download("https://src.invalid/f.exe", d, insecure=False)
             self.assertIsNone(seen["context"])                         # vérification par défaut
+
+
+if __name__ == "__main__":
+    unittest.main()

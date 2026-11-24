@@ -24,7 +24,7 @@ from . import app, config
 from .auth import _complete_login, audit, can, login_required, require
 from .db import db
 from .i18n import L_, _
-from .util import safe_next
+from .util import cipher, safe_next
 
 LIMIT = 1024 * 1024                      # réponse JSON du fournisseur
 LEEWAY = 120                             # écart d'horloge toléré (s)
@@ -388,9 +388,7 @@ def identity(cfg, meta, code, flow):
 # --------------------------------------------------------------------------- état du flux (cookie chiffré)
 
 def _flow_cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-sso-flow-v1", hashlib.sha256).digest()))
+    return cipher(b"loco-sso-flow-v1")
 
 
 def _open_flow(value):

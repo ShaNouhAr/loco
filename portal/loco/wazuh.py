@@ -10,10 +10,8 @@ Quand l'agent est retiré d'un poste, loco retire aussi son entrée du manager, 
 lui est propre, que le manager n'autorise qu'à lancer `manage_agents -r <numéro>` (commande imposée dans authorized_keys,
 seuls les chiffres reçus sont gardés). La clé d'hôte du manager est confirmée par un administrateur avant tout échange.
 """
-import base64
 import gzip
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -30,7 +28,7 @@ from . import app, config, features, fleet, homeassistant, scope
 from .auth import audit, can, login_required, require
 from .db import connect, db
 from .i18n import _, n_
-from .util import back
+from .util import back, sealer
 
 SETTING = "wazuh_config"
 VERSIONS_SETTING = "wazuh_versions"
@@ -55,21 +53,7 @@ AGENT_ID_RE = re.compile(r"[0-9]{1,8}")
 
 # --------------------------------------------------------------------------- réglages
 
-def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-wazuh-v1", hashlib.sha256).digest()))
-
-
-def _seal(value):
-    return _cipher().encrypt(value.encode()).decode() if value else ""
-
-
-def _open(value):
-    try:
-        return _cipher().decrypt(value.encode()).decode() if value else ""
-    except Exception:                           # clé du serveur changée ou valeur altérée : mot de passe à ressaisir
-        return ""
+_seal, _open = sealer(b"loco-wazuh-v1")          # secrets scellés avec la clé du serveur
 
 
 def load(conn=None):

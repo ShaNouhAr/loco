@@ -287,10 +287,6 @@ details[open]:not(.menu):not(.nav-group):not(.panel) > summary::before { transfo
 .nav-panel strong { display: block; color: var(--text); font-size: 13.5px; font-weight: 500; }
 .nav-panel small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--text-3); }
 .nav-short { display: none; }
-/* Une entrée de plus (Android) : « Vue d'ensemble » se réduit à son icône, comme le logo qui mène à la même page. */
-.nav-dense .nav-home > span { display: none; }
-/* Android et Home Assistant ensemble : la seconde entrée se réduit elle aussi à son icône. */
-.nav-crowded .nav-homeassistant > span { display: none; }
 /* Noms longs (compte d'annuaire, nom d'hôte) : coupés plutôt que de pousser la barre hors de l'écran. */
 .user-chip .user-name, .brand span { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 @keyframes nav-reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
@@ -479,7 +475,6 @@ a.tag:hover { border-color: var(--line-2); color: var(--text); text-decoration: 
 label.f { display: block; }
 label.f > span { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 500; }
 .hint { display: block; margin-top: 6px; font-size: 13px; color: var(--text-3); }
-.hint-tight { margin-top: -4px; }
 input[type=text], input[type=url], input[type=password], input[type=search], input[type=date], input[type=time], input[type=datetime-local], input[type=number], input[type=email], select, textarea {
   width: 100%; height: var(--h); padding: 0 11px; border: 1px solid var(--line-2); border-radius: var(--r-sm);
   background: var(--field); color: var(--text); font: 14px var(--sans); outline: none; transition: border-color .12s, box-shadow .12s;
@@ -531,8 +526,6 @@ label.check { display: inline-flex; align-items: center; gap: 8px; margin-right:
 .backup-setting .row { min-width: 0; max-width: 100%; }
 .backup-setting input[type=file] { min-width: 0; max-width: 100%; }
 .backup-setting-text .set-label { margin-bottom: 0; }
-.offsite-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.offsite-head h3 { margin: 0; font-size: 14px; }
 
 /* Mon parc : sélection de postes */
 .select-col { width: 1%; white-space: nowrap; }
@@ -942,7 +935,6 @@ details.menu[open] > .menu-list { animation: nav-reveal .12s ease-out; }
   .auth-top { padding: 12px 14px; }
   .auth-card { padding: 22px 18px; border-radius: 12px; }
 }
-.setup-box .foot .linkbtn { font-size: 13px; }
 
 /* Mouvement, discret : les blocs d'une page entrent l'un après l'autre (pas lors d'un simple rechargement, voir
    theme.js), un onglet apparaît en fondu, un bouton s'enfonce, une ligne modifiée par l'actualisation en direct
@@ -967,11 +959,6 @@ a.attention-row:hover svg { transform: translateX(3px); color: var(--text-2); }
 
 .issued { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .issued code { font-size: 15px; padding: 4px 8px; }
-.repo-select { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-.repo-select .f { flex: 1; min-width: 180px; margin: 0; }
-.repo-create { padding-top: 14px; border-top: 1px solid var(--line); }
-.repo-create > summary { font-weight: 500; }
-.repo-create > form { margin-top: 16px; display: grid; gap: 12px; }
 /* Paquets Linux : brancher un poste en trois étapes. */
 .setup-steps { display: grid; gap: 0; }
 .setup-step { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 14px; padding: 4px 0 20px; }
@@ -1026,21 +1013,14 @@ details.more .mirrors { margin-top: 12px; border: 1px solid var(--line); border-
 details.more .mirrors th, details.more .mirrors td { padding: 8px 12px; font-size: 13px; }
 .file-current { font-size: 12.5px; color: var(--text-2); overflow-wrap: anywhere; }
 .file-current:has(span:empty) { display: none; }
-.repo-copy { margin-top: 6px; font-size: 13px; text-align: left; }
-.repo-copy > summary { color: var(--text-2); }
-.repo-copy > form { margin-top: 8px; flex-wrap: wrap; }
 .appliance-form .panel-b.grid2 > * { margin-top: 0; }
 /* Interrupteurs de fonctions dans le formulaire de configuration : alignés sur le reste du panneau. */
 .cfg-list .feature-row { padding: 13px 20px; }
-.msi-direct { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
-.msi-direct > * + * { margin-top: 8px; }
-.msi-direct .hint a { overflow-wrap: anywhere; }
 details.hint > summary { color: var(--text-2); }
 details.hint > summary:hover { color: var(--text); }
 details.hint[open] > summary { margin-bottom: 6px; }
 .wu-domains > * + * { margin-top: 12px; }
 .live-step { display: grid; gap: 4px; max-width: 420px; margin-bottom: 4px; }
-.directory-test input { width: 200px; }
 
 /* ------------------------------------------------------------------ graphiques (SVG tracés par le serveur) */
 
@@ -1129,9 +1109,6 @@ a.attention-row:hover { background: var(--bg-2); }
 .status-ring .ring-total { fill: var(--text); font: 600 24px var(--sans); letter-spacing: -.02em; }
 .status-ring .ring-unit { fill: var(--text-3); font: 11px var(--sans); }
 @keyframes ring-in { from { stroke-dasharray: 0 100; } }
-.status-total { display: flex; flex: none; align-items: baseline; gap: 8px; margin: 0; }
-.status-total b { font-size: 20px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
-.status-total span { color: var(--text-2); }
 .status-bar { flex: 1 1 auto; min-width: 0; height: 8px; }
 .status-bar rect { rx: 2px; }
 .fleet-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 32px; margin-top: 12px; }
@@ -1188,7 +1165,6 @@ a.fleet-state:hover { background: var(--bg-2); color: var(--text); }
 @keyframes bar-grow { from { transform: scaleX(0); } }
 html.no-enter .usage-list .bar .fill { animation: none; }
 .usage-list .bar .fill { fill: var(--viz-1); }
-.usage-head + .meter { margin: 0 0 18px; }
 
 /* ------------------------------------------------------------------ fiche d'un appareil */
 
@@ -1313,7 +1289,6 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .store-filters { display: grid; gap: 12px; }
 .store-search { display: flex; gap: 8px; }
 .store-search input { flex: 1; min-width: 180px; }
-.store-categories { display: flex; flex-wrap: wrap; gap: 8px; }
 .store-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .store-heading h2 { margin: 0; font-size: 16px; }
 .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 14px; }
@@ -1322,7 +1297,6 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .store-card-top > div { min-width: 0; }
 .store-card h3 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
 .store-card .sub { overflow-wrap: anywhere; font-size: 12px; }
-.store-card-actions { margin-top: auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .store-item { position: relative; display: flex; align-items: center; gap: 14px; min-width: 0; padding: 15px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); box-shadow: var(--shadow-card); transition: border-color .14s, box-shadow .14s, transform .14s; }
 .store-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); box-shadow: var(--shadow-pop); transform: translateY(-1px); }
 .store-item-text { display: grid; min-width: 0; flex: 1; }
@@ -1345,7 +1319,6 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .app-logo-box.has-logo .app-logo-initial { visibility: hidden; }
 .app-logo-box.small { flex-basis: 30px; width: 30px; height: 30px; border-radius: 7px; font-size: 14px; }
 .app-logo-box.large { flex-basis: 60px; width: 60px; height: 60px; border-radius: 12px; font-size: 26px; }
-.software-detail-actions { margin-bottom: 24px; }
 .software-selection-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .selbar .software-selection-actions { flex-shrink: 0; }
 
@@ -1384,7 +1357,6 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 .deploy-targets td { vertical-align: top; }
 .deployment-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; padding: 12px; border-radius: var(--r-sm); background: var(--bg-2); font: 12px/1.6 var(--mono); }
 .deployment-columns > .panel { min-width: 0; }
-.summary-line { color: var(--text-2); font-size: 13.5px; }
 .output-details { margin-top: 4px; }
 .output-details > summary { color: var(--text-2); font-size: 13px; }
 .output-details[open] > summary { margin-bottom: 6px; }
@@ -1405,7 +1377,6 @@ td .sub.only-sm { display: none; overflow-wrap: anywhere; white-space: normal; c
 
 /* ------------------------------------------------------------------ profils d'accès */
 
-.permission-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 20px; align-items: start; }
 .permission-list { display: grid; gap: 16px; }
 .permission-option { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
 .permission-option > input { margin-top: 3px; flex: 0 0 auto; }
@@ -1956,8 +1927,6 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
   .usage-list .bar { grid-column: 1 / -1; }
   .download { flex-wrap: wrap; }
   .download .btn { width: 100%; }
-  .net-grid { grid-template-columns: 1fr; }
-  .net-cell + .net-cell { border-left: 0; border-top: 1px solid var(--line); }
   /* Tableaux en cartes : chaque ligne devient un bloc, les cellules s'empilent. */
   .table-cards thead { display: none; }
   .table-cards, .table-cards tbody, .table-cards tr, .table-cards td { display: block; width: 100%; }
@@ -1973,9 +1942,6 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
 }
 @media (max-width: 520px) {
   .nav { gap: 0; }
-  .nav-dense .nav-android > span { display: none; }   /* une entrée de plus : Android en icône, comme l'accueil */
-  .nav-dense .nav-homeassistant > span { display: none; }
-  .nav-crowded .nav-chevron { display: none; }          /* sept entrées sur un téléphone : les chevrons cèdent la place */
   .nav > a, .nav-group > summary { gap: 4px; padding: 0 3px; font-size: 12.5px; }
   .nav .nav-icon { width: 16px; height: 16px; }
   .nav .nav-chevron { width: 10px; height: 10px; }
@@ -1983,13 +1949,7 @@ dialog.files-editor { width: min(820px, calc(100vw - 32px)); }
   .permission-save .actions { width: 100%; }
   .permission-save .actions .primary { flex: 1; }
 }
-/* Shell root du serveur : carte « disponible », étapes de mise en service, accès rapide dans la barre. */
-.shell-ready { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
-.shell-ready-in { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.shell-ready-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.shell-ready-icon .nav-icon { width: 22px; height: 22px; }
-.shell-ready-text { flex: 1 1 260px; min-width: 0; }
-.shell-ready-text h2 { margin: 0 0 2px; font-size: 15px; }
+/* Shell root du serveur : étapes de mise en service, accès rapide dans la barre. */
 .btn .nav-icon { width: 16px; height: 16px; }
 .shell-steps .setup-step.current .step-n { background: var(--accent); color: var(--accent-fg); }
 .shell-steps .setup-step.done .step-n { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
@@ -2475,13 +2435,6 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 /* Logo personnalisé (image) : contraint à la hauteur de marque, largeur bornée pour ne pas pousser l'en-tête. */
 img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }
 .auth-brand img.brand-logo { max-width: 150px; }
-
-/* Section « Logo » (global, admin) de la fenêtre Apparence. */
-.ap-global-tag { margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--bg-3); color: var(--text-3); font: 600 10px var(--sans); letter-spacing: .05em; text-transform: uppercase; vertical-align: 2px; }
-.ap-logo-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.ap-logo-prev { flex: none; display: inline-grid; place-items: center; height: 48px; min-width: 76px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
-.ap-logo-prev img { height: 28px; width: auto; max-width: 150px; display: block; }
-.ap-logo-sec .ap-bg-actions { flex: 1 1 auto; row-gap: 8px; }
 
 /* Page hors-ligne (PWA) : carte centrée, logo, message, bouton Réessayer. */
 .offline-card { text-align: center; }

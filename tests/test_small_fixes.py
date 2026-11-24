@@ -166,35 +166,47 @@ class TestPlurals(FleetTest):
 
 
 class TestProcessor(unittest.TestCase):
+    """Charge processeur de la vue d'ensemble : mesurée contre un relevé de fond de quelques secondes, sans attendre ;
+    la page n'attend (120 ms) que faute de relevé utilisable."""
+
     def setUp(self):
-        patcher = mock.patch.object(util, "_cpu_last", None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        import collections
+        for patcher in (mock.patch.object(util, "_cpu_samples", collections.deque(maxlen=4)),
+                        mock.patch.object(util, "_cpu_sampler", object()),          # pas de vrai fil de fond ici
+                        mock.patch.object(util.config, "WINDOWS", False)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
-    def test_first_reading_samples_then_averages_without_waiting(self):
-        times = iter([(1000, 900), (1100, 950), (2100, 1450)])
-        clock = iter([100.0, 100.2, 110.2, 110.2])
-        with mock.patch.object(util, "_cpu_times", lambda: next(times)), mock.patch.object(util.time, "sleep") as sleep, \
-                mock.patch.object(util.time, "monotonic", lambda: next(clock)), mock.patch.object(util.config, "WINDOWS", False):
-            first = util.cpu_usage()
-            self.assertEqual(sleep.call_count, 1)
-            self.assertEqual(first["pct"], 50)
-            second = util.cpu_usage()
-            self.assertEqual(sleep.call_count, 1)        # moyenne sur l'intervalle, sans nouvelle attente
-        self.assertEqual(second["pct"], 50)
+    def test_without_a_reading_it_waits_once_then_uses_the_background_one(self):
+        with mock.patch.object(util, "_cpu_times", side_effect=[(1000, 900), (1100, 950)]), mock.patch.object(util.time, "sleep") as sleep, \
+                mock.patch.object(util.time, "monotonic", return_value=100.0):
+            self.assertEqual(util.cpu_usage()["pct"], 50)
+        sleep.assert_called_once()
+        util._cpu_samples.append((100.0, 1100, 950))                                     # relevé de fond
+        with mock.patch.object(util, "_cpu_times", return_value=(2100, 1450)), mock.patch.object(util.time, "sleep") as sleep, \
+                mock.patch.object(util.time, "monotonic", return_value=105.0):
+            self.assertEqual(util.cpu_usage()["pct"], 50)
+        sleep.assert_not_called()
 
-    def test_old_reading_is_not_averaged_over_hours(self):
-        util._cpu_last = (0.0, 1000, 900)
+    def test_readings_too_old_or_too_recent_are_skipped(self):
+        util._cpu_samples.extend([(0.0, 10, 9), (9999.5, 5000, 4000)])                 # vieux d'heures, et d'une demi-seconde
         with mock.patch.object(util, "_cpu_times", side_effect=[(5000, 4000), (5100, 4100)]), mock.patch.object(util.time, "sleep") as sleep, \
-                mock.patch.object(util.time, "monotonic", return_value=9999.0), mock.patch.object(util.config, "WINDOWS", False):
+                mock.patch.object(util.time, "monotonic", return_value=10000.0):
             self.assertEqual(util.cpu_usage()["pct"], 0)
         sleep.assert_called_once()
 
     def test_two_tabs_at_once_do_not_divide_by_nothing(self):
-        util._cpu_last = (100.0, 1000, 900)
-        with mock.patch.object(util, "_cpu_times", side_effect=[(1000, 900), (1000, 900)]), mock.patch.object(util.time, "sleep"), \
-                mock.patch.object(util.time, "monotonic", return_value=100.1), mock.patch.object(util.config, "WINDOWS", False):
+        util._cpu_samples.append((100.0, 1000, 900))
+        with mock.patch.object(util, "_cpu_times", return_value=(1000, 900)), mock.patch.object(util.time, "sleep"), \
+                mock.patch.object(util.time, "monotonic", return_value=102.0):
             self.assertEqual(util.cpu_usage()["pct"], 0)
+
+    def test_the_background_sampler_keeps_recent_readings(self):
+        with mock.patch.object(util, "_cpu_times", return_value=(1000, 900)), mock.patch.object(util.time, "monotonic", return_value=7.0), \
+                mock.patch.object(util.time, "sleep", side_effect=StopIteration):
+            with self.assertRaises(StopIteration):
+                util._sample_cpu()
+        self.assertEqual(list(util._cpu_samples), [(7.0, 1000, 900)])
 
 
 class TestNewInstallStorage(FleetTest):

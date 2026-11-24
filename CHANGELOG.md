@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.196.0 — 2026-11-24
+
+- **Vue d'ensemble, Mon parc et page Système plus rapides.** Sur un parc de 300 postes, la vue d'ensemble s'affiche en 25 ms au lieu de 190 (33 requêtes à la base au lieu de 334), l'état du serveur interrogé par les pages en direct en 4 ms au lieu de 130, la page *Système* en 15 ms au lieu de 93, et Mon parc avec son actualisation en direct fait 18 requêtes au lieu de 318. La charge du processeur est mesurée en arrière-plan (chaque affichage attendait 120 ms pour la mesurer) ; le certificat du portail, la liste des fuseaux horaires et les versions des services installés ne sont plus relus à chaque page ; le dernier résultat de chaque poste est lu en une seule fois ; la vue d'ensemble ne calcule plus que la couleur des postes, sans le détail de leurs raisons. Nouvel index pour les mises à jour en échec (migration 58).
+- **Feuilles de style et scripts compressés** par nginx sur l'appliance : la feuille de style passe de 210 Ko à 45 Ko transférés, le script du portail de 122 à 35 Ko — pages plus vives sur une liaison lente (VPN, téléphone).
+- **Code allégé** : chiffrement des secrets, sessions de terminal tenues par le serveur (Home Assistant, Proxmox, équipements réseau), clés d'hôte SSH connues, envoi de paquets aux dépôts Linux et lecture des recherches dans les catalogues regroupés chacun en un seul endroit ; code mort retiré, ainsi que 30 classes de style et 209 textes traduits qui ne servaient plus.
+
 ## 2.195.0 — 2026-11-24
 
 - **Enrôlement : le nom DNS, puis l'IP.** Quand loco a un nom DNS — l'adresse du portail, ou à défaut le nom complet de son certificat d'entreprise —, la commande d'installation (Linux et Windows), le script Linux, les paquets .deb et .rpm, le MSI et l'APK préconfigurés essaient ce nom d'abord, puis l'IP du serveur. Un poste qui ne reconnaît pas le certificat du nom (autorité d'entreprise absente du poste ou du faisceau des agents) s'inscrit par l'IP, avec le certificat de loco, au lieu d'échouer. L'agent (Linux, Windows, Android) garde l'autre adresse en secours. La page *Enrôlement* montre les adresses et leur ordre ; `SERVER` du MSI et la valeur `Server` du registre (GPO) acceptent plusieurs adresses séparées par des virgules.

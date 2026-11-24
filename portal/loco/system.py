@@ -79,8 +79,18 @@ def server_time():
     return info
 
 
+_TIMEZONES = []
+
+
 def timezones():
-    """Fuseaux horaires proposés dans le menu (liste du système, repli sur zoneinfo)."""
+    """Fuseaux horaires proposés dans le menu (liste du système, repli sur zoneinfo). Lue une fois par processus : elle
+    ne change qu'avec les données de fuseaux, mises à jour avec le système (et loco redémarré)."""
+    if not _TIMEZONES:
+        _TIMEZONES.extend(_list_timezones())
+    return list(_TIMEZONES)
+
+
+def _list_timezones():
     try:
         out = subprocess.run(["timedatectl", "list-timezones"], capture_output=True, text=True, timeout=5).stdout
         zones = out.split()
@@ -181,20 +191,40 @@ def _cert_info_python(path):
     return info
 
 
-def cert_info(path):
-    """Résumé d'un certificat X.509 (via openssl)."""
-    if config.WINDOWS:
-        return _cert_info_python(path)
+_CERT_TEXT = {}                 # chemin -> (état du fichier, sortie d'openssl) : relu seulement quand le fichier change
+
+
+def _cert_text(path):
+    """Sortie d'openssl pour ce certificat, ou None. La page Système, la vue d'ensemble et les alertes la demandent
+    souvent : elle n'est recalculée que si le fichier a changé (date, taille, inode)."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (st.st_mtime_ns, st.st_size, st.st_ino)
+    cached = _CERT_TEXT.get(path)
+    if cached and cached[0] == key:
+        return cached[1]
     try:
         out = subprocess.run(["openssl", "x509", "-in", path, "-noout", "-subject", "-issuer", "-startdate",
                               "-enddate", "-fingerprint", "-sha256", "-ext", "subjectAltName"],
                              capture_output=True, text=True, timeout=10)
+        text = out.stdout if out.returncode == 0 else None
     except (OSError, subprocess.SubprocessError):
-        return None
-    if out.returncode != 0:
+        return None                         # openssl indisponible pour l'instant : réessayé au prochain appel
+    _CERT_TEXT[path] = (key, text)
+    return text
+
+
+def cert_info(path):
+    """Résumé d'un certificat X.509 (via openssl). Les jours restants sont comptés à chaque appel."""
+    if config.WINDOWS:
+        return _cert_info_python(path)
+    text = _cert_text(path)
+    if text is None:
         return None
     info = {"san": []}
-    for line in out.stdout.splitlines():
+    for line in text.splitlines():
         line = line.strip()
         if line.startswith("subject="):
             info["subject"] = line.split("=", 1)[1].strip()
@@ -219,7 +249,22 @@ def _cert_date(text):
     return {"text": d.strftime("%d/%m/%Y"), "days": (d - datetime.datetime.utcnow()).days}
 
 
+_VERSIONS = {}                  # paquet -> (instant, version) : la page Système en lit plusieurs à chaque affichage
+VERSIONS_TTL = 300
+
+
 def package_version(name):
+    """Version installée d'un paquet (relue au plus toutes les cinq minutes)."""
+    now = time.monotonic()
+    cached = _VERSIONS.get(name)
+    if cached and now - cached[0] < VERSIONS_TTL:
+        return cached[1]
+    version = _package_version(name)
+    _VERSIONS[name] = (now, version)
+    return version
+
+
+def _package_version(name):
     if name == "python3-flask":
         from importlib.metadata import version
         return version("Flask")
@@ -1334,11 +1379,11 @@ def metrics():
     if config.RPM_ENABLED:
         from .rpmrepo import list_rpms
         metric("loco_rpm_packages", "Paquets des dépôts RPM locaux.", "gauge", [({}, len(list_rpms()))])
-    from .fleet import catalog, status
+    from .fleet import catalog, status_color
     apps = catalog()
     colors = {"green": 0, "orange": 0, "red": 0, "grey": 0}
     for dev in db().execute("SELECT * FROM devices WHERE state != 'removed'"):
-        colors[status(dev, apps)[0]] += 1
+        colors[status_color(dev, apps)] += 1
     metric("loco_devices", "Postes du parc par voyant (green à jour, orange en attente, red à traiter).", "gauge",
            [({"status": c}, n) for c, n in colors.items()])
     rows = db().execute("SELECT status, COUNT(*) AS n FROM win_apps GROUP BY status").fetchall()

@@ -10,7 +10,7 @@ Stormshield SNS n'a pas de ligne de commande de ce genre : son relevé, sa sauve
 HTTPS de l'équipement (module sns) ; son SSH, s'il est activé, ne sert qu'au terminal.
 """
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .i18n import L_
 
@@ -48,9 +48,7 @@ class Family:
     config: str = "show running-config"
     api: bool = False               # relevé et sauvegarde par l'API (Stormshield)
     firmware: str = ""              # façon d'installer un firmware : "" = à la main sur l'équipement
-    firmware_ext: tuple = ()
     reboot: tuple = ()              # (commande, réponses) du redémarrage
-    hints: dict = field(default_factory=dict)
 
 
 # --------------------------------------------------------------------------- lecture commune
@@ -279,21 +277,21 @@ FAMILIES = {
         inventory=("show version", "show inventory", "show interfaces status", "show ip interface brief",
                    "show processes cpu | include CPU utilization", "show processes memory | include Processor Pool",
                    "show environment all", "dir flash:"),
-        firmware="ios", firmware_ext=(".bin", ".pkg"),
+        firmware="ios",
         reboot=("reload", ((r"Save\? \[yes/no\]:?\s*$", "no\r"), (r"\[confirm\]\s*$", "\r"))),
     ),
     "cisco-sb": Family(
         "cisco-sb", "Cisco Small Business (CBS, SG)", "Cisco", "switch",
         prepare=("terminal datadump", "terminal width 0"),
         inventory=("show version", "show system", "show inventory", "show interfaces status", "show cpu utilization", "show environment"),
-        firmware="", firmware_ext=(".bin", ".ros"),
+        firmware="",
         reboot=("reload", ((r"\(Y/N\)\s*\[N\]\s*\??\s*$", "Y"), (r"\(Y/N\)\s*\[N\]\s*\??\s*$", "Y"))),
     ),
     "exos": Family(
         "exos", "Extreme EXOS / Switch Engine", "Extreme Networks", "switch",
         learn=EXOS_LEARN, prompt=_exos_prompt, prepare=("disable clipaging",), error=EXOS_ERROR,
         inventory=("show version", "show switch", "show ports no-refresh", "show cpu-monitoring", "show memory", "show temperature"),
-        config="show configuration", firmware="exos", firmware_ext=(".xos",),
+        config="show configuration", firmware="exos",
         reboot=("reboot", ((r"save configuration changes.*\(y - save and reboot, n - reboot without save[^)]*\)\s*:?\s*$", "n"),
                            (r"reboot the switch\?\s*\(y/N\)\s*$", "y"))),
     ),
@@ -302,12 +300,12 @@ FAMILIES = {
         prepare=("terminal more disable",), elevate="enable", error=EXOS_ERROR,
         inventory=("show sys-info", "show software", "show interfaces gigabitEthernet", "show khi performance cpu",
                    "show khi performance memory"),
-        firmware="voss", firmware_ext=(".tgz",),
+        firmware="voss",
         reboot=("reset -y", ()),
     ),
     "stormshield": Family(
         "stormshield", "Stormshield SNS", "Stormshield", "firewall", api=True, logout=(),
-        firmware="sns", firmware_ext=(".maj",),
+        firmware="sns",
     ),
 }
 PARSERS = {"cisco-ios": parse_ios, "cisco-sb": parse_sb, "exos": parse_exos, "voss": parse_voss}

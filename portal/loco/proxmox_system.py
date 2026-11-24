@@ -17,7 +17,6 @@ import re
 import secrets
 import shlex
 import subprocess
-import tempfile
 import threading
 import time
 
@@ -111,25 +110,6 @@ def ssh_host(row):
     return row["ssh_host"] or row["host"]
 
 
-class _Known:
-    """Fichier des clés d'hôte, écrit depuis la base (c'est elle qui fait foi) le temps d'une commande."""
-    def __init__(self, row):
-        self.row = row
-
-    def __enter__(self):
-        os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-        fd, self.path = tempfile.mkstemp(prefix="known-", dir=KEY_DIR)
-        with os.fdopen(fd, "w", encoding="ascii") as f:
-            f.write(f"{homeassistant._pattern(ssh_host(self.row), self.row['ssh_port'])} {self.row['host_key']}\n")
-        return self.path
-
-    def __exit__(self, *_exc):
-        try:
-            os.unlink(self.path)
-        except OSError:
-            pass
-
-
 def _argv(row, known, remote, tty=False):
     host = ssh_host(row)
     return (homeassistant._base(host, row["ssh_port"], row["ssh_user"], known, key=KEY_PATH) + ["-o", "StrictHostKeyChecking=yes"]
@@ -143,7 +123,7 @@ def run(row, script, timeout=QUICK):
     if not row["host_key"]:
         raise LinkError(_("La clé d'hôte de Proxmox n'a pas encore été confirmée."))
     public_key()
-    with _Known(row) as known:
+    with homeassistant.KnownHosts(KEY_DIR, ssh_host(row), row["ssh_port"], row["host_key"]) as known:
         try:
             done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(script)), stdin=subprocess.DEVNULL,
                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
@@ -791,8 +771,8 @@ def proxmox_ssh_unlink(host_id):
 
 
 def close_sessions(conn, host_id, reason):
-    for s in conn.execute("SELECT id FROM remote_sessions WHERE target=? AND state!='closed'", (f"proxmox:{host_id}",)).fetchall():
-        conn.execute("UPDATE remote_sessions SET state='closed', error=? WHERE id=?", (reason, s["id"]))
+    from . import remote
+    remote.close_server_sessions(conn, f"proxmox:{host_id}", reason)
 
 
 @app.route("/proxmox/<int:host_id>/system/refresh", methods=["POST"])
@@ -885,27 +865,12 @@ def proxmox_system_reboot(host_id):
 @login_required
 def proxmox_shell(host_id):
     """Terminal root sur Proxmox : une session distante tenue par loco, comme celle de Home Assistant."""
-    from . import adb, remote
+    from . import remote
     row = _host(host_id)
     if not homeassistant.ssh_binary() or not row["host_key"] or not homeassistant.terminal_ready():
         abort(409, _("La liaison SSH avec Proxmox n'est pas prête."))
     public_key()
-    conn = db()
-    conn.execute("BEGIN IMMEDIATE")
-    remote._prune()
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE state IN ('waiting','active')").fetchone()[0] >= remote.SERVER_SESSIONS:
-        abort(409, _('Huit sessions sont déjà ouvertes.'))
-    target = f"proxmox:{host_id}"
-    if conn.execute("SELECT COUNT(*) FROM remote_sessions WHERE target=? AND state IN ('waiting','active')", (target,)).fetchone()[0] >= remote.KIND_SESSIONS:
-        abort(409, _('Deux sessions de ce type sont déjà ouvertes sur ce poste.'))
-    sid, now = secrets.token_hex(16), time.time()
-    conn.execute("INSERT INTO remote_sessions (id,user_id,owner,pw_version,kind,created,browser_seen,expires,target) VALUES (?,?,?,?,?,?,?,?,?)",
-                 (sid, g.user["id"], remote._owner(), g.user["pw_version"], "ssh", now, now, now + 3600, target))
-    audit("proxmox.terminal", f"{row['name']}, {sid}")
-    os.makedirs(KEY_DIR, mode=0o700, exist_ok=True)
-    known = os.path.join(KEY_DIR, "session-" + sid)
-    with open(os.open(known, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="ascii") as f:
-        f.write(f"{homeassistant._pattern(ssh_host(row), row['ssh_port'])} {row['host_key']}\n")
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": config.STATE, "TERM": "xterm-256color", "LANG": "C.UTF-8"}
-    adb.start_command(sid, _argv(row, known, "", tty=True), env, "ssh", after=lambda: os.unlink(known))
-    return redirect(url_for("remote_session", sid=sid, **({"view": "console"} if request.form.get("view") == "console" else {})))
+    return remote.open_server_session(f"proxmox:{host_id}", row["name"], "proxmox.terminal", KEY_DIR,
+                                      f"{homeassistant._pattern(ssh_host(row), row['ssh_port'])} {row['host_key']}\n",
+                                      lambda known: _argv(row, known, "", tty=True), env)

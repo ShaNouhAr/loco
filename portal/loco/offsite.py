@@ -4,7 +4,6 @@ Tourne dans un fil de fond du portail (compte loco, qui sait lire les sauvegarde
 quotidienne, la plus récente est copiée vers la destination, chiffrée au préalable si une phrase de passe est donnée,
 et la destination est limitée au nombre d'archives à conserver. Un échec est signalé (alerte « copie hors-site »).
 """
-import base64
 import contextlib
 import datetime
 import hashlib
@@ -27,6 +26,7 @@ from . import app, config
 from .i18n import _
 from .auth import audit, can, login_required, require
 from .db import db, transaction, lease
+from .util import sealer
 
 CONFIG = "offsite_config"
 STATE = "offsite_state"
@@ -36,21 +36,7 @@ SECRETS = {"s3": ("secret_key",), "sftp": ("private_key",), "crypt": ("passphras
 NAME_RE = re.compile(r"loco-[A-Za-z0-9._-]+-\d{8}-\d{6}\.tar\.gz(?:\.enc)?")
 
 
-def _cipher():
-    from cryptography.fernet import Fernet
-    key = app.secret_key.encode() if isinstance(app.secret_key, str) else app.secret_key
-    return Fernet(base64.urlsafe_b64encode(hmac.new(key, b"loco-offsite-v1", hashlib.sha256).digest()))
-
-
-def _seal(v):
-    return _cipher().encrypt(v.encode()).decode() if v else ""
-
-
-def _open(v):
-    try:
-        return _cipher().decrypt(v.encode()).decode() if v else ""
-    except Exception:
-        return ""
+_seal, _open = sealer(b"loco-offsite-v1")          # secrets scellés avec la clé du serveur
 
 
 def defaults():

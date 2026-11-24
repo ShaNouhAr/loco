@@ -41,7 +41,6 @@ ROOT = os.path.join(config.STATE, "adb")     # clé adb de loco (secret, sauvega
 RUN = os.path.join(config.DATA, "adb")       # socket du serveur adb : hors des sauvegardes (tar ignore mal les sockets)
 PAIR_VERSION = (30,)                          # adb pair : platform-tools 30 et plus
 HOST_RE = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$")
-SERIAL_RE = re.compile(r"^[0-9A-Za-z.:\[\]_-]{3,120}$")
 WAIT_OUTPUT = 0.04
 SEEN_EVERY = 5
 

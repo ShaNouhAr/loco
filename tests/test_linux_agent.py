@@ -136,10 +136,6 @@ class TestScanIncludesInventory(unittest.TestCase):
         self.assertEqual(inv["system"], {"kernel": "6.1"})
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestTrustBundle(unittest.TestCase):
     """Faisceau d'autorités reçu au contact : remplace ca.crt s'il est intact, jamais sans autorité épinglée."""
 
@@ -691,10 +687,6 @@ class TestEnrollment(unittest.TestCase):
         self.assertEqual(conf["uid"], uid)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestEnrollmentKeyDoesNotStay(unittest.TestCase):
     """La clé d'inscription ne reste ni sur le disque du poste, ni dans la liste de ses processus."""
     def test_package_script_gives_way_to_a_note_once_the_machine_is_enrolled(self):
@@ -725,3 +717,7 @@ class TestEnrollmentKeyDoesNotStay(unittest.TestCase):
                 mock.patch.object(agent.sys, "stderr"):
             env.pop("LOCO_ENROLL_KEY", None)
             self.assertEqual(agent.main(["enroll", "--server", "https://loco.test"]), 2)   # sans clé : mode d'emploi
+
+
+if __name__ == "__main__":
+    unittest.main()

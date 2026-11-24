@@ -81,10 +81,6 @@ def _opted_in(conn=None, setting=EXPERIMENTAL_SETTING):
         return set()
 
 
-def _experimental_on(conn=None):
-    return _opted_in(conn, EXPERIMENTAL_SETTING)
-
-
 def disabled(conn=None):
     """Fonctionnalités coupées : par un administrateur, ou dès l'installation (RPM, Flatpak)."""
     if conn is None and "features_off" in g:
