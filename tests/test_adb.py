@@ -27,7 +27,9 @@ case "$1" in
   version) echo "Android Debug Bridge version 1.0.41"; echo "Version 35.0.2-test"; exit 0 ;;
   pair) read code; if [ "$code" = "123456" ]; then echo "Successfully paired to $2 [guid=adb-test]"; exit 0; fi
         echo "Failed: Wrong password or connection was dropped."; exit 1 ;;
-  connect) echo "connected to $2"; exit 0 ;;
+  connect) if [ -e {state}.refuse ]; then echo "failed to connect to $2"; exit 1; fi
+           echo "connected to $2"; exit 0 ;;
+  kill-server) rm -f {state}.refuse; exit 0 ;;
   disconnect) echo "disconnected $2"; exit 0 ;;
   -s) shift 2
       case "$1" in
@@ -35,6 +37,7 @@ case "$1" in
         shell) shift
                if [ $# -eq 0 ]; then PS1='$ ' exec /bin/sh -i; fi
                case "$*" in
+                 *"uiautomator dump"*) cat {state}.ui 2>/dev/null ;;
                  *"wm size"*) echo "Physical size: 1080x2400" ;;
                  *"dumpsys window"*) echo "    mDreamingLockscreen=$(cat {state}.lk 2>/dev/null || echo true)" ;;
                  *"getprop ro.product.manufacturer"*) echo Google ;;
@@ -496,6 +499,89 @@ class TestUnlock(AdbTest):
         r = self.admin.c.post(f"/fleet/{dev['id']}/adb/wake", data={"csrf": tok})
         self.assertEqual(r.status_code, 200)
         self.assertIn("shell input keyevent 224", self.args())
+
+    # Saisie du schéma d'une OnePlus Pad 3 (OxygenOS 16, 2400 × 3392), relevée par uiautomator : le conteneur plein
+    # écran dit aussi « pattern_view », la grille est colorLockPatternView.
+    OXYGEN = ('<?xml version="1.0" encoding="UTF-8"?><hierarchy rotation="0">'
+              '<node index="0" text="" resource-id="com.android.systemui:id/keyguard_security_container" '
+              'class="android.view.ViewGroup" package="com.android.systemui" bounds="[0,0][2400,3392]">'
+              '<node index="0" text="" resource-id="com.android.systemui:id/oplusos_kgd_security_pattern_view" '
+              'class="android.widget.RelativeLayout" package="com.android.systemui" bounds="[0,0][2400,3392]">'
+              '<node index="0" text="" resource-id="com.android.systemui:id/colorLockPatternView" class="android.view.View" '
+              'package="com.android.systemui" content-desc="Zone du schéma" clickable="true" bounds="[790,1532][1609,2267]" />'
+              '</node></node></hierarchy>')
+
+    def test_the_grid_android_describes_is_used_rather_than_the_brand_profile(self):
+        dev, tok = self.ready()
+        with open(self.state + ".ui", "w") as f:
+            f.write(self.OXYGEN)
+        self.assertTrue(self.unlock(dev, tok, method="pattern", pattern="1,4,7,8,9").get_json()["ok"])
+        log = self.args()
+        self.assertIn("uiautomator dump", log)
+        cell_w, cell_h = (1609 - 790) / 3, (2267 - 1532) / 3
+        self.assertIn(f"input motionevent DOWN {int(790 + cell_w / 2)} {int(1532 + cell_h / 2)}", log)          # point 1
+        self.assertIn(f"input motionevent UP {int(790 + 2.5 * cell_w)} {int(1532 + 2.5 * cell_h)}", log)        # point 9
+
+    def test_pattern_box_prefers_the_grid_to_its_container(self):
+        self.assertEqual(adb.pattern_box(self.OXYGEN), (790, 1532, 1609, 2267))
+        aosp = self.OXYGEN.replace("colorLockPatternView", "lockPatternView")
+        self.assertEqual(adb.pattern_box(aosp), (790, 1532, 1609, 2267))
+        other = self.OXYGEN.replace("colorLockPatternView", "kg_pattern_view")        # surcouche inconnue : la plus petite
+        self.assertEqual(adb.pattern_box(other), (790, 1532, 1609, 2267))
+        self.assertIsNone(adb.pattern_box(""))
+        self.assertIsNone(adb.pattern_box(self.OXYGEN.replace("pattern", "pin").replace("Pattern", "Pin")))
+        self.assertEqual(adb.box_grid((0, 0, 300, 600))[0], (50, 100))
+        self.assertEqual(adb.box_grid((0, 0, 300, 600))[8], (250, 500))
+
+
+class TestForeignServer(AdbTest):
+    """Un autre programme du compte loco qui démarre le serveur adb de loco avec un autre HOME (donc une autre clé) :
+    loco l'arrête et relance le sien ; un appareil qui ne reconnaît plus loco est dit tel quel."""
+
+    def setUp(self):
+        super().setUp()
+        self.proc = os.path.join(self.folder, "proc")
+        spec = "localfilesystem:" + os.path.join(adb.RUN, "server.sock")
+        for pid, home, argv in ((101, "/var/lib/loco", ["adb", "-L", spec, "fork-server", "server", "--reply-fd", "4"]),
+                                (102, adb.ROOT, ["adb", "-L", spec, "fork-server", "server", "--reply-fd", "4"]),
+                                (103, "/root", ["adb", "-L", "tcp:5037", "fork-server", "server"])):
+            os.makedirs(os.path.join(self.proc, str(pid)))
+            with open(os.path.join(self.proc, str(pid), "cmdline"), "wb") as f:
+                f.write("\0".join(argv).encode() + b"\0")
+            with open(os.path.join(self.proc, str(pid), "environ"), "wb") as f:
+                f.write(f"PATH=/usr/bin\0HOME={home}\0".encode())
+        patch = mock.patch.object(adb, "PROC", self.proc)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_only_a_server_on_the_loco_socket_with_another_home_is_foreign(self):
+        self.assertEqual(adb._foreign_servers(), [101])
+
+    def test_the_foreign_server_is_stopped_and_the_connection_retried(self):
+        with open(self.state + ".refuse", "w"):
+            pass                                            # refusé tant que le serveur étranger tourne
+        with mock.patch.object(adb.os, "kill") as kill:
+            self.assertEqual(adb.connect_serial("192.168.43.71", 41235), "")
+        kill.assert_called_once_with(101, adb.signal.SIGTERM)
+        log = self.args()
+        self.assertIn("kill-server", log)
+        self.assertEqual(log.count("connect 192.168.43.71:41235"), 2)
+
+    def test_a_device_that_no_longer_knows_loco_asks_for_a_new_pairing(self):
+        shutil.rmtree(os.path.join(self.proc, "101"))
+        with open(self.state + ".refuse", "w"):
+            pass
+        with mock.patch.object(adb, "_port_open", return_value=True):
+            error = adb.connect_serial("192.168.43.71", 41235)
+        self.assertIn("appairez-le de nouveau", error)
+        with mock.patch.object(adb, "_port_open", return_value=False):
+            self.assertIn("failed to connect", adb.connect_serial("192.168.43.71", 41235))
+
+    def test_the_check_runs_at_most_once_a_minute(self):
+        with mock.patch.object(adb, "_SERVER_CHECKED", [0.0]), mock.patch.object(adb.os, "kill") as kill:
+            adb.run(["devices"])
+            adb.run(["devices"])
+        self.assertEqual(kill.call_count, 1)
 
 
 class TestScreen(AdbTest):

@@ -45,6 +45,8 @@ LABELS = {
     "parc.uninstall": L_("Retrait de l'agent demandé"), "parc.install-app": L_("Installation demandée"),
     "parc.session.ouverture": L_("Session distante ouverte"), "parc.session.fin": L_("Session distante terminée"),
     "parc.session.fermeture": L_("Session distante fermée"),
+    "parc.deverrouillage.retenu": L_("Code de déverrouillage retenu"), "parc.deverrouillage.utilise": L_("Code de déverrouillage retenu utilisé"),
+    "parc.deverrouillage.oubli": L_("Code de déverrouillage retenu oublié"),
     "groupes.machines": L_("Groupe de machines modifié"), "groupes.appartenance": L_("Groupes d'un poste modifiés"),
     "groupes.logiciels": L_("Groupe de logiciels modifié"), "groupes.ajout-logiciel": L_("Logiciel ajouté à un groupe"),
     "groupes.suppression": L_("Groupe supprimé"), "groupes.renommage": L_("Groupe renommé"),

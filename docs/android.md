@@ -64,11 +64,23 @@ Depuis la fiche de l'appareil, comme pour un poste :
   contrôle à distance seul reste limité par Android à trois images par seconde environ.
   **Appareil en veille ou verrouillé** (application 2.160 ou plus) : l'écran se rallume à l'ouverture de la
   session, et de nouveau au premier clic ou à la première touche s'il s'est rendormi entre-temps. Vous arrivez sur
-  l'écran de verrouillage : **tapez le code de l'appareil sur votre clavier, puis Entrée** — code PIN ou mot de
-  passe tels quels ; pour un schéma, les numéros de ses points, comptés comme sur un pavé de téléphone (1 en haut
-  à gauche, 9 en bas à droite). Android masque l'écran de saisie du code dans l'image transmise : il s'affiche
-  en noir, c'est normal, la frappe passe quand même. Rien n'est contourné — il faut connaître le code, et les
-  essais ratés comptent comme sur l'appareil.
+  l'écran de verrouillage : **Déverrouiller**, dans la barre d'outils de la session, ouvre un pavé où tracer le
+  **schéma** (ou cliquer ses points dans l'ordre), ou des champs pour le **code PIN** et le **mot de passe** ;
+  l'application loco fait monter la saisie du code (demande officielle à Android, sinon balayage vers le haut) et
+  y entre le code. Vous pouvez aussi **taper le code sur votre clavier, puis Entrée** — pour un schéma, les numéros
+  de ses points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite). Android masque
+  l'écran de saisie du code dans l'image transmise : il s'affiche en noir, c'est normal, la saisie passe quand
+  même. Rien n'est contourné — il faut connaître le code, et les essais ratés comptent comme sur l'appareil.
+  L'application ne tape jamais le code donné par *Déverrouiller* ailleurs que dans la saisie du code : appareil
+  déjà déverrouillé, il est oublié (application 2.198 ou plus ; avant, le code est tapé comme au clavier).
+  **Retenir ce code** le garde pour vos prochaines sessions sur cet appareil, **pour vous seul** : *Déverrouiller*
+  propose alors « Schéma retenu pour vous seul » et déverrouille d'un clic ; *Oublier* l'efface, *Saisir un autre
+  code* en donne un autre. Le code est scellé sur le serveur avec sa clé et lié à votre compte et à l'appareil :
+  aucun autre utilisateur, administrateur compris, ne peut s'en servir, et il n'est jamais affiché — il n'est rendu
+  qu'à votre session d'écran, au moment de déverrouiller. Le journal note qu'un code a été retenu, utilisé ou
+  oublié, jamais le code lui-même. Il disparaît avec votre compte ou avec l'appareil, et se ressaisit après une
+  restauration sur un autre serveur (clé différente). La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
+  (OnePlus, Oppo, Realme), ainsi que sur les surcouches qui la nomment de façon semblable.
 - **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
   l'autre ; les variables d'environnement, non.
 - **Fichiers** — parcourir, téléverser, télécharger, renommer et supprimer dans le stockage de l'appareil.
@@ -200,17 +212,20 @@ associés, sur l'appareil.
 
 ## Déverrouiller l'écran à distance
 
-Une fois l'appareil appairé en adb, **Déverrouiller** (sur sa fiche) réveille l'écran et rejoue le **schéma**,
-le **PIN** ou le **mot de passe** que vous saisissez, par adb — sans toucher l'appareil. L'assistant IA
-dispose de l'outil `adb_unlock`.
+Le plus simple : **Déverrouiller** dans la session **Écran** (voir [plus haut](#ce-que-vous-pouvez-faire)), par
+l'application loco, sans adb. Une fois l'appareil appairé en adb, **Déverrouiller** existe aussi dans la barre de
+**Contrôler l'écran** : loco réveille l'écran et rejoue le **schéma**, le **PIN** ou le **mot de passe** que vous
+saisissez, par adb — sans passer par l'application. L'assistant IA dispose de l'outil `adb_unlock`.
 
 L'écran de verrouillage d'Android est une **surface sécurisée** : ni `screencap` ni scrcpy ne peuvent
 l'afficher (image noire ou vide). Le déverrouillage se fait donc **à l'aveugle** : vous connaissez votre
 secret, vous le saisissez dans loco, et loco l'injecte.
 
-- **Schéma** — vous le tracez sur un pavé 3×3 dans le portail. Les 9 points sont **calculés** depuis la
-  résolution de l'écran ; un **profil par constructeur** (Pixel/AOSP, Samsung, Xiaomi, OnePlus, Vivo,
-  Motorola…) sert de point de départ. Si le schéma ne passe pas, ouvrez **Calage de la grille** : choisissez
+- **Schéma** — vous le tracez sur un pavé 3×3 dans le portail. Une fois la saisie du code ouverte, loco cherche
+  la grille dans la description de l'écran que donne Android (`uiautomator`) : sur la plupart des appareils, dont
+  OxygenOS, il la trouve et trace le schéma exactement dessus, quelle que soit l'orientation. Sinon, les 9 points
+  sont **calculés** depuis la résolution de l'écran ; un **profil par constructeur** (Pixel/AOSP, Samsung, Xiaomi,
+  OnePlus, Vivo, Motorola…) sert de point de départ. Si le schéma ne passe pas, ouvrez **Calage de la grille** : choisissez
   la marque, ou ajustez le centre et l'écart (en fractions de l'écran), puis testez — le réglage est mémorisé
   pour cet appareil. L'injection est rejouée jusqu'à trois fois (un geste tactile n'est pas toujours capté du
   premier coup), bien sous le seuil de blocage d'Android.
@@ -218,6 +233,13 @@ secret, vous le saisissez dans loco, et loco l'injecte.
 
 Le secret saisi (schéma, code, mot de passe) n'est **jamais** écrit au journal. Le déverrouillage à distance
 relève du même droit **Ouvrir un terminal adb** : l'accès adb permet déjà d'injecter ces gestes.
+
+**« l'appareil ne reconnaît plus loco »** : le port adb de l'appareil répond, mais il refuse la clé de loco
+(appairage oublié sur l'appareil, autorisations de débogage révoquées). Appairez-le de nouveau. Avant de le dire,
+loco vérifie que son propre serveur adb tourne bien avec sa clé : un autre programme du compte loco qui
+l'emprunte et le démarre le premier (au démarrage du serveur, par exemple) le lancerait avec une autre clé ; loco
+l'arrête alors et relance le sien. Un tel programme doit définir `HOME` sur le dossier de la clé de loco
+(`/var/lib/loco/adb` sur l'appliance).
 
 ## Contrôler l'écran à distance
 
@@ -370,5 +392,9 @@ l'inscrire à nouveau plus tard. Désinstaller l'application a le même effet c�
   l'application loco auprès de Google (compte gratuit à distribution limitée).
 - Le pilotage de l'écran passe par un service d'accessibilité ; certaines applications sensibles (banque…)
   masquent leur contenu pendant la capture.
+- **OxygenOS / ColorOS** (OnePlus, Oppo, Realme) protègent le partage d'écran accordé une fois pour toutes par
+  l'appairage adb : les applications y restent noires, seules les barres du système s'affichent. L'application
+  loco (2.198 ou plus) le repère, arrête ce partage et montre l'écran par l'accessibilité, environ trois images par
+  seconde. Pour une image fluide sur ces appareils : **Contrôler l'écran**, par adb.
 - L'application est signée avec la clé de release de loco ; mettre à jour l'APK depuis la même source
   conserve l'installation (une signature différente obligerait à désinstaller d'abord).

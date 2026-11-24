@@ -213,6 +213,7 @@ ENDPOINTS = {
     "remote_open": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb"),
     "remote_session": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb", "homeassistant.shell", "proxmox.shell", "network.shell"),
     "remote_io": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb", "homeassistant.shell", "proxmox.shell", "network.shell"),
+    "remote_unlock_code": "remote.desktop",
     "wazuh": "wazuh.view", "wazuh_settings": "wazuh.manage", "wazuh_versions": "wazuh.manage",
     "wazuh_install": "wazuh.install", "wazuh_remove": "wazuh.install", "wazuh_access": "wazuh.manage",
     "wazuh_access_confirm": "wazuh.manage", "wazuh_access_test": "wazuh.manage", "wazuh_access_delete": "wazuh.manage",

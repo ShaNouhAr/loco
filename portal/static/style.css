@@ -2595,6 +2595,16 @@ label.check.inline { display: inline-flex; align-items: center; gap: 6px; margin
 .pattern-dot > i { width: 15px; height: 15px; border-radius: 50%; background: var(--bg-3); border: 1.5px solid var(--line-2); transition: transform .08s ease, background .08s ease, border-color .08s ease; }
 .pattern-dot:hover > i { border-color: var(--text-2); }
 .pattern-dot.on > i { background: var(--text); border-color: var(--text); transform: scale(1.5); }
+.unlock-dlg { width: min(440px, calc(100vw - 32px)); }
+.unlock-dlg .dlg-b > * + * { margin-top: 14px; }
+.unlock-dlg .pattern-pad { margin: 6px auto 0; }
+.unlock-under { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.unlock-under .hint { margin: 0; }
+.unlock-saved { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg-2); }
+.unlock-saved-icon { display: inline-grid; place-items: center; color: var(--text-2); }
+.unlock-saved-icon .ui-icon { width: 16px; height: 16px; }
+.unlock-saved-text { flex: 1; min-width: 0; font-size: 13.5px; }
+.unlock-entry > * + * { margin-top: 14px; }
 
 /* Contrôle de l'écran Android par adb (fiche appareil › Contrôler l'écran) */
 .adb-screen-wrap { position: relative; display: flex; justify-content: center; align-items: center; min-height: 200px; background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }

@@ -33,6 +33,10 @@ class LocoService : Service() {
     private lateinit var agent: Agent
     private var remote: RemoteClient? = null
     @Volatile private var capture: ScreenCapture? = null
+    // Partage d'écran masqué par le système : certaines surcouches (OxygenOS, ColorOS) protègent un partage accordé
+    // sans fenêtre d'accord et n'y laissent voir que leurs barres, les applications restant noires. Repéré pendant une
+    // session, il est arrêté et n'est plus redemandé tant que l'application tourne : l'accessibilité donne l'image.
+    @Volatile private var projectionMasked = false
     private val work = Executors.newSingleThreadExecutor()     // installations demandées par loco, une à la fois
     private val updating = AtomicBoolean(false)
     @Volatile private var wake = false                         // réseau ou réglage changé : réévaluer sans attendre
@@ -220,7 +224,7 @@ class LocoService : Service() {
 
         private fun askProjection(): Boolean {
             val now = SystemClock.uptimeMillis()
-            if (now - asked < 5000 || !ProjectionActivity.silent(this@LocoService)) return false
+            if (projectionMasked || now - asked < 5000 || !ProjectionActivity.silent(this@LocoService)) return false
             if ((getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) return false
             asked = now
             return try { ProjectionActivity.request(this@LocoService); true } catch (_: Exception) { false }
@@ -229,10 +233,42 @@ class LocoService : Service() {
         private var fresh = 0L          // dernière image venue du partage
         private var last: Frame? = null
 
+        private var checkedAt = 0L      // dernière comparaison du partage avec l'accessibilité
+        private var darkSeen = 0        // comparaisons de suite où seul le partage était noir
+
+        /** Le partage d'écran est-il masqué par le système ? Ses images restent noires (barres du système à part) là où
+         *  l'accessibilité montre l'écran — deux fois de suite, à deux secondes d'écart, pour ne pas confondre avec un
+         *  écran qui change. Rien n'est comparé tant que le partage montre quelque chose. */
+        private fun masked(f: Frame, now: Long): Boolean {
+            if (lit(f) >= 0.02) { darkSeen = 0; return false }
+            if (now - checkedAt < 2000) return false
+            checkedAt = now
+            val other = InputService.instance?.screen?.frame() ?: return false
+            darkSeen = if (lit(other) > 0.10) darkSeen + 1 else 0
+            return darkSeen >= 2
+        }
+
+        /** Part de l'image qui n'est pas noire, sur une grille de 40 × 40 points. */
+        private fun lit(f: Frame): Double {
+            if (f.width <= 0 || f.height <= 0) return 0.0
+            var on = 0
+            for (j in 0 until 40) for (i in 0 until 40) {
+                val k = (((j * f.height / 40) * f.width) + i * f.width / 40) * 4
+                if (k + 2 < f.data.size && (f.data[k].toInt() and 0xff) + (f.data[k + 1].toInt() and 0xff) + (f.data[k + 2].toInt() and 0xff) > 60) on++
+            }
+            return on / 1600.0
+        }
+
         override fun frame(): Frame? {
             val now = SystemClock.uptimeMillis()
-            val shared = capture
+            var shared = if (projectionMasked) null else capture
             var f = shared?.frame()
+            if (f != null && masked(f, now)) {
+                projectionMasked = true
+                Handler(Looper.getMainLooper()).post { stopCapture() }
+                shared = null
+                f = null
+            }
             if (shared == null) askProjection()
             // Partage absent, ou repris à l'instant et encore muet : l'accessibilité fournit l'image en attendant.
             if (f != null) fresh = now else if (shared == null || now - fresh > 2000) f = InputService.instance?.screen?.frame()
@@ -240,7 +276,7 @@ class LocoService : Service() {
             return f ?: last            // jamais d'écran noir au passage d'une source à l'autre
         }
 
-        private fun known(): FrameSource? = capture ?: InputService.instance?.screen
+        private fun known(): FrameSource? = (if (projectionMasked) null else capture) ?: InputService.instance?.screen
         override val width get() = known()?.width ?: 0
         override val height get() = known()?.height ?: 0
         override val screenWidth get() = known()?.screenWidth ?: 0

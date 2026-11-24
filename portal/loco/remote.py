@@ -343,7 +343,12 @@ def remote_session(sid):
         db().execute("UPDATE remote_sessions SET browser_attached=1 WHERE id=?", (sid,))
     row = _browser_session(sid)
     db().commit()
-    return render_template("remote_session.html", remote=row, origin=_origin(row), detached=request.args.get("view") == "console")
+    unlock = None
+    if row["kind"] == "desktop" and row["os_family"] == "android" and row["device_id"]:
+        from . import unlock_codes                       # code de déverrouillage retenu par cet utilisateur (sa nature)
+        unlock = unlock_codes.saved(g.user["id"], row["device_id"])
+    return render_template("remote_session.html", remote=row, origin=_origin(row), detached=request.args.get("view") == "console",
+                           unlock=unlock)
 
 
 @app.route("/fleet/session/<sid>/io", methods=["POST"])

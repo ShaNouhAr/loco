@@ -802,6 +802,113 @@ class TestRelayChannel(BrowserTest):
         self.assertGreater(self.polls(), 5)                                         # allers-retours HTTPS, comme avant
 
 
+class TestAndroidUnlock(BrowserTest):
+    """Déverrouiller un appareil Android depuis sa session d'écran : bouton de la barre, pavé de schéma, PIN et mot de
+    passe ; rien ne reste dans la fenêtre une fois fermée, et elle tient sur un téléphone."""
+
+    def setUp(self):
+        super().setUp()
+        from loco import features
+        with transaction() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.EXPERIMENTAL_SETTING, '["android"]'))
+        self.addCleanup(self.restore)
+
+    def restore(self):
+        from loco import features
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
+
+    def tearDown(self):
+        # L'appareil de l'essai ne prend jamais la session : en quittant la page, noVNC journalise l'échec de sa
+        # connexion, attendu ici.
+        self.page.goto("/")
+        self.page.wait_for_timeout(500)
+        self.problems[:] = [p for p in self.problems if "Session fermée." not in p]
+        super().tearDown()
+
+    def open_screen(self):
+        from test_android import ANDROID
+        agent = Agent(dict(ANDROID, hostname="tablette-verrou"), "192.168.43.81", uid=hashlib.sha256(b"tablette-verrou").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        self.page.goto(f"/fleet/{dev['id']}")
+        self.page.locator(".device-actions form", has=self.page.locator("input[name=kind][value=desktop]")).first.locator("button").first.click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+
+    def test_the_pattern_pad_pin_and_password_then_nothing_is_kept(self):
+        self.open_screen()
+        dialog = self.page.locator("#remote-unlock")
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        expect(dialog).to_be_visible()
+        for dot in ("1", "4", "7", "8", "9"):
+            dialog.locator(f'.pattern-dot[data-dot="{dot}"]').click()
+        expect(dialog.locator(".pattern-dot.on")).to_have_count(5)
+        self.assertEqual(dialog.locator("[data-unlock-trace]").get_attribute("points"), "50,50 50,150 50,250 150,250 250,250")
+        box = dialog.bounding_box()
+        self.assertLessEqual(box["x"] + box["width"], DESKTOP["width"])
+        self.assertLessEqual(box["y"] + box["height"], DESKTOP["height"])
+        self.page.screenshot(path=ARTIFACTS / "android-unlock-pattern.png")
+        # Session pas encore reliée à l'appareil : rien ne part, la fenêtre le dit.
+        dialog.locator(".dlg-f .btn.primary").click()
+        expect(dialog.locator("[data-unlock-status]")).to_have_text("La session n’est pas connectée.")
+        dialog.locator(".seg label", has_text="Code PIN").click()
+        expect(dialog.locator('[data-unlock-pane="pin"]')).to_be_visible()
+        expect(dialog.locator('[data-unlock-pane="pattern"]')).to_be_hidden()
+        dialog.locator('[data-unlock-code="pin"]').fill("1234")
+        self.page.keyboard.press("Escape")
+        expect(dialog).to_be_hidden()
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        expect(dialog.locator('[data-unlock-code="pin"]')).to_have_value("")      # le code n'est pas gardé
+        expect(dialog.locator(".pattern-dot.on")).to_have_count(0)
+        expect(dialog.locator('[data-unlock-pane="pin"]')).to_be_visible()          # la méthode, elle, est retenue
+        dialog.locator(".seg label", has_text="Mot de passe").click()
+        expect(dialog.locator('[data-unlock-code="password"]')).to_be_visible()
+
+    def test_a_remembered_code_is_offered_then_forgotten(self):
+        import json as _json
+        from loco import unlock_codes
+        from test_android import ANDROID
+        agent = Agent(dict(ANDROID, hostname="tablette-retenue"), "192.168.43.82", uid=hashlib.sha256(b"tablette-retenue").hexdigest()[:32])
+        agent.enroll()
+        dev = device(agent.uid)
+        with transaction() as conn:
+            uid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()[0]
+            conn.execute("DELETE FROM unlock_codes")
+            conn.execute("INSERT INTO unlock_codes (user_id, device_id, method, secret, saved_at) VALUES (?, ?, 'pattern', ?, '2026-11-24 21:40')",
+                         (uid, dev["id"], unlock_codes._seal(_json.dumps({"u": uid, "d": dev["id"], "m": "pattern", "c": "14789"}))))
+        self.page.goto(f"/fleet/{dev['id']}")
+        self.page.locator(".device-actions form", has=self.page.locator("input[name=kind][value=desktop]")).first.locator("button").first.click()
+        self.page.wait_for_url(re.compile(r"/fleet/session/"))
+        dialog = self.page.locator("#remote-unlock")
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        expect(dialog.locator("[data-unlock-saved]")).to_contain_text("Schéma retenu pour vous seul, le 24/11 21:40")
+        expect(dialog.locator("[data-unlock-entry]")).to_be_hidden()
+        self.assertNotIn("14789", self.page.content())                               # jamais dans la page
+        self.page.screenshot(path=ARTIFACTS / "android-unlock-saved.png")
+        dialog.get_by_role("button", name="Saisir un autre code").click()
+        expect(dialog.locator("[data-unlock-entry]")).to_be_visible()
+        self.page.keyboard.press("Escape")
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        expect(dialog.locator("[data-unlock-entry]")).to_be_hidden()                  # rouverte : le code retenu d'abord
+        dialog.get_by_role("button", name="Oublier").click()
+        expect(dialog.locator("[data-unlock-saved]")).to_be_hidden()
+        expect(dialog.locator("[data-unlock-entry]")).to_be_visible()
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM unlock_codes").fetchone()[0], 0)
+
+    def test_it_fits_a_phone(self):
+        self.page.set_viewport_size(PHONE)
+        self.open_screen()
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        dialog = self.page.locator("#remote-unlock")
+        expect(dialog).to_be_visible()
+        box = dialog.bounding_box()
+        self.assertGreaterEqual(box["x"], 0)
+        self.assertLessEqual(box["x"] + box["width"], PHONE["width"])
+        self.assertLessEqual(self.overflow(), 0)
+        self.page.screenshot(path=ARTIFACTS / "android-unlock-phone.png")
+
+
 class TestRemoteConsent(BrowserTest):
     def test_waiting_for_approval_then_a_refusal_is_explained(self):
         agent = Agent(dict(WINDOWS, hostname="poste-accord"), "192.168.43.78", uid=hashlib.sha256(b"poste-accord").hexdigest()[:32])

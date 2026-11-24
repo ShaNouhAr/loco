@@ -1014,6 +1014,19 @@ MIGRATIONS = [
     );
     CREATE INDEX samba_access_account ON samba_access(account_id);
     """,
+    # 60 : code de déverrouillage d'un appareil Android retenu par un utilisateur, pour lui seul (bouton « Déverrouiller »
+    # de la session d'écran) : schéma, code PIN ou mot de passe, scellé avec la clé du serveur. Il disparaît avec
+    # l'utilisateur ou l'appareil.
+    """
+    CREATE TABLE unlock_codes (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        method TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        saved_at TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (user_id, device_id)
+    );
+    """,
 ]
 
 

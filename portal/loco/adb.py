@@ -89,8 +89,64 @@ def _env():
             "ADB_SERVER_SOCKET": "localfilesystem:" + os.path.join(RUN, "server.sock")}
 
 
+PROC = "/proc"
+SERVER_CHECK_EVERY = 60
+_SERVER_CHECKED = [0.0]
+
+
+def _foreign_servers():
+    """Serveurs adb qui écoutent sur le socket de loco mais ont été lancés avec un autre dossier personnel (HOME) : un
+    autre programme du compte loco qui emprunte ce serveur et le démarre le premier, au démarrage du système par exemple.
+    Ils présentent alors une autre clé que celle de loco, et les appareils appairés refusent la connexion (« failed to
+    connect »). Linux seulement (rien ailleurs)."""
+    spec = ("localfilesystem:" + os.path.join(RUN, "server.sock")).encode()
+    try:
+        pids = [p for p in os.listdir(PROC) if p.isdigit()]
+    except OSError:
+        return []
+    found = []
+    for pid in pids:
+        try:
+            with open(os.path.join(PROC, pid, "cmdline"), "rb") as f:
+                argv = f.read().split(b"\0")
+            if spec not in argv or b"server" not in argv:
+                continue
+            with open(os.path.join(PROC, pid, "environ"), "rb") as f:
+                env = f.read().split(b"\0")
+        except OSError:
+            continue
+        home = next((e[5:].decode("utf-8", "replace") for e in env if e.startswith(b"HOME=")), "")
+        if os.path.realpath(home or "/") != os.path.realpath(ROOT):
+            found.append(int(pid))
+    return found
+
+
+def _check_server(force=False):
+    """Arrête un serveur adb étranger (voir _foreign_servers) : la commande suivante relance celui de loco, avec sa clé.
+    Vérifié au plus une fois par minute, et aussitôt après un refus de connexion. Vrai si un serveur a été arrêté."""
+    now = time.monotonic()
+    if not force and now - _SERVER_CHECKED[0] < SERVER_CHECK_EVERY:
+        return False
+    _SERVER_CHECKED[0] = now
+    pids = _foreign_servers()
+    if not pids:
+        return False
+    try:
+        subprocess.run([binary(), "kill-server"], capture_output=True, timeout=10, env=_env())
+    except (OSError, subprocess.SubprocessError):
+        pass
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass                        # déjà arrêté par kill-server
+    app.logger.warning("serveur adb démarré sans la clé de loco (par un autre programme) : arrêté, loco relance le sien")
+    return True
+
+
 def run(args, stdin=None, timeout=30):
     """(code de retour, sortie) d'une commande adb du serveur de loco. Les secrets passent par l'entrée, jamais en argument."""
+    _check_server()
     try:
         done = subprocess.run([binary(), *args], input=stdin, capture_output=True, text=True, timeout=timeout, env=_env())
     except subprocess.TimeoutExpired:
@@ -113,11 +169,26 @@ def pair(host, port, code):
     return _clean(out) or _("appairage refusé")
 
 
+def _port_open(host, port):
+    try:
+        socket.create_connection((host, int(port)), timeout=3).close()
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def connect_serial(host, port):
     """Connexion au service adb de l'appareil : "" si elle est établie et autorisée, sinon le motif."""
     serial = f"{host}:{port}"
     rc, out = run(["connect", serial], timeout=25)
+    if "connected to" not in out and _check_server(force=True):     # serveur lancé sans la clé de loco : relancé
+        rc, out = run(["connect", serial], timeout=25)
     if "connected to" not in out:
+        if "failed to connect" in out and _port_open(host, port):
+            # Le port répond mais l'appareil coupe la connexion : il ne reconnaît plus la clé de loco (appairage oublié
+            # sur l'appareil, autorisations adb révoquées ou expirées).
+            return _("l'appareil ne reconnaît plus loco : appairez-le de nouveau (menu Plus › Débogage adb…, ou "
+                     "depuis l'application loco)")
         return _clean(out) or _("connexion impossible")
     for _attempt in range(10):
         state = device_state(serial)
@@ -885,6 +956,48 @@ def pattern_grid(serial, dev):
     return [(int(cx + (col - 1) * dx), int(cy + (row - 1) * dy)) for row in range(3) for col in range(3)]
 
 
+_UI_NODE = re.compile(r"<node\b([^>]*)>")
+_UI_ATTR = re.compile(r'([\w-]+)="([^"]*)"')
+_UI_BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
+
+
+def ui_dump(serial):
+    """Arbre de l'interface affichée (uiautomator), ou "". La saisie du code de l'écran de verrouillage y figure sur la
+    plupart des appareils, même quand son image est protégée."""
+    rc, out = run(["-s", serial, "shell", "uiautomator dump /data/local/tmp/loco-ui.xml >/dev/null 2>&1; "
+                   "cat /data/local/tmp/loco-ui.xml; rm -f /data/local/tmp/loco-ui.xml"], timeout=20)
+    return out if rc == 0 and "<hierarchy" in out else ""
+
+
+def pattern_box(xml):
+    """Cadre (gauche, haut, droite, bas) de la grille du schéma dans un arbre d'interface, ou None : la vue
+    `lockPatternView` d'Android, `colorLockPatternView` d'OxygenOS et de ColorOS, sinon la plus petite vue dont
+    l'identifiant dit « pattern view » (la grille plutôt que son conteneur)."""
+    best, best_rank = None, None
+    for m in _UI_NODE.finditer(xml or ""):
+        attrs = dict(_UI_ATTR.findall(m.group(1)))
+        rid = attrs.get("resource-id", "").rsplit("/", 1)[-1].lower()
+        if "patternview" not in rid and "pattern_view" not in rid:
+            continue
+        b = _UI_BOUNDS.fullmatch(attrs.get("bounds", ""))
+        if not b:
+            continue
+        left, top, right, bottom = (int(v) for v in b.groups())
+        if right - left < 90 or bottom - top < 90:
+            continue
+        rank = (not rid.endswith("lockpatternview"), (right - left) * (bottom - top))
+        if best_rank is None or rank < best_rank:
+            best, best_rank = (left, top, right, bottom), rank
+    return best
+
+
+def box_grid(box):
+    """Les 9 points (x, y) du schéma au centre des cases d'une grille 3 × 3, numérotés 1..9."""
+    left, top, right, bottom = box
+    w, h = (right - left) / 3, (bottom - top) / 3
+    return [(int(left + (col + 0.5) * w), int(top + (row + 0.5) * h)) for row in range(3) for col in range(3)]
+
+
 def _path(points, steps=6, dwell=3):
     """Chemin tactile continu : points des dots reliés par des points intermédiaires, avec une pause sur chaque dot
     (le LockPatternView ne l'enregistre que si le doigt s'y attarde) — un tracé fiable."""
@@ -936,15 +1049,20 @@ def unlock_pattern(serial, dev, sequence):
     seq = [n for n in sequence if isinstance(n, int) and 1 <= n <= 9]
     if len(seq) < 2 or len(seq) != len(set(seq)):
         return _("schéma invalide")
-    grid = pattern_grid(serial, dev)
-    if not grid:
-        return _("taille d'écran inconnue")
-    points = _path([grid[n - 1] for n in seq])
+    # La grille est d'abord cherchée dans l'arbre de l'interface, une fois la saisie du code ouverte : sa position
+    # exacte, quel que soit l'appareil ou son orientation. À défaut, elle est calculée (profil de la marque ou calage).
     # L'injection d'un geste tactile est parfois mal captée : on réessaie (3 fois au plus, bien sous le seuil de
     # blocage d'Android), en rouvrant la saisie à chaque fois. Une géométrie fausse échouera les 3 fois.
+    points = None
     error = ""
     for _attempt in range(3):
         _open_bouncer(serial)
+        if points is None:
+            box = pattern_box(ui_dump(serial))
+            grid = box_grid(box) if box else pattern_grid(serial, dev)
+            if not grid:
+                return _("taille d'écran inconnue")
+            points = _path([grid[n - 1] for n in seq])
         error = inject_motion(serial, points)
         if error:
             return error

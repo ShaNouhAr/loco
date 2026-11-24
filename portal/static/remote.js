@@ -638,6 +638,119 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
     e.target.closest('details').open = false;
     rfb.focus();
   });
+  // Déverrouiller (Android) : le code part vers l'application loco de l'appareil, précédé du marqueur XF86WakeUp (réveil,
+  // montée de la saisie du code) et suivi d'Entrée. L'application le saisit sur l'écran de verrouillage et ne le tape
+  // jamais ailleurs ; schéma = numéros des points, de 1 à 9. Les champs sont vidés à la fermeture. Le code peut être
+  // retenu par le serveur pour cet utilisateur seul : il n'est alors redemandé qu'au moment de déverrouiller, jamais
+  // affiché ni gardé par la page.
+  const unlock = document.getElementById('remote-unlock');
+  if (unlock) {
+    const form = unlock.querySelector('form');
+    const pad = unlock.querySelector('[data-unlock-pad]'), trace = unlock.querySelector('[data-unlock-trace]');
+    const status = unlock.querySelector('[data-unlock-status]'), remember = unlock.querySelector('[data-unlock-remember]');
+    const savedBox = unlock.querySelector('[data-unlock-saved]'), savedText = unlock.querySelector('[data-unlock-saved-text]');
+    const other = unlock.querySelector('[data-unlock-other]'), entry = unlock.querySelector('[data-unlock-entry]');
+    const METHODS = ['pattern', 'pin', 'password'], store = 'loco-unlock-method:' + (root.dataset.device || '');
+    let dots = [], drawing = false, saved = unlock.hasAttribute('data-saved'), entering = false;
+    const method = () => (form.querySelector('input[name="method"]:checked') || {}).value || 'pattern';
+    const say = msg => { status.textContent = msg || ''; status.hidden = !msg; };
+    const redraw = () => {
+      trace.setAttribute('points', dots.map(n => [50 + (n - 1) % 3 * 100, 50 + Math.floor((n - 1) / 3) * 100].join(',')).join(' '));
+      pad.querySelectorAll('.pattern-dot').forEach(d => d.classList.toggle('on', dots.includes(+d.dataset.dot)));
+    };
+    const show = () => {
+      const m = method();
+      unlock.querySelectorAll('[data-unlock-pane]').forEach(p => { p.hidden = p.dataset.unlockPane !== m; });
+      savedBox.hidden = !saved;
+      other.hidden = !saved || entering;
+      entry.hidden = saved && !entering;
+    };
+    const clear = () => {
+      dots = []; redraw(); say('');
+      unlock.querySelectorAll('[data-unlock-code]').forEach(i => { i.value = ''; });
+      remember.checked = false; entering = false; show();
+    };
+    const add = n => { if (n && !dots.includes(n) && dots.length < 9) { dots.push(n); redraw(); } };
+    const dotAt = ev => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY), dot = el && el.closest('.pattern-dot');
+      return dot && pad.contains(dot) ? +dot.dataset.dot : 0;
+    };
+    pad.addEventListener('pointerdown', ev => { ev.preventDefault(); drawing = true; say(''); add(dotAt(ev)); });
+    pad.addEventListener('pointermove', ev => { if (drawing) add(dotAt(ev)); });
+    document.addEventListener('pointerup', () => { drawing = false; });
+    pad.addEventListener('click', ev => {                    // clavier (Entrée, Espace sur un point) : point suivant
+      const dot = ev.target.closest('.pattern-dot');
+      if (dot && ev.detail === 0) add(+dot.dataset.dot);
+    });
+    try {
+      const last = localStorage.getItem(store);
+      if (METHODS.includes(last)) form.querySelector(`input[name="method"][value="${last}"]`).checked = true;
+    } catch { /* stockage local indisponible */ }
+    form.addEventListener('change', e => {
+      if (e.target.name !== 'method') return;
+      show(); say('');
+      try { localStorage.setItem(store, method()); } catch { /* stockage local indisponible */ }
+    });
+    // Code retenu par le serveur : action save (method, code), use (le rend) ou forget.
+    const ask = async fields => {
+      const body = new URLSearchParams({ csrf: root.dataset.csrf, ...fields });
+      const r = await fetch(unlock.dataset.url, { method: 'POST', body, cache: 'no-store', headers: { 'X-Requested-With': 'fetch' } });
+      let data = {};
+      try { data = await r.json(); } catch { /* réponse vide */ }
+      if (!r.ok) throw new Error(data.error || t('Le serveur a refusé la demande.'));
+      return data;
+    };
+    other.addEventListener('click', () => { entering = true; say(''); show(); });
+    unlock.querySelector('[data-unlock-forget]').addEventListener('click', async () => {
+      try { await ask({ action: 'forget' }); saved = false; entering = false; say(''); show(); }
+      catch (err) { say(err.message); }
+    });
+    unlock.querySelector('[data-unlock-clear]').addEventListener('click', () => { dots = []; redraw(); say(''); });
+    unlock.addEventListener('close', clear);
+    // Chiffres du schéma ou du code PIN, caractères du mot de passe : les touches à taper sur l'appareil.
+    const keysOf = (m, code) => {
+      const keys = [];
+      for (const ch of code) {
+        const cp = ch.codePointAt(0);
+        if (m === 'password' ? cp >= 32 : ch >= '0' && ch <= '9') keys.push(cp <= 0xff ? cp : 0x01000000 + cp);
+      }
+      return keys;
+    };
+    let busy = false;
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (busy) return;
+      if (!connected) { say(t('La session n’est pas connectée.')); return; }
+      let m = method(), code = '';
+      busy = true;
+      try {
+        if (saved && !entering) {
+          ({ method: m, code } = await ask({ action: 'use' }));
+        } else {
+          code = m === 'pattern' ? dots.join('') : unlock.querySelector(`[data-unlock-code="${m}"]`).value;
+          if (m === 'pattern' && dots.length < 2) { say(t('Tracez d’abord le schéma : au moins deux points.')); return; }
+          if (!keysOf(m, code).length) { say(t('Saisissez le code.')); return; }
+          if (remember.checked) {
+            const answer = await ask({ action: 'save', method: m, code });
+            saved = true; savedText.textContent = answer.label || '';
+          }
+        }
+        const keys = keysOf(m, code);
+        if (!connected || !keys.length) { say(t('La session n’est pas connectée.')); return; }
+        releaseHeld();
+        rfb.sendKey(0x1008ff2b, null);                     // XF86WakeUp : « ce qui suit est le code »
+        keys.forEach(k => rfb.sendKey(k, null));
+        rfb.sendKey(0xff0d, 'Enter');
+        unlock.close();
+        rfb.focus();
+      } catch (err) {
+        say(err.message);
+      } finally {
+        code = ''; busy = false;
+      }
+    });
+    show();
+  }
   rfb.addEventListener('desktopname', e => {
     if (e.detail.name.startsWith('loco-secure:')) {
       remoteLabel = t('bureau sécurisé Windows · UAC / verrouillage'); secureDesktop = true;

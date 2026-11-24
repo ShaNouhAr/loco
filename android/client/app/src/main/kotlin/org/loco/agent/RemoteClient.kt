@@ -266,7 +266,8 @@ class RemoteClient(private val context: Context, private val store: Store, priva
             InputService.instance?.pointer(buttons, sx(x), sy(y))
         }
         override fun key(down: Boolean, keysym: Long) {
-            if (down && Wake.screen(context)) return
+            // Le marqueur « Déverrouiller » réveille lui-même l'écran : il n'est jamais avalé par le réveil.
+            if (down && keysym != InputService.XF86_WAKEUP && Wake.screen(context)) return
             InputService.instance?.key(down, keysym)
         }
         override fun clipboard(text: String) {

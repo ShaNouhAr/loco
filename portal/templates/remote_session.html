@@ -43,6 +43,7 @@
     <button type="button" class="btn sm" data-keys="{{ keys }}">{{ ui_icon(icon) }}<span>{{ label }}</span></button>
     {% endfor %}
     <span class="toolbar-sep" aria-hidden="true"></span>
+    <button type="button" class="btn sm" data-open="#remote-unlock" title="{{ _('Déverrouiller l’appareil : schéma, code PIN ou mot de passe') }}">{{ ui_icon('lock') }}<span>{{ _("Déverrouiller") }}</span></button>
     {% else %}
     <button type="button" class="btn sm" data-keys="ctrl alt delete" title="{{ _('Sécurité Windows : verrouiller, changer d’utilisateur, gestionnaire des tâches') if win else 'Ctrl+Alt+Suppr' }}">{{ ui_icon('shield') }}<span>{{ _("Ctrl+Alt+Suppr") }}</span></button>
     <details class="menu">
@@ -126,10 +127,54 @@
       <span id="remote-readout" class="remote-readout mono" aria-live="polite" title="{{ _('Résolution du bureau et taille d\'affichage (100 %% : un pixel du poste par pixel de l\'écran). La résolution initiale est rétablie à la fermeture de la session.') }}"></span>
       <span id="remote-limit" class="remote-limit" role="status" hidden></span>
     </div>
-    <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% if remote.kind == 'desktop' %}{{ _("Appareil verrouillé : tapez son code au clavier, puis Entrée (schéma : les numéros de ses points, de 1 à 9) ; la saisie du code s'affiche en noir.") }} {% endif %}{% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
+    <p class="small muted remote-footnote">{% if android %}{{ _("Clic droit : Retour · clic milieu : Accueil · molette : défiler.") }} {% if remote.kind == 'desktop' %}{{ _("Appareil verrouillé : « Déverrouiller », ou son code tapé au clavier puis Entrée (schéma : les numéros de ses points, de 1 à 9) ; la saisie du code s'affiche en noir.") }} {% endif %}{% endif %}{{ _("La session expire après une heure. Fermer cet onglet coupe la connexion au poste.") }}</p>
   </div>
   {% endif %}
 </div>
+{% if android and remote.kind == 'desktop' %}
+<dialog id="remote-unlock" class="app-dialog unlock-dlg" aria-labelledby="remote-unlock-title" data-url="{{ url_for('remote_unlock_code', sid=remote.id) }}"{% if unlock %} data-saved{% endif %}>
+  <div class="dlg-h">
+    <div><h2 id="remote-unlock-title">{{ _("Déverrouiller l'appareil") }}</h2><p>{{ _("Android cache la saisie du code dans l'image à distance : donnez ici le schéma, le code PIN ou le mot de passe de l'appareil, et l'application loco le saisit à votre place.") }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button>
+  </div>
+  <form id="remote-unlock-form" autocomplete="off">
+    <div class="dlg-b">
+      <div class="unlock-saved" data-unlock-saved{% if not unlock %} hidden{% endif %}>
+        <span class="unlock-saved-icon">{{ ui_icon('lock') }}</span>
+        <span class="unlock-saved-text" data-unlock-saved-text>{{ unlock.label if unlock else '' }}</span>
+        <button type="button" class="btn sm" data-unlock-forget>{{ _("Oublier") }}</button>
+      </div>
+      <button type="button" class="btn sm" data-unlock-other{% if not unlock %} hidden{% endif %}>{{ _("Saisir un autre code") }}</button>
+      <div class="unlock-entry" data-unlock-entry{% if unlock %} hidden{% endif %}>
+        <div class="seg" role="radiogroup" aria-label="{{ _('Type de code') }}">
+          {% for value, label in [('pattern', _('Schéma')), ('pin', _('Code PIN')), ('password', _('Mot de passe'))] %}
+          <label><input type="radio" name="method" value="{{ value }}"{% if loop.first %} checked{% endif %}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+        <section data-unlock-pane="pattern">
+          <div class="pattern-pad" data-unlock-pad role="group" aria-label="{{ _('Schéma : tracez-le d’un geste, ou cliquez ses points dans l’ordre') }}">
+            <svg class="pattern-trace" viewBox="0 0 300 300" aria-hidden="true"><polyline data-unlock-trace fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% for i in range(1, 10) %}<button type="button" class="pattern-dot" data-dot="{{ i }}" aria-label="{{ i }}"><i></i></button>{% endfor %}
+          </div>
+          <div class="unlock-under"><span class="hint">{{ _("Tracez le schéma d'un seul geste, ou cliquez ses points dans l'ordre.") }}</span><button type="button" class="btn sm" data-unlock-clear>{{ _("Effacer") }}</button></div>
+        </section>
+        <section data-unlock-pane="pin" hidden>
+          <label class="f"><span>{{ _("Code PIN") }}</span><input type="password" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="16" data-unlock-code="pin"></label>
+        </section>
+        <section data-unlock-pane="password" hidden>
+          <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" autocomplete="off" spellcheck="false" maxlength="64" data-unlock-code="password"></label>
+        </section>
+        <label class="check"><input type="checkbox" data-unlock-remember><span>{{ _("Retenir ce code pour mes prochaines sessions — pour moi seul, il n'est jamais affiché") }}</span></label>
+      </div>
+      <p class="small st err" data-unlock-status role="alert" hidden></p>
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary">{{ ui_icon('lock') }}<span>{{ _("Déverrouiller") }}</span></button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {% if remote.kind in ('terminal', 'adb', 'ssh') %}

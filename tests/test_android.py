@@ -10,6 +10,7 @@ from test_fleet import FleetTest, Agent, device
 from loco import config, features
 from loco.db import transaction
 
+ROOT = Path(__file__).resolve().parents[1]
 ANDROID = {"hostname": "tablette-salon", "agent_version": config.VERSION, "addresses": ["192.168.43.70"],
            "os": {"family": "android", "name": "Android 13 · Pixel 7"}}
 
@@ -106,6 +107,19 @@ class AndroidTest(FleetTest):
         self.assertIn('data-keys="recents"', page)          # barre de navigation Android (bouton propre à Android)
         self.assertIn('data-keys="notifications"', page)
         self.assertIn("Clic droit : Retour", page)          # aide souris → navigation
+        # Déverrouiller depuis l'écran : bouton de la barre et dialogue schéma / PIN / mot de passe, sans rien garder.
+        self.assertIn('data-open="#remote-unlock"', page)
+        self.assertIn('<dialog id="remote-unlock"', page)
+        for method in ("pattern", "pin", "password"):
+            self.assertIn(f'name="method" value="{method}"', page)
+        self.assertEqual(page.count('class="pattern-dot"'), 9)
+        self.assertIn('data-unlock-code="pin"', page)
+        self.assertIn('autocomplete="off"', page)
+        script = (ROOT / "portal/static/remote.js").read_text(encoding="utf-8")
+        self.assertIn("rfb.sendKey(0x1008ff2b, null)", script)   # marqueur XF86WakeUp avant le code
+        self.assertIn("unlock.addEventListener('close', clear)", script)   # champs vidés à la fermeture
+        terminal = self.admin.c.get(self.admin.post(f"/fleet/{dev_id}/session", {"kind": "terminal"}).headers["Location"])
+        self.assertNotIn("remote-unlock", terminal.get_data(as_text=True))
 
 
 class TestTrustedNetworks(FleetTest):

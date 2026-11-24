@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
@@ -147,6 +148,18 @@ class InputService : AccessibilityService(), InputSink {
     override fun key(down: Boolean, keysym: Long) {
         if (keysym == 0xffe3L || keysym == 0xffe4L) { ctrl = down; return }     // Ctrl gauche / droit
         if (!down) return
+        if (keysym == XF86_WAKEUP) {                                            // « Déverrouiller » du portail : le code suit
+            unlocking = true
+            unlockingUntil = SystemClock.uptimeMillis() + UNLOCK_WINDOW
+            main.post { unlockBegin() }
+            return
+        }
+        if (unlocking && SystemClock.uptimeMillis() > unlockingUntil) unlocking = false
+        if (unlocking) {
+            if (keysym == 0xff0dL || keysym == 0xff8dL) unlocking = false
+            main.post { unlockKey(keysym) }
+            return
+        }
         if (locked()) { if (lockKey(keysym)) return } else if (lockTyped.isNotEmpty()) main.post { lockTyped.setLength(0) }
         if (ctrl) { shortcut(keysym); return }
         when (keysym) {
@@ -171,11 +184,12 @@ class InputService : AccessibilityService(), InputSink {
 
     // --- Écran de verrouillage ------------------------------------------------
     // Android masque l'écran de saisie du code dans l'image transmise (surface protégée) : la personne qui prend la main
-    // ne voit pas le pavé. Elle tape donc le code de l'appareil sur son clavier, et chaque touche appuie sur la touche
-    // du pavé de même nom — rien n'est contourné, il faut connaître le code. Tapé depuis l'écran de verrouillage, le
-    // premier caractère fait d'abord monter la saisie du code (balayage vers le haut). Schéma : on tape les numéros des
-    // points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite), puis Entrée le trace.
-    private val lockTyped = StringBuilder()        // mot de passe en cours de frappe (champ illisible) ; vidé hors verrouillage
+    // ne voit pas le pavé. Elle donne donc le code de l'appareil — bouton « Déverrouiller » de la session, ou tapé sur son
+    // clavier — et chaque touche appuie sur la touche du pavé de même nom : rien n'est contourné, il faut connaître le
+    // code. La saisie du code est d'abord montée à l'écran (demande officielle à Android, sinon balayage vers le haut).
+    // Schéma : les numéros des points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite),
+    // puis Entrée le trace d'un seul geste.
+    private val lockTyped = StringBuilder()        // mot de passe ou schéma en cours (champ illisible) ; vidé hors verrouillage
 
     private fun locked(): Boolean = try {
         (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
@@ -183,16 +197,54 @@ class InputService : AccessibilityService(), InputSink {
         false
     }
 
-    private val lockQueue = ArrayList<Long>()      // touches tapées pendant que la saisie du code monte à l'écran
-    private var lockRising = false
+    // Bouton « Déverrouiller » de la session : le portail envoie XF86WakeUp, puis le code (chiffres du PIN, numéros des
+    // points du schéma ou mot de passe), puis Entrée. Tout ce qui suit le marqueur jusqu'à Entrée est le code : mis de
+    // côté, appliqué à la saisie du code dès qu'elle est à l'écran, et jamais tapé ailleurs (appareil déjà déverrouillé :
+    // il est oublié). `unlocking` est lu et écrit par le fil de la session, le reste sur le fil principal.
+    @Volatile
+    private var unlocking = false
+    private var unlockingUntil = 0L
+    private val unlockCode = ArrayList<Long>()
 
-    /** Touche tapée appareil verrouillé. Renvoie vrai si elle est prise en charge ici. Elle est traitée sur le fil
-     *  principal, comme les suivantes : les touches gardent leur ordre, même tapées pendant que la saisie du code monte. */
+    private fun unlockBegin() {
+        unlockCode.clear()
+        lockTyped.setLength(0)
+        val woke = Wake.screen(this)
+        if (locked()) main.postDelayed({ if (locked()) raiseBouncer() }, if (woke) 600L else 0L)
+    }
+
+    private fun unlockKey(keysym: Long) {
+        if (unlockCode.size < 128) unlockCode.add(keysym)
+        if (keysym == 0xff0dL || keysym == 0xff8dL) unlockApply(1)
+    }
+
+    private fun unlockApply(attempt: Int) {
+        if (!locked()) { unlockCode.clear(); return }
+        val root = rootInActiveWindow
+        if (root != null && root.packageName?.toString() == SYSTEM_UI && lockReady(root)) {
+            lockTyped.setLength(0)
+            for (k in unlockCode) lockApply(root, k)
+            unlockCode.clear()
+            return
+        }
+        if (attempt == BOUNCER_SWIPE_AT) swipeUp()                       // la demande à Android n'a rien donné
+        if (attempt < BOUNCER_TRIES) main.postDelayed({ unlockApply(attempt + 1) }, BOUNCER_POLL) else unlockCode.clear()
+    }
+
+    private val lockQueue = ArrayList<Long>()      // touches tapées pendant que la saisie du code monte à l'écran
+    @Volatile
+    private var lockRising = false                 // écrit sur le fil principal, lu aussi par celui de la session
+
+    /** Touche tapée au clavier, appareil verrouillé. Renvoie vrai si elle est prise en charge ici. Elle est traitée sur
+     *  le fil principal, comme les suivantes : les touches gardent leur ordre, même tapées pendant que la saisie monte
+     *  (l'activité qui la demande passe alors un instant au premier plan). */
     private fun lockKey(keysym: Long): Boolean {
-        val root = rootInActiveWindow ?: return false
-        if (root.packageName?.toString() != SYSTEM_UI) return false           // autre fenêtre par-dessus le verrouillage
         val typed = keypad(keysym) != null || character(keysym) != null
         if (!typed && keysym != 0xff0dL && keysym != 0xff8dL && keysym != 0xff08L) return false
+        if (!lockRising) {
+            val root = rootInActiveWindow ?: return false
+            if (root.packageName?.toString() != SYSTEM_UI) return false       // autre fenêtre par-dessus le verrouillage
+        }
         main.post { lockHandle(keysym, typed) }
         return true
     }
@@ -213,15 +265,16 @@ class InputService : AccessibilityService(), InputSink {
         if (!typed) return
         lockQueue.add(keysym)
         lockRising = true
-        swipeUp()
-        main.postDelayed({ lockDrain(1) }, 700)
+        raiseBouncer()
+        main.postDelayed({ lockDrain(1) }, BOUNCER_POLL)
     }
 
     private fun lockDrain(attempt: Int) {
         val root = rootInActiveWindow
         val ready = locked() && root != null && root.packageName?.toString() == SYSTEM_UI && lockReady(root)
-        if (!ready && locked() && attempt < 4) {
-            main.postDelayed({ lockDrain(attempt + 1) }, 500)
+        if (!ready && locked() && attempt < BOUNCER_TRIES) {
+            if (attempt == BOUNCER_SWIPE_AT) swipeUp()
+            main.postDelayed({ lockDrain(attempt + 1) }, BOUNCER_POLL)
             return
         }
         val keys = lockQueue.toList()
@@ -230,10 +283,53 @@ class InputService : AccessibilityService(), InputSink {
         if (ready && root != null) for (k in keys) lockApply(root, k)
     }
 
-    private fun lockGrid(root: AccessibilityNodeInfo): AccessibilityNodeInfo? = try {
-        root.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/lockPatternView")?.firstOrNull { it.isVisibleToUser }
-    } catch (_: Exception) {
-        null
+    /** Fait monter la saisie du code : demande officielle à Android (requestDismissKeyguard, depuis une activité sans
+     *  interface), sinon le geste « balayer vers le haut ». */
+    private fun raiseBouncer() {
+        if (!WakeActivity.dismiss(this)) swipeUp()
+    }
+
+    /** Identifiant court d'un nœud (« lockPatternView »), en minuscules ; "" s'il n'en a pas. */
+    private fun idName(n: AccessibilityNodeInfo): String = n.viewIdResourceName?.substringAfter(":id/")?.lowercase() ?: ""
+
+    /** Premier nœud qui convient, en largeur d'abord (l'écran de verrouillage compte quelques dizaines de nœuds). */
+    private fun findNode(root: AccessibilityNodeInfo, match: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var seen = 0
+        while (queue.isNotEmpty() && seen++ < 600) {
+            val n = queue.removeFirst()
+            try {
+                if (match(n)) return n
+            } catch (_: Exception) {
+            }
+            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        }
+        return null
+    }
+
+    /** Grille du schéma : `lockPatternView` d'Android, `colorLockPatternView` d'OxygenOS et de ColorOS, sinon la plus
+     *  petite vue dont l'identifiant dit « pattern view » (autres surcouches : la grille, pas son conteneur). */
+    private fun lockGrid(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        for (id in GRID_IDS) {
+            try {
+                root.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/$id")?.firstOrNull { it.isVisibleToUser }?.let { return it }
+            } catch (_: Exception) {
+            }
+        }
+        var best: AccessibilityNodeInfo? = null
+        var bestArea = Long.MAX_VALUE
+        val box = android.graphics.Rect()
+        findNode(root) { n ->
+            val id = idName(n)
+            if (n.isVisibleToUser && (id.contains("patternview") || id.contains("pattern_view"))) {
+                n.getBoundsInScreen(box)
+                val area = box.width().toLong() * box.height()
+                if (box.width() >= 100 && box.height() >= 100 && area < bestArea) { best = n; bestArea = area }
+            }
+            false                                                           // tout parcourir
+        }
+        return best
     }
 
     private fun lockField(root: AccessibilityNodeInfo): AccessibilityNodeInfo? =
@@ -292,23 +388,20 @@ class InputService : AccessibilityService(), InputSink {
         return true
     }
 
-    /** Touche du pavé du verrouillage : par son identifiant, sinon (chiffres) par son nom lu par l'accessibilité. */
+    /** Touche du pavé du verrouillage : par son identifiant d'Android, puis par le même nom en fin d'identifiant (autres
+     *  surcouches), sinon (chiffres) par son nom lu par l'accessibilité. */
     private fun padKey(root: AccessibilityNodeInfo, id: String, label: String?): AccessibilityNodeInfo? {
         try {
             root.findAccessibilityNodeInfosByViewId("$SYSTEM_UI:id/$id")?.firstOrNull { it.isClickable && it.isVisibleToUser }?.let { return it }
         } catch (_: Exception) {
         }
+        val suffix = id.lowercase()
+        findNode(root) { it.isClickable && it.isVisibleToUser && idName(it).endsWith(suffix) }?.let { return it }
         if (label == null) return null
-        val queue = ArrayDeque<AccessibilityNodeInfo>()
-        queue.add(root)
-        var seen = 0
-        while (queue.isNotEmpty() && seen++ < 600) {
-            val n = queue.removeFirst()
-            if (n.isClickable && n.isVisibleToUser && (n.contentDescription?.toString() == label || n.text?.toString() == label) &&
-                n.className?.toString()?.contains("EditText") != true) return n
-            for (i in 0 until n.childCount) n.getChild(i)?.let { queue.add(it) }
+        return findNode(root) { n ->
+            n.isClickable && n.isVisibleToUser && (n.contentDescription?.toString() == label || n.text?.toString() == label) &&
+                n.className?.toString()?.contains("EditText") != true
         }
-        return null
     }
 
     /** Trace un schéma : un seul geste qui passe par le centre des points donnés (1 à 9, ligne par ligne). */
@@ -331,11 +424,12 @@ class InputService : AccessibilityService(), InputSink {
         }
     }
 
+    /** Balayage vers le haut, du bas de l'écran (sous les notifications de l'écran de verrouillage) vers son milieu. */
     private fun swipeUp() {
         try {
             val m = resources.displayMetrics
-            val path = Path().apply { moveTo(m.widthPixels / 2f, m.heightPixels * 0.82f); lineTo(m.widthPixels / 2f, m.heightPixels * 0.25f) }
-            dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 220)).build(), null, null)
+            val path = Path().apply { moveTo(m.widthPixels / 2f, m.heightPixels * 0.94f); lineTo(m.widthPixels / 2f, m.heightPixels * 0.35f) }
+            dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 250)).build(), null, null)
         } catch (_: Exception) {
         }
     }
@@ -457,5 +551,13 @@ class InputService : AccessibilityService(), InputSink {
         const val XF86_HOME = 0x1008ff18L
         const val XF86_TASKPANE = 0x1008ff7fL     // applications récentes
         const val XF86_MENUKB = 0x1008ff65L       // volet des notifications
+        // Bouton « Déverrouiller » de la session : réveille l'appareil ; le code de l'appareil suit, jusqu'à Entrée.
+        const val XF86_WAKEUP = 0x1008ff2bL
+
+        private const val UNLOCK_WINDOW = 20_000L            // le code suit le marqueur de près ; au-delà, il est oublié
+        private val GRID_IDS = listOf("lockPatternView", "colorLockPatternView")
+        private const val BOUNCER_POLL = 400L                // attente de la saisie du code, par pas
+        private const val BOUNCER_TRIES = 10                 // … au plus 4 s
+        private const val BOUNCER_SWIPE_AT = 4               // si rien n'est monté après 1,6 s : balayage vers le haut
     }
 }

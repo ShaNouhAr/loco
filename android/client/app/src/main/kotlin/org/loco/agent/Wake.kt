@@ -1,6 +1,7 @@
 package org.loco.agent
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -51,8 +52,16 @@ object Wake {
     }
 }
 
-/** Sans interface : allume l'écran par-dessus l'écran de verrouillage, puis se referme (le verrouillage reste en place). */
+/**
+ * Sans interface : allume l'écran par-dessus l'écran de verrouillage, puis se referme (le verrouillage reste en place).
+ * Lancée pour déverrouiller ([dismiss]), elle demande en plus à Android d'afficher la saisie du code
+ * (requestDismissKeyguard, le moyen officiel, quelle que soit la surcouche du constructeur) et se referme dès que
+ * l'appareil est déverrouillé ou que la saisie est abandonnée.
+ */
 class WakeActivity : Activity() {
+    private val main = Handler(Looper.getMainLooper())
+    private var asked = false
+
     override fun onCreate(saved: Bundle?) {
         super.onCreate(saved)
         if (Build.VERSION.SDK_INT >= 27) {
@@ -63,17 +72,46 @@ class WakeActivity : Activity() {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                     android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
         }
-        Handler(Looper.getMainLooper()).postDelayed({ finish() }, 800)
+        main.postDelayed({ finish() }, if (intent?.getBooleanExtra(EXTRA_DISMISS, false) == true) DISMISS_MS else 800L)
+    }
+
+    // Demandée une fois visible : Android refuse la demande d'une activité qui ne l'est pas encore.
+    override fun onResume() {
+        super.onResume()
+        if (asked || intent?.getBooleanExtra(EXTRA_DISMISS, false) != true) return
+        asked = true
+        try {
+            (getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).requestDismissKeyguard(this,
+                object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() { finish() }
+                    override fun onDismissCancelled() { finish() }
+                    override fun onDismissError() { finish() }
+                })
+        } catch (_: Exception) {
+            finish()
+        }
+    }
+
+    override fun onDestroy() {
+        main.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     companion object {
-        fun start(context: Context) {
-            try {
-                context.startActivity(Intent(context, WakeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS))
-            } catch (_: Exception) {
-                // lancement refusé par Android (application en arrière-plan sans dérogation) : rien de plus à tenter
-            }
+        private const val EXTRA_DISMISS = "dismiss"
+        private const val DISMISS_MS = 60_000L        // saisie du code laissée ouverte, au plus une minute
+
+        fun start(context: Context) { launch(context, false) }
+
+        /** Fait monter la saisie du code de l'écran de verrouillage. Faux si Android a refusé de lancer l'activité. */
+        fun dismiss(context: Context): Boolean = launch(context, true)
+
+        private fun launch(context: Context, dismiss: Boolean): Boolean = try {
+            context.startActivity(Intent(context, WakeActivity::class.java).putExtra(EXTRA_DISMISS, dismiss)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS))
+            true
+        } catch (_: Exception) {
+            false                // lancement refusé par Android (application en arrière-plan sans dérogation)
         }
     }
 }
