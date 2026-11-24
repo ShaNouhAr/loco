@@ -5474,5 +5474,9 @@
  "Samba %(v)s en service": "Samba %(v)s running",
  "Samba %(v)s arrêté": "Samba %(v)s stopped",
  "Type d’utilisateur": "User type",
- "Dossier créé :": "Folder created:"
+ "Dossier créé :": "Folder created:",
+ "Activer : %(list)s.": "Turn on: %(list)s.",
+ "Couper : %(list)s. Leurs pages et leurs API sont aussitôt refusées ; leurs données sont gardées.": "Turn off: %(list)s. Their pages and APIs are refused at once; their data is kept.",
+ "Coupées aussi, car elles en dépendent : %(list)s.": "Also turned off, as they depend on them: %(list)s.",
+ "Les services réseau correspondants sont arrêtés ou relancés.": "The matching network services are stopped or restarted."
 }

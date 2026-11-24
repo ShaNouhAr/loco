@@ -1135,6 +1135,36 @@
     Object.keys(values).forEach(function (name) { var field = form.elements[name]; if (field) field.value = values[name]; });
   });
 
+  /* ---------------------------------------------------------------- fonctionnalités */
+
+  // Confirmation précise : ce qui est activé, ce qui est coupé, et ce qui l'est avec par dépendance ; rien à confirmer
+  // quand rien ne change. Composée à l'envoi, juste avant la fenêtre de confirmation commune (qui écoute plus haut).
+  $$("[data-feature-form]").forEach(function (form) {
+    var title = form.dataset.confirm;
+    form.addEventListener("submit", function () {
+      if (form.dataset.confirmed) return;
+      var boxes = $$("input[type=checkbox][role=switch]:not(:disabled)", form);
+      var on = [], off = [], offKeys = [], service = false;
+      boxes.forEach(function (box) {
+        if (box.checked === box.defaultChecked) return;
+        (box.checked ? on : off).push(box.dataset.label);
+        if (!box.checked) offKeys.push(box.name);
+        if (box.hasAttribute("data-service")) service = true;
+      });
+      var also = boxes.filter(function (box) {
+        return box.checked && (box.dataset.depends || "").split(",").some(function (k) { return k && offKeys.indexOf(k) >= 0; });
+      }).map(function (box) { return box.dataset.label; });
+      if (!on.length && !off.length) { delete form.dataset.confirm; return; }
+      var text = [];
+      if (on.length) text.push(t("Activer : %(list)s.", { list: on.join(", ") }));
+      if (off.length) text.push(t("Couper : %(list)s. Leurs pages et leurs API sont aussitôt refusées ; leurs données sont gardées.", { list: off.join(", ") }));
+      if (also.length) text.push(t("Coupées aussi, car elles en dépendent : %(list)s.", { list: also.join(", ") }));
+      if (service) text.push(t("Les services réseau correspondants sont arrêtés ou relancés."));
+      form.dataset.confirm = title;
+      form.dataset.confirmText = text.join(" ");
+    });
+  });
+
   /* ---------------------------------------------------------------- partages de fichiers */
 
   // Taille limite au curseur ou au clavier, dessinée sur la barre de la partition choisie (segment « nouveau ») ;

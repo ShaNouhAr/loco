@@ -5474,5 +5474,9 @@
  "Samba %(v)s en service": "Samba %(v)s en servicio",
  "Samba %(v)s arrêté": "Samba %(v)s detenido",
  "Type d’utilisateur": "Tipo de usuario",
- "Dossier créé :": "Carpeta creada:"
+ "Dossier créé :": "Carpeta creada:",
+ "Activer : %(list)s.": "Activar: %(list)s.",
+ "Couper : %(list)s. Leurs pages et leurs API sont aussitôt refusées ; leurs données sont gardées.": "Desactivar: %(list)s. Sus páginas y sus API se rechazan al instante; sus datos se conservan.",
+ "Coupées aussi, car elles en dépendent : %(list)s.": "También desactivadas, porque dependen de ellas: %(list)s.",
+ "Les services réseau correspondants sont arrêtés ou relancés.": "Los servicios de red correspondientes se detienen o se reinician."
 }

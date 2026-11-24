@@ -181,7 +181,8 @@ def features():
         (experimental if key in EXPERIMENTAL else optional if key in OPTIONAL else items).append(
             {"key": key, "label": label, "description": description, "on": key not in off,
              "chosen": key in chosen if opt_in else key not in manual, "install_off": install_off, "unavailable": unavailable,
-             "depends": [FEATURES[d][0] for d in depends], "blocked_by": [FEATURES[d][0] for d in depends if d in off],
+             "depends": [FEATURES[d][0] for d in depends], "depends_keys": list(depends),
+             "blocked_by": [FEATURES[d][0] for d in depends if d in off],
              "service": bool(switch) and config.APPLIANCE})
     return render_template("features.html", items=items, experimental=experimental, optional=optional, appliance=config.APPLIANCE)
 

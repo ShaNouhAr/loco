@@ -51,6 +51,17 @@ class TestFeatures(FleetTest):
             conn.execute("UPDATE users SET disabled=1 WHERE username='perm-second-admin'")       # administrateur désactivé : plus rien
         self.assertNotEqual(other.c.get("/administration/features").status_code, 200)
 
+    def test_each_switch_carries_what_the_confirmation_needs(self):
+        """La confirmation dit ce qui change (activé, coupé, coupé par dépendance) : chaque interrupteur porte son
+        libellé et ses dépendances, le formulaire est repéré par la page."""
+        import re
+        page = self.admin.c.get("/administration/features").get_data(as_text=True)
+        self.assertIn("data-feature-form", page)
+        remote = re.search(r'<input type="checkbox" name="remote"[^>]*>', page).group(0)
+        self.assertIn('data-label="Accès distant"', remote)
+        self.assertIn('data-depends="fleet"', remote)
+        self.assertIn('data-depends=""', re.search(r'<input type="checkbox" name="fleet"[^>]*>', page).group(0))
+
     def test_disabled_feature_is_hidden_and_refused_everywhere(self):
         self.switch("wu")
         with transaction() as conn:

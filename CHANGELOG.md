@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.197.1 — 2026-11-24
+
+- **Fonctionnalités : la confirmation dit ce qui change.** En activant une fonctionnalité, la fenêtre de confirmation annonçait que « les utilisateurs perdent l'accès aux fonctionnalités désactivées », même quand rien n'était coupé. Elle dit maintenant ce qui est activé, ce qui est coupé — et ce qui l'est avec, par dépendance (couper *Mon parc* coupe aussi l'accès distant, les scripts…) —, ne parle des services réseau que si l'un d'eux change, et n'apparaît plus quand rien ne change.
+
 ## 2.197.0 — 2026-11-24
 
 - **Partages de fichiers (facultatif) : le serveur loco partage des dossiers sur le réseau, en SMB, comme un NAS.** loco installe Samba depuis les dépôts du système et le règle lui-même : comptes seulement (ni invité ni anonyme), SMB 2 et plus récents sur le port 445, sans NetBIOS ni imprimantes, réseaux des postes de loco seulement. Chaque partage vit sur une **partition déjà en service**, choisie d'un clic — loco n'en formate ni n'en monte aucune —, dans un dossier qu'il crée lui-même d'après le nom du partage : aucun chemin à taper. Chaque partition s'affiche en barre (système et autres données, fichiers des partages, place réservée, place libre) et la taille limite se choisit au curseur, dessinée sur cette barre ; chaque partage a son anneau d'occupation. Sur l'appliance, Debian et Ubuntu ; à activer dans *Fonctionnalités*.
