@@ -60,10 +60,11 @@
         <span class="feature-text">
           <strong>{{ f.label }}</strong>
           <small>{{ f.description }}</small>
-          {% if f.blocked_by %}<small class="warn-text">{{ _("Inactive tant que %(blocked_by)s est désactivé.", blocked_by=f.blocked_by|join(', ')) }}</small>
+          {% if f.unavailable %}<small class="warn-text">{{ _("Indisponible dans l'image Docker et sur un serveur Windows : il faut un serveur Linux (appliance, Debian, Ubuntu) avec son agent d'administration.") }}</small>
+          {% elif f.blocked_by %}<small class="warn-text">{{ _("Inactive tant que %(blocked_by)s est désactivé.", blocked_by=f.blocked_by|join(', ')) }}</small>
           {% elif f.depends %}<small class="faint">{{ _("Nécessite %(depends)s.", depends=f.depends|join(', ')) }}</small>{% endif %}
         </span>
-        <span class="switch"><input type="checkbox" name="{{ f.key }}" value="1" role="switch" {{ 'checked' if f.chosen }}><i aria-hidden="true"></i></span>
+        <span class="switch"><input type="checkbox" name="{{ f.key }}" value="1" role="switch" {{ 'checked' if f.chosen and not f.unavailable }} {{ 'disabled' if f.unavailable }}><i aria-hidden="true"></i></span>
       </label>
       {% endfor %}
     </div>

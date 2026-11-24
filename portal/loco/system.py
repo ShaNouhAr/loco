@@ -436,6 +436,9 @@ def firewall_ports():
         rows.append({"port": str(config.WU_PROXY_PORT), "proto": "TCP",
                      "service": _("Proxy Windows Update (Squid, sans redirection DNS)"), "audience": _("Postes Windows"),
                      "scheme": "HTTP", "on": True, "always": False})
+    if "samba" not in off:
+        rows.append({"port": "445", "proto": "TCP", "service": _("Partages de fichiers (Samba, SMB 2 et plus récents)"),
+                     "audience": _("Postes"), "scheme": "SMB", "on": True, "always": False})
     return rows
 
 

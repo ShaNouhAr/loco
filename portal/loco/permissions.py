@@ -92,6 +92,10 @@ GROUPS = [
         ("network.shell", L_("Ouvrir un terminal sur un équipement"), L_("Ligne de commande de l'équipement avec le compte enregistré : accès complet à sa configuration."), ("network.view",), True),
         ("network.manage", L_("Relier des équipements réseau"), L_("Ajouter ou retirer un équipement, son compte et son mot de passe, confirmer sa clé d'hôte ou son certificat."), ("network.view",), True),
     ]),
+    (L_("Partages de fichiers"), [
+        ("samba.view", L_("Consulter les partages de fichiers"), L_("Partages du serveur loco : partitions, place occupée et son historique, utilisateurs Samba et leurs droits, connexions en cours."), (), False),
+        ("samba.manage", L_("Gérer les partages de fichiers"), L_("Installer Samba, créer, modifier ou retirer un partage et sa taille limite, ajouter les utilisateurs Samba (comptes loco ou non), choisir leur mot de passe et leurs droits."), ("samba.view",), True),
+    ]),
     (L_("Wazuh"), [
         ("wazuh.view", L_("Consulter Wazuh"), L_("État de l'agent Wazuh sur les postes du parc."), ("fleet.view",), False),
         ("wazuh.install", L_("Installer et retirer l'agent Wazuh"), L_("Poser l'agent Wazuh sur des postes, le mettre à jour ou le retirer (en root ou SYSTEM)."), ("wazuh.view",), True),
@@ -234,6 +238,10 @@ ENDPOINTS = {
     "network_backup": "network.backup", "network_config": "network.backup", "network_config_download": "network.backup",
     "network_firmware": "network.firmware", "network_firmware_upload": "network.firmware", "network_firmware_delete": "network.firmware",
     "network_reboot": "network.restart", "network_shell": "network.shell",
+    "shares": "samba.view", "shares_add": "samba.manage", "shares_edit": "samba.manage", "shares_delete": "samba.manage",
+    "shares_install": "samba.manage", "shares_takeover": "samba.manage",
+    "shares_user_add": "samba.manage", "shares_user_edit": "samba.manage", "shares_user_toggle": "samba.manage",
+    "shares_user_delete": "samba.manage",
     "fleet_remote_consent": "remote.consent", "fleet_group_remote_consent": "remote.consent",
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",

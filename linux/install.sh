@@ -753,7 +753,7 @@ else
 # Agent root des mises à jour du système (portal/locoadmin.py) : le portail y dépose ses demandes, dossier créé
 # avant le portail (ProtectSystem=strict ne lui ouvre que des dossiers existants).
 install -d -m 755 -o root -g root /var/lib/loco-agent /var/lib/loco-agent/jobs
-install -d -m 730 -o root -g loco /var/lib/loco-agent/requests
+install -d -m 730 -o root -g loco /var/lib/loco-agent/requests /var/lib/loco-agent/cache /var/lib/loco-agent/samba
 ln -sf "$PREFIX/bin/loco-update" /usr/local/sbin/loco-update
 render "$PREFIX/conf/loco-portal.service" > /etc/systemd/system/loco-portal.service
 cp "$PREFIX/conf/loco-stats.service" "$PREFIX/conf/loco-stats.timer" \

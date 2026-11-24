@@ -145,6 +145,9 @@ def _attention():
     if can("network.view") and "network" not in features.disabled():
         from . import network
         rows += network.attention()
+    if can("samba.view") and "samba" not in features.disabled():
+        from . import samba
+        rows += samba.attention()
     rows.sort(key=lambda row: row["tone"] != "err")
     return rows
 

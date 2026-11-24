@@ -20,6 +20,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | Mettre à jour un **Proxmox VE** et ouvrir son terminal | [Proxmox VE](proxmox.md) |
 | Poser l'**agent Wazuh** sur les postes | [Agent Wazuh](wazuh.md) |
 | Gérer les **switchs** Cisco et Extreme et les **pare-feu** Stormshield (expérimental) | [Équipements réseau](reseau.md) |
+| **Partager des dossiers** sur le réseau (SMB), avec tailles limites et comptes | [Partages de fichiers](partages.md) |
 | **Contribuer** | [Développement](developpement.md) |
 
 À côté : [politique de sécurité](../SECURITY.md) · [changelog](../CHANGELOG.md) · [appliance ISO](../linux/iso/README.md).

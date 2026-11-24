@@ -29,6 +29,7 @@ FEATURES = {
     "homeassistant": (L_("Home Assistant"), L_("Votre Home Assistant relié par SSH avec une clé propre à loco : versions, mises à jour du cœur, du système et des modules complémentaires, sauvegardes, état de santé, redémarrages et terminal."), (), ""),
     "proxmox": (L_("Proxmox VE"), L_("Vos serveurs Proxmox reliés par un jeton d'API : sauvegarde des machines virtuelles et des conteneurs, à la demande ou planifiée, sur le stockage de Proxmox de votre choix (disque, NAS, Proxmox Backup Server), avec la conservation voulue, réunie avec les sauvegardes de loco et de Home Assistant dans Administration › Sauvegardes. Relié aussi par SSH avec une clé propre à loco, le serveur apparaît dans Mon parc : mises à jour, redémarrage et terminal."), (), ""),
     "network": (L_("Équipements réseau"), L_("Vos switchs Cisco (IOS, IOS-XE, Small Business) et Extreme (EXOS / Switch Engine, VOSS / Fabric Engine) et vos pare-feu Stormshield, reliés sans agent avec un compte de l'équipement : état et ports dans Mon parc, sauvegarde planifiée de la configuration avec l'historique de ses changements, terminal, redémarrage et installation d'un firmware déposé dans loco."), (), ""),
+    "samba": (L_("Partages de fichiers"), L_("Le serveur loco partage des dossiers sur le réseau (SMB, comme un NAS) : chaque partage vit sur une partition déjà en service, avec une taille limite, et s'ouvre aux comptes loco choisis, en lecture ou en écriture, avec un mot de passe de partage propre à chacun."), (), ""),
     "wazuh": (L_("Agent Wazuh"), L_("Installe l'agent Wazuh sur les postes du parc, réglé pour votre manager, et suit son état : le paquet officiel est téléchargé et vérifié par loco, puis remis aux postes par leur agent loco. Au retrait, loco peut aussi effacer l'entrée du poste sur le manager."), ("fleet",), ""),
 }
 
@@ -37,7 +38,7 @@ EXPERIMENTAL = {"android", "network"}
 EXPERIMENTAL_SETTING = "features_experimental"
 # Fonctionnalités facultatives : abouties, mais hors du cœur de loco et sans intérêt pour tout le monde. Désactivées
 # par défaut elles aussi, à activer si l'on en a l'usage.
-OPTIONAL = {"homeassistant", "proxmox", "wazuh"}
+OPTIONAL = {"homeassistant", "proxmox", "wazuh", "samba"}
 OPTIONAL_SETTING = "features_optional"
 OPT_IN = {EXPERIMENTAL_SETTING: EXPERIMENTAL, OPTIONAL_SETTING: OPTIONAL}
 
@@ -48,7 +49,7 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
            "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
            "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",),
-           "loco.proxmox_system": ("proxmox",), "loco.network": ("network",)}
+           "loco.proxmox_system": ("proxmox",), "loco.network": ("network",), "loco.samba": ("samba",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
@@ -65,7 +66,7 @@ PERMISSIONS = {"linux": ("apt",), "rpm": ("rpm",), "flatpak": ("flatpak",), "wu"
                "store": ("windows_apps",), "fleet": ("fleet",), "deployments": ("fleet", "windows_apps"),
                "remote": ("fleet", "remote"), "scripts": ("fleet", "scripts"), "sso": ("directories",), "alerts": ("alerts",),
                "mcp": ("mcp",), "android": ("fleet", "android"), "homeassistant": ("homeassistant",),
-               "wazuh": ("fleet", "wazuh"), "proxmox": ("proxmox",), "network": ("network",)}
+               "wazuh": ("fleet", "wazuh"), "proxmox": ("proxmox",), "network": ("network",), "samba": ("samba",)}
 # Échanges des agents : refusés avec 503 (l'agent réessaie plus tard sans rien perdre).
 AGENT_ENDPOINTS = {"agent_enroll", "agent_checkin", "agent_result", "agent_linux_installer", "agent_windows_installer",
                    "agent_file", "agent_deb", "agent_rpm", "remote_agent", "agent_logs", "agent_ca", "agent_android_apk",
@@ -96,6 +97,8 @@ def disabled(conn=None):
         off.add("flatpak")
     if not config.WU_PROXY:
         off.add("wu_proxy")              # Squid absent : ne jamais pousser un proxy inexistant aux postes
+    if not samba_possible():
+        off.add("samba")                 # image Docker, serveur Windows : pas d'agent root pour tenir Samba
     # Expérimental et facultatif : coupés tant qu'un administrateur ne les a pas explicitement activés.
     for setting, keys in OPT_IN.items():
         off |= keys - _opted_in(conn, setting)
@@ -104,6 +107,11 @@ def disabled(conn=None):
     if conn is None:
         g.features_off = off
     return off
+
+
+def samba_possible():
+    """Partages de fichiers possibles ici : serveur Linux avec l'agent root (ni image Docker, ni serveur Windows)."""
+    return config.SERVER_UPDATES and not config.CONTAINER and not config.WINDOWS
 
 
 def enabled(key):
@@ -168,10 +176,11 @@ def features():
     items, experimental, optional = [], [], []
     for key, (label, description, depends, switch) in FEATURES.items():
         install_off = (key == "rpm" and not config.RPM_ENABLED) or (key == "flatpak" and not config.FLATPAK_ENABLED)
+        unavailable = key == "samba" and not samba_possible()
         opt_in = key in EXPERIMENTAL or key in OPTIONAL
         (experimental if key in EXPERIMENTAL else optional if key in OPTIONAL else items).append(
             {"key": key, "label": label, "description": description, "on": key not in off,
-             "chosen": key in chosen if opt_in else key not in manual, "install_off": install_off,
+             "chosen": key in chosen if opt_in else key not in manual, "install_off": install_off, "unavailable": unavailable,
              "depends": [FEATURES[d][0] for d in depends], "blocked_by": [FEATURES[d][0] for d in depends if d in off],
              "service": bool(switch) and config.APPLIANCE})
     return render_template("features.html", items=items, experimental=experimental, optional=optional, appliance=config.APPLIANCE)
@@ -209,5 +218,9 @@ def features_save():
                 flash(_('Services réseau inchangés : %(e)s.', e=e), "error")
             if clean:
                 appliance._submit("configure", clean)
+    # Partages de fichiers : Samba arrêté quand la fonctionnalité est coupée (fichiers gardés), relancé quand elle revient.
+    if ("samba" in now) != ("samba" in previous):
+        from . import samba
+        samba.switched("samba" not in now)
     flash((_('Fonctionnalités enregistrées.') if changes else _('Aucun changement.')), "ok")
     return back("features")

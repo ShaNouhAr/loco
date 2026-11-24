@@ -26,6 +26,7 @@
     {% set android_nav = feature('android') and can('android.view') %}
     {% set homeassistant_nav = feature('homeassistant') and can('homeassistant.view') %}
     {% set network_nav = feature('network') and can('network.view') %}
+    {% set samba_nav = feature('samba') and can('samba.view') %}
     <nav class="nav" aria-label="{{ _('Navigation principale') }}">
       {% if can("dashboard.view") %}<a href="{{ url_for('index') }}" class="nav-home {{ 'on' if ep == 'index' }}" aria-label="{{ _("Vue d'ensemble") }}" title="{{ _("Vue d'ensemble") }}" {% if ep == 'index' %}aria-current="page"{% endif %}>{{ nav_icon('overview') }}<span>{{ _("Vue d'ensemble") }}</span></a>{% endif %}
       {# Le terminal d'un Home Assistant est une session distante hors du parc : il relève de son entrée, pas de Mon parc. #}
@@ -34,8 +35,8 @@
       {% set fleet_on = (ep.startswith(('fleet', 'remote', 'deployment', 'script', 'schedule')) or ep == 'enrollment') and not homeassistant_on and not network_on %}
       {% if can("fleet.view") %}<a href="{{ url_for('fleet') }}" class="{{ 'on' if fleet_on }}" aria-label="{{ _('Mon parc') }}" title="{{ _('Mon parc') }}" {% if fleet_on %}aria-current="page"{% endif %}>{{ nav_icon('devices') }}<span>{{ _("Mon parc") }}</span></a>{% endif %}
       {% if not can("fleet.view") and can_any("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view") %}<a href="{{ url_for('enrollment') }}" class="nav-enroll {{ 'on' if ep == 'enrollment' }}" aria-label="{{ _('Enrôlement') }}" {% if ep == 'enrollment' %}aria-current="page"{% endif %}>{{ nav_icon('enroll') }}<span>{{ _("Enrôlement") }}</span></a>{% endif %}
-      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav or network_nav %}
-      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_')) or homeassistant_on or network_on }}">
+      {% if can("linux.view") or (rpm_enabled and can("rpm.view")) or (flatpak_enabled and can("flatpak.view")) or can_any("wu.view", "windows.view", "store.view") or android_nav or homeassistant_nav or network_nav or samba_nav %}
+      <details class="nav-group {{ 'on' if ep.startswith(('linux', 'flatpak', 'rpm', 'windows_update', 'windows_apps', 'winget', 'software_store', 'software_group', 'software_detail', 'android_', 'shares')) or homeassistant_on or network_on }}">
         <summary aria-expanded="false" aria-controls="nav-system" aria-label="{{ _('Systèmes') }}" title="{{ _('Systèmes') }}">{{ nav_icon('server') }}<span>{{ _("Systèmes") }}</span>{{ nav_icon('chevron') }}</summary>
         <div class="nav-dropdown" id="nav-system">
           <div class="nav-panel nav-sections">
@@ -69,6 +70,12 @@
             <div class="nav-section">
               <div class="nav-section-h">{{ _("Réseau") }}</div>
               <a href="{{ url_for('network') }}" {% if network_on %}aria-current="page"{% endif %}>{{ nav_icon('network') }}<span><strong>{{ _("Équipements réseau") }}</strong><small>{{ _("Switchs et pare-feu, configurations, firmwares") }}</small></span></a>
+            </div>
+            {% endif %}
+            {% if samba_nav %}
+            <div class="nav-section">
+              <div class="nav-section-h">{{ _("Fichiers") }}</div>
+              <a href="{{ url_for('shares') }}" {% if ep.startswith('shares') %}aria-current="page"{% endif %}>{{ nav_icon('folder') }}<span><strong>{{ _("Partages de fichiers") }}</strong><small>{{ _("Dossiers partagés sur le réseau, tailles et comptes") }}</small></span></a>
             </div>
             {% endif %}
           </div>

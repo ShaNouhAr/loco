@@ -1135,6 +1135,70 @@
     Object.keys(values).forEach(function (name) { var field = form.elements[name]; if (field) field.value = values[name]; });
   });
 
+  /* ---------------------------------------------------------------- partages de fichiers */
+
+  // Taille limite au curseur ou au clavier, dessinée sur la barre de la partition choisie (segment « nouveau ») ;
+  // dossier proposé d'après le nom, comme le serveur le choisira s'il reste vide.
+  var GIB = 1073741824;
+  var shareSlug = function (text) {
+    return (text || "").normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63);
+  };
+  $$("[data-share-form]").forEach(function (form) {
+    var range = $("[data-share-range]", form), size = $("[data-share-size]", form);
+    if (!range || !size) return;
+    var chosen = function () { return $("[data-share-mount]:checked", form); };
+    var bounds = function () {
+      var m = chosen();
+      var room = m ? Number(m.dataset.available) : Number(range.dataset.available || 0) + Number(range.dataset.current || 0);
+      range.max = String(Math.max(1, Math.floor(room / GIB), Number(size.value) || 1));
+    };
+    var out = $("[data-share-out]", form);
+    var draw = function () {
+      if (out) out.textContent = (Number(size.value) || 0) + " " + t("Go");
+      $$("[data-share-preview]", form).forEach(function (r) { r.setAttribute("width", "0"); });
+      var m = chosen(), box = m && m.closest(".share-choice"), bar = box && $("[data-share-preview]", box);
+      if (!bar) return;
+      var width = 1000 * (Number(size.value) || 0) * GIB / Number(bar.dataset.total);
+      bar.setAttribute("width", String(Math.max(0, Math.min(width, 1000 - Number(bar.dataset.start)))));
+    };
+    range.addEventListener("input", function () { size.value = range.value; draw(); });
+    size.addEventListener("input", function () {
+      if (Number(size.value) > Number(range.max)) range.max = size.value;
+      range.value = size.value;
+      draw();
+    });
+    // Dossier que loco créera : dossier des partages de la partition choisie, puis le nom du partage sans accent.
+    var name = $("[data-share-name]", form), dest = $("[data-share-dest]", form);
+    var where = function () {
+      var m = chosen();
+      if (dest && m) dest.textContent = m.dataset.base + "/" + (shareSlug(name && name.value) || dest.dataset.empty);
+    };
+    $$("[data-share-mount]", form).forEach(function (m) {
+      m.addEventListener("change", function () { bounds(); draw(); where(); });
+    });
+    if (name) name.addEventListener("input", where);
+    bounds();
+    draw();
+    where();
+  });
+
+  // Nouvel utilisateur Samba : un compte loco (liste) ou un utilisateur Samba seul (identifiant) ; le champ de l'autre
+  // choix est désactivé, donc pas envoyé.
+  $$("[data-share-user]").forEach(function (form) {
+    var pick = function () {
+      var kind = ($("[data-share-kind]:checked", form) || {}).value;
+      [["loco", "[data-kind-loco]"], ["samba", "[data-kind-samba]"]].forEach(function (pair) {
+        var box = $(pair[1], form);
+        if (!box) return;
+        box.hidden = kind !== pair[0];
+        $$("input, select", box).forEach(function (field) { field.disabled = kind !== pair[0]; });
+      });
+    };
+    $$("[data-share-kind]", form).forEach(function (r) { r.addEventListener("change", pick); });
+    pick();
+  });
+
   /* ---------------------------------------------------------------- mot de passe (Mon compte) */
 
   // Règles vérifiées en direct (les mêmes que le serveur) et affichage du mot de passe à la demande.

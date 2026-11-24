@@ -653,6 +653,8 @@ def users_update(user_id):
         audit("comptes.modification", f"{row['username']} : {', '.join(changes)}", commit=False)
         flash(_('Compte %(row)s : %(v)s. Ses connexions ont été fermées.', row=row['username'], v=', '.join(changes)), "ok")
     conn.commit()
+    if disabled != bool(row["disabled"]):
+        _shares_changed()
     return back("users")
 
 
@@ -673,7 +675,16 @@ def users_delete(user_id):
         audit("comptes.suppression", row["username"], commit=False)
         flash(_('Compte %(row)s supprimé.', row=row['username']), "ok")
     conn.commit()
+    _shares_changed()
     return back("users")
+
+
+def _shares_changed():
+    """Compte supprimé, désactivé ou réactivé : comptes des partages de fichiers mis à jour aussitôt côté Samba."""
+    from . import features
+    if "samba" not in features.disabled():
+        from . import samba
+        samba.push()
 
 
 # --------------------------------------------------------------------------- profils d'accès

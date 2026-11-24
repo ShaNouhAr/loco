@@ -981,6 +981,39 @@ MIGRATIONS = [
     """
     CREATE INDEX device_commands_failed_updates ON device_commands(finished_at) WHERE action='update' AND state='failed';
     """,
+    # 59 : partages de fichiers (Samba) servis par le serveur loco : partition, dossier, taille limite ; utilisateurs
+    # Samba — liés à un compte loco ou seuls — et leurs droits (lecture, écriture). Les mots de passe ne sont connus
+    # que de Samba.
+    """
+    CREATE TABLE samba_shares (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        mount TEXT NOT NULL,
+        folder TEXT NOT NULL,
+        size_limit INTEGER NOT NULL,
+        comment TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT '',
+        UNIQUE (mount, folder)
+    );
+    CREATE TABLE samba_accounts (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        login TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        label TEXT NOT NULL DEFAULT '',
+        disabled INTEGER NOT NULL DEFAULT 0,
+        password_at TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE samba_access (
+        share_id INTEGER NOT NULL REFERENCES samba_shares(id) ON DELETE CASCADE,
+        account_id INTEGER NOT NULL REFERENCES samba_accounts(id) ON DELETE CASCADE,
+        can_write INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (share_id, account_id)
+    );
+    CREATE INDEX samba_access_account ON samba_access(account_id);
+    """,
 ]
 
 

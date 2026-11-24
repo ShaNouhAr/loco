@@ -642,16 +642,30 @@ def start():
         work_soon(dev_id)
 
     def loop():
-        from . import features
         time.sleep(20)
         while True:
             try:
-                if features.enabled("network") and not ha.skip_background() and lease("network"):
-                    _tick()
+                background()
             except Exception:
                 pass
             time.sleep(TICK)
     threading.Thread(target=loop, name="loco-reseau", daemon=True).start()
+
+
+def background():
+    """Un passage de la boucle de fond. Hors de toute requête : l'état de la fonctionnalité est lu sur une connexion
+    à part (features.enabled demande une requête, et son erreur, avalée par la boucle, la rendait muette)."""
+    from . import features, ha
+    if ha.skip_background() or not lease("network"):
+        return False
+    conn = connect()
+    try:
+        if "network" in features.disabled(conn):
+            return False
+    finally:
+        conn.close()
+    _tick()
+    return True
 
 
 # --------------------------------------------------------------------------- vues

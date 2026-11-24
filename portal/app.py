@@ -1,7 +1,7 @@
 """Point d'entrée gunicorn (« app:app »). Administration : python3 -m loco.cli."""
 
 from loco import app, startup
-from loco import alerts, android_apps, backups, db, homeassistant, logforward, network, offsite, proxmox_system, relay
+from loco import alerts, android_apps, backups, db, homeassistant, logforward, network, offsite, proxmox_system, relay, samba
 
 startup()
 db.keep_open()               # base tenue ouverte tant qu'on sert : une requête ne paie plus le rangement du journal SQLite
@@ -14,5 +14,6 @@ backups.start()              # planifications de sauvegarde ; suivi des sauvegar
 proxmox_system.start()       # mises à jour et redémarrages de Proxmox : suivis repris (ils continuent sur l'hôte)
 network.start()              # équipements réseau : relevés et sauvegardes planifiées de la configuration
 relay.start()                # connexions persistantes des sessions distantes (agents et navigateurs prévenus, plus de relevé à vide)
+samba.start()                # partages de fichiers : description de la base renvoyée à l'agent root s'il ne l'a pas
 
 __all__ = ["app"]

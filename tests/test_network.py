@@ -183,6 +183,28 @@ class TestStormshield(unittest.TestCase):
         self.assertEqual(sns.crc(b"123456789"), "%X" % (0xCBF43926 ^ 0xFFFFFFFF))
 
 
+class TestBackground(unittest.TestCase):
+    """Relevés et sauvegardes planifiées : la boucle tourne hors de toute requête. features.enabled y levait une erreur
+    (pas de contexte Flask), avalée par la boucle : rien ne se faisait jamais en fond."""
+
+    def setUp(self):
+        self.off()
+        self.addCleanup(self.off)
+
+    def off(self):
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (features.EXPERIMENTAL_SETTING,))
+
+    def test_runs_outside_any_request_and_only_when_enabled(self):
+        with mock.patch.object(network, "_tick") as tick, mock.patch.object(network, "lease", lambda name: True):
+            self.assertFalse(network.background())
+            tick.assert_not_called()
+            with transaction() as conn:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.EXPERIMENTAL_SETTING, '["network"]'))
+            self.assertTrue(network.background())
+            tick.assert_called_once_with()
+
+
 class NetworkPortalTest(unittest.TestCase):
     family, env = "cisco-ios", {}
 

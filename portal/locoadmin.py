@@ -277,6 +277,23 @@ def _ha():
     return locoha
 
 
+def _samba():
+    """Partages de fichiers (portal/locosamba.py), importés à la demande comme la haute disponibilité."""
+    here = os.path.dirname(HERE)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import locosamba
+    return locosamba
+
+
+def samba_worker():
+    """Fil dédié de l'agent : partages de fichiers Samba (demandes du portail, occupation, état publié)."""
+    try:
+        _samba().worker(env=_system_env())
+    except Exception as e:                       # les partages ne doivent jamais empêcher l'agent de tourner
+        print(f"partages de fichiers indisponibles : {e}", file=sys.stderr)
+
+
 def ha_params(action, params):
     """Paramètres d'une opération de haute disponibilité, revalidés par l'agent (ValueError sinon)."""
     p = params or {}
@@ -3320,6 +3337,7 @@ def agent():
         print(f"shell root indisponible : {e}", file=sys.stderr)
     threading.Thread(target=cache_worker, name="loco-cache", daemon=True).start()
     threading.Thread(target=ha_worker, name="loco-ha", daemon=True).start()
+    threading.Thread(target=samba_worker, name="loco-samba", daemon=True).start()
     code = os.stat(HERE).st_mtime_ns
     beat = timecheck = 0
     # Opérations interrompues (arrêt brutal) : marquées comme échouées.

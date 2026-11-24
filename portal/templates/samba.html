@@ -1,0 +1,443 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Partages de fichiers") }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import ui_icon, nav_icon %}
+{% set manage = can('samba.manage') %}
+{% set ready = st.installed and st.managed and not st.stale %}
+{% set first_host = hosts[0] if hosts else host %}
+{% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
+{% set kebab_icon %}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>{% endset %}
+
+{# Anneau d'occupation : part de la taille limite, couleur d'état (ok, bientôt plein, plein), valeur au centre. #}
+{% macro ring(pct, level, size=76, sub='') -%}
+{% set p = [[pct or 0, 0]|max, 100]|min %}
+<svg class="chart share-ring {{ level }}" viewBox="0 0 96 96" width="{{ size }}" height="{{ size }}" role="img" aria-label="{{ _('%(pct)s %% de la taille limite', pct=p) }}">
+  <circle class="ring-track" cx="48" cy="48" r="39"/>
+  {% if p > 0 %}<circle class="ring-arc" cx="48" cy="48" r="39" pathLength="100" stroke-dasharray="{{ '%.2f'|format([p, 1.2]|max) }} {{ '%.2f'|format(100 - [p, 1.2]|max) }}" transform="rotate(-90 48 48)"/>{% endif %}
+  <text class="ring-total" x="48" y="{{ 52 if not sub else 49 }}" text-anchor="middle">{{ p }}<tspan class="ring-unit-pct" dx="1">%</tspan></text>
+  {% if sub %}<text class="ring-unit" x="48" y="64" text-anchor="middle">{{ sub }}</text>{% endif %}
+</svg>
+{%- endmacro %}
+
+{# Partition : barre segmentée (système et autres données, fichiers des partages, place réservée, libre) ; le segment
+   « nouveau » est dessiné par la page quand on choisit la taille d'un partage. #}
+{% macro part_bar(p) -%}
+{% set total = [p.size, 1]|max %}{% set ns = namespace(x=0) %}
+<svg class="chart share-bar" viewBox="0 0 1000 14" preserveAspectRatio="none" role="img" aria-label="{{ _('%(mount)s : %(used)s occupés sur %(size)s', mount=p.mount, used=(p.size - p.free)|human, size=p.size|human) }}">
+  <rect class="seg-free" x="0" y="0" width="1000" height="14"/>
+  {% for key, value in p.segments if key != 'free' and value > 0 %}{% set w = 1000 * value / total %}
+  <rect class="seg-{{ key }}" x="{{ '%.2f'|format(ns.x) }}" y="0" width="{{ '%.2f'|format([w, 2]|max) }}" height="14"/>{% set ns.x = ns.x + w %}
+  {% endfor %}
+  <rect class="seg-new" data-share-preview data-total="{{ total }}" data-start="{{ '%.2f'|format(ns.x) }}" x="{{ '%.2f'|format(ns.x) }}" y="0" width="0" height="14"/>
+</svg>
+{%- endmacro %}
+
+{% macro part_legend(p) -%}
+<ul class="legend share-legend">
+  <li><i class="key seg-other"></i>{{ _("Système et autres données") }}<span class="num">{{ p.segments[0][1]|human }}</span></li>
+  <li><i class="key seg-used"></i>{{ _("Fichiers des partages") }}<span class="num">{{ p.shares_used|human }}</span></li>
+  <li><i class="key seg-reserved"></i>{{ _("Réservé aux partages") }}<span class="num">{{ p.reserved|human }}</span></li>
+  <li><i class="key seg-free"></i>{{ _("Libre, non réservé") }}<span class="num">{{ p.available|human }}</span></li>
+</ul>
+{%- endmacro %}
+
+{% macro avatar(login, write=None, big=False) -%}
+<span class="share-avatar{{ ' big' if big }}{{ ' w' if write }}"{% if write is not none %} title="{{ login }} · {{ _('lecture et écriture') if write else _('lecture') }}"{% endif %} aria-hidden="true">{{ login[:1]|upper }}</span>
+{%- endmacro %}
+
+{# Une ligne de choix : aucun accès, lecture, lecture et écriture. #}
+{% macro right_row(field, label, mine, note='') -%}
+      <tr><td><span class="share-who-cell">{{ label }}{% if note %} <span class="faint">{{ note }}</span>{% endif %}</span></td>
+        <td class="center"><input type="radio" name="{{ field }}" value="" aria-label="{{ _('%(u)s : aucun accès', u=label) }}"{% if not mine %} checked{% endif %}></td>
+        <td class="center"><input type="radio" name="{{ field }}" value="read" aria-label="{{ _('%(u)s : lecture', u=label) }}"{% if mine == 'read' %} checked{% endif %}></td>
+        <td class="center"><input type="radio" name="{{ field }}" value="write" aria-label="{{ _('%(u)s : lecture et écriture', u=label) }}"{% if mine == 'write' %} checked{% endif %}></td></tr>
+{%- endmacro %}
+
+{% macro rights_head(first) -%}
+    <thead><tr><th>{{ first }}</th><th class="center">{{ _("Aucun accès") }}</th><th class="center">{{ _("Lecture") }}</th><th class="center">{{ _("Lecture et écriture") }}</th></tr></thead>
+{%- endmacro %}
+
+{# Droits d'un partage, utilisateur par utilisateur (dialogue du partage). #}
+{% macro share_rights(share=None) -%}
+{% set given = share.rights if share else {} %}
+{% if users %}
+<div class="table-wrap share-rights">
+  <table>
+    {{ rights_head(_("Utilisateur Samba")) }}
+    <tbody>
+    {% for a in users %}{{ right_row('access-' ~ a.id, a.login, given.get(a.id, ''), _('désactivé') if a.off else (_('compte loco') if a.linked else a.label)) }}{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="note">{{ _("Aucun utilisateur Samba pour l'instant : créez le partage, puis ajoutez des utilisateurs dans l'onglet Utilisateurs — leurs droits s'y choisissent aussi.") }}</p>
+{% endif %}
+{%- endmacro %}
+
+{# Droits d'un utilisateur, partage par partage (dialogue de l'utilisateur). #}
+{% macro user_rights(account=None) -%}
+{% set given = account.rights if account else {} %}
+{% if shares %}
+<div class="table-wrap share-rights">
+  <table>
+    {{ rights_head(_("Partage")) }}
+    <tbody>
+    {% for s in shares %}{{ right_row('share-' ~ s.id, s.name, given.get(s.id, '')) }}{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="hint">{{ _("Aucun partage pour l'instant : les droits se donnent ensuite, depuis chaque partage ou depuis cet utilisateur.") }}</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro password_fields(required=True) -%}
+<div class="rollout-fields">
+  <label class="f"><span>{{ _("Mot de passe") if required else _("Nouveau mot de passe") }}</span><span class="password-field"><input type="password" name="new" {{ 'required' if required }} minlength="{{ min_password }}" maxlength="256" autocomplete="new-password"{% if not required %} placeholder="{{ _('inchangé si vide') }}"{% endif %}></span></label>
+  <label class="f"><span>{{ _("Confirmation") }}</span><span class="password-field"><input type="password" name="confirm" {{ 'required' if required }} minlength="{{ min_password }}" maxlength="256" autocomplete="new-password"></span></label>
+</div>
+<ul class="password-rules share-pw-rules" aria-live="polite">
+  <li data-rule="length">{{ _("Au moins %(min_password)s caractères", min_password=min_password) }}</li>
+  <li data-rule="variety">{{ _("Au moins 5 caractères différents") }}</li>
+  <li data-rule="match">{{ _("Confirmation identique") }}</li>
+</ul>
+{%- endmacro %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ _("Partages de fichiers") }}</h1>
+    <p>{{ _("Des dossiers du serveur loco partagés sur le réseau (SMB), chacun avec sa taille limite et ses utilisateurs.") }}</p>
+  </div>
+  {% if manage and ready %}<div class="actions">
+    <button type="button" class="btn" data-open="#share-user-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un utilisateur") }}</span></button>
+    {% if partitions %}<button type="button" class="btn primary" data-open="#share-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un partage") }}</span></button>{% endif %}
+  </div>{% endif %}
+</div>
+
+<div class="stack" data-poll="{{ url_for('shares') }}" data-poll-every="10000" data-signature="{{ signature }}">
+{% if not available %}
+<div class="note err"><p>{{ _("Les partages de fichiers demandent un serveur Linux avec son agent d'administration (appliance, Debian, Ubuntu) : ils ne sont pas possibles dans l'image Docker ni sur un serveur Windows.") }}</p></div>
+{% elif st.stale %}
+<div class="note err"><p>{{ _("L'agent d'administration du serveur (service loco-agent) ne répond pas : l'état des partages est inconnu, et les changements s'appliqueront à son retour.") }}</p></div>
+{% endif %}
+{% if st.support == 'system' %}
+<div class="note err"><p>{{ _("loco sait installer et tenir Samba sur l'appliance, Debian et Ubuntu : ce système n'en fait pas partie.") }}</p></div>
+{% endif %}
+{% if st.busy == 'install' %}
+<div class="note"><p><span class="spin on"></span> {{ _("Installation de Samba en cours, depuis les dépôts du système…") }}</p></div>
+{% elif st.error == 'install' %}
+<div class="note err"><p>{{ _("L'installation de Samba a échoué. Fin du journal :") }}</p><pre class="log">{{ st.install_log }}</pre></div>
+{% elif st.error == 'config' %}
+<div class="note err"><p>{{ _("Samba a refusé la configuration écrite par loco (testparm) : l'ancienne est restée en place.") }}</p>{% if st.install_log %}<pre class="log">{{ st.install_log }}</pre>{% endif %}</div>
+{% elif st.error == 'service' %}
+<div class="note err"><p>{{ _("Samba ne démarre pas sur le serveur : voyez son journal dans /var/log/samba.") }}</p></div>
+{% elif st.error == 'internal' %}
+<div class="note err"><p>{{ _("L'agent d'administration n'a pas pu appliquer la dernière demande : réessayez, ou voyez son journal.") }}</p></div>
+{% endif %}
+
+{% if available and not st.stale and not st.installed and st.busy != 'install' %}
+<section class="panel">
+  <div class="empty empty-rich">
+    {{ nav_icon('folder') }}
+    <strong>{{ _("Samba n'est pas installé sur ce serveur") }}</strong>
+    <span>{{ _("loco installe le serveur Samba depuis les dépôts du système (smbd et ses outils, sans NetBIOS ni imprimantes), puis le règle lui-même : comptes seulement, aucun accès invité, SMB 2 ou plus récent, réseaux des postes de loco seulement.") }}</span>
+    {% if manage %}<form method="post" action="{{ url_for('shares_install') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn primary"><span class="spin"></span>{{ _("Installer Samba") }}</button>
+    </form>{% endif %}
+  </div>
+</section>
+{% elif st.installed and not st.managed %}
+<div class="note warn">
+  <p>{{ _("Samba est déjà installé et réglé sur ce serveur, en dehors de loco : loco ne touche pas à sa configuration.") }}</p>
+  {% if manage %}<form method="post" action="{{ url_for('shares_takeover') }}" data-confirm="{{ _('Laisser loco gérer Samba ?') }}" data-confirm-text="{{ _('La configuration actuelle (/etc/samba/smb.conf) est remplacée par celle de loco ; une copie est gardée dans /etc/samba/smb.conf.avant-loco. Les partages qu’elle décrivait ne sont plus servis.') }}" data-confirm-ok="{{ _('Laisser loco gérer Samba') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn"><span class="spin"></span>{{ _("Laisser loco gérer Samba") }}</button>
+  </form>{% endif %}
+</div>
+{% endif %}
+
+{% if st.installed %}
+<section class="panel share-strip" data-refresh="server">
+  <span class="st {{ 'ok' if st.running else 'err' }}">{{ _("Samba %(v)s en service", v=st.version) if st.running else _("Samba %(v)s arrêté", v=st.version) }}</span>
+  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\" aria-label="{{ _('Adresse des partages') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+  <span><span class="share-strip-k">{{ _("Réseaux autorisés") }}</span> <span class="mono">{% if st.networks %}{{ st.networks|join(' ') }}{% else %}{{ _("tous") }}{% endif %}</span></span>
+  <span><span class="share-strip-k">{{ _("Connexions") }}</span> {{ (st.sessions or [])|length }}</span>
+</section>
+{% endif %}
+
+{% if ready %}
+<section class="panel" data-refresh="partitions">
+  <div class="panel-h"><h2>{{ _("Partitions") }}{% if partitions %} <span class="h-count">{{ partitions|length }}</span>{% endif %}</h2><div class="aside">{{ _("en service sur le serveur ; loco n'en formate ni n'en monte aucune") }}</div></div>
+  {% if partitions %}
+  <div class="panel-b share-parts">
+    {% for p in partitions %}
+    <div class="share-part">
+      <div class="share-part-h">
+        <strong class="mono">{{ p.mount }}</strong>
+        <span class="sub">{{ p.device }} · {{ p.fstype }} · {{ _("partages dans %(base)s", base=p.base) }}</span>
+        <span class="share-part-size"><b>{{ p.free|human }}</b> {{ _("libres sur %(size)s", size=p.size|human) }}</span>
+      </div>
+      {{ part_bar(p) }}
+      {{ part_legend(p) }}
+      {% if p.over %}<p class="note warn">{{ _("Les tailles limites des partages de cette partition dépassent sa place libre : ils pourraient la remplir avant d'atteindre leur limite.") }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="panel-b"><p class="muted">{{ _("Aucune partition utilisable : il faut un système de fichiers à droits Unix (ext4, XFS, Btrfs…) monté en écriture, hors des dossiers du système.") }}</p></div>
+  {% endif %}
+</section>
+
+<div class="tabs" role="tablist" data-hash>
+  <button type="button" data-tab="partages" aria-selected="true">{{ _("Partages") }} <span class="tab-count">{{ shares|length }}</span></button>
+  <button type="button" data-tab="utilisateurs" aria-selected="false">{{ _("Utilisateurs") }} <span class="tab-count">{{ users|length }}</span></button>
+  <button type="button" data-tab="connexions" aria-selected="false">{{ _("Connexions") }} <span class="tab-count">{{ (st.sessions or [])|length }}</span></button>
+</div>
+
+<div class="tab-panel on" data-panel="partages"><div data-refresh="shares">
+  {% if shares %}
+  <div class="share-grid">
+    {% for s in shares %}
+    <article class="share-card{{ ' is-full' if s.full }}{{ ' is-error' if s.error }}">
+      <header class="share-card-h">
+        <div class="share-card-t"><strong><span class="ti">{{ nav_icon('folder') }}</span>{{ s.name }}</strong><span class="sub">{{ s.comment or s.path }}</span></div>
+        {% if manage %}<details class="menu row-menu">
+          <summary class="kebab" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}">{{ kebab_icon }}</summary>
+          <div class="menu-list" role="menu">
+            <button type="button" class="menu-item" data-open="#share-edit-{{ s.id }}">{{ ui_icon('edit') }}<span>{{ _("Modifier") }}</span></button>
+            <form method="post" action="{{ url_for('shares_delete', share_id=s.id) }}" data-confirm="{{ _('Retirer le partage %(name)s ?', name=s.name) }}" data-confirm-text="{{ _('Il n’est plus servi sur le réseau. Ses fichiers restent sur le serveur, dans %(path)s.', path=s.path) }}" data-confirm-ok="{{ _('Retirer') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="menu-item danger">{{ ui_icon('trash') }}<span>{{ _("Retirer le partage") }}</span></button>
+            </form>
+          </div>
+        </details>{% endif %}
+      </header>
+      <div class="share-card-b">
+        {{ ring(s.pct, s.color, 76) }}
+        <div class="share-card-n">
+          <span class="v">{{ s.used|human if s.used is not none else '—' }}</span>
+          <span class="s">{{ _("sur %(limit)s", limit=s.size_limit|human) }}</span>
+          {% if s.full %}<span class="pill err">{{ _("plein : lecture seule") }}</span>{% elif s.error %}<span class="pill err">{{ _("en erreur") }}</span>{% elif s.used is none %}<span class="pill">{{ _("pas encore relevée") }}</span>{% endif %}
+        </div>
+      </div>
+      {% if s.error %}<p class="share-card-err err-text">{{ s.error }}</p>{% endif %}
+      <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\{{ s.name }}" aria-label="{{ _('Adresse du partage') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+      <footer class="share-card-f">
+        <span class="share-avatars">{% for a in s.access %}{{ avatar(a.login, a.can_write) }}{% endfor %}</span>
+        <span class="sub">{% if s.access %}{{ ngettext('%(num)s utilisateur', '%(num)s utilisateurs', s.access|length) }}{% else %}{{ _("aucun utilisateur") }}{% endif %}{% if s.sessions %} · {{ ngettext('%(num)s connexion', '%(num)s connexions', s.sessions|length) }}{% endif %}</span>
+      </footer>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <section class="panel">
+    <div class="empty empty-rich">
+      {{ nav_icon('folder') }}
+      <strong>{{ _("Aucun partage pour l'instant") }}</strong>
+      <span>{{ _("Choisissez une partition, une taille limite et les utilisateurs qui y accèdent : le dossier est créé par loco, et chacun s'y connecte avec son identifiant et son mot de passe Samba.") }}</span>
+      {% if manage and partitions %}<button type="button" class="btn primary" data-open="#share-add">{{ _("Ajouter un partage") }}</button>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+</div></div>
+
+<div class="tab-panel" data-panel="utilisateurs"><div data-refresh="users">
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Utilisateurs Samba") }}</h2>
+      <div class="aside">{% if manage %}<button type="button" class="btn sm" data-open="#share-user-add">{{ ui_icon('plus') }}<span>{{ _("Ajouter un utilisateur") }}</span></button>{% endif %}</div></div>
+    {% if users %}
+    <div class="table-wrap">
+      <table class="table-cards share-users">
+        <thead><tr><th>{{ _("Utilisateur") }}</th><th>{{ _("Partages") }}</th><th>{{ _("Mot de passe") }}</th><th></th></tr></thead>
+        <tbody>
+        {% for a in users %}
+          <tr{% if a.off %} class="is-off"{% endif %}>
+            <td><span class="share-user">{{ avatar(a.login, big=True) }}<span><strong class="mono">{{ a.login }}</strong>
+              {% if a.linked %}<span class="pill">{{ _("compte loco") }}</span>{% else %}<span class="pill">{{ _("Samba seul") }}</span>{% endif %}
+              {% if a.off %}<span class="pill warn">{{ _("désactivé") }}</span>{% elif a.connected %}<span class="pill ok">{{ _("connecté") }}</span>{% endif %}
+              {% if a.label %}<span class="sub">{{ a.label }}</span>{% endif %}
+              {% if a.linked and (a.loco_disabled or a.loco_pending) %}<span class="sub warn-text">{{ _("Son compte loco est désactivé : il ne se connecte pas non plus aux partages.") }}</span>{% endif %}</span></span></td>
+            <td data-label="{{ _('Partages') }}">{% for name, right in a.shares %}<span class="share-chip{{ ' w' if right == 'write' }}">{{ name }}<b>{{ _("écriture") if right == 'write' else _("lecture") }}</b></span>{% else %}<span class="muted">{{ _("aucun") }}</span>{% endfor %}</td>
+            <td data-label="{{ _('Mot de passe') }}">{% if a.in_samba %}{{ _("défini le %(v)s", v=a.password_at|date_fr) }}{% else %}<span class="warn-text">{{ _("pas encore posé dans Samba") }}</span>{% endif %}</td>
+            <td class="right">{% if manage %}<details class="menu row-menu">
+              <summary class="kebab" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}">{{ kebab_icon }}</summary>
+              <div class="menu-list" role="menu">
+                <button type="button" class="menu-item" data-open="#share-user-{{ a.id }}">{{ ui_icon('edit') }}<span>{{ _("Modifier, mot de passe et droits") }}</span></button>
+                <form method="post" action="{{ url_for('shares_user_toggle', account_id=a.id) }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <button class="menu-item">{{ ui_icon('power') }}<span>{{ _("Réactiver") if a.disabled else _("Désactiver") }}</span></button>
+                </form>
+                <form method="post" action="{{ url_for('shares_user_delete', account_id=a.id) }}" data-confirm="{{ _('Retirer l’utilisateur Samba %(login)s ?', login=a.login) }}" data-confirm-text="{{ _('Il ne peut plus se connecter à aucun partage ; les fichiers qu’il y a déposés restent en place.') }}{% if a.linked %} {{ _('Son compte loco n’est pas touché.') }}{% endif %}" data-confirm-ok="{{ _('Retirer') }}">
+                  <input type="hidden" name="csrf" value="{{ csrf }}">
+                  <button class="menu-item danger">{{ ui_icon('trash') }}<span>{{ _("Retirer de Samba") }}</span></button>
+                </form>
+              </div>
+            </details>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty empty-rich">
+      {{ nav_icon('users') }}
+      <strong>{{ _("Aucun utilisateur Samba") }}</strong>
+      <span>{{ _("Ajoutez un compte loco existant, ou un utilisateur propre aux partages (un poste de numérisation, un collègue sans compte loco) : son identifiant, son mot de passe et ses droits se règlent ici.") }}</span>
+      {% if manage %}<button type="button" class="btn primary" data-open="#share-user-add">{{ _("Ajouter un utilisateur") }}</button>{% endif %}
+    </div>
+    {% endif %}
+  </section>
+</div></div>
+
+<div class="tab-panel" data-panel="connexions"><div data-refresh="sessions">
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Connexions en cours") }}</h2><div class="aside">{{ _("relevées toutes les quinze secondes") }}</div></div>
+    {% if st.sessions %}
+    <div class="table-wrap">
+      <table class="table-cards">
+        <thead><tr><th>{{ _("Utilisateur") }}</th><th>{{ _("Partage") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Depuis") }}</th></tr></thead>
+        <tbody>
+        {% for c in st.sessions %}
+          <tr><td><span class="share-user">{{ avatar(c.user) }}<span class="mono">{{ c.user }}</span></span></td>
+            <td data-label="{{ _('Partage') }}">{{ c.share }}</td><td data-label="{{ _('Poste') }}"><span class="mono">{{ c.machine }}</span></td>
+            <td data-label="{{ _('Depuis') }}">{{ c.since|date_fr if c.since else '—' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="panel-b"><p class="muted">{{ _("Personne n'est connecté aux partages en ce moment.") }}</p></div>
+    {% endif %}
+  </section>
+</div></div>
+{% endif %}
+</div>
+
+{% if manage and ready %}
+<dialog id="share-add" class="wide-dialog">
+  <form method="post" action="{{ url_for('shares_add') }}" autocomplete="off" data-share-form>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Ajouter un partage") }}</h2><p>{{ _("Un dossier créé par loco sur la partition choisie, servi sur le réseau.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Nom du partage") }}</span><input type="text" name="name" required maxlength="32" pattern="[\w][\w.\-]{0,31}" spellcheck="false" placeholder="Documents" data-share-name></label>
+        <label class="f"><span>{{ _("Description") }}</span><input type="text" name="comment" maxlength="120" placeholder="{{ _('facultative') }}"></label>
+      </div>
+      <fieldset class="share-choose">
+        <legend>{{ _("Partition") }}</legend>
+        {% for p in partitions %}
+        <label class="share-choice">
+          <input type="radio" name="mount" value="{{ p.mount }}" required data-share-mount data-available="{{ p.available }}" data-base="{{ p.base }}"{% if loop.first %} checked{% endif %}>
+          <span class="share-choice-b">
+            <span class="share-part-h"><strong class="mono">{{ p.mount }}</strong><span class="sub">{{ p.device }} · {{ p.fstype }}</span>
+              <span class="share-part-size">{{ _("%(free)s libres non réservés", free=p.available|human) }}</span></span>
+            {{ part_bar(p) }}
+          </span>
+        </label>
+        {% endfor %}
+      </fieldset>
+      <div class="share-size">
+        <div class="share-size-h"><span>{{ _("Taille limite") }}</span><output class="share-size-out" data-share-out>10 Go</output></div>
+        <label class="f"><span class="share-size-in"><input type="range" min="1" max="2048" step="1" value="10" data-share-range aria-label="{{ _('Taille limite en Go') }}">
+            <input type="number" name="size" min="1" step="1" value="10" required data-share-size aria-label="{{ _('Taille limite en Go') }}"> <span>{{ _("Go") }}</span></span></label>
+        <p class="hint">{{ _("Au-delà, le partage passe en lecture seule jusqu'à ce qu'on y fasse de la place ; les postes Windows le voient comme un disque de cette taille.") }}</p>
+      </div>
+      <p class="share-dest">{{ _("Dossier créé :") }} <span class="mono" data-share-dest data-empty="…">{{ partitions[0].base if partitions else '' }}/…</span></p>
+      {{ share_rights() }}
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Créer le partage") }}</button>
+    </div>
+  </form>
+</dialog>
+
+{% for s in shares %}{% set p = partitions|selectattr('mount', 'equalto', s.mount)|first %}
+<dialog id="share-edit-{{ s.id }}" class="wide-dialog">
+  <form method="post" action="{{ url_for('shares_edit', share_id=s.id) }}" autocomplete="off" data-share-form>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Modifier %(name)s", name=s.name) }}</h2><p class="mono">{{ s.path }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Nom du partage") }}</span><input type="text" name="name" required maxlength="32" pattern="[\w][\w.\-]{0,31}" spellcheck="false" value="{{ s.name }}"></label>
+        <label class="f"><span>{{ _("Description") }}</span><input type="text" name="comment" maxlength="120" value="{{ s.comment }}"></label>
+      </div>
+      {% if p %}<div class="share-choice-b">{{ part_bar(p) }}</div>{% endif %}
+      <div class="share-size">
+        <div class="share-size-h"><span>{{ _("Taille limite") }}</span><output class="share-size-out" data-share-out>{{ (s.size_limit / gib)|round|int }} Go</output></div>
+        <label class="f"><span class="share-size-in"><input type="range" min="1" max="2048" step="1" value="{{ (s.size_limit / gib)|round|int }}" data-share-range data-current="{{ s.size_limit }}" data-available="{{ p.available if p else 0 }}" aria-label="{{ _('Taille limite en Go') }}">
+            <input type="number" name="size" min="1" step="1" value="{{ (s.size_limit / gib)|round|int }}" required data-share-size aria-label="{{ _('Taille limite en Go') }}"> <span>{{ _("Go") }}</span></span></label>
+        {% if s.used is not none %}<p class="hint">{{ _("Occupé aujourd'hui : %(used)s.", used=s.used|human) }}</p>{% endif %}
+      </div>
+      {{ share_rights(s) }}
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endfor %}
+
+<dialog id="share-user-add" class="wide-dialog">
+  <form method="post" action="{{ url_for('shares_user_add') }}" autocomplete="off" data-password-form data-username="" data-min="{{ min_password }}" data-share-user>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Ajouter un utilisateur Samba") }}</h2><p>{{ _("Il se connecte aux partages avec cet identifiant et ce mot de passe.") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <fieldset class="share-kinds">
+        <legend>{{ _("Type d’utilisateur") }}</legend>
+        <label class="share-kind"><input type="radio" name="kind" value="loco" data-share-kind{% if free_loco %} checked{% else %} disabled{% endif %}>
+          <span><strong>{{ _("Un compte loco") }}</strong><small>{{ _("même identifiant ; désactivé et retiré avec son compte loco") }}</small></span></label>
+        <label class="share-kind"><input type="radio" name="kind" value="samba" data-share-kind{% if not free_loco %} checked{% endif %}>
+          <span><strong>{{ _("Un utilisateur Samba seul") }}</strong><small>{{ _("sans accès à loco : poste de numérisation, collègue, imprimante") }}</small></span></label>
+      </fieldset>
+      <div class="rollout-fields">
+        <label class="f" data-kind-loco{% if not free_loco %} hidden{% endif %}><span>{{ _("Compte loco") }}</span><select name="loco"{% if not free_loco %} disabled{% endif %}>
+          {% for u in free_loco %}<option value="{{ u.id }}">{{ u.username }}</option>{% endfor %}
+        </select></label>
+        <label class="f" data-kind-samba{% if free_loco %} hidden{% endif %}><span>{{ _("Identifiant") }}</span><input type="text" name="login" maxlength="32" pattern="[a-z0-9][a-z0-9._\-]{1,31}" spellcheck="false" autocomplete="off" placeholder="comptabilite"{% if free_loco %} disabled{% endif %}></label>
+        <label class="f"><span>{{ _("Description") }}</span><input type="text" name="label" maxlength="80" placeholder="{{ _('facultative') }}"></label>
+      </div>
+      {{ password_fields(True) }}
+      <p class="hint">{{ _("Le mot de passe est remis à Samba et n'est gardé nulle part ailleurs : loco ne pourra plus l'afficher. Transmettez-le à la personne par un moyen sûr.") }}</p>
+      {{ user_rights() }}
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Ajouter l'utilisateur") }}</button>
+    </div>
+  </form>
+</dialog>
+
+{% for a in users %}
+<dialog id="share-user-{{ a.id }}" class="wide-dialog">
+  <form method="post" action="{{ url_for('shares_user_edit', account_id=a.id) }}" autocomplete="off" data-password-form data-username="" data-min="{{ min_password }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="dlg-h">
+      <div><h2>{{ _("Modifier %(name)s", name=a.login) }}</h2><p>{{ _("Compte loco") if a.linked else _("Utilisateur Samba seul, sans accès à loco") }}</p></div>
+      <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+    </div>
+    <div class="dlg-b dlg-stack">
+      <label class="f"><span>{{ _("Description") }}</span><input type="text" name="label" maxlength="80" value="{{ a.label }}"></label>
+      {{ password_fields(False) }}
+      {{ user_rights(a) }}
+    </div>
+    <div class="dlg-f">
+      <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+      <button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button>
+    </div>
+  </form>
+</dialog>
+{% endfor %}
+{% endif %}
+{% endblock %}
