@@ -6,7 +6,9 @@ celles qu'il connaît et adopte la première qui répond avec un certificat de l
 une adresse annoncée ne peut pas rediriger les postes vers un autre serveur.
 """
 
+import ipaddress
 import json
+import os
 import re
 import urllib.parse
 
@@ -28,6 +30,79 @@ def normalize(url):
     if port is not None and not 1 <= port <= 65535:
         raise ValueError(_('port invalide'))
     return url
+
+
+def _host(url):
+    return (urllib.parse.urlsplit(url).hostname or "").strip("[]")
+
+
+def _is_ip(host):
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def _alt_names(name):
+    """Noms alternatifs (SAN) d'un certificat du dossier TLS : (noms DNS, IP) ; vides s'il manque ou se lit mal."""
+    try:
+        from cryptography import x509
+        with open(os.path.join(config.TLS_DIR, name), "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        return names.get_values_for_type(x509.DNSName), names.get_values_for_type(x509.IPAddress)
+    except Exception:
+        return [], []
+
+
+def _certificate_ips():
+    """IP couvertes par le certificat de loco (server.crt, autorité loco), hors boucle locale : celles qu'un poste peut
+    joindre en reconnaissant loco par son autorité, sans celle de l'entreprise."""
+    return [str(ip) for ip in _alt_names("server.crt")[1] if not ip.is_loopback]
+
+
+def _enterprise_name():
+    """Nom DNS complet du certificat d'entreprise ou importé que loco présente (« loco.entreprise.lan »), s'il y en a
+    un : c'est par lui que les postes du domaine joignent loco, quand aucune adresse de portail n'est réglée."""
+    for name in ("enterprise.crt", "imported.crt"):
+        for dns in _alt_names(name)[0]:
+            if "." in dns and "*" not in dns and not dns.endswith(".local"):
+                return dns
+    return ""
+
+
+def enroll_servers():
+    """Adresses d'inscription, dans l'ordre d'essai : le nom DNS du portail s'il en a un (à défaut, celui du certificat
+    d'entreprise), puis l'adresse des agents.
+
+    Un nom DNS présente souvent le certificat d'une autorité d'entreprise, que tous les postes ne reconnaissent pas
+    (poste neuf, hors domaine, faisceau des agents sans cette autorité) ; l'IP présente le certificat de loco, que
+    l'agent reconnaît par l'empreinte de son autorité. Les commandes et les installeurs essaient donc le nom, puis l'IP,
+    et l'agent garde l'autre adresse en secours."""
+    out = []
+    portal = config.portal_url().rstrip("/")
+    agents = config.HTTPS_URL.rstrip("/")
+    if portal and not _is_ip(_host(portal)):
+        out.append(portal)
+    elif _is_ip(_host(agents)) and _enterprise_name():
+        # Pas de nom de portail réglé, mais un certificat d'entreprise pour un nom : ce nom, sur le port des agents.
+        port = urllib.parse.urlsplit(agents).port
+        out.append(f"https://{_enterprise_name()}" + (f":{port}" if port else ""))
+    out.append(agents)
+    if not _is_ip(_host(agents)):              # adresse des agents donnée par un nom : l'IP du certificat de loco ensuite
+        port = urllib.parse.urlsplit(agents).port
+        for ip in _certificate_ips():
+            out.append(f"https://{'[' + ip + ']' if ':' in ip else ip}" + (f":{port}" if port else ""))
+    valid = []
+    for url in out:
+        try:
+            url = normalize(url)
+        except ValueError:
+            continue
+        if url not in valid:
+            valid.append(url)
+    return valid[:3] or [agents]
 
 
 def announced(conn):

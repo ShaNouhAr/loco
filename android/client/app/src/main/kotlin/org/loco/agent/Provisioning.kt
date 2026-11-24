@@ -5,8 +5,9 @@ import org.json.JSONObject
 import java.io.RandomAccessFile
 
 /** Configuration gravée dans l'APK par loco (route /agent/android/enroll.apk) : adresse du serveur, clé
- *  d'inscription et empreinte de l'autorité. Permet d'inscrire l'appareil sans rien saisir. */
-class Provision(val server: String, val key: String, val ca: String)
+ *  d'inscription et empreinte de l'autorité. Permet d'inscrire l'appareil sans rien saisir. servers : les adresses à
+ *  essayer dans l'ordre (nom DNS du portail, puis IP), la première étant server. */
+class Provision(val server: String, val key: String, val ca: String, val servers: List<String> = listOf(server))
 
 /** Lit la configuration que loco a gravée dans le « bloc de signature » de notre propre APK, sans toucher à sa
  *  signature (voir portal/loco/apksign.py). Renvoie null pour l'APK générique (aucune paire loco) ou si l'APK est
@@ -21,7 +22,10 @@ object Provisioning {
             val o = JSONObject(String(it, Charsets.UTF_8))
             val server = o.optString("server").trimEnd('/')
             val key = o.optString("key")
-            if (server.startsWith("https://") && key.isNotEmpty()) Provision(server, key, o.optString("ca")) else null
+            val list = o.optJSONArray("servers")
+            val servers = (if (list == null) listOf(server) else (0 until list.length()).map { list.optString(it).trimEnd('/') })
+                .filter { it.startsWith("https://") }.distinct().take(4).ifEmpty { listOf(server) }
+            if (server.startsWith("https://") && key.isNotEmpty()) Provision(server, key, o.optString("ca"), servers) else null
         }
     } catch (_: Exception) { null }
 

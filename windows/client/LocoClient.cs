@@ -429,22 +429,45 @@ namespace Loco
 
         static Dictionary<string, object> Enroll(Dictionary<string, object> conf)
         {
-            string server = Setting("Server").TrimEnd('/'), key = Setting("Key"), pin = Setting("CaSha256");
-            if (server == "" || key == "") return null;
+            string key = Setting("Key"), pin = Setting("CaSha256");
+            // Server : une adresse, ou plusieurs séparées par des virgules, essayées dans l'ordre (nom DNS du portail, puis
+            // IP). Un nom peut présenter le certificat d'une autorité d'entreprise absente du faisceau ; l'IP, celui de loco.
+            var servers = Setting("Server").Split(',').Select(u => u.Trim().TrimEnd('/')).Where(u => ServerPattern.IsMatch(u)).Distinct().Take(4).ToList();
+            if (servers.Count == 0 || key == "") return null;
             SecureRoot();
-            if (pin != "") FetchCa(server, pin); else if (File.Exists(CaPath)) File.Delete(CaPath);
-            LoadCa();
             string uid = Str(conf, "uid");
             if (uid == "") uid = Guid.NewGuid().ToString("N");
             var data = Identity();
             data["key"] = key;
             data["uid"] = uid;
-            var answer = Post(server, "/agent/api/enroll", data, null);
+            Dictionary<string, object> answer = null;
+            string server = "";
+            Exception failure = null;
+            foreach (string candidate in servers)
+            {
+                try
+                {
+                    if (pin != "") FetchCa(candidate, pin); else if (File.Exists(CaPath)) File.Delete(CaPath);
+                    LoadCa();
+                    answer = Post(candidate, "/agent/api/enroll", data, null);
+                    server = candidate;
+                    break;
+                }
+                catch (LocoHttpException) { throw; }        // le serveur a répondu (clé refusée…) : pas une question d'adresse
+                catch (Exception e)
+                {
+                    Log(Lang.T("serveur injoignable à ", "server unreachable at ", "servidor inaccesible en ") + candidate + " : " + e.Message);
+                    failure = e;
+                }
+            }
+            if (answer == null) throw failure ?? new Exception(Lang.T("aucune adresse de serveur", "no server address", "ninguna dirección de servidor"));
             // Identité retenue par le serveur (loco 2.144.0 et plus) : il en attribue une neuve si l'identifiant
             // présenté est déjà celui d'un poste inscrit dont on n'a pas le jeton.
             if (Str(answer, "uid") != "") uid = Str(answer, "uid");
             conf = new Dictionary<string, object> {
                 { "server", server }, { "uid", uid }, { "token", Str(answer, "token") }, { "enrolled", DateTime.Now.ToString("s") } };
+            var others = new ArrayList(servers.Where(u => u != server).ToList());
+            if (others.Count > 0) conf["servers"] = others;      // en secours, essayées si l'adresse retenue ne répond plus
             SaveJson(ConfigPath, conf);
             SaveJson(StatePath, new Dictionary<string, object> { { "last_scan", 0 }, { "scan_hours", 6 }, { "rescan", true } });
             Log(Lang.T("poste inscrit auprès de ", "machine enrolled with ", "equipo inscrito en ") + server);

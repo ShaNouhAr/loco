@@ -36,7 +36,9 @@ LOCO_CA_EOF
 {% else %}rm -f /etc/loco-client/ca.crt
 {% endif %}chmod 644 /etc/loco-client/ca.crt 2>/dev/null || true
 # Clé d'inscription passée par l'environnement : elle n'apparaît pas dans la liste des processus du poste.
-LOCO_ENROLL_KEY='{{ key }}' /usr/local/lib/loco-client/loco-client.py enroll --server '{{ server }}'
+# Adresses essayées dans l'ordre (nom DNS du portail, puis IP) : la première qui répond inscrit le poste, les autres
+# restent connues de l'agent en secours.
+LOCO_ENROLL_KEY='{{ key }}' /usr/local/lib/loco-client/loco-client.py enroll --server '{{ servers or server }}'
 cat > /etc/systemd/system/loco-client.service <<'UNIT_EOF'
 [Unit]
 Description=loco : agent du parc (inventaire, mises à jour)

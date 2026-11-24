@@ -6,6 +6,8 @@ de leurs sorties, sans rien installer ni appeler le réseau."""
 import importlib.util
 import os
 from pathlib import Path
+import ssl
+import urllib.error
 import unittest
 from unittest import mock
 
@@ -647,6 +649,40 @@ class TestEnrollment(unittest.TestCase):
                                        answer={"token": fresh + ".nouveau", "uid": fresh, "interval": 120})
         self.assertNotIn("proof", sent["data"])                          # plus de jeton : rien à prouver
         self.assertEqual((conf["uid"], conf["token"]), (fresh, fresh + ".nouveau"))
+
+    def test_the_ip_is_tried_when_the_dns_name_fails(self):
+        """Nom DNS au certificat d'une autorité d'entreprise inconnue du poste : l'agent passe à l'IP, s'y inscrit, et
+        garde le nom en secours. Un refus du serveur (clé) arrête là, sans essayer l'adresse suivante."""
+        calls, saved = [], {}
+
+        def call(target, path, data, token=None, timeout=60):
+            calls.append(target)
+            if "loco.example.lan" in target:
+                raise urllib.error.URLError(ssl.SSLCertVerificationError("certificate verify failed: unable to get local issuer certificate"))
+            return {"token": data["uid"] + ".nouveau", "uid": data["uid"], "interval": 120}
+
+        with mock.patch.object(agent, "load", lambda path, default=None: {}), \
+             mock.patch.object(agent, "save", lambda path, data, mode=0o600: saved.__setitem__(path, data)), \
+             mock.patch.object(agent.os, "makedirs", lambda *a, **k: None), \
+             mock.patch.object(agent, "identity", lambda: {"hostname": "srv", "os": {"family": "debian", "name": "Debian"}}), \
+             mock.patch.object(agent, "call", call), mock.patch.object(agent, "log", lambda *a: None):
+            code = agent.enroll("https://loco.example.lan:8443,https://192.0.2.8:8443", self.KEY)
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["https://loco.example.lan:8443", "https://192.0.2.8:8443"])
+        conf = saved[agent.CONFIG]
+        self.assertEqual((conf["server"], conf["servers"]), ("https://192.0.2.8:8443", ["https://loco.example.lan:8443"]))
+        self.assertEqual(agent.known_servers(conf), ["https://192.0.2.8:8443", "https://loco.example.lan:8443"])
+
+        def refused(target, path, data, token=None, timeout=60):
+            calls.append(target)
+            raise urllib.error.HTTPError(target + path, 403, "Forbidden", {}, None)
+        calls.clear()
+        with mock.patch.object(agent, "load", lambda path, default=None: {}), \
+             mock.patch.object(agent, "save", lambda *a, **k: None), mock.patch.object(agent.os, "makedirs", lambda *a, **k: None), \
+             mock.patch.object(agent, "identity", lambda: {"hostname": "srv", "os": {"family": "debian", "name": "Debian"}}), \
+             mock.patch.object(agent, "call", refused), mock.patch.object(agent, "log", lambda *a: None):
+            self.assertEqual(agent.enroll("https://loco.example.lan:8443,https://192.0.2.8:8443", self.KEY), 1)
+        self.assertEqual(calls, ["https://loco.example.lan:8443"])
 
     def test_an_older_server_without_uid_in_its_answer_keeps_the_local_one(self):
         uid = "ab" * 16

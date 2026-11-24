@@ -1644,6 +1644,16 @@ _MSI_FIELDS = (
 )
 
 
+def msi_servers(servers):
+    """Valeur SERVER du MSI : les adresses à essayer, séparées par des virgules, autant qu'en tient l'emplacement."""
+    room = len(_MSI_FIELDS[0][0])
+    out = []
+    for url in servers:
+        if len(",".join(out + [url]).encode()) <= room:
+            out.append(url)
+    return ",".join(out)
+
+
 def _stamp_msi(data, server="", key="", ca=""):
     """Grave l'adresse, la clé d'inscription et l'empreinte de l'autorité dans les emplacements du MSI (complétés
     d'espaces, que l'agent rogne). Valeurs vides = emplacements vidés (MSI générique pour ps1/GPO). Un MSI sans
@@ -1739,13 +1749,28 @@ WINDOWS_PIN = ("Add-Type 'using System.Net;using System.Net.Security;public stat
 def windows_command(base, key):
     """Commande d'enrôlement Windows (Windows PowerShell, administrateur). Le certificat de loco est reconnu par son
     empreinte : rien à importer avant, et un autre certificat (interception) reste refusé. Un certificat déjà reconnu par
-    le poste (autorité d'entreprise) passe comme d'habitude."""
-    url = f"{base}/agent/windows.ps1?key={key}"
-    pins = served_pins() if base.startswith("https://") else []
-    if not pins:
-        return f"irm '{url}' | iex"
-    listed = ",".join(f"'{p.upper()}'" for p in pins)
-    return f"{WINDOWS_PIN}[LocoPin]::On(@({listed}));irm '{url}' | iex"
+    le poste (autorité d'entreprise) passe comme d'habitude. base : une adresse, ou la liste des adresses à essayer dans
+    l'ordre (nom DNS puis IP) — l'erreur montrée est celle de la dernière."""
+    bases = [base] if isinstance(base, str) else list(base)
+    path = f"/agent/windows.ps1?key={key}"
+    pins = served_pins() if bases[0].startswith("https://") else []
+    listed = ",".join("'" + p.upper() + "'" for p in pins)
+    prefix = f"{WINDOWS_PIN}[LocoPin]::On(@({listed}));" if pins else ""
+    if len(bases) == 1:
+        return f"{prefix}irm '{bases[0]}{path}' | iex"
+    first = ",".join(f"'{b}'" for b in bases[:-1])
+    return (f"{prefix}$s=$null;foreach($u in @({first})){{try{{$s=irm \"$u{path}\";break}}catch{{}}}};"
+            f"if(-not $s){{$s=irm '{bases[-1]}{path}'}};$s|iex")
+
+
+def linux_fetch(bases, path, output=""):
+    """curl d'une ressource de loco, essayée à chaque adresse dans l'ordre (nom DNS puis IP) ; seule l'erreur de la
+    dernière est montrée. output : fichier où l'écrire (sinon la sortie standard)."""
+    opt = f"-fsSLo {output}" if output else "-fsSL"
+    tries = [f"curl {opt} '{b}{path}'" for b in bases]
+    if len(tries) == 1:
+        return tries[0]
+    return "{ " + " || ".join(t + " 2>/dev/null" for t in tries[:-1]) + " || " + tries[-1] + "; }"
 
 
 def _check_key():
@@ -1760,9 +1785,12 @@ def agent_linux_installer():
 
 
 def _linux_script(key):
-    """Script d'installation de l'agent Linux pour ce serveur : agent, autorité épinglée, adresse et clé."""
-    return render_template("agent-linux.sh", server=config.HTTPS_URL, key=key, ca=_ca_pem(), version=config.VERSION,
-                           agent=_agent_source("loco-client.py"))
+    """Script d'installation de l'agent Linux pour ce serveur : agent, autorité épinglée, adresses (essayées dans
+    l'ordre à l'inscription) et clé."""
+    from .addresses import enroll_servers
+    servers = enroll_servers()
+    return render_template("agent-linux.sh", server=servers[0], servers=",".join(servers), key=key, ca=_ca_pem(),
+                           version=config.VERSION, agent=_agent_source("loco-client.py"))
 
 
 def repos_available(kind):
@@ -1811,8 +1839,10 @@ def agent_windows_installer():
         reason = sha.replace("'", "''")
         script = f"Write-Warning 'Agent Windows indisponible sur le serveur loco : {reason}.'\n"
     else:
+        from .addresses import enroll_servers
         from .clients import client_base
-        script = render_template("agent-windows.ps1", server=config.HTTPS_URL, key=key, ca_sha256=_ca_fingerprint(),
+        servers = enroll_servers()
+        script = render_template("agent-windows.ps1", server=servers[0], servers=",".join(servers), key=key, ca_sha256=_ca_fingerprint(),
                                  version=config.VERSION, msi_url=client_base() + "/agent/files/loco-client.msi",
                                  msi_sha256=sha)
     return Response(script.replace("\r\n", "\n").replace("\n", "\r\n"), mimetype="text/plain")
@@ -1870,8 +1900,9 @@ def agent_enroll_msi():
         current_app.logger.warning("MSI de l'agent %s indisponible : %s", config.VERSION, reason)
         return Response(f"loco-client.msi {config.VERSION} indisponible : {reason}. Réessayez dans un instant.\n",
                         status=503, mimetype="text/plain", headers={"Retry-After": "30"})
+    from .addresses import enroll_servers
     with open(path, "rb") as f:
-        data = _stamp_msi(f.read(), server=config.HTTPS_URL, key=group_key(group["id"]) if group else enroll_key(),
+        data = _stamp_msi(f.read(), server=msi_servers(enroll_servers()), key=group_key(group["id"]) if group else enroll_key(),
                           ca=_ca_fingerprint())
     return Response(data, mimetype="application/x-msi",
                     headers={"Content-Disposition": "attachment; filename=loco-client.msi"})
@@ -1893,7 +1924,9 @@ def agent_enroll_apk():
         current_app.logger.warning("APK de l'agent %s indisponible : %s", config.VERSION, reason)
         return Response(f"loco-agent.apk {config.VERSION} indisponible : {reason}. Reessayez dans un instant.\n",
                         status=503, mimetype="text/plain", headers={"Retry-After": "30"})
-    cfg = json.dumps({"server": config.HTTPS_URL, "key": group_key(group["id"]) if group else enroll_key(),
+    from .addresses import enroll_servers
+    servers = enroll_servers()
+    cfg = json.dumps({"server": servers[0], "servers": servers, "key": group_key(group["id"]) if group else enroll_key(),
                       "ca": _ca_fingerprint()}, separators=(",", ":")).encode()
     try:
         with open(path, "rb") as f:
@@ -1971,16 +2004,21 @@ def _rows(apps=None):
 
 
 def _commands(key):
-    base, http = config.HTTPS_URL, config.HTTP_URL
+    from .addresses import enroll_servers
+    bases, http = enroll_servers(), config.HTTP_URL
     ca = _ca_fingerprint()
+    server = msi_servers(bases)
     commands = {
-        "windows": windows_command(base, key),
+        "servers": bases,
+        "windows": windows_command(bases, key),
         "windows_http": f"irm '{http}/agent/windows.ps1?key={key}' | iex" if http else "",
-        # MSI téléchargé à la main : sans ces paramètres, il installe le service sans l'inscrire.
-        "msiexec": (f'msiexec /i "%USERPROFILE%\\Downloads\\loco-client.msi" SERVER={base} KEY={key}'
+        # MSI téléchargé à la main : sans ces paramètres, il installe le service sans l'inscrire. Plusieurs adresses :
+        # l'agent les essaie dans l'ordre à l'inscription.
+        "msi_server": server,
+        "msiexec": (f'msiexec /i "%USERPROFILE%\\Downloads\\loco-client.msi" SERVER={server} KEY={key}'
                     + (f" CA_SHA256={ca}" if ca else "") + " /qb"),
-        "msi_urls": [u + "/agent/files/loco-client.msi" for u in (base, http) if u],
-        "linux": f"curl -fsSL '{base}/agent/linux.sh?key={key}' | sudo sh",
+        "msi_urls": [u + "/agent/files/loco-client.msi" for u in bases + ([http] if http else [])],
+        "linux": f"{linux_fetch(bases, f'/agent/linux.sh?key={key}')} | sudo sh",
         "linux_http": f"curl -fsSL '{http}/agent/linux.sh?key={key}' | sudo sh" if http else "",
     }
     # Paquets de l'agent, seuls ou avec les dépôts (« _full ») : téléchargés depuis le portail puis copiés sur le
@@ -1990,7 +2028,7 @@ def _commands(key):
             tag, file = kind + ("_full" if full else ""), name(config.VERSION, full)
             path = f"/agent/loco-client.{kind}?key={key}" + ("&depots=1" if full else "")
             commands.update({f"{tag}_path": path, f"{tag}_install": f"sudo {tool} install ./{file}",
-                             f"{tag}_fetch": f"curl -fsSLo {file} '{base}{path}' && sudo {tool} install ./{file}",
+                             f"{tag}_fetch": f"{linux_fetch(bases, path, file)} && sudo {tool} install ./{file}",
                              f"{tag}_fetch_http": f"curl -fsSLo {file} '{http}{path}' && sudo {tool} install ./{file}"
                              if http else ""})
     return commands

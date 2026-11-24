@@ -5528,5 +5528,6 @@
  "Envoi refusé par le pare-feu : %(m)s": "Envío rechazado por el cortafuegos: %(m)s",
  "Un autre administrateur a la main en écriture sur le pare-feu : réessayez quand il aura terminé (%(m)s).": "Otro administrador tiene el control en escritura del cortafuegos: inténtelo de nuevo cuando haya terminado (%(m)s).",
  "Le pare-feu ne répond pas (%(e)s).": "El cortafuegos no responde (%(e)s).",
- "Réponse illisible : ce n'est pas l'API d'un pare-feu Stormshield.": "Respuesta ilegible: no es la API de un cortafuegos Stormshield."
+ "Réponse illisible : ce n'est pas l'API d'un pare-feu Stormshield.": "Respuesta ilegible: no es la API de un cortafuegos Stormshield.",
+ "Adresses essayées dans l'ordre : %(first)s, puis %(then)s. Un poste qui ne reconnaît pas le certificat du nom DNS (autorité d'entreprise absente) s'inscrit par l'IP, et l'agent garde l'autre adresse en secours.": "Direcciones probadas en orden: %(first)s y luego %(then)s. Un equipo que no reconoce el certificado del nombre DNS (falta la autoridad de la empresa) se inscribe por la IP, y el agente conserva la otra dirección como respaldo."
 }

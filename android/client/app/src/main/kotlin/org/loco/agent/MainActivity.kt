@@ -508,18 +508,26 @@ class MainActivity : Activity() {
         if (autoStarted) return
         autoStarted = true
         Thread {
-            try {
-                val caPem = Net.fetchCaPem(cfg.server)
-                if (cfg.ca.isNotEmpty() && !Net.fingerprintOfFirst(caPem).equals(cfg.ca, ignoreCase = true)) {
-                    fallback(cfg, getString(R.string.auto_ca_mismatch)); return@Thread
+            // Adresses essayées dans l'ordre (nom DNS du portail, puis IP) : un nom peut présenter le certificat d'une
+            // autorité d'entreprise que l'autorité loco épinglée ne couvre pas ; l'IP présente celui de loco.
+            var message = getString(R.string.enroll_unreachable)
+            for (server in cfg.servers) {
+                try {
+                    val caPem = Net.fetchCaPem(server)
+                    if (cfg.ca.isNotEmpty() && !Net.fingerprintOfFirst(caPem).equals(cfg.ca, ignoreCase = true)) {
+                        message = getString(R.string.auto_ca_mismatch); continue
+                    }
+                    Agent(this).enroll(server, cfg.key, caPem)
+                    runOnUiThread { render() }
+                    return@Thread
+                } catch (e: Net.HttpError) {
+                    fallback(cfg, if (e.code == 403) getString(R.string.enroll_bad_key) else getString(R.string.enroll_failed, e.code))
+                    return@Thread
+                } catch (e: Exception) {
+                    message = getString(R.string.enroll_unreachable)
                 }
-                Agent(this).enroll(cfg.server, cfg.key, caPem)
-                runOnUiThread { render() }
-            } catch (e: Net.HttpError) {
-                fallback(cfg, if (e.code == 403) getString(R.string.enroll_bad_key) else getString(R.string.enroll_failed, e.code))
-            } catch (e: Exception) {
-                fallback(cfg, getString(R.string.enroll_unreachable))
             }
+            fallback(cfg, message)
         }.start()
     }
 

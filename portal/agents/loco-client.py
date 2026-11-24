@@ -7,7 +7,7 @@ demandées depuis le portail : inventaire, mise à jour, passage à la version m
 redémarrage, retrait de l'agent. Terminal interactif séparé, réservé aux administrateurs du portail.
   loco-client run                         contact du serveur (service)
   loco-client os-upgrade                  mise à niveau du système demandée par loco (lancée par l'agent, hors de lui)
-  loco-client enroll --server URL --key CLÉ      (ou la clé dans LOCO_ENROLL_KEY, sans --key)
+  loco-client enroll --server URL[,URL…] --key CLÉ      (ou la clé dans LOCO_ENROLL_KEY, sans --key ; adresses essayées dans l'ordre)
   loco-client status
   loco-client remove                      retrait local (le poste reste à oublier dans le portail)
 Bibliothèque standard de Python uniquement ; autorité du serveur épinglée (/etc/loco-client/ca.crt).
@@ -2965,16 +2965,32 @@ def enroll(server, key):
         # une identité neuve.
         data["proof"] = hmac.new(hashlib.sha256(secret.encode()).hexdigest().encode(),
                                  f"loco-enroll-v1\n{uid}\n{key}".encode(), hashlib.sha256).hexdigest()
-    try:
-        answer = call(server, "/agent/api/enroll", data)
-    except urllib.error.HTTPError as e:
-        log(t("clé d'inscription refusée.", "enrollment key refused.", "clave de inscripción rechazada.") if e.code == 403 else t(f"inscription refusée : HTTP {e.code}", f"enrollment refused: HTTP {e.code}", f"inscripción rechazada: HTTP {e.code}"))
+    # Plusieurs adresses (« https://nom:8443,https://IP:8443 ») : essayées dans l'ordre. Un nom DNS peut présenter le
+    # certificat d'une autorité d'entreprise que ce poste ne reconnaît pas ; l'IP, celui de loco.
+    servers = [u.strip().rstrip("/") for u in server.split(",") if SERVER_RE.match(u.strip().rstrip("/"))][:4]
+    if not servers:
+        log(t(f"adresse de serveur invalide : {server}", f"invalid server address: {server}", f"dirección de servidor no válida: {server}"))
         return 1
-    except (OSError, ValueError) as e:
-        log(t(f"serveur injoignable : {e}", f"server unreachable: {e}", f"servidor inaccesible: {e}"))
+    answer = None
+    for candidate in servers:
+        try:
+            answer = call(candidate, "/agent/api/enroll", data)
+        except urllib.error.HTTPError as e:     # le serveur a répondu : ce n'est pas une question d'adresse
+            log(t("clé d'inscription refusée.", "enrollment key refused.", "clave de inscripción rechazada.") if e.code == 403 else t(f"inscription refusée : HTTP {e.code}", f"enrollment refused: HTTP {e.code}", f"inscripción rechazada: HTTP {e.code}"))
+            return 1
+        except (OSError, ValueError) as e:
+            log(t(f"serveur injoignable à {candidate} : {e}", f"server unreachable at {candidate}: {e}", f"servidor inaccesible en {candidate}: {e}"))
+            continue
+        server = candidate
+        break
+    if answer is None:
         return 1
-    save(CONFIG, {"server": server.rstrip("/"), "uid": answer.get("uid") or uid, "token": answer["token"],
-                  "enrolled": datetime.datetime.now().isoformat(timespec="seconds")})
+    others = [u for u in servers if u != server]
+    conf = {"server": server, "uid": answer.get("uid") or uid, "token": answer["token"],
+            "enrolled": datetime.datetime.now().isoformat(timespec="seconds")}
+    if others:
+        conf["servers"] = others             # en secours, essayées si l'adresse retenue ne répond plus
+    save(CONFIG, conf)
     save(STATE, {"rescan": True})
     log(t(f"poste inscrit auprès de {server}.", f"machine enrolled with {server}.", f"equipo inscrito en {server}."))
     return 0

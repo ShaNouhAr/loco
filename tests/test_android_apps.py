@@ -564,7 +564,7 @@ class TestEnrollApk(AppsTest):
         self.assertEqual((r.status_code, r.mimetype), (200, "application/vnd.android.package-archive"))
         self.assertIn("filename=loco-agent.apk", r.headers["Content-Disposition"])
         self.assertEqual(json.loads(apksign.read_loco(r.data)),
-                         {"server": config.HTTPS_URL, "key": key, "ca": "deadbeef42"})
+                         {"server": config.HTTPS_URL, "servers": [config.HTTPS_URL], "key": key, "ca": "deadbeef42"})
         self.assertIsNone(zipfile.ZipFile(io.BytesIO(r.data)).testzip())          # l'APK reste un ZIP valide
 
     def test_requires_the_android_feature(self):

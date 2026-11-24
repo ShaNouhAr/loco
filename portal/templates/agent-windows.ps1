@@ -26,7 +26,8 @@ if ((Get-FileHash $msi -Algorithm SHA256).Hash -ne '{{ msi_sha256 }}') {
     throw {{ ps_t('Empreinte SHA-256 du MSI incorrecte : installation annulee.') }}
 }
 $log = Join-Path $env:TEMP 'loco-client-install.log'
-$arguments = '/i "{0}" SERVER="{{ server }}" KEY="{{ key }}" CA_SHA256="{{ ca_sha256 }}" /qn /norestart /l*v "{1}"' -f $msi, $log
+# SERVER : adresses essayees dans l'ordre a l'inscription (nom DNS du portail, puis IP), separees par des virgules.
+$arguments = '/i "{0}" SERVER="{{ servers or server }}" KEY="{{ key }}" CA_SHA256="{{ ca_sha256 }}" /qn /norestart /l*v "{1}"' -f $msi, $log
 $p = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru
 Remove-Item $msi -Force -ErrorAction SilentlyContinue
 if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw {{ ps_t('Installation du MSI en echec (code %(code)s, journal %(log)s).', code='$($p.ExitCode)', log='$log') }} }

@@ -5528,5 +5528,6 @@
  "Envoi refusé par le pare-feu : %(m)s": "Upload refused by the firewall: %(m)s",
  "Un autre administrateur a la main en écriture sur le pare-feu : réessayez quand il aura terminé (%(m)s).": "Another administrator holds write access on the firewall: try again once they have finished (%(m)s).",
  "Le pare-feu ne répond pas (%(e)s).": "The firewall is not responding (%(e)s).",
- "Réponse illisible : ce n'est pas l'API d'un pare-feu Stormshield.": "Unreadable response: this is not the API of a Stormshield firewall."
+ "Réponse illisible : ce n'est pas l'API d'un pare-feu Stormshield.": "Unreadable response: this is not the API of a Stormshield firewall.",
+ "Adresses essayées dans l'ordre : %(first)s, puis %(then)s. Un poste qui ne reconnaît pas le certificat du nom DNS (autorité d'entreprise absente) s'inscrit par l'IP, et l'agent garde l'autre adresse en secours.": "Addresses tried in order: %(first)s, then %(then)s. A machine that does not recognise the DNS name's certificate (enterprise authority missing) enrolls through the IP, and the agent keeps the other address as a fallback."
 }

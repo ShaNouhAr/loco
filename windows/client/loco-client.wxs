@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Installeur MSI de l'agent Windows loco-client (construit par build.sh avec wixl).
-     msiexec /i loco-client.msi SERVER=https://loco:8443 KEY=CLE CA_SHA256=EMPREINTE /qn
+     msiexec /i loco-client.msi SERVER=https://loco:8443 KEY=CLE CA_SHA256=EMPREINTE /qn   (SERVER : une adresse, ou plusieurs séparées par des virgules, essayées dans l'ordre)
      Sans propriétés (GPO) : réglages dans HKLM\SOFTWARE\Policies\loco\Client (Server, Key, CaSha256). -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="loco-client" Language="1036" Codepage="1252" Version="$(var.Version)"

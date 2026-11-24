@@ -217,3 +217,103 @@ class TestKeyStaysOutOfTheAccessLog(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDnsThenIp(FleetTest):
+    """Nom DNS du portail (certificat d'une autorité d'entreprise que tous les postes ne reconnaissent pas) : les
+    commandes et les installeurs essaient le nom, puis l'IP, et l'agent garde l'autre adresse en secours."""
+
+    NAME, IP = "https://loco.example.lan:8443", "https://192.0.2.8:8443"
+
+    def addresses(self, portal, agents):
+        from loco import addresses
+        patches = [mock.patch.object(config, "portal_url", lambda: portal), mock.patch.object(config, "HTTPS_URL", agents)]
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+        return addresses
+
+    def test_the_dns_name_first_then_the_ip(self):
+        addresses = self.addresses(self.NAME, self.IP)
+        self.assertEqual(addresses.enroll_servers(), [self.NAME, self.IP])
+        addresses = self.addresses(self.IP, self.IP)                                    # sans nom : l'IP seule
+        self.assertEqual(addresses.enroll_servers(), [self.IP])
+
+    def test_agents_given_by_name_fall_back_to_the_ips_of_the_loco_certificate(self):
+        import datetime
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+        import ipaddress
+        key = ec.generate_private_key(ec.SECP256R1())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "loco")])
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+                .serial_number(1).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+                .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("192.0.2.9")),
+                                                            x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                                                            x509.DNSName("loco.example.lan")]), critical=False)
+                .sign(key, hashes.SHA256()))
+        folder = tempfile.mkdtemp()
+        with open(os.path.join(folder, "server.crt"), "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+        addresses = self.addresses(self.NAME, self.NAME)
+        with mock.patch.object(config, "TLS_DIR", folder):
+            self.assertEqual(addresses.enroll_servers(), [self.NAME, "https://192.0.2.9:8443"])      # sans la boucle locale
+
+    def test_without_a_portal_name_the_enterprise_certificate_gives_it(self):
+        """Pas d'adresse de portail réglée (le cas d'une appliance), mais un certificat d'entreprise pour
+        loco.example.lan : ce nom d'abord, sur le port des agents, puis l'IP."""
+        import datetime
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.x509.oid import NameOID
+        key = ec.generate_private_key(ec.SECP256R1())
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "loco")])
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+                .serial_number(1).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+                .add_extension(x509.SubjectAlternativeName([x509.DNSName("loco"), x509.DNSName("loco.example.lan")]), critical=False)
+                .sign(key, hashes.SHA256()))
+        folder = tempfile.mkdtemp()
+        addresses = self.addresses(self.IP, self.IP)
+        with mock.patch.object(config, "TLS_DIR", folder):
+            self.assertEqual(addresses.enroll_servers(), [self.IP])                     # sans certificat d'entreprise
+            with open(os.path.join(folder, "enterprise.crt"), "wb") as f:
+                f.write(cert.public_bytes(serialization.Encoding.PEM))
+            self.assertEqual(addresses.enroll_servers(), [self.NAME, self.IP])           # le nom complet, pas « loco »
+
+    def test_commands_and_installers_try_each_address(self):
+        self.addresses(self.NAME, self.IP)
+        key = Agent.key()
+        commands = fleet._commands(key)
+        self.assertEqual(commands["linux"], f"{{ curl -fsSL '{self.NAME}/agent/linux.sh?key={key}' 2>/dev/null || "
+                                            f"curl -fsSL '{self.IP}/agent/linux.sh?key={key}'; }} | sudo sh")
+        self.assertIn(f"foreach($u in @('{self.NAME}'))", commands["windows"])
+        self.assertIn(f"if(-not $s){{$s=irm '{self.IP}/agent/windows.ps1?key={key}'}};$s|iex", commands["windows"])
+        self.assertIn(f"SERVER={self.NAME},{self.IP} KEY={key}", commands["msiexec"])
+        self.assertTrue(commands["deb_fetch"].startswith(f"{{ curl -fsSLo loco-client_{config.VERSION}_all.deb '{self.NAME}/agent/"))
+        script = self.admin.c.get(f"/agent/linux.sh?key={key}").get_data(as_text=True)
+        self.assertIn(f"enroll --server '{self.NAME},{self.IP}'", script)
+        page = self.admin.c.get("/enrollment").get_data(as_text=True)
+        self.assertIn("Adresses essayées dans l'ordre", page)
+        self.assertIn(f"SERVER={self.NAME},{self.IP} KEY=", page)                        # déploiement en masse
+
+    def test_the_linux_command_runs_in_a_plain_shell(self):
+        """La commande telle qu'affichée, avec un faux curl : le nom échoue (certificat), l'IP répond, sh exécute."""
+        import subprocess
+        self.addresses(self.NAME, self.IP)
+        command = fleet._commands("K")["linux"].replace("| sudo sh", "| sh")
+        fake = ('curl() { case "$2" in *loco.example.lan*) echo "curl: (60) SSL certificate problem" >&2; return 60 ;; '
+                '*) echo "echo inscrit par $2" ;; esac; }; ')
+        done = subprocess.run(["sh", "-c", fake + command], capture_output=True, text=True, timeout=30)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip(), f"inscrit par {self.IP}/agent/linux.sh?key=K")
+        self.assertEqual(done.stderr, "")                                                 # l'échec du nom reste discret
+
+    def test_the_msi_slot_keeps_what_fits(self):
+        long_name = "https://" + "a" * 130 + ".lan:8443"                              # 147 car. : l'IP ne tient plus (160)
+        self.assertEqual(fleet.msi_servers([self.NAME, self.IP]), f"{self.NAME},{self.IP}")
+        self.assertEqual(fleet.msi_servers([long_name, self.IP]), long_name)

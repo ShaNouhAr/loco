@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.195.0 — 2026-11-24
+
+- **Enrôlement : le nom DNS, puis l'IP.** Quand loco a un nom DNS — l'adresse du portail, ou à défaut le nom complet de son certificat d'entreprise —, la commande d'installation (Linux et Windows), le script Linux, les paquets .deb et .rpm, le MSI et l'APK préconfigurés essaient ce nom d'abord, puis l'IP du serveur. Un poste qui ne reconnaît pas le certificat du nom (autorité d'entreprise absente du poste ou du faisceau des agents) s'inscrit par l'IP, avec le certificat de loco, au lieu d'échouer. L'agent (Linux, Windows, Android) garde l'autre adresse en secours. La page *Enrôlement* montre les adresses et leur ordre ; `SERVER` du MSI et la valeur `Server` du registre (GPO) acceptent plusieurs adresses séparées par des virgules.
+
 ## 2.194.0 — 2026-11-23
 
 - **Nouvelle police : Outfit**, à la place de Bricolage Grotesque, dans tout le portail et dans l'application Android. Formes rondes et géométriques, dessin épuré, et compacte : les colonnes de Mon parc et des tableaux restent lisibles. Livrée avec loco (aucun appel à un site extérieur), licence SIL OFL ; IBM Plex Mono reste la police des adresses, versions et commandes.

@@ -64,6 +64,7 @@
       {% endif %}
       <div class="composer-out" data-composer-out aria-live="polite"></div>
       {% if os == 'windows' %}<span class="hint">{{ _("À lancer dans Windows PowerShell, en administrateur. La commande reconnaît le certificat de loco par son empreinte SHA-256 : inutile d'importer son autorité avant, et un autre certificat reste refusé.") }}</span>{% endif %}
+      {% if commands.servers and commands.servers|length > 1 %}<span class="hint">{{ _("Adresses essayées dans l'ordre : %(first)s, puis %(then)s. Un poste qui ne reconnaît pas le certificat du nom DNS (autorité d'entreprise absente) s'inscrit par l'IP, et l'agent garde l'autre adresse en secours.", first=commands.servers[0], then=commands.servers[1:]|join(', ')) }}</span>{% endif %}
       <span class="hint">{{ _("Le poste apparaît dans <a href=\"%(v)s\">Mon parc</a> dès l'installation de l'agent ; il se met ensuite à jour seul.", v=url_for('fleet')) }}</span>
     </div>
   </div>
@@ -122,7 +123,7 @@
             {{ cmd('enroll-msi', commands.msiexec, '>') }}
             <span class="hint">{{ _("MSI générique depuis le navigateur du poste :") }} {% for url in commands.msi_urls %}<a href="{{ url }}" class="mono">{{ url }}</a>{{ ' ou ' if not loop.last }}{% endfor %}.</span>
             <span class="cmd-label">{{ _("Déploiement en masse : distribuer le MSI et créer sous") }} <code>{{ _("HKLM\\SOFTWARE\\Policies\\loco\\Client") }}</code> {{ _("les valeurs chaîne") }} <code>{{ _("Server") }}</code> = <code>{{ https_url }}</code>, <code>{{ _("Key") }}</code> = <code>{{ key }}</code> {{ _("et") }} <code>{{ _("CaSha256") }}</code> = <code>{{ ca_sha256 or _('(vide : certificat public)') }}</code>{{ _(", ou en ligne de commande :") }}</span>
-            {{ cmd('enroll-msi-mass', 'msiexec /i loco-client.msi SERVER=' ~ https_url ~ ' KEY=' ~ key ~ (' CA_SHA256=' ~ ca_sha256 if ca_sha256 else '') ~ ' /qn', '>') }}
+            {{ cmd('enroll-msi-mass', 'msiexec /i loco-client.msi SERVER=' ~ commands.msi_server ~ ' KEY=' ~ key ~ (' CA_SHA256=' ~ ca_sha256 if ca_sha256 else '') ~ ' /qn', '>') }}
           </div>
         </details>
       </div>

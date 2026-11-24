@@ -27,6 +27,15 @@ certificat (interception). À lancer dans **Windows PowerShell** (pas PowerShell
 curl -fsSL 'https://<ip>:8443/agent/linux.sh?key=<clé>' | sudo sh
 ```
 
+**Nom DNS, puis IP.** Quand loco a un nom DNS — l'adresse du portail, ou à défaut le nom de son certificat
+d'entreprise —, les commandes, le script Linux, les paquets, le MSI et l'APK préconfigurés essaient ce nom d'abord,
+puis l'IP du serveur. Un nom DNS présente souvent le certificat d'une autorité d'entreprise, que tous les postes ne
+reconnaissent pas (poste neuf ou hors domaine, faisceau des agents sans cette autorité) ; l'IP présente le certificat
+de loco, reconnu par l'empreinte de son autorité. Le poste s'inscrit par la première adresse qui répond, et l'agent
+garde l'autre en secours. La page *Enrôlement* indique les adresses et leur ordre. Pour un MSI déployé à la main ou
+par GPO, `SERVER` (ou la valeur `Server` du registre) accepte de même plusieurs adresses séparées par des virgules :
+`SERVER=https://loco.entreprise.lan:8443,https://192.168.1.10:8443`.
+
 **Inscrire directement dans un groupe** : en haut de la page Enrôlement, *Inscrire les postes dans le groupe* bascule
 le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du
 groupe** (`g<id>-…`) : un poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans
