@@ -723,7 +723,7 @@
     </div>
     <section data-adb-pane="pattern">
       <div class="pattern-pad" data-adb-pad role="group" aria-label="{{ _('Pavé de schéma 3 × 3') }}">
-        <svg class="pattern-trace" viewBox="0 0 300 300" aria-hidden="true"><polyline data-adb-trace fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg class="pattern-trace" viewBox="0 0 300 300" aria-hidden="true"><polyline data-adb-trace fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><line class="pattern-rubber" stroke-width="4" stroke-linecap="round" visibility="hidden"/></svg>
         {% for i in range(1, 10) %}<button type="button" class="pattern-dot" data-dot="{{ i }}" aria-label="{{ i }}"><i></i></button>{% endfor %}
       </div>
       <div class="split"><button type="button" class="btn" data-adb-clear>{{ _("Effacer") }}</button><button type="button" class="btn primary" data-adb-unlock="pattern"><span class="spin"></span>{{ _("Déverrouiller") }}</button></div>
@@ -810,6 +810,7 @@
 {% endblock %}
 {% block scripts %}
 {% if files_ready and dev.state == 'active' %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endif %}
-{% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='adb_unlock.js') }}?v={{ asset_v }}"></script>{% endif %}
+{% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='pattern-pad.js') }}?v={{ asset_v }}"></script>
+<script src="{{ url_for('static', filename='adb_unlock.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='adb_screen.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% endblock %}

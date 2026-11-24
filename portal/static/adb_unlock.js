@@ -1,5 +1,5 @@
-/* Déverrouillage d'un appareil Android depuis sa fiche : pavé de schéma, PIN, mot de passe, réveil et calage de la
-   grille. Appelle les routes /fleet/<id>/adb/{wake,unlock,calibrate} (JSON). L'écran verrouillé est une surface
+/* Déverrouillage d'un appareil Android par adb (barre de « Contrôler l'écran ») : pavé de schéma (pattern-pad.js), PIN,
+   mot de passe, réveil et calage de la grille. Appelle les routes /fleet/<id>/adb/{wake,unlock,calibrate} (JSON). L'écran verrouillé est une surface
    sécurisée : on ne l'affiche pas, la personne saisit elle-même le secret et loco l'injecte par adb. */
 (function () {
   "use strict";
@@ -8,8 +8,6 @@
   var D = dlg.dataset;
   var statusEl = dlg.querySelector("[data-adb-status]");
   var pad = dlg.querySelector("[data-adb-pad]");
-  var trace = dlg.querySelector("[data-adb-trace]");
-  var sequence = [];
 
   function form(obj) {
     var f = new FormData();
@@ -46,26 +44,10 @@
     });
   });
 
-  // Pavé de schéma ----------------------------------------------------------
-  var DOT = { 1: [50, 50], 2: [150, 50], 3: [250, 50], 4: [50, 150], 5: [150, 150], 6: [250, 150],
-              7: [50, 250], 8: [150, 250], 9: [250, 250] };
-  function redraw() {
-    if (trace) trace.setAttribute("points", sequence.map(function (n) { return DOT[n].join(","); }).join(" "));
-    pad.querySelectorAll(".pattern-dot").forEach(function (d) {
-      d.classList.toggle("on", sequence.indexOf(+d.dataset.dot) >= 0);
-    });
-  }
-  function addDot(n) { if (n && sequence.indexOf(n) < 0) { sequence.push(n); redraw(); } }
-  function dotAt(ev) {
-    var el = document.elementFromPoint(ev.clientX, ev.clientY);
-    var dot = el && el.closest ? el.closest(".pattern-dot") : null;
-    return dot ? +dot.dataset.dot : 0;
-  }
-  var drawing = false;
-  pad.addEventListener("pointerdown", function (ev) { ev.preventDefault(); drawing = true; say(""); addDot(dotAt(ev)); });
-  pad.addEventListener("pointermove", function (ev) { if (drawing) addDot(dotAt(ev)); });
-  document.addEventListener("pointerup", function () { drawing = false; });
-  dlg.querySelector("[data-adb-clear]").addEventListener("click", function () { sequence = []; redraw(); say(""); });
+  // Pavé de schéma (pattern-pad.js : prise près du centre, diagonales, points sautés comme sur Android) ----------
+  var pattern = window.LocoPatternPad(pad);
+  pad.addEventListener("pointerdown", function () { say(""); });
+  dlg.querySelector("[data-adb-clear]").addEventListener("click", function () { pattern.clear(); say(""); });
 
   // Réveil ------------------------------------------------------------------
   dlg.querySelector("[data-adb-wake]").addEventListener("click", function () {
@@ -79,6 +61,7 @@
   function unlock(btn) {
     var method = btn.dataset.adbUnlock, body = { method: method };
     if (method === "pattern") {
+      var sequence = pattern.dots();
       if (sequence.length < 2) { say(D.msgDraw, "err"); return; }
       body.pattern = sequence.join(",");
     } else {
@@ -123,5 +106,4 @@
     });
   });
 
-  redraw();
 })();

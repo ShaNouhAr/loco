@@ -2591,6 +2591,7 @@ label.check.inline { display: inline-flex; align-items: center; gap: 6px; margin
 /* Déverrouillage Android par schéma (fiche appareil › Déverrouiller) : pavé 3×3 abstrait, l'écran verrouillé ne pouvant pas être affiché. */
 .pattern-pad { position: relative; width: 240px; max-width: 100%; aspect-ratio: 1; margin: 14px auto 4px; touch-action: none; display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; }
 .pattern-trace { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; stroke: var(--text); opacity: .5; }
+.pattern-rubber { opacity: .6; }
 .pattern-dot { width: 100%; height: 100%; display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer; }
 .pattern-dot > i { width: 15px; height: 15px; border-radius: 50%; background: var(--bg-3); border: 1.5px solid var(--line-2); transition: transform .08s ease, background .08s ease, border-color .08s ease; }
 .pattern-dot:hover > i { border-color: var(--text-2); }

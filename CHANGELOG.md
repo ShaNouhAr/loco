@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.198.1 — 2026-11-24
+
+- **Déverrouiller : le schéma se trace en diagonale.** Sur le pavé du portail, chaque point occupait toute sa case : un trait en diagonale accrochait les points voisins au passage. Le pavé se comporte maintenant comme la grille d'Android : un point n'est pris que si le pointeur passe près de son centre, un geste vif ne saute aucun point traversé, le trait suit le pointeur, et un point sauté sur une ligne droite (1 → 3, 1 → 9…) est pris au passage, comme Android le fait. Même pavé dans la session d'écran et dans *Contrôler l'écran*.
+
 ## 2.198.0 — 2026-11-24
 
 - **Android : « Déverrouiller » passe dans la session d'écran.** Un bouton de la barre d'outils ouvre un pavé où tracer le schéma (ou cliquer ses points dans l'ordre), ou des champs pour le code PIN et le mot de passe ; l'application loco réveille l'appareil, fait monter la saisie du code et y entre le code. Le code n'est ni gardé ni journalisé, et l'application ne le tape jamais ailleurs que dans la saisie du code : sur un appareil déjà déverrouillé, il est simplement oublié. Le déverrouillage par adb quitte la fiche de l'appareil pour la barre de *Contrôler l'écran*.

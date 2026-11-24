@@ -646,18 +646,14 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
   const unlock = document.getElementById('remote-unlock');
   if (unlock) {
     const form = unlock.querySelector('form');
-    const pad = unlock.querySelector('[data-unlock-pad]'), trace = unlock.querySelector('[data-unlock-trace]');
+    const pattern = window.LocoPatternPad(unlock.querySelector('[data-unlock-pad]'));     // pattern-pad.js
     const status = unlock.querySelector('[data-unlock-status]'), remember = unlock.querySelector('[data-unlock-remember]');
     const savedBox = unlock.querySelector('[data-unlock-saved]'), savedText = unlock.querySelector('[data-unlock-saved-text]');
     const other = unlock.querySelector('[data-unlock-other]'), entry = unlock.querySelector('[data-unlock-entry]');
     const METHODS = ['pattern', 'pin', 'password'], store = 'loco-unlock-method:' + (root.dataset.device || '');
-    let dots = [], drawing = false, saved = unlock.hasAttribute('data-saved'), entering = false;
+    let saved = unlock.hasAttribute('data-saved'), entering = false;
     const method = () => (form.querySelector('input[name="method"]:checked') || {}).value || 'pattern';
     const say = msg => { status.textContent = msg || ''; status.hidden = !msg; };
-    const redraw = () => {
-      trace.setAttribute('points', dots.map(n => [50 + (n - 1) % 3 * 100, 50 + Math.floor((n - 1) / 3) * 100].join(',')).join(' '));
-      pad.querySelectorAll('.pattern-dot').forEach(d => d.classList.toggle('on', dots.includes(+d.dataset.dot)));
-    };
     const show = () => {
       const m = method();
       unlock.querySelectorAll('[data-unlock-pane]').forEach(p => { p.hidden = p.dataset.unlockPane !== m; });
@@ -666,22 +662,11 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
       entry.hidden = saved && !entering;
     };
     const clear = () => {
-      dots = []; redraw(); say('');
+      pattern.clear(); say('');
       unlock.querySelectorAll('[data-unlock-code]').forEach(i => { i.value = ''; });
       remember.checked = false; entering = false; show();
     };
-    const add = n => { if (n && !dots.includes(n) && dots.length < 9) { dots.push(n); redraw(); } };
-    const dotAt = ev => {
-      const el = document.elementFromPoint(ev.clientX, ev.clientY), dot = el && el.closest('.pattern-dot');
-      return dot && pad.contains(dot) ? +dot.dataset.dot : 0;
-    };
-    pad.addEventListener('pointerdown', ev => { ev.preventDefault(); drawing = true; say(''); add(dotAt(ev)); });
-    pad.addEventListener('pointermove', ev => { if (drawing) add(dotAt(ev)); });
-    document.addEventListener('pointerup', () => { drawing = false; });
-    pad.addEventListener('click', ev => {                    // clavier (Entrée, Espace sur un point) : point suivant
-      const dot = ev.target.closest('.pattern-dot');
-      if (dot && ev.detail === 0) add(+dot.dataset.dot);
-    });
+    unlock.querySelector('[data-unlock-pad]').addEventListener('pointerdown', () => say(''));
     try {
       const last = localStorage.getItem(store);
       if (METHODS.includes(last)) form.querySelector(`input[name="method"][value="${last}"]`).checked = true;
@@ -705,7 +690,7 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
       try { await ask({ action: 'forget' }); saved = false; entering = false; say(''); show(); }
       catch (err) { say(err.message); }
     });
-    unlock.querySelector('[data-unlock-clear]').addEventListener('click', () => { dots = []; redraw(); say(''); });
+    unlock.querySelector('[data-unlock-clear]').addEventListener('click', () => { pattern.clear(); say(''); });
     unlock.addEventListener('close', clear);
     // Chiffres du schéma ou du code PIN, caractères du mot de passe : les touches à taper sur l'appareil.
     const keysOf = (m, code) => {
@@ -727,8 +712,8 @@ if (['terminal', 'adb'].includes(root.dataset.kind)) {
         if (saved && !entering) {
           ({ method: m, code } = await ask({ action: 'use' }));
         } else {
-          code = m === 'pattern' ? dots.join('') : unlock.querySelector(`[data-unlock-code="${m}"]`).value;
-          if (m === 'pattern' && dots.length < 2) { say(t('Tracez d’abord le schéma : au moins deux points.')); return; }
+          code = m === 'pattern' ? pattern.dots().join('') : unlock.querySelector(`[data-unlock-code="${m}"]`).value;
+          if (m === 'pattern' && pattern.dots().length < 2) { say(t('Tracez d’abord le schéma : au moins deux points.')); return; }
           if (!keysOf(m, code).length) { say(t('Saisissez le code.')); return; }
           if (remember.checked) {
             const answer = await ask({ action: 'save', method: m, code });

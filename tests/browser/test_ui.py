@@ -864,6 +864,39 @@ class TestAndroidUnlock(BrowserTest):
         dialog.locator(".seg label", has_text="Mot de passe").click()
         expect(dialog.locator('[data-unlock-code="password"]')).to_be_visible()
 
+    def test_diagonals_are_drawn_like_on_android(self):
+        """Un point n'est pris que près de son centre : une diagonale n'accroche pas les voisins ; un point sauté sur une
+        ligne droite est pris au passage ; un geste vif ne saute rien."""
+        self.open_screen()
+        dialog = self.page.locator("#remote-unlock")
+        self.page.locator("#remote-toolbar").get_by_role("button", name="Déverrouiller").click()
+        box = dialog.locator("[data-unlock-pad]").bounding_box()
+
+        def at(n):
+            return box["x"] + ((n - 1) % 3 + 0.5) * box["width"] / 3, box["y"] + ((n - 1) // 3 + 0.5) * box["height"] / 3
+
+        def draw(*seq, steps=12):
+            dialog.locator("[data-unlock-clear]").click()
+            self.page.mouse.move(*at(seq[0]))
+            self.page.mouse.down()
+            for n in seq[1:]:
+                self.page.mouse.move(*at(n), steps=steps)
+            self.page.mouse.up()
+            return dialog.locator("[data-unlock-trace]").get_attribute("points")
+
+        def points(*seq):
+            return " ".join(f"{50 + (n - 1) % 3 * 100},{50 + (n - 1) // 3 * 100}" for n in seq)
+
+        self.assertEqual(draw(3, 5, 7), points(3, 5, 7))                  # diagonale : ni 2, ni 4, ni 6, ni 8
+        self.assertEqual(draw(1, 6), points(1, 6))                        # saut de cavalier : rien entre les deux
+        self.assertEqual(draw(7, 3), points(7, 5, 3))                     # grande diagonale : 5 pris au passage
+        self.assertEqual(draw(1, 9, steps=1), points(1, 5, 9))            # geste vif : rien de sauté
+        self.assertEqual(draw(2, 4, 8, 6, 2), points(2, 4, 8, 6))         # losange ; un point déjà pris n'est pas repris
+        dialog.locator("[data-unlock-clear]").click()
+        dialog.locator('.pattern-dot[data-dot="1"]').click()
+        dialog.locator('.pattern-dot[data-dot="3"]').click()              # points cliqués un à un : 2 ajouté, comme Android
+        self.assertEqual(dialog.locator("[data-unlock-trace]").get_attribute("points"), points(1, 2, 3))
+
     def test_a_remembered_code_is_offered_then_forgotten(self):
         import json as _json
         from loco import unlock_codes
