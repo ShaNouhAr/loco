@@ -179,7 +179,10 @@ distribués ; supprimer le groupe aussi.
   postes à mettre à jour. Le *Centre de logiciels* importe un logiciel avec ces informations ; *Nouvelles versions*
   met à jour les logiciels issus de winget, puis les postes concernés passent en orange.
 
-L'agent se met à jour automatiquement avec loco.
+L'agent se met à jour automatiquement avec loco. Sous Windows, l'installateur pose la nouvelle version en entier avant
+de retirer l'ancienne : un poste éteint brutalement en pleine mise à jour garde un agent qui fonctionne (l'ancien ou le
+nouveau) et la reprend plus tard. Seul l'installeur de la version en marche reste en cache
+(`C:\ProgramData\loco-client`), et le journal de la mise à jour (`update.log`) y est écrit ligne à ligne.
 
 ![Fiche d'un poste : supervision en direct et sur 24 heures](media/poste.webp)
 

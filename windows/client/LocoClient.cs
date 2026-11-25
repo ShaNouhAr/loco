@@ -74,6 +74,7 @@ namespace Loco
             // Redémarrage automatique du service s'il s'arrête anormalement.
             try { Agent.Detached("sc.exe", "failure loco-client reset= 86400 actions= restart/60000/restart/60000/restart/300000"); }
             catch (Exception) { }
+            Agent.PruneMsiCacheSoon();
             worker = new Thread(Loop) { IsBackground = true, Name = "loco-client" };
             worker.Start();
             remote = new RemoteControl(stopping);
@@ -160,11 +161,49 @@ namespace Loco
             catch (Exception) { return null; }
         }
 
+        // Écrit jusqu'au disque avant de remplacer l'ancien fichier : après une coupure de courant, on retrouve l'ancien
+        // contenu ou le nouveau, jamais un fichier rempli de zéros (l'identité du poste est dans client.json).
         static void SaveJson(string path, object data)
         {
             string tmp = path + ".tmp";
-            File.WriteAllText(tmp, Json.Serialize(data), new UTF8Encoding(false));
+            byte[] bytes = new UTF8Encoding(false).GetBytes(Json.Serialize(data));
+            using (var f = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                f.Write(bytes, 0, bytes.Length);
+                f.Flush(true);
+            }
             if (File.Exists(path)) File.Replace(tmp, path, null); else File.Move(tmp, path);
+        }
+
+        public static void PruneMsiCacheSoon()
+        {
+            new Thread(() => { Thread.Sleep(60000); PruneMsiCache(); }) { IsBackground = true, Name = "loco-msi-cache" }.Start();
+        }
+
+        // MSI des versions précédentes, gardés jusqu'ici à chaque mise à jour (des dizaines) : seuls restent celui de la
+        // version en marche et ceux d'une version plus récente (mise à jour en cours). Windows Installer garde sa propre
+        // copie pour désinstaller ou réparer.
+        static void PruneMsiCache()
+        {
+            try
+            {
+                var running = typeof(Agent).Assembly.GetName().Version;
+                int removed = 0;
+                foreach (var file in Directory.GetFiles(Root, "loco-client-*.msi"))
+                {
+                    System.Version v;
+                    string name = Path.GetFileNameWithoutExtension(file).Substring("loco-client-".Length);
+                    if (!System.Version.TryParse(name, out v) || Normalize(v) >= Normalize(running)) continue;
+                    try { File.Delete(file); removed++; } catch (Exception) { }
+                }
+                if (removed > 0) Log(Lang.T("anciens installeurs retirés : ", "old installers removed: ", "instaladores antiguos eliminados: ") + removed);
+            }
+            catch (Exception) { }
+        }
+
+        static System.Version Normalize(System.Version v)
+        {
+            return new System.Version(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
         }
 
         static string Str(Dictionary<string, object> d, string key)
@@ -2352,7 +2391,8 @@ namespace Loco
                 Download(Str(conf, "server") + "/agent/files/loco-client.msi", path);
                 if (Sha256File(path) != sha) { File.Delete(path); throw new Exception(Lang.T("empreinte du MSI incorrecte", "incorrect MSI fingerprint", "huella del MSI incorrecta")); }
                 Log(Lang.T("mise à jour de l'agent : ", "agent update: ", "actualización del agente: ") + Version + " -> " + wanted);
-                Detached("msiexec.exe", "/i \"" + path + "\" /qn /norestart /l*v \"" + Path.Combine(Root, "update.log") + "\"");
+                // Journal écrit ligne à ligne (« ! ») : lisible même après une coupure en pleine mise à jour.
+                Detached("msiexec.exe", "/i \"" + path + "\" /qn /norestart /l*v! \"" + Path.Combine(Root, "update.log") + "\"");
             }
             catch (Exception e) { Log(Lang.T("mise à jour de l'agent impossible : ", "agent update failed: ", "no se pudo actualizar el agente: ") + e.Message); }
         }

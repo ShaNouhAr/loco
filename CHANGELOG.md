@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.202.1 — 2026-11-25
+
+- **Agent Windows : une coupure de courant pendant sa mise à jour ne le fait plus disparaître.** L'installateur retirait l'ancienne version avant de poser la nouvelle : un PC éteint brutalement entre les deux restait sans agent — dossier vide, service introuvable — et sortait du parc jusqu'à une réinstallation à la main (arrivé à un poste le 25/11). La nouvelle version est maintenant posée en entier avant que l'ancienne soit retirée. Vérifié sur Windows 11 en coupant la machine à quatre moments de la mise à jour : l'agent repart chaque fois, avec l'ancienne ou la nouvelle version, et la mise à jour suivante passe. L'ancien ordre, coupé au même endroit, laissait bien le poste sans agent.
+- **Agent Windows : ses fichiers de réglages résistent aux coupures.** Ils sont écrits jusqu'au disque avant de remplacer les précédents (l'identité du poste en dépend), et le journal de la mise à jour est écrit ligne à ligne, lisible même après une coupure.
+- **Agent Windows : les anciens installeurs ne s'accumulent plus.** Chaque mise à jour en gardait une copie, des dizaines au fil des versions : seul celui de la version en marche reste.
+
 ## 2.202.0 — 2026-11-25
 
 - **Mon parc : Home Assistant et Proxmox se comportent comme les autres appareils.** *Tout mettre à jour* et la planification de tout le parc les mettent à jour aussi (Home Assistant avec une sauvegarde avant), et le nombre du bouton les compte. Leurs lignes suivent les filtres (*État*, *Système* — avec *Home Assistant* et *Proxmox VE* —, *Situation*), la recherche et l'actualisation en direct ; elles comptent dans les nombres de la page et dans l'anneau de la vue d'ensemble, leurs tâches s'affichent dans le déroulé des *Mises à jour* et dans la pastille de navigation, et Ctrl K les trouve. Home Assistant montre les ressources de son hôte (disque ; mémoire et processeur sur Home Assistant OS) et se coche avec les droits de ses propres boutons (mettre à jour, redémarrer) au lieu de « gérer ». Ils ne sont membres d'aucun groupe : *Mettre à jour ce groupe* ne les touche pas.

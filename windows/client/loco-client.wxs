@@ -8,6 +8,14 @@
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
              Description="Agent du parc loco (inventaire, mises à jour)" Comments="https://github.com/ShaNouhAr/loco" />
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="Une version plus récente de loco-client est déjà installée." />
+    <!-- Mise à niveau : la nouvelle version est posée en entier AVANT que l'ancienne soit retirée. Par défaut, l'ancienne
+         part d'abord (après InstallValidate) : une coupure de courant entre les deux laissait le poste sans agent, dossier
+         vide et service introuvable (vu le 2026-11-25). Les composants gardent leur GUID d'une version à l'autre : retirer
+         l'ancienne ensuite ne touche à aucun fichier de la nouvelle. wixl 0.106 ignore MajorUpgrade/@Schedule : la place
+         est donnée ici. -->
+    <InstallExecuteSequence>
+      <RemoveExistingProducts After="InstallFinalize" />
+    </InstallExecuteSequence>
     <Media Id="1" Cabinet="client.cab" EmbedCab="yes" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/ShaNouhAr/loco" />
     <Property Id="ARPNOMODIFY" Value="1" />
