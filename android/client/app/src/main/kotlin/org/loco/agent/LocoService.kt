@@ -55,7 +55,7 @@ class LocoService : Service() {
         remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady, ::onTrustedNetwork) { on ->
             watched = on
             showControl()
-            if (!on) lockSoon()
+            if (!on) lockNow()
         }
         // Après un redémarrage, sans attendre le premier contact — jamais hors d'un réseau de confiance.
         if (agent.store.keepAdb && onTrustedNetwork()) AdbProbe.keep(this)
@@ -370,15 +370,21 @@ class LocoService : Service() {
     private fun showControl() = Handler(Looper.getMainLooper()).post { controlNotice(piloted || watched) }
 
     /**
-     * Fin de la session d'écran sur un téléphone ou une tablette : l'appareil se verrouille, pour ne pas rester ouvert
-     * après le départ de la personne qui le pilotait depuis loco (pas sur un téléviseur, qui n'a pas de verrouillage).
-     * Un court délai laisse une session qui reprend aussitôt (nouvelle session, nouvel onglet) trouver l'appareil tel
-     * quel. Par le service d'accessibilité (Android 9 et plus), comme le bouton marche/arrêt ; sans effet si l'écran est
-     * déjà verrouillé.
+     * Fin de la dernière session d'écran sur un téléphone ou une tablette : l'appareil se verrouille aussitôt, pour ne
+     * pas rester ouvert après le départ de la personne qui le pilotait depuis loco (pas sur un téléviseur, qui n'a pas de
+     * verrouillage). Sans délai de grâce : une session rouverte juste après — pour vérifier, justement — trouve l'appareil
+     * verrouillé (« Déverrouiller », dans la session). Jamais pendant que loco pilote encore l'écran par adb. Par le
+     * service d'accessibilité (Android 9 et plus), comme le bouton marche/arrêt ; le résultat va au journal d'Android
+     * (étiquette « loco »).
      */
-    private fun lockSoon() {
+    private fun lockNow() {
         if (Inventory.form(this) == "tv") return
-        Handler(Looper.getMainLooper()).postDelayed({ if (!watched) InputService.instance?.lockScreen() }, LOCK_DELAY)
+        Handler(Looper.getMainLooper()).post {
+            if (watched || piloted) return@post                       // une autre session d'écran, ou adb, pilote encore
+            val input = InputService.instance
+            val outcome = if (input == null) "service d'accessibilité absent" else input.lockScreen()
+            android.util.Log.i("loco", "fin de la session d'écran : verrouillage — $outcome")
+        }
     }
 
     /** Garde-fou : tant qu'un administrateur voit ou pilote l'écran (session de l'agent, ou adb sans dialogue système),
@@ -448,7 +454,6 @@ class LocoService : Service() {
         /** Vrai tant que l'écran est réellement partagé (reflète la capture, pas un drapeau persistant). */
         @Volatile var sharing = false
             private set
-        const val LOCK_DELAY = 5000L                // fin d'une session d'écran → verrouillage, sauf reprise entre-temps
         const val ACTION_WAKE = "org.loco.agent.WAKE"
         const val ACTION_AWAKE = "org.loco.agent.AWAKE"
         const val ACTION_SCREEN_ON = "org.loco.agent.SCREEN_ON"

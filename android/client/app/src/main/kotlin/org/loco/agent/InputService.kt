@@ -197,10 +197,16 @@ class InputService : AccessibilityService(), InputSink {
         false
     }
 
-    /** Verrouille l'écran, comme le bouton marche/arrêt (Android 9 et plus) ; rien s'il l'est déjà. Vrai si demandé. */
-    fun lockScreen(): Boolean {
-        if (Build.VERSION.SDK_INT < 28 || locked()) return false
-        return try { performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) } catch (_: Exception) { false }
+    /** Verrouille l'écran, comme le bouton marche/arrêt (Android 9 et plus) ; rien s'il l'est déjà. Rend ce qui s'est
+     *  passé, pour le journal : « fait », « déjà verrouillé », « refusé par Android »… */
+    fun lockScreen(): String {
+        if (Build.VERSION.SDK_INT < 28) return "Android trop ancien (9 ou plus)"
+        if (locked()) return "déjà verrouillé"
+        return try {
+            if (performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)) "fait" else "refusé par Android"
+        } catch (e: Exception) {
+            "impossible (${e.javaClass.simpleName})"
+        }
     }
 
     // Bouton « Déverrouiller » de la session : le portail envoie XF86WakeUp, puis le code (chiffres du PIN, numéros des

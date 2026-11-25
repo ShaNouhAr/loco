@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 2.201.1 — 2026-11-25
+
+- **Android : fermer la session d'écran verrouille vraiment la tablette ou le téléphone.** Le verrouillage attendait cinq secondes après la fin de la session, et une session rouverte entre-temps l'annulait : fermer la session puis la rouvrir aussitôt pour vérifier laissait l'appareil ouvert. Il se fait maintenant dès la fin de la dernière session d'écran ; une session rouverte ensuite trouve l'appareil verrouillé (*Déverrouiller*, dans la session). Jamais tant que loco pilote encore l'écran par adb. Le résultat est noté dans le journal d'Android (étiquette `loco`).
+
 ## 2.201.0 — 2026-11-25
 
 - **Partages de fichiers : le port SMB est ouvert d'office sur le pare-feu du serveur.** Samba n'a besoin que du port 445/TCP (NetBIOS est coupé) : loco l'ouvre lui-même sur le pare-feu actif du serveur — ufw (Debian, Ubuntu, l'appliance) ou firewalld — pour les réseaux des postes, tant que les partages sont servis, et le referme quand on les coupe. Ses règles portent leur marque (`loco-samba`) et celles de l'administrateur ne sont jamais touchées ; un pare-feu allumé après coup reçoit la règle dans les dix minutes. La page des partages dit ce qu'il en est (*Pare-feu du serveur*).

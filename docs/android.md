@@ -81,10 +81,12 @@ Depuis la fiche de l'appareil, comme pour un poste :
   oublié, jamais le code lui-même. Il disparaît avec votre compte ou avec l'appareil, et se ressaisit après une
   restauration sur un autre serveur (clé différente).
   **Fermer la session verrouille le téléphone ou la tablette** (application 2.199 ou plus, Android 9 ou plus) :
-  quelques secondes après la fin de la dernière session d'écran — fermée depuis le portail, par l'assistant IA ou
-  par expiration —, l'appareil se verrouille comme avec le bouton marche/arrêt, pour ne pas rester ouvert après le
-  départ de la personne qui le pilotait. Une session rouverte aussitôt le trouve tel quel ; un téléviseur n'est pas
-  concerné. La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
+  dès la fin de la dernière session d'écran — fermée depuis le portail, par l'assistant IA ou par expiration —,
+  l'appareil se verrouille comme avec le bouton marche/arrêt, pour ne pas rester ouvert après le départ de la
+  personne qui le pilotait (application 2.201.1 ou plus ; avant, il attendait cinq secondes et une session rouverte
+  entre-temps l'en empêchait). Une session rouverte ensuite le trouve verrouillé : *Déverrouiller*. Rien tant que
+  loco pilote encore l'écran par adb ; un téléviseur n'est pas concerné. Le résultat est noté dans le journal
+  d'Android (étiquette `loco`). La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
   (OnePlus, Oppo, Realme), ainsi que sur les surcouches qui la nomment de façon semblable.
 - **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
   l'autre ; les variables d'environnement, non.
