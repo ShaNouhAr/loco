@@ -197,6 +197,12 @@ class InputService : AccessibilityService(), InputSink {
         false
     }
 
+    /** Verrouille l'écran, comme le bouton marche/arrêt (Android 9 et plus) ; rien s'il l'est déjà. Vrai si demandé. */
+    fun lockScreen(): Boolean {
+        if (Build.VERSION.SDK_INT < 28 || locked()) return false
+        return try { performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) } catch (_: Exception) { false }
+    }
+
     // Bouton « Déverrouiller » de la session : le portail envoie XF86WakeUp, puis le code (chiffres du PIN, numéros des
     // points du schéma ou mot de passe), puis Entrée. Tout ce qui suit le marqueur jusqu'à Entrée est le code : mis de
     // côté, appliqué à la saisie du code dès qu'elle est à l'écran, et jamais tapé ailleurs (appareil déjà déverrouillé :

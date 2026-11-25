@@ -169,6 +169,25 @@ class TestTransport(McpTest):
 
 # --------------------------------------------------------------------------- protocole
 
+class TestNewToolsForExistingAccesses(McpTest):
+    def test_migration_grants_the_tools_that_extend_an_existing_one(self):
+        """Migration 61 : terminal_job suit terminal_run, push_file et pull_file suivent adb_shell ; rien d'autre ne
+        change, et la rejouer ne double rien."""
+        from loco import db as loco_db
+        create(self.admin, "Avec terminal", ["terminal_run", "list_devices"])
+        create(self.admin, "Avec adb", ["adb_shell"])
+        create(self.admin, "Lecture", ["list_devices"])
+        with transaction() as conn:
+            conn.execute("UPDATE mcp_tokens SET tools=? WHERE name='Avec terminal'", (json.dumps(["terminal_run", "list_devices"]),))
+            conn.execute("UPDATE mcp_tokens SET tools=? WHERE name='Avec adb'", (json.dumps(["adb_shell"]),))
+        for _ in range(2):
+            with transaction() as conn:
+                conn.executescript(loco_db.MIGRATIONS[60])
+        self.assertEqual(json.loads(token_row("Avec terminal")["tools"]), ["terminal_run", "list_devices", "terminal_job"])
+        self.assertEqual(json.loads(token_row("Avec adb")["tools"]), ["adb_shell", "push_file", "pull_file"])
+        self.assertEqual(json.loads(token_row("Lecture")["tools"]), ["list_devices"])
+
+
 class TestLegacyProtocol(McpTest):
     def test_handshake_listing_and_calls(self):
         token, _ = create(self.admin, "Claude", ["list_devices", "get_server_status"])

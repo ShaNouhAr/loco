@@ -177,7 +177,8 @@ class TestActions(ApiTest):
 
     def test_body_too_large(self):
         token, _ = create(self.admin, "Robot", ["update_devices"])
-        huge = "x" * (1024 * 1024 + 10)
+        from loco import mcp
+        huge = "x" * (mcp.MAX_BODY + 10)
         r = Rest(token).post("/updates", raw=huge, headers={"Content-Type": "application/json"})
         self.assertEqual(r.status_code, 413)
 

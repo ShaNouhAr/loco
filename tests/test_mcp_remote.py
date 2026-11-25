@@ -11,6 +11,7 @@ import threading
 import time
 import unittest
 import zlib
+from unittest import mock
 
 import test_portal as fixture
 from test_fleet import LINUX, WINDOWS, Agent
@@ -138,7 +139,7 @@ class TestTerminal(RemoteTest):
         host = self.device()
         client = self.client(["terminal_run"])
         script = "\n".join(f"echo ligne-{i}" for i in range(4000))             # ~ 55 Ko, une seule frappe
-        result = client.data("terminal_run", device=host, command=script, timeout=60)
+        result = client.data("terminal_run", device=host, command=script, timeout=60, max_output=60000)
         lines = result["output"].split("\n")
         self.assertEqual((len(lines), lines[0], lines[-1], result["exit_code"]), (4000, "ligne-0", "ligne-3999", 0))
 
@@ -162,6 +163,146 @@ class TestTerminal(RemoteTest):
         self.assertTrue(late["timed_out"])
         self.assertIn("avant", late["output"])
         self.assertEqual(client.data("terminal_run", device=host, command="echo après")["output"], "après")
+
+
+class TestTerminalRobustness(RemoteTest):
+    """Un délai dépassé arrête vraiment la commande et ce qu'elle a lancé ; un shell resté occupé est repéré et remplacé ;
+    shell neuf à la demande ; tâches de fond détachées ; sortie plafonnée et jamais d'écho de la commande."""
+
+    def setUp(self):
+        super().setUp()
+        patch = mock.patch.dict(mcp_remote.JOB_DIRS, {"linux": os.path.join(self.folder, "jobs")})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    @staticmethod
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        with open(f"/proc/{pid}/stat") as f:                       # zombie en attente de son parent : déjà mort
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+
+    def pid(self, name, timeout=5):
+        path, end = os.path.join(self.folder, name), time.time() + timeout
+        while time.time() < end:
+            if os.path.exists(path):
+                with open(path) as f:
+                    text = f.read().strip()
+                if text:
+                    return int(text)
+            time.sleep(0.05)
+        self.fail(f"no {name}")
+
+    def gone(self, pid, timeout=8):
+        end = time.time() + timeout
+        while time.time() < end and self.alive(pid):
+            time.sleep(0.1)
+        return not self.alive(pid)
+
+    def type_into_session(self, data):
+        from loco import app
+        with app.app_context():
+            conn = db()
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM remote_sessions WHERE owner LIKE 'mcp:%' AND kind='terminal' "
+                               "AND state IN ('waiting','active')").fetchone()
+            remote._append(row, "in", row["input_seq"] + 1, base64.b64encode(data).decode())
+            conn.commit()
+
+    def test_a_timeout_kills_the_command_and_its_children(self):
+        host = self.device()
+        client = self.client(["terminal_run"])
+        f = self.folder
+        late = client.data("terminal_run", device=host, timeout=2,
+                           command=f"echo avant; (sleep 300; echo jamais) & echo $! > {f}/child; echo $$ > {f}/main; sleep 300")
+        self.assertTrue(late["timed_out"])
+        self.assertTrue(late["killed"])
+        self.assertIn("avant", late["output"])
+        self.assertTrue(self.gone(self.pid("main")), "la commande tourne encore")
+        self.assertTrue(self.gone(self.pid("child")), "son enfant tourne encore")
+        again = client.data("terminal_run", device=host, command="echo après")
+        self.assertEqual((again["output"], again["exit_code"]), ("après", 0))
+        states = [r["state"] for r in self.sessions()]
+        self.assertEqual(states.count("closed"), 1)                   # la session du délai est fermée, une neuve a servi
+
+    def test_a_busy_shell_is_detected_and_replaced(self):
+        host = self.device()
+        client = self.client(["terminal_run"])
+        self.assertEqual(client.data("terminal_run", device=host, command="echo prêt")["output"], "prêt")
+        # Un programme reste au premier plan du shell (comme cmd /c … d8.bat qui attend) : les commandes suivantes
+        # partiraient dans sa saisie.
+        self.type_into_session(f"sh -c 'echo $$ > {self.folder}/stuck; exec sleep 300'\r".encode())
+        stuck = self.pid("stuck")
+        result = client.data("terminal_run", device=host, command="echo vivant", timeout=40)
+        self.assertEqual((result["output"], result["exit_code"]), ("vivant", 0))
+        self.assertIn("still busy", result["note"])
+        self.assertTrue(self.gone(stuck), "le programme bloquant tourne encore")
+
+    def test_fresh_shell_on_demand(self):
+        host = self.device()
+        client = self.client(["terminal_run"])
+        client.data("terminal_run", device=host, command="echo un")
+        first = [r["id"] for r in self.sessions() if r["state"] in ("waiting", "active")]
+        result = client.data("terminal_run", device=host, command="echo deux", fresh=True)
+        self.assertEqual(result["output"], "deux")
+        now = [r["id"] for r in self.sessions() if r["state"] in ("waiting", "active")]
+        self.assertEqual(len(now), 1)
+        self.assertNotEqual(first, now)
+
+    def test_background_jobs_run_detached_report_and_stop(self):
+        host = self.device()
+        client = self.client(["terminal_run", "terminal_job"])
+        started = client.data("terminal_run", device=host, background=True,
+                              command="echo début; sleep 2; echo fin; exit 4")
+        job = started["job"]
+        self.assertRegex(job, "^[0-9a-f]{12}$")
+        self.assertEqual(client.data("terminal_job", device=host, job=job)["state"], "running")
+        # Le shell de la session est fermé (délai, shell neuf…) : la tâche continue.
+        client.data("terminal_run", device=host, command="echo autre", fresh=True)
+        end, status = time.time() + 15, {}
+        while time.time() < end:
+            status = client.data("terminal_job", device=host, job=job)
+            if status["state"] != "running":
+                break
+            time.sleep(0.5)
+        self.assertEqual((status["state"], status["exit_code"], status["output"]), ("done", 4, "début\nfin"))
+        long_job = client.data("terminal_run", device=host, background=True,
+                               command=f"echo $$ > {self.folder}/job; sleep 300")["job"]
+        pid = self.pid("job")
+        stopped = client.data("terminal_job", device=host, job=long_job, action="stop")
+        self.assertEqual(stopped["state"], "stopped")
+        self.assertTrue(self.gone(pid), "la tâche arrêtée tourne encore")
+        self.assertEqual(client.data("terminal_job", device=host, job="0123456789ab")["state"], "missing")
+        self.assertTrue(client.call("terminal_job", device=host, job="../../etc/x")["isError"])
+        big = client.data("terminal_run", device=host, background=True,
+                          command="echo HAUT; for i in $(seq 1 4000); do echo ligne-$i; done; echo BAS")["job"]
+        end = time.time() + 15
+        while time.time() < end and client.data("terminal_job", device=host, job=big)["state"] == "running":
+            time.sleep(0.3)
+        clipped = client.data("terminal_job", device=host, job=big, max_output=2000)
+        self.assertTrue(clipped["truncated"])
+        self.assertIn("HAUT", clipped["output"])
+        self.assertIn("BAS", clipped["output"])
+        self.assertLessEqual(len(clipped["output"]), 2200)
+
+    def test_output_is_capped_and_the_command_is_never_echoed(self):
+        host = self.device()
+        client = self.client(["terminal_run"])
+        payload = base64.b64encode(os.urandom(15000)).decode()          # 20 Ko de base64 dans la commande
+        result = client.data("terminal_run", device=host, command=f"printf '%s' '{payload}' | wc -c")
+        self.assertEqual((result["output"].strip(), result["exit_code"]), (str(len(payload)), 0))
+        self.assertNotIn(payload[:40], json.dumps(result))
+        script = "echo HAUT; for i in $(seq 1 3000); do echo ligne-de-remplissage-$i; done; echo BAS"
+        default = client.data("terminal_run", device=host, command=script)
+        self.assertTrue(default["truncated"])
+        self.assertLessEqual(len(default["output"]), mcp_remote.OUTPUT_DEFAULT + 200)
+        small = client.data("terminal_run", device=host, command=script, max_output=1000)
+        self.assertLessEqual(len(small["output"]), 1200)
+        self.assertIn("HAUT", small["output"])
+        self.assertIn("BAS", small["output"])
+        self.assertIn(mcp_remote.OMIT_MARK, small["output"])
 
 
 class TestInteractive(RemoteTest):
@@ -249,6 +390,72 @@ class TestFiles(RemoteTest):
         with transaction() as conn:
             actions = {r["action"] for r in conn.execute("SELECT action FROM audit WHERE action LIKE 'parc.fichiers.%'")}
         self.assertEqual(actions, {"parc.fichiers.ecriture", "parc.fichiers.modification", "parc.fichiers.suppression"})
+
+
+class TestFileEncodings(RemoteTest):
+    """write_file écrit les octets voulus : UTF-8 SANS BOM par défaut (Windows compris), BOM, ASCII strict, UTF-16 et fins
+    de ligne au choix ; push_file / pull_file copient d'un poste à l'autre sans passer par l'assistant."""
+
+    def read(self, name):
+        with open(os.path.join(self.folder, name), "rb") as f:
+            return f.read()
+
+    def test_charsets_and_line_endings(self):
+        host = self.device()
+        client = self.client(["write_file"])
+        java = "class Main { String s = \"é\"; }\n"
+        written = client.data("write_file", device=host, path=os.path.join(self.folder, "Main.java"), content=java)
+        self.assertEqual(self.read("Main.java"), java.encode("utf-8"))                       # aucun BOM
+        self.assertEqual(written["sha256"], __import__("hashlib").sha256(java.encode()).hexdigest())
+        client.data("write_file", device=host, path=os.path.join(self.folder, "bom.txt"), content="é", charset="utf-8-bom")
+        self.assertEqual(self.read("bom.txt"), b"\xef\xbb\xbf\xc3\xa9")
+        client.data("write_file", device=host, path=os.path.join(self.folder, "run.bat"), content="@echo off\necho ok\n",
+                    charset="ascii", newline="crlf")
+        self.assertEqual(self.read("run.bat"), b"@echo off\r\necho ok\r\n")
+        refused = client.call("write_file", device=host, path=os.path.join(self.folder, "a.txt"), content="café", charset="ascii")
+        self.assertTrue(refused["isError"])
+        self.assertIn("not ascii", refused["content"][0]["text"])
+        self.assertFalse(os.path.exists(os.path.join(self.folder, "a.txt")))
+        client.data("write_file", device=host, path=os.path.join(self.folder, "u.reg"), content="é", charset="utf-16le-bom")
+        self.assertEqual(self.read("u.reg"), b"\xff\xfe\xe9\x00")
+        client.data("write_file", device=host, path=os.path.join(self.folder, "lf.sh"), content="a\r\nb\r\n", newline="lf")
+        self.assertEqual(self.read("lf.sh"), b"a\nb\n")
+
+    def test_copies_between_a_device_and_an_android_device(self):
+        """push_file from_device : le fichier va du poste source à l'appareil Android sans passer par l'assistant ;
+        pull_file to_device : l'inverse. adb est simulé ; le gestionnaire de fichiers de l'agent est le vrai."""
+        import hashlib
+        host = self.device()
+        phone = Agent(dict(LINUX, hostname="tablette-adb", os={"family": "android", "name": "Android 16"}), "192.168.43.75")
+        phone.enroll()
+        client = self.client(["push_file", "pull_file", "read_file", "write_file"])
+        source = os.path.join(self.folder, "classes.dex")
+        blob = os.urandom(700000)                                         # plusieurs morceaux du gestionnaire de fichiers
+        with open(source, "wb") as f:
+            f.write(blob)
+        device_side = os.path.join(self.folder, "on-device.dex")
+
+        def fake_push(dev, serial, local, path, mode=None):
+            with open(local, "rb") as src, open(device_side, "wb") as dst:
+                data = src.read()
+                dst.write(data)
+            return len(data), hashlib.sha256(data).hexdigest()
+        with mock.patch.object(mcp_remote, "_adb_serial", return_value="serie"), \
+                mock.patch.object(mcp_remote, "_adb_push_file", side_effect=fake_push), \
+                mock.patch.object(mcp_remote, "_adb_get", return_value=blob[:1000]):
+            pushed = client.data("push_file", device="tablette-adb", path="/data/local/tmp/classes.dex",
+                                 from_device=host, from_path=source)
+            self.assertEqual((pushed["written"], pushed["sha256"]), (len(blob), hashlib.sha256(blob).hexdigest()))
+            self.assertEqual(self.read("on-device.dex"), blob)
+            copied = client.data("pull_file", device="tablette-adb", path="/sdcard/log.txt", to_device=host,
+                                 to_path=os.path.join(self.folder, "log-copie.txt"))
+            self.assertEqual(copied["copied_to"]["path"], os.path.join(self.folder, "log-copie.txt"))
+            self.assertEqual(self.read("log-copie.txt"), blob[:1000])
+        no_files = self.client(["push_file"])
+        with mock.patch.object(mcp_remote, "_adb_serial", return_value="serie"):
+            refused = no_files.call("push_file", device="tablette-adb", path="/data/local/tmp/x", from_device=host, from_path=source)
+        self.assertTrue(refused["isError"])
+        self.assertIn("file tools", refused["content"][0]["text"])
 
 
 class TestDesktop(RemoteTest):

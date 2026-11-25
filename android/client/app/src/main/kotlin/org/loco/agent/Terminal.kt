@@ -38,8 +38,41 @@ class Terminal(private val context: Context, private val cols: Int, private val 
             while (!ended) feed(input.readByte())
         } catch (_: EOFException) {
         } finally {
-            running?.destroy()
+            running?.let { stop(it) }
         }
+    }
+
+    /** Arrête la commande ET tout ce qu'elle a lancé (sh -c n'est que la racine : ses enfants survivraient à son seul
+     *  arrêt) — fin de session, délai dépassé côté loco, Ctrl+C. */
+    private fun stop(p: Process) {
+        val root = pidOf(p)
+        if (root > 0) {
+            val children = HashMap<Int, MutableList<Int>>()
+            File("/proc").listFiles()?.forEach { f ->
+                val pid = f.name.toIntOrNull() ?: return@forEach
+                try {
+                    val stat = File(f, "stat").readText()
+                    val ppid = stat.substringAfterLast(") ").split(" ")[1].toInt()   // champ 4 : processus parent
+                    children.getOrPut(ppid) { ArrayList() }.add(pid)
+                } catch (_: Exception) {
+                }
+            }
+            val tree = ArrayList<Int>()
+            val queue = ArrayDeque(listOf(root))
+            while (queue.isNotEmpty()) {
+                val pid = queue.removeFirst()
+                tree.add(pid)
+                children[pid]?.let { queue.addAll(it) }
+            }
+            for (pid in tree.asReversed()) try { android.os.Process.sendSignal(pid, 9) } catch (_: Exception) {}
+        }
+        p.destroy()
+    }
+
+    private fun pidOf(p: Process): Int = try {
+        p.javaClass.getDeclaredField("pid").apply { isAccessible = true }.getInt(p)
+    } catch (_: Exception) {
+        -1
     }
 
     private fun say(text: String) = out.write(text.toByteArray(Charsets.UTF_8))
@@ -118,7 +151,7 @@ class Terminal(private val context: Context, private val cols: Int, private val 
     private fun interrupt() {
         say("^C\r\n")
         val p = running
-        if (p != null) { p.destroy(); return }                          // l'invite revient à la fin de la commande
+        if (p != null) { stop(p); return }                              // l'invite revient à la fin de la commande
         line.setLength(0)
         prompt()
     }

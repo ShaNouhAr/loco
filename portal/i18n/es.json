@@ -2931,7 +2931,6 @@
  "Lire un fichier": "Leer un archivo",
  "Lire le contenu d'un fichier du poste (texte, ou base64 pour un fichier binaire).": "Leer el contenido de un archivo del equipo (texto, o base64 para un archivo binario).",
  "Écrire un fichier": "Escribir un archivo",
- "Créer ou remplacer un fichier du poste (remplacement atomique).": "Crear o reemplazar un archivo del equipo (reemplazo atómico).",
  "Organiser les fichiers": "Organizar los archivos",
  "Créer un dossier, copier, déplacer, renommer ou changer les droits d'un élément du poste.": "Crear una carpeta, copiar, mover, renombrar o cambiar los permisos de un elemento del equipo.",
  "Supprimer des fichiers": "Eliminar archivos",
@@ -5500,5 +5499,13 @@
  "Mot de passe retenu pour vous seul, le %(date)s": "Contraseña recordada solo para usted, el %(date)s",
  "Code invalide.": "Código no válido.",
  "Aucun code retenu lisible pour cet appareil : saisissez-le de nouveau.": "No hay ningún código recordado legible para este dispositivo: vuelva a introducirlo.",
- "Le serveur a refusé la demande.": "El servidor rechazó la solicitud."
+ "Le serveur a refusé la demande.": "El servidor rechazó la solicitud.",
+ "Fermer la session verrouille le téléphone ou la tablette.": "Cerrar la sesión bloquea el teléfono o la tableta.",
+ "Commandes en arrière-plan": "Comandos en segundo plano",
+ "Suivre, lire ou arrêter une commande lancée en arrière-plan par terminal_run (état, code de sortie, sortie).": "Seguir, leer o detener un comando iniciado en segundo plano por terminal_run (estado, código de salida, salida).",
+ "Créer ou remplacer un fichier du poste (remplacement atomique), en UTF-8 sans BOM par défaut.": "Crear o reemplazar un archivo del equipo (reemplazo atómico), en UTF-8 sin BOM por defecto.",
+ "Envoyer un fichier par adb (Android)": "Enviar un archivo por adb (Android)",
+ "Déposer un fichier sur un appareil Android appairé, avec les droits de l'utilisateur shell d'Android (comme adb push) : contenu envoyé dans la requête, ou copié directement depuis un autre poste, puis vérifié sur l'appareil.": "Colocar un archivo en un dispositivo Android emparejado con los derechos del usuario shell de Android (como adb push): contenido enviado en la solicitud, o copiado directamente desde otro equipo, y luego verificado en el dispositivo.",
+ "Récupérer un fichier par adb (Android)": "Recuperar un archivo por adb (Android)",
+ "Lire un fichier d'un appareil Android appairé avec les droits de l'utilisateur shell d'Android (comme adb pull), ou le copier directement vers un autre poste.": "Leer un archivo de un dispositivo Android emparejado con los derechos del usuario shell de Android (como adb pull), o copiarlo directamente a otro equipo."
 }

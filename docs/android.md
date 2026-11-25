@@ -79,7 +79,12 @@ Depuis la fiche de l'appareil, comme pour un poste :
   aucun autre utilisateur, administrateur compris, ne peut s'en servir, et il n'est jamais affiché — il n'est rendu
   qu'à votre session d'écran, au moment de déverrouiller. Le journal note qu'un code a été retenu, utilisé ou
   oublié, jamais le code lui-même. Il disparaît avec votre compte ou avec l'appareil, et se ressaisit après une
-  restauration sur un autre serveur (clé différente). La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
+  restauration sur un autre serveur (clé différente).
+  **Fermer la session verrouille le téléphone ou la tablette** (application 2.199 ou plus, Android 9 ou plus) :
+  quelques secondes après la fin de la dernière session d'écran — fermée depuis le portail, par l'assistant IA ou
+  par expiration —, l'appareil se verrouille comme avec le bouton marche/arrêt, pour ne pas rester ouvert après le
+  départ de la personne qui le pilotait. Une session rouverte aussitôt le trouve tel quel ; un téléviseur n'est pas
+  concerné. La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
   (OnePlus, Oppo, Realme), ainsi que sur les surcouches qui la nomment de façon semblable.
 - **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
   l'autre ; les variables d'environnement, non.
@@ -87,7 +92,9 @@ Depuis la fiche de l'appareil, comme pour un poste :
 - **Terminal adb** — un vrai terminal `adb shell`, avec les droits de l'utilisateur « shell » d'Android
   (voir [Terminal adb](#terminal-adb)).
 - **Assistants IA (MCP)** — les mêmes actions (terminal, fichiers, écran) sont offertes aux assistants, dans
-  la limite des droits du jeton et du profil, ainsi que l'outil `adb_shell` pour le shell adb.
+  la limite des droits du jeton et du profil, ainsi que l'outil `adb_shell` pour le shell adb et `push_file` /
+  `pull_file` pour envoyer ou récupérer un fichier par adb (comme `adb push` / `adb pull`, contenu vérifié), y compris
+  directement depuis ou vers un autre poste du parc.
 
 ## Accorder les accès, sur l'appareil
 

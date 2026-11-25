@@ -51,7 +51,11 @@ class LocoService : Service() {
         } else {
             startForeground(NOTIF_ID, notification(getString(R.string.svc_connecting)))
         }
-        remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady, ::onTrustedNetwork) { on -> watched = on; showControl() }
+        remote = RemoteClient(this, agent.store, ::screenSource, ::screenReady, ::onTrustedNetwork) { on ->
+            watched = on
+            showControl()
+            if (!on) lockSoon()
+        }
         // Après un redémarrage, sans attendre le premier contact — jamais hors d'un réseau de confiance.
         if (agent.store.keepAdb && onTrustedNetwork()) AdbProbe.keep(this)
         watchNetwork()
@@ -342,6 +346,18 @@ class LocoService : Service() {
 
     private fun showControl() = Handler(Looper.getMainLooper()).post { controlNotice(piloted || watched) }
 
+    /**
+     * Fin de la session d'écran sur un téléphone ou une tablette : l'appareil se verrouille, pour ne pas rester ouvert
+     * après le départ de la personne qui le pilotait depuis loco (pas sur un téléviseur, qui n'a pas de verrouillage).
+     * Un court délai laisse une session qui reprend aussitôt (nouvelle session, nouvel onglet) trouver l'appareil tel
+     * quel. Par le service d'accessibilité (Android 9 et plus), comme le bouton marche/arrêt ; sans effet si l'écran est
+     * déjà verrouillé.
+     */
+    private fun lockSoon() {
+        if (Inventory.form(this) == "tv") return
+        Handler(Looper.getMainLooper()).postDelayed({ if (!watched) InputService.instance?.lockScreen() }, LOCK_DELAY)
+    }
+
     /** Garde-fou : tant qu'un administrateur voit ou pilote l'écran (session de l'agent, ou adb sans dialogue système),
      *  l'appareil l'affiche, bien en vue. */
     private fun controlNotice(on: Boolean) {
@@ -405,6 +421,7 @@ class LocoService : Service() {
         /** Vrai tant que l'écran est réellement partagé (reflète la capture, pas un drapeau persistant). */
         @Volatile var sharing = false
             private set
+        const val LOCK_DELAY = 5000L                // fin d'une session d'écran → verrouillage, sauf reprise entre-temps
         const val ACTION_SCREEN_ON = "org.loco.agent.SCREEN_ON"
         const val ACTION_SCREEN_OFF = "org.loco.agent.SCREEN_OFF"
         const val ACTION_NETWORKS = "org.loco.agent.NETWORKS"

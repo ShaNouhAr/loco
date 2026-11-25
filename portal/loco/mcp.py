@@ -37,7 +37,7 @@ CLIENT_KEY = "io.modelcontextprotocol/clientInfo"
 SERVER_INFO = {"name": "loco", "title": "loco", "version": config.VERSION}
 PREFIX = "loco_mcp_"
 TOKEN_RE = re.compile(r"^loco_mcp_[A-Za-z0-9_-]{43}$")
-MAX_BODY = 1024 * 1024
+MAX_BODY = 8 * 1024 * 1024                # push_file : jusqu’à ~6 Mo de fichier par appel (base64)
 LIST_TTL_MS = 60_000
 TOUCH = datetime.timedelta(minutes=1)
 EXPIRIES = {"30": 30, "90": 90, "365": 365, "0": 0}     # jours ; 0 = sans expiration

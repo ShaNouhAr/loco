@@ -34,10 +34,15 @@ case "$1" in
   -s) shift 2
       case "$1" in
         get-state) cat {state} 2>/dev/null || echo device; exit 0 ;;
+        push) cp "$2" "$3" 2>/dev/null || {{ echo "adb: error: failed to copy '$2' to '$3': remote No such file or directory"; exit 1; }}
+              echo "$2: 1 file pushed."; exit 0 ;;
+        pull) cp "$2" "$3" 2>/dev/null || {{ echo "adb: error: remote object '$2' does not exist"; exit 1; }}
+              echo "$2: 1 file pulled."; exit 0 ;;
         shell) shift
                if [ $# -eq 0 ]; then PS1='$ ' exec /bin/sh -i; fi
                case "$*" in
                  *"uiautomator dump"*) cat {state}.ui 2>/dev/null ;;
+                 *"stat -c %s"*|"chmod "*) sh -c "$*"; exit $? ;;
                  *"wm size"*) echo "Physical size: 1080x2400" ;;
                  *"dumpsys window"*) echo "    mDreamingLockscreen=$(cat {state}.lk 2>/dev/null || echo true)" ;;
                  *"getprop ro.product.manufacturer"*) echo Google ;;
@@ -429,6 +434,96 @@ class TestMcp(AdbTest):
                 conn.execute("UPDATE remote_sessions SET state='closed' WHERE id=?", (sid,))
         self.assertIn("adb shell : echo bonjour", detail)
         self.assertEqual(json.loads(json.dumps(result))["hostname"], dev["hostname"])
+
+    def test_a_long_command_is_neither_echoed_back_nor_cut(self):
+        """~15 Ko de base64 dans une commande adb : elle passe entière (lignes courtes, sous la limite d'une ligne de
+        terminal), et la réponse ne contient que le résultat, jamais la commande réaffichée."""
+        _a, dev = self.phone()
+        self.pair(dev)
+        client = Client(create(self.admin, "Assistant adb long", ["adb_shell"])[0])
+        payload = base64.b64encode(os.urandom(15000)).decode()
+        result = client.data("adb_shell", device=dev["hostname"], command=f"printf '%s' '{payload}' | wc -c")
+        self.assertEqual((result["output"].strip(), result["exit_code"]), (str(len(payload)), 0))
+        self.assertNotIn(payload[:40], json.dumps(result))
+        self.assertLess(len(json.dumps(result)), 1000)
+        with transaction() as conn:
+            for sid in [r[0] for r in conn.execute("SELECT id FROM remote_sessions WHERE kind='adb' AND state IN ('waiting','active')")]:
+                conn.execute("UPDATE remote_sessions SET state='closed' WHERE id=?", (sid,))
+
+    def test_push_and_pull_files_through_adb_checked_on_the_device(self):
+        """push_file / pull_file : par le serveur adb de loco (utilisateur shell d'Android), contenu dans le corps de la
+        requête — jamais dans une commande —, vérifié sur l'appareil (taille, SHA-256), en une ou plusieurs parties."""
+        import hashlib
+        _a, dev = self.phone()
+        self.pair(dev)
+        client = Client(create(self.admin, "Assistant fichiers adb", ["push_file", "pull_file"])[0])
+        target = os.path.join(self.folder, "classes.dex")
+        blob = os.urandom(300000)
+        result = client.data("push_file", device=dev["hostname"], path=target, mode="755",
+                             content_base64=base64.b64encode(blob).decode(), sha256=hashlib.sha256(blob).hexdigest())
+        self.assertEqual((result["written"], result["sha256"], result["verified"]), (len(blob), hashlib.sha256(blob).hexdigest(), True))
+        with open(target, "rb") as f:
+            self.assertEqual(f.read(), blob)
+        self.assertEqual(oct(os.stat(target).st_mode & 0o777), "0o755")
+        self.assertNotIn(base64.b64encode(blob[:30]).decode()[:20], self.args())    # jamais dans une ligne de commande
+        # En plusieurs parties, dans l'ordre ; une partie hors d'ordre est refusée.
+        second = os.path.join(self.folder, "app.apk")
+        one, two = blob[:100000], blob[100000:]
+        part = client.data("push_file", device=dev["hostname"], path=second, content_base64=base64.b64encode(one).decode(), final=False)
+        self.assertEqual(part["received"], len(one))
+        self.assertTrue(client.call("push_file", device=dev["hostname"], path=second, offset=5,
+                                    content_base64=base64.b64encode(two).decode())["isError"])
+        done = client.data("push_file", device=dev["hostname"], path=second, offset=len(one), content_base64=base64.b64encode(two).decode())
+        self.assertEqual(done["written"], len(blob))
+        with open(second, "rb") as f:
+            self.assertEqual(f.read(), blob)
+        wrong = client.call("push_file", device=dev["hostname"], path=os.path.join(self.folder, "x"),
+                            content_base64=base64.b64encode(b"abc").decode(), sha256="0" * 64)
+        self.assertTrue(wrong["isError"])
+        self.assertFalse(os.path.exists(os.path.join(self.folder, "x")))
+        # Lecture : texte, base64, binaire repéré.
+        text_file = os.path.join(self.folder, "notes.txt")
+        with open(text_file, "w") as f:
+            f.write("première ligne\nseconde ligne\n")
+        read = client.data("pull_file", device=dev["hostname"], path=text_file)
+        self.assertEqual(read["content"], "première ligne\nseconde ligne\n")
+        pulled = client.data("pull_file", device=dev["hostname"], path=target, encoding="base64", max_bytes=1000, offset=10)
+        self.assertEqual((base64.b64decode(pulled["content_base64"]), pulled["size"], pulled["complete"]), (blob[10:1010], len(blob), False))
+        self.assertEqual(pulled["sha256"], hashlib.sha256(blob).hexdigest())
+        self.assertTrue(client.data("pull_file", device=dev["hostname"], path=target)["binary"])
+        self.assertTrue(client.call("pull_file", device=dev["hostname"], path=os.path.join(self.folder, "absent"))["isError"])
+        # Ailleurs que sur un appareil Android : refusé.
+        linux = Agent(LINUX, "192.168.43.74")
+        linux.enroll()
+        self.assertTrue(client.call("push_file", device=LINUX["hostname"], path="/tmp/x", content_base64="YQ==")["isError"])
+
+    def test_write_file_goes_through_adb_where_the_app_cannot_write(self):
+        """L'application loco n'a pas accès à /data/local/tmp : write_file passe alors par adb (même appairage), si cet
+        accès a aussi les outils adb ; sinon l'erreur de l'application est rendue telle quelle."""
+        _a, dev = self.phone()
+        self.pair(dev)
+        target = os.path.join(self.folder, "Main.java")
+
+        class Refused:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+        refusal = mcp_remote.ToolError(f"write {target}: Accès refusé.")
+        with mock.patch.object(mcp_remote, "Channel", Refused), mock.patch.object(mcp_remote.Files, "call", side_effect=refusal):
+            both = Client(create(self.admin, "Fichiers et adb", ["write_file", "push_file"])[0])
+            result = both.data("write_file", device=dev["hostname"], path=target, content="class Main {}\n")
+            self.assertEqual((result["via"], result["written"]), ("adb", 14))
+            with open(target, "rb") as f:
+                self.assertEqual(f.read(), b"class Main {}\n")                    # sans BOM
+            only_files = Client(create(self.admin, "Fichiers seuls", ["write_file"])[0])
+            refused = only_files.call("write_file", device=dev["hostname"], path=target, content="x")
+            self.assertTrue(refused["isError"])
+            self.assertIn("Accès refusé", refused["content"][0]["text"])
 
     def test_adb_unlock_injects_the_pattern_blind(self):
         _a, dev = self.phone()

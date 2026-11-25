@@ -13,12 +13,15 @@ des fils de gunicorn à l'interface et aux agents.
   les zones modifiées transitent ; rendu PNG, clics, frappes et touches."""
 import base64
 import binascii
+import hashlib
 import json
 import math
 import os
 import re
 import secrets
+import shlex
 import struct
+import tempfile
 import threading
 import time
 import zlib
@@ -26,7 +29,7 @@ import zlib
 from flask import g
 from werkzeug.exceptions import HTTPException
 
-from . import fleet, remote
+from . import config, fleet, remote
 from .auth import audit, can
 from .util import counted
 from .db import db
@@ -36,8 +39,17 @@ from .mcp import DEVICE, ToolError, _active, _device, _via, tool
 TERMINAL_COLS, TERMINAL_ROWS = 300, 200
 TTY_COLS, TTY_ROWS = 120, 40
 COMMAND_MAX = 64_000
-OUTPUT_MAX = 60_000
+OUTPUT_MAX = 200_000                    # plafond de max_output
+OUTPUT_DEFAULT = 24_000                 # sortie rendue par défaut : lisible, et sous la limite des clients MCP (~10 000 jetons)
 OMIT_MARK = "characters omitted from the middle"   # repère d'une sortie écourtée (gardée au début ET à la fin)
+CHUNK_LINE = 900                        # morceaux d'un script tapé : jamais la limite de 4 096 octets d'une ligne de terminal
+START_WAIT = 6.0                        # secondes sans marqueur de début : le shell est encore occupé par une commande d'avant
+JOB_RE = re.compile(r"^[0-9a-f]{12}$")
+JOB_DIRS = {"linux": "/var/tmp/loco-jobs", "android": "/data/data/org.loco.agent/files/loco-jobs"}
+JOB_DAYS = 7                            # tâches de fond gardées (dossier, sortie) une semaine
+MAX_OUTPUT = {"type": "integer", "minimum": 1000, "maximum": OUTPUT_MAX,
+              "description": f"Most characters of output to return (default {OUTPUT_DEFAULT}). Beyond, the start and the end are "
+                             "kept and the middle is replaced by a note of how much was omitted."}
 FILE_READ_MAX = 1024 * 1024
 FILE_CHUNK = 256 * 1024
 SCREEN_WIDTH = 1440                     # au-delà, la capture est réduite d'un facteur entier (lisible par l'assistant)
@@ -162,6 +174,8 @@ class Channel:
             raise
 
     def close(self, reason):
+        """Ferme la session : l'agent arrête alors le shell et tout ce qu'il a lancé (Windows : objet de tâche ; Linux :
+        raccrochage du terminal et groupe de processus)."""
         if not self.sid:
             return
         conn = db()
@@ -170,6 +184,7 @@ class Channel:
         remote._close(self.sid, reason, g.user["username"])
         conn.commit()
         _STATE.pop(self.sid, None)
+        self.sid = None
 
     def _finish(self):
         """Acquitte ce qui a été lu : rien ne sera relu par l'appel suivant."""
@@ -250,34 +265,55 @@ class Channel:
 
 # --------------------------------------------------------------------------- terminal
 
-def _bash_line(command, nonce):
-    # Script en argument (base64) : guillemets, retours à la ligne et lecture clavier du script sans surprise.
+def _bash_lines(command, nonce, pty=True):
+    """Lignes à taper pour une commande bash / sh, encadrée de ses marqueurs (le début s'affiche avant qu'elle démarre).
+    Le script part en base64 : guillemets, retours à la ligne et lecture clavier sans surprise. Sur un vrai
+    pseudo-terminal (bash du poste, shell adb), un long script part par morceaux courts dans une variable : aucune ligne
+    ne dépasse la limite de 4 096 octets d'une ligne de terminal."""
     script = base64.b64encode(command.encode()).decode()
-    return (f" printf '\\036LOCO:{nonce}:B\\036\\n'; \"$(command -v bash || echo sh)\" -c \"$(printf %s {script} | base64 -d)\";"
-            f" printf '\\036LOCO:{nonce}:E:%d\\036\\n' \"$?\"")
+    begin = f" printf '\\036LOCO:{nonce}:B\\036\\n';"
+    end = f" printf '\\036LOCO:{nonce}:E:%d\\036\\n' \"$?\""
+    shell = "\"$(command -v bash || echo sh)\""
+    if not pty or len(script) <= CHUNK_LINE:
+        return [f"{begin} {shell} -c \"$(printf %s {script} | base64 -d)\";{end}"]
+    lines = [" __l=''"] + [f" __l=\"$__l\"'{script[i:i + CHUNK_LINE]}'" for i in range(0, len(script), CHUNK_LINE)]
+    lines.append(f"{begin} {shell} -c \"$(printf %s \"$__l\" | base64 -d)\";{end}; unset __l")
+    return lines
 
 
-def _powershell_lines(command, nonce):
+def _bash_line(command, nonce):
+    """(Compatibilité) la commande en une seule ligne."""
+    return _bash_lines(command, nonce, pty=False)[0]
+
+
+def _powershell_lines(command, nonce, limit=OUTPUT_DEFAULT):
     script = base64.b64encode(command.encode("utf-8")).decode()
     lines = [" $__l = ''"] + [f" $__l += '{script[i:i + 3000]}'" for i in range(0, len(script), 3000)]
     lines.append(
-        " & { $n = '" + nonce + "'; $global:LASTEXITCODE = 0; "
+        " & { $n = '" + nonce + "'; Write-Host ('@' + '@LOCO:' + $n + ':S'); $global:LASTEXITCODE = 0; "
         "$s = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($__l)); "
-        "try { $r = & ([scriptblock]::Create($s)) 2>&1; $ok = $?; $o = $r | Out-String -Width 250; "
-        "$c = if (-not $ok) { 1 } elseif ($LASTEXITCODE) { $LASTEXITCODE } else { 0 } } catch { $o = $_ | Out-String; $c = 1 }; "
-        f"if ($o.Length -gt {OUTPUT_MAX}) {{ $h = [int]({OUTPUT_MAX}/3); $om = $o.Length - {OUTPUT_MAX}; "
-        f"$o = $o.Substring(0,$h) + [char]10+[char]10 + '[... ' + $om + ' {OMIT_MARK} ...]' + [char]10+[char]10 + $o.Substring($o.Length - ({OUTPUT_MAX}-$h)) }}; "
+        # Le script passe par un fichier .ps1 : un « exit 3 » y rend son code sans fermer la console de la session.
+        # Une stratégie d'exécution qui l'interdirait (GPO) : repli sur un bloc de script, comme avant.
+        "$f = Join-Path $env:TEMP ('loco-mcp-' + $n + '.ps1'); [IO.File]::WriteAllText($f, $s, (New-Object Text.UTF8Encoding $true)); "
+        "try { try { $r = & $f 2>&1 } catch [System.Management.Automation.PSSecurityException] { $r = & ([scriptblock]::Create($s)) 2>&1 }; "
+        "$e = @($r | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] }).Count; $o = $r | Out-String -Width 250; "
+        "$c = if ($LASTEXITCODE) { $LASTEXITCODE } elseif ($e) { 1 } else { 0 } } catch { $o = $_ | Out-String; $c = 1 } "
+        "finally { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }; "
+        f"if ($o.Length -gt {limit}) {{ $h = [int]({limit}/3); $om = $o.Length - {limit}; "
+        f"$o = $o.Substring(0,$h) + [char]10+[char]10 + '[... ' + $om + ' {OMIT_MARK} ...]' + [char]10+[char]10 + $o.Substring($o.Length - ({limit}-$h)) }}; "
         "$b = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($o)); "
         "Write-Host ('@' + '@LOCO:' + $n + ':B'); "
         "for ($i = 0; $i -lt $b.Length; $i += 240) { Write-Host $b.Substring($i, [Math]::Min(240, $b.Length - $i)); "
         "if ($i % 24000 -eq 0) { Start-Sleep -Milliseconds 30 } }; "
-        "Write-Host ('@' + '@LOCO:' + $n + ':E:' + $c + ':' + $b.Length) }")
+        "Write-Host ('@' + '@LOCO:' + $n + ':E:' + $c + ':' + $b.Length); Remove-Variable __l -Scope Global -ErrorAction SilentlyContinue }")
     return lines
 
 
 def _ready(chan, windows):
     """Session neuve : le shell démarre (profil, PowerShell) et peut perdre ce qui est tapé avant d'être prêt. Une sonde
-    est renvoyée à intervalle court jusqu'à ce que l'une d'elles réponde ; ensuite seulement, la commande part."""
+    est renvoyée à intervalle court jusqu'à ce que l'une d'elles réponde ; ensuite seulement, la commande part. Sous
+    Linux et dans le shell adb, la sonde coupe aussi l'écho et l'édition de ligne de ce shell réservé à l'assistant :
+    ce qui est tapé n'est jamais réaffiché."""
     markers, sent, end = [], 0.0, time.monotonic() + 30
     while time.monotonic() < end:
         if time.monotonic() - sent >= (0.7 if windows else 2.0):
@@ -285,10 +321,12 @@ def _ready(chan, windows):
             if windows:
                 # PSReadLine aspire la saisie en attente et la perd quand on le retire : on le retire dans la sonde
                 # même, la commande ne part qu'une fois la console simple en place (pas de redessin à chaque frappe).
-                chan.send(f" Remove-Module PSReadLine -ErrorAction SilentlyContinue; Write-Host ('@' + '@LOCO:R{probe}')\r".encode())
+                chan.send(f" Remove-Module PSReadLine -ErrorAction SilentlyContinue; Set-ExecutionPolicy -Scope Process "
+                          f"-ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue; Write-Host ('@' + '@LOCO:R{probe}')\r".encode())
                 markers.append(f"@@LOCO:R{probe}")
             else:
-                chan.send(f" printf '\\036LOCO:R{probe}\\036\\n'\r".encode())
+                chan.send(f" stty -echo 2>/dev/null; set +o emacs 2>/dev/null; set +o vi 2>/dev/null; "
+                          f"printf '\\036LOCO:R{probe}\\036\\n'\r".encode())
                 markers.append(f"\x1eLOCO:R{probe}\x1e")
             sent = time.monotonic()
         chan.poll()
@@ -304,13 +342,13 @@ def clean(text):
     return ANSI_RE.sub("", text.replace("\r\n", "\n").replace("\r", "\n"))
 
 
-def _clip(text):
+def _clip(text, limit=OUTPUT_DEFAULT):
     """Sortie trop longue pour l'assistant : on garde le DÉBUT et la FIN (contexte et erreurs sont souvent en haut, le
     résultat en bas), avec au milieu le compte de ce qui a sauté — plutôt que de ne garder que la queue. (texte, écourté)."""
-    if len(text) <= OUTPUT_MAX:
+    if len(text) <= limit:
         return text, False
-    head = OUTPUT_MAX // 3
-    tail = OUTPUT_MAX - head
+    head = limit // 3
+    tail = limit - head
     return f"{text[:head]}\n\n[... {len(text) - head - tail} {OMIT_MARK} ...]\n\n{text[-tail:]}", True
 
 
@@ -341,31 +379,240 @@ def powershell_result(raw, nonce):
         raise ChannelError("The PowerShell output was garbled by the console: run the command again.")
 
 
-def _partial(raw, nonce, windows):
+def _started(raw, nonce, windows):
+    """La commande a-t-elle démarré (marqueur de début affiché par le shell) ?"""
+    text = raw.decode("utf-8", "replace")
+    return f"@@LOCO:{nonce}:S" in clean(text) if windows else f"\x1eLOCO:{nonce}:B\x1e" in text
+
+
+def _partial(raw, nonce, windows, limit=OUTPUT_DEFAULT):
     text = clean(raw.decode("utf-8", "replace"))
     if windows:
         return ""                                          # sortie PowerShell rendue seulement à la fin
     marker = f"LOCO:{nonce}:B"
-    return _clip(text[text.find(marker) + len(marker):].strip("\x1e\n"))[0] if marker in text else ""
+    return _clip(text[text.find(marker) + len(marker):].strip("\x1e\n"), limit)[0] if marker in text else ""
+
+
+def _execute(dev, kind, command, timeout, limit):
+    """Une commande dans le shell de la session (le même d'un appel à l'autre), avec ses marqueurs de début et de fin :
+    {"output", "exit_code"} ou {"timed_out"}. Un shell resté occupé par une commande d'avant (pas de marqueur de début
+    à temps) est fermé avec ce qu'il faisait tourner, et la commande repart dans un shell neuf. Au-delà du délai, la
+    session est fermée : l'agent arrête le shell et tous les processus qu'il a lancés ; l'appel suivant ouvre un shell
+    neuf."""
+    windows = dev["os_family"] == "windows" and kind == "terminal"
+    pty = not windows and not (dev["os_family"] == "android" and kind == "terminal")   # le terminal de l'appli n'en a pas
+    parse = powershell_result if windows else bash_result
+    note = ""
+    for attempt in (1, 2):
+        nonce = secrets.token_hex(6)
+        lines = _powershell_lines(command, nonce, limit) if windows else _bash_lines(command, nonce, pty)
+        with Channel(dev, kind) as chan:
+            if chan.fresh:
+                _ready(chan, windows)
+            for line in lines:
+                chan.send(line.encode("utf-8") + b"\r")
+            found = []
+
+            def ready():
+                if not found:
+                    result = parse(bytes(chan.buffer), nonce)
+                    if result is not None:
+                        found.append(result)
+                return bool(found)
+            start = time.monotonic()
+            # Shell déjà ouvert : sans marqueur de début à temps, il est resté occupé (un délai plus court que cette attente
+            # finit de toute façon par fermer la session, comme tout dépassement).
+            if not chan.fresh and attempt == 1 and timeout > START_WAIT:
+                grace = min(timeout, START_WAIT + len(command) / 20000)
+                if not chan.wait(lambda: ready() or _started(bytes(chan.buffer), nonce, windows), grace):
+                    chan.close("Shell resté occupé par une commande précédente : fermé par le client MCP.")
+                    note = ("The device shell was still busy with an earlier command that never ended: that shell was closed "
+                            "with everything it had started, and this command ran in a fresh shell.")
+                    continue
+            if chan.wait(ready, max(0.0, timeout - (time.monotonic() - start))):
+                output, code = found[0]
+                out, truncated = _clip(output, limit)
+                result = {"exit_code": code, "output": out, "truncated": truncated or OMIT_MARK in output,
+                          "seconds": round(time.monotonic() - start, 1)}
+                return {**result, **({"note": note} if note else {})}
+            partial = _partial(bytes(chan.buffer), nonce, windows, limit)
+            chan.close("Commande arrêtée au bout du délai : le shell et ce qu'il avait lancé sont fermés (client MCP).")
+        return {"exit_code": None, "timed_out": True, "killed": True, "output": partial,
+                "message": f"No result after {timeout} s: the command was stopped — its shell and every process it had "
+                           "started were closed, and the next call opens a fresh shell. Use a longer timeout, or "
+                           "background=true for long tasks (then terminal_job).",
+                **({"note": note} if note else {})}
+    raise ChannelError("The device shell did not answer.")
+
+
+# --------------------------------------------------------------------------- tâches de fond (terminal_run background)
+# La commande part détachée du terminal (elle survit à sa fermeture) ; sa sortie et son code de sortie vont dans un
+# dossier propre à la tâche, sur le poste : /var/tmp/loco-jobs (Linux, root), %ProgramData%\loco\jobs (Windows, SYSTEM
+# et administrateurs seulement), le dossier privé de l'application (Android). Gardés une semaine.
+
+def _job_dir(dev):
+    return JOB_DIRS["android" if dev["os_family"] == "android" else "linux"]
+
+
+def _sh_job_start(dev, job, command):
+    base = _job_dir(dev)
+    script = base64.b64encode(command.encode()).decode()
+    return (f"b='{base}'; d=\"$b/{job}\"; mkdir -p \"$d\" && chmod 700 \"$b\" \"$d\" 2>/dev/null\n"
+            f"find \"$b\" -mindepth 1 -maxdepth 1 -type d -mtime +{JOB_DAYS} -exec rm -rf {{}} + 2>/dev/null\n"
+            f"printf %s '{script}' | base64 -d > \"$d/cmd\" || exit 1\n"
+            "s=$(command -v bash || echo sh)\n"
+            "w='echo $$ > \"$1/pid\"; \"$2\" \"$1/cmd\" > \"$1/out\" 2>&1 < /dev/null; echo $? > \"$1/exit\"'\n"
+            "if command -v setsid >/dev/null 2>&1; then setsid sh -c \"$w\" job \"$d\" \"$s\" > /dev/null 2>&1 < /dev/null &\n"
+            "else nohup sh -c \"$w\" job \"$d\" \"$s\" > /dev/null 2>&1 < /dev/null & fi\n"
+            "i=0; while [ ! -s \"$d/pid\" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done\n"
+            "echo \"J:started:$(cat \"$d/pid\" 2>/dev/null)\"\n")
+
+
+def _sh_job_status(dev, job, limit, stop=False):
+    head, tail = limit // 3, limit - limit // 3
+    stopping = ("p=$(cat \"$d/pid\" 2>/dev/null); if [ -n \"$p\" ] && [ ! -f \"$d/exit\" ] && kill -0 \"$p\" 2>/dev/null; then "
+                "touch \"$d/stopped\"; kill -TERM -\"$p\" 2>/dev/null || kill -TERM \"$p\" 2>/dev/null; sleep 1; "
+                "kill -KILL -\"$p\" 2>/dev/null; kill -KILL \"$p\" 2>/dev/null; fi\n") if stop else ""
+    return (f"d='{_job_dir(dev)}/{job}'; [ -d \"$d\" ] || {{ echo 'J:missing::0'; exit 0; }}\n" + stopping +
+            "n=$(wc -c < \"$d/out\" 2>/dev/null | tr -d ' '); n=${n:-0}\n"
+            "if [ -f \"$d/stopped\" ]; then echo \"J:stopped::$n\"\n"
+            "elif [ -f \"$d/exit\" ]; then echo \"J:done:$(cat \"$d/exit\"):$n\"\n"
+            "elif [ -f \"$d/pid\" ] && kill -0 \"$(cat \"$d/pid\")\" 2>/dev/null; then echo \"J:running::$n\"\n"
+            "else echo \"J:lost::$n\"; fi\n"
+            f"if [ \"$n\" -le {limit} ]; then cat \"$d/out\" 2>/dev/null; else head -c {head} \"$d/out\"; "
+            f"printf '\\n\\n[... %d {OMIT_MARK} ...]\\n\\n' $((n - {limit})); tail -c {tail} \"$d/out\"; fi\n")
+
+
+def _ps_job_base():
+    return "$ProgressPreference = 'SilentlyContinue'; $b = Join-Path $env:ProgramData 'loco\\jobs'"
+
+
+def _ps_job_start(job, command):
+    script = base64.b64encode(command.encode("utf-8")).decode()
+    wrapper = ("$d = Split-Path -Parent $MyInvocation.MyCommand.Path\n"
+               "Set-Content -Path \"$d\\pid\" -Value $PID -Encoding ascii\n"
+               "$global:LASTEXITCODE = 0; $c = 0\n"
+               "try { & \"$d\\cmd.ps1\" *>&1 | Out-File -FilePath \"$d\\out.txt\" -Encoding utf8 -Width 250; if ($LASTEXITCODE) { $c = $LASTEXITCODE } }\n"
+               "catch { ($_ | Out-String) | Out-File -FilePath \"$d\\out.txt\" -Append -Encoding utf8; $c = 1 }\n"
+               "Set-Content -Path \"$d\\exit\" -Value $c -Encoding ascii\n")
+    return (_ps_job_base() + "\n"
+            "if (-not (Test-Path $b)) { New-Item -ItemType Directory -Force -Path $b | Out-Null; "
+            "& icacls $b /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null }\n"
+            f"Get-ChildItem $b -Directory -ErrorAction SilentlyContinue | Where-Object {{ $_.LastWriteTime -lt (Get-Date).AddDays(-{JOB_DAYS}) }} | "
+            "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue\n"
+            f"$d = Join-Path $b '{job}'; New-Item -ItemType Directory -Force -Path $d | Out-Null\n"
+            "$bom = New-Object Text.UTF8Encoding $true\n"
+            f"[IO.File]::WriteAllText(\"$d\\cmd.ps1\", [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{script}')), $bom)\n"
+            f"[IO.File]::WriteAllText(\"$d\\run.ps1\", @'\n{wrapper}'@, $bom)\n"
+            "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = "
+            "('powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"' + $d + '\\run.ps1\"'); CurrentDirectory = $d }\n"
+            "if ($r.ReturnValue -ne 0) { throw ('Win32_Process.Create: ' + $r.ReturnValue) }\n"
+            "'J:started:' + $r.ProcessId\n")
+
+
+def _ps_job_status(job, limit, stop=False):
+    head = limit // 3
+    stopping = ("$p = if (Test-Path \"$d\\pid\") { [int](Get-Content \"$d\\pid\" -Raw) } else { 0 }\n"
+                "if ($p -and -not (Test-Path \"$d\\exit\") -and (Get-Process -Id $p -ErrorAction SilentlyContinue)) { "
+                "New-Item -ItemType File -Force -Path \"$d\\stopped\" | Out-Null; & taskkill.exe /PID $p /T /F 2>&1 | Out-Null }\n") if stop else ""
+    return (_ps_job_base() + f"; $d = Join-Path $b '{job}'\n"
+            "if (-not (Test-Path $d)) { 'J:missing::0'; return }\n" + stopping +
+            "$o = if (Test-Path \"$d\\out.txt\") { [IO.File]::ReadAllText(\"$d\\out.txt\") } else { '' }\n"
+            "$n = $o.Length\n"
+            "if (Test-Path \"$d\\stopped\") { \"J:stopped::$n\" }\n"
+            "elseif (Test-Path \"$d\\exit\") { 'J:done:' + (Get-Content \"$d\\exit\" -Raw).Trim() + \":$n\" }\n"
+            "elseif ((Test-Path \"$d\\pid\") -and (Get-Process -Id ([int](Get-Content \"$d\\pid\" -Raw)) -ErrorAction SilentlyContinue)) { \"J:running::$n\" }\n"
+            "else { \"J:lost::$n\" }\n"
+            f"if ($n -gt {limit}) {{ $o.Substring(0, {head}) + \"`n`n[... \" + ($n - {limit}) + ' {OMIT_MARK} ...]' + \"`n`n\" + $o.Substring($n - {limit - head}) }} else {{ $o }}\n")
+
+
+def _job_call(dev, script, limit):
+    """Script court de gestion d'une tâche, dans le shell de la session ; (état, code, octets, sortie)."""
+    result = _execute(dev, "terminal", script, 60, limit + 4000)
+    if result.get("timed_out"):
+        raise ToolError("The device did not answer about this background job in time: retry.")
+    text = result["output"]
+    first, _sep, rest = text.partition("\n")
+    m = re.match(r"^J:(\w+):(-?\d*):?(\d*)", first.strip())
+    if not m:
+        raise ToolError("Unexpected answer from the device: " + text[:300])
+    state, code, size = m.group(1), m.group(2), m.group(3)
+    return state, (int(code) if code.lstrip("-").isdigit() else None), (int(size) if size.isdigit() else None), rest
+
+
+def _job_start(dev, command, args):
+    job = secrets.token_hex(6)
+    script = _ps_job_start(job, command) if dev["os_family"] == "windows" else _sh_job_start(dev, job, command)
+    state, code, _size, rest = _job_call(dev, script, 4000)
+    if state != "started":
+        raise ToolError("The background command could not be started: " + rest[:500])
+    audit("parc.session.commande", f"{dev['hostname']} (arrière-plan {job}) : {command[:300]}{_via()}")
+    return {"device_id": dev["id"], "hostname": dev["hostname"], "job": job, "state": "running",
+            "message": "Started in the background, detached from the terminal (it keeps running if the session closes). "
+                       "Follow it with terminal_job (state, exit code, output); action=stop stops it with every process "
+                       "it started."}
 
 
 @tool("terminal_run", "remote", "Run a terminal command", L_("Commandes dans le terminal"),
       L_("Lancer des commandes dans le terminal root (Linux) ou PowerShell SYSTEM (Windows) d'un poste et lire leur sortie, en direct."),
       ("fleet.view", "remote.terminal"),
       "Run a command in the device's live terminal — root bash on Linux, Windows PowerShell as SYSTEM on Windows, or the "
-      "agent's own shell on Android (unprivileged, no root) — and "
-      "return its output and exit code within seconds (no agent check-in wait). Each call is independent: no working "
-      "directory or variable is kept between calls. The command must not wait for keyboard input (use terminal_interact "
-      "for interactive programs); it is interrupted after the timeout. For tasks longer than a few minutes, start them in "
-      "the background (nohup … & / Start-Process) and check back. Scripts up to 64 KB. If the output is longer than 60 KB, the start and the end are kept (the middle is omitted, with a note of how much).",
+      "agent's own shell on Android (unprivileged, no root) — and return its output and exit code within seconds (no "
+      "agent check-in wait). Each call is independent: no working directory or variable is kept between calls. The "
+      "command must not wait for keyboard input (use terminal_interact for interactive programs).\n"
+      "- Timeout: after `timeout` seconds the command is STOPPED for real — its shell and every process it started are "
+      "closed (killed: true) — and the next call opens a fresh shell.\n"
+      "- A shell still busy with an earlier command is detected: it is closed with what it ran, the command runs in a "
+      "fresh shell, and the answer says so (note).\n"
+      "- fresh=true runs the command in a brand-new shell.\n"
+      "- background=true starts the command detached (it survives the session) and returns a job id at once: follow it "
+      "with terminal_job. Use it for anything longer than a few minutes (builds, installs).\n"
+      f"- Output: at most max_output characters (default {OUTPUT_DEFAULT}); beyond, the start and the end are kept with "
+      "a note of what was omitted (truncated: true). The command itself is never echoed back.\n"
+      "- To create or change files (code, scripts, configuration), prefer write_file: it writes the exact bytes, UTF-8 "
+      "WITHOUT a BOM by default, where Windows PowerShell 5.1's Set-Content -Encoding UTF8 or Out-File add one (javac, "
+      "bash and many parsers then fail).\n"
+      "Scripts up to 64 KB.",
       {"device": DEVICE,
        "command": {"type": "string", "minLength": 1, "maxLength": COMMAND_MAX, "description": "Command or script (bash on Linux, PowerShell on Windows)."},
-       "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait (default 30)."}},
+       "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait before the command is stopped (default 30)."},
+       "fresh": {"type": "boolean", "description": "Run it in a brand-new shell (the previous one is closed, with anything still running in it)."},
+       "background": {"type": "boolean", "description": "Start it detached and return a job id at once; follow it with terminal_job."},
+       "max_output": MAX_OUTPUT},
       ("device", "command"), read_only=False, destructive=True, idempotent=False)
 def _terminal_run(args):
     dev = _device(args["device"])
     _active(dev)
     return _run(dev, "terminal", args)
+
+
+@tool("terminal_job", "remote", "Follow a background command", L_("Commandes en arrière-plan"),
+      L_("Suivre, lire ou arrêter une commande lancée en arrière-plan par terminal_run (état, code de sortie, sortie)."),
+      ("fleet.view", "remote.terminal"),
+      "Follow a command started with terminal_run background=true: its state (running, done, stopped, lost — ended "
+      "without an exit code, for instance after a reboot — or missing), its exit code and its output (the start and the "
+      f"end are kept beyond max_output, default {OUTPUT_DEFAULT} characters). action=stop stops it with every process it "
+      "started. Jobs and their output are kept on the device for a week.",
+      {"device": DEVICE,
+       "job": {"type": "string", "minLength": 12, "maxLength": 12, "description": "Job id returned by terminal_run."},
+       "action": {"type": "string", "enum": ["status", "stop"], "description": "status (default) or stop."},
+       "max_output": MAX_OUTPUT},
+      ("device", "job"), read_only=False, destructive=False, idempotent=False)
+def _terminal_job(args):
+    dev = _device(args["device"])
+    _active(dev)
+    job = args["job"].lower()
+    if not JOB_RE.match(job):
+        raise ToolError("Unknown job id.")
+    limit, stop = args.get("max_output", OUTPUT_DEFAULT), args.get("action") == "stop"
+    script = _ps_job_status(job, limit, stop) if dev["os_family"] == "windows" else _sh_job_status(dev, job, limit, stop)
+    state, code, size, output = _job_call(dev, script, limit)
+    if stop:
+        audit("parc.session.commande", f"{dev['hostname']} (arrière-plan {job}) : arrêt{_via()}")
+    out, truncated = _clip(output.strip("\n"), limit)
+    return {"device_id": dev["id"], "hostname": dev["hostname"], "job": job, "state": state,
+            "exit_code": code if state == "done" else None, "output": out,
+            "truncated": truncated or OMIT_MARK in output, **({"output_size": size} if size is not None else {})}
 
 
 @tool("adb_shell", "remote", "Run an adb shell command (Android)", L_("Commandes adb (Android)"),
@@ -375,11 +622,16 @@ def _terminal_run(args):
       "classic adb port, set up from the device page). It runs as Android's \"shell\" user, with far more rights than "
       "terminal_run on Android: pm (install, list, grant, uninstall), am/cmd (start activities, force-stop), settings, "
       "input (tap x y, swipe, text, keyevent), screencap, dumpsys, logcat -d, getprop. Returns the output and exit code. "
-      "Each call is independent (no working directory or variable kept). It must not wait for keyboard input; it is "
-      "interrupted after the timeout. If the output is longer than 60 KB, the start and the end are kept (the middle is omitted).",
+      "Each call is independent (no working directory or variable kept). It must not wait for keyboard input; after "
+      "the timeout it is stopped for real and the next call opens a fresh shell. "
+      f"Output: at most max_output characters (default {OUTPUT_DEFAULT}), start and end kept; the command is never "
+      "echoed back. To send or fetch a file (an APK, a .dex, data), use push_file / pull_file: never paste base64 into a "
+      "command.",
       {"device": DEVICE,
        "command": {"type": "string", "minLength": 1, "maxLength": COMMAND_MAX, "description": "Shell command or script (Android sh)."},
-       "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait (default 30)."}},
+       "timeout": {"type": "integer", "minimum": 1, "maximum": 300, "description": "Seconds to wait before the command is stopped (default 30)."},
+       "fresh": {"type": "boolean", "description": "Run it in a brand-new adb shell."},
+       "max_output": MAX_OUTPUT},
       ("device", "command"), read_only=False, destructive=True, idempotent=False)
 def _adb_shell(args):
     dev = _device(args["device"])
@@ -394,9 +646,10 @@ def _adb_shell(args):
       ("fleet.view", "remote.adb"),
       "Wake and unlock an Android device paired over adb, by replaying its screen lock: a PATTERN (the dots in order, "
       "numbered 1..9 left-to-right then top-to-bottom, e.g. [1,4,5,9]), a PIN (digits), or a PASSWORD (text). The lock "
-      "screen is a secure surface that cannot be captured, so the unlock is injected blind: the pattern uses a "
-      "per-manufacturer grid geometry (tune it on the device page if a pattern keeps failing; PIN and password need no "
-      "geometry). Returns whether the device ended up unlocked. The secret is never logged.",
+      "screen is a secure surface that cannot be captured, so the unlock is injected blind: loco reads the grid's "
+      "position from the screen description when the device gives it, otherwise uses a per-manufacturer geometry "
+      "(tune it from Control the screen if a pattern keeps failing; PIN and password need no geometry). Returns "
+      "whether the device ended up unlocked. The secret is never logged.",
       {"device": DEVICE,
        "method": {"type": "string", "enum": ["pattern", "pin", "password"], "description": "Kind of screen lock."},
        "pattern": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 9}, "minItems": 2, "maxItems": 9,
@@ -422,40 +675,17 @@ def _adb_unlock(args):
 
 
 def _run(dev, kind, args):
-    """Une commande dans un terminal du poste (agent) ou dans le shell adb (loco), avec ses marqueurs de début et de fin."""
-    windows = dev["os_family"] == "windows" and kind == "terminal"
+    """Une commande de l'assistant dans un terminal du poste (agent) ou dans le shell adb (loco)."""
     command = args["command"].replace("\r\n", "\n")
     if len(command.encode()) > COMMAND_MAX:
         raise ToolError(f"Scripts are limited to {COMMAND_MAX // 1000} KB here: use run_command for longer ones.")
-    nonce = secrets.token_hex(6)
-    timeout = args.get("timeout", 30)
-    with Channel(dev, kind) as chan:
-        if chan.fresh:
-            _ready(chan, windows)
-        for line in (_powershell_lines(command, nonce) if windows else [_bash_line(command, nonce)]):
-            chan.send(line.encode("utf-8") + b"\r")
-        audit("parc.session.commande", f"{dev['hostname']} : {'adb shell : ' if kind == 'adb' else ''}{command[:300]}{_via()}")
-        parse = powershell_result if windows else bash_result
-        found = []
-
-        def ready():
-            result = parse(bytes(chan.buffer), nonce)
-            if result is not None:
-                found.append(result)
-            return bool(found)
-        start = time.monotonic()
-        if chan.wait(ready, timeout):
-            output, code = found[0]
-            # Linux/adb : la sortie complète arrive ici, on garde début+fin. Windows : PowerShell l'a déjà écourtée au poste.
-            out, truncated = (output, OMIT_MARK in output) if windows else _clip(output)
-            return {"device_id": dev["id"], "hostname": dev["hostname"], "exit_code": code,
-                    "output": out, "truncated": truncated, "seconds": round(time.monotonic() - start, 1)}
-        partial = _partial(bytes(chan.buffer), nonce, windows)
-        chan.send(b"\x03")                                  # Ctrl+C : le terminal redevient disponible
-        chan.wait(lambda: False, 1.0)
-    return {"device_id": dev["id"], "hostname": dev["hostname"], "exit_code": None, "timed_out": True,
-            "output": partial, "message": f"No result after {timeout} s: the command was interrupted (Ctrl+C). "
-                                          "Use a longer timeout, or run_command for long tasks."}
+    if args.get("background"):
+        return _job_start(dev, command, args)
+    if args.get("fresh"):
+        close_role(g.mcp["token"]["id"], dev["id"], kind, "", "Nouveau shell demandé par le client MCP.")
+    audit("parc.session.commande", f"{dev['hostname']} : {'adb shell : ' if kind == 'adb' else ''}{command[:300]}{_via()}")
+    result = _execute(dev, kind, command, args.get("timeout", 30), args.get("max_output", OUTPUT_DEFAULT))
+    return {"device_id": dev["id"], "hostname": dev["hostname"], **result}
 
 
 # --------------------------------------------------------------------------- terminal interactif
@@ -515,10 +745,12 @@ def _screen_text(state):
 
 
 def close_role(token_id, dev_id, kind, role, reason):
+    """Ferme les sessions de cet accès sur ce poste (terminal interactif : role « tty » ; shell de terminal_run : role
+    vide) : l'agent arrête le shell et ce qu'il a lancé."""
     conn = db()
     conn.execute("BEGIN IMMEDIATE")
     for row in conn.execute("SELECT id FROM remote_sessions WHERE owner=? AND device_id=? AND kind=? AND state IN "
-                            "('waiting','active')", (f"mcp:{token_id}:{role}", dev_id, kind)).fetchall():
+                            "('waiting','active')", (f"mcp:{token_id}" + (f":{role}" if role else ""), dev_id, kind)).fetchall():
         remote._close(row["id"], reason, g.user["username"])
         _STATE.pop(row["id"], None)
     conn.commit()
@@ -640,18 +872,25 @@ def _read_file(args):
     dev = _device(args["device"])
     _active(dev)
     offset, wanted = args.get("offset", 0), args.get("max_bytes", 65536)
-    data, size = bytearray(), 0
-    with Channel(dev, "files") as chan:
-        files = Files(chan)
-        while len(data) < wanted:
-            header, chunk = files.call("read", path=_path(args), offset=offset + len(data),
-                                       length=min(FILE_CHUNK, wanted - len(data)))
-            data += chunk
-            size = header.get("size", 0)
-            if header.get("eof") or not chunk:
-                break
+    data, size, via = bytearray(), 0, None
+    try:
+        with Channel(dev, "files") as chan:
+            files = Files(chan)
+            while len(data) < wanted:
+                header, chunk = files.call("read", path=_path(args), offset=offset + len(data),
+                                           length=min(FILE_CHUNK, wanted - len(data)))
+                data += chunk
+                size = header.get("size", 0)
+                if header.get("eof") or not chunk:
+                    break
+    except ToolError as error:
+        serial = _android_via_adb(dev, error)
+        if serial is None:
+            raise
+        whole = _adb_get(dev, serial, _path(args))
+        size, data, via = len(whole), bytearray(whole[offset:offset + wanted]), "adb"
     out = {"device_id": dev["id"], "path": args["path"], "size": size, "offset": offset, "bytes": len(data),
-           "complete": offset + len(data) >= size}
+           "complete": offset + len(data) >= size, **({"via": via} if via else {})}
     if args.get("encoding") == "base64":
         out["content_base64"] = base64.b64encode(bytes(data)).decode()
     elif b"\x00" in data[:8192]:
@@ -662,36 +901,91 @@ def _read_file(args):
     return out
 
 
+CHARSETS = {"utf-8": ("utf-8", b""), "utf-8-bom": ("utf-8", b"\xef\xbb\xbf"), "ascii": ("ascii", b""),
+            "utf-16le-bom": ("utf-16-le", b"\xff\xfe")}
+
+
+def _encode_text(content, charset, newline):
+    """Texte → octets du fichier : fins de ligne au choix, puis jeu de caractères (UTF-8 SANS BOM par défaut)."""
+    if newline in ("lf", "crlf"):
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
+        if newline == "crlf":
+            content = content.replace("\n", "\r\n")
+    codec, bom = CHARSETS[charset]
+    try:
+        return bom + content.encode(codec)
+    except UnicodeEncodeError as e:
+        raise ToolError(f"The content is not {charset}: character {content[e.start]!r} at position {e.start}. "
+                        "Use charset=utf-8.") from None
+
+
+def _android_via_adb(dev, error):
+    """Appareil Android dont l'application n'a pas accès à ce chemin (/data/local/tmp…) : passer par adb (utilisateur
+    shell) si cet accès MCP a les outils adb et que l'appareil est appairé. None sinon."""
+    if dev["os_family"] != "android" or not can("remote.adb"):
+        return None
+    from . import adb
+    row = adb.link(dev)
+    if row is None or not (row["paired_at"] or row["mode"] == "tcp"):
+        return None
+    return _adb_serial(dev)
+
+
 @tool("write_file", "remote", "Write a file", L_("Écrire un fichier"),
-      L_("Créer ou remplacer un fichier du poste (remplacement atomique)."), ("fleet.view", "remote.files"),
-      "Create or replace a file on the device (as root / SYSTEM), atomically, with the given content (up to 1 MB). "
-      "The parent folder must exist.",
+      L_("Créer ou remplacer un fichier du poste (remplacement atomique), en UTF-8 sans BOM par défaut."), ("fleet.view", "remote.files"),
+      "Create or replace a file on the device (as root / SYSTEM; on Android, as the loco app), atomically, with the "
+      "given content (up to 1 MB). The parent folder must exist.\n"
+      "- Text is written in UTF-8 WITHOUT a byte order mark by default, on every system. charset changes it: utf-8-bom "
+      "(only for tools that need one), ascii (refused if a character is not ASCII) or utf-16le-bom (Windows \"Unicode\", "
+      ".reg files). newline=lf or crlf normalizes the line endings (crlf for Windows .bat/.cmd).\n"
+      "- Prefer write_file to the terminal for code, scripts and configuration: Windows PowerShell 5.1's Set-Content "
+      "-Encoding UTF8 and Out-File add a BOM (javac, bash and many parsers then fail), echo and here-documents mangle "
+      "quotes and line endings.\n"
+      "- encoding=base64 writes raw bytes (binary files) as they are.\n"
+      "- Android: where the loco app has no access (/data/local/tmp…) and the device is paired over adb, the file is "
+      "written through adb (Android's shell user) when this access also has the adb tools (via: adb).",
       {"device": DEVICE, "path": {"type": "string", "minLength": 1, "maxLength": 4096},
        "content": {"type": "string", "maxLength": 1400000, "description": "New content of the file."},
-       "encoding": {"type": "string", "enum": ["text", "base64"], "description": "text (UTF-8, default) or base64."}},
+       "encoding": {"type": "string", "enum": ["text", "base64"], "description": "text (default) or base64 (raw bytes)."},
+       "charset": {"type": "string", "enum": sorted(CHARSETS),
+                   "description": "For text: utf-8 (default, no BOM), utf-8-bom, ascii or utf-16le-bom."},
+       "newline": {"type": "string", "enum": ["keep", "lf", "crlf"], "description": "For text: keep (default), lf or crlf."}},
       ("device", "path"), read_only=False, destructive=True, idempotent=True)
 def _write_file(args):
     dev = _device(args["device"])
     _active(dev)
     content = args.get("content", "")
-    try:
-        data = base64.b64decode(content, validate=True) if args.get("encoding") == "base64" else content.encode("utf-8")
-    except (binascii.Error, ValueError):
-        raise ToolError("content is not valid base64.")
+    if args.get("encoding") == "base64":
+        try:
+            data = base64.b64decode(re.sub(r"\s+", "", content), validate=True)
+        except (binascii.Error, ValueError):
+            raise ToolError("content is not valid base64.")
+    else:
+        data = _encode_text(content, args.get("charset", "utf-8"), args.get("newline", "keep"))
     if len(data) > FILE_READ_MAX:
-        raise ToolError("At most 1 MB per write_file call.")
-    with Channel(dev, "files") as chan:
-        files = Files(chan)
-        offset = 0
-        while True:
-            chunk = data[offset:offset + FILE_CHUNK]
-            final = offset + len(chunk) >= len(data)
-            files.call("write", chunk, path=_path(args), offset=offset, final=final)
-            offset += len(chunk)
-            if final:
-                break
+        raise ToolError("At most 1 MB per write_file call (push_file sends larger files to Android devices).")
+    try:
+        with Channel(dev, "files") as chan:
+            files = Files(chan)
+            offset = 0
+            while True:
+                chunk = data[offset:offset + FILE_CHUNK]
+                final = offset + len(chunk) >= len(data)
+                files.call("write", chunk, path=_path(args), offset=offset, final=final)
+                offset += len(chunk)
+                if final:
+                    break
+    except ToolError as error:
+        serial = _android_via_adb(dev, error)
+        if serial is None:
+            raise
+        size, digest = _adb_put(dev, serial, data, _path(args))
+        audit("parc.fichiers.ecriture", f"{dev['hostname']} : {args['path'][:300]} ({len(data)} octets, par adb){_via()}")
+        return {"device_id": dev["id"], "path": args["path"], "written": size, "sha256": digest, "via": "adb",
+                "note": f"The loco app could not write there ({error}): the file was written through adb."}
     audit("parc.fichiers.ecriture", f"{dev['hostname']} : {args['path'][:300]} ({len(data)} octets){_via()}")
-    return {"device_id": dev["id"], "path": args["path"], "written": len(data)}
+    return {"device_id": dev["id"], "path": args["path"], "written": len(data),
+            "sha256": hashlib.sha256(data).hexdigest()}
 
 
 @tool("manage_files", "remote", "Create, copy, move or rename files", L_("Organiser les fichiers"),
@@ -741,6 +1035,259 @@ def _delete_file(args):
         Files(chan).call("delete", path=_path(args))
     audit("parc.fichiers.suppression", f"{dev['hostname']} : {args['path'][:300]}{_via()}")
     return {"device_id": dev["id"], "path": args["path"], "deleted": True}
+
+
+# --------------------------------------------------------------------------- fichiers par adb (Android, utilisateur shell)
+# Comme adb push / adb pull, par le serveur adb de loco et l'appairage de l'appareil : l'utilisateur « shell » d'Android
+# écrit et lit là où l'application loco ne peut pas (/data/local/tmp…). Le contenu passe dans le corps de la requête ou
+# directement d'un poste à l'autre, jamais dans une ligne de commande ; il est vérifié sur l'appareil (taille, SHA-256).
+
+ADB_FILE_MAX = 64 * 1024 * 1024
+STAGE_TTL = 3600                                           # envoi en plusieurs parties : abandonné au bout d'une heure
+
+
+def _adb_serial(dev):
+    if dev["os_family"] != "android":
+        raise ToolError(f"{dev['hostname']} is not an Android device.")
+    from . import adb
+    if not adb.available():
+        raise ToolError("adb is not installed on this loco server.")
+    try:
+        return adb.ensure(dev)
+    except ValueError as e:
+        raise ToolError(f"adb is not ready on {dev['hostname']}: {e}") from e
+
+
+def _stage_dir():
+    folder = os.path.join(config.DATA, ".tmp", "mcp-adb")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    now = time.time()
+    for name in os.listdir(folder):
+        try:
+            if now - os.path.getmtime(os.path.join(folder, name)) > STAGE_TTL:
+                os.unlink(os.path.join(folder, name))
+        except OSError:
+            pass
+    return folder
+
+
+def _adb_check(serial, path):
+    """(taille, sha256 ou "") du fichier sur l'appareil."""
+    from . import adb
+    q = shlex.quote(path)
+    rc, out = adb.run(["-s", serial, "shell", f"stat -c %s {q} 2>&1; (sha256sum {q} || toybox sha256sum {q}) 2>/dev/null"],
+                      timeout=180)
+    lines = out.splitlines()
+    if rc != 0 or not lines or not lines[0].strip().isdigit():
+        raise ToolError(f"{path}: {adb._clean(out) or 'not found on the device'}")
+    m = re.search(r"\b([0-9a-f]{64})\b", out)
+    return int(lines[0].strip()), m.group(1) if m else ""
+
+
+def _adb_push_file(dev, serial, local, path, mode=None):
+    """adb push d'un fichier du serveur, droits éventuels, puis contrôle sur l'appareil : (taille, sha256)."""
+    from . import adb
+    rc, out = adb.run(["-s", serial, "push", local, path], timeout=900)
+    if rc != 0:
+        raise ToolError(f"adb push {path}: {adb._clean(out)}")
+    if mode:
+        rc, out = adb.run(["-s", serial, "shell", f"chmod {mode} {shlex.quote(path)}"], timeout=30)
+        if rc != 0:
+            raise ToolError(f"chmod {mode} {path}: {adb._clean(out)}")
+    return _adb_check(serial, path)
+
+
+def _adb_put(dev, serial, data, path, mode=None):
+    """Octets → fichier de l'appareil par adb, vérifié (taille et SHA-256) : (taille, sha256)."""
+    fd, local = tempfile.mkstemp(dir=_stage_dir(), prefix="push-")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        size, digest = _adb_push_file(dev, serial, local, path, mode)
+    finally:
+        os.unlink(local)
+    expected = hashlib.sha256(data).hexdigest()
+    if size != len(data) or (digest and digest != expected):
+        raise ToolError(f"{path} arrived damaged on the device ({size} of {len(data)} bytes, SHA-256 {digest or '?'}).")
+    return size, digest or expected
+
+
+def _adb_get(dev, serial, path, limit=ADB_FILE_MAX):
+    """Fichier de l'appareil par adb pull (vérifié par sa taille) : ses octets."""
+    from . import adb
+    size, _digest = _adb_check(serial, path)
+    if size > limit:
+        raise ToolError(f"{path} is {size} bytes: at most {limit // (1024 * 1024)} MB here.")
+    fd, local = tempfile.mkstemp(dir=_stage_dir(), prefix="pull-")
+    os.close(fd)
+    try:
+        rc, out = adb.run(["-s", serial, "pull", path, local], timeout=900)
+        if rc != 0:
+            raise ToolError(f"adb pull {path}: {adb._clean(out)}")
+        with open(local, "rb") as f:
+            data = f.read()
+    finally:
+        os.unlink(local)
+    if len(data) != size:
+        raise ToolError(f"{path} changed or arrived incomplete ({len(data)} of {size} bytes): retry.")
+    return data
+
+
+def _files_read(dev, path, limit=ADB_FILE_MAX):
+    """Tout un fichier d'un autre poste, par le gestionnaire de fichiers de son agent."""
+    data = bytearray()
+    with Channel(dev, "files") as chan:
+        files = Files(chan)
+        while True:
+            header, chunk = files.call("read", path=path, offset=len(data), length=FILE_CHUNK, timeout=60)
+            if header.get("size", 0) > limit:
+                raise ToolError(f"{path} is {header['size']} bytes: at most {limit // (1024 * 1024)} MB here.")
+            data += chunk
+            if header.get("eof") or not chunk:
+                return bytes(data)
+
+
+def _files_write(dev, path, data):
+    with Channel(dev, "files") as chan:
+        files = Files(chan)
+        offset = 0
+        while True:
+            chunk = data[offset:offset + FILE_CHUNK]
+            final = offset + len(chunk) >= len(data)
+            files.call("write", chunk, path=path, offset=offset, final=final, timeout=60)
+            offset += len(chunk)
+            if final:
+                return
+
+
+def _other_device(args, key, verb):
+    """Poste source ou destination d'une copie : dans le parc de cet accès, actif, et avec les outils de fichiers."""
+    if not can("remote.files"):
+        raise ToolError(f"Copying {verb} another device needs the file tools (read_file / write_file) in this access.")
+    other = _device(args[key])
+    _active(other)
+    return other
+
+
+@tool("push_file", "remote", "Send a file to an Android device (adb)", L_("Envoyer un fichier par adb (Android)"),
+      L_("Déposer un fichier sur un appareil Android appairé, avec les droits de l'utilisateur shell d'Android (comme adb push) : contenu envoyé dans la requête, ou copié directement depuis un autre poste, puis vérifié sur l'appareil."),
+      ("fleet.view", "remote.adb"),
+      "Copy a file to an Android device paired with loco, through adb, as Android's \"shell\" user (like adb push): it "
+      "can write where the loco app cannot, such as /data/local/tmp. Two ways:\n"
+      "- content_base64: the file in base64, in the request body (never in a command line). Up to ~6 MB per call; for "
+      "a larger file send parts in order with offset (bytes already sent) and final=false, then the last part with "
+      "final=true.\n"
+      "- from_device + from_path: loco copies the file straight from another loco device (a PC that built it, for "
+      "instance), up to 64 MB, without it going through your context — the right way for builds (.dex, .apk). Needs "
+      "the file tools (read_file) in this access too.\n"
+      "The file is then checked on the device: size and SHA-256 (sha256 lets you give the expected one). mode sets its "
+      "permissions, e.g. 755. The parent folder must exist.",
+      {"device": DEVICE,
+       "path": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Absolute destination path on the Android device."},
+       "content_base64": {"type": "string", "maxLength": 8_000_000, "description": "File content (or this part of it), base64."},
+       "offset": {"type": "integer", "minimum": 0, "description": "Bytes already sent in previous parts (default 0)."},
+       "final": {"type": "boolean", "description": "false while more parts follow (default true)."},
+       "from_device": {"type": "string", "maxLength": 255, "description": "Copy from this loco device (id or exact hostname)…"},
+       "from_path": {"type": "string", "maxLength": 4096, "description": "…this file of it."},
+       "sha256": {"type": "string", "minLength": 64, "maxLength": 64, "description": "Expected SHA-256 of the whole file (hex)."},
+       "mode": {"type": "string", "maxLength": 4, "description": "Octal permissions to set, e.g. 755."}},
+      ("device", "path"), read_only=False, destructive=True, idempotent=True)
+def _push_file(args):
+    dev = _device(args["device"])
+    _active(dev)
+    path, mode = _path(args), args.get("mode")
+    if mode and not re.fullmatch(r"[0-7]{3,4}", mode):
+        raise ToolError("mode must be octal, such as 644 or 755.")
+    expected = (args.get("sha256") or "").lower()
+    if expected and not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ToolError("sha256 must be 64 hexadecimal characters.")
+    serial = _adb_serial(dev)
+    if args.get("from_device") or args.get("from_path"):
+        if not (args.get("from_device") and args.get("from_path")):
+            raise ToolError("from_device and from_path go together.")
+        source = _other_device(args, "from_device", "from")
+        data = _files_read(source, _path(args, "from_path"))
+        origin = f" (copié de {source['hostname']} : {args['from_path'][:200]})"
+    else:
+        try:
+            part = base64.b64decode(re.sub(r"\s+", "", args.get("content_base64", "")), validate=True)
+        except (binascii.Error, ValueError):
+            raise ToolError("content_base64 is not valid base64.")
+        offset, final = args.get("offset", 0), args.get("final", True)
+        stage = os.path.join(_stage_dir(), "part-" + hashlib.sha256(
+            f"{g.mcp['token']['id']}:{dev['id']}:{path}".encode()).hexdigest()[:32])
+        have = os.path.getsize(stage) if os.path.exists(stage) else 0
+        if offset == 0:
+            have = 0
+        if offset != have:
+            raise ToolError(f"Expected offset {have} (bytes received so far for {path}), not {offset}.")
+        if have + len(part) > ADB_FILE_MAX:
+            raise ToolError("At most 64 MB per file.")
+        with open(stage, "r+b" if offset else "wb") as f:
+            os.chmod(stage, 0o600)
+            f.seek(offset)
+            f.write(part)
+            f.truncate()
+        if not final:
+            return {"device_id": dev["id"], "path": path, "received": have + len(part), "final": False,
+                    "message": "Part kept on the loco server: send the next one with this offset, the last with final=true."}
+        with open(stage, "rb") as f:
+            data = f.read()
+        os.unlink(stage)
+        origin = ""
+    digest = hashlib.sha256(data).hexdigest()
+    if expected and expected != digest:
+        raise ToolError(f"The content does not match sha256 (received {len(data)} bytes, SHA-256 {digest}): nothing was written.")
+    size, on_device = _adb_put(dev, serial, data, path, mode)
+    audit("parc.fichiers.ecriture", f"{dev['hostname']} : {path[:250]} ({size} octets, par adb){origin}{_via()}")
+    return {"device_id": dev["id"], "hostname": dev["hostname"], "path": path, "written": size, "sha256": on_device,
+            "verified": True, **({"mode": mode} if mode else {})}
+
+
+@tool("pull_file", "remote", "Fetch a file from an Android device (adb)", L_("Récupérer un fichier par adb (Android)"),
+      L_("Lire un fichier d'un appareil Android appairé avec les droits de l'utilisateur shell d'Android (comme adb pull), ou le copier directement vers un autre poste."),
+      ("fleet.view", "remote.adb"),
+      "Fetch a file from an Android device paired with loco, through adb, as Android's \"shell\" user (like adb pull): "
+      "it reads where the loco app cannot. Returns the size, the SHA-256 and the content from offset, up to max_bytes "
+      "(default 24 KB, 1 MB per call): text, or base64 with encoding=base64. To copy the file to another loco device "
+      "instead (an APK, a log, a screenshot to a PC), give to_device + to_path: the whole file goes there directly, up to "
+      "64 MB, and is checked by its size (needs the file tools, write_file, in this access too).",
+      {"device": DEVICE,
+       "path": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Absolute path on the Android device."},
+       "offset": {"type": "integer", "minimum": 0, "description": "Start offset in bytes (default 0)."},
+       "max_bytes": {"type": "integer", "minimum": 1, "maximum": FILE_READ_MAX, "description": "Bytes to return (default 24576)."},
+       "encoding": {"type": "string", "enum": ["text", "base64"], "description": "text (default) or base64."},
+       "to_device": {"type": "string", "maxLength": 255, "description": "Copy the whole file to this loco device (id or exact hostname)…"},
+       "to_path": {"type": "string", "maxLength": 4096, "description": "…at this path (its folder must exist)."}},
+      ("device", "path"), read_only=False, destructive=False, idempotent=True)
+def _pull_file(args):
+    dev = _device(args["device"])
+    _active(dev)
+    serial = _adb_serial(dev)
+    path = _path(args)
+    if args.get("to_device") or args.get("to_path"):
+        if not (args.get("to_device") and args.get("to_path")):
+            raise ToolError("to_device and to_path go together.")
+        target = _other_device(args, "to_device", "to")
+        data = _adb_get(dev, serial, path)
+        _files_write(target, _path(args, "to_path"), data)
+        audit("parc.fichiers.ecriture", f"{target['hostname']} : {args['to_path'][:200]} ({len(data)} octets, copiés de "
+                                        f"{dev['hostname']} : {path[:200]} par adb){_via()}")
+        return {"device_id": dev["id"], "path": path, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                "copied_to": {"device_id": target["id"], "hostname": target["hostname"], "path": args["to_path"]}}
+    data = _adb_get(dev, serial, path)
+    offset, wanted = args.get("offset", 0), args.get("max_bytes", 24576)
+    part = data[offset:offset + wanted]
+    out = {"device_id": dev["id"], "path": path, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+           "offset": offset, "bytes": len(part), "complete": offset + len(part) >= len(data)}
+    if args.get("encoding") == "base64":
+        out["content_base64"] = base64.b64encode(part).decode()
+    elif b"\x00" in part[:8192]:
+        out["binary"] = True
+        out["message"] = "Binary file: read it again with encoding=base64, or copy it with to_device."
+    else:
+        out["content"] = part.decode("utf-8", "replace")
+    return out
 
 
 # --------------------------------------------------------------------------- bureau (RFB)

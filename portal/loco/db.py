@@ -1027,6 +1027,19 @@ MIGRATIONS = [
         PRIMARY KEY (user_id, device_id)
     );
     """,
+    # 61 : nouveaux outils MCP accordés d'office aux accès qui ont déjà l'outil qu'ils prolongent (mêmes droits) :
+    # terminal_job (tâches de fond) avec terminal_run ; push_file et pull_file (fichiers par adb) avec adb_shell.
+    """
+    UPDATE mcp_tokens SET tools = json_insert(tools, '$[#]', 'terminal_job')
+     WHERE json_valid(tools) AND EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'terminal_run')
+       AND NOT EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'terminal_job');
+    UPDATE mcp_tokens SET tools = json_insert(tools, '$[#]', 'push_file')
+     WHERE json_valid(tools) AND EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'adb_shell')
+       AND NOT EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'push_file');
+    UPDATE mcp_tokens SET tools = json_insert(tools, '$[#]', 'pull_file')
+     WHERE json_valid(tools) AND EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'adb_shell')
+       AND NOT EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'pull_file');
+    """,
 ]
 
 
