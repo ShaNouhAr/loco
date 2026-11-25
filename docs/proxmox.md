@@ -51,8 +51,13 @@ loco refuse de lancer une mise à jour qui retirerait le paquet `proxmox-ve` (d�
 
 *Rechercher les mises à jour* relit seulement les dépôts (`apt-get update`) ; Proxmox le fait aussi chaque jour.
 
-Dans Mon parc, le bouton de la ligne et la sélection lancent la même mise à jour. Un Proxmox **ne se redémarre pas
-avec une sélection** : toutes ses machines s'arrêtent avec lui, cela se décide depuis sa page.
+Dans Mon parc, le bouton de la ligne, la sélection, *Tout mettre à jour* et la planification de tout le parc lancent
+la même mise à jour. Un Proxmox **redémarre aussi depuis Mon parc** — sélection, *Mettre à jour puis redémarrer si
+nécessaire* (seulement si la mise à jour installe un noyau à charger), bouton *Redémarrer* de sa ligne quand un
+redémarrage est requis —, comme un poste, à une différence près : loco attend d'abord la fin des mises à jour en
+cours sur les postes du parc, une heure au plus, pour ne couper aucune installation dans une machine virtuelle. La
+tâche dit ce qu'elle attend (« En attente de la fin des mises à jour du parc : 2 postes en cours. »). Le bouton
+*Redémarrer* de sa page, lui, redémarre aussitôt.
 
 ## Redémarrer
 

@@ -327,6 +327,17 @@ def create(conn, action, params, targets, form):
     return sched_id
 
 
+def _extras(conn, s, reboot):
+    """Home Assistant et Proxmox mis à jour par une planification de tout le parc, avec les droits actuels de son auteur
+    (rien si son compte n'existe plus). Renvoie le nombre de systèmes dont la mise à jour est lancée."""
+    from . import permissions
+    user = conn.execute("SELECT role FROM users WHERE username=?", (s["created_by"],)).fetchone()
+    if user is None:
+        return 0
+    granted = permissions.role_permissions(conn, user["role"])
+    return fleet._extras_to_update(conn, reboot and "fleet.reboot" in granted, s["created_by"], allowed=lambda p: p in granted)
+
+
 def materialize(conn):
     """Transforme les planifications dues en commandes d'agent et les fait passer à l'occurrence suivante."""
     from . import scripts
@@ -344,6 +355,8 @@ def materialize(conn):
             added = sum(1 for dev in devices
                         if fleet.queue(dev, "update", {"reboot": bool(params.get("reboot"))}, user=s["created_by"],
                                        run_after=s["next_run"]))
+            # Tout le parc : Home Assistant et Proxmox aussi, comme « Tout mettre à jour », selon les droits de l'auteur.
+            added += _extras(conn, s, bool(params.get("reboot"))) if _targets(s).get("all") else 0
             # Résultat gardé en français dans la base, traduit à l'affichage (result_text).
             result = (counted(added, "poste") if added else
                       N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))

@@ -56,6 +56,12 @@ Le relevé est refait tout seul tant que la page est affichée (toutes les deux 
 **Actualiser** le refait tout de suite. La vue d'ensemble signale dans « À traiter » une liaison en échec, une
 installation dégradée et les mises à jour disponibles.
 
+Dans **Mon parc**, une instance est une ligne comme un poste : ressources de son hôte (disque ; mémoire et
+processeur sur Home Assistant OS), *Mettre à jour* sur sa ligne, case à cocher (*Mettre à jour*, *Redémarrer* le
+système), et elle est comprise dans *Tout mettre à jour* et la planification de tout le parc. Depuis Mon parc, ses
+mises à jour se font toujours avec une sauvegarde avant (cœur et modules), comme sa page le propose. Droits :
+*Mettre à jour Home Assistant* pour la mettre à jour, *Redémarrer Home Assistant* pour la redémarrer.
+
 ## Actions
 
 | Action | Commande lancée sur Home Assistant |

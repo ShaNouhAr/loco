@@ -444,9 +444,13 @@ def account():
     granted = permissions.role_permissions(db(), g.user["role"])
     activity = [{"r": r, **journal_view.describe(r["action"])} for r in db().execute(
         "SELECT * FROM audit WHERE username=? ORDER BY id DESC LIMIT 10", (g.user["username"],))]
-    from . import totp
+    from . import appearance, totp
     from .oidc import link_state
+    # Photo de profil : reprise du fournisseur SSO, ou choisie ici (et alors, le moyen de revenir à celle du fournisseur).
+    identity = db().execute("SELECT d.label FROM directory_identities i JOIN auth_directories d ON d.id=i.directory_id "
+                            "WHERE i.user_id=? AND d.kind='oidc' LIMIT 1", (g.user["id"],)).fetchone()
     return render_template(template, min_password=config.MIN_PASSWORD, activity=activity, sso_link=link_state(g.user),
+                           avatar_from=appearance.avatar_source(g.user), sso_identity=identity["label"] if identity else "",
                            mfa_recovery_left=totp.recovery_left(g.user["recovery_codes"]) if g.user["mfa_enabled"] else 0,
                            granted_count=len(granted), total_permissions=len(permissions.PERMISSIONS),
                            granted_groups=[(label, [permissions.PERMISSIONS[item[0]] for item in items if item[0] in granted])

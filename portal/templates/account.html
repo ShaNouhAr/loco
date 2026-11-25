@@ -148,6 +148,9 @@
           {% if my_avatar %}<form method="post" action="{{ url_for('account_avatar_delete') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm" type="submit">{{ _("Retirer") }}</button></form>{% endif %}
         </div>
         <p class="sub">{{ _("PNG, JPEG, GIF ou WebP, 2 Mo maximum. L’image est enregistrée dès que vous la choisissez.") }}</p>
+        {% if avatar_from.sso %}<p class="sub">{{ _("Photo reprise de votre compte %(name)s à chaque connexion ; une image choisie ici la remplace.", name=avatar_from.sso) }}</p>
+        {% elif avatar_from.own and sso_identity %}<form method="post" action="{{ url_for('account_avatar_sso') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn" type="submit">{{ _("Reprendre la photo de mon compte %(name)s", name=sso_identity) }}</button></form>
+        {% elif sso_identity %}<p class="sub">{{ _("Si votre compte %(name)s a une photo, elle est reprise à votre prochaine connexion par lui.", name=sso_identity) }}</p>{% endif %}
       </div>
     </div>
   </section>

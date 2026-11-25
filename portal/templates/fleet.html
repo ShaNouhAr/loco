@@ -16,7 +16,7 @@
 {% include '_fleet_nav.html' %}
 {% set can_select = can('fleet.update') or can('fleet.wake') %}
 {# Home Assistant et Proxmox reliés : montrés même quand aucun poste n'est encore inscrit (hors recherche et filtres). #}
-{% set extra_only = not rows and page == 1 and not query and not total and not selected_group and (ha_rows or px_rows or net_rows) %}
+{% set extra_only = not rows and page == 1 and (ha_rows or px_rows or net_rows) %}
 <div class="head">
   <div>
     <h1>{{ _("Mon parc") }}{% if selected_group %} <span class="faint">› {{ selected_group.name }}</span>{% endif %}</h1>
@@ -25,7 +25,7 @@
   <div class="actions" data-refresh="actions">
     {% if can('fleet.enroll') %}<a class="btn" href="{{ url_for('enrollment') }}">{{ _("Ajouter un poste") }}</a>{% endif %}
     {% if selected_group and can('fleet.bulk_install') %}<a class="btn" href="{{ url_for('deployment_compose', device_group=selected_group.id) }}">{{ _("Déployer sur ce groupe") }}</a>{% endif %}
-    {% if can('fleet.bulk_update') and total %}
+    {% if can('fleet.bulk_update') and (total or to_update or updating) %}
     {# Mises à jour déjà demandées : montrées comme telles (et suivies dans Mises à jour), plus proposées une seconde fois. #}
     {% if updating %}<a class="btn busy" href="{{ url_for('fleet_updates') }}" title="{{ _('Suivre le déroulé des mises à jour') }}"><span class="spin"></span>{{ _("Mises à jour en cours (%(n)s)", n=updating) }}</a>{% endif %}
     {% if to_update or not updating %}<button type="button" class="btn primary" data-open="#update-all" {{ 'disabled' if not to_update }}>{{ _('Mettre à jour ce groupe') if selected_group else _('Tout mettre à jour') }}{% if to_update %} ({{ to_update }}){% endif %}</button>{% endif %}
@@ -107,12 +107,12 @@
         <button type="button" class="linkbtn" data-select-clear>{{ _("Tout désélectionner") }}</button></span>
       <div class="row">
         {% if can('fleet.wake') %}<button type="button" class="btn sm" data-select-submit data-action="{{ url_for('fleet_wake_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Réveiller les postes sélectionnés ?') }}" data-confirm-text="{{ _('Seuls les postes éteints et branchés en Ethernet sur un réseau joignable seront réveillés.') }}" data-confirm-ok="{{ _('Réveiller') }}"><span class="spin"></span>{{ _("Réveiller") }}</button>{% endif %}
-        {% if can('fleet.reboot') %}<button type="button" class="btn sm" data-select-submit data-action="{{ url_for('fleet_reboot_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Redémarrer les postes sélectionnés ?') }}" data-confirm-text="{{ _('Chaque poste redémarre une minute après son prochain contact ; un message prévient la personne connectée. Les appareils Android ne sont pas concernés.') }}" data-confirm-ok="{{ _('Redémarrer') }}"><span class="spin"></span>{{ _("Redémarrer") }}</button>{% endif %}
+        {% if can('fleet.reboot') %}<button type="button" class="btn sm" data-select-submit data-action="{{ url_for('fleet_reboot_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Redémarrer les postes sélectionnés ?') }}" data-confirm-text="{{ _('Chaque poste redémarre une minute après son prochain contact ; un message prévient la personne connectée. Les appareils Android ne sont pas concernés.') }}{% if managed.px %} {{ _('Un serveur Proxmox coché redémarre après la fin des mises à jour en cours sur les postes du parc, avec toutes ses machines.') }}{% endif %}" data-confirm-ok="{{ _('Redémarrer') }}"><span class="spin"></span>{{ _("Redémarrer") }}</button>{% endif %}
         {% if (can('fleet.update') and can('fleet.reboot')) or can('fleet.wake') %}
         <details class="menu">
           <summary class="btn sm" aria-label="{{ _('Autres actions sur la sélection') }}">{{ _("Plus") }}</summary>
           <div class="menu-list" role="menu">
-            {% if can('fleet.update') and can('fleet.reboot') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-reboot data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés, puis les redémarrer si nécessaire ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">{{ _("Mettre à jour puis redémarrer si nécessaire") }}</button>{% endif %}
+            {% if can('fleet.update') and can('fleet.reboot') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-reboot data-action="{{ url_for('fleet_update_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Mettre à jour les postes sélectionnés, puis les redémarrer si nécessaire ?') }}" data-confirm-text="{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste ; ceux qui en ont besoin redémarrent ensuite.') }}{% if managed.px %} {{ _('Un serveur Proxmox coché attend pour redémarrer la fin des mises à jour en cours sur les postes du parc.') }}{% endif %}" data-confirm-ok="{{ _('Mettre à jour') }}">{{ _("Mettre à jour puis redémarrer si nécessaire") }}</button>{% endif %}
             {% if can('fleet.wake') %}<button type="button" class="menu-item" role="menuitem" data-select-submit data-action="{{ url_for('fleet_wake_policy_selected') }}" data-csrf="{{ csrf }}" data-confirm="{{ _('Activer le réveil à distance sur les postes sélectionnés ?') }}" data-confirm-text="{{ _('L’agent active le réveil sur leurs cartes Ethernet à son prochain contact, puis le maintient. Sous Windows, la carte peut redémarrer : quelques secondes de coupure. Il doit aussi être autorisé dans le BIOS.') }}" data-confirm-ok="{{ _('Activer le réveil') }}">{{ _("Activer le réveil à distance…") }}</button>{% endif %}
           </div>
         </details>
@@ -128,7 +128,7 @@
         <tbody data-refresh="rows">
         {% if ha_rows and page == 1 %}{% for ha in ha_rows %}
           <tr class="ha-row">
-            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if can('homeassistant.manage') %}<label class="row-select-label"><input type="checkbox" data-select data-id="ha-{{ ha.id }}" aria-label="{{ _('Sélectionner %(host)s', host=ha.name) }}"></label>{% endif %}</td>{% endif %}
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if can('homeassistant.update') or can('homeassistant.restart') %}<label class="row-select-label"><input type="checkbox" data-select data-id="ha-{{ ha.id }}" aria-label="{{ _('Sélectionner %(host)s', host=ha.name) }}"></label>{% endif %}</td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if ha.online else 'err' }} device-availability" role="img" aria-label="Home Assistant"></span>
               <span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon('ha') }}</span><a href="{{ url_for('homeassistant_host', host_id=ha.id) }}" class="host nowrap">{{ ha.name }}</a></span>
               <span class="sub">Home Assistant{% if ha.hostname and ha.hostname|lower != ha.name|lower %} · {{ ha.hostname }}{% endif %}</span></td>
@@ -138,7 +138,7 @@
               <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(ha.color, '') }}" role="img" aria-label="{{ ha.label }}"></span>
               <span class="fleet-updates">{% if ha.updates %}<span class="upd-pill sys" title="{{ ha.label }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ ha.label }}</span>{% else %}<span{% if ha.color in ('green', 'grey') %} class="muted"{% endif %}>{{ ha.label }}</span>{% endif %}</span></span>
             </td>
-            <td class="hide-sm" data-label="{{ _('Ressources') }}">—</td>
+            <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(ha.mon) }}</td>
             <td class="right nowrap card-action">{% if ha.busy %}<span class="busy-note"><span class="spin"></span>{{ _("en cours") }}</span>{% elif ha.updates and can('homeassistant.update') %}<div class="row-acts">
               <form method="post" action="{{ url_for('homeassistant_fleet_update', host_id=ha.id) }}" data-ajax>
                 <input type="hidden" name="csrf" value="{{ csrf }}">
@@ -148,7 +148,7 @@
         {% endfor %}{% endif %}
         {% if px_rows and page == 1 %}{% for px in px_rows %}
           <tr class="ha-row px-row">
-            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if px.ssh and can('proxmox.update') %}<label class="row-select-label"><input type="checkbox" data-select data-id="px-{{ px.id }}" aria-label="{{ _('Sélectionner %(host)s', host=px.name) }}"></label>{% endif %}</td>{% endif %}
+            {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}">{% if px.ssh and (can('proxmox.update') or can('proxmox.restart')) %}<label class="row-select-label"><input type="checkbox" data-select data-id="px-{{ px.id }}" aria-label="{{ _('Sélectionner %(host)s', host=px.name) }}"></label>{% endif %}</td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if px.online else 'err' }} device-availability" role="img" aria-label="Proxmox VE"></span>
               <span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon('server') }}</span><a href="{{ url_for('proxmox_system_host', host_id=px.id) }}" class="host nowrap">{{ px.name }}</a></span>
               <span class="sub">Proxmox VE{% if px.version %} {{ px.version }}{% endif %}{% if px.node and px.node|lower != px.name|lower %} · {{ px.node }}{% endif %}</span></td>
@@ -156,14 +156,22 @@
             <td data-label="{{ _('Mises à jour') }}">
               <span class="fleet-update-state">
               <span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(px.color, '') }}" role="img" aria-label="{{ px.label }}"></span>
-              <span class="fleet-updates">{% if px.updates and not px.busy %}<span class="upd-pill sys" title="{{ px.label }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ px.label }}</span>{% elif not px.ssh and can('proxmox.manage') %}<a class="muted" href="{{ url_for('proxmox_system_host', host_id=px.id) }}#ssh">{{ px.label }}</a>{% else %}<span{% if px.color in ('green', 'grey') %} class="muted"{% endif %}>{{ px.label }}</span>{% endif %}</span></span>
+              <span class="fleet-updates">{% if px.updates and not px.busy %}<span class="upd-pill sys" title="{{ px.label }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 8v8l-9 4-9-4V8l9-4 9 4Z"/><path d="m3.3 7 8.7 4 8.7-4"/><path d="M12 11v9"/></svg>{{ px.label }}</span>{% elif not px.ssh and can('proxmox.manage') %}<a class="muted" href="{{ url_for('proxmox_system_host', host_id=px.id) }}#ssh">{{ px.label }}</a>{% else %}<span{% if px.color in ('green', 'grey') %} class="muted"{% endif %}>{{ px.label }}</span>{% endif %}
+              {% if px.reboot_required and px.updates and not px.busy %}<span class="reboot-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>{{ _("redémarrage nécessaire") }}</span>{% endif %}</span></span>
             </td>
             <td class="hide-sm" data-label="{{ _('Ressources') }}" data-quiet>{{ resources(px.mon) }}</td>
-            <td class="right nowrap card-action">{% if px.busy %}<span class="busy-note"><span class="spin"></span>{{ _("en cours") }}</span>{% elif px.updates and px.ssh and can('proxmox.update') %}<div class="row-acts">
-              <form method="post" action="{{ url_for('proxmox_fleet_update', host_id=px.id) }}" data-ajax data-confirm="{{ _('Mettre à jour %(name)s ?', name=px.name) }}" data-confirm-text="{{ _('loco relit les dépôts puis installe toutes les mises à jour (apt-get dist-upgrade, comme le bouton « Upgrade » de Proxmox). Les machines virtuelles continuent de tourner ; un nouveau noyau ne servira qu’au prochain redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
+            <td class="right nowrap card-action">{% if px.busy %}<span class="busy-note"><span class="spin"></span>{{ _("redémarrage prévu") if px.rebooting and not px.updating else _("en cours") }}</span>
+              {% else %}{% set px_update = px.updates and px.ssh and not px.blocked and can('proxmox.update') %}{% set px_reboot = px.reboot_required and px.ssh and can('proxmox.restart') %}
+              {% if px_update or px_reboot %}<div class="row-acts">
+              {% if px_update %}<form method="post" action="{{ url_for('proxmox_fleet_update', host_id=px.id) }}" data-ajax data-confirm="{{ _('Mettre à jour %(name)s ?', name=px.name) }}" data-confirm-text="{{ _('loco relit les dépôts puis installe toutes les mises à jour (apt-get dist-upgrade, comme le bouton « Upgrade » de Proxmox). Les machines virtuelles continuent de tourner ; un nouveau noyau ne servira qu’au prochain redémarrage.') }}" data-confirm-ok="{{ _('Mettre à jour') }}">
                 <input type="hidden" name="csrf" value="{{ csrf }}">
                 <button class="btn sm"><span class="spin"></span>{{ _("Mettre à jour") }}</button>
-              </form></div>{% endif %}</td>
+              </form>{% endif %}
+              {% if px_reboot %}<form method="post" action="{{ url_for('proxmox_fleet_reboot', host_id=px.id) }}" data-ajax data-confirm="{{ _('Redémarrer %(name)s ?', name=px.name) }}" data-confirm-text="{{ _('Proxmox redémarre dès que les mises à jour en cours sur les postes du parc sont finies (une heure au plus). Toutes ses machines virtuelles s’arrêtent avec lui, loco compris : loco suit son retour.') if px.self else _('Proxmox redémarre dès que les mises à jour en cours sur les postes du parc sont finies (une heure au plus). Toutes ses machines virtuelles s’arrêtent avec lui.') }}" data-confirm-ok="{{ _('Redémarrer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn sm icon-only" title="{{ _('Redémarrer') }}" aria-label="{{ _('Redémarrer %(name)s', name=px.name) }}"><span class="spin"></span>{{ ui_icon('restart') }}</button>
+              </form>{% endif %}
+              </div>{% endif %}{% endif %}</td>
           </tr>
         {% endfor %}{% endif %}
         {% if net_rows and page == 1 %}{% for nd in net_rows %}
@@ -248,7 +256,7 @@
         </tbody>
       </table>
     </div>
-    {% if extra_only %}<div class="empty">{{ _("Aucun poste pour l'instant") }}{% if can('fleet.enroll') %} : <a href="{{ url_for('enrollment') }}">{{ _("ajoutez-en un") }}</a>{% endif %}.</div>{% endif %}
+    {% if extra_only and not devices_total and not selected_group %}<div class="empty">{{ _("Aucun poste pour l'instant") }}{% if can('fleet.enroll') %} : <a href="{{ url_for('enrollment') }}">{{ _("ajoutez-en un") }}</a>{% endif %}.</div>{% endif %}
     {% if pages > 1 %}
     <nav class="row store-pagination fleet-pager" aria-label="{{ _('Pages du parc') }}" data-refresh="pager">
       {% if page > 1 %}<a class="btn sm" href="{{ filter_url(page=page - 1) }}">{{ _("Précédente") }}</a>{% endif %}
@@ -267,8 +275,8 @@
   </section>
 </div>
 
-{% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).')) }}{% endif %}
-{% if can('fleet.bulk_update') and total and to_update %}
+{% if can('fleet.bulk_update') %}{{ schedule_dialog('plan-all', _('Planifier la mise à jour du groupe %(name)s', name=selected_group.name) if selected_group else _('Planifier la mise à jour du parc'), 'update', [('target', 'selection'), ('device_group', selected_group.id)] if selected_group else [('target', 'all')], url_for('fleet', group=selected_group.id) if selected_group else url_for('fleet'), reboot=can('fleet.reboot'), intro=_('Tous les postes actifs du groupe %(name)s au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).', name=selected_group.name) if selected_group else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows), ainsi que Home Assistant et Proxmox.') if managed.ha or managed.px else _('Tous les postes actifs du parc au moment de chaque exécution : système, Flatpak et logiciels (catalogue de loco, et winget sous Windows).')) }}{% endif %}
+{% if can('fleet.bulk_update') and to_update %}
 <dialog id="update-all">
   {# Zone rafraîchie avec la liste : le nombre de postes du titre et les vagues suivent le bouton qui ouvre la fenêtre. #}
   <form method="post" action="{{ url_for('fleet_update_all') }}" data-ajax data-refresh="update-all">
@@ -276,14 +284,14 @@
     <div class="dlg-b stack-sm">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       {% if selected_group %}<input type="hidden" name="group" value="{{ selected_group.id }}">{% endif %}
-      <p class="muted">{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.') }}{% if selected_group %} {{ _('Seuls les postes du groupe %(name)s sont concernés.', name=selected_group.name) }}{% endif %}</p>
+      <p class="muted">{{ _('Système (Windows Update, APT, DNF, Flatpak) et logiciels (catalogue de loco, et winget sous Windows), au prochain contact de chaque poste.') }}{% if selected_group %} {{ _('Seuls les postes du groupe %(name)s sont concernés.', name=selected_group.name) }}{% elif to_update > to_update_devices %} {{ _('Home Assistant et Proxmox se mettent à jour aussitôt, Home Assistant avec une sauvegarde avant.') }}{% endif %}</p>
       {% if can("fleet.reboot") %}
       <label class="switch-row">
         <span class="switch"><input type="checkbox" name="reboot" value="1" role="switch"><i aria-hidden="true"></i></span>
-        <span>{{ _("Redémarrer les postes si nécessaire") }}<span class="sub">{{ _("Seulement ceux dont une mise à jour l'exige, une fois installée.") }}</span></span>
+        <span>{{ _("Redémarrer les postes si nécessaire") }}<span class="sub">{{ _("Seulement ceux dont une mise à jour l'exige, une fois installée.") }}{% if managed.px %} {{ _("Proxmox attend la fin des mises à jour des postes, puis redémarre avec ses machines.") }}{% endif %}</span></span>
       </label>
       {% endif %}
-      {% if to_update > 1 %}{{ rollout_fields((to_update / 10)|int or 1, device_groups) }}{% endif %}
+      {% if to_update_devices > 1 %}{{ rollout_fields((to_update_devices / 10)|int or 1, device_groups) }}{% endif %}
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Mettre à jour") }}</button></div>
   </form>

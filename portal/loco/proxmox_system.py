@@ -48,8 +48,13 @@ ACTIONS = {
     "check": L_("Recherche des mises à jour"),
     "reboot": L_("Redémarrage du serveur"),
     "reboot-after": L_("Redémarrage après la mise à jour"),
+    "reboot-wait": L_("Redémarrage après les mises à jour du parc"),
+    "reboot-needed": L_("Redémarrage si nécessaire, après les mises à jour du parc"),
 }
-REBOOTS = {"reboot", "reboot-after"}
+REBOOTS = {"reboot", "reboot-after", "reboot-wait", "reboot-needed"}
+# Redémarrages décidés depuis Mon parc : l'hyperviseur arrête toutes ses machines avec lui, loco compris ; il attend
+# d'abord la fin des mises à jour en cours sur les postes du parc (pas d'installation coupée en route), une heure au plus.
+FLEET_WAIT, FLEET_STEP = 3600, 30
 _WORKERS, _REFRESH, _GUARD = {}, set(), threading.Lock()
 
 # Lancement de la mise à jour, détachée de la liaison : script et journal dans /var/lib/loco-upgrade (root seul), code
@@ -474,7 +479,42 @@ def _reboot(conn, row, job, resumed):
     return "failed", _("Proxmox n'a pas répondu dans les vingt minutes qui ont suivi le redémarrage.")
 
 
-HANDLERS = {"update": _upgrade, "check": _check, "reboot": _reboot, "reboot-after": _reboot}
+def fleet_busy(conn):
+    """Postes du parc dont une mise à jour (ou une montée de version) est en cours, ou va partir — demandée, due, et le
+    poste en ligne : un redémarrage de l'hyperviseur couperait une machine virtuelle en pleine installation."""
+    from . import fleet
+    now, busy = time.strftime("%Y-%m-%d %H:%M:%S"), set()
+    for c in conn.execute("SELECT c.device_id, c.state, d.last_seen, d.state AS device_state FROM device_commands c "
+                          "JOIN devices d ON d.id=c.device_id WHERE c.action IN ('update', 'os-upgrade') "
+                          "AND c.state IN ('queued', 'sent', 'running') AND d.state='active' AND (c.run_after='' OR c.run_after<=?)",
+                          (now,)):
+        if c["state"] == "running" or fleet.is_online({"last_seen": c["last_seen"], "state": c["device_state"]}):
+            busy.add(c["device_id"])
+    return len(busy)
+
+
+def _reboot_fleet(conn, row, job, resumed):
+    """Redémarrage décidé depuis Mon parc (sélection, ligne, « redémarrer si nécessaire ») : comme pour un poste, mais
+    après la fin des mises à jour en cours sur les postes du parc, une heure au plus. « reboot-needed » ne redémarre que
+    si le relevé fait après la mise à jour le demande (nouveau noyau, sans épinglage contraire)."""
+    if not job["boot_id"]:                                  # rien d'envoyé encore : une reprise continue d'attendre
+        if job["action"] == "reboot-needed":
+            info = sys_info(row)
+            if info is not None and not info["reboot_required"]:
+                return "success", _("Aucun redémarrage nécessaire après la mise à jour.")
+        deadline = time.time() + FLEET_WAIT - _age(job)
+        busy = fleet_busy(conn)
+        while busy and time.time() < deadline:
+            _save_output(conn, job["id"], _("En attente de la fin des mises à jour du parc : %(n)s poste en cours.", n=busy) if busy == 1
+                         else _("En attente de la fin des mises à jour du parc : %(n)s postes en cours.", n=busy))
+            time.sleep(FLEET_STEP)
+            busy = fleet_busy(conn)
+        resumed = False
+    return _reboot(conn, row, job, resumed)
+
+
+HANDLERS = {"update": _upgrade, "check": _check, "reboot": _reboot, "reboot-after": _reboot,
+            "reboot-wait": _reboot_fleet, "reboot-needed": _reboot_fleet}
 
 
 def _work(host_id):
@@ -509,7 +549,7 @@ def _work(host_id):
                 if job["action"] == "update" and state != "success":
                     # « Redémarrer ensuite » ne vaut qu'après une mise à jour réussie.
                     conn.execute("UPDATE proxmox_system_jobs SET state='failed', finished_at=?, output=? WHERE host_id=? "
-                                 "AND action='reboot-after' AND state='queued'",
+                                 "AND action IN ('reboot-after', 'reboot-needed') AND state='queued'",
                                  (_stamp(), _("Annulé : la mise à jour qui le précédait a échoué, Proxmox n'a pas été redémarré."), host_id))
             refresh(host_id, conn)
     finally:
@@ -641,17 +681,44 @@ def fleet_rows():
         out.append({"id": row["id"], "name": row["name"], "address": ssh_host(row), "version": (info or {}).get("pve") or (api or {}).get("version") or "",
                     "node": (info or {}).get("hostname") or "", "updates": updates, "busy": bool(running), "ssh": bool(row["host_key"]),
                     "online": (not row["error"]) if not row["host_key"] else not row["sys_error"],
+                    "blocked": bool(info and "proxmox-ve" in info["removals"]),
+                    "reboot_required": bool(info and row["host_key"] and info["reboot_required"]),
+                    "rebooting": any(j["action"] in REBOOTS for j in running), "updating": any(j["action"] == "update" for j in running),
+                    "self": bool(info and info.get("self")),
                     "color": color, "label": label, "mon": resources(_node(api, info), row["checked"])})
     return out
 
 
-def update_host(host_id):
-    """Lance la mise à jour d'un serveur (sélection de Mon parc) ; renvoie 1 si elle est lancée, 0 sinon. Dans une requête."""
-    row = db().execute("SELECT * FROM proxmox_hosts WHERE id=?", (host_id,)).fetchone()
+def update_host(host_id, reboot=False, conn=None, user=None):
+    """Lance la mise à jour d'un serveur depuis Mon parc (sélection, « Tout mettre à jour », planification), suivie au
+    besoin d'un redémarrage s'il devient nécessaire (après les mises à jour du parc). Renvoie le nombre de tâches lancées."""
+    conn = conn or db()
+    row = conn.execute("SELECT * FROM proxmox_hosts WHERE id=?", (host_id,)).fetchone()
     info = sys_info(row) if row is not None and row["host_key"] else None
     if not info or not info["updates"] or "proxmox-ve" in info["removals"]:
         return 0
-    return _launch(row, ["update"])
+    return _launch(row, ["update"] + (["reboot-needed"] if reboot else []), conn, user)
+
+
+def reboot_host(host_id):
+    """Redémarre un serveur depuis Mon parc (sélection, bouton de sa ligne), après les mises à jour en cours du parc.
+    Renvoie le nombre de tâches lancées (0 si déjà prévu ou sans liaison SSH)."""
+    row = db().execute("SELECT * FROM proxmox_hosts WHERE id=?", (host_id,)).fetchone()
+    if row is None or not row["host_key"] or any(j["action"] in REBOOTS for j in active(db(), host_id)):
+        return 0
+    return _launch(row, ["reboot-wait"])
+
+
+def pending_updates(conn=None):
+    """Serveurs reliés en SSH qui ont des mises à jour à installer et rien en cours : ce que « Tout mettre à jour » et
+    la planification du parc lancent."""
+    conn = conn or db()
+    found = []
+    for row in conn.execute("SELECT * FROM proxmox_hosts WHERE host_key!='' ORDER BY name COLLATE NOCASE, id").fetchall():
+        info = sys_info(row)
+        if info and info["updates"] and "proxmox-ve" not in info["removals"] and not active(conn, row["id"]):
+            found.append(row["id"])
+    return found
 
 
 def attention():
@@ -787,11 +854,15 @@ def proxmox_system_refresh(host_id):
     return redirect(url_for("proxmox_system_host", host_id=host_id))
 
 
-def _launch(row, actions):
-    conn, count = db(), 0
+def _launch(row, actions, conn=None, user=None):
+    """Met des tâches en file et lance leur exécution ; renvoie le nombre ajouté. Hors d'une requête (planification),
+    la connexion et l'auteur sont donnés."""
+    conn = conn or db()
+    user = user or g.user["username"]
+    count = 0
     for action in actions:
-        if queue(conn, row["id"], action, g.user["username"]):
-            audit("proxmox." + action, row["name"], commit=False)
+        if queue(conn, row["id"], action, user):
+            audit("proxmox." + action, row["name"], username=user, commit=False)
             count += 1
     conn.commit()
     if count:
@@ -836,6 +907,17 @@ def proxmox_fleet_update(host_id):
     info, error = _ready(row)
     count = _launch(row, ["update"]) if info else 0
     flash(_("Mise à jour lancée.") if count else error or _("Une mise à jour est déjà en cours."), "ok" if count else "error")
+    return back("fleet")
+
+
+@app.route("/proxmox/<int:host_id>/fleet-reboot", methods=["POST"])
+@login_required
+def proxmox_fleet_reboot(host_id):
+    """Bouton « Redémarrer » de la ligne Proxmox dans Mon parc : redémarrage après les mises à jour en cours du parc."""
+    _host(host_id)
+    count = reboot_host(host_id)
+    flash(_("Redémarrage de Proxmox prévu : il part dès que les mises à jour en cours sur les postes du parc sont finies (une heure au plus).")
+          if count else _("Ce redémarrage est déjà prévu."), "ok" if count else "error")
     return back("fleet")
 
 

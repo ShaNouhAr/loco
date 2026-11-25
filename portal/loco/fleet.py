@@ -1366,9 +1366,12 @@ def _command_online(c):
 
 def _activity_signature(active, finished):
     """Change quand une ligne change d'état ou qu'un poste en attente apparaît ou disparaît, et toutes les 5 min pour
-    garder justes les « il y a … » ; pas à chaque paquet (les barres et les listes sont réécrites en place)."""
+    garder justes les « il y a … » ; pas à chaque paquet (les barres et les listes sont réécrites en place). Les tâches
+    de Home Assistant et de Proxmox comptent aussi, avec leur dernière ligne."""
+    systems = system_activity()
     return hashlib.sha256(json.dumps([[[c["id"], c["state"], _command_online(c)] for c in active],
                                       [[c["id"], c["state"]] for c in finished],
+                                      [[r["id"], r["state"], r.get("step", "")] for part in systems.values() for r in part],
                                       int(time.time() // 300)]).encode()).hexdigest()[:16]
 
 
@@ -1402,6 +1405,45 @@ UPGRADE_DONE_RE = re.compile(r"^(Passé à|Upgraded to|Actualizado a|Windows Upd
 def upgrade_summary(output):
     """Ligne du compte rendu d'une mise à niveau réussie qui dit la version atteinte (« Passé à Debian GNU/Linux 13 »)."""
     return next((line.strip()[:160] for line in (output or "").splitlines() if UPGRADE_DONE_RE.match(line.strip())), "")
+
+
+SYSTEM_JOB_ACTIONS = {"homeassistant": ("update-core", "update-os", "update-supervisor", "update-addon", "update-hacs",
+                                       "restart-core", "reboot-host"),
+                      "proxmox": ("update", "reboot", "reboot-after", "reboot-wait", "reboot-needed")}
+
+
+def system_activity():
+    """Tâches de Home Assistant et de Proxmox suivies par le déroulé avec celles des postes : mises à jour et
+    redémarrages, en cours, en attente, terminés depuis 24 h — selon les droits du compte."""
+    from . import homeassistant, proxmox_system
+    since = (datetime.datetime.now() - datetime.timedelta(hours=ACTIVITY_FINISHED_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    sources = []
+    if features.enabled("homeassistant") and can("homeassistant.view"):
+        sources.append(("homeassistant", "homeassistant_jobs", "homeassistant_hosts", "Home Assistant", "ha",
+                        "homeassistant_host", lambda j: str(homeassistant.ACTIONS.get(j["action"], ("",))[0])))
+    if features.enabled("proxmox") and can("proxmox.view"):
+        sources.append(("proxmox", "proxmox_system_jobs", "proxmox_hosts", "Proxmox VE", "server",
+                        "proxmox_system_host", lambda j: str(proxmox_system.ACTIONS.get(j["action"], ""))))
+    running, waiting, done = [], [], []
+    for key, jobs, hosts, system, icon, endpoint, title in sources:
+        marks = ",".join("?" * len(SYSTEM_JOB_ACTIONS[key]))
+        for j in db().execute(f"SELECT j.*, h.name AS host_name FROM {jobs} j JOIN {hosts} h ON h.id=j.host_id "
+                              f"WHERE j.action IN ({marks}) AND (j.state IN ('queued', 'running') OR j.finished_at>=?) "
+                              f"ORDER BY j.id", (*SYSTEM_JOB_ACTIONS[key], since)).fetchall():
+            label = title(j) + (f" · {j['label']}" if j["label"] else "")
+            lines = [line.strip() for line in (j["output"] or "").splitlines() if line.strip()]
+            item = {"id": f"{icon}-{j['id']}", "href": url_for(endpoint, host_id=j["host_id"]), "icon": icon,
+                    "hostname": j["host_name"], "os_short": system, "label": label, "state": j["state"],
+                    "action": "system", "by": j["created_by"], "online": True, "progress": None}
+            if j["state"] == "running":
+                running.append(dict(item, step=lines[-1][:160] if lines else _("En cours"), since=ago_text(j["started_at"] or j["created_at"])))
+            elif j["state"] == "queued":
+                waiting.append(dict(item, tone="warn", status=_("En file"), detail=_("après la tâche en cours"), since=ago_text(j["created_at"])))
+            else:
+                done.append(dict(item, ok=j["state"] == "success", view=None, detail=lines[-1][:160] if lines else "",
+                                 since=ago_text(j["finished_at"] or j["created_at"]), finished=j["finished_at"] or ""))
+    done.sort(key=lambda r: r["finished"], reverse=True)
+    return {"running": running, "waiting": waiting, "done": done}
 
 
 def update_activity(active, finished):
@@ -1442,6 +1484,10 @@ def update_activity(active, finished):
         item["detail"] = _success_summary(c, view) if item["ok"] else _failure_reason(view, c["output"])
         done.append(item)
     done.sort(key=lambda r: r["ok"])                    # tri stable : les échecs d'abord, puis du plus récent au plus ancien
+    systems = system_activity()
+    running += systems["running"]
+    waiting += systems["waiting"]
+    done = sorted(done + systems["done"], key=lambda r: r["ok"])     # les échecs d'abord, l'ordre de chacun gardé
     return {"running": running, "waiting": waiting, "done": done,
             "offline": sum(1 for r in waiting if not r["online"]), "failures": sum(1 for r in done if not r["ok"])}
 
@@ -1451,10 +1497,17 @@ def updating_count():
     now = datetime.datetime.now()
     alive = (now - datetime.timedelta(seconds=ONLINE_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        return db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
-                            "WHERE c.action IN ('update', 'reboot', 'os-upgrade') AND c.state IN ('queued', 'sent', 'running') "
-                            "AND d.state != 'removed' AND d.last_seen >= ? AND (c.run_after = '' OR c.run_after <= ?)"
-                            + scope.sql("d.id"), (alive, _now())).fetchone()[0]
+        n = db().execute("SELECT COUNT(*) FROM device_commands c JOIN devices d ON d.id = c.device_id "
+                         "WHERE c.action IN ('update', 'reboot', 'os-upgrade') AND c.state IN ('queued', 'sent', 'running') "
+                         "AND d.state != 'removed' AND d.last_seen >= ? AND (c.run_after = '' OR c.run_after <= ?)"
+                         + scope.sql("d.id"), (alive, _now())).fetchone()[0]
+        # Home Assistant et Proxmox : leurs mises à jour et redémarrages en cours, comme dans le déroulé.
+        for key, table in (("homeassistant", "homeassistant_jobs"), ("proxmox", "proxmox_system_jobs")):
+            if features.enabled(key) and can(key + ".view"):
+                marks = ",".join("?" * len(SYSTEM_JOB_ACTIONS[key]))
+                n += db().execute(f"SELECT COUNT(*) FROM {table} WHERE state IN ('queued', 'running') AND action IN ({marks})",
+                                  SYSTEM_JOB_ACTIONS[key]).fetchone()[0]
+        return n
     except Exception:  # noqa: BLE001 - une pastille de navigation ne doit jamais faire tomber une page
         return 0
 
@@ -2202,6 +2255,35 @@ def _search(rows, query, names):
     return found
 
 
+# Home Assistant, Proxmox et équipements réseau : lignes de Mon parc à côté des postes, filtrées et comptées comme eux.
+# Ils ne sont membres d'aucun groupe, n'ont pas de distribution ; leur famille de système est la leur.
+EXTRA_FAMILIES = (("homeassistant", "Home Assistant"), ("proxmox", "Proxmox VE"), ("network", L_("Équipements réseau")))
+
+
+def _extra_items(extras):
+    """(genre, famille, ligne, texte cherchable) de chaque ligne hors postes."""
+    for kind, family, base in (("ha", "homeassistant", "Home Assistant"), ("px", "proxmox", "Proxmox VE"), ("nd", "network", "")):
+        for x in extras[kind]:
+            words = [str(x.get(k) or "") for k in ("name", "hostname", "node", "address", "version", "system", "model", "family")]
+            yield kind, family, x, _fold(" ".join(words + [base]))
+
+
+def _keep_extras(extras, test):
+    kept = {"ha": [], "px": [], "nd": []}
+    for kind, family, x, text in _extra_items(extras):
+        if test(family, x, text):
+            kept[kind].append(x)
+    return kept
+
+
+def _extra_count(extras, test=lambda family, x: True):
+    return sum(1 for _kind, family, x, _text in _extra_items(extras) if test(family, x))
+
+
+EXTRA_VIEWS = {"hors-ligne": lambda x: not x["online"], "redemarrage": lambda x: bool(x.get("reboot_required")),
+               "nouvelle-version": lambda x: False}
+
+
 def _ha_fleet_rows():
     try:
         from . import homeassistant
@@ -2238,32 +2320,52 @@ def fleet():
         selected_group = groups._group("device", group_id)
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         rows = [r for r in rows if r["d"]["id"] in member_ids]
+    # Home Assistant, Proxmox, équipements réseau : jamais dans un groupe (ils n'en sont membres d'aucun).
+    others = ({"ha": [], "px": [], "nd": []} if selected_group else
+              {"ha": _ha_fleet_rows(), "px": _px_fleet_rows(), "nd": _net_fleet_rows()})
+    devices_total = len(rows)
+    managed = {"ha": bool(others["ha"]), "px": bool(others["px"])}     # avant les filtres : pour les textes des fenêtres
     # Ce que « Tout mettre à jour » fera vraiment : tout le groupe ou le parc, quels que soient les filtres affichés —
-    # sans les postes dont la mise à jour est déjà demandée, comptés à part (« en cours »).
-    to_update = sum(1 for r in rows if r["needs_update"] and not r["updating"])
-    updating = sum(1 for r in rows if r["updating"])
+    # sans les postes dont la mise à jour est déjà demandée, comptés à part (« en cours ») ; Home Assistant et Proxmox
+    # compris, chacun selon son droit.
+    to_update_devices = sum(1 for r in rows if r["needs_update"] and not r["updating"])
+    to_update = to_update_devices + (
+        sum(1 for x in others["ha"] if x["updates"] and not x["busy"] and can("homeassistant.update"))
+        + sum(1 for x in others["px"] if x["updates"] and x["ssh"] and not x["busy"] and not x["blocked"] and can("proxmox.update")))
+    updating = sum(1 for r in rows if r["updating"]) + sum(1 for k in ("ha", "px") for x in others[k] if x["busy"])
     names = _group_names()
     query = request.args.get("q", "").strip()[:100]
     rows = _search(rows, query, names)
-    counts = {c: sum(1 for r in rows if r["color"] == c) for c in ("green", "orange", "red", "grey")}
-    systems = _systems(rows)
-    total = len(rows)
+    terms = _fold(query).split()
+    others = _keep_extras(others, lambda family, x, text: all(term in text for term in terms))
+    counts = {c: sum(1 for r in rows if r["color"] == c) + _extra_count(others, lambda f, x, c=c: x["color"] == c)
+              for c in ("green", "orange", "red", "grey")}
+    systems = _systems(rows) + [{"key": key, "label": str(label), "count": n, "dists": []} for key, label in EXTRA_FAMILIES
+                                if (n := _extra_count(others, lambda f, x, key=key: f == key))]
+    total = len(rows) + _extra_count(others)
     state = request.args.get("statut", "")
     system, dist = request.args.get("os", ""), request.args.get("dist", "")
     if state in counts:
         rows = [r for r in rows if r["color"] == state]
+        others = _keep_extras(others, lambda family, x, text: x["color"] == state)
     # Une distribution choisie l'emporte sur la famille (et dit laquelle c'est) ; une valeur inconnue ne filtre rien.
     families = {d["key"]: f["key"] for f in systems for d in f["dists"]}
     if dist in families:
         system = families[dist]
         rows = [r for r in rows if _slug(distribution(r["d"])) == dist]
+        others = _keep_extras(others, lambda family, x, text: False)
     else:
         dist = ""
         if system in {f["key"] for f in systems}:
             rows = [r for r in rows if system_family(r["d"]) == system]
+            others = _keep_extras(others, lambda family, x, text: family == system)
         else:
             system = ""
     rows, view, extras = _fleet_view(rows, request.args.get("voir", ""))
+    for key, test in EXTRA_VIEWS.items():
+        extras[key] += _extra_count(others, lambda f, x, test=test: test(x))
+    if view:
+        others = _keep_extras(others, lambda family, x, text: EXTRA_VIEWS[view](x))
     rows.sort(key=_urgency)
     shown = len(rows)
     pages = max(1, (shown + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -2275,7 +2377,9 @@ def fleet():
     signature = hashlib.sha256(json.dumps([[[r["d"]["id"], r["d"]["last_seen"][:16], r["color"], r["reason"],
                                              is_online(r["d"]), [c["state"] for c in r["pending"]], r["rebooting"]] for r in rows],
                                            counts, [[f["key"], f["count"], [[d["key"], d["count"]] for d in f["dists"]]] for f in systems],
-                                           extras, shown, to_update, updating]).encode()).hexdigest()[:16]
+                                           extras, shown, to_update, updating,
+                                           [[k, x["id"], x["color"], x["label"], x["busy"], x["online"], x.get("updates"),
+                                             x.get("reboot_required")] for k in ("ha", "px", "nd") for x in others[k]]]).encode()).hexdigest()[:16]
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     rows = _enrich(rows, names)
@@ -2291,8 +2395,9 @@ def fleet():
                            fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
                            counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
+                           to_update_devices=to_update_devices, devices_total=devices_total, managed=managed,
                            checkin=CHECKIN, online_minutes=ONLINE_SECONDS // 60, red_threshold=red_threshold(),
-                           ha_rows=_ha_fleet_rows(), px_rows=_px_fleet_rows(), net_rows=_net_fleet_rows())
+                           ha_rows=others["ha"], px_rows=others["px"], net_rows=others["nd"])
 
 
 @app.route("/fleet/search.json")
@@ -2305,6 +2410,12 @@ def fleet_search():
         sub = " · ".join(p for p in (d["os_name"] or d["os_family"], main_address(d)) if p)
         devices.append({"title": d["hostname"] or _("Poste sans nom"),
                         "sub": sub, "href": url_for("fleet_device", dev_id=d["id"])})
+    for x in _ha_fleet_rows():
+        devices.append({"title": x["name"], "sub": " · ".join(p for p in ("Home Assistant", x["address"]) if p),
+                        "href": url_for("homeassistant_host", host_id=x["id"])})
+    for x in _px_fleet_rows():
+        devices.append({"title": x["name"], "sub": " · ".join(p for p in ("Proxmox VE", x["address"]) if p),
+                        "href": url_for("proxmox_system_host", host_id=x["id"])})
     return {"devices": devices}
 
 
@@ -2692,6 +2803,8 @@ def fleet_update_all():
             flash(str(e), "error")
             return back("fleet", **({"group": group_id} if group_id else {}))
         db().commit()
+        if member_ids is None:
+            _extras_to_update(reboot=reboot)              # Home Assistant et Proxmox : avec la première vague
         return back("deployment_detail", deployment_id=deployment_id)
     count = 0
     for r in _rows(apps):
@@ -2700,6 +2813,8 @@ def fleet_update_all():
         if r["needs_update"] and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
     db().commit()
+    if member_ids is None:                                # un groupe ne contient que des postes
+        count += _extras_to_update(reboot=reboot)
     audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
     flash((n_('Mise à jour demandée sur %(num)s poste.', 'Mise à jour demandée sur %(num)s postes.', count) if count else _('Aucun poste à mettre à jour.')), "ok")
     # S'il y a quelque chose à suivre, aller au déroulé des mises à jour ; sinon rester sur la liste.
@@ -2743,33 +2858,59 @@ def _split_selection(raw_ids):
     return devices, ha, px
 
 
-def _px_bulk(px_ids):
-    """Lance la mise à jour des serveurs Proxmox cochés, si le compte peut les mettre à jour. Renvoie le nombre lancé.
-    Jamais de redémarrage groupé : un hyperviseur s'arrête avec toutes ses machines, cela se décide depuis sa page."""
-    if not px_ids or not features.enabled("proxmox") or not can("proxmox.update"):
+def _px_bulk(px_ids, what="update", reboot=False):
+    """Mise à jour (« update », suivie si demandé d'un redémarrage s'il devient nécessaire) ou redémarrage (« reboot »)
+    des serveurs Proxmox cochés, selon les droits du compte. Comme un poste, mais un hyperviseur s'arrête avec toutes ses
+    machines : il attend d'abord la fin des mises à jour en cours sur les postes du parc (une heure au plus). Renvoie le
+    nombre de tâches lancées."""
+    needed = "proxmox.update" if what == "update" else "proxmox.restart"
+    if not px_ids or not features.enabled("proxmox") or not can(needed):
         return 0
     from . import proxmox_system
+    reboot = reboot and can("proxmox.restart")
     count = 0
     for hid in px_ids:
         try:
-            count += proxmox_system.update_host(hid)
+            count += bool(proxmox_system.update_host(hid, reboot) if what == "update" else proxmox_system.reboot_host(hid))
         except Exception:                                     # un serveur injoignable ne doit pas faire échouer le lot
             pass
     return count
 
 
 def _ha_bulk(ha_ids, what):
-    """Applique une action (« update » ou « reboot ») aux instances Home Assistant cochées, si le compte peut les gérer
-    et que la fonction est active. Renvoie le nombre de tâches lancées."""
-    if not ha_ids or not features.enabled("homeassistant") or not can("homeassistant.manage"):
+    """Mises à jour disponibles (« update », avec une sauvegarde avant comme sur sa page) ou redémarrage du système
+    (« reboot ») des instances Home Assistant cochées, selon les droits du compte. Renvoie le nombre de tâches lancées."""
+    needed = "homeassistant.update" if what == "update" else "homeassistant.restart"
+    if not ha_ids or not features.enabled("homeassistant") or not can(needed):
         return 0
     from . import homeassistant
     count = 0
     for hid in ha_ids:
         try:
-            count += homeassistant.update_host(hid) if what == "update" else homeassistant.reboot_host(hid)
+            count += bool(homeassistant.update_host(hid) if what == "update" else homeassistant.reboot_host(hid))
         except Exception:                                     # une instance injoignable ne doit pas faire échouer le lot
             pass
+    return count
+
+
+def _extras_to_update(conn=None, reboot=False, user=None, allowed=None):
+    """Home Assistant et Proxmox qui ont des mises à jour, mis à jour avec le parc (« Tout mettre à jour », planification
+    du parc) : chacun selon son droit (allowed(droit), le compte courant par défaut). Renvoie le nombre de tâches lancées."""
+    from . import homeassistant, proxmox_system
+    allowed = allowed or can
+    off, count = features.disabled(conn) if conn is not None else features.disabled(), 0
+    if "homeassistant" not in off and allowed("homeassistant.update"):
+        for hid in homeassistant.pending_updates(conn):
+            try:
+                count += bool(homeassistant.update_host(hid, conn=conn, user=user))
+            except Exception:
+                pass
+    if "proxmox" not in off and allowed("proxmox.update"):
+        for hid in proxmox_system.pending_updates(conn):
+            try:
+                count += bool(proxmox_system.update_host(hid, reboot and allowed("proxmox.restart"), conn=conn, user=user))
+            except Exception:
+                pass
     return count
 
 
@@ -2792,7 +2933,7 @@ def fleet_update_selected():
         r = rows.get(dev_id)
         if r and r["d"]["state"] == "active" and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
-    ha_count = _ha_bulk(ha_ids, "update") + _px_bulk(px_ids)
+    ha_count = _ha_bulk(ha_ids, "update") + _px_bulk(px_ids, "update", reboot)
     db().commit()
     audit("parc.mise-a-jour-selection", f"{counted(count + ha_count, 'poste')}{', avec redémarrage' if reboot else ''}")
     return {"ok": True, "count": count + ha_count}
@@ -2815,9 +2956,9 @@ def fleet_reboot_selected():
         if (r and r["d"]["state"] == "active" and r["d"]["os_family"] != "android" and not r["rebooting"] and not r["upgrading"]
                 and queue(r["d"], "reboot", {})):
             count += 1
-    count += _ha_bulk(ha_ids, "reboot")
+    count += _ha_bulk(ha_ids, "reboot") + _px_bulk(px_ids, "reboot")
     db().commit()
-    total = len(ids) + len(ha_ids)
+    total = len(ids) + len(ha_ids) + len(px_ids)
     audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(total, 'sélectionné')}")
     if count:
         flash(n_("Redémarrage demandé sur %(num)s poste : il redémarre une minute après son prochain contact.",
@@ -2826,9 +2967,9 @@ def fleet_reboot_selected():
         flash(n_("%(num)s poste laissé tel quel : redémarrage déjà en cours, mise à jour de version en cours, appareil Android ou poste retiré.",
                  "%(num)s postes laissés tels quels : redémarrage déjà en cours, mise à jour de version en cours, appareils Android ou postes retirés.",
                  total - count), "error")
-    if px_ids:
-        flash(_("Un serveur Proxmox ne se redémarre pas avec une sélection : toutes ses machines s'arrêtent avec lui. Redémarrez-le depuis sa page."), "error")
-    return {"ok": True, "count": count, "skipped": total - count + len(px_ids)}
+    if px_ids and can("proxmox.restart"):
+        flash(_("Proxmox redémarre dès que les mises à jour en cours sur les postes du parc sont finies (une heure au plus), avec toutes ses machines."), "ok")
+    return {"ok": True, "count": count, "skipped": total - count}
 
 
 def _report_wake(result):

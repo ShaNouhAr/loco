@@ -163,6 +163,19 @@ class AppearanceRouteTest(unittest.TestCase):
         bad = self.b.c.post("/account/dismiss", data={"csrf": tok, "key": "clé invalide !"}, content_type="multipart/form-data")
         self.assertEqual(bad.status_code, 400)
 
+    def test_a_theme_change_keeps_the_photo_and_the_hidden_notes(self):
+        tok = self.b.token("/")
+        self.b.c.post("/account/avatar", data={"csrf": tok, "avatar": (io.BytesIO(PNG), "me.png")}, content_type="multipart/form-data")
+        self.b.c.post("/account/dismiss", data={"csrf": tok, "key": "n1a2b3c"}, content_type="multipart/form-data")
+        self.b.post("/account/appearance", {"theme": "sepia", "accent": "amber", "alpha": "70", "bg": "g:rose"})
+        self.b.c.post("/account/appearance/background", data={"csrf": tok, "background": (io.BytesIO(PNG), "wall.png")},
+                      content_type="multipart/form-data")
+        self.b.post("/account/appearance/background/remove", {})
+        stored = json.loads(self._appearance())
+        self.assertEqual((stored["theme"], stored.get("avatar"), stored.get("avatar_own")), ("sepia", "png", True))
+        self.assertIn("n1a2b3c", stored.get("dismissed", []))
+        self.assertIn("user-avatar-img", self.b.c.get("/").get_data(as_text=True))
+
     def test_appearance_requires_login(self):
         anon = Browser()
         self.assertIn(anon.c.post("/account/appearance", data={"csrf": anon.token(), "theme": "light"}).status_code, (302, 401, 403))

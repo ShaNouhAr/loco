@@ -88,6 +88,9 @@ class ProxmoxSystemTest(unittest.TestCase):
         with transaction() as conn:
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (features.OPTIONAL_SETTING, '["proxmox"]'))
             conn.execute("DELETE FROM proxmox_hosts")
+            # Parc vide : les postes laissés par d'autres essais (mises à jour « en cours ») feraient attendre les
+            # redémarrages décidés depuis Mon parc, et compteraient dans « Tout mettre à jour ».
+            conn.execute("DELETE FROM devices")
         self.addCleanup(self.reset)
         fixture.reset_failures()
         self.admin = fixture.Browser()
@@ -98,6 +101,7 @@ class ProxmoxSystemTest(unittest.TestCase):
         with transaction() as conn:
             conn.execute("DELETE FROM settings WHERE key=?", (features.OPTIONAL_SETTING,))
             conn.execute("DELETE FROM proxmox_hosts")
+            conn.execute("DELETE FROM devices WHERE uid='px-vm'")
             conn.execute("DELETE FROM users WHERE username LIKE 'px-%'")
             conn.execute("DELETE FROM access_roles WHERE id LIKE 'px-%'")
 
@@ -348,18 +352,125 @@ class TestFleet(ProxmoxSystemTest):
         self.assertIn("<span>redémarrage requis</span>", cell)
         self.assertEqual(cell.count('class="st '), 1)
 
-    def test_selection_updates_but_never_reboots_a_hypervisor(self):
+    def test_selection_updates_and_reboots_like_any_device(self):
         row = self.host()
         tok = self.admin.token("/fleet")
         got = self.admin.c.post("/fleet/update-selected", data={"csrf": tok, "ids": f"px-{row['id']}"}, content_type="multipart/form-data")
         self.assertEqual(got.get_json()["count"], 1)
         self.idle()
         got = self.admin.c.post("/fleet/reboot-selected", data={"csrf": tok, "ids": f"px-{row['id']}"}, content_type="multipart/form-data")
-        self.assertEqual((got.get_json()["count"], got.get_json()["skipped"]), (0, 1))
+        self.assertEqual((got.get_json()["count"], got.get_json()["skipped"]), (1, 0))
         self.idle()
-        self.assertEqual([j["action"] for j in self.jobs()], ["update"])
+        self.assertEqual([(j["action"], j["state"]) for j in self.jobs()], [("update", "success"), ("reboot-wait", "success")])
+        self.assertIn("systemctl reboot", "".join(self.pve.calls))
         self.assertEqual(self.admin.c.post("/fleet/wake-selected", data={"csrf": tok, "ids": f"px-{row['id']}"},
                                            content_type="multipart/form-data").status_code, 400)    # aucun poste à réveiller
+
+    def test_update_then_reboot_only_if_the_update_requires_it(self):
+        row = self.host()
+        tok = self.admin.token("/fleet")
+        self.admin.c.post("/fleet/update-selected", data={"csrf": tok, "ids": f"px-{row['id']}", "reboot": "1"},
+                          content_type="multipart/form-data")
+        self.idle()
+        self.assertEqual([(j["action"], j["state"]) for j in self.jobs()], [("update", "success"), ("reboot-needed", "success")])
+        self.assertIn("systemctl reboot", "".join(self.pve.calls))                  # nouveau noyau : redémarré
+        self.clear_jobs()
+        self.pve.calls.clear()
+        self.pve.pin = "7.0.14-15-pve"                                               # noyau épinglé : rien à redémarrer
+        proxmox_system.refresh(row["id"])
+        self.admin.c.post("/fleet/update-selected", data={"csrf": tok, "ids": f"px-{row['id']}", "reboot": "1"},
+                          content_type="multipart/form-data")
+        self.idle()
+        jobs = self.jobs()
+        self.assertEqual([(j["action"], j["state"]) for j in jobs], [("update", "success"), ("reboot-needed", "success")])
+        self.assertEqual(jobs[1]["output"], "Aucun redémarrage nécessaire après la mise à jour.")
+        self.assertNotIn("systemctl reboot", "".join(self.pve.calls))
+
+    def test_a_reboot_from_my_fleet_waits_for_the_devices_updates(self):
+        row = self.host()
+        cmd = self.device_updating()
+        with mock.patch.object(proxmox_system, "FLEET_STEP", 0.02):
+            self.assertEqual(self.admin.post(f"/proxmox/{row['id']}/fleet-reboot", {}, page="/fleet").status_code, 302)
+            deadline = time.time() + 5
+            while time.time() < deadline and "En attente" not in (self.jobs()[0]["output"] or ""):
+                time.sleep(0.02)
+            job = self.jobs()[0]
+            self.assertEqual((job["action"], job["state"]), ("reboot-wait", "running"))
+            self.assertEqual(job["output"], "En attente de la fin des mises à jour du parc : 1 poste en cours.")
+            self.assertNotIn("systemctl reboot", "".join(self.pve.calls))            # rien d'envoyé tant que le poste installe
+            with transaction() as conn:
+                conn.execute("UPDATE device_commands SET state='success' WHERE id=?", (cmd,))
+            self.idle()
+        self.assertEqual(self.jobs()[0]["state"], "success")
+        self.assertIn("systemctl reboot", "".join(self.pve.calls))
+
+    def test_the_wait_is_bounded(self):
+        row = self.host()
+        self.device_updating()
+        with mock.patch.object(proxmox_system, "FLEET_STEP", 0.02), mock.patch.object(proxmox_system, "FLEET_WAIT", 0.3):
+            self.admin.post(f"/proxmox/{row['id']}/fleet-reboot", {}, page="/fleet")
+            self.idle()
+        self.assertEqual(self.jobs()[0]["state"], "success")                       # au bout du délai, il redémarre
+        self.assertIn("systemctl reboot", "".join(self.pve.calls))
+
+    def test_update_all_includes_the_server_but_not_a_group(self):
+        self.host()
+        html = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Tout mettre à jour (1)", html)
+        self.assertIn("Home Assistant et Proxmox se mettent à jour aussitôt", html)
+        tok = self.admin.token("/fleet")
+        self.assertEqual(self.admin.c.post("/fleet/update-all", data={"csrf": tok, "reboot": "1"}).status_code, 302)
+        self.idle()
+        self.assertEqual([j["action"] for j in self.jobs()], ["update", "reboot-needed"])
+        self.clear_jobs()
+        with transaction() as conn:
+            gid = conn.execute("INSERT INTO device_groups (name, updated_at) VALUES ('Bureau-px', '2026-11-25 10:00:00')").lastrowid
+        self.admin.c.post("/fleet/update-all", data={"csrf": tok, "group": str(gid)})
+        self.idle()
+        self.assertEqual(self.jobs(), [])                                           # un groupe ne contient que des postes
+        with transaction() as conn:
+            conn.execute("DELETE FROM device_groups WHERE id=?", (gid,))
+
+    def test_filters_search_and_counts_treat_the_server_like_a_device(self):
+        row = self.host()
+        seen = lambda query: f"/proxmox/{row['id']}" in self.admin.c.get("/fleet" + query).get_data(as_text=True)    # noqa: E731
+        self.assertTrue(seen(""))
+        self.assertTrue(seen("?os=proxmox"))
+        self.assertFalse(seen("?os=windows"))
+        self.assertTrue(seen("?q=pve"))
+        self.assertFalse(seen("?q=introuvable"))
+        self.assertTrue(seen("?statut=orange"))
+        self.assertFalse(seen("?statut=green"))
+        self.assertTrue(seen("?voir=redemarrage"))                                 # nouveau noyau installé
+        self.assertFalse(seen("?voir=hors-ligne"))
+        html = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Proxmox VE<span class=\"menu-count\">1</span>", html)        # famille du filtre Système
+        self.assertIn(f"/proxmox/{row['id']}/fleet-reboot", html)                  # redémarrer depuis sa ligne
+        self.assertIn("redémarrage nécessaire", html)
+        found = self.admin.c.get("/fleet/search.json").get_json()["devices"]
+        self.assertIn(("pve", f"/proxmox/{row['id']}"), [(d["title"], d["href"]) for d in found])
+
+    def test_the_updates_feed_follows_the_server(self):
+        row = self.host()
+        self.admin.post(f"/proxmox/{row['id']}/fleet-update", {}, page="/fleet")
+        self.idle()
+        html = self.admin.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn("Mise à jour du système", html)
+        self.assertIn(f'href="/proxmox/{row["id"]}"', html)
+        self.assertIn("Réussie", html)
+
+    def device_updating(self):
+        """Un poste du parc, en ligne, en pleine mise à jour ; renvoie le numéro de sa commande."""
+        now = time.strftime("%Y-%m-%d %H:%M:%S")
+        with transaction() as conn:
+            dev = conn.execute("INSERT INTO devices (uid, token_hash, hostname, os_family, os_name, enrolled_at, last_seen) "
+                               "VALUES ('px-vm', 'x', 'px-vm', 'debian', 'Debian GNU/Linux 13', ?, ?)", (now, now)).lastrowid
+            return conn.execute("INSERT INTO device_commands (device_id, action, state, created_at) VALUES (?, 'update', 'running', ?)",
+                                (dev, now)).lastrowid
+
+    def clear_jobs(self):
+        with transaction() as conn:
+            conn.execute("DELETE FROM proxmox_system_jobs")
 
     def test_rights(self):
         row = self.host()

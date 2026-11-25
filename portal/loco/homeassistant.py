@@ -712,6 +712,9 @@ def fleet_rows():
         return []
     out = []
     for row in db().execute("SELECT * FROM homeassistant_hosts ORDER BY name COLLATE NOCASE, id").fetchall():
+        # Comme la vue d'ensemble : un relevé qui date est refait en arrière-plan tant que Mon parc est affiché.
+        if row["host_key"] and time.time() - (row["checked"] or 0) > OVERVIEW_STALE:
+            refresh_soon(row["id"])
         info = _info(row)
         running = db().execute("SELECT 1 FROM homeassistant_jobs WHERE host_id=? AND state IN ('queued','running') LIMIT 1", (row["id"],)).fetchone()
         if running:
@@ -729,10 +732,29 @@ def fleet_rows():
             color, label = "green", _("à jour")
         out.append({"id": row["id"], "name": row["name"],
                     "address": row["host"] + ("" if row["port"] == 22 else ":%d" % row["port"]),
-                    "hostname": (info.get("hostname") if info else "") or "",
+                    "hostname": (info.get("hostname") if info else "") or "", "system": (info or {}).get("system") or "",
                     "updates": len(info["updates"]) if info else 0, "busy": bool(running),
-                    "online": bool(info) and not row["error"], "color": color, "label": label})
+                    "online": bool(info) and not row["error"], "color": color, "label": label,
+                    "reboot_required": False, "mon": _resources(info, row["checked"])})
     return out
+
+
+def _resources(info, checked):
+    """Mémoire, processeur et disque de l'hôte au format des lignes de Mon parc (macro resources) ; le disque vient de
+    tout Home Assistant, la mémoire et le processeur de Home Assistant OS seulement."""
+    from . import monitoring
+    if not info:
+        return None
+    pct = lambda used, total: round(100 * used / total, 1) if used is not None and total else None      # noqa: E731
+    free, total = info.get("disk_free"), info.get("disk_total")
+    m = {"cpu": info.get("cpu_percent"), "mem": pct(info.get("memory_used"), info.get("memory_total")),
+         "disk": pct(total - free, total) if free is not None and total else None, "disk_mount": "/",
+         "stale": time.time() - (checked or 0) > 2 * OVERVIEW_STALE,
+         "age_text": time.strftime("%H:%M", time.localtime(checked)) if checked else "—"}
+    if all(m[k] is None for k in ("cpu", "mem", "disk")):
+        return None
+    m["levels"] = {k: monitoring.level(k, m[k]) for k in ("cpu", "mem", "disk")}
+    return m
 
 
 def _signature(views):
@@ -897,12 +919,16 @@ def homeassistant_refresh(host_id):
     return back("homeassistant")
 
 
-def _launch(row, items, backup=False):
-    """Met des tâches en file et lance leur exécution ; renvoie le nombre de tâches ajoutées."""
-    conn, count = db(), 0
+def _launch(row, items, backup=False, conn=None, user=None):
+    """Met des tâches en file et lance leur exécution ; renvoie le nombre de tâches ajoutées. Hors d'une requête de
+    l'interface (planification), la connexion et l'auteur sont donnés."""
+    conn = conn or db()
+    user = user or g.user["username"]
+    count = 0
     for action, target, label in items:
-        if queue(conn, row["id"], action, target, label, backup and action in ("update-core", "update-addon"), g.user["username"]):
-            audit("homeassistant." + action, f"{row['name']}" + (f" : {label}" if label else "") + (", sauvegarde avant" if backup and action in ("update-core", "update-addon") else ""), commit=False)
+        if queue(conn, row["id"], action, target, label, backup and action in ("update-core", "update-addon"), user):
+            audit("homeassistant." + action, f"{row['name']}" + (f" : {label}" if label else "") + (", sauvegarde avant" if backup and action in ("update-core", "update-addon") else ""),
+                  username=user, commit=False)
             count += 1
     conn.commit()
     if count:
@@ -928,15 +954,25 @@ def _update_items(info, target):
     return [item[:3] for item in found if not target or item[3] == target]
 
 
-def update_host(host_id):
-    """Lance toutes les mises à jour disponibles d'une instance (sélection de Mon parc). Renvoie le nombre lancé, 0 si
-    rien à faire ou instance absente. À appeler dans un contexte de requête (l'auteur est pris sur g.user)."""
-    row = db().execute("SELECT * FROM homeassistant_hosts WHERE id=?", (host_id,)).fetchone()
+def update_host(host_id, backup=True, conn=None, user=None):
+    """Lance toutes les mises à jour disponibles d'une instance depuis Mon parc (ligne, sélection, « Tout mettre à
+    jour », planification) — avec une sauvegarde avant celle du cœur et des modules, comme la page le propose. Renvoie
+    le nombre lancé, 0 si rien à faire ou instance absente."""
+    conn = conn or db()
+    row = conn.execute("SELECT * FROM homeassistant_hosts WHERE id=?", (host_id,)).fetchone()
     if row is None:
         return 0
     info = _info(row)
     items = _update_items(info, "") if info else []
-    return _launch(row, items) if items else 0
+    return _launch(row, items, backup, conn, user) if items else 0
+
+
+def pending_updates(conn=None):
+    """Instances qui ont des mises à jour à installer et aucune tâche en cours : ce que « Tout mettre à jour » et la
+    planification du parc lancent."""
+    conn = conn or db()
+    return [row["id"] for row in conn.execute("SELECT * FROM homeassistant_hosts ORDER BY name COLLATE NOCASE, id").fetchall()
+            if (_info(row) or {}).get("updates") and not active(conn, row["id"])]
 
 
 def reboot_host(host_id):

@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% block title %}{{ _("Mises à jour") }} · {{ host }}{% endblock %}
-{% from "_nav_icons.html" import device_icon %}
+{% from "_nav_icons.html" import device_icon, nav_icon %}
+{# Une ligne du déroulé : un poste, ou Home Assistant / Proxmox (r.href : leur page). #}
 {% macro device(r) -%}
-<div class="upd-host">{{ device_icon(r) }}<a class="host" href="{{ url_for('fleet_device', dev_id=r.dev_id) }}">{{ r.hostname }}</a><span class="sub" title="{{ r.os_short }}">{{ r.os_short }}</span></div>
+<div class="upd-host">{% if r.href %}<span class="device-icon ha-fleet-icon" aria-hidden="true">{{ nav_icon(r.icon) }}</span><a class="host" href="{{ r.href }}">{{ r.hostname }}</a>{% else %}{{ device_icon(r) }}<a class="host" href="{{ url_for('fleet_device', dev_id=r.dev_id) }}">{{ r.hostname }}</a>{% endif %}<span class="sub" title="{{ r.os_short }}">{{ r.os_short }}</span></div>
 <div class="upd-action">{{ r.label }}</div>
 {%- endmacro %}
 {% macro when(r) -%}
@@ -32,7 +33,8 @@
       <div class="upd-row" role="listitem" data-cmd="{{ r.id }}">
         {{ device(r) }}
         <div class="upd-state">
-          {% if r.online %}<span class="upd-step" data-cmd-label>{{ r.progress.label if r.progress else (_("Démarrage…") if r.action in ('update', 'os-upgrade') else _("Redémarrage en cours")) }}</span>
+          {% if r.step %}<span class="upd-step">{{ r.step }}</span>
+          {% elif r.online %}<span class="upd-step" data-cmd-label>{{ r.progress.label if r.progress else (_("Démarrage…") if r.action in ('update', 'os-upgrade') else _("Redémarrage en cours")) }}</span>
           {% else %}<span class="st warn">{{ _("Sans réponse du poste") }}</span><span class="sub">{{ _("vu %(seen)s", seen=r.seen) }}</span>{% endif %}
           {% if r.action in ('update', 'os-upgrade') %}<span class="upd-bar"><svg class="chart progress-bar" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect class="prog-bg" x="0" y="0" width="100" height="6"/><rect class="prog-active" x="0" y="0" width="{{ r.progress.percent if r.progress else 0 }}" height="6" data-cmd-bar/></svg><span class="upd-pct" data-cmd-pct>{{ r.progress.percent ~ ' %' if r.progress }}</span></span>{% endif %}
         </div>
@@ -55,7 +57,7 @@
         {{ device(r) }}
         <div class="upd-state"><span class="st {{ r.tone }}">{{ r.status }}</span><span class="sub">{{ r.detail }}</span></div>
         {{ when(r) }}
-        <div class="upd-link">{% if r.state == 'queued' and can('fleet.update' if r.action in ('update', 'os-upgrade') else 'fleet.reboot') %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=r.dev_id, cmd_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return" value="{{ url_for('fleet_updates') }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}</div>
+        <div class="upd-link">{% if r.href %}<a class="linkbtn" href="{{ r.href }}">{{ _("Voir") }}</a>{% elif r.state == 'queued' and can('fleet.update' if r.action in ('update', 'os-upgrade') else 'fleet.reboot') %}<form method="post" action="{{ url_for('fleet_cancel_command', dev_id=r.dev_id, cmd_id=r.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="return" value="{{ url_for('fleet_updates') }}"><button class="linkbtn">{{ _("Annuler") }}</button></form>{% endif %}</div>
       </div>
       {% endfor %}
     </div>
@@ -72,7 +74,7 @@
         {{ device(r) }}
         <div class="upd-state"><span class="st {{ 'ok' if r.ok else 'err' }}">{{ _("Réussie") if r.ok else _("Échec") }}</span>{% if r.detail %}<span class="sub" title="{{ r.detail }}">{{ r.detail }}</span>{% endif %}</div>
         {{ when(r) }}
-        <div class="upd-link"><a class="linkbtn" href="{{ url_for('fleet_device', dev_id=r.dev_id, _anchor='historique') }}">{{ _("Détail") }}</a></div>
+        <div class="upd-link"><a class="linkbtn" href="{{ r.href or url_for('fleet_device', dev_id=r.dev_id, _anchor='historique') }}">{{ _("Détail") }}</a></div>
         {% if r.view and 'items' in r.view %}{{ pkg_progress(r.id, r.view) }}{% endif %}
       </div>
       {% endfor %}

@@ -72,6 +72,15 @@ distribués ; supprimer le groupe aussi.
   *Réveiller*, *Redémarrer* et *Mettre à jour* ; le menu *Plus* ajoute *Mettre à jour puis redémarrer si nécessaire* et
   *Activer le réveil à distance*. Un poste qui redémarre déjà, change de version du système, ou un appareil Android, est
   laissé de côté et compté. Droits : ceux de chaque action sur un poste.
+- **Home Assistant et Proxmox** (fonctionnalités facultatives, une fois reliés) : leurs lignes se comportent comme
+  celles des postes. *Tout mettre à jour* et la planification de tout le parc les mettent à jour aussi (Home
+  Assistant avec une sauvegarde avant) et le nombre du bouton les compte ; *Mettre à jour ce groupe* ne les touche
+  pas, ils ne sont membres d'aucun groupe. Ils se cochent, suivent les filtres (*État*, *Système › Home Assistant* ou
+  *Proxmox VE*, *Situation*), la recherche (Ctrl K compris) et l'actualisation en direct, comptent dans les nombres
+  de la page et dans l'anneau de la vue d'ensemble, et leurs tâches apparaissent dans *Mises à jour*. Un serveur
+  Proxmox redémarre aussi avec une sélection, *Mettre à jour puis redémarrer si nécessaire* ou le bouton de sa ligne
+  quand un redémarrage est requis — mais seulement après la fin des mises à jour en cours sur les postes du parc (une
+  heure au plus), puisque toutes ses machines s'arrêtent avec lui. Droits : ceux de Home Assistant et de Proxmox.
 - **Nom personnalisé** : la fiche d'un poste (menu *Plus → Nom personnalisé…*) permet de lui donner un nom plus
   parlant, affiché à la place de son nom d'hôte dans Mon parc et dans la recherche ; le nom d'hôte reste visible.
   Droit *Nommer les appareils* (Administrateur et Opérateur).

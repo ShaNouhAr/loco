@@ -3,13 +3,16 @@ vérifié (signature, émetteur, audience, expiration) et identités liées comm
 
 Aucun jeton n'est conservé : le jeton d'identité sert une fois à ouvrir la session loco, puis est oublié."""
 import base64
+import binascii
 import datetime
 import hashlib
 import hmac
 import http.client
+import ipaddress
 import json
 import re
 import secrets
+import socket
 import ssl
 import threading
 import time
@@ -150,6 +153,85 @@ def _json(cfg, url, data=None, headers=None, method=None):
     if not isinstance(result, dict):
         raise OIDCError(_("Réponse du fournisseur illisible (JSON attendu)."))
     return result
+
+
+# --------------------------------------------------------------------------- photo de profil (claim « picture »)
+
+PICTURE_MAX = 2 * 1024 * 1024            # comme une photo envoyée dans Mon compte
+PICTURE_DATA_RE = re.compile(r"data:image/[a-z0-9.+-]{1,40};base64,([A-Za-z0-9+/=\s]+)\Z", re.I)
+
+
+class _ToAddress(http.client.HTTPSConnection):
+    """HTTPS vers une adresse déjà vérifiée (publique), le nom d'origine servant au certificat : la résolution ne peut
+    pas changer entre la vérification et la connexion."""
+    def __init__(self, host, address, **kwargs):
+        super().__init__(host, **kwargs)
+        self.address = address
+
+    def connect(self):
+        sock = socket.create_connection((self.address, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+def picture(cfg, meta, value):
+    """Image de la photo de profil donnée par le fournisseur : en ligne (data:), ou à une adresse HTTPS — chez le
+    fournisseur lui-même, avec la même confiance que la connexion (autorité ou certificat épinglé), ou sur un service
+    public (Gravatar) : jamais une adresse interne, ni une redirection. Octets reçus (2 Mo au plus ; à l'appelant de
+    juger si c'est une photo), ou None si rien n'a pu être lu."""
+    if not isinstance(value, str) or not value or len(value) > 3 * PICTURE_MAX:
+        return None
+    inline = PICTURE_DATA_RE.match(value.strip())
+    if inline:
+        try:
+            blob = base64.b64decode("".join(inline.group(1).split()), validate=True)
+        except (ValueError, binascii.Error):
+            return None
+        return blob if len(blob) <= PICTURE_MAX else None
+    try:
+        url = https_url(value)
+    except OIDCError:
+        return None
+    parts = urllib.parse.urlsplit(url)
+    headers = {"Accept": "image/png, image/jpeg, image/gif, image/webp", "User-Agent": config.USER_AGENT}
+    try:
+        if parts.hostname == urllib.parse.urlsplit(str(meta.get("issuer", ""))).hostname:
+            context, pin = _tls(cfg)
+            opener = urllib.request.build_opener(_NoRedirect(), _PinnedHTTPS(context, pin) if pin
+                                                 else urllib.request.HTTPSHandler(context=context))
+            with opener.open(urllib.request.Request(url, headers=headers), timeout=6) as response:
+                if response.status != 200:
+                    return None
+                blob = response.read(PICTURE_MAX + 1)
+        else:
+            port = parts.port or 443
+            found = {info[4][0] for info in socket.getaddrinfo(parts.hostname, port, type=socket.SOCK_STREAM)}
+            if not found or not all(ipaddress.ip_address(a.split("%")[0]).is_global for a in found):
+                return None
+            address = sorted(found, key=lambda a: (":" in a, a))[0]          # IPv4 d'abord
+            conn = _ToAddress(parts.hostname, address, port=port, timeout=6, context=ssl.create_default_context())
+            try:
+                conn.request("GET", (parts.path or "/") + (f"?{parts.query}" if parts.query else ""), headers=headers)
+                response = conn.getresponse()
+                if response.status != 200:
+                    return None
+                blob = response.read(PICTURE_MAX + 1)
+            finally:
+                conn.close()
+    except (OIDCError, OSError, http.client.HTTPException, ValueError):
+        return None
+    return blob if len(blob) <= PICTURE_MAX else None
+
+
+def _take_picture(user, directory, cfg, meta, claims):
+    """Photo de profil du fournisseur reprise sur le compte, au mieux : jamais un obstacle à la connexion."""
+    from . import appearance
+    if claims.get("_picture_unknown"):                      # profil injoignable : on ne sait pas, rien ne change
+        return
+    try:
+        if appearance.take_sso_picture(db(), user, directory, claims.get("picture"), lambda value: picture(cfg, meta, value)):
+            db().commit()
+    except Exception:  # noqa: BLE001 - la connexion passe avant la photo
+        db().rollback()
 
 
 # --------------------------------------------------------------------------- découverte et clés publiques
@@ -376,12 +458,23 @@ def identity(cfg, meta, code, flow):
     claims = verify_id_token(tokens.get("id_token"), cfg, meta, flow["n"])
     access = tokens.get("access_token")
     wanted = cfg.get("username_claim") or "preferred_username"
-    if (not claims.get(wanted) or not claims.get("email")) and meta.get("userinfo_endpoint") \
-            and isinstance(access, str) and access and len(access) < 8192 and not re.search(r"\s", access):
+    usable = meta.get("userinfo_endpoint") and isinstance(access, str) and access and len(access) < 8192 \
+        and not re.search(r"\s", access)
+    if (not claims.get(wanted) or not claims.get("email")) and usable:
         info = _json(cfg, meta["userinfo_endpoint"], headers={"Authorization": "Bearer " + access})
         if info.get("sub") != claims["sub"]:
             raise OIDCError(_("Profil du fournisseur incohérent avec le jeton d’identité."))
         claims = {**info, **{k: v for k, v in claims.items() if v not in (None, "")}}
+    elif "picture" not in claims and usable:
+        # Photo de profil absente du jeton d'identité : demandée au profil, au mieux (jamais un obstacle à la connexion).
+        try:
+            info = _json(cfg, meta["userinfo_endpoint"], headers={"Authorization": "Bearer " + access})
+        except OIDCError:
+            info = None
+        if info is None:
+            claims = dict(claims, _picture_unknown=True)
+        elif isinstance(info, dict) and info.get("sub") == claims["sub"] and isinstance(info.get("picture"), str):
+            claims = dict(claims, picture=info["picture"])
     return claims
 
 
@@ -483,7 +576,7 @@ def _claim_groups(claims):
     return json.dumps([str(g)[:200] for g in found[:100]] if isinstance(found, list) else [], ensure_ascii=False)
 
 
-def _finish_link(directory, claims, flow):
+def _finish_link(directory, claims, flow, cfg=None, meta=None):
     """Lie l'identité reçue au compte local qui a demandé la liaison. Rien n'est rapproché par nom ou courriel : seule cette demande
     explicite, faite depuis un compte connecté, crée le lien. Une demande d'accès encore en attente pour cette identité est retirée."""
     from . import permissions
@@ -510,6 +603,8 @@ def _finish_link(directory, claims, flow):
                   str(claims.get("email") or "")[:254], _claim_groups(claims)))
     audit("sso.liaison", f"{user['username']} : {label}", username=user["username"], commit=False)
     conn.commit()
+    if cfg is not None and meta is not None:
+        _take_picture(user, directory, cfg, meta, claims)
     return _status(_("Votre compte %(username)s est maintenant lié à %(label)s. Vous pouvez aussi vous connecter avec ce bouton ; votre mot de passe reste valable.",
                      username=user["username"], label=label), kind="ok", heading=_("Liaison du compte"), to_account=True)
 
@@ -605,10 +700,11 @@ def sso_callback(directory_id):
             "name": str(claims.get("name") or ""), "email": str(claims.get("email") or ""),
             "groups": ", ".join(str(x) for x in groups[:20])})
     if linking:
-        return _finish_link(directory, claims, flow)
+        return _finish_link(directory, claims, flow, cfg, meta)
     user, notice = _link(directory, cfg, claims)
     if user is None:
         return _status(notice, 202, kind="ok")
+    _take_picture(user, directory, cfg, meta, claims)                # photo du fournisseur, si la personne n'a pas la sienne
     if user["auth_source"] == "local" and user["mfa_enabled"]:
         # Compte local lié : sa double authentification reste exigée, le SSO ne la contourne pas.
         session.clear()

@@ -225,6 +225,203 @@ class TestAuthentikSignIn(OidcTest):
         self.assertEqual(r.status_code, 400)
 
 
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+
+
+class TestProfilePicture(OidcTest):
+    """La photo de profil du fournisseur (claim « picture ») est reprise sur le compte à la connexion, sauf si la personne
+    a choisi la sienne dans loco ; une adresse interne n'est jamais demandée."""
+
+    def setUp(self):
+        super().setUp()
+        self.add()
+        self.addCleanup(self.photos_away)
+
+    @staticmethod
+    def photos_away():
+        from loco import appearance
+        for f in __import__("glob").glob(os.path.join(appearance.BG_DIR, "avatar-u*")):
+            os.unlink(f)
+
+    def signed_in(self, picture=None):
+        """Connexion SSO dans un nouveau navigateur (la première crée la demande d'accès, approuvée aussitôt) ;
+        renvoie le compte."""
+        def with_picture(idp, claims):
+            if picture is not None:
+                claims["picture"] = picture
+            return idp.sign(claims)
+        self.idp.mutate = with_picture
+        browser = fixture.Browser()
+        if self.user("jean.dupont") is None:
+            self.callback(browser.c, self.start(browser.c))
+            self.admin.post(f"/accounts/{self.user('jean.dupont')['id']}/approve", {"role": "viewer"}, page="/accounts")
+        self.assertEqual(self.callback(browser.c, self.start(browser.c)).status_code, 200)
+        self.browser = browser
+        return self.user("jean.dupont")
+
+    def appearance(self):
+        return json.loads(self.user("jean.dupont")["appearance"] or "{}")
+
+    def test_an_inline_picture_becomes_the_profile_photo(self):
+        user = self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        self.assertEqual(self.appearance()["avatar"], "png")
+        self.assertEqual(self.appearance()["avatar_sso"]["n"], "Authentik")
+        img = self.browser.c.get(f"/account/avatar/{user['id']}.img")
+        self.assertEqual((img.status_code, img.data), (200, PNG))
+        page = html.unescape(self.browser.c.get("/account").get_data(as_text=True))
+        self.assertIn("Photo reprise de votre compte Authentik à chaque connexion", page)
+
+    def test_a_picture_at_the_provider_is_fetched_with_its_trust(self):
+        fetched = []
+        def picture(cfg, meta, value):
+            fetched.append(value)
+            return JPEG
+        with mock.patch.object(oidc, "picture", picture):
+            self.signed_in("https://ak.test/media/avatars/jean.jpg")
+            self.assertEqual(self.appearance()["avatar"], "jpg")
+            self.signed_in("https://ak.test/media/avatars/jean.jpg")      # même photo le jour même : pas relue
+            self.assertEqual(fetched, ["https://ak.test/media/avatars/jean.jpg"])
+            self.signed_in("https://ak.test/media/avatars/jean-2.jpg")    # changée chez le fournisseur : relue
+            self.assertEqual(len(fetched), 2)
+
+    def test_an_svg_or_unreadable_picture_is_never_taken(self):
+        self.signed_in("data:image/svg+xml;base64," + base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'/>").decode())
+        self.assertNotIn("avatar", self.appearance())
+        self.signed_in("data:image/png;base64," + base64.b64encode(b"<svg/>").decode())      # se dit PNG, ne l'est pas
+        self.assertNotIn("avatar", self.appearance())
+
+    def test_my_own_photo_wins_until_i_take_the_providers_back(self):
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        browser = self.browser
+        tok = browser.token("/account")
+        browser.c.post("/account/avatar", data={"csrf": tok, "avatar": (__import__("io").BytesIO(JPEG), "moi.jpg")},
+                       content_type="multipart/form-data")
+        self.assertEqual((self.appearance()["avatar"], self.appearance().get("avatar_own")), ("jpg", True))
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        self.assertEqual(self.appearance()["avatar"], "jpg")                              # la sienne reste
+        browser = self.browser
+        page = html.unescape(browser.c.get("/account").get_data(as_text=True))
+        self.assertIn("Reprendre la photo de mon compte Authentik", page)
+        browser.c.post("/account/avatar/sso", data={"csrf": browser.token("/account")})
+        self.assertNotIn("avatar", self.appearance())
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        self.assertEqual(self.appearance()["avatar"], "png")                              # reprise du fournisseur
+
+    def test_a_picture_removed_at_the_provider_goes_away(self):
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        self.assertEqual(self.appearance()["avatar"], "png")
+        self.idp.userinfo = {"sub": "a1b2c3d4e5f6"}
+        self.signed_in(None)
+        self.assertNotIn("avatar", self.appearance())
+
+    def test_back_to_initials_at_the_provider_drops_the_photo_but_an_outage_keeps_it(self):
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        with mock.patch.object(oidc, "picture", return_value=None):                       # fournisseur injoignable
+            self.signed_in("https://ak.test/media/avatars/autre.jpg")
+        self.assertEqual(self.appearance()["avatar"], "png")
+        svg = base64.b64encode(b"<svg xmlns='http://www.w3.org/2000/svg'><text>JE</text></svg>").decode()
+        self.signed_in("data:image/svg+xml;base64," + svg)                               # initiales d'Authentik 2026.8
+        self.assertNotIn("avatar", self.appearance())
+
+    def test_a_picture_absent_from_the_token_is_asked_to_the_profile(self):
+        self.idp.userinfo = {"sub": "a1b2c3d4e5f6", "picture": "data:image/png;base64," + base64.b64encode(PNG).decode()}
+        self.signed_in(None)
+        self.assertEqual(self.appearance()["avatar"], "png")
+
+    def test_an_unreachable_profile_changes_nothing(self):
+        self.signed_in("data:image/png;base64," + base64.b64encode(PNG).decode())
+        real = self.idp.__call__
+
+        def no_profile(cfg, url, data=None, headers=None):
+            if url.endswith("/userinfo/"):
+                raise oidc.OIDCError("injoignable")
+            return real(cfg, url, data, headers)
+        with mock.patch.object(oidc, "_json", no_profile):
+            self.signed_in(None)                                                         # pas de photo dans le jeton
+        self.assertEqual(self.appearance()["avatar"], "png")                             # on ne sait pas : gardée
+
+    def test_a_broken_picture_never_blocks_the_sign_in(self):
+        with mock.patch.object(oidc, "picture", side_effect=RuntimeError("boom")):
+            self.signed_in("https://ak.test/media/avatars/jean.jpg")                       # connexion réussie quand même
+        self.assertNotIn("avatar", self.appearance())
+
+
+class TestPictureFetch(unittest.TestCase):
+    """Où loco va chercher une photo : chez le fournisseur avec sa confiance, ou sur une adresse publique seulement."""
+    META = {"issuer": ISSUER}
+
+    def test_internal_addresses_are_refused(self):
+        for address in ("192.168.1.10", "10.0.0.5", "127.0.0.1", "169.254.169.254", "::1", "fd00::5"):
+            family = 10 if ":" in address else 2
+            with mock.patch.object(oidc.socket, "getaddrinfo", return_value=[(family, 1, 6, "", (address, 443))]), \
+                    mock.patch.object(oidc, "_ToAddress", side_effect=AssertionError("connexion interdite")):
+                self.assertIsNone(oidc.picture({}, self.META, "https://avatars.example/jean.png"), address)
+
+    def test_a_public_address_is_used_as_resolved(self):
+        seen = {}
+
+        class Fake:
+            def __init__(self, host, address, **kwargs):
+                seen.update(host=host, address=address, port=kwargs.get("port"))
+
+            def request(self, method, path, headers=None):
+                seen.update(method=method, path=path)
+
+            def getresponse(self):
+                return mock.Mock(status=200, read=lambda n: PNG)
+
+            def close(self):
+                pass
+        with mock.patch.object(oidc.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("192.0.80.239", 443))]), \
+                mock.patch.object(oidc.ipaddress, "ip_address", lambda a: mock.Mock(is_global=True)), \
+                mock.patch.object(oidc, "_ToAddress", Fake):
+            blob = oidc.picture({}, self.META, "https://secure.gravatar.com/avatar/abc?size=158&default=404")
+        self.assertEqual(blob, PNG)
+        self.assertEqual(seen, {"host": "secure.gravatar.com", "address": "192.0.80.239", "port": 443, "method": "GET",
+                                "path": "/avatar/abc?size=158&default=404"})
+
+    def test_not_found_too_big_or_not_https(self):
+        class Fake:
+            status, body = 404, b""
+
+            def __init__(self, host, address, **kwargs):
+                pass
+
+            def request(self, *args, **kwargs):
+                pass
+
+            def getresponse(self):
+                return mock.Mock(status=Fake.status, read=lambda n: Fake.body)
+
+            def close(self):
+                pass
+        with mock.patch.object(oidc.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("192.0.80.239", 443))]), \
+                mock.patch.object(oidc.ipaddress, "ip_address", lambda a: mock.Mock(is_global=True)), \
+                mock.patch.object(oidc, "_ToAddress", Fake):
+            self.assertIsNone(oidc.picture({}, self.META, "https://secure.gravatar.com/avatar/abc"))      # 404
+            Fake.status, Fake.body = 200, b"x" * (oidc.PICTURE_MAX + 1)
+            self.assertIsNone(oidc.picture({}, self.META, "https://secure.gravatar.com/avatar/abc"))
+        self.assertIsNone(oidc.picture({}, self.META, "http://ak.test/media/a.png"))
+        self.assertIsNone(oidc.picture({}, self.META, "file:///etc/passwd"))
+
+    def test_the_providers_own_host_keeps_its_trust_and_refuses_redirects(self):
+        built = []
+
+        class Opener:
+            def open(self, req, timeout):
+                built.append(req.full_url)
+                return mock.MagicMock(__enter__=lambda s: mock.Mock(status=200, read=lambda n: PNG), __exit__=lambda *a: False)
+
+        def build(*handlers):
+            built.append([type(h).__name__ for h in handlers])
+            return Opener()
+        with mock.patch.object(oidc.urllib.request, "build_opener", build), \
+                mock.patch.object(oidc.socket, "getaddrinfo", side_effect=AssertionError("pas de résolution à part")):
+            self.assertEqual(oidc.picture({}, self.META, "https://ak.test/media/avatars/jean.png"), PNG)
+        self.assertEqual(built, [["_NoRedirect", "HTTPSHandler"], "https://ak.test/media/avatars/jean.png"])
+
+
 class TestRefusals(OidcTest):
     def refused(self, mutate, message=None):
         self.idp.mutate = mutate

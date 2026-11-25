@@ -492,6 +492,11 @@ class TestHacs(HomeAssistantTest):
 class TestFleetSelection(HomeAssistantTest):
     """Les instances Home Assistant se cochent dans Mon parc comme les autres postes : mise à jour et redémarrage groupés."""
 
+    def setUp(self):
+        super().setUp()
+        with transaction() as conn:
+            conn.execute("DELETE FROM devices")           # parc vide : seuls les comptes de l'instance comptent
+
     def test_instances_are_selectable_and_acted_on(self):
         row = self.link()                                             # instance avec des mises à jour disponibles
         parc = self.admin.c.get("/fleet").get_data(as_text=True)
@@ -507,14 +512,73 @@ class TestFleetSelection(HomeAssistantTest):
         self.assertEqual(reb.get_json()["count"], 1)                 # redémarrage du système lancé
         self.idle()
 
-    def test_without_the_right_to_manage_nothing_runs(self):
+    def test_the_rights_are_those_of_its_own_buttons(self):
         row = self.link()
-        viewer = self.member("viewer", ["homeassistant.view", "fleet.view", "fleet.update"])
+        viewer = self.member("viewer", ["homeassistant.view", "fleet.view", "fleet.update", "fleet.reboot"])
         got = viewer.c.post("/fleet/update-selected",
                             data={"csrf": viewer.token("/fleet"), "ids": "ha-%d" % row["id"]},
                             content_type="multipart/form-data")
-        self.assertEqual(got.get_json().get("count"), 0)             # peut voir, pas gérer : rien n'est lancé
+        self.assertEqual(got.get_json().get("count"), 0)             # peut voir, pas mettre à jour : rien n'est lancé
         self.idle()
+        updater = self.member("updater", ["homeassistant.view", "homeassistant.update", "fleet.view", "fleet.update", "fleet.reboot"])
+        self.assertIn('data-id="ha-%d"' % row["id"], updater.c.get("/fleet").get_data(as_text=True))
+        tok = updater.token("/fleet")
+        got = updater.c.post("/fleet/update-selected", data={"csrf": tok, "ids": "ha-%d" % row["id"]}, content_type="multipart/form-data")
+        self.assertEqual(got.get_json()["count"], 1)                 # le droit de mettre à jour suffit (plus « gérer »)
+        self.idle()
+        got = updater.c.post("/fleet/reboot-selected", data={"csrf": tok, "ids": "ha-%d" % row["id"]}, content_type="multipart/form-data")
+        self.assertEqual(got.get_json()["count"], 0)                 # redémarrer : son propre droit
+        self.idle()
+        self.assertFalse(any(j["action"] == "reboot-host" for j in self.jobs()))
+
+    def test_update_all_takes_it_with_a_backup_first(self):
+        row = self.link()
+        html = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Tout mettre à jour (1)", html)
+        self.assertEqual(self.admin.c.post("/fleet/update-all", data={"csrf": self.admin.token("/fleet")}).status_code, 302)
+        self.idle()
+        jobs = self.jobs()
+        self.assertTrue(jobs and all(j["host_id"] == row["id"] for j in jobs))
+        self.assertEqual({j["action"]: j["backup"] for j in jobs}.get("update-core"), 1)    # sauvegarde avant, comme sa page
+        feed = self.admin.c.get("/fleet/updates").get_data(as_text=True)
+        self.assertIn("Mise à jour de Home Assistant", feed)
+        self.assertIn('href="/homeassistant/%d"' % row["id"], feed)
+
+    def test_the_fleet_schedule_updates_it_too(self):
+        self.link()
+        with transaction() as conn:
+            sched = conn.execute("INSERT INTO schedules (action, targets, recurrence, at_time, start_date, next_run, created_by, created_at, updated_at) "
+                                 "VALUES ('update', ?, 'once', '02:00', '2026-01-01', '2026-01-01 02:00:00', 'admin', '2026-01-01 00:00:00', '2026-01-01 00:00:00')",
+                                 (json.dumps({"all": True}),)).lastrowid
+        self.addCleanup(self.drop_schedules)
+        from loco import schedules
+        from loco.db import db
+        with fixture.loco.app.test_request_context():
+            schedules.materialize(db())
+            db().commit()
+        self.idle()
+        jobs = self.jobs()
+        self.assertTrue(jobs and all(j["created_by"] == "admin" for j in jobs))
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT last_result FROM schedules WHERE id=?", (sched,)).fetchone()[0], "1 poste")
+
+    @staticmethod
+    def drop_schedules():
+        with transaction() as conn:
+            conn.execute("DELETE FROM schedules WHERE created_at='2026-01-01 00:00:00' AND action='update'")
+
+    def test_its_row_follows_the_filters_and_shows_its_resources(self):
+        row = self.link()
+        seen = lambda query: "/homeassistant/%d\"" % row["id"] in self.admin.c.get("/fleet" + query).get_data(as_text=True)    # noqa: E731
+        self.assertTrue(seen("?os=homeassistant"))
+        self.assertFalse(seen("?os=linux"))
+        self.assertTrue(seen("?q=maison"))
+        self.assertFalse(seen("?q=introuvable"))
+        self.assertFalse(seen("?voir=redemarrage"))
+        html = self.admin.c.get("/fleet").get_data(as_text=True)
+        self.assertIn("Home Assistant<span class=\"menu-count\">1</span>", html)
+        ha_row = html.split('<tr class="ha-row">', 1)[1].split("</tr>", 1)[0]
+        self.assertIn("Disque", ha_row)                              # ressources de l'hôte, plus un simple tiret
 
     def test_a_row_offers_a_direct_update_button(self):
         row = self.link()                                             # instance avec des mises à jour disponibles

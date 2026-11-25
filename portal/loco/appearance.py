@@ -8,9 +8,11 @@ cadre de l'instance dans settings (appearance_policy). Les fonds téléversés s
 applique la transparence et la couleur de l'entreprise avant l'affichage (sans flash).
 """
 import glob
+import hashlib
 import json
 import os
 import re
+import time
 
 from flask import abort, flash, g, has_request_context, jsonify, redirect, render_template, request, send_file, url_for
 
@@ -157,6 +159,17 @@ def _valid_bg(bg):
             or (bg.startswith("w:") and bg[2:] in WALLPAPERS))
 
 
+# Gardé dans le même JSON que l'apparence, sans en faire partie : photo de profil (et d'où elle vient), encadrés masqués.
+KEPT_KEYS = ("avatar", "avatar_sso", "avatar_own", "dismissed")
+
+
+def _with_kept(appear, stored):
+    """Apparence à enregistrer, avec ce qui n'en fait pas partie repris tel quel (un changement de thème ne retire ni la
+    photo de profil ni les encadrés masqués)."""
+    raw = _loads(stored)
+    return dict(appear, **{k: raw[k] for k in KEPT_KEYS if k in raw})
+
+
 def parse(raw):
     """Apparence sûre à partir du JSON stocké (ou d'un dict de formulaire) ; valeurs inconnues ignorées. Le choix du
     logo (administrateurs, voir logo_for) n'est gardé que s'il en est un."""
@@ -240,7 +253,7 @@ def account_appearance():
             appear["logo"] = kept
     if appear["bg"] == "u" and not _bg_file(g.user["id"]):
         appear["bg"] = ""                                 # pas d'image téléversée : revenir à aucun fond
-    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(_with_kept(appear, g.user["appearance"])), g.user["id"]))
     db().commit()
     return jsonify(appear)
 
@@ -266,7 +279,7 @@ def account_appearance_background():
     os.chmod(path, 0o640)
     appear = parse(g.user["appearance"])
     appear["bg"] = "u"
-    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(_with_kept(appear, g.user["appearance"])), g.user["id"]))
     db().commit()
     audit("compte.fond", f"{len(blob)} o")
     return jsonify(appear)
@@ -280,7 +293,7 @@ def account_appearance_background_delete():
     appear = parse(g.user["appearance"])
     if appear["bg"] == "u":
         appear["bg"] = ""
-    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(_with_kept(appear, g.user["appearance"])), g.user["id"]))
     db().commit()
     return jsonify(appear)
 
@@ -399,7 +412,7 @@ def _save_logo_choice(choice):
     appear.pop("logo", None)
     if choice:
         appear["logo"] = choice
-    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(_with_kept(appear, g.user["appearance"])), g.user["id"]))
     db().commit()
 
 
@@ -505,6 +518,8 @@ def account_avatar():
     os.chmod(path, 0o640)
     appear = _loads(g.user["appearance"])
     appear["avatar"] = ext
+    appear["avatar_own"] = True                           # choisie ici : le SSO ne la remplace plus
+    appear.pop("avatar_sso", None)
     db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
     db().commit()
     audit("compte.photo", f"{ext}, {len(blob)} o")
@@ -519,9 +534,84 @@ def account_avatar_delete():
         os.unlink(old)
     appear = _loads(g.user["appearance"])
     appear.pop("avatar", None)
+    appear.pop("avatar_sso", None)
+    appear["avatar_own"] = True                           # retirée ici : le SSO ne la remet pas
     db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
     db().commit()
     flash(_("Photo de profil retirée."), "ok")
+    return redirect(url_for("account") + "#apparence")
+
+
+SSO_REFRESH = 24 * 3600                    # photo du fournisseur SSO relue au plus une fois par jour (ou si elle change)
+
+
+def avatar_source(user):
+    """D'où vient la photo d'un compte : {"sso": libellé du fournisseur} si elle est reprise du SSO, {"own": True} si la
+    personne l'a choisie (ou retirée) ici, {} sinon."""
+    raw = _loads(user["appearance"]) if user else {}
+    if raw.get("avatar_sso") and raw.get("avatar"):
+        return {"sso": str(raw["avatar_sso"].get("n") or "")}
+    return {"own": True} if raw.get("avatar_own") else {}
+
+
+def take_sso_picture(conn, user, directory, value, fetch):
+    """Photo de profil reprise du fournisseur SSO à la connexion (value : son claim « picture », adresse ou image en
+    ligne), sauf si la personne a choisi la sienne ici. Relue si elle a changé ou une fois par jour ; retirée si le
+    fournisseur n'en donne plus. fetch(value) rend les octets de l'image ou None. Vrai si la photo a changé."""
+    appear = _loads(user["appearance"])
+    if appear.get("avatar_own"):
+        return False
+    known = appear.get("avatar_sso") if isinstance(appear.get("avatar_sso"), dict) else {}
+    value = value if isinstance(value, str) else ""
+
+    def drop():                                           # plus de photo chez le fournisseur : celle reprise s'en va
+        if not known:
+            return False
+        for old in glob.glob(os.path.join(BG_DIR, f"avatar-u{int(user['id'])}.*")):
+            os.unlink(old)
+        appear.pop("avatar", None)
+        appear.pop("avatar_sso", None)
+        conn.execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), user["id"]))
+        return True
+    if not value:
+        return drop()
+    digest = hashlib.sha256(value.encode()).hexdigest()[:16]
+    if (known.get("h") == digest and time.time() - float(known.get("t") or 0) < SSO_REFRESH
+            and appear.get("avatar") and _avatar_file(user["id"])):
+        return False
+    blob = fetch(value)
+    if blob is None:                                      # injoignable : la photo du moment est gardée
+        return False
+    ext = _detect(blob) if len(blob) <= MAX_AVATAR else None      # raster seulement : jamais de SVG
+    if not ext:                                           # avatar à initiales (SVG) ou autre chose qu'une photo
+        return drop()
+    os.makedirs(BG_DIR, exist_ok=True)
+    for old in glob.glob(os.path.join(BG_DIR, f"avatar-u{int(user['id'])}.*")):
+        os.unlink(old)
+    path = os.path.join(BG_DIR, f"avatar-u{int(user['id'])}.{ext}")
+    with open(path, "wb") as f:
+        f.write(blob)
+    os.chmod(path, 0o640)
+    appear["avatar"] = ext
+    appear["avatar_sso"] = {"d": directory["id"], "n": directory["label"], "h": digest, "t": int(time.time())}
+    conn.execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), user["id"]))
+    audit("compte.photo", f"reprise de {directory['label']}, {ext}, {len(blob)} o", username=user["username"], commit=False)
+    return True
+
+
+@app.route("/account/avatar/sso", methods=["POST"])
+@login_required
+def account_avatar_sso():
+    """Revenir à la photo du fournisseur SSO : la photo choisie ici est retirée, celle du fournisseur reprise à la
+    prochaine connexion par lui."""
+    appear = _loads(g.user["appearance"])
+    for old in glob.glob(os.path.join(BG_DIR, f"avatar-u{g.user['id']}.*")):
+        os.unlink(old)
+    for key in ("avatar", "avatar_own", "avatar_sso"):
+        appear.pop(key, None)
+    db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(appear), g.user["id"]))
+    db().commit()
+    flash(_("Votre photo sera reprise de votre fournisseur d’identité à votre prochaine connexion par lui."), "ok")
     return redirect(url_for("account") + "#apparence")
 
 

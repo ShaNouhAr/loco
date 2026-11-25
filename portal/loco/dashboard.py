@@ -107,6 +107,12 @@ def _fleet_summary():
         counts[status_color(dev, apps)] += 1
         reboot += bool(dev["reboot_required"])
         offline += not is_online(dev)
+    # Home Assistant et Proxmox comptent avec le parc, comme dans Mon parc (chacun selon son droit de consultation).
+    from .fleet import _ha_fleet_rows, _px_fleet_rows
+    for x in _ha_fleet_rows() + _px_fleet_rows():
+        counts[x["color"] if x["color"] in counts else "grey"] += 1
+        reboot += bool(x.get("reboot_required"))
+        offline += not x["online"]
     ring = [{"key": key, "label": label, "count": counts[key]}
             for key, label in (("green", _("à jour")), ("orange", _("mises à jour en attente")), ("red", _("à traiter")),
                                ("grey", _("état inconnu")))]
