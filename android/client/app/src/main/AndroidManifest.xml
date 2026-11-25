@@ -82,6 +82,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".KeepAwakeReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".StartReceiver"
             android:exported="true">
             <intent-filter>

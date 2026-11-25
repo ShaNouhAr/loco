@@ -77,6 +77,12 @@
     <string name="battery_hint">Autorisez loco à rester actif en arrière-plan : sinon l\'appareil peut le mettre en veille et le contact se perd quand l\'écran est éteint.</string>
     <string name="battery_on">Autoriser l\'arrière-plan</string>
     <string name="battery_state_off">À autoriser</string>
+    <string name="awake_title">Toujours joignable</string>
+    <string name="awake_state_charging">Sur secteur ; toutes les 5 min sur batterie</string>
+    <string name="awake_state_always">En permanence, même sur batterie</string>
+    <string name="awake_hint">Écran éteint et appareil verrouillé, loco garde le contact : sur secteur, l\'appareil ne s\'endort pas tout à fait ; sur batterie, Android le réveille toutes les cinq minutes. « En permanence » le garde éveillé aussi sur batterie, au prix d\'une consommation plus forte.</string>
+    <string name="awake_always">En permanence</string>
+    <string name="awake_charging">Sur secteur seulement</string>
 
     <!-- Sessions distantes -->
     <string name="remote_no_screen">Écran distant non autorisé sur l\'appareil : dans l\'appli loco, activez une fois le contrôle à distance (accessibilité), ou touchez « Activer l\'écran distant ».</string>

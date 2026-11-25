@@ -61,6 +61,12 @@
     <string name="battery_hint">Allow loco to keep running in the background: otherwise the device may put it to sleep and the connection is lost when the screen is off.</string>
     <string name="battery_on">Allow background</string>
     <string name="battery_state_off">To allow</string>
+    <string name="awake_title">Always reachable</string>
+    <string name="awake_state_charging">On mains power; every 5 min on battery</string>
+    <string name="awake_state_always">All the time, even on battery</string>
+    <string name="awake_hint">Screen off and device locked, loco stays in touch: on mains power the device never fully sleeps; on battery, Android wakes it every five minutes. \u00ab All the time \u00bb keeps it awake on battery too, at the cost of higher battery use.</string>
+    <string name="awake_always">All the time</string>
+    <string name="awake_charging">On mains power only</string>
 
     <!-- Installs -->
     <string name="install_title">Installs</string>

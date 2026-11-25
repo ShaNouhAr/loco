@@ -268,6 +268,16 @@ class TestBattery(AndroidTest):
         page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
         self.assertNotIn("battery-tag", page)
 
+    def test_an_android_sleep_that_is_not_lifted_is_flagged(self):
+        """Application 2.200 : elle dit si Android peut la mettre en veille (optimisation de la batterie active) ; la fiche
+        le signale, et seulement dans ce cas."""
+        a, dev_id = self.enrolled()
+        a.checkin(self.system(power={"unrestricted": False, "awake": "charging", "held": True}))
+        page = self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True)
+        self.assertIn("Veille non levée", page)
+        a.checkin(self.system(power={"unrestricted": True, "awake": "always", "held": True}))
+        self.assertNotIn("Veille non levée", self.admin.c.get(f"/fleet/{dev_id}").get_data(as_text=True))
+
     def test_an_out_of_range_percent_is_clamped(self):
         a, dev_id = self.enrolled()
         a.checkin(self.system(battery={"percent": 250, "charging": False}))

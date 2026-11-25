@@ -831,7 +831,13 @@ def _store_software(dev, inv):
                 "can_install": bool(system.get("can_install")),
                 **({"battery": {"percent": max(0, min(100, _int(system["battery"].get("percent")))),
                                 "charging": bool(system["battery"].get("charging"))}}
-                   if isinstance(system.get("battery"), dict) and isinstance(system["battery"].get("percent"), (int, float)) else {})}
+                   if isinstance(system.get("battery"), dict) and isinstance(system["battery"].get("percent"), (int, float)) else {}),
+                # Application 2.200 et plus : veille d'Android (optimisation de la batterie levée ou non, mode « toujours
+                # joignable », processeur tenu éveillé en ce moment).
+                **({"power": {"unrestricted": bool(system["power"].get("unrestricted")),
+                              "awake": "always" if system["power"].get("awake") == "always" else "charging",
+                              "held": bool(system["power"].get("held"))}}
+                   if isinstance(system.get("power"), dict) else {})}
                if system.get("sdk") else {}),
         },
     }
@@ -1143,6 +1149,9 @@ def agent_checkin():
     if dev["os_family"] == "android" and isinstance(data.get("adb"), dict):    # application 2.139.0 et plus
         from . import adb
         adb.record_report(conn, dev, data["adb"])
+        power = ((data.get("inventory") or {}).get("system") or {}).get("power") if isinstance(data.get("inventory"), dict) else None
+        if isinstance(power, dict) and power.get("unrestricted") is False and adb.available():
+            adb.battery_soon(dev, adb.link(dev, conn))     # Android peut le mettre en veille : levée par adb si appairé
     expire_commands(db(), dev["id"])
     if isinstance(data.get("holding"), list):
         settle_lost(conn, dev, data["holding"])

@@ -35,6 +35,9 @@ class RemoteClient(private val context: Context, private val store: Store, priva
     private var woken = false
 
     /** Quelque chose à échanger tout de suite : loco prévient, ou une session a écrit. */
+    /** Réveil programmé : l'échange suivant part tout de suite (canal persistant rouvert s'il était tombé). */
+    fun poke() = signal()
+
     private fun signal() {
         synchronized(wakeLock) { woken = true; wakeLock.notifyAll() }
     }

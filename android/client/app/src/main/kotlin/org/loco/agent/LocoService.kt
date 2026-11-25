@@ -44,6 +44,7 @@ class LocoService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        alive = true
         agent = Agent(this)
         // Type explicite : sans lui, Android 14+ exigerait aussi le type « projection d'écran », pas encore autorisé ici.
         if (Build.VERSION.SDK_INT >= 29) {
@@ -59,6 +60,7 @@ class LocoService : Service() {
         // Après un redémarrage, sans attendre le premier contact — jamais hors d'un réseau de confiance.
         if (agent.store.keepAdb && onTrustedNetwork()) AdbProbe.keep(this)
         watchNetwork()
+        watchPower()
         Thread({ remote?.run() }, "loco-remote").apply { isDaemon = true }.start()
     }
 
@@ -68,6 +70,8 @@ class LocoService : Service() {
             ACTION_SCREEN_OFF -> stopCapture()
             ACTION_NETWORKS -> { Networks.invalidate(); wake = true }      // réglage changé dans l'application
             ACTION_CHECKIN -> wake = true                                 // application ouverte : contact tout de suite
+            ACTION_WAKE -> { wake = true; remote?.poke() }                // réveil programmé : contact et canal rouvert
+            ACTION_AWAKE -> KeepAwake.apply(this)                         // réglage « toujours joignable » changé
             ACTION_UPDATE -> installOffered()
         }
         if (!checking && agent.store.enrolled) {
@@ -116,6 +120,25 @@ class LocoService : Service() {
                 if (slept % 5 == 0 && agent.store.netMode != Networks.ALL && onTrustedNetwork() != (paused == null)) break
             }
         }
+    }
+
+    // --- Joignable en permanence (voir KeepAwake) ---------------------------
+    private var powerWatch: android.content.BroadcastReceiver? = null
+
+    /** Branché ou débranché : le processeur est tenu éveillé, ou relâché, aussitôt. */
+    private fun watchPower() {
+        val watch = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) { KeepAwake.apply(this@LocoService) }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(watch, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(watch, filter)
+            powerWatch = watch
+        } catch (_: Exception) {
+        }
+        KeepAwake.apply(this)
     }
 
     // --- Réseaux de confiance ----------------------------------------------
@@ -381,6 +404,9 @@ class LocoService : Service() {
     private fun clock() = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
     override fun onDestroy() {
+        alive = false
+        powerWatch?.let { try { unregisterReceiver(it) } catch (_: Exception) {} }
+        KeepAwake.release()
         checking = false
         paused = null
         netWatch?.let { try { (getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager).unregisterNetworkCallback(it) } catch (_: Exception) {} }
@@ -400,6 +426,7 @@ class LocoService : Service() {
         private const val CONTROL_NOTIF = 2
 
         /** Dernier contact réussi avec loco (millisecondes), et état du dernier essai. */
+        @Volatile var alive = false                 // service démarré (réveil programmé : simple relance)
         @Volatile var lastContact = 0L
             private set
         @Volatile var offline = false
@@ -422,6 +449,8 @@ class LocoService : Service() {
         @Volatile var sharing = false
             private set
         const val LOCK_DELAY = 5000L                // fin d'une session d'écran → verrouillage, sauf reprise entre-temps
+        const val ACTION_WAKE = "org.loco.agent.WAKE"
+        const val ACTION_AWAKE = "org.loco.agent.AWAKE"
         const val ACTION_SCREEN_ON = "org.loco.agent.SCREEN_ON"
         const val ACTION_SCREEN_OFF = "org.loco.agent.SCREEN_OFF"
         const val ACTION_NETWORKS = "org.loco.agent.NETWORKS"
@@ -446,6 +475,22 @@ class LocoService : Service() {
         }
 
         /** Application ouverte : un contact tout de suite, pour savoir sans attendre si une mise à jour est proposée. */
+        /** Réveil programmé (KeepAwakeReceiver) : contact tout de suite ; le service repart s'il avait été arrêté. */
+        fun wakeUp(context: Context) {
+            val intent = Intent(context, LocoService::class.java).setAction(ACTION_WAKE)
+            try {
+                // Service en marche (premier plan) : simple relance. Arrêté (application tuée) : il repart au premier
+                // plan, permis le temps d'un réveil programmé.
+                if (alive || Build.VERSION.SDK_INT < 26) context.startService(intent) else context.startForegroundService(intent)
+            } catch (_: Exception) {
+            }
+        }
+
+        /** Réglage « toujours joignable » changé dans l'application. */
+        fun awakeChanged(context: Context) {
+            try { context.startService(Intent(context, LocoService::class.java).setAction(ACTION_AWAKE)) } catch (_: Exception) {}
+        }
+
         fun checkNow(context: Context) {
             try { context.startService(Intent(context, LocoService::class.java).setAction(ACTION_CHECKIN)) } catch (_: Exception) {}
         }

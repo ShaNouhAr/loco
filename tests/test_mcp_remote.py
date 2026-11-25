@@ -305,6 +305,17 @@ class TestTerminalRobustness(RemoteTest):
         self.assertIn(mcp_remote.OMIT_MARK, small["output"])
 
 
+class TestWindowsJobScripts(unittest.TestCase):
+    def test_a_running_job_is_read_in_shared_mode(self):
+        """Sous Windows, le lanceur d'une tâche garde out.txt ouvert en écriture : ReadAllText (accès exclusif) levait
+        « fichier utilisé par un autre processus » au lieu d'un état. Toutes les lectures du suivi sont partagées."""
+        for script in (mcp_remote._ps_job_status("0123456789ab", 24000), mcp_remote._ps_job_status("0123456789ab", 24000, stop=True)):
+            self.assertNotIn("ReadAllText", script)
+            self.assertNotIn("Get-Content", script)
+            self.assertIn("[IO.FileShare]'ReadWrite, Delete'", script)
+            self.assertIn("catch { $null }", script)                    # un fichier illisible ne coupe jamais le suivi
+
+
 class TestInteractive(RemoteTest):
     def test_programs_keys_state_and_reset(self):
         host = self.device()

@@ -61,6 +61,12 @@
     <string name="battery_hint">Permita que loco siga activo en segundo plano: de lo contrario, el dispositivo puede suspenderlo y se pierde el contacto con la pantalla apagada.</string>
     <string name="battery_on">Permitir segundo plano</string>
     <string name="battery_state_off">Por permitir</string>
+    <string name="awake_title">Siempre accesible</string>
+    <string name="awake_state_charging">Con corriente; cada 5 min con batería</string>
+    <string name="awake_state_always">Siempre, incluso con batería</string>
+    <string name="awake_hint">Con la pantalla apagada y el dispositivo bloqueado, loco mantiene el contacto: conectado a la corriente, el dispositivo no se duerme del todo; con batería, Android lo despierta cada cinco minutos. \u00ab Siempre \u00bb lo mantiene despierto también con batería, a costa de un mayor consumo.</string>
+    <string name="awake_always">Siempre</string>
+    <string name="awake_charging">Solo con corriente</string>
 
     <!-- Instalaciones -->
     <string name="install_title">Instalaciones</string>

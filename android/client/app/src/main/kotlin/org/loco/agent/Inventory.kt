@@ -44,6 +44,7 @@ object Inventory {
             .put("abis", JSONArray(Build.SUPPORTED_ABIS.toList()))
             .put("can_install", context.packageManager.canRequestPackageInstalls())
         battery(context)?.let { system.put("battery", it) }
+        system.put("power", KeepAwake.state(context))
         put("inventory", JSONObject()
             .put("updates", JSONArray())
             .put("apps", apps(context))

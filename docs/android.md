@@ -96,6 +96,23 @@ Depuis la fiche de l'appareil, comme pour un poste :
   `pull_file` pour envoyer ou récupérer un fichier par adb (comme `adb push` / `adb pull`, contenu vérifié), y compris
   directement depuis ou vers un autre poste du parc.
 
+## Toujours joignable
+
+L'application garde le contact écran éteint et appareil verrouillé (application 2.200 ou plus) :
+
+- **sur secteur**, elle tient le processeur éveillé — l'écran, lui, reste éteint — et le Wi-Fi hors de son économie
+  d'énergie : contacts, canal persistant et débogage sans fil continuent comme écran allumé, et une session s'ouvre
+  aussitôt ;
+- **sur batterie**, Android la réveille toutes les cinq minutes, même en veille profonde, pour un contact et pour
+  rouvrir le canal : une session peut attendre ce réveil ;
+- **Toujours joignable** (écran de l'application) la garde éveillée aussi sur batterie, au prix d'une consommation plus
+  forte.
+
+Il faut que l'**optimisation de la batterie** soit levée pour loco, sinon Android coupe aussi son réseau en veille :
+l'application la demande d'elle-même (une fois par version) et garde la ligne *Fonctionnement en arrière-plan* tant
+qu'elle ne l'est pas. Sur un appareil appairé en adb, loco la lève lui-même dès qu'elle revient (réglage remis à zéro,
+surcouche du constructeur). La fiche de l'appareil montre *Veille non levée* tant qu'elle ne l'est pas.
+
 ## Accorder les accès, sur l'appareil
 
 Chaque capacité s'active depuis l'application, sur l'appareil, et se voit :

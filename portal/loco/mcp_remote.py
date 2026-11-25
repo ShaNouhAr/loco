@@ -510,18 +510,28 @@ def _ps_job_start(job, command):
             "'J:started:' + $r.ProcessId\n")
 
 
+# Les fichiers d'une tâche en cours restent ouverts en écriture par son lanceur (out.txt), ou le sont un instant (exit,
+# pid) : on les lit en partage (FileShare ReadWrite + Delete), jamais avec ReadAllText qui exigerait l'exclusivité.
+# Un fichier illisible n'interrompt jamais le suivi : la tâche garde un état.
+PS_READ_SHARED = ("function Get-Shared([string]$p) { if (-not (Test-Path -LiteralPath $p)) { return $null }; "
+                  "try { $fs = [IO.File]::Open($p, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete'); "
+                  "try { (New-Object IO.StreamReader($fs, (New-Object Text.UTF8Encoding $false), $true)).ReadToEnd() } "
+                  "finally { $fs.Dispose() } } catch { $null } }\n"
+                  "function Get-JobPid([string]$d) { $v = 0; [void][int]::TryParse((\"\" + (Get-Shared \"$d\\pid\")).Trim(), [ref]$v); $v }\n")
+
+
 def _ps_job_status(job, limit, stop=False):
     head = limit // 3
-    stopping = ("$p = if (Test-Path \"$d\\pid\") { [int](Get-Content \"$d\\pid\" -Raw) } else { 0 }\n"
+    stopping = ("$p = Get-JobPid $d\n"
                 "if ($p -and -not (Test-Path \"$d\\exit\") -and (Get-Process -Id $p -ErrorAction SilentlyContinue)) { "
                 "New-Item -ItemType File -Force -Path \"$d\\stopped\" | Out-Null; & taskkill.exe /PID $p /T /F 2>&1 | Out-Null }\n") if stop else ""
-    return (_ps_job_base() + f"; $d = Join-Path $b '{job}'\n"
+    return (_ps_job_base() + f"; $d = Join-Path $b '{job}'\n" + PS_READ_SHARED +
             "if (-not (Test-Path $d)) { 'J:missing::0'; return }\n" + stopping +
-            "$o = if (Test-Path \"$d\\out.txt\") { [IO.File]::ReadAllText(\"$d\\out.txt\") } else { '' }\n"
-            "$n = $o.Length\n"
+            "$o = Get-Shared \"$d\\out.txt\"; if ($null -eq $o) { $o = '' }\n"
+            "$n = $o.Length; $x = (\"\" + (Get-Shared \"$d\\exit\")).Trim(); $p = Get-JobPid $d\n"
             "if (Test-Path \"$d\\stopped\") { \"J:stopped::$n\" }\n"
-            "elseif (Test-Path \"$d\\exit\") { 'J:done:' + (Get-Content \"$d\\exit\" -Raw).Trim() + \":$n\" }\n"
-            "elseif ((Test-Path \"$d\\pid\") -and (Get-Process -Id ([int](Get-Content \"$d\\pid\" -Raw)) -ErrorAction SilentlyContinue)) { \"J:running::$n\" }\n"
+            "elseif ($x -match '^-?\\d+$') { \"J:done:${x}:$n\" }\n"
+            "elseif ($p -and (Get-Process -Id $p -ErrorAction SilentlyContinue)) { \"J:running::$n\" }\n"
             "else { \"J:lost::$n\" }\n"
             f"if ($n -gt {limit}) {{ $o.Substring(0, {head}) + \"`n`n[... \" + ($n - {limit}) + ' {OMIT_MARK} ...]' + \"`n`n\" + $o.Substring($n - {limit - head}) }} else {{ $o }}\n")
 

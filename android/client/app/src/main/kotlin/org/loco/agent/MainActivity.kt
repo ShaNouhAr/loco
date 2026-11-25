@@ -164,6 +164,15 @@ class MainActivity : Activity() {
             row(access, getString(R.string.battery_title), false, getString(R.string.battery_state_off),
                 getString(R.string.battery_hint), getString(R.string.battery_on)) { requestBattery() }
         }
+        // Toujours joignable : sur secteur (par défaut, et toutes les 5 min sur batterie) ou en permanence (KeepAwake).
+        val always = store.awakeAlways
+        row(access, getString(R.string.awake_title), true,
+            getString(if (always) R.string.awake_state_always else R.string.awake_state_charging),
+            getString(R.string.awake_hint), getString(if (always) R.string.awake_charging else R.string.awake_always)) {
+            store.awakeAlways = !always
+            LocoService.awakeChanged(this)
+            render()
+        }
         root.addView(access, ui.spaced(12))
         root.addView(networksPanel(), ui.spaced(12))
 
@@ -464,6 +473,12 @@ class MainActivity : Activity() {
         if (store.enrolled) LocoService.checkNow(this)
         Installs.cancel(this, "update", 0)          // « Application mise à jour » : vue, puisque l'application est ouverte
         if (store.enrolled) render()
+        // Optimisation de la batterie encore active : Android le demande une fois par version de l'application (la
+        // ligne « Fonctionnement en arrière-plan » reste là tant qu'elle n'est pas levée).
+        if (store.enrolled && !batteryExempt() && store.batteryAsked != BuildConfig.VERSION_CODE.toLong()) {
+            store.batteryAsked = BuildConfig.VERSION_CODE.toLong()
+            requestBattery()
+        }
         root.removeCallbacks(watcher)
         root.postDelayed(watcher, 1500)
     }

@@ -398,6 +398,42 @@ def prepare_soon(dev, row):
     threading.Thread(target=work, name="loco-adb-prepare", daemon=True).start()
 
 
+# Veille : l'application dit qu'Android peut la mettre en veille (optimisation de la batterie active — réglage remis à
+# zéro, surcouche du constructeur…). Sur un appareil appairé et joignable, loco la lève par adb, comme à l'appairage.
+BATTERY = (("dumpsys", "deviceidle", "whitelist", "+" + AGENT),
+           ("cmd", "appops", "set", AGENT, "RUN_IN_BACKGROUND", "allow"),
+           ("cmd", "appops", "set", AGENT, "RUN_ANY_IN_BACKGROUND", "allow"))
+BATTERY_EVERY = 1800
+_BATTERY = {}
+
+
+def battery_soon(dev, row):
+    """En arrière-plan, au plus une fois par demi-heure et par appareil, sans faire attendre le contact."""
+    seen = report(dev)
+    if row is None or not (row["paired_at"] or row["mode"] == "tcp") or not (row["mode"] == "tcp" or seen.get("wireless") and seen.get("port")):
+        return
+    now = time.time()
+    with _GUARD:
+        if now - _BATTERY.get(dev["id"], 0) < BATTERY_EVERY:
+            return
+        _BATTERY[dev["id"]] = now
+    dev_id = dev["id"]
+
+    def work():
+        with app.app_context():
+            try:
+                current = db().execute("SELECT * FROM devices WHERE id=?", (dev_id,)).fetchone()
+                serial = ensure(current)
+                done = [command[0] for command in BATTERY if _sh(serial, *command)[0] == 0]
+                with connect() as conn:
+                    conn.execute("INSERT INTO audit (at, username, ip, action, detail) VALUES (?, 'loco', '', 'parc.adb.autorisations', ?)",
+                                 (time.strftime("%Y-%m-%d %H:%M:%S"), f"{current['hostname']} : veille levée ({len(done)}/{len(BATTERY)})"))
+            except (ValueError, TypeError, sqlite3.Error):
+                pass
+
+    threading.Thread(target=work, name="loco-adb-battery", daemon=True).start()
+
+
 # --------------------------------------------------------------------------- mise à jour de l'application par adb
 
 UPDATE_RETRY = 1800                 # après un échec, l'application reprend la main (sa propre mise à jour) pendant 30 min

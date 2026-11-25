@@ -387,6 +387,28 @@ class TestPermanentScreen(AdbTest):
         self.admin.post(f"/fleet/{dev['id']}/adb/forget", page=f"/fleet/{dev['id']}")
 
 
+class TestSleep(AdbTest):
+    def test_loco_lifts_the_android_sleep_through_adb_when_the_app_reports_it(self):
+        """L'application dit qu'Android peut la mettre en veille : sur un appareil appairé, loco la retire de
+        l'optimisation de la batterie par adb, en arrière-plan, une fois par demi-heure au plus."""
+        agent, dev = self.phone()
+        self.pair(dev)
+        report = {"developer": True, "wireless": True, "port": 41235, "ip": "192.168.43.71"}
+        restricted = {"updates": [], "apps": [], "system": {"sdk": 34, "power": {"unrestricted": False, "awake": "charging"}}}
+        with mock.patch.dict(adb._BATTERY, clear=True):
+            for _ in range(2):
+                agent.post("/agent/api/checkin", dict(agent.ident, adb=report, inventory=restricted), agent.token)
+            end = time.time() + 10
+            while time.time() < end and "RUN_ANY_IN_BACKGROUND" not in self.args():
+                time.sleep(0.1)
+            time.sleep(0.3)
+            log = self.args()
+        self.assertEqual(log.count("dumpsys deviceidle whitelist +org.loco.agent"), 1)   # une seule fois malgré 2 contacts
+        self.assertIn("cmd appops set org.loco.agent RUN_ANY_IN_BACKGROUND allow", log)
+        with transaction() as conn:
+            self.assertTrue(conn.execute("SELECT 1 FROM audit WHERE action='parc.adb.autorisations' AND detail LIKE '%veille levée%'").fetchone())
+
+
 class TestTerminal(AdbTest):
     def test_a_real_shell_is_relayed_and_the_app_never_sees_the_session(self):
         a, dev = self.phone()

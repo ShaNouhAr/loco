@@ -5507,5 +5507,7 @@
  "Envoyer un fichier par adb (Android)": "Send a file over adb (Android)",
  "Déposer un fichier sur un appareil Android appairé, avec les droits de l'utilisateur shell d'Android (comme adb push) : contenu envoyé dans la requête, ou copié directement depuis un autre poste, puis vérifié sur l'appareil.": "Put a file on a paired Android device with the rights of Android's shell user (like adb push): content sent in the request, or copied straight from another device, then checked on the device.",
  "Récupérer un fichier par adb (Android)": "Fetch a file over adb (Android)",
- "Lire un fichier d'un appareil Android appairé avec les droits de l'utilisateur shell d'Android (comme adb pull), ou le copier directement vers un autre poste.": "Read a file of a paired Android device with the rights of Android's shell user (like adb pull), or copy it straight to another device."
+ "Lire un fichier d'un appareil Android appairé avec les droits de l'utilisateur shell d'Android (comme adb pull), ou le copier directement vers un autre poste.": "Read a file of a paired Android device with the rights of Android's shell user (like adb pull), or copy it straight to another device.",
+ "Android peut mettre l'application loco en veille : le contact se perd alors quand l'appareil dort. Dans l'application loco, touchez « Autoriser l'arrière-plan » (sur un appareil appairé en adb, loco le fait lui-même).": "Android may put the loco app to sleep: contact is then lost while the device sleeps. In the loco app, tap “Allow background” (on a device paired over adb, loco does it itself).",
+ "Veille non levée": "Sleep not lifted"
 }

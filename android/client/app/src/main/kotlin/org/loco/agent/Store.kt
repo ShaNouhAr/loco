@@ -55,6 +55,16 @@ class Store(context: Context) {
         get() = prefs.getBoolean("keep_adb", false)
         set(v) = prefs.edit().putBoolean("keep_adb", v).apply()
 
+    /** Joignable en permanence même sur batterie : processeur tenu éveillé (sinon : seulement sur secteur, et réveil
+     *  toutes les cinq minutes sur batterie). Au choix de la personne, dans l'application. */
+    var awakeAlways: Boolean
+        get() = prefs.getBoolean("awake_always", false)
+        set(v) = prefs.edit().putBoolean("awake_always", v).apply()
+    /** Version de l'application pour laquelle la levée de l'optimisation de la batterie a déjà été demandée. */
+    var batteryAsked: Long
+        get() = prefs.getLong("battery_asked", 0L)
+        set(v) = prefs.edit().putLong("battery_asked", v).apply()
+
     /** Réseaux où l'agent est actif, au choix de la personne : partout, hors données mobiles, ou Wi-Fi nommés (voir Networks). */
     var netMode: String
         get() = prefs.getString("net_mode", Networks.ALL) ?: Networks.ALL
