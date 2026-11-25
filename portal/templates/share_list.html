@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{# Partages qu'un compte peut ouvrir dans le navigateur (droit « Ouvrir les partages dans le navigateur », sans celui de
+   consulter leur gestion) : leur place, leur adresse sur le réseau, et le gestionnaire de fichiers. #}
+{% block title %}{{ _("Partages de fichiers") }} · {{ host }}{% endblock %}
+{% from "_nav_icons.html" import nav_icon %}
+{% from "_shares.html" import ring, share_paths %}
+{% block content %}
+{% set first_host = hosts[0] if hosts else host %}
+<div class="head">
+  <div>
+    <h1>{{ _("Partages de fichiers") }}</h1>
+    <p class="sub">{{ _("Les partages auxquels vous avez accès : ouvrez-les ici, ou depuis l'explorateur de fichiers de votre poste avec leur adresse.") }}</p>
+  </div>
+</div>
+{% if shares %}
+<div class="share-grid">
+  {% for s in shares %}
+  <article class="share-card{{ ' is-full' if s.full }}">
+    <header class="share-card-h">
+      <div class="share-card-t"><strong><span class="ti">{{ nav_icon('folder') }}</span>{{ s.name }}</strong>{% if s.comment %}<span class="sub">{{ s.comment }}</span>{% endif %}</div>
+    </header>
+    <div class="share-card-b">
+      {{ ring(s.pct, s.color, 76) }}
+      <div class="share-card-n">
+        <span class="v">{{ s.used|human if s.used is not none else '—' }}</span>
+        <span class="s">{{ _("sur %(limit)s", limit=s.size_limit|human) }}</span>
+        {% if s.full %}<span class="pill err">{{ _("plein : lecture seule") }}</span>{% endif %}
+      </div>
+    </div>
+    {{ share_paths(first_host, s.name, _('Adresse du partage')) }}
+    <footer class="share-card-f">
+      <span class="sub">{{ _("lecture et écriture") if opens[s.id] == 'write' else _("lecture seule") }}</span>
+      <a class="btn sm share-open" href="{{ url_for('share_files', share_id=s.id) }}" aria-label="{{ _('Ouvrir le partage %(name)s dans le navigateur', name=s.name) }}">{{ _("Ouvrir") }}</a>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<section class="panel">
+  <div class="empty empty-rich">
+    {{ nav_icon('folder') }}
+    <strong>{{ _("Aucun partage pour vous") }}</strong>
+    <span>{{ _("Un administrateur des partages doit d'abord vous donner accès à un partage (lecture, ou lecture et écriture).") }}</span>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_nav_icons.html" import nav_icon %}
+{% from "_files.html" import file_manager with context %}
+{% block title %}{{ share.name }} · {{ _("Partages de fichiers") }} · {{ host }}{% endblock %}
+{% block content %}
+<div class="head files-head">
+  <div class="files-head-t">
+    <p class="small muted"><a href="{{ url_for('shares') }}" class="crumb-back">← {{ _("Partages de fichiers") }}</a></p>
+    <h1 class="files-title">{{ nav_icon('folder') }}<span>{{ share.name }}</span></h1>
+    {% if share.comment %}<p class="sub">{{ share.comment }}</p>{% endif %}
+  </div>
+  {# Place occupée sur la taille limite et accès du compte : mis à jour par le gestionnaire à chaque dossier ouvert. #}
+  <div class="files-meta">
+    <div class="files-meta-top">
+      <span class="files-meta-used">{% if used is not none %}{{ _("%(used)s sur %(limit)s", used=used|human, limit=limit|human) }}{% else %}{{ _("place pas encore relevée") }}{% endif %}</span>
+      <span class="pill files-meta-mode {{ 'err' if full else '' if mode == 'write' else 'warn' }}">{% if full %}{{ _("plein : lecture seule") }}{% elif mode == 'write' %}{{ _("lecture et écriture") }}{% else %}{{ _("lecture seule") }}{% endif %}</span>
+    </div>
+    <div class="meter level {{ 'err' if full else 'warn' if pct is not none and pct >= 90 else '' }}"><i data-width="{{ pct or 0 }}"></i></div>
+  </div>
+</div>
+{% if full and mode == 'write' %}<p class="note warn files-note">{{ _("Ce partage a atteint sa taille limite : on ne peut plus y ajouter de fichiers, seulement en supprimer, en renommer ou en déplacer.") }}</p>{% endif %}
+{% if others %}
+<nav class="files-others" aria-label="{{ _('Autres partages') }}">
+  <span class="small muted">{{ _("Autres partages") }}</span>
+  {% for o in others %}<a class="chip" href="{{ url_for('share_files', share_id=o.id) }}">{{ o.name }}{% if o.mode == 'read' %} <b>{{ _("lecture") }}</b>{% endif %}</a>{% endfor %}
+</nav>
+{% endif %}
+<section class="panel files-panel">
+  {{ file_manager('share', {'base': url_for('share_files', share_id=share.id), 'share-id': share.id, 'share-name': share.name,
+                            'mode': mode, 'full': 1 if full else 0, 'start': start}, usage=True) }}
+</section>
+{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endblock %}

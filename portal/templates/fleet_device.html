@@ -5,6 +5,7 @@
 {% from "_charts.html" import line_chart, legend %}
 {% from "_nav_icons.html" import device_icon, ui_icon %}
 {% from "_macros.html" import pkg_progress with context %}
+{% from "_files.html" import file_manager with context %}
 {# busy : l'action est déjà lancée sur ce poste — le bouton le dit (témoin, libellé) et ne se clique plus. #}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='', fields=none) -%}
 {% if busy %}<button type="button" class="{{ cls or 'menu-item' }} loading" disabled><span class="spin"></span>{{ busy }}</button>{% else %}
@@ -352,7 +353,7 @@
             <polyline class="line s1" data-live-line="cpu" points=""/><polyline class="line s2" data-live-line="mem" points=""/>
             <line class="live-cross" x1="0" x2="0" y1="12" y2="164"/>
           </svg>
-          <div class="live-axis live-y"><span style="top: 12px">100 %</span><span style="top: 88px">50 %</span><span style="top: 164px">0 %</span></div>
+          <div class="live-axis live-y"><span>100 %</span><span>50 %</span><span>0 %</span></div>
           <div class="live-axis live-x"><span>{{ _("−3 min") }}</span><span>{{ _("−2 min") }}</span><span>{{ _("−1 min") }}</span><span>{{ _("maintenant") }}</span></div>
           <div class="live-end" data-live-end="cpu"><i class="key s1"></i><span></span></div>
           <div class="live-end" data-live-end="mem"><i class="key s2"></i><span></span></div>
@@ -494,53 +495,11 @@
 
     {% if files_ready and active %}
     <div class="tab-panel" data-panel="fichiers">
-      <div id="file-manager" class="files" data-dev="{{ dev.id }}" data-session-url="{{ url_for('remote_open', dev_id=dev.id) }}" data-link="{{ url_for('static', filename='relay-link.js') }}?v={{ asset_v }}"
-           data-csrf="{{ csrf }}" data-windows="{{ 1 if dev.os_family == 'windows' else 0 }}"
-           data-chmod="{{ 0 if dev.os_family in ('windows', 'android') else 1 }}" hidden>
-        <div class="files-bar">
-          <div class="files-nav">
-            <button type="button" class="btn icon sm" data-files="up" title="{{ _('Dossier parent') }}" aria-label="{{ _('Dossier parent') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V6M5 12l7-7 7 7"/></svg></button>
-            <button type="button" class="btn icon sm" data-files="refresh" title="{{ _('Actualiser') }}" aria-label="{{ _('Actualiser') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg></button>
-            <button type="button" class="btn icon sm eye-toggle" data-files="hidden" aria-pressed="false" title="{{ _('Afficher les fichiers cachés') }}" aria-label="{{ _('Afficher les fichiers cachés') }}"><svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.2M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7c1.7 0 3.2-.4 4.5-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/></svg></button>
-            {% if disk_usage %}<button type="button" class="btn icon sm" data-files="usage" aria-pressed="false" title="{{ _('Espace disque : voir ce qui occupe le plus') }}" aria-label="{{ _('Espace disque : voir ce qui occupe le plus') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="0.5"/><rect x="12" y="8" width="3" height="10" rx="0.5"/><rect x="17" y="4" width="3" height="14" rx="0.5"/></svg></button>{% endif %}
-            <nav class="files-crumbs" aria-label="{{ _('Chemin') }}"></nav>
-          </div>
-          <div class="files-tools">
-            <button type="button" class="btn sm" data-files="paste" hidden></button>
-            <button type="button" class="btn sm" data-files="mkdir">{{ _("Nouveau dossier") }}</button>
-            <label class="btn sm primary"><input type="file" multiple hidden>{{ _("Téléverser") }}</label>
-          </div>
-        </div>
-        <div class="files-sub">
-          <div class="files-roots"></div>
-        </div>
-        <div class="files-pane">
-          <div class="table-wrap">
-            <table class="files-table">
-              <thead><tr><th>{{ _("Nom") }}</th><th class="num">{{ _("Taille") }}</th><th class="nowrap">{{ _("Modifié") }}</th><th class="num">{{ _("Droits") }}</th><th aria-label="{{ _('Actions') }}"></th></tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="files-empty empty hidden">{{ _("Dossier vide.") }}</div>
-          <div class="files-truncated note warn hidden">{{ _("Dossier volumineux : seuls les 5000 premiers éléments sont affichés.") }}</div>
-          <div class="files-drop"><div class="files-drop-in">{{ _("Déposez les fichiers à téléverser") }}</div></div>
-        </div>
-        <div class="files-foot">
-          <div class="files-status" role="status"></div>
-          <div class="files-transfers"></div>
-        </div>
-        <dialog class="files-editor">
-          <form method="dialog" class="files-editor-form">
-            <div class="dlg-h"><h2>{{ _("Modifier") }}</h2><span class="mono small muted files-editor-path"></span></div>
-            <div class="dlg-b"><textarea spellcheck="false" wrap="off" aria-label="Contenu du fichier"></textarea></div>
-            <div class="dlg-f">
-              <span class="files-editor-note muted small"></span>
-              <button type="button" class="btn" data-editor="cancel">{{ _("Fermer") }}</button>
-              <button type="button" class="btn primary" data-editor="save">{{ _("Enregistrer") }}</button>
-            </div>
-          </form>
-        </dialog>
-      </div>
+      {{ file_manager('relay', {'dev': dev.id, 'session-url': url_for('remote_open', dev_id=dev.id),
+                                'link': url_for('static', filename='relay-link.js') ~ '?v=' ~ asset_v,
+                                'windows': 1 if dev.os_family == 'windows' else 0,
+                                'chmod': 0 if dev.os_family in ('windows', 'android') else 1,
+                                'usage': 1 if disk_usage else 0}, usage=disk_usage, hidden=True) }}
     </div>
     {% endif %}
 

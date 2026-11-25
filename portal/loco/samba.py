@@ -312,7 +312,13 @@ def _stamp():
 @app.route("/shares")
 @login_required
 def shares():
+    from . import sharefiles
     st = agent_state()
+    opens = sharefiles.openable(st)
+    if not can("samba.view"):
+        # Seulement le droit d'ouvrir des partages dans le navigateur : ceux du compte, sans rien de leur gestion.
+        mine = [s for s in share_views(st, share_rows()) if s["id"] in opens]
+        return render_template("share_list.html", shares=mine, opens=opens, hosts=hosts())
     if can("samba.manage"):
         sync(st)
     rows, users = share_rows(), accounts()
@@ -323,7 +329,7 @@ def shares():
     return render_template("samba.html", st=st, partitions=partition_views(st, rows), shares=share_views(st, rows),
                            users=users, connections=connection_views(st, users), free_loco=free_loco_accounts(),
                            hosts=hosts(), signature=sig, gib=GIB, available=samba_possible(),
-                           min_password=config.MIN_PASSWORD)
+                           min_password=config.MIN_PASSWORD, opens=opens)
 
 
 # --------------------------------------------------------------------------- partages

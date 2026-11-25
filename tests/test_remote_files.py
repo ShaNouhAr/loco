@@ -64,6 +64,17 @@ class TestRemoteFiles(FleetTest):
         self.assertNotIn('data-tab="fichiers"', limited)
         self.assertEqual(self.open(browser=viewer, page="/account").status_code, 403)
 
+    def test_one_file_manager_with_disk_usage_for_linux_agents(self):
+        # Même gestionnaire que les partages (backend « relay ») ; l'espace disque pour un agent Linux (famille debian).
+        page = self.admin.c.get(f"/fleet/{self.dev_id}").get_data(as_text=True)
+        self.assertIn('data-backend="relay"', page)
+        self.assertIn('data-files="usage"', page)
+        self.assertIn('data-chmod="1"', page)
+        android = Agent(dict(LINUX, hostname="tablette", os={"family": "android", "name": "Android 15"}), "192.168.43.63")
+        android.enroll()
+        tablet = self.admin.c.get(f"/fleet/{device(android.uid)['id']}").get_data(as_text=True)
+        self.assertNotIn('data-files="usage"', tablet)
+
     def test_bytes_relay_to_the_agent_and_back(self):
         sid = self.open().get_json()["sid"]
         request = base64.b64encode(frame({"op": "hello", "id": 1})).decode()

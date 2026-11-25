@@ -49,7 +49,8 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
            "loco.directories": ("directories",), "loco.alerts": ("alerts",), "loco.mcp": ("mcp",), "loco.mcp_oauth": ("mcp",), "loco.mcp_install": ("mcp",),
            "loco.android_apps": ("fleet", "android"), "loco.adb": ("fleet", "remote", "android"),
            "loco.homeassistant": ("homeassistant",), "loco.wazuh": ("fleet", "wazuh"), "loco.proxmox": ("proxmox",),
-           "loco.proxmox_system": ("proxmox",), "loco.network": ("network",), "loco.samba": ("samba",)}
+           "loco.proxmox_system": ("proxmox",), "loco.network": ("network",), "loco.samba": ("samba",),
+           "loco.sharefiles": ("samba",)}
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),

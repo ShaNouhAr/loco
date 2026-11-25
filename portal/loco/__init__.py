@@ -52,8 +52,10 @@ STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.j
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))
 
 # Politique de contenu stricte : aucun script ni style en ligne.
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; "
-       "connect-src 'self'; manifest-src 'self'; worker-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+# Aperçus du gestionnaire de fichiers : image, son, vidéo ou PDF lus depuis le portail ou composés par la page (blob:).
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; "
+       "frame-src 'self' blob:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; "
+       "form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 
 # Points d'entrée publics (postes clients, supervision) : ni session, ni jeton CSRF.
 PUBLIC_ENDPOINTS = {"linux_setup", "linux_proxmox", "linux_repository_source", "windows_install_script", "flatpak_setup", "flatpak_repo_file", "rpm_setup",
@@ -84,7 +86,11 @@ def csrf_protect():
     if "csrf" not in session:
         session["csrf"] = secrets.token_hex(16)
     if request.method == "POST":
-        token = request.form.get("csrf", "")
+        # Corps brut (fragment de téléversement) : le jeton vient de l'en-tête, qu'une autre origine ne peut pas poser.
+        if request.mimetype == "application/octet-stream":
+            token = request.headers.get("X-CSRF-Token", "")
+        else:
+            token = request.form.get("csrf", "")
         if not hmac.compare_digest(token, session["csrf"]):
             abort(400, _('Jeton CSRF invalide, rechargez la page.'))
 
@@ -168,12 +174,12 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, proxmox_system, network, backups, api, samba, unlock_codes  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, proxmox_system, network, backups, api, samba, sharefiles, unlock_codes  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
                  mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh,
-                 proxmox, proxmox_system, network, backups, api, samba, unlock_codes)
+                 proxmox, proxmox_system, network, backups, api, samba, sharefiles, unlock_codes)
 
 
 def startup():

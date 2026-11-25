@@ -98,11 +98,54 @@ qui n'est plus permis sur les connexions déjà ouvertes : celles d'un utilisate
 sur les connexions dont le droit a changé (retiré, passé en lecture seule parce que le partage est plein, ou rendu) ou
 qui n'est plus servi. Le poste qui y a encore droit le rouvre de lui-même, avec ses nouveaux droits.
 
+## Ouvrir un partage dans le navigateur
+
+*Ouvrir*, sur la carte d'un partage, l'affiche dans loco, avec un gestionnaire de fichiers complet :
+
+- **parcourir** : fil d'Ariane, dossiers précédent et suivant, tri par nom, taille ou date, fichiers cachés à afficher
+  ou non, filtre du dossier et **recherche dans les sous-dossiers** (sans casse ni accents), espace disque façon
+  TreeSize, propriétés (taille d'un dossier et de son contenu) ;
+- **téléverser** des fichiers ou des **dossiers entiers** (bouton *Téléverser*, ou glisser-déposer depuis
+  l'ordinateur, sur la liste ou sur un dossier) : l'envoi se fait par morceaux, reprend après une coupure du réseau,
+  garde la date de modification d'origine ; plusieurs fichiers partent à la fois, chacun avec sa progression ;
+- **télécharger** un fichier, ou un dossier et toute une sélection en **archive ZIP** composée à la volée ;
+- **aperçu** des photos, des PDF, du son et des vidéos, avec les voisins du dossier (flèches ← →) ; **éditeur** pour
+  les fichiers texte (Ctrl+S enregistre) — un fichier modifié entre-temps par quelqu'un d'autre n'est pas écrasé ;
+- **nouveau dossier** ou **fichier texte**, **renommer**, **copier**, **couper** et **coller** (dans le partage, ou
+  vers un autre partage ouvert ensuite), déplacer en glissant des lignes sur un dossier (Ctrl : copier),
+  **supprimer** — après confirmation, sans corbeille ;
+- **sélection** de plusieurs éléments (cases, Maj ou Ctrl + clic, Ctrl+A) avec une barre en bas de l'écran
+  (télécharger, copier, couper, supprimer), **clic droit** et bouton ⋮ sur chaque ligne, **raccourcis clavier**
+  (Entrée, Suppr, F2, Ctrl+C / X / V, Retour arrière, Alt + ← / →, `/` pour chercher ; liste par le bouton clavier).
+
+Un nom déjà pris à destination est soumis **avant** le moindre envoi ou collage : *Remplacer* (*Fusionner* pour un
+dossier envoyé), *Garder les deux* (« nom (2) »), *Ignorer*, une fois pour toutes si l'on veut. La place occupée sur
+la taille limite est affichée en haut : un envoi qui la dépasserait est refusé d'avance, et **un partage plein ne peut
+plus que diminuer** (supprimer, renommer, déplacer) tant qu'il n'est pas repassé sous sa limite.
+
+**Qui ouvre quoi.** Le droit *Ouvrir les partages dans le navigateur* est nécessaire. Avec *Gérer les partages de
+fichiers*, il ouvre **tous** les partages en lecture et écriture. Sinon, il ouvre les partages de l'**utilisateur
+Samba lié au compte loco**, avec ses droits sur le réseau : en lecture, le gestionnaire ne propose ni envoi, ni
+création, ni modification, ni suppression ; un utilisateur Samba désactivé n'ouvre plus rien. Un compte qui n'a que ce
+droit voit, dans *Partages de fichiers*, la liste de ses partages (place, adresse sur le réseau, *Ouvrir*) et rien de
+leur gestion. Les envois, créations, renommages, copies, déplacements et suppressions sont inscrits au journal.
+
+**Comment c'est fait.** Le portail ne touche jamais lui-même aux dossiers des partages. Un service à part, lancé par
+l'agent root sous le compte propriétaire des partages (`loco-share`, sans aucun droit root), fait chaque opération
+dans le dossier du partage : un chemin y est suivi un dossier après l'autre, **sans jamais traverser un lien
+symbolique** (les liens sont montrés, jamais suivis). Pour un envoi ou un téléchargement, il passe au portail le
+fichier déjà ouvert. Les fichiers créés depuis loco ont les mêmes propriétaire et droits que ceux posés par Samba
+(`0660`, dossiers `2770`). Les noms qu'un poste Windows ne pourrait pas ouvrir (`\ / : * ? " < > |`, point ou espace
+final, `CON`, `NUL`…) sont refusés. Une page HTML ou une image SVG d'un partage se télécharge, sans jamais s'exécuter
+dans le navigateur. Les envois en cours attendent dans le dossier caché `.loco-envois` du partage, qui n'apparaît pas
+dans loco ; ceux qu'un redémarrage a interrompus en sont effacés au bout d'un jour.
+
 ## Droits
 
 *Consulter les partages de fichiers* et *Gérer les partages de fichiers* (installer Samba, créer et modifier les
-partages, ajouter les utilisateurs Samba, choisir leur mot de passe et leurs droits, couper une connexion) : à cocher
-dans les profils d'accès.
+partages, ajouter les utilisateurs Samba, choisir leur mot de passe et leurs droits, couper une connexion), et *Ouvrir
+les partages dans le navigateur* (voir plus haut) : à cocher dans les profils d'accès. Le profil Administrateur a les
+trois.
 
 ## Sauvegarde, haute disponibilité, désactivation
 
@@ -122,6 +165,15 @@ Sur des connexions déjà ouvertes (Samba 4.23, clients `smbclient`) : coupure �
 visée, et perte immédiate de l'accès pour un utilisateur désactivé, un droit retiré, un passage en lecture seule
 (partage plein, puis retour à l'écriture) et un partage retiré.
 L'installation par la page, sur un loco Debian 13 ; pas encore sur l'appliance elle-même, ni avec un poste macOS.
+
+Le gestionnaire de fichiers, sur un loco Debian 13 (Samba 4.22 installé par la page, portail confiné par systemd) dans
+Chromium : envoi d'un fichier de 20 Mo par morceaux puis téléchargement à l'identique (même empreinte), morceau demandé
+(lecture d'une vidéo), archive ZIP, aperçu d'une photo et d'un PDF, nouveau dossier, copie, renommage, éditeur,
+recherche dans les sous-dossiers, suppression ; service lancé sous `loco-share`, relancé avec l'agent root ; fichiers
+créés avec les mêmes propriétaire et droits que par Samba, date d'origine gardée ; relus et complétés par un
+utilisateur Samba avec `smbclient`. Les droits (gestionnaire, lecteur, rédacteur, sans accès), la taille limite et le
+partage plein, les liens symboliques et les noms refusés sont couverts par les tests automatiques. Pas encore sur
+l'appliance, ni avec Firefox ou Safari.
 
 ---
 

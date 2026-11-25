@@ -1,21 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Partages de fichiers") }} · {{ host }}{% endblock %}
 {% from "_nav_icons.html" import ui_icon, nav_icon %}
+{% from "_shares.html" import ring, share_paths %}
 {% set manage = can('samba.manage') %}
 {% set ready = st.installed and st.managed and not st.stale %}
 {% set first_host = hosts[0] if hosts else host %}
 {% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
 
-{# Anneau d'occupation : part de la taille limite, couleur d'état (ok, bientôt plein, plein), valeur au centre. #}
-{% macro ring(pct, level, size=76, sub='') -%}
-{% set p = [[pct or 0, 0]|max, 100]|min %}
-<svg class="chart share-ring {{ level }}" viewBox="0 0 96 96" width="{{ size }}" height="{{ size }}" role="img" aria-label="{{ _('%(pct)s %% de la taille limite', pct=p) }}">
-  <circle class="ring-track" cx="48" cy="48" r="39"/>
-  {% if p > 0 %}<circle class="ring-arc" cx="48" cy="48" r="39" pathLength="100" stroke-dasharray="{{ '%.2f'|format([p, 1.2]|max) }} {{ '%.2f'|format(100 - [p, 1.2]|max) }}" transform="rotate(-90 48 48)"/>{% endif %}
-  <text class="ring-total" x="48" y="{{ 52 if not sub else 49 }}" text-anchor="middle">{{ p }}<tspan class="ring-unit-pct" dx="1">%</tspan></text>
-  {% if sub %}<text class="ring-unit" x="48" y="64" text-anchor="middle">{{ sub }}</text>{% endif %}
-</svg>
-{%- endmacro %}
+
 
 {# Partition : barre segmentée (système et autres données, fichiers des partages, place réservée, libre) ; le segment
    « nouveau » est dessiné par la page quand on choisit la taille d'un partage. #}
@@ -51,15 +43,7 @@
         <td class="center"><input type="radio" name="{{ field }}" value="write" aria-label="{{ _('%(u)s : lecture et écriture', u=label) }}"{% if mine == 'write' %} checked{% endif %}></td></tr>
 {%- endmacro %}
 
-{# Adresse d'un partage (ou du serveur) pour chaque système : Windows (chemin UNC), Linux et macOS (smb://). #}
-{% macro share_paths(name='', label='') -%}
-<div class="share-paths" role="group" aria-label="{{ label }}">
-  <span class="share-os">Windows</span>
-  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\{{ name }}" aria-label="{{ label }} · Windows"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
-  <span class="share-os">Linux · macOS</span>
-  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="smb://{{ first_host }}/{{ name }}" aria-label="{{ label }} · Linux, macOS"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
-</div>
-{%- endmacro %}
+
 
 {% macro rights_head(first) -%}
     <thead><tr><th>{{ first }}</th><th class="center">{{ _("Aucun accès") }}</th><th class="center">{{ _("Lecture") }}</th><th class="center">{{ _("Lecture et écriture") }}</th></tr></thead>
@@ -169,7 +153,7 @@
 {% if st.installed %}
 <section class="panel share-strip" data-refresh="server">
   <span class="st {{ 'ok' if st.running else 'err' }}">{{ _("Samba %(v)s en service", v=st.version) if st.running else _("Samba %(v)s arrêté", v=st.version) }}</span>
-  {{ share_paths('', _('Adresse des partages')) }}
+  {{ share_paths(first_host, '', _('Adresse des partages')) }}
   <span><span class="share-strip-k">{{ _("Réseaux autorisés") }}</span> <span class="mono">{% if st.networks %}{{ st.networks|join(' ') }}{% else %}{{ _("tous") }}{% endif %}</span></span>
   <span><span class="share-strip-k">{{ _("Connexions") }}</span> {{ connections|length }}</span>
   {% set fw = st.firewall or {} %}
@@ -230,10 +214,11 @@
         </div>
       </div>
       {% if s.error %}<p class="share-card-err err-text">{{ s.error }}</p>{% endif %}
-      {{ share_paths(s.name, _('Adresse du partage')) }}
+      {{ share_paths(first_host, s.name, _('Adresse du partage')) }}
       <footer class="share-card-f">
         <span class="share-avatars">{% for a in s.access %}{{ avatar(a.login, a.can_write) }}{% endfor %}</span>
         <span class="sub">{% if s.access %}{{ ngettext('%(num)s utilisateur', '%(num)s utilisateurs', s.access|length) }}{% else %}{{ _("aucun utilisateur") }}{% endif %}{% if s.sessions %} · {{ ngettext('%(num)s connexion', '%(num)s connexions', s.sessions|length) }}{% endif %}</span>
+        {% if s.id in opens %}<a class="btn sm share-open" href="{{ url_for('share_files', share_id=s.id) }}" aria-label="{{ _('Ouvrir le partage %(name)s dans le navigateur', name=s.name) }}">{{ _("Ouvrir") }}</a>{% endif %}
       </footer>
     </article>
     {% endfor %}

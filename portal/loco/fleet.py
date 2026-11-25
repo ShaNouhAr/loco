@@ -2554,7 +2554,8 @@ def fleet_device(dev_id):
                            consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,
                            consent_version=".".join(map(str, CONSENT_VERSION)),
                            files_ready=version_key(dev["agent_version"]) >= (2, 23) and can("remote.files"),
-                           disk_usage=version_key(dev["agent_version"]) >= (2, 186) and dev["os_family"] in ("windows", "linux"),
+                           # Agents Linux (familles debian, rhel) et Windows : l'agent Android ne mesure pas l'espace disque.
+                           disk_usage=version_key(dev["agent_version"]) >= (2, 186) and dev["os_family"] != "android",
                            gpu_offers=gpu_driver_offers(dev), gpu_busy=any(c["action"] == "gpu-driver" for c in waiting),
                            remove_pkg=can("fleet.remove") and version_key(dev["agent_version"]) >= (2, 187) and dev["os_family"] in ("debian", "rhel"),
                            action_label=action_label, agent_outdated=agent_outdated(dev), server_version=config.VERSION,

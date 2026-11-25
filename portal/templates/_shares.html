@@ -1,0 +1,21 @@
+{# Macros communes aux pages des partages de fichiers (gestion des partages, partages ouverts par un compte). #}
+{# Anneau d'occupation : part de la taille limite, couleur d'état (ok, bientôt plein, plein), valeur au centre. #}
+{% macro ring(pct, level, size=76, sub='') -%}
+{% set p = [[pct or 0, 0]|max, 100]|min %}
+<svg class="chart share-ring {{ level }}" viewBox="0 0 96 96" width="{{ size }}" height="{{ size }}" role="img" aria-label="{{ _('%(pct)s %% de la taille limite', pct=p) }}">
+  <circle class="ring-track" cx="48" cy="48" r="39"/>
+  {% if p > 0 %}<circle class="ring-arc" cx="48" cy="48" r="39" pathLength="100" stroke-dasharray="{{ '%.2f'|format([p, 1.2]|max) }} {{ '%.2f'|format(100 - [p, 1.2]|max) }}" transform="rotate(-90 48 48)"/>{% endif %}
+  <text class="ring-total" x="48" y="{{ 52 if not sub else 49 }}" text-anchor="middle">{{ p }}<tspan class="ring-unit-pct" dx="1">%</tspan></text>
+  {% if sub %}<text class="ring-unit" x="48" y="64" text-anchor="middle">{{ sub }}</text>{% endif %}
+</svg>
+{%- endmacro %}
+
+{# Adresse d'un partage (ou du serveur) pour chaque système : Windows (chemin UNC), Linux et macOS (smb://). #}
+{% macro share_paths(host, name='', label='') -%}
+<div class="share-paths" role="group" aria-label="{{ label }}">
+  <span class="share-os">Windows</span>
+  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ host }}\{{ name }}" aria-label="{{ label }} · Windows"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+  <span class="share-os">Linux · macOS</span>
+  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="smb://{{ host }}/{{ name }}" aria-label="{{ label }} · Linux, macOS"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+</div>
+{%- endmacro %}

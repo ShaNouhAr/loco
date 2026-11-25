@@ -392,7 +392,7 @@ flowchart LR
 <img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Appareils, applications, écran distant.</sub><br><br>
 <img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>Liaison SSH, mises à jour, sauvegardes.</sub><br><br>
 <img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/wazuh.md">Agent Wazuh</a></b><br><sub>Posé sur les postes, réglé pour votre manager.</sub><br><br>
-<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/partages.md">Partages de fichiers</a></b><br><sub>Dossiers SMB, tailles limites, comptes.</sub><br><br>
+<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/partages.md">Partages de fichiers</a></b><br><sub>Dossiers SMB, tailles limites, comptes, gestionnaire de fichiers.</sub><br><br>
 </td>
 <td width="33%" valign="top">
 <h4>Faire tourner</h4>

@@ -8,9 +8,13 @@ Côté portail (compte loco, sans droits root) : request() dépose une demande, 
 
 Un mot de passe de partage n'existe que dans sa demande (fichier 0600 du compte loco, effacé dès sa lecture) et dans
 la base de Samba : il est remis à smbpasswd par son entrée standard, jamais en argument, dans l'état ni dans un journal.
+Fichiers des partages ouverts dans le navigateur : un service à part (files_serve), lancé par l'agent sous le compte
+loco-share, fait les opérations du gestionnaire de fichiers du portail (voir « fichiers des partages » plus bas).
 Module hors du paquet loco : chargé à la demande par locoadmin (mode isolé) et importé par le portail.
 """
 
+import contextlib
+import errno
 import grp
 import hashlib
 import ipaddress
@@ -18,15 +22,20 @@ import json
 import os
 import pwd
 import re
+import secrets
 import shlex
 import shutil
 import signal
+import socket
 import stat
+import struct
 import subprocess
 import sys
 import threading
 import time
+import unicodedata
 import uuid
+import zipfile
 
 AGENT_DIR = "/var/lib/loco-agent"
 REQUESTS = os.path.join(AGENT_DIR, "samba")            # demandes du portail (0730 root:loco)
@@ -689,6 +698,7 @@ class Worker:
         self.raw, self.applied = None, ""
         self.firewall = {"kind": "", "open": False}
         self.access = {}                                              # droits de la configuration écrite en dernier
+        self.files_proc, self.files_sock, self.files_at = None, None, 0.0
         saved = _read_json(SPEC)
         if saved:
             self.enabled = bool(saved.get("enabled"))
@@ -820,6 +830,37 @@ class Worker:
         if touched:
             self.sessions, self.sessions_at = _sessions(spec["users"]), time.time()
 
+    # -- fichiers des partages ouverts dans le navigateur
+
+    def files_keep(self):
+        """Service des fichiers des partages (files_serve), lancé sous le compte loco-share tant que la fonctionnalité
+        est active et Samba installé ; relancé s'il s'arrête (au plus toutes les 15 secondes), arrêté sinon."""
+        proc = self.files_proc
+        if not (self.enabled and installed() and _exists(OWNER)):
+            if proc and proc.poll() is None:
+                proc.terminate()
+            self.files_proc = None
+            if self.files_sock is not None:
+                self.files_sock.close()
+                self.files_sock = None
+                with contextlib.suppress(OSError):
+                    os.unlink(FILES_SOCK)
+            return
+        if (proc and proc.poll() is None) or time.time() - self.files_at < 15:
+            return
+        self.files_at = time.time()
+        try:
+            if self.files_sock is None:
+                self.files_sock = files_socket()
+            uid, gid = _owner_ids()
+            fd = self.files_sock.fileno()
+            self.files_proc = subprocess.Popen(
+                [sys.executable, "-I", HERE, "files", str(fd)], pass_fds=(fd,), user=uid, group=gid, extra_groups=[],
+                umask=0o007, cwd="/", env={"PATH": PATH, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        except (OSError, KeyError, ValueError, subprocess.SubprocessError) as e:
+            print(f"fichiers des partages indisponibles : {e}", file=sys.stderr)
+
     # -- demandes
 
     def handle(self, req):
@@ -915,6 +956,7 @@ class Worker:
         measured = published = walled = 0.0
         while True:
             self.requests()
+            self.files_keep()
             now = time.time()
             # Pare-feu allumé (ou règles retirées) depuis : le port des partages est rouvert dans les dix minutes.
             if self.enabled and installed() and managed() and now - walled > FIREWALL_EVERY:
@@ -963,6 +1005,1044 @@ def worker(env=None):
         print(f"partages de fichiers indisponibles : {e}", file=sys.stderr)
 
 
+# --------------------------------------------------------------------------- fichiers des partages, dans le navigateur
+# Le portail (compte loco) ouvre un partage dans son gestionnaire de fichiers sans jamais toucher lui-même aux dossiers
+# des partages. Un service à part, lancé par l'agent sous le compte loco-share — propriétaire de tous les partages, sans
+# aucun droit root — fait chaque opération dans le dossier d'un partage publié par l'agent : un chemin y est suivi un
+# dossier après l'autre (descripteurs ouverts sans suivre de lien), si bien qu'aucun lien symbolique n'en fait sortir.
+# Pour lire ou écrire un fichier, il passe au portail le fichier déjà ouvert (descripteur, SCM_RIGHTS). Les droits de la
+# personne (lecture, ou lecture et écriture, partage par partage) sont décidés par le portail ; le service refuse en plus
+# d'agrandir un partage plein ou au-delà de sa taille limite. Les refus sont des codes que le portail traduit.
+
+FILES_RUN = "/run/loco-shares"
+FILES_SOCK = os.path.join(FILES_RUN, "files.sock")
+PORTAL_USER = "loco"
+STAGING = ".loco-envois"                     # téléversements en cours, à la racine de chaque partage
+STAGING_TTL = 86400                          # téléversement abandonné (portail relancé…) : effacé au bout d'un jour
+FILES_MAX = 10000                            # éléments d'un dossier rendus au plus
+FILES_REQUEST_MAX = 1 << 20
+FILES_BUDGET = 20.0                          # secondes : taille d'un dossier, espace disque, recherche
+FILES_FOUND = 500                            # résultats d'une recherche
+FILES_ITEMS = 2000                           # éléments d'une même opération (sélection)
+FILES_CONNECTIONS = 32
+FILES_JOBS = 8                               # copies, déplacements et suppressions en cours à la fois
+JOB_KEEP = 600                               # tâche terminée : son bilan reste lisible dix minutes
+SPACE_MARGIN = 64 << 20                      # place toujours laissée libre sur la partition
+COPY_CHUNK = 8 << 20
+O_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+O_READ = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+O_NEW = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+WINDOWS_BAD = frozenset('\\/:*?"<>|')
+WINDOWS_RESERVED = re.compile(r"(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?")
+TOKEN_RE = re.compile(r"[0-9a-f]{32}")
+JOB_RE = re.compile(r"[0-9a-f]{16}")
+CONFLICTS = ("replace", "rename", "skip")
+
+
+class FileError(Exception):
+    """Refus d'une opération : code connu du portail (qui le traduit) et valeurs de son message."""
+
+    def __init__(self, code, **values):
+        super().__init__(code)
+        self.code, self.values = code, values
+
+
+ERRNO_CODES = {errno.ENOENT: "not-found", errno.ELOOP: "link", errno.ENOTDIR: "not-dir", errno.EISDIR: "is-dir",
+               errno.EEXIST: "exists", errno.ENOTEMPTY: "exists", errno.ENOSPC: "disk", errno.EDQUOT: "disk",
+               errno.EACCES: "denied", errno.EPERM: "denied", errno.EROFS: "denied", errno.ENAMETOOLONG: "bad-name",
+               errno.EMFILE: "busy", errno.ENFILE: "busy"}
+
+
+def _failure(e):
+    if isinstance(e, FileError):
+        return e
+    if isinstance(e, OSError) and e.errno in ERRNO_CODES:
+        return FileError(ERRNO_CODES[e.errno])
+    if isinstance(e, OSError) and e.errno:
+        return FileError("io", error=os.strerror(e.errno))
+    return FileError("io", error=type(e).__name__)
+
+
+def _parts(path):
+    """Chemin relatif au partage (« Photos/2026/a.jpg ») : ses éléments, un par un — jamais « . » ni « .. »."""
+    if not isinstance(path, str) or len(path) > 4096 or "\x00" in path:
+        raise FileError("bad-path")
+    parts = [p for p in path.split("/") if p]
+    for part in parts:
+        try:
+            size = len(os.fsencode(part))
+        except UnicodeError:
+            raise FileError("bad-path") from None
+        if part in (".", "..") or size > 255:
+            raise FileError("bad-path")
+    return parts
+
+
+def _new_name(name, top=False):
+    """Nom choisi dans le navigateur (dossier, fichier, renommage, téléversement) : un élément, lisible aussi par les
+    postes Windows (ni « \\ / : * ? \" < > | », ni caractère de contrôle, ni point ou espace final, ni nom réservé)."""
+    if not isinstance(name, str):
+        raise FileError("bad-name")
+    try:
+        size = len(os.fsencode(name))
+    except UnicodeError:
+        raise FileError("bad-name") from None
+    if (not name or size > 255 or name in (".", "..") or name[-1] in ". " or WINDOWS_RESERVED.fullmatch(name)
+            or any(c in WINDOWS_BAD or ord(c) < 32 or ord(c) == 127 for c in name) or (top and name == STAGING)):
+        raise FileError("bad-name")
+    return name
+
+
+def _fold(text):
+    """Texte comparé sans casse ni accents (recherche)."""
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)).casefold()
+
+
+def _lstat(dirfd, name):
+    try:
+        return os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+
+
+def _describe(name, st):
+    mode = st.st_mode
+    kind = "dir" if stat.S_ISDIR(mode) else "file" if stat.S_ISREG(mode) else "other"
+    return {"name": name, "type": kind, "size": st.st_size if kind == "file" else 0, "mtime": int(st.st_mtime),
+            "link": stat.S_ISLNK(mode)}
+
+
+def _free_name(dirfd, name):
+    """« photo (2).jpg », « Dossier (3) »… : premier nom libre à côté de « name »."""
+    stem, ext = os.path.splitext(name)
+    if not stem:
+        stem, ext = name, ""
+    for n in range(2, 10000):
+        candidate = f"{stem} ({n}){ext}"
+        if len(os.fsencode(candidate)) > 255:
+            candidate = f"{stem[:200]} ({n}){ext[:40]}"
+        if _lstat(dirfd, candidate) is None:
+            return candidate
+    raise FileError("exists")
+
+
+class _Partial(Exception):
+    """Parcours arrêté au bout de son temps : le résultat est partiel."""
+
+
+def _walk(fd, deadline, skip=None, path=()):
+    """Chaque élément sous le dossier ouvert fd, en profondeur : (dossiers, nom, stat, dossier ouvert). Aucun lien n'est
+    suivi ; un dossier illisible est passé ; « skip » est ignoré au premier niveau. Au-delà de deadline : _Partial."""
+    try:
+        with os.scandir(fd) as it:
+            items = [e for e in it if not (skip and not path and e.name == skip)]
+    except OSError:
+        return
+    subdirs = []
+    for entry in items:
+        if time.monotonic() > deadline:
+            raise _Partial()
+        try:
+            st = entry.stat(follow_symlinks=False)
+        except OSError:
+            continue
+        yield path, entry.name, st, fd
+        if stat.S_ISDIR(st.st_mode):
+            subdirs.append(entry.name)
+    for name in subdirs:
+        try:
+            sub = os.open(name, O_DIR, dir_fd=fd)
+        except OSError:
+            continue
+        try:
+            yield from _walk(sub, deadline, skip, path + (name,))
+        finally:
+            os.close(sub)
+
+
+def _tree_size(dirfd, name, st, deadline):
+    """Octets sous un élément (dossier parcouru, fichier, lien : 0)."""
+    if stat.S_ISREG(st.st_mode):
+        return st.st_size
+    if not stat.S_ISDIR(st.st_mode):
+        return 0
+    total = 0
+    sub = os.open(name, O_DIR, dir_fd=dirfd)
+    try:
+        walker = _walk(sub, deadline)
+        try:
+            for _path, _name, child, _fd in walker:
+                if stat.S_ISREG(child.st_mode):
+                    total += child.st_size
+        finally:
+            walker.close()
+    finally:
+        os.close(sub)
+    return total
+
+
+def _remove(dirfd, name, job=None):
+    """Retire un élément ; un dossier avec tout son contenu, sans jamais suivre de lien."""
+    st = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+    if not stat.S_ISDIR(st.st_mode):
+        os.unlink(name, dir_fd=dirfd)
+        if job:
+            job.step()
+        return
+    fd = os.open(name, O_DIR, dir_fd=dirfd)
+    try:
+        with os.scandir(fd) as it:
+            children = list(it)
+        for child in children:
+            if job and job.cancelled:
+                raise FileError("cancelled")
+            if child.is_dir(follow_symlinks=False):
+                _remove(fd, child.name, job)
+            else:
+                os.unlink(child.name, dir_fd=fd)
+                if job:
+                    job.step()
+    finally:
+        os.close(fd)
+    os.rmdir(name, dir_fd=dirfd)
+    if job:
+        job.step()
+
+
+def _pump(src, dst, job=None):
+    """Copie le contenu d'un fichier ouvert dans un autre (copy_file_range, sinon lecture/écriture)."""
+    fast = hasattr(os, "copy_file_range")                     # selon la bibliothèque C de Python (musl, glibc)
+    while True:
+        if job and job.cancelled:
+            raise FileError("cancelled")
+        if fast:
+            try:
+                n = os.copy_file_range(src, dst, COPY_CHUNK)
+            except OSError as e:
+                if e.errno not in (errno.EXDEV, errno.ENOSYS, errno.EOPNOTSUPP, errno.EINVAL, errno.EPERM):
+                    raise
+                fast = False
+                continue
+        else:
+            data = os.read(src, 1 << 20)
+            n = len(data)
+            view = memoryview(data)
+            while view:
+                view = view[os.write(dst, view):]
+        if not n:
+            return
+        if job:
+            job.done += n
+
+
+def _copy(sfd, name, dfd, target, job=None):
+    """Copie un élément (fichier, dossier et son contenu, lien recopié tel quel) ; dates de modification gardées."""
+    st = os.stat(name, dir_fd=sfd, follow_symlinks=False)
+    if stat.S_ISLNK(st.st_mode):
+        os.symlink(os.readlink(name, dir_fd=sfd), target, dir_fd=dfd)
+    elif stat.S_ISREG(st.st_mode):
+        src = os.open(name, O_READ, dir_fd=sfd)
+        try:
+            dst = os.open(target, O_NEW, 0o660, dir_fd=dfd)
+            try:
+                _pump(src, dst, job)
+                os.utime(dst, ns=(st.st_atime_ns, st.st_mtime_ns))
+            except BaseException:
+                os.close(dst)
+                with contextlib.suppress(OSError):
+                    os.unlink(target, dir_fd=dfd)
+                raise
+            os.close(dst)
+        finally:
+            os.close(src)
+    elif stat.S_ISDIR(st.st_mode):
+        os.mkdir(target, 0o2770, dir_fd=dfd)
+        src = os.open(name, O_DIR, dir_fd=sfd)
+        try:
+            dst = os.open(target, O_DIR, dir_fd=dfd)
+            try:
+                os.fchmod(dst, 0o2770)
+                with os.scandir(src) as it:
+                    children = sorted(e.name for e in it)
+                for child in children:
+                    if job and job.cancelled:
+                        raise FileError("cancelled")
+                    _copy(src, child, dst, child, job)
+                os.utime(dst, ns=(st.st_atime_ns, st.st_mtime_ns))
+            finally:
+                os.close(dst)
+        finally:
+            os.close(src)
+    if job:
+        job.step()
+
+
+def _zip_time(mtime):
+    t = time.localtime(max(mtime, 315532800))                 # une archive ZIP ne date rien d'avant 1980
+    return t[:6]
+
+
+def _zip_name(text):
+    return os.fsencode(text).decode("utf-8", "replace")
+
+
+class Job:
+    """Copie, déplacement ou suppression en cours dans le service : avancement lu par le portail."""
+
+    def __init__(self, kind, items):
+        self.id, self.kind, self.items = secrets.token_hex(8), kind, items
+        self.state, self.done, self.total, self.count = "running", 0, 0, 0
+        self.current, self.errors, self.cancelled, self.finished = "", [], False, 0.0
+        self.result = {}
+
+    def step(self):
+        self.count += 1
+
+    def view(self):
+        return {"id": self.id, "kind": self.kind, "state": self.state, "done": self.done, "total": self.total,
+                "count": self.count, "items": self.items, "current": self.current, "errors": self.errors[:50],
+                "result": self.result}
+
+
+class ShareFiles:
+    """Opérations du gestionnaire de fichiers dans les partages publiés par l'agent, sous le compte loco-share."""
+
+    def __init__(self, status_path=None):
+        self.status_path = status_path or STATUS
+        self.lock = threading.Lock()
+        self.added = {}                          # partage -> [(instant, octets)] ajoutés depuis son dernier relevé
+        self.jobs = {}
+        self.uploads = {}                        # jeton -> partage : téléversements en cours
+
+    # -- partages et dossiers
+
+    @staticmethod
+    def parts(path):
+        """Chemin d'une demande : comme _parts, sans jamais atteindre le dossier des téléversements en cours."""
+        parts = _parts(path)
+        if parts and parts[0] == STAGING:
+            raise FileError("not-found")
+        return parts
+
+    def share(self, name):
+        shares = _read_json(self.status_path).get("shares") or {}
+        found = shares.get(name) if isinstance(name, str) else None
+        if not isinstance(found, dict) or found.get("error") or not str(found.get("path") or "").startswith("/"):
+            raise FileError("no-share")
+        return dict(found, name=name)
+
+    @contextlib.contextmanager
+    def folder(self, share, parts):
+        """Dossier « parts » du partage, ouvert un élément après l'autre sans jamais suivre de lien."""
+        try:
+            fd = os.open(share["path"], O_DIR)
+        except OSError:
+            raise FileError("no-share") from None
+        try:
+            for part in parts:
+                try:
+                    sub = os.open(part, O_DIR, dir_fd=fd)
+                except OSError as e:
+                    raise _failure(e) from None
+                os.close(fd)
+                fd = sub
+            yield fd
+        finally:
+            os.close(fd)
+
+    def grow(self, share, size, fd):
+        """Place demandée par un ajout (téléversement, copie) : refusée si le partage est plein, si elle dépasse ce qu'il
+        reste avant sa taille limite (relevé de l'agent et ajouts faits depuis), ou la place libre de la partition."""
+        if share.get("full"):
+            raise FileError("full")
+        limit, used = int(share.get("limit") or 0), int(share.get("used") or 0)
+        measured = float(share.get("measured") or 0)
+        try:
+            st = os.fstatvfs(fd)
+            disk = st.f_bavail * st.f_frsize - SPACE_MARGIN
+        except OSError:
+            disk = None
+        with self.lock:
+            recent = [(at, n) for at, n in self.added.get(share["name"], []) if at > measured]
+            left = limit - used - sum(n for _at, n in recent) if limit else None
+            if left is not None and size > left:
+                raise FileError("quota", free=max(0, left))
+            if disk is not None and size > disk:
+                raise FileError("disk")
+            recent.append((time.time(), size))
+            self.added[share["name"]] = recent
+
+    def _item_paths(self, req, key="paths"):
+        paths = req.get(key)
+        if not isinstance(paths, list) or not 1 <= len(paths) <= FILES_ITEMS:
+            raise FileError("bad-path")
+        found = [self.parts(p) for p in paths]
+        if any(not p for p in found):
+            raise FileError("bad-path")
+        return found
+
+    # -- lecture
+
+    def op_list(self, req):
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        with self.folder(share, parts) as fd:
+            names = sorted((n for n in os.listdir(fd) if parts or n != STAGING), key=lambda n: (n.casefold(), n))
+            entries = []
+            for name in names[:FILES_MAX]:
+                st = _lstat(fd, name)
+                if st is not None:
+                    entries.append(_describe(name, st))
+        entries.sort(key=lambda e: (e["type"] != "dir", e["name"].casefold(), e["name"]))
+        return {"path": "/".join(parts), "entries": entries, "truncated": len(names) > FILES_MAX}
+
+    def op_stat(self, req):
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        if not parts:
+            with self.folder(share, []) as fd:
+                return dict(_describe(share["name"], os.fstat(fd)), path="")
+        with self.folder(share, parts[:-1]) as fd:
+            st = _lstat(fd, parts[-1])
+        if st is None:
+            raise FileError("not-found")
+        return dict(_describe(parts[-1], st), path="/".join(parts))
+
+    def op_size(self, req):
+        """Taille d'un dossier, nombre de fichiers et de dossiers (fenêtre des propriétés)."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        deadline = time.monotonic() + FILES_BUDGET
+        total = files = dirs = 0
+        partial = False
+        with self.folder(share, parts) as fd:
+            walker = _walk(fd, deadline, STAGING if not parts else None)
+            try:
+                for _path, _name, st, _fd in walker:
+                    if stat.S_ISDIR(st.st_mode):
+                        dirs += 1
+                    elif stat.S_ISREG(st.st_mode):
+                        files += 1
+                        total += st.st_size
+            except (_Partial, RecursionError):
+                partial = True
+            finally:
+                walker.close()
+        return {"path": "/".join(parts), "size": total, "files": files, "dirs": dirs, "partial": partial}
+
+    def op_usage(self, req):
+        """Espace disque (façon TreeSize) : taille de chaque élément du dossier, du plus gros au plus petit."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        deadline = time.monotonic() + FILES_BUDGET
+        entries, total, partial = [], 0, False
+        with self.folder(share, parts) as fd:
+            names = [n for n in os.listdir(fd) if parts or n != STAGING]
+            partial = len(names) > FILES_MAX
+            for name in names[:FILES_MAX]:
+                st = _lstat(fd, name)
+                if st is None:
+                    continue
+                try:
+                    size = _tree_size(fd, name, st, deadline)
+                except (_Partial, RecursionError):
+                    size, partial = 0, True
+                except OSError:
+                    size = 0
+                total += size
+                entries.append(dict(_describe(name, st), size=size))
+        entries.sort(key=lambda e: e["size"], reverse=True)
+        return {"path": "/".join(parts), "total": total, "entries": entries, "partial": partial}
+
+    def op_search(self, req):
+        """Éléments dont le nom contient le texte cherché (sans casse ni accents), dans le dossier et ses sous-dossiers."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        query = _fold(str(req.get("q") or "")).strip()[:200]
+        if not query:
+            raise FileError("bad-query")
+        deadline = time.monotonic() + FILES_BUDGET
+        found, partial = [], False
+        with self.folder(share, parts) as fd:
+            walker = _walk(fd, deadline, STAGING if not parts else None)
+            try:
+                for path, name, st, _fd in walker:
+                    if query in _fold(name):
+                        found.append(dict(_describe(name, st), dir="/".join(parts + list(path))))
+                        if len(found) >= FILES_FOUND:
+                            partial = True
+                            break
+            except (_Partial, RecursionError):
+                partial = True
+            finally:
+                walker.close()
+        return {"path": "/".join(parts), "entries": found, "partial": partial}
+
+    def op_open(self, req):
+        """Fichier ouvert en lecture, passé au portail (téléchargement, aperçu)."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        if not parts:
+            raise FileError("is-dir")
+        with self.folder(share, parts[:-1]) as fd:
+            try:
+                handle = os.open(parts[-1], O_READ, dir_fd=fd)
+            except OSError as e:
+                raise _failure(e) from None
+        st = os.fstat(handle)
+        if not stat.S_ISREG(st.st_mode):
+            os.close(handle)
+            raise FileError("is-dir" if stat.S_ISDIR(st.st_mode) else "not-found")
+        os.set_blocking(handle, True)
+        return {"name": parts[-1], "size": st.st_size, "mtime": st.st_mtime_ns // 1000000}, [handle]
+
+    def op_conflicts(self, req):
+        """Éléments d'une copie ou d'un déplacement qui portent déjà leur nom à destination (à faire choisir avant)."""
+        src = self.share(req.get("share"))
+        dst = self.share(req.get("to_share") or req.get("share"))
+        items, to = self._item_paths(req), self.parts(req.get("to", ""))
+        with self.folder(dst, to) as dfd:
+            taken = [p[-1] for p in items if _lstat(dfd, p[-1]) is not None
+                     and not (dst["name"] == src["name"] and p[:-1] == to)]
+        return {"conflicts": taken}
+
+    # -- modifications
+
+    def op_mkdir(self, req):
+        """Nouveau dossier ; avec « parents », les dossiers manquants du chemin aussi (dossier téléversé)."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        if not parts:
+            raise FileError("bad-path")
+        if share.get("full"):
+            raise FileError("full")
+        parents = bool(req.get("parents"))
+        with self.folder(share, []) as root:
+            fd = os.dup(root)
+            try:
+                for i, part in enumerate(parts):
+                    last = i == len(parts) - 1
+                    if _lstat(fd, part) is None:
+                        if not (last or parents):
+                            raise FileError("not-found")
+                        _new_name(part, top=not i)
+                        with contextlib.suppress(FileExistsError):
+                            os.mkdir(part, 0o2770, dir_fd=fd)
+                        created = True
+                    elif last and not parents:
+                        raise FileError("exists")
+                    else:
+                        created = False
+                    sub = os.open(part, O_DIR, dir_fd=fd)        # un fichier ou un lien à ce nom : refus
+                    os.close(fd)
+                    fd = sub
+                    if created:
+                        os.fchmod(fd, 0o2770)
+            finally:
+                os.close(fd)
+        return {"path": "/".join(parts)}
+
+    def op_newfile(self, req):
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        if not parts:
+            raise FileError("bad-path")
+        if share.get("full"):
+            raise FileError("full")
+        name = _new_name(parts[-1], top=len(parts) == 1)
+        with self.folder(share, parts[:-1]) as fd:
+            try:
+                os.close(os.open(name, O_NEW, 0o660, dir_fd=fd))
+            except OSError as e:
+                raise _failure(e) from None
+        return {"path": "/".join(parts)}
+
+    def op_rename(self, req):
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        if not parts:
+            raise FileError("bad-path")
+        name = _new_name(req.get("name"), top=len(parts) == 1)
+        with self.folder(share, parts[:-1]) as fd:
+            old = _lstat(fd, parts[-1])
+            if old is None:
+                raise FileError("not-found")
+            if name != parts[-1]:
+                other = _lstat(fd, name)
+                if other is not None and (other.st_ino, other.st_dev) != (old.st_ino, old.st_dev):
+                    raise FileError("exists")
+                try:
+                    os.rename(parts[-1], name, src_dir_fd=fd, dst_dir_fd=fd)
+                except OSError as e:
+                    raise _failure(e) from None
+        return {"path": "/".join(parts[:-1] + [name]), "name": name}
+
+    def op_delete(self, req):
+        share, items = self.share(req.get("share")), self._item_paths(req)
+
+        def run(job):
+            for parts in items:
+                if job.cancelled:
+                    raise FileError("cancelled")
+                job.current = parts[-1]
+                try:
+                    with self.folder(share, parts[:-1]) as fd:
+                        _remove(fd, parts[-1], job)
+                except (OSError, FileError) as e:
+                    if isinstance(e, FileError) and e.code == "cancelled":
+                        raise
+                    job.errors.append({"name": parts[-1], "error": _failure(e).code})
+        return self.start("delete", len(items), run)
+
+    def op_copy(self, req):
+        return self._transfer(req, move=False)
+
+    def op_move(self, req):
+        return self._transfer(req, move=True)
+
+    def _transfer(self, req, move):
+        """Copie ou déplacement d'éléments (même partage ou un autre) vers un dossier ; pour chaque nom déjà pris à
+        destination, la décision venue du navigateur : remplacer, garder les deux (nom libre), ou passer."""
+        src = self.share(req.get("share"))
+        dst = self.share(req.get("to_share") or req.get("share"))
+        items, to = self._item_paths(req), self.parts(req.get("to", ""))
+        decisions = req.get("decisions") if isinstance(req.get("decisions"), dict) else {}
+        same = src["name"] == dst["name"]
+        for parts in items:
+            if same and to[:len(parts)] == parts:
+                raise FileError("into-itself")
+        with self.folder(dst, to):
+            pass                                                  # la destination existe (sinon : refus immédiat)
+        # Une copie, ou un déplacement vers un autre partage, agrandit la destination : place vérifiée d'abord.
+        total = 0
+        if not move or not same:
+            deadline = time.monotonic() + FILES_BUDGET
+            for parts in items:
+                try:
+                    with self.folder(src, parts[:-1]) as fd:
+                        st = _lstat(fd, parts[-1])
+                        total += _tree_size(fd, parts[-1], st, deadline) if st else 0
+                except (_Partial, RecursionError):
+                    break
+            with self.folder(dst, to) as dfd:
+                self.grow(dst, total, dfd)
+
+        def run(job):
+            job.total = total
+            for parts in items:
+                if job.cancelled:
+                    raise FileError("cancelled")
+                name = parts[-1]
+                job.current = name
+                decision = decisions.get(name)
+                try:
+                    self._transfer_one(job, src, parts, dst, to, move, decision if decision in CONFLICTS else None)
+                except (OSError, FileError) as e:
+                    if isinstance(e, FileError) and e.code == "cancelled":
+                        raise
+                    job.errors.append({"name": name, "error": _failure(e).code})
+        return self.start("move" if move else "copy", len(items), run)
+
+    def _transfer_one(self, job, src, parts, dst, to, move, decision):
+        name, same_dir = parts[-1], src["name"] == dst["name"] and parts[:-1] == to
+        with self.folder(src, parts[:-1]) as sfd, self.folder(dst, to) as dfd:
+            st = _lstat(sfd, name)
+            if st is None:
+                raise FileError("not-found")
+            target, existing = name, _lstat(dfd, name)
+            if existing is not None:
+                if same_dir and move:
+                    return                                        # déplacé là où il est déjà : rien à faire
+                if same_dir or decision == "rename":
+                    target = _free_name(dfd, name)                # copie dans son propre dossier : « nom (2) »
+                elif decision == "skip":
+                    return
+                elif decision != "replace":
+                    raise FileError("exists")
+            if move:
+                try:
+                    if target == name and existing is not None:
+                        if stat.S_ISDIR(existing.st_mode) or stat.S_ISDIR(st.st_mode):
+                            _remove(dfd, name)
+                    os.rename(name, target, src_dir_fd=sfd, dst_dir_fd=dfd)
+                    job.step()
+                    return
+                except OSError as e:
+                    if e.errno != errno.EXDEV:
+                        raise
+            if target == name and existing is not None:
+                # Remplacer : copie sous un nom provisoire, puis l'ancien laisse sa place (rien n'est perdu si la
+                # copie échoue en route).
+                provisional = f".loco-copie-{secrets.token_hex(6)}"
+                _copy(sfd, name, dfd, provisional, job)
+                try:
+                    if stat.S_ISDIR(existing.st_mode):
+                        _remove(dfd, name)
+                    os.rename(provisional, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+                except BaseException:
+                    with contextlib.suppress(OSError):
+                        _remove(dfd, provisional)
+                    raise
+            else:
+                _copy(sfd, name, dfd, target, job)
+            if move:
+                _remove(sfd, name)
+
+    # -- téléversements
+
+    def staging(self, share):
+        """Dossier des téléversements en cours, à la racine du partage (créé au besoin)."""
+        with self.folder(share, []) as root:
+            try:
+                os.mkdir(STAGING, 0o2770, dir_fd=root)
+            except FileExistsError:
+                pass
+            except OSError as e:
+                raise _failure(e) from None
+            try:
+                return os.open(STAGING, O_DIR, dir_fd=root)
+            except OSError as e:
+                raise _failure(e) from None
+
+    def op_upload(self, req):
+        """Début d'un téléversement : place vérifiée, fichier provisoire ouvert et passé au portail, qui y écrit."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("dir", ""))
+        _new_name(req.get("name"), top=not parts)
+        try:
+            size = int(req.get("size"))
+        except (TypeError, ValueError):
+            raise FileError("size") from None
+        if size < 0:
+            raise FileError("size")
+        with self.folder(share, parts) as fd:
+            self.grow(share, size, fd)
+        token = secrets.token_hex(16)
+        sfd = self.staging(share)
+        try:
+            handle = os.open(token + ".part", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                             0o660, dir_fd=sfd)
+        except OSError as e:
+            raise _failure(e) from None
+        finally:
+            os.close(sfd)
+        with self.lock:
+            self.uploads[token] = share["name"]
+        return {"token": token}, [handle]
+
+    def op_upload_done(self, req):
+        """Fin d'un téléversement : le fichier provisoire prend sa place (remplace, garde les deux, ou refus si le nom
+        est pris), avec sa date de modification d'origine."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("dir", ""))
+        name = _new_name(req.get("name"), top=not parts)
+        token = str(req.get("token", ""))
+        if not TOKEN_RE.fullmatch(token):
+            raise FileError("bad-path")
+        conflict = req.get("conflict") if req.get("conflict") in ("replace", "rename") else None
+        sfd = self.staging(share)
+        try:
+            st = _lstat(sfd, token + ".part")
+            if st is None or not stat.S_ISREG(st.st_mode):
+                raise FileError("not-found")
+            if "size" in req and st.st_size != int(req.get("size") or 0):
+                raise FileError("size")
+            mtime = req.get("mtime")
+            if isinstance(mtime, (int, float)) and 0 < mtime < 2 ** 42:
+                os.utime(token + ".part", ns=(time.time_ns(), int(mtime) * 1000000), dir_fd=sfd, follow_symlinks=False)
+            with self.folder(share, parts) as dfd:
+                target, existing = name, _lstat(dfd, name)
+                if existing is not None:
+                    if conflict == "rename":
+                        target = _free_name(dfd, name)
+                    elif conflict != "replace":
+                        raise FileError("exists")
+                    elif stat.S_ISDIR(existing.st_mode):
+                        raise FileError("is-dir")
+                    elif isinstance(req.get("expect"), int) and existing.st_mtime_ns // 1000000 != req["expect"]:
+                        raise FileError("changed")              # enregistré depuis l'éditeur, modifié entre-temps
+                try:
+                    os.rename(token + ".part", target, src_dir_fd=sfd, dst_dir_fd=dfd)
+                except OSError as e:
+                    raise _failure(e) from None
+                placed = _lstat(dfd, target)
+        finally:
+            os.close(sfd)
+        with self.lock:
+            self.uploads.pop(token, None)
+        return {"name": target, "path": "/".join(parts + [target]),
+                "mtime": placed.st_mtime_ns // 1000000 if placed else None}
+
+    def op_upload_cancel(self, req):
+        share, token = self.share(req.get("share")), str(req.get("token", ""))
+        if TOKEN_RE.fullmatch(token):
+            sfd = self.staging(share)
+            try:
+                with contextlib.suppress(OSError):
+                    os.unlink(token + ".part", dir_fd=sfd)
+            finally:
+                os.close(sfd)
+        with self.lock:
+            self.uploads.pop(token, None)
+        return {}
+
+    # -- archive ZIP (téléchargement d'un dossier ou d'une sélection)
+
+    def op_zip(self, req):
+        """Archive ZIP de la sélection (ou de tout le dossier), écrite à la volée dans un tube passé au portail."""
+        share, parts = self.share(req.get("share")), self.parts(req.get("path", ""))
+        names = req.get("names") or []
+        if not isinstance(names, list) or len(names) > FILES_ITEMS or any(
+                not isinstance(n, str) or len(_parts(n)) != 1 or (not parts and n == STAGING) for n in names):
+            raise FileError("bad-path")
+        with self.folder(share, parts) as fd:
+            if not names:
+                names = sorted(n for n in os.listdir(fd) if parts or n != STAGING)
+            elif any(_lstat(fd, n) is None for n in names):
+                raise FileError("not-found")
+        read, write = os.pipe2(os.O_CLOEXEC)
+        threading.Thread(target=self._zip_write, args=(share, parts, names, write), name="loco-files-zip",
+                         daemon=True).start()
+        return {"names": len(names)}, [read]
+
+    def _zip_write(self, share, parts, names, write):
+        out = os.fdopen(write, "wb", buffering=1 << 20)
+        try:
+            with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as archive:
+                with self.folder(share, parts) as fd:
+                    for name in names:
+                        self._zip_add(archive, fd, name, name)
+        except (OSError, FileError, ValueError, RecursionError, zipfile.LargeZipFile):
+            pass                                                  # navigateur parti, ou dossier illisible
+        finally:
+            with contextlib.suppress(OSError):
+                out.close()
+
+    def _zip_add(self, archive, dirfd, name, arc):
+        st = _lstat(dirfd, name)
+        if st is None:
+            return
+        if stat.S_ISDIR(st.st_mode):
+            info = zipfile.ZipInfo(_zip_name(arc) + "/", date_time=_zip_time(st.st_mtime))
+            info.external_attr = (0o40775 << 16) | 0x10
+            archive.writestr(info, b"")
+            sub = os.open(name, O_DIR, dir_fd=dirfd)
+            try:
+                for child in sorted(os.listdir(sub)):
+                    self._zip_add(archive, sub, child, arc + "/" + child)
+            finally:
+                os.close(sub)
+        elif stat.S_ISREG(st.st_mode):
+            info = zipfile.ZipInfo(_zip_name(arc), date_time=_zip_time(st.st_mtime))
+            info.external_attr = 0o100664 << 16
+            info.file_size = st.st_size
+            handle = os.open(name, O_READ, dir_fd=dirfd)
+            with os.fdopen(handle, "rb") as source, archive.open(info, "w", force_zip64=st.st_size > (1 << 31)) as dest:
+                shutil.copyfileobj(source, dest, 1 << 20)
+
+    # -- tâches (copie, déplacement, suppression)
+
+    def start(self, kind, items, run):
+        with self.lock:
+            now = time.time()
+            for key in [k for k, j in self.jobs.items() if j.finished and now - j.finished > JOB_KEEP]:
+                del self.jobs[key]
+            if sum(1 for j in self.jobs.values() if not j.finished) >= FILES_JOBS:
+                raise FileError("busy")
+            job = Job(kind, items)
+            self.jobs[job.id] = job
+
+        def body():
+            try:
+                run(job)
+                job.state = "done"
+            except FileError as e:
+                job.state = "cancelled" if e.code == "cancelled" else "failed"
+                if e.code != "cancelled":
+                    job.errors.append({"name": job.current, "error": e.code})
+            except Exception as e:                                # une tâche ne doit jamais arrêter le service
+                job.state = "failed"
+                job.errors.append({"name": job.current, "error": _failure(e).code})
+            finally:
+                job.current, job.finished = "", time.time()
+        threading.Thread(target=body, name=f"loco-files-{kind}", daemon=True).start()
+        return {"job": job.id}
+
+    def _job(self, req):
+        key = str(req.get("job", ""))
+        job = self.jobs.get(key) if JOB_RE.fullmatch(key) else None
+        if job is None:
+            raise FileError("not-found")
+        return job
+
+    def op_job(self, req):
+        return self._job(req).view()
+
+    def op_job_cancel(self, req):
+        self._job(req).cancelled = True
+        return {}
+
+    # -- service
+
+    def handle(self, req):
+        """(réponse, descripteurs à passer) ; un refus est une réponse {"ok": false, "error": code}."""
+        op = req.get("op") if isinstance(req, dict) else None
+        method = getattr(self, "op_" + op, None) if isinstance(op, str) and re.fullmatch(r"[a-z_]{2,20}", op) else None
+        try:
+            if method is None:
+                raise FileError("bad-op")
+            reply = method(req)
+        except Exception as e:                                    # refus, ou demande mal formée : jamais une chute
+            failure = _failure(e)
+            return {"ok": False, "error": failure.code, "values": failure.values}, []
+        reply, fds = reply if isinstance(reply, tuple) else (reply, [])
+        return dict(reply, ok=True), fds
+
+    def tidy(self):
+        """Téléversements abandonnés depuis un jour (portail relancé en route) : effacés ; vieilles tâches oubliées."""
+        now = time.time()
+        for name in list((_read_json(self.status_path).get("shares") or {})):
+            try:
+                share = self.share(name)
+                with self.folder(share, []) as root:
+                    try:
+                        sfd = os.open(STAGING, O_DIR, dir_fd=root)
+                    except OSError:
+                        continue
+                    try:
+                        with self.lock:
+                            active = {t for t, s in self.uploads.items() if s == name}
+                        for entry in os.listdir(sfd):
+                            st = _lstat(sfd, entry)
+                            if st and entry[:32] not in active and now - st.st_mtime > STAGING_TTL:
+                                with contextlib.suppress(OSError):
+                                    _remove(sfd, entry)
+                    finally:
+                        os.close(sfd)
+            except (FileError, OSError):
+                continue
+        with self.lock:
+            for key in [k for k, j in self.jobs.items() if j.finished and now - j.finished > JOB_KEEP]:
+                del self.jobs[key]
+
+
+def _peer_uid(conn):
+    try:
+        _pid, uid, _gid = struct.unpack("3i", conn.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+        return uid
+    except OSError:
+        return None
+
+
+def _files_connection(files, conn, slots, allowed):
+    try:
+        conn.settimeout(30)
+        if _peer_uid(conn) not in allowed:
+            return
+        buf = b""
+        while not buf.endswith(b"\n") and len(buf) <= FILES_REQUEST_MAX:
+            chunk = conn.recv(65536)
+            if not chunk:
+                break
+            buf += chunk
+        try:
+            req = json.loads(buf) if len(buf) <= FILES_REQUEST_MAX else None
+        except ValueError:
+            req = None
+        reply, fds = files.handle(req) if isinstance(req, dict) else ({"ok": False, "error": "bad-op"}, [])
+        data = json.dumps(reply).encode() + b"\n"
+        try:
+            if fds:
+                socket.send_fds(conn, [data], fds)
+            else:
+                conn.sendall(data)
+        finally:
+            for fd in fds:
+                with contextlib.suppress(OSError):
+                    os.close(fd)
+    except OSError:
+        pass
+    finally:
+        conn.close()
+        slots.release()
+
+
+def files_serve(listen_fd, allowed=None, files=None):
+    """Service des fichiers des partages (processus à part, compte loco-share) : une demande JSON par connexion sur le
+    socket hérité de l'agent ; seul le portail (compte loco) y est entendu. Il s'arrête avec l'agent qui l'a lancé."""
+    server = socket.socket(fileno=listen_fd)
+    files = files or ShareFiles()
+    if allowed is None:
+        allowed = {0}
+        with contextlib.suppress(KeyError):
+            allowed.add(pwd.getpwnam(PORTAL_USER).pw_uid)
+    parent = os.getppid()
+
+    def watch():
+        tidied = 0.0
+        while True:
+            time.sleep(2)
+            if os.getppid() != parent:                            # agent arrêté ou relancé : ce service s'en va aussi
+                os._exit(0)
+            if time.time() - tidied > 3600:
+                tidied = time.time()
+                with contextlib.suppress(Exception):
+                    files.tidy()
+    threading.Thread(target=watch, name="loco-files-watch", daemon=True).start()
+    slots = threading.BoundedSemaphore(FILES_CONNECTIONS)
+    while True:
+        try:
+            conn, _addr = server.accept()
+        except OSError:
+            time.sleep(0.2)
+            continue
+        if not slots.acquire(blocking=False):
+            with contextlib.suppress(OSError):
+                conn.sendall(json.dumps({"ok": False, "error": "busy"}).encode() + b"\n")
+            conn.close()
+            continue
+        threading.Thread(target=_files_connection, args=(files, conn, slots, allowed), name="loco-files",
+                         daemon=True).start()
+
+
+def files_socket(path=None, group=PORTAL_USER):
+    """Socket d'écoute du service (créé par l'agent root) : dossier et socket réservés au groupe du portail."""
+    path = path or FILES_SOCK
+    folder = os.path.dirname(path)
+    os.makedirs(folder, mode=0o750, exist_ok=True)
+    if group:
+        shutil.chown(folder, "root", group)
+    os.chmod(folder, 0o750)
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(path)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(path)
+    sock.listen(64)                                               # root seul s'y connecte jusqu'aux droits ci-dessous
+    if group:
+        shutil.chown(path, "root", group)
+    os.chmod(path, 0o660)
+    return sock
+
+
+def files_call(req, timeout=30, path=None):
+    """Côté portail : une demande au service des fichiers. Rend (réponse, descripteurs reçus) — l'appelant ferme
+    ces derniers. OSError si le service ne répond pas."""
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    client.settimeout(timeout)
+    fds, buf = [], b""
+    try:
+        client.connect(path or FILES_SOCK)
+        client.sendall(json.dumps(req).encode() + b"\n")
+        while not buf.endswith(b"\n"):
+            data, got, _flags, _addr = socket.recv_fds(client, 1 << 20, 4)
+            fds.extend(got)
+            if not data:
+                break
+            buf += data
+            if len(buf) > 64 * 1024 * 1024:
+                raise OSError(errno.EMSGSIZE, "réponse trop longue")
+        reply = json.loads(buf)
+        if not isinstance(reply, dict):
+            raise ValueError("réponse invalide")
+    except BaseException:
+        for fd in fds:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+        raise
+    finally:
+        client.close()
+    return reply, fds
+
+
 # --------------------------------------------------------------------------- dfree (appelé par smbd)
 
 def dfree(directory="."):
@@ -987,3 +2067,5 @@ def dfree(directory="."):
 if __name__ == "__main__":
     if len(sys.argv) >= 2 and sys.argv[1] == "dfree":
         print(dfree(sys.argv[2] if len(sys.argv) > 2 else "."))
+    elif len(sys.argv) == 3 and sys.argv[1] == "files" and sys.argv[2].isdigit():
+        files_serve(int(sys.argv[2]))
