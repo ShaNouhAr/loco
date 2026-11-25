@@ -37,6 +37,21 @@ class FakeStatvfs:
     f_frsize, f_blocks, f_bfree, f_bavail = 4096, 1000 * 262144, 600 * 262144, 550 * 262144    # 1000 Gio, 550 libres
 
 
+def smbstatus(*opened):
+    """Relevé « smbstatus --json » au format de Samba 4.23 (raccourci) : (pid, compte Unix, machine, partages…)."""
+    data = {"version": "4.23.8", "sessions": {}, "tcons": {}, "open_files": {}}
+    for n, (pid, unix, machine, shares) in enumerate(opened, 1):
+        server = {"pid": pid, "task_id": "0", "vnn": "4294967295", "unique_id": f"u{pid}"}
+        data["sessions"][str(700 + n)] = {"session_id": str(700 + n), "server_id": server, "uid": 1000 + n,
+                                          "username": unix, "remote_machine": machine,
+                                          "hostname": f"ipv4:{machine}:51234", "session_dialect": "SMB3_11"}
+        for m, name in enumerate(shares, 1):
+            data["tcons"][str(9000 + 10 * n + m)] = {"service": name, "server_id": server, "tcon_id": str(9000 + 10 * n + m),
+                                                     "session_id": str(700 + n), "machine": machine,
+                                                     "connected_at": f"2026-11-25T10:0{m}:00.000000+00:00"}
+    return data
+
+
 class TestPartitions(unittest.TestCase):
     def test_only_writable_unix_filesystems_outside_system_folders(self):
         with tempfile.NamedTemporaryFile("w", delete=False) as f:
@@ -210,7 +225,8 @@ class AgentTest(unittest.TestCase):
                    mock.patch.object(locosamba, "prepare_folder", lambda path, mount: None),
                    mock.patch.object(locosamba, "with_password", lambda: []),
                    mock.patch.object(locosamba, "service", lambda action: True),
-                   mock.patch.object(locosamba, "_run", lambda cmd, stdin=None, timeout=120, env=None: (0, ""))]
+                   mock.patch.object(locosamba, "_run", lambda cmd, stdin=None, timeout=120, env=None: (0, "")),
+                   mock.patch.object(locosamba, "firewall_kind", lambda: "")]
         for patch in patches:
             patch.start()
             self.addCleanup(patch.stop)
@@ -323,6 +339,222 @@ class TestAgent(AgentTest):
         with mock.patch.object(locosamba.os, "statvfs", lambda path: FakeStatvfs()):
             self.assertEqual(locosamba.dfree(os.path.join(folder, "sous-dossier")), f"{10 * GIB // 1024} {7 * GIB // 1024}")
             self.assertEqual(locosamba.dfree(self.work), f"{1000 * GIB // 1024} {550 * GIB // 1024}")   # hors partage
+
+
+class TestConnections(unittest.TestCase):
+    """Connexions en cours d'après smbstatus ; une connexion coupée l'est par le processus smbd qui la sert, celui que
+    Samba désigne lui-même, jamais un autre processus."""
+
+    def test_open_shares_and_the_process_that_serves_them(self):
+        data = smbstatus(("47", "lsmb1", "192.168.42.77", ["Documents", "Scans"]), ("49", "lsmb2", "192.168.42.20", ["IPC$", "Documents"]))
+        rows = locosamba._sessions({"lsmb1": "marie", "lsmb2": "scanner"}, data)
+        self.assertEqual([(r["user"], r["share"], r["machine"], r["pid"], r["uid"]) for r in rows],
+                         [("marie", "Documents", "192.168.42.77", "47", "u47"), ("scanner", "Documents", "192.168.42.20", "49", "u49"),
+                          ("marie", "Scans", "192.168.42.77", "47", "u47")])               # IPC$ (caché) laissé de côté
+        self.assertEqual(rows[0]["since"], "2026-11-25 10:01:00")
+        self.assertEqual(sorted((c["pid"], c["unix"], c["shares"]) for c in locosamba.connections(data)),
+                         [("47", "lsmb1", ["Documents", "Scans"]), ("49", "lsmb2", ["Documents"])])
+        self.assertEqual(locosamba._sessions({}, {}), [])                                 # Samba muet : rien
+
+    def test_only_a_connection_listed_by_samba_is_ended(self):
+        data, ran = smbstatus(("47", "lsmb1", "192.168.42.77", ["Documents"])), []
+        with mock.patch.object(locosamba, "_run", lambda cmd, **kw: ran.append(cmd) or (0, "")), \
+                mock.patch.object(locosamba, "served_by_smbd", lambda pid: pid == "47"), \
+                mock.patch.object(locosamba, "_gone", lambda pid: bool(ran)):
+            self.assertFalse(locosamba.end_connection("1", "", data))                       # pas une connexion
+            self.assertFalse(locosamba.end_connection("47", "u12", data))                   # numéro repris par un autre
+            self.assertFalse(locosamba.end_connection("47;reboot", "", data))
+            self.assertEqual(ran, [])
+            self.assertTrue(locosamba.end_connection("47", "u47", data))
+        self.assertEqual(ran, [["smbcontrol", "47", "shutdown"]])
+        with mock.patch.object(locosamba, "served_by_smbd", lambda pid: False), \
+                mock.patch.object(locosamba, "_run", lambda cmd, **kw: ran.append(cmd) or (0, "")):
+            self.assertFalse(locosamba.end_connection("47", "u47", data))                   # plus un fils de smbd
+        self.assertEqual(len(ran), 1)
+
+    def test_sigterm_when_samba_does_not_end_it(self):
+        data, killed, clock = smbstatus(("47", "lsmb1", "192.168.42.77", ["Documents"])), [], iter(range(100000))
+        with mock.patch.object(locosamba, "_run", lambda cmd, **kw: (0, "")), \
+                mock.patch.object(locosamba, "served_by_smbd", lambda pid: True), \
+                mock.patch.object(locosamba, "_gone", lambda pid: bool(killed)), \
+                mock.patch.object(locosamba.os, "kill", lambda pid, sig: killed.append((pid, sig))), \
+                mock.patch.object(locosamba.time, "time", lambda: next(clock)), \
+                mock.patch.object(locosamba.time, "sleep", lambda s: None):
+            self.assertTrue(locosamba.end_connection("47", "u47", data))
+        self.assertEqual(killed, [(47, locosamba.signal.SIGTERM)])
+
+    def test_a_child_of_smbd_and_nothing_else(self):
+        procs = {"47": ("S", "33"), "33": ("S", "1"), "60": ("S", "33"), "70": ("Z", "33"), "80": ("S", "40")}
+        names = {"47": "smbd[192.168.4", "33": "smbd", "60": "bash", "70": "smbd[127.0.0.1]", "80": "smbd[10.0.0.1]",
+                 "40": "sshd"}
+        with mock.patch.object(locosamba, "_proc_stat", procs.get), mock.patch.object(locosamba, "_comm", lambda pid: names.get(pid, "")):
+            self.assertEqual([pid for pid in ("47", "33", "60", "70", "80", "99") if locosamba.served_by_smbd(pid)], ["47"])
+
+    def test_rights_given_by_the_configuration(self):
+        spec = locosamba.check_spec({"users": [{"unix": "lsmb1", "login": "marie"}, {"unix": "lsmb2", "login": "scanner"},
+                                               {"unix": "lsmb3", "login": "paul", "disabled": True}],
+                                     "shares": [{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB,
+                                                 "write": ["lsmb1", "lsmb3"], "read": ["lsmb2"]},
+                                                {"name": "Scans", "mount": "/", "folder": "scans", "limit": GIB, "write": ["lsmb2"]},
+                                                {"name": "Vieux", "mount": "/media/x", "folder": "vieux", "limit": GIB, "write": ["lsmb1"]}]},
+                                    [{"mount": "/"}])
+        self.assertEqual(locosamba.access(spec), {"documents": {"lsmb1": "write", "lsmb2": "read"}, "scans": {"lsmb2": "write"}})
+        self.assertEqual(locosamba.access(spec, full={"Scans"})["scans"], {"lsmb2": "read"})
+
+
+class TestAgentConnections(AgentTest):
+    """Ce que la configuration retire vaut aussi pour les connexions déjà ouvertes (Samba ne l'applique qu'aux
+    nouvelles) ; une connexion se coupe à la demande du portail."""
+
+    def setUp(self):
+        super().setUp()
+        self.open = smbstatus(("47", "lsmb1", "192.168.42.77", ["Documents", "Scans"]),
+                              ("49", "lsmb2", "192.168.42.20", ["IPC$", "Documents"]))
+        self.ended, self.closed = [], []
+        for patch in (mock.patch.object(locosamba, "_smbstatus", lambda: self.open),
+                      mock.patch.object(locosamba, "end_connection",
+                                        lambda pid, uid="", data=None: self.ended.append((pid, uid)) or True),
+                      mock.patch.object(locosamba, "close_share", lambda name, pid="smbd": self.closed.append((name, pid)))):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def two(self, **change):
+        users = [{"unix": "lsmb1", "login": "marie"}, {"unix": "lsmb2", "login": "scanner"}]
+        shares = [{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB, "write": ["lsmb1"], "read": ["lsmb2"]},
+                  {"name": "Scans", "mount": "/", "folder": "scans", "limit": GIB, "write": ["lsmb1", "lsmb2"]}]
+        spec = {"users": change.pop("users", users), "shares": change.pop("shares", shares)}
+        self.worker.handle({"op": "apply", "spec": spec, "enabled": True})
+
+    def test_nothing_changes_nothing_is_cut(self):
+        self.two()
+        self.two()
+        self.assertEqual((self.ended, self.closed), ([], []))
+
+    def test_a_disabled_or_removed_account_loses_its_open_connections(self):
+        self.two()
+        self.two(users=[{"unix": "lsmb1", "login": "marie"}, {"unix": "lsmb2", "login": "scanner", "disabled": True}])
+        self.assertEqual((self.ended, self.closed), ([("49", "u49")], []))
+        self.ended.clear()
+        self.two(users=[{"unix": "lsmb2", "login": "scanner"}])                       # marie retirée de Samba
+        self.assertEqual(self.ended, [("47", "u47")])
+
+    def test_one_process_for_two_users_of_a_computer(self):
+        self.open = smbstatus(("47", "lsmb2", "192.168.42.77", ["Scans"]), ("47", "lsmb1", "192.168.42.77", ["Documents"]))
+        self.two()
+        self.two(users=[{"unix": "lsmb1", "login": "marie", "disabled": True}, {"unix": "lsmb2", "login": "scanner"}],
+                 shares=[{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB, "write": ["lsmb1"]},
+                         {"name": "Scans", "mount": "/", "folder": "scans", "limit": GIB, "read": ["lsmb2"]}])
+        self.assertEqual((self.ended, self.closed), ([("47", "u47")], []))              # arrêté une fois, puis plus visé
+
+    def test_a_right_taken_away_closes_the_share_on_that_connection_only(self):
+        self.two()
+        self.two(shares=[{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB, "write": ["lsmb1"]},
+                         {"name": "Scans", "mount": "/", "folder": "scans", "limit": GIB, "write": ["lsmb1", "lsmb2"]}])
+        self.assertEqual((self.ended, self.closed), ([], [("Documents", "49")]))
+        self.closed.clear()
+        self.open = smbstatus(("47", "lsmb1", "192.168.42.77", ["Documents", "Scans"]), ("49", "lsmb2", "192.168.42.20", ["IPC$"]))
+        self.two(shares=[{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB, "read": ["lsmb1"]},
+                         {"name": "Scans", "mount": "/", "folder": "scans", "limit": GIB, "write": ["lsmb1", "lsmb2"]}])
+        self.assertEqual(self.closed, [("Documents", "47")])                           # écriture → lecture
+
+    def test_a_full_share_turns_read_only_on_open_connections_too_and_back(self):
+        self.two()
+        with mock.patch.object(locosamba, "measure", lambda path, timeout=600: 2 * GIB if path.endswith("scans") else 0), \
+                mock.patch.object(locosamba.os.path, "isdir", lambda path: True):
+            self.worker.measure_all()
+        self.assertEqual(self.closed, [("Scans", "47")])                               # rouvert en lecture seule
+        self.closed.clear()
+        with mock.patch.object(locosamba, "measure", lambda path, timeout=600: 0), \
+                mock.patch.object(locosamba.os.path, "isdir", lambda path: True):
+            self.worker.measure_all()
+        self.assertEqual(self.closed, [("Scans", "47")])                               # et de nouveau en écriture
+
+    def test_a_share_taken_away_is_closed(self):
+        self.two()
+        self.two(shares=[{"name": "Documents", "mount": "/", "folder": "documents", "limit": GIB, "write": ["lsmb1"], "read": ["lsmb2"]}])
+        self.assertEqual((self.ended, self.closed), ([], [("Scans", "47")]))
+
+    def test_a_connection_cut_on_request(self):
+        self.two()
+        self.worker.handle({"op": "disconnect", "pid": "47", "uid": "u47"})
+        self.assertEqual(self.ended, [("47", "u47")])
+        published = locosamba.status()["sessions"]
+        self.assertEqual({(s["user"], s["pid"]) for s in published}, {("marie", "47"), ("scanner", "49")})
+
+
+class TestFirewall(unittest.TestCase):
+    """Le port 445 (seul port de Samba ici : NetBIOS est coupé) est ouvert d'office sur le pare-feu actif du serveur aux
+    réseaux des postes, puis refermé ; les règles de l'administrateur ne sont jamais touchées."""
+
+    UFW_NUMBERED = ("Status: active\n\n     To                         Action      From\n     --                         ------      ----\n"
+                    "[ 1] 22/tcp                     ALLOW IN    Anywhere\n"
+                    "[ 2] 445/tcp                    ALLOW IN    192.168.42.0/24            # loco-samba\n"
+                    "[ 3] 445/tcp                    ALLOW IN    10.0.0.0/8                 # loco-samba\n"
+                    "[ 4] 8443/tcp                   ALLOW IN    Anywhere                   # admin\n")
+
+    def setUp(self):
+        self.calls = []
+
+    def fake(self, outputs):
+        def run(cmd, stdin=None, timeout=120, env=None):
+            self.calls.append(cmd)
+            for key, out in outputs.items():
+                if cmd[:len(key)] == list(key):
+                    return 0, out
+            return 0, ""
+        return run
+
+    def test_ufw_rules_for_the_device_networks_then_removed(self):
+        outputs = {("ufw", "status", "numbered"): self.UFW_NUMBERED, ("ufw", "status"): "Status: active"}
+        with mock.patch.object(locosamba, "_which", lambda name: name == "ufw"), \
+                mock.patch.object(locosamba, "_run", self.fake(outputs)):
+            self.assertEqual(locosamba.firewall_kind(), "ufw")
+            state = locosamba.firewall_open(["192.168.42.0/24", "fd00::/64"])
+        self.assertEqual(state, {"kind": "ufw", "open": True, "networks": ["192.168.42.0/24", "fd00::/64"]})
+        deletes = [c for c in self.calls if c[:3] == ["ufw", "--force", "delete"]]
+        self.assertEqual(deletes, [["ufw", "--force", "delete", "3"], ["ufw", "--force", "delete", "2"]])   # les siennes, de la fin
+        allows = [c for c in self.calls if c[:2] == ["ufw", "allow"]]
+        self.assertEqual(allows, [["ufw", "allow", "from", net, "to", "any", "port", "445", "proto", "tcp", "comment", "loco-samba"]
+                                  for net in ("192.168.42.0/24", "fd00::/64")])
+        self.assertNotIn(["ufw", "--force", "delete", "1"], self.calls)
+        self.assertNotIn(["ufw", "--force", "delete", "4"], self.calls)                  # règles de l'administrateur
+        with mock.patch.object(locosamba, "_which", lambda name: name == "ufw"), \
+                mock.patch.object(locosamba, "_run", self.fake(outputs)):
+            self.assertTrue(locosamba.firewall_has("ufw"))
+
+    def test_firewalld_rich_rules(self):
+        rules = ('rule family="ipv4" source address="192.168.42.0/24" port port="445" protocol="tcp" accept\n'
+                 'rule family="ipv4" source address="10.1.0.0/16" port port="22" protocol="tcp" accept\n')
+        outputs = {("firewall-cmd", "--state"): "running", ("firewall-cmd", "--permanent", "--list-rich-rules"): rules}
+        with mock.patch.object(locosamba, "_which", lambda name: name == "firewall-cmd"), \
+                mock.patch.object(locosamba, "_run", self.fake(outputs)):
+            self.assertEqual(locosamba.firewall_kind(), "firewalld")
+            locosamba.firewall_open(["192.168.42.0/24"])
+        removed = [c[-1] for c in self.calls if c[:3] == ["firewall-cmd", "--permanent", "--remove-rich-rule"]]
+        self.assertEqual(removed, ['rule family="ipv4" source address="192.168.42.0/24" port port="445" protocol="tcp" accept'])
+        added = [c[-1] for c in self.calls if c[:3] == ["firewall-cmd", "--permanent", "--add-rich-rule"]]
+        self.assertEqual(added, ['rule family="ipv4" source address="192.168.42.0/24" port port="445" protocol="tcp" accept'])
+        self.assertIn(["firewall-cmd", "--reload"], self.calls)
+
+    def test_no_active_firewall_nothing_to_do(self):
+        with mock.patch.object(locosamba, "_which", lambda name: name == "ufw"), \
+                mock.patch.object(locosamba, "_run", lambda cmd, stdin=None, timeout=120, env=None:
+                                  (1, "ERROR: Couldn't determine iptables version")):
+            self.assertEqual(locosamba.firewall_kind(), "")                 # l'appliance : ufw présent mais inactif
+            self.assertEqual(locosamba.firewall_open(["192.168.42.0/24"]), {"kind": "", "open": False})
+
+
+class TestAgentFirewall(AgentTest):
+    def test_the_port_opens_with_the_shares_and_closes_with_them(self):
+        opened, closed = [], []
+        with mock.patch.object(locosamba, "firewall_open", lambda nets: opened.append(nets) or {"kind": "ufw", "open": True}), \
+                mock.patch.object(locosamba, "firewall_close", lambda kind=None: closed.append(kind)):
+            self.worker.handle({"op": "apply", "spec": self.spec(), "enabled": True})
+            self.worker.publish()
+            self.assertEqual(locosamba.status()["firewall"], {"kind": "ufw", "open": True})
+            self.worker.handle({"op": "stop"})
+        self.assertEqual(opened, [["192.168.42.0/24"]])
+        self.assertEqual(closed, [None])
 
 
 class TestFolders(unittest.TestCase):
@@ -471,6 +703,17 @@ class TestPortal(PortalTest):
         html = self.admin.c.get("/shares").get_data(as_text=True)
         self.assertIn("/srv/partages/documents", html)
         self.assertIn('value="\\\\', html)                                         # adresse \\serveur\partage à copier
+        self.assertIn('value="smb://', html)                                     # et smb://serveur/partage (Linux, macOS)
+        self.assertIn("/Documents", html)
+        self.assertIn("Linux · macOS", html)
+
+    def test_the_page_says_what_the_server_firewall_does(self):
+        self.publish(firewall={"kind": "ufw", "open": True})
+        self.assertIn("port 445 ouvert par loco (ufw)", self.admin.c.get("/shares").get_data(as_text=True))
+        self.publish(firewall={"kind": "", "open": False})
+        self.assertIn("aucun actif : rien à ouvrir", self.admin.c.get("/shares").get_data(as_text=True))
+        self.publish(firewall={"kind": "firewalld", "open": False})
+        self.assertIn("port 445 pas encore ouvert (firewalld)", self.admin.c.get("/shares").get_data(as_text=True))
 
     def test_what_the_form_refuses(self):
         for values in ({"name": "homes"}, {"name": "a b"}, {"size": "0.5"}, {"mount": "/ailleurs"}, {"size": "500"}):
@@ -634,6 +877,94 @@ class TestUsers(PortalTest):
         account = self.user()
         self.add(**{f"access-{account}": "write"})
         self.assertIn(f"lsmb{account}", self.deposited()[-1]["spec"]["shares"][0]["write"])
+
+
+class TestConnectionsPage(PortalTest):
+    """Onglet Connexions : une ligne par connexion de poste, et « Couper », avec au choix l'utilisateur désactivé."""
+
+    def setUp(self):
+        super().setUp()
+        self.add()
+        self.acct = self.user()
+        self.unix = f"lsmb{self.acct}"
+        self.deposited()
+        self.publish(sessions=[
+            {"user": "comptable", "share": "Documents", "machine": "192.168.42.77", "since": "2026-11-25 10:02:00", "pid": "47", "uid": "u47"},
+            {"user": "comptable", "share": "Scans", "machine": "192.168.42.77", "since": "2026-11-25 10:01:00", "pid": "47", "uid": "u47"},
+            {"user": "lsmb99", "share": "Documents", "machine": "192.168.42.20", "since": "", "pid": "49", "uid": "u49"}])
+        self.done = mock.patch.object(samba, "_cut_done", lambda pid, seconds: True)
+        self.done.start()
+        self.addCleanup(self.done.stop)
+
+    def audited(self):
+        with transaction() as conn:
+            return [(r["action"], r["detail"]) for r in conn.execute(
+                "SELECT action, detail FROM audit WHERE action LIKE 'partages.%' ORDER BY id DESC LIMIT 2")]
+
+    def test_one_row_per_connection_and_no_menu_left(self):
+        html = self.admin.c.get("/shares").get_data(as_text=True)
+        self.assertEqual(html.count('data-open="#share-cut-47"'), 1)                   # deux partages, une connexion
+        self.assertIn('id="share-cut-47"', html)
+        self.assertIn('<input type="hidden" name="uid" value="u47">', html)
+        self.assertIn(f'name="disable" value="{self.acct}"', html)                  # utilisateur connu : désactivable
+        self.assertEqual(html.count('name="disable"'), 1)                              # inconnu (lsmb99) : non
+        self.assertIn('<span class="tab-count">2</span>', html)
+        self.assertNotIn("kebab", html)                                                # plus de menu « ⋮ » sur la page
+        self.assertIn('aria-label="Désactiver comptable"', html)
+        self.assertIn('aria-label="Modifier le partage Documents"', html)
+
+    def test_a_connection_cut(self):
+        r = self.admin.post("/shares/sessions/cut", {"pid": "47", "uid": "u47"}, page="/shares")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r.headers["Location"].endswith("#connexions"))
+        self.assertEqual(self.deposited(), [{"op": "disconnect", "pid": "47", "uid": "u47"}])
+        self.assertEqual(self.audited()[0], ("partages.connexion_coupee", "comptable depuis 192.168.42.77"))
+        self.assertFalse(self.account_row()["disabled"])
+
+    def test_cut_and_kept_out(self):
+        self.admin.post("/shares/sessions/cut", {"pid": "47", "uid": "u47", "disable": str(self.acct)}, page="/shares")
+        sent = self.deposited()
+        self.assertEqual([s["op"] for s in sent], ["apply", "disconnect"])            # désactivé avant d'être coupé
+        self.assertIn({"unix": self.unix, "login": "comptable", "disabled": True}, sent[0]["spec"]["users"])
+        self.assertTrue(self.account_row()["disabled"])
+        self.assertEqual(self.audited()[1], ("partages.connexion_coupee", "comptable depuis 192.168.42.77, comptable désactivé"))
+
+    def test_only_the_account_on_that_connection_can_be_disabled_with_it(self):
+        other = self.user(login="scanner", new="Scan-Secret-2026", confirm="Scan-Secret-2026")
+        self.deposited()
+        self.admin.post("/shares/sessions/cut", {"pid": "47", "uid": "u47", "disable": str(other)}, page="/shares")
+        self.assertEqual([s["op"] for s in self.deposited()], ["disconnect"])
+        self.assertFalse(self.account(other)["disabled"])
+
+    def test_an_ended_connection_is_left_alone(self):
+        for form in ({"pid": "48", "uid": "u48"}, {"pid": "47", "uid": "u12"}, {"pid": "47"}, {"pid": "47 ", "uid": "u47"}):
+            r = self.admin.post("/shares/sessions/cut", form, page="/shares")
+            self.assertEqual(r.status_code, 302, form)
+        self.assertEqual(self.deposited(), [])
+
+    def test_the_agent_is_slow(self):
+        with mock.patch.object(samba, "_cut_done", lambda pid, seconds: False):
+            r = self.admin.post("/shares/sessions/cut", {"pid": "47", "uid": "u47"}, page="/shares")
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual([s["op"] for s in self.deposited()], ["disconnect"])
+
+    def test_waits_for_the_agent(self):
+        self.done.stop()
+        self.addCleanup(self.done.start)
+        with mock.patch.object(samba.time, "sleep", lambda s: self.publish(sessions=[])):
+            self.assertTrue(samba._cut_done("47", 5))                                   # disparue de l'état publié
+        self.publish(sessions=[{"user": "comptable", "share": "Documents", "pid": "47", "uid": "u47"}])
+        self.assertFalse(samba._cut_done("47", 0))
+
+    def test_viewing_is_not_cutting(self):
+        browser, _uid = self.member("lecture", ["samba.view"])
+        html = browser.c.get("/shares").get_data(as_text=True)
+        self.assertNotIn("share-cut-47", html)
+        self.assertEqual(browser.post("/shares/sessions/cut", {"pid": "47", "uid": "u47"}, page="/shares").status_code, 403)
+        self.assertEqual(self.deposited(), [])
+
+    def account_row(self):
+        return self.account(self.acct)
 
 
 if __name__ == "__main__":

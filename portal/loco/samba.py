@@ -25,6 +25,7 @@ from .util import back
 GIB = 1 << 30
 STALE = 60                      # état de l'agent plus ancien : l'agent ne tourne plus
 NEAR_FULL = 90                  # jauge orange à partir de 90 % de la taille limite
+CUT_WAIT = 8.0                  # attente de la coupure d'une connexion par l'agent (secondes)
 RESERVED_LOGINS = {"root", "nobody", "guest", "loco", "loco-share"}
 
 
@@ -213,6 +214,27 @@ def account_views(st, rows, users):
     return users
 
 
+def connection_views(st, users):
+    """Connexions en cours, une par connexion de poste (le processus smbd qui la sert) : qui, d'où, quels partages
+    ouverts, depuis quand ; et l'utilisateur Samba qu'on peut désactiver en la coupant, s'il est seul dessus."""
+    by_login, found = {a["login"]: a for a in users}, {}
+    for x in st.get("sessions") or []:
+        pid = str(x.get("pid") or "")
+        key = pid if pid.isdigit() else f"{x.get('user')}@{x.get('machine')}"
+        c = found.setdefault(key, {"pid": pid if pid.isdigit() else "", "uid": str(x.get("uid") or ""), "users": [],
+                                   "machine": str(x.get("machine") or ""), "shares": [], "since": ""})
+        for field, value in (("users", x.get("user")), ("shares", x.get("share"))):
+            if value and value not in c[field]:
+                c[field].append(value)
+        since = str(x.get("since") or "")
+        if since and (not c["since"] or since < c["since"]):
+            c["since"] = since
+    for c in found.values():
+        account = by_login.get(c["users"][0]) if len(c["users"]) == 1 else None
+        c["account"] = account if account and not account["off"] else None
+    return sorted(found.values(), key=lambda c: ([u.casefold() for u in c["users"]], c["machine"], c["pid"]))
+
+
 def hosts():
     """Noms sous lesquels les postes joignent le serveur (adresse du portail, puis celle des agents) : jamais l'en-tête
     Host de la requête."""
@@ -257,7 +279,7 @@ def _signature(st, rows, users):
         [[r["id"], r["name"], r["size_limit"], [(a["account_id"], a["can_write"]) for a in r["access"]],
           (shares.get(r["name"]) or {}).get("used"), (shares.get(r["name"]) or {}).get("full")] for r in rows],
         [(a["id"], a["login"], a["off"], a["password_at"]) for a in users], sorted(st.get("passwords") or []),
-        [(s.get("user"), s.get("share"), s.get("machine")) for s in st.get("sessions") or []],
+        [(s.get("user"), s.get("share"), s.get("machine"), s.get("pid")) for s in st.get("sessions") or []],
         [(p.get("mount"), p.get("free")) for p in st.get("partitions") or []]], default=str).encode()).hexdigest()[:16]
 
 
@@ -297,9 +319,11 @@ def shares():
     sig = _signature(st, rows, users)
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": sig}
+    users = account_views(st, rows, users)
     return render_template("samba.html", st=st, partitions=partition_views(st, rows), shares=share_views(st, rows),
-                           users=account_views(st, rows, users), free_loco=free_loco_accounts(), hosts=hosts(),
-                           signature=sig, gib=GIB, available=samba_possible(), min_password=config.MIN_PASSWORD)
+                           users=users, connections=connection_views(st, users), free_loco=free_loco_accounts(),
+                           hosts=hosts(), signature=sig, gib=GIB, available=samba_possible(),
+                           min_password=config.MIN_PASSWORD)
 
 
 # --------------------------------------------------------------------------- partages
@@ -570,3 +594,59 @@ def shares_user_delete(account_id):
     push(conn)
     flash(_("Utilisateur Samba %(login)s retiré.", login=row["login"]), "ok")
     return back("shares", _anchor="utilisateurs")
+
+
+# --------------------------------------------------------------------------- connexions des postes
+
+def _cut_done(pid, seconds):
+    """La connexion n'est plus dans l'état publié par l'agent (il l'a coupée) ; faux au bout du délai."""
+    deadline = time.time() + seconds
+    while True:
+        if not any(str(x.get("pid") or "") == pid for x in locosamba.status().get("sessions") or []):
+            return True
+        if time.time() >= deadline:
+            return False
+        time.sleep(0.25)
+
+
+@app.route("/shares/sessions/cut", methods=["POST"])
+@login_required
+def shares_session_cut():
+    """Coupe la connexion d'un poste (le processus smbd qui la sert, désigné par l'agent lui-même) ; au choix,
+    l'utilisateur est désactivé du même coup, pour qu'il ne se reconnecte pas."""
+    require("samba.manage")
+    pid, uid = request.form.get("pid", ""), request.form.get("uid", "")
+    rows = [x for x in agent_state().get("sessions") or []
+            if pid.isdigit() and str(x.get("pid") or "") == pid and str(x.get("uid") or "") == uid]
+    if not rows:
+        flash(_("Cette connexion est déjà terminée."), "ok")
+        return back("shares", _anchor="connexions")
+    who = ", ".join(sorted({str(x.get("user") or "") for x in rows}))
+    machine = str(rows[0].get("machine") or "")
+    conn, off = db(), None
+    target = request.form.get("disable", "")
+    if target.isdigit():
+        row = conn.execute("SELECT * FROM samba_accounts WHERE id=?", (int(target),)).fetchone()
+        if row and not row["disabled"] and row["login"] in {x.get("user") for x in rows}:
+            conn.execute("UPDATE samba_accounts SET disabled=1 WHERE id=?", (row["id"],))
+            off = row
+    audit("partages.connexion_coupee", f"{who} depuis {machine}" + (f", {off['login']} désactivé" if off else ""),
+          commit=False)
+    if off:
+        audit("partages.utilisateur_desactive", off["login"], commit=False)
+    conn.commit()
+    try:
+        if off:
+            locosamba.request("apply", spec=spec(conn), enabled=True)    # désactivé d'abord : il ne revient pas
+        locosamba.request("disconnect", pid=pid, uid=uid)
+    except ValueError:
+        return _fail(_("L'agent d'administration (service loco-agent) ne répond pas : réessayez dans un instant."),
+                     "connexions")
+    if not _cut_done(pid, CUT_WAIT):
+        flash(_("Coupure demandée : la liste des connexions se met à jour dans un instant."), "ok")
+    elif off:
+        flash(_("Connexion de %(user)s coupée ; l'utilisateur est désactivé et ne peut plus se reconnecter.",
+                user=off["login"]), "ok")
+    else:
+        flash(_("Connexion de %(user)s depuis %(machine)s coupée.", user=who, machine=machine), "ok")
+    return back("shares", _anchor="connexions")

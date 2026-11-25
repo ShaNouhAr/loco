@@ -20,6 +20,7 @@ import pwd
 import re
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -161,6 +162,89 @@ def _allowed_networks():
     except (OSError, ValueError):
         pass
     return []
+
+
+# --------------------------------------------------------------------------- pare-feu du serveur
+# Samba ne sert que SMB 2 et plus récents sur le port 445 (NetBIOS, 137-139, est coupé) : c'est le seul port à ouvrir.
+# Un pare-feu actif sur le serveur (ufw sur Debian, Ubuntu ou l'appliance, firewalld) le reçoit d'office pour les
+# réseaux des postes tant que les partages sont servis, et le perd quand on les coupe. Les règles de loco portent leur
+# marque ; celles de l'administrateur ne sont jamais touchées.
+
+FW_TAG = "loco-samba"
+SMB_PORT = "445"
+FIREWALL_EVERY = 600
+
+
+def firewall_kind():
+    """Pare-feu actif sur le serveur que loco sait régler : « ufw », « firewalld », ou "" (aucun)."""
+    if _which("ufw"):
+        code, out = _run(["ufw", "status"], timeout=30)
+        if code == 0 and re.search(r"(?im)^Status:\s*active\b", out):
+            return "ufw"
+    if _which("firewall-cmd"):
+        code, out = _run(["firewall-cmd", "--state"], timeout=30)
+        if code == 0 and out.strip() == "running":
+            return "firewalld"
+    return ""
+
+
+def _rich(net):
+    family = "ipv6" if ":" in net else "ipv4"
+    return f'rule family="{family}" source address="{net}" port port="{SMB_PORT}" protocol="tcp" accept'
+
+
+def firewall_close(kind=None):
+    """Retire les règles de loco pour Samba (ufw : celles qui portent sa marque ; firewalld : ses règles riches)."""
+    kind = firewall_kind() if kind is None else kind
+    if kind == "ufw":
+        code, out = _run(["ufw", "status", "numbered"], timeout=30)
+        numbers = [int(m.group(1)) for m in re.finditer(r"(?m)^\[\s*(\d+)\].*#\s*" + FW_TAG + r"\s*$", out)] if code == 0 else []
+        for number in sorted(numbers, reverse=True):              # du dernier au premier : les numéros ne bougent pas
+            _run(["ufw", "--force", "delete", str(number)], timeout=30)
+    elif kind == "firewalld":
+        code, out = _run(["firewall-cmd", "--permanent", "--list-rich-rules"], timeout=30)
+        for rule in (out.splitlines() if code == 0 else []):
+            if f'port port="{SMB_PORT}" protocol="tcp" accept' in rule and "source address=" in rule:
+                _run(["firewall-cmd", "--permanent", "--remove-rich-rule", rule.strip()], timeout=30)
+        _run(["firewall-cmd", "--reload"], timeout=60)
+
+
+def firewall_has(kind):
+    """Les règles de loco pour Samba sont-elles en place sur ce pare-feu ?"""
+    if kind == "ufw":
+        code, out = _run(["ufw", "status", "numbered"], timeout=30)
+        return code == 0 and re.search(r"#\s*" + FW_TAG + r"\s*$", out, re.M) is not None
+    if kind == "firewalld":
+        code, out = _run(["firewall-cmd", "--permanent", "--list-rich-rules"], timeout=30)
+        return code == 0 and f'port port="{SMB_PORT}" protocol="tcp" accept' in out
+    return False
+
+
+def firewall_open(networks):
+    """Ouvre le port 445/TCP aux réseaux des postes (à tous s'ils ne sont pas réglés) ; les anciennes règles de loco
+    sont d'abord retirées (réseaux changés). Rend l'état à publier."""
+    kind = firewall_kind()
+    if not kind:
+        return {"kind": "", "open": False}
+    firewall_close(kind)
+    sources = list(networks) or (["any"] if kind == "ufw" else [])
+    ok = True
+    if kind == "ufw":
+        for net in sources:
+            code, _out = _run(["ufw", "allow", "from", net, "to", "any", "port", SMB_PORT, "proto", "tcp",
+                               "comment", FW_TAG], timeout=30)
+            ok = ok and code == 0
+    else:
+        if sources:
+            for net in sources:
+                code, _out = _run(["firewall-cmd", "--permanent", "--add-rich-rule", _rich(net)], timeout=30)
+                ok = ok and code == 0
+        else:
+            code, _out = _run(["firewall-cmd", "--permanent", "--add-rich-rule",
+                               f'rule port port="{SMB_PORT}" protocol="tcp" accept'], timeout=30)
+            ok = code == 0
+        _run(["firewall-cmd", "--reload"], timeout=60)
+    return {"kind": kind, "open": ok, "networks": sources}
 
 
 # --------------------------------------------------------------------------- partitions et dossiers
@@ -452,22 +536,141 @@ def managed():
         return False
 
 
-def _sessions(logins):
-    """Connexions en cours : compte loco, partage, machine, depuis quand (smbstatus --json, Samba 4.16 et suivants)."""
+# --------------------------------------------------------------------------- connexions des postes
+# Samba n'applique sa configuration qu'aux connexions qui s'ouvrent : un compte désactivé, un droit retiré, un partage
+# retiré ou passé en lecture seule (plein) restent sans effet sur une connexion déjà ouverte — vérifié avec Samba 4.23.
+# L'agent referme donc lui-même ce qui n'est plus permis (Worker.enforce) ; le poste qui y a encore droit rouvre le
+# partage de lui-même, avec ses nouveaux droits.
+
+def _smbstatus():
+    """Sessions et partages ouverts, tels que Samba les voit (smbstatus --json, Samba 4.16 et suivants) ; {} sinon."""
     code, out = _run(["smbstatus", "--json"], timeout=20)
     try:
         data = json.loads(out) if code == 0 else {}
     except ValueError:
-        return []
-    sessions = data.get("sessions") or {}
-    found = []
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _server(item):
+    """Processus smbd qui sert une session ou un partage ouvert : numéro et identifiant unique (un numéro repris
+    entre-temps par un autre processus ne correspond plus)."""
+    server = item.get("server_id") if isinstance(item, dict) else None
+    server = server if isinstance(server, dict) else {}
+    pid = str(server.get("pid", ""))
+    return (pid, str(server.get("unique_id", ""))) if pid.isdigit() else ("", "")
+
+
+def _shares_of(data):
+    """Partages ouverts (hors IPC$ et autres partages cachés du serveur), par session."""
+    found = {}
     for tcon in (data.get("tcons") or {}).values():
-        session = sessions.get(str(tcon.get("session_id", ""))) or {}
+        name = str(tcon.get("service", "")) if isinstance(tcon, dict) else ""
+        if name and not name.endswith("$"):
+            found.setdefault(str(tcon.get("session_id", "")), []).append((name, tcon))
+    return found
+
+
+def connections(data):
+    """Une entrée par session ouverte : processus smbd qui la sert, compte Unix, machine, partages ouverts."""
+    shares, found = _shares_of(data), []
+    for key, session in (data.get("sessions") or {}).items():
+        pid, uid = _server(session)
+        if pid:
+            found.append({"pid": pid, "uid": uid, "unix": str(session.get("username", "")),
+                          "machine": str(session.get("remote_machine", "")),
+                          "shares": [name for name, _tcon in shares.get(str(key), [])]})
+    return found
+
+
+def _sessions(logins, data=None):
+    """Connexions en cours, pour le portail : une ligne par partage ouvert (compte loco, partage, machine, depuis quand)
+    avec le processus smbd qui sert la connexion, pour la couper."""
+    data = _smbstatus() if data is None else data
+    sessions, found = data.get("sessions") or {}, []
+    for key, opened in _shares_of(data).items():
+        session = sessions.get(key) if isinstance(sessions.get(key), dict) else {}
         unix = str(session.get("username", ""))
-        found.append({"user": logins.get(unix, unix), "share": str(tcon.get("service", "")),
-                      "machine": str(tcon.get("machine", "") or session.get("remote_machine", "")),
-                      "since": str(tcon.get("connected_at", ""))[:19].replace("T", " ")})
+        for name, tcon in opened:
+            pid, uid = _server(tcon)
+            if not pid:
+                pid, uid = _server(session)
+            found.append({"user": logins.get(unix, unix), "share": name,
+                          "machine": str(tcon.get("machine", "") or session.get("remote_machine", "")),
+                          "since": str(tcon.get("connected_at", ""))[:19].replace("T", " "), "pid": pid, "uid": uid})
     return sorted(found, key=lambda s: (s["share"], s["user"]))
+
+
+def _proc_stat(pid):
+    """(état, processus parent) d'un processus, d'après /proc ; None s'il n'existe plus."""
+    try:
+        with open(f"/proc/{pid}/stat", encoding="ascii", errors="replace") as f:
+            fields = f.read().rsplit(")", 1)[1].split()
+        return fields[0], fields[1]
+    except (OSError, IndexError):
+        return None
+
+
+def _comm(pid):
+    try:
+        with open(f"/proc/{pid}/comm", encoding="ascii", errors="replace") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def served_by_smbd(pid):
+    """Vrai pour un processus fils de smbd (celui qui sert la connexion d'un poste) ; jamais smbd lui-même ni un autre."""
+    st = _proc_stat(pid)
+    return bool(st) and st[0] not in ("Z", "X") and st[1].isdigit() and int(st[1]) > 1 \
+        and _comm(st[1]) == "smbd" and _comm(pid).startswith("smbd")
+
+
+def _gone(pid):
+    st = _proc_stat(pid)
+    return st is None or st[0] in ("Z", "X")
+
+
+def end_connection(pid, uid="", data=None):
+    """Coupe la connexion d'un poste : le processus smbd qui la sert — celui que smbstatus donne, fils de smbd, jamais
+    un autre — se termine proprement (smbcontrol … shutdown), au besoin par SIGTERM. Vrai s'il n'est plus là."""
+    pid, uid = str(pid), str(uid or "")
+    known = {c["pid"]: c["uid"] for c in connections(_smbstatus() if data is None else data)}
+    if not pid.isdigit() or pid not in known or (uid and known[pid] != uid) or not served_by_smbd(pid):
+        return False
+    _run(["smbcontrol", pid, "shutdown"], timeout=15)
+    for last in (False, True):
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            if _gone(pid):
+                return True
+            time.sleep(0.1)
+        if not last and served_by_smbd(pid):
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+            except OSError:
+                pass
+    return _gone(pid)
+
+
+def close_share(name, pid="smbd"):
+    """Referme un partage ouvert, sur une connexion (son processus smbd) ou sur toutes (« smbd ») ; un poste qui y a
+    encore droit le rouvre de lui-même, avec les droits du moment."""
+    if NAME_RE.fullmatch(name) and (pid == "smbd" or str(pid).isdigit()):
+        _run(["smbcontrol", str(pid), "close-share", name], timeout=15)
+
+
+def access(spec, full=()):
+    """Droits que donne la configuration écrite (render) : {partage: {compte Unix: "write" ou "read"}} ; un partage
+    plein ne laisse que la lecture, un compte désactivé n'a rien."""
+    off, out = set(spec.get("disabled") or ()), {}
+    for share in spec["shares"]:
+        if share["error"]:
+            continue
+        rights = {u: "read" for u in share["read"] if u not in off}
+        rights.update({u: "read" if share["name"] in full else "write" for u in share["write"] if u not in off})
+        out[share["name"].casefold()] = rights
+    return out
 
 
 # --------------------------------------------------------------------------- agent (root)
@@ -484,6 +687,8 @@ class Worker:
         self.state = {"busy": "", "error": "", "install_log": ""}
         self.sessions, self.sessions_at, self.passwords = [], 0.0, []
         self.raw, self.applied = None, ""
+        self.firewall = {"kind": "", "open": False}
+        self.access = {}                                              # droits de la configuration écrite en dernier
         saved = _read_json(SPEC)
         if saved:
             self.enabled = bool(saved.get("enabled"))
@@ -506,7 +711,7 @@ class Worker:
             data = {"at": time.time(), "support": support(), "installed": installed(), "running": running(),
                     "managed": managed(), "enabled": self.enabled, "version": _version() if installed() else "",
                     "partitions": parts, "shares": shares, "passwords": self.passwords, "sessions": self.sessions,
-                    "networks": _allowed_networks(), "applied": self.applied}
+                    "networks": _allowed_networks(), "applied": self.applied, "firewall": self.firewall}
             data.update(self.state)
             _write(STATUS, json.dumps(data, ensure_ascii=False))
 
@@ -533,6 +738,8 @@ class Worker:
                 return
             if not self.enabled:
                 service("stop")
+                firewall_close()
+                self.firewall = {"kind": firewall_kind(), "open": False}
                 self.state["error"] = ""
                 return
             ensure_owner()
@@ -550,6 +757,7 @@ class Worker:
                     self.errors[share["name"]] = str(e) if isinstance(e, ValueError) else "Le dossier %(path)s ne peut pas être créé."
             self.full &= {s["name"] for s in self.spec["shares"]}
             self.write_config(takeover)
+            self.firewall = firewall_open(_allowed_networks())
             self.passwords = with_password()
             for unix in self.passwords:
                 if unix in self.spec["users"]:
@@ -580,6 +788,37 @@ class Worker:
         if alpine() and os.path.isdir(os.path.dirname(OPENRC_CONF)):
             _write(OPENRC_CONF, 'daemon_list="smbd"\n')                  # smbd seul : pas de NetBIOS (nmbd)
         self.state["error"] = "" if service("restart" if takeover else "reload") else "service"
+        if not self.state["error"]:
+            self.enforce(spec)
+
+    def enforce(self, spec):
+        """Ce que la configuration vient de changer vaut aussi pour les connexions déjà ouvertes : un compte désactivé
+        ou retiré perd ses connexions ; un partage retiré, un droit retiré ou changé (lecture seule d'un partage plein,
+        et retour) referme le partage sur la connexion, que le poste rouvre de lui-même s'il y a encore droit."""
+        before, now = self.access, access(spec, self.full)
+        self.access = now
+        changed = {(name, unix) for name, rights in before.items() for unix, right in rights.items()
+                   if name in now and now[name].get(unix) not in (None, right)}
+        active = set(spec["users"]) - set(spec.get("disabled") or ())
+        data = _smbstatus()
+        touched, ended = False, set()
+        # Un processus peut servir plusieurs sessions (poste à plusieurs utilisateurs) : les connexions à arrêter passent
+        # d'abord, et un processus arrêté n'est plus visé d'après ce relevé — son numéro a pu être repris depuis.
+        for conn in sorted(connections(data), key=lambda c: UNIX_RE.fullmatch(c["unix"]) is None or c["unix"] in active):
+            unix, pid = conn["unix"], conn["pid"]
+            if pid in ended:
+                continue
+            if UNIX_RE.fullmatch(unix) and unix not in active:
+                ended.add(pid)
+                touched = end_connection(pid, conn["uid"], data) or touched
+                continue
+            for name in conn["shares"]:
+                key = name.casefold()
+                if key not in now or unix not in now[key] or (key, unix) in changed:
+                    close_share(name, pid)
+                    touched = True
+        if touched:
+            self.sessions, self.sessions_at = _sessions(spec["users"]), time.time()
 
     # -- demandes
 
@@ -614,6 +853,10 @@ class Worker:
             if UNIX_RE.fullmatch(unix) and installed():
                 forget(unix)
                 self.passwords = with_password()
+        elif op == "disconnect":
+            if installed():
+                end_connection(str(req.get("pid", "")), str(req.get("uid", "")))
+                self.sessions, self.sessions_at = _sessions(self.spec["users"]), time.time()
         self.publish()
 
     def requests(self):
@@ -669,10 +912,19 @@ class Worker:
             with self.lock:
                 self.apply()
         self.publish()
-        measured = published = 0.0
+        measured = published = walled = 0.0
         while True:
             self.requests()
             now = time.time()
+            # Pare-feu allumé (ou règles retirées) depuis : le port des partages est rouvert dans les dix minutes.
+            if self.enabled and installed() and managed() and now - walled > FIREWALL_EVERY:
+                walled = now
+                kind = firewall_kind()
+                with self.lock:
+                    if kind and not firewall_has(kind):
+                        self.firewall = firewall_open(_allowed_networks())
+                    elif self.firewall.get("kind") != kind:
+                        self.firewall = {"kind": kind, "open": bool(kind)}
             if self.enabled and installed() and now - measured > MEASURE_EVERY:
                 measured = now
                 threading.Thread(target=self.measure_all, name="loco-samba-du", daemon=True).start()

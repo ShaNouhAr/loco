@@ -5,7 +5,6 @@
 {% set ready = st.installed and st.managed and not st.stale %}
 {% set first_host = hosts[0] if hosts else host %}
 {% set x_icon %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>{% endset %}
-{% set kebab_icon %}<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>{% endset %}
 
 {# Anneau d'occupation : part de la taille limite, couleur d'état (ok, bientôt plein, plein), valeur au centre. #}
 {% macro ring(pct, level, size=76, sub='') -%}
@@ -50,6 +49,16 @@
         <td class="center"><input type="radio" name="{{ field }}" value="" aria-label="{{ _('%(u)s : aucun accès', u=label) }}"{% if not mine %} checked{% endif %}></td>
         <td class="center"><input type="radio" name="{{ field }}" value="read" aria-label="{{ _('%(u)s : lecture', u=label) }}"{% if mine == 'read' %} checked{% endif %}></td>
         <td class="center"><input type="radio" name="{{ field }}" value="write" aria-label="{{ _('%(u)s : lecture et écriture', u=label) }}"{% if mine == 'write' %} checked{% endif %}></td></tr>
+{%- endmacro %}
+
+{# Adresse d'un partage (ou du serveur) pour chaque système : Windows (chemin UNC), Linux et macOS (smb://). #}
+{% macro share_paths(name='', label='') -%}
+<div class="share-paths" role="group" aria-label="{{ label }}">
+  <span class="share-os">Windows</span>
+  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\{{ name }}" aria-label="{{ label }} · Windows"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+  <span class="share-os">Linux · macOS</span>
+  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="smb://{{ first_host }}/{{ name }}" aria-label="{{ label }} · Linux, macOS"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+</div>
 {%- endmacro %}
 
 {% macro rights_head(first) -%}
@@ -160,9 +169,11 @@
 {% if st.installed %}
 <section class="panel share-strip" data-refresh="server">
   <span class="st {{ 'ok' if st.running else 'err' }}">{{ _("Samba %(v)s en service", v=st.version) if st.running else _("Samba %(v)s arrêté", v=st.version) }}</span>
-  <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\" aria-label="{{ _('Adresse des partages') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+  {{ share_paths('', _('Adresse des partages')) }}
   <span><span class="share-strip-k">{{ _("Réseaux autorisés") }}</span> <span class="mono">{% if st.networks %}{{ st.networks|join(' ') }}{% else %}{{ _("tous") }}{% endif %}</span></span>
-  <span><span class="share-strip-k">{{ _("Connexions") }}</span> {{ (st.sessions or [])|length }}</span>
+  <span><span class="share-strip-k">{{ _("Connexions") }}</span> {{ connections|length }}</span>
+  {% set fw = st.firewall or {} %}
+  <span title="{{ _('loco ouvre lui-même le port 445/TCP (SMB) du pare-feu actif de ce serveur aux réseaux des postes, et le referme si l’on coupe les partages. Un pare-feu entre les postes et le serveur doit aussi laisser passer 445/TCP.') }}"><span class="share-strip-k">{{ _("Pare-feu du serveur") }}</span> {% if fw.kind and fw.open %}{{ _("port 445 ouvert par loco (%(kind)s)", kind=fw.kind) }}{% elif fw.kind %}<span class="err-text">{{ _("port 445 pas encore ouvert (%(kind)s)", kind=fw.kind) }}</span>{% else %}{{ _("aucun actif : rien à ouvrir") }}{% endif %}</span>
 </section>
 {% endif %}
 
@@ -192,7 +203,7 @@
 <div class="tabs" role="tablist" data-hash>
   <button type="button" data-tab="partages" aria-selected="true">{{ _("Partages") }} <span class="tab-count">{{ shares|length }}</span></button>
   <button type="button" data-tab="utilisateurs" aria-selected="false">{{ _("Utilisateurs") }} <span class="tab-count">{{ users|length }}</span></button>
-  <button type="button" data-tab="connexions" aria-selected="false">{{ _("Connexions") }} <span class="tab-count">{{ (st.sessions or [])|length }}</span></button>
+  <button type="button" data-tab="connexions" aria-selected="false">{{ _("Connexions") }} <span class="tab-count">{{ connections|length }}</span></button>
 </div>
 
 <div class="tab-panel on" data-panel="partages"><div data-refresh="shares">
@@ -202,16 +213,13 @@
     <article class="share-card{{ ' is-full' if s.full }}{{ ' is-error' if s.error }}">
       <header class="share-card-h">
         <div class="share-card-t"><strong><span class="ti">{{ nav_icon('folder') }}</span>{{ s.name }}</strong><span class="sub">{{ s.comment or s.path }}</span></div>
-        {% if manage %}<details class="menu row-menu">
-          <summary class="kebab" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}">{{ kebab_icon }}</summary>
-          <div class="menu-list" role="menu">
-            <button type="button" class="menu-item" data-open="#share-edit-{{ s.id }}">{{ ui_icon('edit') }}<span>{{ _("Modifier") }}</span></button>
-            <form method="post" action="{{ url_for('shares_delete', share_id=s.id) }}" data-confirm="{{ _('Retirer le partage %(name)s ?', name=s.name) }}" data-confirm-text="{{ _('Il n’est plus servi sur le réseau. Ses fichiers restent sur le serveur, dans %(path)s.', path=s.path) }}" data-confirm-ok="{{ _('Retirer') }}">
-              <input type="hidden" name="csrf" value="{{ csrf }}">
-              <button class="menu-item danger">{{ ui_icon('trash') }}<span>{{ _("Retirer le partage") }}</span></button>
-            </form>
-          </div>
-        </details>{% endif %}
+        {% if manage %}<div class="row-actions">
+          <button type="button" class="btn icon sm ghost" data-open="#share-edit-{{ s.id }}" title="{{ _('Modifier') }}" aria-label="{{ _('Modifier le partage %(name)s', name=s.name) }}">{{ ui_icon('edit') }}</button>
+          <form method="post" action="{{ url_for('shares_delete', share_id=s.id) }}" data-confirm="{{ _('Retirer le partage %(name)s ?', name=s.name) }}" data-confirm-text="{{ _('Il n’est plus servi sur le réseau. Ses fichiers restent sur le serveur, dans %(path)s.', path=s.path) }}" data-confirm-ok="{{ _('Retirer') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button class="btn icon sm ghost danger" title="{{ _('Retirer le partage') }}" aria-label="{{ _('Retirer le partage %(name)s', name=s.name) }}">{{ ui_icon('trash') }}</button>
+          </form>
+        </div>{% endif %}
       </header>
       <div class="share-card-b">
         {{ ring(s.pct, s.color, 76) }}
@@ -222,7 +230,7 @@
         </div>
       </div>
       {% if s.error %}<p class="share-card-err err-text">{{ s.error }}</p>{% endif %}
-      <span class="copy-field share-unc"><input type="text" readonly class="mono" value="\\{{ first_host }}\{{ s.name }}" aria-label="{{ _('Adresse du partage') }}"><button type="button" class="btn sm" data-copy data-copied="{{ _('Copié') }}">{{ _("Copier") }}</button></span>
+      {{ share_paths(s.name, _('Adresse du partage')) }}
       <footer class="share-card-f">
         <span class="share-avatars">{% for a in s.access %}{{ avatar(a.login, a.can_write) }}{% endfor %}</span>
         <span class="sub">{% if s.access %}{{ ngettext('%(num)s utilisateur', '%(num)s utilisateurs', s.access|length) }}{% else %}{{ _("aucun utilisateur") }}{% endif %}{% if s.sessions %} · {{ ngettext('%(num)s connexion', '%(num)s connexions', s.sessions|length) }}{% endif %}</span>
@@ -260,20 +268,17 @@
               {% if a.linked and (a.loco_disabled or a.loco_pending) %}<span class="sub warn-text">{{ _("Son compte loco est désactivé : il ne se connecte pas non plus aux partages.") }}</span>{% endif %}</span></span></td>
             <td data-label="{{ _('Partages') }}">{% for name, right in a.shares %}<span class="share-chip{{ ' w' if right == 'write' }}">{{ name }}<b>{{ _("écriture") if right == 'write' else _("lecture") }}</b></span>{% else %}<span class="muted">{{ _("aucun") }}</span>{% endfor %}</td>
             <td data-label="{{ _('Mot de passe') }}">{% if a.in_samba %}{{ _("défini le %(v)s", v=a.password_at|date_fr) }}{% else %}<span class="warn-text">{{ _("pas encore posé dans Samba") }}</span>{% endif %}</td>
-            <td class="right">{% if manage %}<details class="menu row-menu">
-              <summary class="kebab" aria-label="{{ _('Actions') }}" title="{{ _('Actions') }}">{{ kebab_icon }}</summary>
-              <div class="menu-list" role="menu">
-                <button type="button" class="menu-item" data-open="#share-user-{{ a.id }}">{{ ui_icon('edit') }}<span>{{ _("Modifier, mot de passe et droits") }}</span></button>
-                <form method="post" action="{{ url_for('shares_user_toggle', account_id=a.id) }}">
-                  <input type="hidden" name="csrf" value="{{ csrf }}">
-                  <button class="menu-item">{{ ui_icon('power') }}<span>{{ _("Réactiver") if a.disabled else _("Désactiver") }}</span></button>
-                </form>
-                <form method="post" action="{{ url_for('shares_user_delete', account_id=a.id) }}" data-confirm="{{ _('Retirer l’utilisateur Samba %(login)s ?', login=a.login) }}" data-confirm-text="{{ _('Il ne peut plus se connecter à aucun partage ; les fichiers qu’il y a déposés restent en place.') }}{% if a.linked %} {{ _('Son compte loco n’est pas touché.') }}{% endif %}" data-confirm-ok="{{ _('Retirer') }}">
-                  <input type="hidden" name="csrf" value="{{ csrf }}">
-                  <button class="menu-item danger">{{ ui_icon('trash') }}<span>{{ _("Retirer de Samba") }}</span></button>
-                </form>
-              </div>
-            </details>{% endif %}</td>
+            <td class="right card-action">{% if manage %}<div class="row-actions">
+              <button type="button" class="btn icon sm ghost" data-open="#share-user-{{ a.id }}" title="{{ _('Modifier, mot de passe et droits') }}" aria-label="{{ _('Modifier %(login)s : mot de passe et droits', login=a.login) }}">{{ ui_icon('edit') }}</button>
+              <form method="post" action="{{ url_for('shares_user_toggle', account_id=a.id) }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn icon sm ghost" title="{{ _('Réactiver') if a.disabled else _('Désactiver') }}" aria-label="{{ _('Réactiver %(login)s', login=a.login) if a.disabled else _('Désactiver %(login)s', login=a.login) }}">{{ ui_icon('power') }}</button>
+              </form>
+              <form method="post" action="{{ url_for('shares_user_delete', account_id=a.id) }}" data-confirm="{{ _('Retirer l’utilisateur Samba %(login)s ?', login=a.login) }}" data-confirm-text="{{ _('Il ne peut plus se connecter à aucun partage ; les fichiers qu’il y a déposés restent en place.') }}{% if a.linked %} {{ _('Son compte loco n’est pas touché.') }}{% endif %}" data-confirm-ok="{{ _('Retirer') }}">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <button class="btn icon sm ghost danger" title="{{ _('Retirer de Samba') }}" aria-label="{{ _('Retirer %(login)s de Samba', login=a.login) }}">{{ ui_icon('trash') }}</button>
+              </form>
+            </div>{% endif %}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -293,15 +298,17 @@
 <div class="tab-panel" data-panel="connexions"><div data-refresh="sessions">
   <section class="panel">
     <div class="panel-h"><h2>{{ _("Connexions en cours") }}</h2><div class="aside">{{ _("relevées toutes les quinze secondes") }}</div></div>
-    {% if st.sessions %}
+    {% if connections %}
     <div class="table-wrap">
-      <table class="table-cards">
-        <thead><tr><th>{{ _("Utilisateur") }}</th><th>{{ _("Partage") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Depuis") }}</th></tr></thead>
+      <table class="table-cards share-conns">
+        <thead><tr><th>{{ _("Utilisateur") }}</th><th>{{ _("Partages ouverts") }}</th><th>{{ _("Poste") }}</th><th>{{ _("Depuis") }}</th>{% if manage %}<th></th>{% endif %}</tr></thead>
         <tbody>
-        {% for c in st.sessions %}
-          <tr><td><span class="share-user">{{ avatar(c.user) }}<span class="mono">{{ c.user }}</span></span></td>
-            <td data-label="{{ _('Partage') }}">{{ c.share }}</td><td data-label="{{ _('Poste') }}"><span class="mono">{{ c.machine }}</span></td>
-            <td data-label="{{ _('Depuis') }}">{{ c.since|date_fr if c.since else '—' }}</td></tr>
+        {% for c in connections %}
+          <tr><td><span class="share-user">{{ avatar(c.users[0] if c.users else '?') }}<span class="mono">{{ c.users|join(', ') }}</span></span></td>
+            <td data-label="{{ _('Partages') }}">{% for name in c.shares %}<span class="share-chip">{{ name }}</span>{% endfor %}</td>
+            <td data-label="{{ _('Poste') }}"><span class="mono">{{ c.machine }}</span></td>
+            <td data-label="{{ _('Depuis') }}">{{ c.since|date_fr if c.since else '—' }}</td>
+            {% if manage %}<td class="right card-action">{% if c.pid %}<button type="button" class="btn sm" data-open="#share-cut-{{ c.pid }}" aria-label="{{ _('Couper la connexion de %(user)s', user=c.users|join(', ')) }}">{{ ui_icon('unplug') }}<span>{{ _("Couper") }}</span></button>{% endif %}</td>{% endif %}</tr>
         {% endfor %}
         </tbody>
       </table>
@@ -310,6 +317,27 @@
     <div class="panel-b"><p class="muted">{{ _("Personne n'est connecté aux partages en ce moment.") }}</p></div>
     {% endif %}
   </section>
+  {% if manage %}{% for c in connections if c.pid %}
+  <dialog id="share-cut-{{ c.pid }}">
+    <form method="post" action="{{ url_for('shares_session_cut') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="pid" value="{{ c.pid }}"><input type="hidden" name="uid" value="{{ c.uid }}">
+      <div class="dlg-h">
+        <div><h2>{{ _("Couper la connexion de %(user)s ?", user=c.users|join(', ')) }}</h2>
+          <p>{{ _("Depuis %(machine)s, partages ouverts : %(shares)s.", machine=c.machine, shares=c.shares|join(', ')) if c.shares else _("Depuis %(machine)s.", machine=c.machine) }}</p></div>
+        <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ x_icon }}</button>
+      </div>
+      <div class="dlg-b dlg-stack">
+        <p class="muted">{{ _("Un fichier en cours d'enregistrement peut rester incomplet. Le poste se reconnecte de lui-même tant que l'utilisateur garde ses droits.") }}</p>
+        {% if c.account %}<label class="check"><input type="checkbox" name="disable" value="{{ c.account.id }}"> <span>{{ _("Désactiver aussi %(login)s : plus aucune connexion aux partages tant qu'il n'est pas réactivé (onglet Utilisateurs).", login=c.account.login) }}</span></label>{% endif %}
+      </div>
+      <div class="dlg-f">
+        <button type="button" class="btn" data-close>{{ _("Annuler") }}</button>
+        <button class="btn danger"><span class="spin"></span>{{ _("Couper") }}</button>
+      </div>
+    </form>
+  </dialog>
+  {% endfor %}{% endif %}
 </div></div>
 {% endif %}
 </div>

@@ -242,7 +242,7 @@ ENDPOINTS = {
     "shares": "samba.view", "shares_add": "samba.manage", "shares_edit": "samba.manage", "shares_delete": "samba.manage",
     "shares_install": "samba.manage", "shares_takeover": "samba.manage",
     "shares_user_add": "samba.manage", "shares_user_edit": "samba.manage", "shares_user_toggle": "samba.manage",
-    "shares_user_delete": "samba.manage",
+    "shares_user_delete": "samba.manage", "shares_session_cut": "samba.manage",
     "fleet_remote_consent": "remote.consent", "fleet_group_remote_consent": "remote.consent",
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",

@@ -512,6 +512,43 @@
     if (e.key === "Escape") $$("details.menu[open]").forEach(function (m) { m.open = false; $("summary", m).focus(); });
   });
 
+  // Menu « ⋮ » d'une ligne (tableaux, gestionnaire de fichiers) : ouvert dans la couche supérieure du navigateur, il
+  // n'est plus rogné par le tableau qui défile ni poussé hors de l'écran ; il se place sous son bouton, au-dessus faute
+  // de place dessous, et toujours dans la largeur de l'écran. Il suit la page qui défile et se ferme s'il en sort.
+  // Navigateur sans « popover » : le menu garde sa place habituelle, sous le bouton.
+  var POPOVER = typeof HTMLElement.prototype.showPopover === "function";
+  function placeRowMenu(menu) {
+    var list = $(":scope > .menu-list", menu), button = $(":scope > summary", menu);
+    if (!list || !button || !list.matches(":popover-open")) return;
+    var r = button.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    if (r.bottom < 0 || r.top > vh) { menu.open = false; return; }
+    var w = list.offsetWidth, h = list.offsetHeight, edge = 8, gap = 6;
+    var top = r.bottom + gap;
+    if (top + h > vh - edge && r.top - gap - h >= edge) top = r.top - gap - h;
+    list.style.left = Math.max(edge, Math.min(r.right - w, vw - w - edge)) + "px";
+    list.style.top = Math.max(edge, Math.min(top, vh - h - edge)) + "px";
+  }
+  document.addEventListener("toggle", function (e) {
+    var menu = e.target;
+    if (!POPOVER || !menu.matches || !menu.matches("details.row-menu")) return;
+    var list = $(":scope > .menu-list", menu);
+    if (!list) return;
+    if (menu.open) {
+      list.setAttribute("popover", "manual");
+      try { list.showPopover(); } catch (err) { return; }
+      placeRowMenu(menu);
+    } else if (list.matches(":popover-open")) {
+      list.hidePopover();
+    }
+  }, true);
+  var placing = 0;
+  function placeOpenMenus() {
+    if (placing) return;
+    placing = requestAnimationFrame(function () { placing = 0; $$("details.row-menu[open]").forEach(placeRowMenu); });
+  }
+  window.addEventListener("scroll", placeOpenMenus, true);
+  window.addEventListener("resize", placeOpenMenus);
+
   /* ---------------------------------------------------------------- brancher un poste Linux */
 
   // Commande composée à partir des choix (système, ce que loco fournit, EPEL, autorité à importer).
