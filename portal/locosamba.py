@@ -1032,9 +1032,10 @@ FILES_JOBS = 8                               # copies, déplacements et suppress
 JOB_KEEP = 600                               # tâche terminée : son bilan reste lisible dix minutes
 SPACE_MARGIN = 64 << 20                      # place toujours laissée libre sur la partition
 COPY_CHUNK = 8 << 20
-O_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-O_READ = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
-O_NEW = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+if os.name == "posix":
+    O_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    O_READ = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    O_NEW = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
 WINDOWS_BAD = frozenset('\\/:*?"<>|')
 WINDOWS_RESERVED = re.compile(r"(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?")
 TOKEN_RE = re.compile(r"[0-9a-f]{32}")
@@ -1050,10 +1051,11 @@ class FileError(Exception):
         self.code, self.values = code, values
 
 
-ERRNO_CODES = {errno.ENOENT: "not-found", errno.ELOOP: "link", errno.ENOTDIR: "not-dir", errno.EISDIR: "is-dir",
-               errno.EEXIST: "exists", errno.ENOTEMPTY: "exists", errno.ENOSPC: "disk", errno.EDQUOT: "disk",
-               errno.EACCES: "denied", errno.EPERM: "denied", errno.EROFS: "denied", errno.ENAMETOOLONG: "bad-name",
-               errno.EMFILE: "busy", errno.ENFILE: "busy"}
+if os.name == "posix":
+    ERRNO_CODES = {errno.ENOENT: "not-found", errno.ELOOP: "link", errno.ENOTDIR: "not-dir", errno.EISDIR: "is-dir",
+                   errno.EEXIST: "exists", errno.ENOTEMPTY: "exists", errno.ENOSPC: "disk", errno.EDQUOT: "disk",
+                   errno.EACCES: "denied", errno.EPERM: "denied", errno.EROFS: "denied", errno.ENAMETOOLONG: "bad-name",
+                   errno.EMFILE: "busy", errno.ENFILE: "busy"}
 
 
 def _failure(e):
