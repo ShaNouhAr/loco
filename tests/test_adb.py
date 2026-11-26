@@ -695,10 +695,14 @@ class TestForeignServer(AdbTest):
             self.assertIn("failed to connect", adb.connect_serial("192.168.43.71", 41235))
 
     def test_the_check_runs_at_most_once_a_minute(self):
-        with mock.patch.object(adb, "_SERVER_CHECKED", [0.0]), mock.patch.object(adb.os, "kill") as kill:
+        with mock.patch.object(adb, "_SERVER_CHECKED", [None]), mock.patch.object(adb.os, "kill") as kill, \
+                mock.patch.object(adb, "time", wraps=adb.time) as clock:
+            clock.monotonic.side_effect = [1.0, 60.0, 61.0]
             adb.run(["devices"])
             adb.run(["devices"])
-        self.assertEqual(kill.call_count, 1)
+            self.assertEqual(kill.call_count, 1)
+            adb.run(["devices"])
+            self.assertEqual(kill.call_count, 2)
 
 
 class TestScreen(AdbTest):

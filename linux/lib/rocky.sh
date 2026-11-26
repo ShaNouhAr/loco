@@ -30,8 +30,13 @@ rocky_packages() {
         dnf config-manager --set-enabled "$builder_repo" >> "$LOG" 2>&1
         echo "$builder_repo" > "$ROCKY_STATE/rocky-builder-enabled"
     fi
-    if [ "$OS_MAJOR" = 8 ]; then rocky_nginx_runtime; fi
-    if ! dnf install -y "${PACKAGES[@]}" >> "$LOG" 2>&1; then
+    local dnf_options=()
+    if [ "$OS_MAJOR" = 8 ]; then
+        rocky_nginx_runtime
+        # BaseOS can publish an RPM update before AppStream publishes its matching rpm-build.
+        dnf_options+=(--nobest)
+    fi
+    if ! dnf install -y "${dnf_options[@]}" "${PACKAGES[@]}" >> "$LOG" 2>&1; then
         tail -20 "$LOG" >&2
         die "installation DNF impossible (journal : $LOG)." "DNF installation failed (log: $LOG)." "instalación DNF fallida (registro: $LOG)."
     fi

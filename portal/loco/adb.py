@@ -91,7 +91,7 @@ def _env():
 
 PROC = "/proc"
 SERVER_CHECK_EVERY = 60
-_SERVER_CHECKED = [0.0]
+_SERVER_CHECKED = [None]
 
 
 def _foreign_servers():
@@ -125,7 +125,8 @@ def _check_server(force=False):
     """Arrête un serveur adb étranger (voir _foreign_servers) : la commande suivante relance celui de loco, avec sa clé.
     Vérifié au plus une fois par minute, et aussitôt après un refus de connexion. Vrai si un serveur a été arrêté."""
     now = time.monotonic()
-    if not force and now - _SERVER_CHECKED[0] < SERVER_CHECK_EVERY:
+    previous = _SERVER_CHECKED[0]
+    if not force and previous is not None and now - previous < SERVER_CHECK_EVERY:
         return False
     _SERVER_CHECKED[0] = now
     pids = _foreign_servers()
