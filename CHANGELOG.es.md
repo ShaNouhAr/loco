@@ -2,6 +2,13 @@
 
 # Registro de cambios
 
+## 2.207.0 — 2026-11-26
+
+- **La documentación en inglés, francés y español.** El README, las guías de `docs/`, la política de seguridad, la guía de la appliance y este registro de cambios existen ahora en inglés — el idioma por defecto en GitHub — y en francés y español. Una barra al principio de cada página cambia de idioma con un clic y lleva a la misma página en el otro idioma. Las capturas, el banner y la animación de las actualizaciones en directo se toman del portal en cada idioma.
+- **Las novedades en su idioma.** *Administración › Actualizaciones* muestra el registro de cambios de la versión instalada y las novedades de la versión disponible en el idioma de la cuenta (inglés, francés o español), y vuelve al inglés cuando falta una traducción.
+- **Instaladores de Claude y Codex con el nombre en su idioma**: `add-loco-to-claude.cmd`, `ajouter-loco-a-claude.cmd`, `anadir-loco-a-claude.cmd`…
+- **Corregido, en inglés y en español**: los preajustes de apariencia *Alpes* y *Boreal* conservaban su nombre francés; el título de las páginas de grupos de equipos y de programas colaba una palabra francesa («machines groups»); las acciones del diario sin categoría mostraban «Autre»; los filtros de Mi parque ponían un espacio antes de los dos puntos («Status : All»); y el número de ejecuciones de los scripts se escribía «ejecución(es)».
+
 ## 2.206.0 — 2026-11-26
 
 - **Enlazar Proxmox y Home Assistant se hace en Mi parque › Inscripción.** Dos pestañas, *Proxmox VE* y *Home Assistant*, junto a Windows, Linux y Android, dan los pasos del enlace y la confirmación de la huella (certificado de Proxmox, clave de host de Home Assistant). Para Proxmox, un último paso lista los servidores enlazados por su token pero todavía no por SSH (*Enlazar por SSH*), que es lo que hace falta para verlos en Mi parque. *Copias de seguridad* y la página *Home Assistant* conservan lo ya enlazado y remiten a la inscripción para enlazar uno nuevo; la renovación de un certificado o de una clave de host se sigue confirmando en el sitio.

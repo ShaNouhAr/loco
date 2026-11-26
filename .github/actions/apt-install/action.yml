@@ -1,11 +1,11 @@
-name: Paquets Ubuntu (avec cache)
+name: Ubuntu packages (with cache)
 description: >-
-  Installe des paquets Ubuntu sur le runner sans dépendre du miroir à chaque run : les .deb téléchargés une fois
-  sont gardés dans le cache GitHub Actions, par version de l'image du runner et par liste de paquets. Cache vide,
-  périmé ou inutilisable : installation normale depuis le miroir, qui remplit le cache pour les runs suivants.
+  Installs Ubuntu packages on the runner without depending on the mirror at every run: the .deb files downloaded once
+  are kept in the GitHub Actions cache, per runner image version and per package list. Empty, stale or unusable
+  cache: normal installation from the mirror, which fills the cache for the next runs.
 inputs:
   packages:
-    description: Paquets à installer, séparés par des espaces
+    description: Packages to install, separated by spaces
     required: true
 runs:
   using: composite

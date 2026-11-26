@@ -1,4 +1,4 @@
-name: Tests d'intégration
+name: Integration tests
 # Machines virtuelles (Debian, Ubuntu, Rocky, AlmaLinux, Alpine), Docker, ISO de l'appliance et serveurs Windows.
 # Lancés quand un push touche ce qu'ils vérifient, à la demande (onglet Actions) et avant chaque publication
 # (release.yml, qui récupère l'ISO et l'agent Windows construits ici). Aucun secret ni serveur requis.
@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   plan:
-    name: Plateformes à tester
+    name: Platforms to test
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -57,15 +57,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Outils de virtualisation
+      - name: Virtualization tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Installation, isolation, Flatpak, sauvegarde et désinstallation
+      - name: Installation, isolation, Flatpak, backup and uninstallation
         run: tests/vm-e2e.sh '${{ matrix.platform }}'
-      - name: Conserver les résultats
+      - name: Keep the results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -73,7 +73,7 @@ jobs:
           path: test-results/
           retention-days: 14
   rpm:
-    name: Postes Red Hat / ${{ matrix.platform }}
+    name: Red Hat devices / ${{ matrix.platform }}
     runs-on: ubuntu-24.04
     needs: plan
     timeout-minutes: 45
@@ -84,15 +84,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Outils de virtualisation
+      - name: Virtualization tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Serveur Debian 13 et poste ${{ matrix.platform }} (dépôt local, cache, EPEL, retrait)
+      - name: Debian 13 server and ${{ matrix.platform }} device (local repository, cache, EPEL, removal)
         run: tests/vm-rpm-e2e.sh '${{ matrix.platform }}'
-      - name: Conserver les résultats
+      - name: Keep the results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -109,15 +109,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Outils de virtualisation
+      - name: Virtualization tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Image, docker compose, poste client, recréation, sauvegarde
+      - name: Image, docker compose, client device, recreation, backup
         run: tests/vm-docker-e2e.sh
-      - name: Conserver les résultats
+      - name: Keep the results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
         with:
@@ -126,7 +126,7 @@ jobs:
           retention-days: 14
 
   update-blocks:
-    name: Mises à jour bloquées / ${{ matrix.image }}
+    name: Blocked updates / ${{ matrix.image }}
     runs-on: ubuntu-24.04
     needs: plan
     timeout-minutes: 20
@@ -138,11 +138,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Vrais paquets, vrai apt ou dnf, code de l'agent
+      - name: Real packages, real apt or dnf, agent code
         run: tests/linux-blocks-e2e.sh '${{ matrix.image }}'
 
   alpine-server:
-    name: Serveur natif / Alpine 3.24
+    name: Native server / Alpine 3.24
     runs-on: ubuntu-24.04
     needs: windows-packages
     timeout-minutes: 45
@@ -154,13 +154,13 @@ jobs:
         with:
           name: windows-packages
           path: test-results/packages
-      - name: Outils de virtualisation
+      - name: Virtualization tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Installation, agent, GUI et CLI, mises à jour, retour arrière et désinstallation
+      - name: Installation, agent, GUI and CLI, updates, rollback and uninstallation
         run: LOCO_FIXTURES="$PWD/test-results/packages" tests/vm-alpine-server-e2e.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -170,7 +170,7 @@ jobs:
           retention-days: 14
 
   iso-alpine:
-    name: ISO appliance / Alpine BIOS et UEFI
+    name: ISO appliance / Alpine BIOS and UEFI
     runs-on: ubuntu-24.04
     needs: plan
     timeout-minutes: 60
@@ -178,13 +178,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Outils de virtualisation et ISO
+      - name: Virtualization and ISO tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage xorriso ovmf
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Fabrique ISO, installation BIOS / UEFI, démarrage sans média, portail et commandes
+      - name: ISO build, BIOS / UEFI installation, boot without media, portal and commands
         run: tests/vm-alpine-iso-build.sh
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -196,7 +196,7 @@ jobs:
           retention-days: 14
 
   rocky-server:
-    name: Serveur natif / ${{ matrix.platform }}
+    name: Native server / ${{ matrix.platform }}
     runs-on: ubuntu-24.04
     needs: plan
     timeout-minutes: 60
@@ -209,15 +209,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Outils de virtualisation
+      - name: Virtualization tools
         uses: ./.github/actions/apt-install
         with:
           packages: qemu-system-x86 qemu-utils genisoimage
-      - name: Accès à KVM
+      - name: KVM access
         run: if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
-      - name: Serveur Rocky, SELinux, pare-feu, paquets, sauvegarde et désinstallation
+      - name: Rocky server, SELinux, firewall, packages, backup and uninstallation
         run: tests/vm-rocky-server-e2e.sh '${{ matrix.platform }}'
-      - name: Conserver les résultats
+      - name: Keep the results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -226,7 +226,7 @@ jobs:
           retention-days: 14
 
   windows-packages:
-    name: Paquets Windows (agent MSI et paquets de test)
+    name: Windows packages (MSI agent and test packages)
     runs-on: ubuntu-24.04
     needs: plan
     timeout-minutes: 30
@@ -234,11 +234,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Outil rpm
+      - name: rpm tool
         uses: ./.github/actions/apt-install
         with:
           packages: rpm
-      - name: Construire de vrais paquets Debian et RPM
+      - name: Build real Debian and RPM packages
         run: tests/windows-fixtures.sh test-results/packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -246,7 +246,7 @@ jobs:
           path: test-results/packages/
           retention-days: 14
 
-      - name: Compiler loco-client.exe et construire loco-client.msi (Mono, msitools de Debian 13)
+      - name: Compile loco-client.exe and build loco-client.msi (Mono, Debian 13 msitools)
         run: |
           version=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' portal/loco/config.py)
           docker run --rm -v "$PWD:/src" -w /src -e VERSION="$version" debian:13 sh -euc '
@@ -272,7 +272,7 @@ jobs:
           retention-days: 30
 
   windows:
-    name: Serveur natif / ${{ matrix.os }}
+    name: Native server / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     needs: windows-packages
     timeout-minutes: 35
@@ -293,13 +293,13 @@ jobs:
         with:
           name: loco-client-msi
           path: portal/agents
-      - name: Installation, portail, signatures, caches, agent du parc, sauvegarde, retrait et purge
+      - name: Installation, portal, signatures, caches, fleet agent, backup, removal and purge
         shell: powershell
         run: |
           # Les images hébergées ont IIS/HTTP.sys actif ; ce runner est jetable.
           Stop-Service HTTP -Force
           .\tests\windows-e2e.ps1 -Fixtures "$env:GITHUB_WORKSPACE\test-results\packages"
-      - name: Journaux en cas d'échec
+      - name: Logs on failure
         if: failure()
         shell: powershell
         run: |

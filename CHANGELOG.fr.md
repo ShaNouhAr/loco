@@ -2,6 +2,13 @@
 
 # Journal des versions
 
+## 2.207.0 — 2026-11-26
+
+- **La documentation en anglais, en français et en espagnol.** Le README, les guides de `docs/`, la politique de sécurité, le guide de l'appliance et ce journal des versions existent maintenant en anglais — la langue par défaut sur GitHub — ainsi qu'en français et en espagnol. Une barre en tête de chaque page change de langue d'un clic et mène à la même page dans l'autre langue. Les captures, la bannière et l'animation des mises à jour en direct sont prises sur le portail dans chaque langue.
+- **Les nouveautés dans votre langue.** *Administration › Mises à jour* montre le journal des versions installées et les nouveautés de la version disponible dans la langue du compte (anglais, français ou espagnol), et revient à l'anglais quand une traduction manque.
+- **Installateurs Claude et Codex nommés dans votre langue** : `add-loco-to-claude.cmd`, `ajouter-loco-a-claude.cmd`, `anadir-loco-a-claude.cmd`…
+- **Corrigé, en anglais et en espagnol** : les préréglages d'apparence *Alpes* et *Boréale* gardaient leur nom français ; le titre des pages de groupes de machines et de logiciels glissait un mot français (« machines groups ») ; les actions du journal sans catégorie affichaient « Autre » ; les filtres de Mon parc mettaient une espace avant les deux-points (« Status : All ») ; et, en espagnol, le nombre d'exécutions des scripts s'écrivait « ejecución(es) ».
+
 ## 2.206.0 — 2026-11-26
 
 - **Relier Proxmox et Home Assistant se fait dans Mon parc › Enrôlement.** Deux onglets, *Proxmox VE* et *Home Assistant*, à côté de Windows, Linux et Android, donnent les étapes de liaison et la confirmation de l'empreinte (certificat de Proxmox, clé d'hôte de Home Assistant). Pour Proxmox, une dernière étape liste les serveurs reliés par leur jeton mais pas encore par SSH (*Relier par SSH*), ce qu'il faut pour les voir dans Mon parc. *Sauvegardes* et la page *Home Assistant* gardent ce qui est déjà relié et renvoient à l'enrôlement pour en relier un nouveau ; le renouvellement d'un certificat ou d'une clé d'hôte se confirme toujours sur place.

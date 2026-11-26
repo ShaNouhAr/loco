@@ -2,6 +2,13 @@
 
 # Changelog
 
+## 2.207.0 — 2026-11-26
+
+- **The documentation in English, French and Spanish.** The README, the guides in `docs/`, the security policy, the appliance guide and this changelog now exist in English — the default on GitHub — and in French and Spanish. A bar at the top of each page switches language in one click and leads to the same page in the other language. The screenshots, the banner and the animation of the live updates are taken from the portal in each language.
+- **What's new, in your language.** *Administration › Updates* shows the changelog of the installed version and the new features of the available one in the account's language (English, French or Spanish), and falls back to English when a translation is missing.
+- **Claude and Codex installers named in your language**: `add-loco-to-claude.cmd`, `ajouter-loco-a-claude.cmd`, `anadir-loco-a-claude.cmd`…
+- **Fixed, in English and Spanish**: the *Alps* and *Boreal* appearance presets kept their French name; the title of the device and software groups pages mixed in a French word ("machines groups"); the actions of the audit log without a category showed "Autre"; My fleet's filters put a space before the colon ("Status : All"); and, in Spanish, the scripts' run counts read "ejecución(es)".
+
 ## 2.206.0 — 2026-11-26
 
 - **Linking Proxmox and Home Assistant is done in My fleet › Enrollment.** Two tabs, *Proxmox VE* and *Home Assistant*, next to Windows, Linux and Android, give the linking steps and the fingerprint confirmation (Proxmox certificate, Home Assistant host key). For Proxmox, a last step lists the servers linked by their token but not yet by SSH (*Link through SSH*), which is what it takes to see them in My fleet. *Backups* and the *Home Assistant* page keep what is already linked and point to the enrollment to link a new one; renewing a certificate or a host key is still confirmed on the spot.

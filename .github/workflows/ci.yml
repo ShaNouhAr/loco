@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   checks:
-    name: Vérifications (lint et tests unitaires)
+    name: Checks (lint and unit tests)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Shell et Python
+      - name: Shell and Python
         run: |
           shellcheck -S style -x install.sh linux/install.sh linux/remove.sh linux/lib/*.sh linux/bin/* tests/*.sh linux/docker/*.sh linux/conf/loco-cron linux/conf/*.initd linux/conf/loco-issue.start linux/lxc/proxmox-lxc.sh portal/templates/setup.sh portal/templates/proxmox.sh portal/templates/flatpak-setup.sh portal/templates/rpm-setup.sh linux/iso/*.sh linux/iso/loco-installer windows/client/build.sh
           # Les bibliothèques embarquées restent intactes ; contrôler tout le code propre au projet.
@@ -33,13 +33,13 @@ jobs:
             | xargs pipx run pyflakes
           docker compose -f linux/docker/docker-compose.yml config -q
           docker compose -f linux/docker/docker-compose.yml -f linux/docker/docker-compose.build.yml config -q
-      - name: Paquets des tests unitaires
+      - name: Unit test packages
         uses: ./.github/actions/apt-install
         with:
           packages: python3-flask apt-utils gnupg createrepo-c rpm
-      - name: Tests unitaires du portail (rapides, hors VM)
+      - name: Portal unit tests (fast, outside a VM)
         run: python3 -W error::ResourceWarning -m unittest discover -s tests
-      - name: PowerShell (syntaxe des scripts Windows)
+      - name: PowerShell (syntax of the Windows scripts)
         shell: pwsh
         run: |
           $errors = 0
@@ -51,7 +51,7 @@ jobs:
           }
           exit $errors
   libraries:
-    name: Tests unitaires sur ${{ matrix.image }}
+    name: Unit tests on ${{ matrix.image }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     container: ${{ matrix.image }}
@@ -65,7 +65,7 @@ jobs:
       LANG: C.UTF-8
       DEBIAN_FRONTEND: noninteractive
     steps:
-      - name: Paquets de la distribution
+      - name: Distribution packages
         run: |
           for attempt in 1 2 3; do
               apt-get update -q && apt-get install -y -q python3-flask apt-utils gnupg createrepo-c rpm git ca-certificates && exit 0
@@ -75,31 +75,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Tests unitaires (sans droits root, comme dans les VM)
+      - name: Unit tests (without root rights, as in the VMs)
         run: |
           useradd -m ci
           chown -R ci .
           runuser -u ci -- python3 -W error::ResourceWarning -m unittest discover -s tests
   browser:
-    name: Parcours dans un vrai navigateur
+    name: Walkthrough in a real browser
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Paquets du portail
+      - name: Portal packages
         uses: ./.github/actions/apt-install
         with:
           packages: python3-flask python3-venv apt-utils gnupg createrepo-c rpm
-      - name: Playwright et Chromium
+      - name: Playwright and Chromium
         run: |
           python3 -m venv --system-site-packages /tmp/browser
           /tmp/browser/bin/pip install --quiet playwright==1.64.1
           /tmp/browser/bin/playwright install --with-deps chromium
-      - name: Scripts, direct, géométrie des pages et console
+      - name: Scripts, live pages, page geometry and console
         run: /tmp/browser/bin/python3 tests/browser/test_ui.py
-      - name: Captures des pages
+      - name: Page screenshots
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

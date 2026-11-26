@@ -24,6 +24,13 @@
   document.addEventListener("error", function (e) { appLogo(e.target); }, true);
   $$("img[data-app-logo]").forEach(appLogo);
 
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    $$("#fleet-table .res-bar .fill").forEach(function (bar) {
+      if (bar.animate) bar.animate([{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }],
+        { duration: 520, easing: "cubic-bezier(.2,.7,.3,1)" });
+    });
+  }
+
   /* ---------------------------------------------------------------- navigation */
 
   var navGroups = $$(".nav-group");

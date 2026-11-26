@@ -536,15 +536,20 @@ class TestPages(TempAgent):
                 "changelogs": {"fr": "## 9.1.0 — 2026-11-02\n\n- **Grande nouveauté.** a\n"}}
         with open(locoadmin.STATUS, "w") as f:
             json.dump({"checked": "2026-10-15 09:00:00", "latest": news, "packages": [], "errors": []}, f)
-        french = self.b.c.get("/system/updates").get_data(as_text=True)
+        def page(lang):                         # la langue choisie sur le compte prime sur celle du navigateur
+            with fixture.connect() as conn:
+                conn.execute("UPDATE users SET lang=? WHERE username='admin'", (lang,))
+            return self.b.c.get("/system/updates").get_data(as_text=True)
+
+        self.addCleanup(page, "")
+        french = page("fr")
         self.assertIn("Version actuelle.", french)
         self.assertIn("Grande nouveauté.", french)
         self.assertNotIn("Big news.", french)
-        english = self.b.c.get("/system/updates", headers={"Accept-Language": "en"}).get_data(as_text=True)
+        english = page("en")
         self.assertIn("Current release.", english)
         self.assertIn("Big news.", english)
-        with mock.patch.object(config, "VERSION", config.VERSION):                 # pas de CHANGELOG.es.md : l'anglais
-            spanish = self.b.c.get("/system/updates", headers={"Accept-Language": "es"}).get_data(as_text=True)
+        spanish = page("es")                                            # pas de CHANGELOG.es.md : l'anglais
         self.assertIn("Current release.", spanish)
 
     def test_long_lists_show_five_and_fold_the_rest(self):

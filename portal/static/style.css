@@ -718,11 +718,32 @@ a.release-note:hover { text-decoration: underline; }
 /* Réglages du parc : lignes de réglage, légende de pastilles, aperçu de clé. */
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; }
 .set-row.sub { gap: 8px 16px; }
-.set-current { padding: 13px 15px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
-.set-current-val { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
-.set-change { margin-top: 18px; }
-.set-change .set-label { margin-bottom: 7px; }
-.set-change .repo-form input { max-width: 440px; }
+.fleet-settings { gap: clamp(12px, 2vw, 22px); }
+.fleet-settings-grid, .fleet-address-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(12px, 2vw, 22px); }
+.fleet-settings .panel { min-width: 0; }
+.fleet-settings .panel-h h2 { display: flex; align-items: center; gap: 10px; }
+.fleet-setting-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: var(--r-sm); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg-2)); }
+.fleet-setting-icon svg { width: 18px; height: 18px; }
+.fleet-settings-grid .panel { display: flex; flex-direction: column; }
+.fleet-settings-grid .panel-b { flex: 1; }
+.fleet-settings-grid .panel-b > p { margin: 0; }
+.fleet-address-grid { align-items: center; }
+.fleet-address-current { display: grid; justify-items: start; align-content: start; gap: 6px; min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg-2); }
+.fleet-address-current .set-label { margin: 0; }
+.fleet-address-current progress { width: 100%; height: 5px; border: 0; border-radius: 999px; overflow: hidden; appearance: none; background: var(--bg-3); color: var(--warn); }
+.fleet-address-current progress.complete { color: var(--ok); }
+.fleet-address-current progress::-webkit-progress-bar { background: var(--bg-3); }
+.fleet-address-current progress::-webkit-progress-value { border-radius: 999px; background: currentColor; }
+.fleet-address-current progress::-moz-progress-bar { border-radius: 999px; background: currentColor; }
+.fleet-address-form { display: grid; gap: 7px; min-width: 0; }
+.fleet-address-form label { font-size: 13px; font-weight: 600; }
+.fleet-address-controls, .fleet-setting-actions { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.fleet-address-controls input { flex: 1 1 180px; min-width: 0; }
+.fleet-settings .set-help { border-top: 1px solid var(--line); padding-top: 12px; }
+.fleet-settings .set-help > summary { max-width: 100%; }
+@media (max-width: 760px) {
+  .fleet-settings-grid, .fleet-address-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .set-label { font-size: 12.5px; color: var(--text-3); margin-bottom: 3px; }
 .set-value { font-size: 15px; color: var(--text); word-break: break-all; }
 .set-aside { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--text-2); }
@@ -1111,7 +1132,7 @@ details.hint[open] > summary { margin-bottom: 6px; }
 .res-k { color: var(--text-3); }
 .res-bar { display: block; width: 100%; height: 6px; }
 .res-bar .track { fill: var(--bg-3); }
-.res-bar .fill { fill: var(--gauge); }
+.res-bar .fill { fill: var(--gauge); transform-box: fill-box; transform-origin: left center; }
 .res-bar .fill.lvl-warn { fill: var(--warn); } .res-bar .fill.lvl-err { fill: var(--err); }
 .res-v { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
 .res-v.lvl-warn { color: var(--warn); font-weight: 600; } .res-v.lvl-err { color: var(--err); font-weight: 600; }

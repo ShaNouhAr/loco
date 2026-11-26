@@ -1,26 +1,38 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Réglages du parc") }}{% endblock %}
 {% block content %}
+{% from '_nav_icons.html' import nav_icon, ui_icon %}
 {% include '_fleet_nav.html' %}
 <div class="head">
   <div>
     <h1>{{ _("Réglages du parc") }}</h1>
-    <p>{{ _("Adresse du serveur connue des agents, seuil des pastilles et clé d'inscription des postes.") }}</p>
   </div>
 </div>
 
-<div class="stack">
-  <section class="panel">
-    <div class="panel-h"><h2>{{ _("Adresse du serveur pour les agents") }}</h2>{% if server_coverage|length > 1 %}<div class="aside"><span class="st warn">{{ _("changement en cours") }}</span></div>{% endif %}</div>
+<div class="stack fleet-settings">
+  <section class="panel fleet-settings-address">
+    <div class="panel-h"><h2><span class="fleet-setting-icon">{{ ui_icon('server') }}</span>{{ _("Adresse du serveur pour les agents") }}</h2>{% if server_coverage|length > 1 %}<div class="aside"><span class="st warn">{{ _("changement en cours") }}</span></div>{% endif %}</div>
     <div class="panel-b">
       {% set current = server_coverage[0] %}
-      <div class="set-current">
-        <span class="set-label">{{ _("Adresse actuelle") }}</span>
-        <div class="set-current-val">
-          <span class="set-value mono">{{ current[0] }}</span>
-          {% if current[2] %}<span class="st {{ 'ok' if current[1] == current[2] else 'warn' }}">{{ ngettext("Confirmée par %(num)s agent sur %(total)s", "Confirmée par %(num)s agents sur %(total)s", current[1], total=current[2]) }}</span>
+      <div class="fleet-address-grid">
+        <div class="fleet-address-current">
+          <div class="set-label">{{ _("Adresse actuelle") }}</div>
+          <div class="set-value mono">{{ current[0] }}</div>
+          {% if current[2] %}
+          {% set confirmed = ngettext("Confirmée par %(num)s agent sur %(total)s", "Confirmée par %(num)s agents sur %(total)s", current[1], total=current[2]) %}
+          <progress class="{{ 'complete' if current[1] == current[2] }}" max="{{ current[2] }}" value="{{ current[1] }}" aria-label="{{ confirmed }}"></progress>
+          <span class="st {{ 'ok' if current[1] == current[2] else 'warn' }}">{{ confirmed }}</span>
           {% else %}<span class="st">{{ _("aucun agent inscrit") }}</span>{% endif %}
         </div>
+
+        <form method="post" action="{{ url_for('fleet_server_address') }}" class="fleet-address-form" data-ajax>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label for="fleet-new-address">{{ _("Annoncer une nouvelle adresse") }}</label>
+          <div class="fleet-address-controls">
+            <input id="fleet-new-address" type="text" name="url" required placeholder="{{ _('https://192.168.1.20:8443') }}" spellcheck="false" class="mono">
+            <button class="btn primary"><span class="spin"></span>{{ _("Annoncer aux agents") }}</button>
+          </div>
+        </form>
       </div>
 
       {% if server_coverage|length > 1 %}
@@ -41,15 +53,6 @@
       </div>
       {% endif %}
 
-      <div class="set-change">
-        <span class="set-label">{{ _("Annoncer une nouvelle adresse") }}</span>
-        <form method="post" action="{{ url_for('fleet_server_address') }}" class="repo-form" data-ajax>
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <input type="text" name="url" required placeholder="{{ _('https://192.168.1.20:8443') }}" aria-label="{{ _('Nouvelle adresse du serveur') }}" spellcheck="false" class="mono">
-          <button class="btn"><span class="spin"></span>{{ _("Annoncer aux agents") }}</button>
-        </form>
-      </div>
-
       <details class="set-help">
         <summary>{{ _("Comment changer l'adresse sans perdre les postes ?") }}</summary>
         <ol>
@@ -62,9 +65,9 @@
     </div>
   </section>
 
-  <div class="cols even">
+  <div class="fleet-settings-grid">
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Seuil des pastilles") }}</h2></div>
+      <div class="panel-h"><h2><span class="fleet-setting-icon">{{ nav_icon('settings') }}</span>{{ _("Seuil des pastilles") }}</h2></div>
       <div class="panel-b">
         <p class="muted small">{{ _("Couleur de la pastille d'un poste selon ses mises à jour en attente (système, Flatpak et logiciels).") }}</p>
         <div class="set-legend">
@@ -81,13 +84,15 @@
     </section>
 
     <section class="panel">
-      <div class="panel-h"><h2>{{ _("Clé d'inscription") }}</h2></div>
+      <div class="panel-h"><h2><span class="fleet-setting-icon">{{ ui_icon('key') }}</span>{{ _("Clé d'inscription") }}</h2></div>
       <div class="panel-b">
         <p class="muted small">{{ _("Incluse dans les commandes d'installation de l'agent. En changer rend les commandes déjà copiées inutilisables ; les postes inscrits restent rattachés.") }}</p>
-        <div class="set-key mono" title="{{ _('Clé en clair dans les commandes de la page Enrôlement') }}">{{ enroll_key[:4] }}<span class="muted">•••••••••••••</span></div>
-        <form method="post" action="{{ url_for('fleet_rotate_key') }}" data-confirm="{{ _('Changer la clé d\'inscription ?') }}" data-confirm-text="{{ _('Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés.') }}" data-confirm-ok="{{ _('Changer') }}">
-          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Changer la clé") }}</button>
-        </form>
+        <div class="fleet-setting-actions">
+          <div class="set-key mono" title="{{ _('Clé en clair dans les commandes de la page Enrôlement') }}">{{ enroll_key[:4] }}<span class="muted">•••••••••••••</span></div>
+          <form method="post" action="{{ url_for('fleet_rotate_key') }}" data-confirm="{{ _('Changer la clé d\'inscription ?') }}" data-confirm-text="{{ _('Les commandes déjà copiées ne fonctionneront plus. Les postes inscrits restent rattachés.') }}" data-confirm-ok="{{ _('Changer') }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Changer la clé") }}</button>
+          </form>
+        </div>
       </div>
     </section>
   </div>

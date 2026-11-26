@@ -115,7 +115,7 @@ def describe(action):
     """{label, category, category_label, failure} d'un code d'action (« parc.adresse-annoncee »…)."""
     key = category(action)
     label = LABELS.get(action) or action.replace("_", " ").replace(".", " · ").replace("-", " ").capitalize()
-    return {"label": label, "category": key, "category_label": CATEGORIES[key][0] if key else "Autre",
+    return {"label": label, "category": key, "category_label": CATEGORIES[key][0] if key else L_("Autre"),
             "failure": action.endswith(FAILURES)}
 
 
