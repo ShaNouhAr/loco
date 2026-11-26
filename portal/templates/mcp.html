@@ -2,19 +2,19 @@
 {% from '_nav_icons.html' import ui_icon %}
 {% from '_mcp_tools.html' import tool_grid %}
 {% from '_brand_logos.html' import claude_logo, codex_logo %}
-{% block title %}{{ _("Serveur MCP") }}{% endblock %}
+{% block title %}{{ _("MCP et API") }}{% endblock %}
 
 {% macro dlg_head(title, sub='') -%}
 <div class="dlg-h"><div><h2>{{ title }}</h2>{% if sub %}<p>{{ sub }}</p>{% endif %}</div><button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}">{{ ui_icon('close') }}</button></div>
 {%- endmacro %}
 
-{# Claude et Codex : un installateur, téléchargé avec un jeton créé pour lui, écrit la configuration MCP de l'application
+{# Claude et Codex : un installateur, téléchargé avec une clé créée pour lui, écrit la configuration MCP de l'application
    sur cet ordinateur (aucune des deux n'accepte qu'un lien ajoute un serveur MCP). #}
 {% macro apps_panel() -%}
 <section class="panel" id="applications">
   <div class="panel-h"><h2>{{ _("Ajouter loco à Claude ou à Codex") }}</h2><div class="aside">{{ _("installé sur cet ordinateur") }}</div></div>
   <div class="panel-b mcp-connect">
-    <p class="muted">{{ _("Choisissez l'application et les outils : loco prépare un installateur qui ajoute le serveur MCP à la configuration de l'application, sur cet ordinateur, avec un jeton créé pour lui. Ouvrez-le une fois téléchargé, puis redémarrez l'application.") }}</p>
+    <p class="muted">{{ _("Choisissez l'application et les outils : loco prépare un installateur qui ajoute le serveur MCP à la configuration de l'application, sur cet ordinateur, avec une clé créée pour elle. Ouvrez-le une fois téléchargé, puis redémarrez l'application.") }}</p>
     <div class="app-tiles">
       <button type="button" class="app-tile claude" data-open="#mcp-install-claude">
         <span class="app-tile-logo">{{ claude_logo() }}</span>
@@ -41,15 +41,15 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
 </section>
 {%- endmacro %}
 
-{# Fenêtre d'un installateur : nom, durée et outils du jeton, système de l'ordinateur. #}
+{# Fenêtre d'un installateur : nom, durée et outils de la clé, système de l'ordinateur. #}
 {% macro install_dialog(key, label, logo) -%}
 <dialog id="mcp-install-{{ key }}" class="mcp-dialog">
   <form method="post" action="{{ url_for('mcp_installer') }}" data-download>
-    {{ dlg_head(_("Ajouter loco à %(app)s", app=label), _("L'installateur écrit la configuration MCP de %(app)s sur cet ordinateur, avec un jeton limité aux outils activés ici.", app=label)) }}
+    {{ dlg_head(_("Ajouter loco à %(app)s", app=label), _("L'installateur écrit la configuration MCP de %(app)s sur cet ordinateur, avec une clé limitée aux outils activés ici.", app=label)) }}
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="app" value="{{ key }}">
       <div class="install-fields">
-        <label class="f"><span>{{ _("Nom du jeton") }}</span><input type="text" name="name" required maxlength="80" value="{{ 'Claude Code' if key == 'claude' else 'Codex' }}"></label>
+        <label class="f"><span>{{ _("Nom de la clé") }}</span><input type="text" name="name" required maxlength="80" value="{{ 'Claude Code' if key == 'claude' else 'Codex' }}"></label>
         <label class="f"><span>{{ _("Expiration") }}</span><select name="expiry">
           <option value="30">{{ _("30 jours") }}</option><option value="90" selected>{{ _("90 jours") }}</option>
           <option value="365">{{ _("1 an") }}</option><option value="0">{{ _("Jamais") }}</option></select></label>
@@ -64,10 +64,10 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
 </dialog>
 {%- endmacro %}
 
-{# Connexion d'un client : avec le jeton tout juste créé, ou un emplacement « <jeton> » à remplacer. #}
+{# Connexion d'un client : avec la clé tout juste créée, ou un emplacement « <clé> » à remplacer. #}
 {% macro connect_panel(token) -%}
 <section class="panel" id="connexion">
-  <div class="panel-h"><h2>{{ _("Connecter un client MCP avec un jeton") }}</h2></div>
+  <div class="panel-h"><h2>{{ _("Connecter un client MCP ou un script avec une clé") }}</h2></div>
   <div class="panel-b mcp-connect">
     <dl class="kv-grid">
       <div><dt>{{ _("Adresse du serveur") }}</dt><dd><div class="cmd"><code>{{ endpoint }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div></dd></div>
@@ -89,101 +89,118 @@ codex mcp login loco</code><button type="button" class="copy">{{ _("Copier") }}<
       <p class="hint">{{ _("VS Code : même contenu, sous la clé « servers » au lieu de « mcpServers ».") }}</p>
     </details>
     <p class="hint">{{ _("Le client vérifie le certificat de loco : installez l’autorité de loco (%(ca)s) sur le poste où il tourne. Les clients Node.js (Claude Code, Cursor…) la lisent aussi dans la variable NODE_EXTRA_CA_CERTS.", ca=https_url ~ '/ca.crt') }}</p>
-    <span class="cmd-label">{{ _("API REST (scripts, supervision, tableaux de bord) : le même jeton, les mêmes outils") }}</span>
+    <span class="cmd-label">{{ _("API REST (scripts, supervision, tableaux de bord) : la même clé, les mêmes outils") }}</span>
     <div class="cmd"><code>curl --cacert ca.crt -H "Authorization: Bearer {{ token }}" {{ api_url }}/resources</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
-    <p class="hint">{{ _("Toutes les routes, leurs paramètres et l’outil que chacune demande : %(url)s (description OpenAPI, lisible sans jeton).", url=api_url ~ '/openapi.json') }}</p>
+    <p class="hint">{{ _("Toutes les routes, leurs paramètres et l’outil que chacune demande : %(url)s (description OpenAPI, lisible sans clé).", url=api_url ~ '/openapi.json') }}</p>
   </div>
 </section>
+{%- endmacro %}
+
+{# Ligne d'une clé : nom et origine, (compte), outils, dernier appel, expiration, actions. #}
+{% macro key_row(t, edit=false, owner=false) -%}
+<tr{% if t.expired or t.owner_disabled %} class="off"{% endif %}>
+  <td><strong>{{ t.name }}</strong><span class="sub"><span class="mono">{{ t.hint }}…</span>{% if t.app %} · {{ _("obtenu par %(app)s", app=t.app) }}{% endif %}</span></td>
+  {% if owner %}<td data-label="{{ _('Compte') }}">{{ t.owner }}</td>{% endif %}
+  <td data-label="{{ _('Outils') }}"><span title="{{ t.labels|join(' · ') }}">{{ ngettext("%(num)s outil", "%(num)s outils", t.tools|length) }}</span> <span class="faint">·</span> {% if t.actions %}{{ ngettext("%(num)s action", "%(num)s actions", t.actions) }}{% else %}{{ _("lecture seule") }}{% endif %}
+    <span class="sub">{% for label, count in t.groups %}{{ label }} {{ count }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
+  <td class="hide-sm">{% if t.used %}{{ t.used }}<span class="sub">{{ t.client or _("client inconnu") }}{% if t.ip %} · <span class="mono">{{ t.ip }}</span>{% endif %}</span>{% else %}<span class="faint">{{ _("jamais utilisée") }}</span>{% endif %}</td>
+  <td class="hide-sm nowrap">{% if t.expired %}<span class="st err">{{ _("expirée") }}</span>{% elif t.owner_disabled %}<span class="st warn">{{ _("compte désactivé") }}</span>{% elif t.expires %}{{ t.expires }}{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
+  <td class="right nowrap card-action">
+    <div class="dir-acts">
+      {% if edit %}<button type="button" class="btn sm" data-open="#mcp-edit-{{ t.id }}">{{ _("Modifier") }}</button>{% endif %}
+      <form method="post" action="{{ url_for('mcp_token_revoke', token_id=t.id) }}" data-confirm="{{ _('Révoquer la clé « %(name)s » ?', name=t.name) }}" data-confirm-text="{{ _('Ce qui l’utilise (client MCP, script) est refusé immédiatement et ses sessions sur les postes sont fermées. Pour le reconnecter, il faudra une nouvelle clé.') }}" data-confirm-ok="{{ _('Révoquer') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Révoquer") }}</button>
+      </form>
+    </div>
+  </td>
+</tr>
 {%- endmacro %}
 
 {% block content %}
 <div class="head">
   <div>
-    <h1>{{ _("Serveur MCP") }}</h1>
-    <p>{{ _("Permet à un LLM de consulter et de piloter loco par MCP (Model Context Protocol). Son client MCP (Claude Code, Cursor, VS Code…) se connecte avec un jeton, qui n’ouvre que les outils activés pour lui — état du parc, mises à jour, scripts, terminal, fichiers ou bureau d’un poste — sans dépasser les droits du compte qui l’a créé.") }} {{ _("Les mêmes jetons ouvrent l’API REST de loco, %(url)s, pour vos scripts et vos outils de supervision.", url=api_url) }}</p>
+    <h1>{{ _("MCP et API") }}</h1>
+    <p>{{ _("Des clés pour que loco soit consulté et piloté par un LLM, à travers son client MCP (Claude Code, Codex, Cursor, VS Code…), ou par vos scripts et outils de supervision, à travers l’API REST. Chaque clé n’ouvre que les outils activés pour elle — état du parc, mises à jour, scripts, terminal, fichiers ou bureau d’un poste — sans dépasser les droits du compte qui l’a créée.") }}</p>
   </div>
-  <div class="actions"><button type="button" class="btn primary" data-open="#mcp-add">{{ ui_icon('plus') }}<span>{{ _("Nouveau jeton") }}</span></button></div>
+  {% if manage %}<div class="actions"><button type="button" class="btn primary" data-open="#mcp-add">{{ ui_icon('plus') }}<span>{{ _("Nouvelle clé") }}</span></button></div>{% endif %}
 </div>
 
 <div class="stack">
   {% if created %}
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Jeton « %(name)s » créé", name=created.name) }}</h2><div class="aside">{{ _("affiché une seule fois") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Clé « %(name)s » créée", name=created.name) }}</h2><div class="aside">{{ _("affichée une seule fois") }}</div></div>
     <div class="panel-b">
-      <p class="muted mcp-once">{{ _("Copiez-le maintenant : loco n’en garde qu’une empreinte. Les commandes de connexion ci-dessous le contiennent déjà.") }}</p>
+      <p class="muted mcp-once">{{ _("Copiez-la maintenant : loco n’en garde qu’une empreinte. Les commandes de connexion ci-dessous la contiennent déjà.") }}</p>
       <div class="cmd"><code>{{ created.token }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
     </div>
   </section>
   {{ connect_panel(created.token) }}
   {% endif %}
 
-  {% if not created %}{{ apps_panel() }}{% endif %}
+  {% if manage and not created %}{{ apps_panel() }}{% endif %}
 
   <section class="panel">
-    <div class="panel-h"><h2>{{ _("Jetons") }}{% if tokens %} <span class="h-count">{{ tokens|length }}</span>{% endif %}</h2><div class="aside">{{ _("chaque appel qui modifie quelque chose est inscrit au journal, avec le nom du jeton") }}</div></div>
+    <div class="panel-h"><h2>{{ _("Vos clés") }}{% if tokens %} <span class="h-count">{{ tokens|length }}</span>{% endif %}</h2><div class="aside">{{ _("chaque appel qui modifie quelque chose est inscrit au journal, avec le nom de la clé") if manage else _("votre profil ne permet pas d’en créer : vous pouvez les révoquer") }}</div></div>
     {% if tokens %}
     <div class="table-wrap">
-      <table class="mcp-table">
-        <thead><tr><th>{{ _("Jeton") }}</th><th>{{ _("Outils") }}</th><th class="hide-sm">{{ _("Dernier appel") }}</th><th class="hide-sm">{{ _("Expire") }}</th><th></th></tr></thead>
-        <tbody>
-        {% for t in tokens %}
-          <tr{% if t.expired or t.owner_disabled %} class="off"{% endif %}>
-            <td><strong>{{ t.name }}</strong><span class="sub"><span class="mono">{{ t.hint }}…</span>{% if t.app %} · {{ _("obtenu par %(app)s", app=t.app) }}{% endif %}{% if not t.mine %} · {{ _("créé par %(owner)s", owner=t.owner) }}{% endif %}</span></td>
-            <td><span title="{{ t.labels|join(' · ') }}">{{ ngettext("%(num)s outil", "%(num)s outils", t.tools|length) }}</span> <span class="faint">·</span> {% if t.actions %}{{ ngettext("%(num)s action", "%(num)s actions", t.actions) }}{% else %}{{ _("lecture seule") }}{% endif %}
-              <span class="sub">{% for label, count in t.groups %}{{ label }} {{ count }}{% if not loop.last %} · {% endif %}{% endfor %}</span></td>
-            <td class="hide-sm">{% if t.used %}{{ t.used }}<span class="sub">{{ t.client or _("client inconnu") }}{% if t.ip %} · <span class="mono">{{ t.ip }}</span>{% endif %}</span>{% else %}<span class="faint">{{ _("jamais utilisé") }}</span>{% endif %}</td>
-            <td class="hide-sm nowrap">{% if t.expired %}<span class="st err">{{ _("expiré") }}</span>{% elif t.owner_disabled %}<span class="st warn">{{ _("compte désactivé") }}</span>{% elif t.expires %}{{ t.expires }}{% else %}<span class="faint">{{ _("jamais") }}</span>{% endif %}</td>
-            <td class="right nowrap">
-              <div class="dir-acts">
-                {% if t.mine %}<button type="button" class="btn sm" data-open="#mcp-edit-{{ t.id }}">{{ _("Modifier") }}</button>{% endif %}
-                <form method="post" action="{{ url_for('mcp_token_revoke', token_id=t.id) }}" data-confirm="{{ _('Révoquer le jeton « %(name)s » ?', name=t.name) }}" data-confirm-text="{{ _('Le client qui l’utilise est refusé immédiatement et ses sessions sur les postes sont fermées. Pour le reconnecter, il faudra un nouveau jeton.') }}" data-confirm-ok="{{ _('Révoquer') }}">
-                  <input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm">{{ _("Révoquer") }}</button>
-                </form>
-              </div>
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
+      <table class="mcp-table table-cards">
+        <thead><tr><th>{{ _("Clé") }}</th><th>{{ _("Outils") }}</th><th class="hide-sm">{{ _("Dernier appel") }}</th><th class="hide-sm">{{ _("Expire") }}</th><th></th></tr></thead>
+        <tbody>{% for t in tokens %}{{ key_row(t, edit=manage) }}{% endfor %}</tbody>
       </table>
     </div>
     {% else %}
-    <div class="empty">{{ _("Aucun jeton. Créez-en un, puis ajoutez-le à votre client MCP.") }}</div>
+    <div class="empty">{{ _("Aucune clé. Créez-en une, puis ajoutez-la à votre client MCP ou à votre script.") }}</div>
     {% endif %}
   </section>
 
-  {% if not created %}{{ connect_panel("<" ~ _("jeton") ~ ">") }}{% endif %}
+  {% if others %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ _("Clés des autres comptes") }} <span class="h-count">{{ others|length }}</span></h2><div class="aside">{{ _("vous pouvez les révoquer ; leurs outils ne se changent que depuis leur compte") }}</div></div>
+    <div class="table-wrap">
+      <table class="mcp-table table-cards">
+        <thead><tr><th>{{ _("Clé") }}</th><th>{{ _("Compte") }}</th><th>{{ _("Outils") }}</th><th class="hide-sm">{{ _("Dernier appel") }}</th><th class="hide-sm">{{ _("Expire") }}</th><th></th></tr></thead>
+        <tbody>{% for t in others %}{{ key_row(t, owner=true) }}{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if manage and not created %}{{ connect_panel("<" ~ _("clé") ~ ">") }}{% endif %}
 </div>
 
+{% if manage %}
 <dialog id="mcp-add" class="mcp-dialog">
   <form method="post" action="{{ url_for('mcp_token_add') }}">
-    {{ dlg_head(_("Nouveau jeton MCP"), _("Le LLM ne pourra appeler que les outils activés ici, et jamais au-delà de vos propres droits.")) }}
+    {{ dlg_head(_("Nouvelle clé"), _("Le client MCP ou le script ne pourra appeler que les outils activés ici, et jamais au-delà de vos propres droits.")) }}
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="grid2">
-        <label class="f"><span>{{ _("Nom du jeton") }}</span><input type="text" name="name" required maxlength="80" placeholder="{{ _('Claude Code — poste de Marie') }}"></label>
+        <label class="f"><span>{{ _("Nom de la clé") }}</span><input type="text" name="name" required maxlength="80" placeholder="{{ _('Claude Code — poste de Marie') }}"></label>
         <label class="f"><span>{{ _("Expiration") }}</span><select name="expiry">
           <option value="30">{{ _("30 jours") }}</option><option value="90" selected>{{ _("90 jours") }}</option>
           <option value="365">{{ _("1 an") }}</option><option value="0">{{ _("Jamais") }}</option></select></label>
       </div>
       {{ tool_grid(tools) }}
     </div>
-    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Créer le jeton") }}</button></div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Créer la clé") }}</button></div>
   </form>
 </dialog>
+{% endif %}
 
-{% if can('mcp.manage') %}{{ install_dialog('claude', 'Claude', claude_logo) }}{{ install_dialog('codex', 'Codex', codex_logo) }}{% endif %}
+{% if manage %}{{ install_dialog('claude', 'Claude', claude_logo) }}{{ install_dialog('codex', 'Codex', codex_logo) }}
 
-{% for t in tokens if t.mine %}
+{% for t in tokens %}
 <dialog id="mcp-edit-{{ t.id }}" class="mcp-dialog">
   <form method="post" action="{{ url_for('mcp_token_update', token_id=t.id) }}">
-    {{ dlg_head(_("Modifier « %(name)s »", name=t.name), _("Le jeton ne change pas : les outils s’appliquent dès le prochain appel du client.")) }}
+    {{ dlg_head(_("Modifier « %(name)s »", name=t.name), _("La clé ne change pas : les outils s’appliquent dès le prochain appel du client.")) }}
     <div class="dlg-b dlg-stack">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label class="f"><span>{{ _("Nom du jeton") }}</span><input type="text" name="name" required maxlength="80" value="{{ t.name }}"></label>
+      <label class="f"><span>{{ _("Nom de la clé") }}</span><input type="text" name="name" required maxlength="80" value="{{ t.name }}"></label>
       {{ tool_grid(tools, t.tools) }}
     </div>
     <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary"><span class="spin"></span>{{ _("Enregistrer") }}</button></div>
   </form>
 </dialog>
 {% endfor %}
+{% endif %}
 {% endblock %}

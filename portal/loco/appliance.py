@@ -164,6 +164,11 @@ FRACTION_RE = (re.compile(r"\((\d+)/(\d+)\)"),          # apk : « (12/40) Upgra
 APT_TOTAL_RE = re.compile(r"(\d+) upgraded, (\d+) newly installed")
 
 
+# Dernière étape d'une mise à jour inscrite au journal par l'agent root (les mêmes textes que locoadmin.CHECK_STEP).
+CHECK_STEP = ("Vérification de ce qui reste à mettre à jour…", "Checking what is left to update…",
+              "Comprobando lo que queda por actualizar…")
+
+
 def job_progress(job, log_text):
     """Avancement d'une opération, lu dans son journal : pourcentage (None : indéterminé), étape et durée.
     Mise à jour de loco : téléchargement, empreinte, puis les étapes de l'installeur ; mises à jour du système :
@@ -210,6 +215,9 @@ def job_progress(job, log_text):
             out.update(pct=round(5 + 90 * done / total), step=_("Paquet %(n)s sur %(t)s", n=done, t=total))
         else:
             out["step"] = _("Préparation des paquets")
+    if state == "running" and lines and any(m in lines[-1] for m in CHECK_STEP):
+        # Installation finie : l'agent relit ce qui reste à mettre à jour avant d'annoncer la fin.
+        out.update(pct=max(out["pct"] or 0, 97), step=_("Vérification de ce qui reste à mettre à jour"))
     if state == "success":
         out["pct"] = 100
     elif state == "failed":
@@ -318,7 +326,7 @@ def appliance_updates():
     published = (latest.get("published") or "").replace("T", " ")
     return render_template(
         "appliance_updates.html", status=status, latest=latest, jobs=jobs, job=job,
-        signature=f"{jobs[0]['id']}:{jobs[0]['state']}" if jobs else "",
+        signature=_signature(jobs, status),
         job_log=ANSI_RE.sub("", locoadmin.job_log(job["id"])) if job else "", labels=ACTION_LABELS, tag_labels=TAG_LABELS, job_detail=job_detail,
         update_available=bool(latest) and _vkey(latest["version"]) > _vkey(config.VERSION),
         running=locoadmin.running_job(), agent=locoadmin.agent_running(), agent_restart=_agent_restart(),
@@ -353,13 +361,17 @@ def appliance_job(job_id):
     return {"state": job.get("state", ""), "log": ANSI_RE.sub("", log), "progress": job_progress(job, log)}
 
 
+def _signature(jobs, status):
+    """Dernière opération (et son état) et dernière vérification : la page se recharge quand l'une ou l'autre change —
+    une vérification qui se termine (automatique, ou après une mise à jour) montre aussitôt ce qui reste à installer."""
+    return (f"{jobs[0]['id']}:{jobs[0]['state']}" if jobs else "") + "|" + str(status.get("checked") or "")
+
+
 @app.route("/system/operations/state")
 @login_required
 def appliance_operations_state():
     _require_agent()
-    latest = locoadmin.jobs(limit=1)
-    signature = f"{latest[0]['id']}:{latest[0]['state']}" if latest else ""
-    return {"signature": signature}
+    return {"signature": _signature(locoadmin.jobs(limit=1), locoadmin.read_status())}
 
 
 @app.route("/system/updates", methods=["POST"])

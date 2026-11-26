@@ -136,9 +136,10 @@ GROUPS = [
         ("audit.configure", L_("Configurer la conservation du journal"), L_("Durée de conservation des événements."), ("audit.view",), True),
         ("syslog.configure", L_("Envoyer les journaux vers un serveur syslog"), L_("Choisir le serveur syslog et ce qui lui est envoyé : le journal de loco, les journaux des postes, ou les deux."), ("audit.view",), True),
     ]),
-    (L_("Serveur MCP"), [
-        ("mcp.manage", L_("Créer des jetons MCP"),
-         L_("Créer des jetons MCP limités à ses propres droits, et révoquer ceux des comptes que l'on peut gérer."), (), True),
+    (L_("MCP et API"), [
+        ("mcp.manage", L_("Créer des clés MCP et API"),
+         L_("Créer des clés limitées à ses propres droits, pour un client MCP ou l'API REST, et révoquer celles des comptes que "
+            "l'on peut gérer. Sans ce droit, un compte voit et révoque quand même ses propres clés."), (), True),
     ]),
 ]
 PERMISSIONS = {item[0]: {"key": item[0], "label": item[1], "description": item[2],
@@ -288,8 +289,8 @@ ENDPOINTS = {
     "features": "system.view", "features_save": "system.view",
     "roles": "roles.view", "roles_editor": "roles.view", "roles_add": "roles.manage",
     "roles_update": "roles.manage", "roles_delete": "roles.manage",
-    "mcp_settings": "mcp.manage", "mcp_token_add": "mcp.manage", "mcp_token_update": "mcp.manage",
-    "mcp_token_revoke": "mcp.manage", "mcp_oauth_authorize": "mcp.manage", "mcp_installer": "mcp.manage",
+    "mcp_token_add": "mcp.manage", "mcp_token_update": "mcp.manage",
+    "mcp_oauth_authorize": "mcp.manage", "mcp_installer": "mcp.manage",
 }
 ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_mfa_setup", "account_mfa_codes", "account_mfa_disable", "account_mfa_recovery",
@@ -298,7 +299,9 @@ ACCOUNT_ENDPOINTS = {"login", "login_mfa", "account", "logout", "set_language",
                      "account_avatar", "account_avatar_delete", "account_avatar_sso", "account_avatar_img", "account_dismiss_note",
                      "sso_start", "sso_callback",
                      "login_passkey_options", "login_passkey", "account_passkey_options", "account_passkey_add",
-                     "account_passkey_rename", "account_passkey_delete"}
+                     "account_passkey_rename", "account_passkey_delete",
+                     # MCP et API : chaque compte voit et révoque ses propres clés (contrôles dans la vue).
+                     "mcp_settings", "mcp_token_revoke"}
 ACTION_PERMISSIONS = {"scan": "fleet.scan", "update": "fleet.update", "install-app": "fleet.install", "install-package": "fleet.install",
                       "remove-package": "fleet.remove",
                       "gpu-driver": "fleet.update",

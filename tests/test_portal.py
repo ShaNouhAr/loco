@@ -909,7 +909,7 @@ class TestNavigation(unittest.TestCase):
         return re.findall(r'>([^<]+)</a>', block[1].split("</nav>", 1)[0]) if len(block) == 2 else []
 
     def test_admin_tabs_follow_the_current_section(self):
-        self.assertEqual(self.subnav("/accounts"), ["Comptes", "Profils d'accès", "Annuaires et SSO", "Serveur MCP"])
+        self.assertEqual(self.subnav("/accounts"), ["Comptes", "Profils d'accès", "Annuaires et SSO", "MCP et API"])
         self.assertIn("Système", self.subnav("/system"))
         self.assertNotIn("Comptes", self.subnav("/system"))
         self.assertEqual(self.subnav("/log"), ["Journal", "Alertes", "Envoi syslog"])

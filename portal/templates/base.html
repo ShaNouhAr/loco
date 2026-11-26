@@ -86,7 +86,7 @@
         ('access', can('users.view'), 'users', ep.startswith('users'), 'users', _('Comptes'), _('Utilisateurs et mots de passe')),
         ('access', can('roles.view'), 'roles', ep.startswith('roles'), 'shield', _("Profils d'accès"), _('Droits par action')),
         ('access', can('sso.manage'), 'sso_settings', ep.startswith(('sso', 'directory')), 'user', _('Annuaires et SSO'), _('Connexion avec les comptes de l’entreprise')),
-        ('access', can('mcp.manage'), 'mcp_settings', ep.startswith('mcp'), 'plug', _('Serveur MCP'), _('Connecter un LLM à loco par MCP')),
+        ('access', can('mcp.manage') or own_api_keys(), 'mcp_settings', ep.startswith('mcp'), 'plug', _('MCP et API'), _('Clés pour les clients MCP et l’API REST')),
         ('server', can('system.view'), 'system', ep == 'system', 'server', _('Système'), _('État, réseau, certificat, heure')),
         ('server', can('system.view') or (feature('homeassistant') and can('homeassistant.view')) or (feature('proxmox') and can('proxmox.view')) or (feature('network') and can('network.view')), 'backups', ep == 'backups', 'save', _('Sauvegardes'), _('Ce qui est sauvegardé, où et quand')),
         ('server', server_updates and can('system.view'), 'appliance_updates', ep.startswith('appliance_updates') or ep == 'appliance_job', 'update', _('Mises à jour'), _('loco, système et sécurité') if appliance else _('Système, noyau et sécurité')),

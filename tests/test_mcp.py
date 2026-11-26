@@ -453,7 +453,7 @@ class TestTools(McpTest):
         client = Client(token)
         events = client.data("search_journal", text="Audit")["events"]
         self.assertEqual(events[0]["action"], "mcp.acces.ajout")
-        self.assertEqual(events[0]["label"], "Jeton MCP créé")
+        self.assertEqual(events[0]["label"], "Clé d'API créée")
         self.assertTrue(client.call("search_journal", since="hier")["isError"])
         status = client.data("get_server_status")
         self.assertNotIn("fleet", status)                 # le parc n'est pas accordé à cet accès
@@ -518,6 +518,44 @@ class TestAdministration(McpTest):
             events = [r["action"] for r in conn.execute("SELECT action FROM audit WHERE action LIKE 'mcp.%' ORDER BY id")]
         self.assertEqual(events[-1], "mcp.acces.revocation")
         self.assertIn("mcp.acces.modification", events)
+
+    def test_each_account_sees_its_own_keys_first(self):
+        create(self.admin, "Clé de l'admin", ["list_devices"])
+        marie = self.operator()
+        create(marie, "Clé de Marie", ["list_devices"])
+        page = self.admin.c.get("/accounts/mcp").get_data(as_text=True)
+        mine, others = page.split("Clés des autres comptes")             # ses clés d'abord, celles des autres à part
+        self.assertIn("Clé de l&#39;admin", mine)
+        self.assertNotIn("Clé de Marie", mine)
+        self.assertIn("Clé de Marie", others)
+        self.assertIn('data-label="Compte">marie</td>', others)          # avec le compte qui la tient
+        page = marie.c.get("/accounts/mcp").get_data(as_text=True)
+        self.assertIn("Clé de Marie", page)
+        self.assertNotIn("Clé de l&#39;admin", page)
+        self.assertNotIn("Clés des autres comptes", page)                 # marie ne gère aucun compte
+
+    def test_without_the_right_an_account_still_sees_and_revokes_its_keys(self):
+        marie = self.operator()
+        create(marie, "Ancienne clé", ["list_devices"])
+        create(self.admin, "Clé de l'admin", ["list_devices"])
+        with transaction() as conn:                                        # le droit de créer des clés lui est retiré
+            grants = permissions.expand(permissions.VIEWER | {"fleet.scan"})
+            conn.execute("UPDATE access_roles SET permissions=? WHERE id='ia'", (json.dumps(sorted(grants)),))
+        page = marie.c.get("/accounts/mcp")
+        text = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Ancienne clé", text)
+        self.assertNotIn('data-open="#mcp-add"', text)                     # plus de « Nouvelle clé »
+        self.assertNotIn('data-open="#mcp-edit-', text)                    # ni de changement d'outils
+        self.assertIn('href="/accounts/mcp"', marie.c.get("/account").get_data(as_text=True))     # le menu y mène
+        self.assertEqual(create(marie, "Nouvelle", ["list_devices"])[1].status_code, 403)
+        admin_key = token_row("Clé de l'admin")
+        self.assertEqual(marie.post(f"/accounts/mcp/{admin_key['id']}/revoke", page="/accounts/mcp").status_code, 404)
+        r = marie.post(f"/accounts/mcp/{token_row('Ancienne clé')['id']}/revoke", page="/accounts/mcp")
+        self.assertTrue(r.headers["Location"].endswith("/account"))       # plus rien à voir : retour à son compte
+        self.assertIsNone(token_row("Ancienne clé"))
+        self.assertEqual(marie.c.get("/accounts/mcp").status_code, 403)
+        self.assertNotIn('href="/accounts/mcp"', marie.c.get("/account").get_data(as_text=True))
 
     def test_page_access_menu_and_journal(self):
         self.assertIn('href="/accounts/mcp"', self.admin.c.get("/accounts").get_data(as_text=True))

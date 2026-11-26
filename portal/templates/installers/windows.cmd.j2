@@ -1,5 +1,5 @@
 @echo off
-rem {{ m.title }} : installateur genere par loco {{ version }}. Il contient un jeton : il s'efface apres usage.
+rem {{ m.title }} : installateur genere par loco {{ version }}. Il contient une cle : il s'efface apres usage.
 chcp 65001 >nul
 set "LOCO_SELF=%~f0"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$s = [IO.File]::ReadAllText($env:LOCO_SELF, [Text.Encoding]::UTF8); Invoke-Expression $s.Substring($s.LastIndexOf('#=== loco PowerShell'))"

@@ -14,7 +14,7 @@ Par où commencer ? Par ce que vous voulez faire.
 | **Sauvegarder** loco, Home Assistant et Proxmox vers un NAS | [Sauvegardes](sauvegardes.md) |
 | **Tracer** ce qui se passe | [Journal et syslog](journal.md) |
 | **Doubler** le serveur | [Haute disponibilité](haute-disponibilite.md) |
-| **Brancher un assistant IA** ou un **script / une supervision** | [Serveur MCP et API REST](mcp.md) |
+| **Brancher un assistant IA** ou un **script / une supervision** | [MCP et API](mcp.md) |
 | Gérer des appareils **Android** | [Android](android.md) |
 | Suivre **Home Assistant** | [Home Assistant](homeassistant.md) |
 | Mettre à jour un **Proxmox VE** et ouvrir son terminal | [Proxmox VE](proxmox.md) |

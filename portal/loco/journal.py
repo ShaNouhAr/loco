@@ -17,7 +17,7 @@ CATEGORIES = {
     "serveur": (L_("Serveur"), ("systeme.", "alertes.", "apparence.")),
     "journal": (L_("Journal"), ("journal.", "syslog.")),
     "scripts": (L_("Scripts"), ("scripts.",)),
-    "mcp": (L_("Serveur MCP"), ("mcp.",)),
+    "mcp": (L_("MCP et API"), ("mcp.",)),
 }
 
 LABELS = {
@@ -88,8 +88,8 @@ LABELS = {
     "systeme.shell.ouverture": L_("Shell root ouvert"), "systeme.shell.fermeture": L_("Shell root fermé"),
     "systeme.shell.refus": L_("Activation du shell root refusée"),
     "alertes.configuration": L_("Alertes configurées"),
-    "mcp.acces.ajout": L_("Jeton MCP créé"), "mcp.acces.modification": L_("Outils d'un jeton MCP modifiés"),
-    "mcp.acces.revocation": L_("Jeton MCP révoqué"), "mcp.oauth.autorisation": L_("Application autorisée sur le serveur MCP"),
+    "mcp.acces.ajout": L_("Clé d'API créée"), "mcp.acces.modification": L_("Outils d'une clé d'API modifiés"),
+    "mcp.acces.revocation": L_("Clé d'API révoquée"), "mcp.oauth.autorisation": L_("Application autorisée sur le serveur MCP"),
     "mcp.oauth.refus": L_("Application refusée sur le serveur MCP"),
     "parc.session.commande": L_("Commande lancée via MCP"),
     "parc.fichiers.ecriture": L_("Fichier écrit via MCP"), "parc.fichiers.modification": L_("Fichiers organisés via MCP"),

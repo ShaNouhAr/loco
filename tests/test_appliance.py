@@ -415,6 +415,30 @@ class TestSystemPackages(TempAgent):
         self.assertEqual(len(os.listdir(locoadmin.REQUESTS)), 3)
 
 
+class TestJobEnd(TempAgent):
+    """Fin d'une mise à jour : la page qui la suit se recharge dès que l'opération est finie ; ce qui reste à installer
+    doit donc être relu AVANT (sinon elle montrait encore les paquets tout juste installés, sans plus se rafraîchir)."""
+
+    def test_an_update_ends_only_once_what_is_left_is_read(self):
+        job_id = "20261126-120000-abcdef"
+        meta = os.path.join(locoadmin.JOBS, job_id + ".json")
+        locoadmin._write_json(meta, {"id": job_id, "action": "update-system", "state": "queued", "queued": "2026-11-26 12:00:00"})
+        seen = {}
+
+        def check(log=print):
+            seen["state"] = locoadmin._read_json(meta)["state"]                 # pendant la relecture
+            locoadmin._update_status(checked="2026-11-26 12:01:00", system_updates=[])
+            return True
+        with mock.patch.object(locoadmin, "update_system", return_value=True), mock.patch.object(locoadmin, "check", check), \
+                mock.patch.object(locoadmin, "ha_configured", return_value=False):
+            locoadmin.run_job(job_id)
+        self.assertEqual(seen["state"], "running")                                 # pas encore annoncée finie
+        self.assertEqual(locoadmin._read_json(meta)["state"], "success")
+        self.assertEqual(locoadmin.read_status()["system_updates"], [])
+        with open(os.path.join(locoadmin.JOBS, job_id + ".log")) as f:
+            self.assertIn(locoadmin.CHECK_STEP[0], f.read())                         # l'étape se voit dans la barre
+
+
 class TestJobProgress(unittest.TestCase):
     """Barre d'avancement : étape et pourcentage lus dans le journal de l'opération."""
 
@@ -443,6 +467,13 @@ class TestJobProgress(unittest.TestCase):
         self.assertEqual(self.progress("update-system", apt)["step"], "Paquet 2 sur 4")
         self.assertIsNone(self.progress("check", "")["pct"])                  # indéterminé : barre animée
         self.assertEqual(self.progress("update-loco", "", state="queued")["step"], "En attente de l'agent…")
+
+    def test_the_last_step_checks_what_is_left_before_the_end(self):
+        self.assertEqual(appliance.CHECK_STEP, locoadmin.CHECK_STEP)           # mêmes textes des deux côtés
+        apk = "(12/12) Upgrading busybox\n15:01:10 Vérification de ce qui reste à mettre à jour…\n"
+        p = self.progress("update-system", apk)
+        self.assertEqual((p["step"], p["pct"]), ("Vérification de ce qui reste à mettre à jour", 97))
+        self.assertEqual(self.progress("update-system", apk, state="success")["pct"], 100)
 
 
 class TestPages(TempAgent):

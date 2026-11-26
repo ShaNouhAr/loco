@@ -1,12 +1,12 @@
-"""API REST de loco (v1) : les jetons, les droits et les outils du serveur MCP, en requêtes HTTP ordinaires.
+"""API REST de loco (v1) : les clés, les droits et les outils du serveur MCP, en requêtes HTTP ordinaires.
 
-Un jeton créé dans Administration › Serveur MCP sert aussi ici (en-tête « Authorization: Bearer … »). Chaque route
-correspond à un outil, que le jeton doit avoir coché ; il agit avec les droits actuels de son compte, sur le parc de son
-profil, et ses actions sont au journal comme celles du serveur MCP (« API « nom du jeton » »). Les lectures sont des GET
+Une clé créée dans Administration › MCP et API sert aussi ici (en-tête « Authorization: Bearer … »). Chaque route
+correspond à un outil, que la clé doit avoir coché ; elle agit avec les droits actuels de son compte, sur le parc de son
+profil, et ses actions sont au journal comme celles du serveur MCP (« API « nom de la clé » »). Les lectures sont des GET
 (arguments dans l'adresse), les actions des POST ou DELETE (arguments en JSON). Les réponses sont en JSON ; une erreur
-est {"error": "…"}, avec 400 (argument), 401 (jeton), 403 (outil non accordé, origine refusée), 404 (introuvable),
+est {"error": "…"}, avec 400 (argument), 401 (clé), 403 (outil non accordé, origine refusée), 404 (introuvable),
 405 (méthode), 413 (requête trop grande) ou 503 (fonctionnalité coupée, serveur de secours). La description complète
-(OpenAPI 3.1) est servie sans jeton par GET /api/v1/openapi.json.
+(OpenAPI 3.1) est servie sans clé par GET /api/v1/openapi.json.
 """
 import json
 import re
@@ -119,8 +119,8 @@ def api_v1(path):
         return _error("The loco API (shared with the MCP server) is disabled on this server: Administration > Features.", 503)
     found = mcp.authenticate()
     if found is None:
-        return _error("Missing, invalid, expired or revoked access token: send Authorization: Bearer <token>. "
-                      "Tokens are created in Administration > MCP server.", 401)
+        return _error("Missing, invalid, expired or revoked key: send Authorization: Bearer <key>. "
+                      "Keys are created in Administration > MCP and API.", 401)
     token, user = found
     usable, effective = mcp.grants(token, user)
     g.user, g.permissions = user, effective
@@ -136,8 +136,8 @@ def api_v1(path):
             return _error(f"Method {request.method} not allowed here.", 405, allowed=sorted(set(extra)))
         return _error(f"Unknown API route {PREFIX}{path}.", 404, see=config.portal_url() + PREFIX + "/openapi.json")
     if t not in usable:
-        return _error(f"This access token may not use {t['name']} (tick it on the token, within the rights of its loco "
-                      "account: Administration > MCP server).", 403, tool=t["name"])
+        return _error(f"This key may not use {t['name']} (tick it on the key, within the rights of its loco "
+                      "account: Administration > MCP and API).", 403, tool=t["name"])
     try:
         args = _arguments(t, extra)
     except TooLarge:
@@ -202,8 +202,8 @@ def openapi():
         paths.setdefault(PREFIX + path, {})[method.lower()] = operation
     return {"openapi": "3.1.0",
             "info": {"title": "loco API", "version": "v1 (loco " + config.VERSION + ")",
-                     "description": "Same access tokens, rights and tools as the loco MCP server. Create a token in "
-                                    "Administration > MCP server and tick the tools it may use."},
+                     "description": "Same keys, rights and tools as the loco MCP server. Create a key in "
+                                    "Administration > MCP and API and tick the tools it may use."},
             "servers": [{"url": config.portal_url()}],
             "security": [{"bearer": []}],
             "components": {"securitySchemes": {"bearer": {"type": "http", "scheme": "bearer"}},

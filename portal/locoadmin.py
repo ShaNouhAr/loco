@@ -3202,6 +3202,11 @@ def _lock(wait):
 
 # --------------------------------------------------------------------------- agent (root)
 
+# Dernière étape d'une mise à jour, inscrite au journal de l'opération (la page d'avancement la reconnaît).
+CHECK_STEP = ("Vérification de ce qui reste à mettre à jour…", "Checking what is left to update…",
+              "Comprobando lo que queda por actualizar…")
+
+
 def _job_paths(job_id):
     return os.path.join(JOBS, job_id + ".json"), os.path.join(JOBS, job_id + ".log")
 
@@ -3228,13 +3233,16 @@ def run_job(job_id):
                 ok = _operation(job["action"], job.get("params") or {}, log)
         except Exception as e:  # noqa: BLE001 - tout échec est rapporté dans le journal de l'opération
             log(f"Erreur : {e}")
-        job.update(state="success" if ok else "failed", finished=_now())
-        _write_json(meta_path, job)
         if job["action"] in ("update-loco", "update-system", "update-security", "configure"):
+            # Ce qui reste à installer est relu AVANT d'annoncer la fin : la page qui suit l'opération se recharge alors
+            # sur un état juste (avant, elle montrait encore les paquets tout juste installés, sans plus se rafraîchir).
+            log(t(CHECK_STEP[0], CHECK_STEP[1], CHECK_STEP[2]))
             try:
                 check(lambda _text: None)
             except Exception as e:  # noqa: BLE001
                 log(t(f"Vérification des versions impossible : {e}", f"Version check failed: {e}", f"No se pudo comprobar las versiones: {e}"))
+        job.update(state="success" if ok else "failed", finished=_now())
+        _write_json(meta_path, job)
         os.close(fd)
 
 

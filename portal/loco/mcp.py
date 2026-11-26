@@ -617,7 +617,7 @@ def _wake(args):
 
 
 @tool("cancel_device_action", "fleet", "Cancel a queued action", L_("Annuler une action en attente"),
-      L_("Annuler une action pas encore transmise à l'agent (seulement celles que ce jeton peut lancer)."),
+      L_("Annuler une action pas encore transmise à l'agent (seulement celles que cette clé peut lancer)."),
       ("fleet.view",),
       "Cancel an action that is still queued (not yet sent to the agent). The action id comes from get_device "
       "(pending_actions). Only kinds of actions this access may start can be cancelled.",
@@ -780,7 +780,7 @@ def _run_script(args):
 
 
 @tool("run_command", "scripts", "Run a command written by the assistant", L_("Exécuter des commandes écrites par le LLM"),
-      L_("Le LLM écrit lui-même un script et le lance en SYSTEM ou root : le plus puissant, à réserver aux jetons de confiance."),
+      L_("Le LLM écrit lui-même un script et le lance en SYSTEM ou root : le plus puissant, à réserver aux clés de confiance."),
       ("scripts.run", "scripts.edit"),
       "Run a script you write (PowerShell on Windows, shell on Linux, or Python on both) on devices and / or device "
       "groups, as SYSTEM (Windows) or root (Linux). It is recorded with its exact content in the script runs history. "
@@ -980,7 +980,7 @@ def _call(params, structured):
         return {"content": [{"type": "text", "text": message}], "isError": True}
     if t not in g.mcp["tools"]:
         return failure(f"The tool {name} is not allowed for this access (or no longer allowed by the rights of its "
-                       "loco account). In loco: Administration > MCP server.")
+                       "loco account). In loco: Administration > MCP and API.")
     try:
         data = t["handler"](arguments(t, params.get("arguments")))
     except ToolError as e:
@@ -1128,9 +1128,22 @@ def _catalog_view(own):
 
 
 def _visible():
+    """Clés que le compte connecté voit : les siennes, toujours (même sans le droit d'en créer : il peut les révoquer) ;
+    avec ce droit, aussi celles des comptes qu'il peut gérer, montrées à part."""
     rows = db().execute("SELECT t.*, u.username, u.role, u.disabled AS owner_disabled FROM mcp_tokens t "
                         "JOIN users u ON u.id=t.user_id ORDER BY t.id DESC").fetchall()
-    return [r for r in rows if r["user_id"] == g.user["id"] or can_manage_user(r)]
+    manage = can("mcp.manage")
+    return [r for r in rows if r["user_id"] == g.user["id"] or (manage and can_manage_user(r))]
+
+
+def own_keys():
+    """Nombre de clés du compte connecté : le menu mène à MCP et API un compte qui en a, même sans le droit d'en créer."""
+    if g.get("user") is None or "mcp" in features.disabled():
+        return 0
+    return db().execute("SELECT COUNT(*) FROM mcp_tokens WHERE user_id=?", (g.user["id"],)).fetchone()[0]
+
+
+app.jinja_env.globals["own_api_keys"] = own_keys
 
 
 def _day(value):
@@ -1191,12 +1204,15 @@ def _page(created=None, status=200):
     own = permissions.role_permissions(db(), g.user["role"])
     rows = _visible()
     apps = client_names(db(), [r["client_id"] for r in rows])
+    keys = [_token_view(r, apps) for r in rows]
     tools = _catalog_view(own)
     # Installateurs : la consultation cochée d'office, jamais l'accès distant (fichiers, écran, terminal d'un poste).
     checked = [t["name"] for grp in tools if grp["key"] != "remote" for t in grp["tools"] if t["available"] and t["read_only"]]
-    return render_template("mcp.html", tools=tools, tokens=[_token_view(r, apps) for r in rows], endpoint=_endpoint_url(),
-                           created=created, expiries=EXPIRIES, install_checked=checked, system=detect_system(),
-                           by_ip=by_ip(), api_url=config.portal_url() + "/api/v1"), status
+    # Chaque compte voit d'abord ses clés ; celles des autres comptes (qu'il peut révoquer) sont à part.
+    return render_template("mcp.html", tools=tools, tokens=[k for k in keys if k["mine"]], others=[k for k in keys if not k["mine"]],
+                           manage=can("mcp.manage"), endpoint=_endpoint_url(), created=created, expiries=EXPIRIES,
+                           install_checked=checked, system=detect_system(), by_ip=by_ip(),
+                           api_url=config.portal_url() + "/api/v1"), status
 
 
 def _form_values():
@@ -1207,7 +1223,7 @@ def _form_values():
         abort(400)                                          # cases désactivées dans le formulaire : requête forgée
     name = CONTROL_RE.sub(" ", request.form.get("name", "")).strip()
     if not name or len(name) > NAME_MAX:
-        raise ValueError(_("Donnez un nom au jeton (%(n)s caractères au plus).", n=NAME_MAX))
+        raise ValueError(_("Donnez un nom à la clé (%(n)s caractères au plus).", n=NAME_MAX))
     if not chosen:
         raise ValueError(_("Activez au moins un outil."))
     return name, [n for n in TOOLS if n in chosen]
@@ -1216,6 +1232,9 @@ def _form_values():
 @app.route("/accounts/mcp")
 @login_required
 def mcp_settings():
+    # Ouverte à tout compte qui a des clés (pour les voir et les révoquer) ; en créer demande le droit mcp.manage.
+    if not can("mcp.manage") and not own_keys():
+        abort(403)
     return _page()
 
 
@@ -1268,7 +1287,7 @@ def mcp_token_update(token_id):
 @app.route("/accounts/mcp/<int:token_id>/revoke", methods=["POST"])
 @login_required
 def mcp_token_revoke(token_id):
-    require("mcp.manage")
+    # Sa propre clé : toujours révocable ; celle d'un autre compte : avec mcp.manage et le droit de gérer ce compte (_visible).
     row = next((r for r in _visible() if r["id"] == token_id), None)
     if row is None:
         abort(404)
@@ -1278,5 +1297,5 @@ def mcp_token_revoke(token_id):
     conn.execute("DELETE FROM mcp_tokens WHERE id=?", (token_id,))
     audit("mcp.acces.revocation", f"{row['name']} ({row['username']})", commit=False)
     conn.commit()
-    flash(_("Jeton « %(name)s » révoqué : le client qui l’utilisait est refusé dès maintenant.", name=row["name"]), "ok")
-    return back("mcp_settings")
+    flash(_("Clé « %(name)s » révoquée : ce qui l’utilisait (client MCP, script) est refusé dès maintenant.", name=row["name"]), "ok")
+    return back("mcp_settings") if can("mcp.manage") or own_keys() else back("account")

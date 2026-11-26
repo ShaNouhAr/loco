@@ -198,12 +198,12 @@ Derrière un proxy d'entreprise ? Ça marche aussi.
 
 **« Quels postes n'ont pas redémarré depuis un mois ? »** Demandez-le à votre assistant.
 
-<img src="docs/media/mcp.webp" width="100%" alt="Serveur MCP : jetons, outils accordés à chacun, dernier appel et commande de connexion d'un assistant">
+<img src="docs/media/mcp.webp" width="100%" alt="MCP et API : clés, outils accordés à chacune, dernier appel et commande de connexion d'un assistant">
 
 - **Claude ou Codex en un clic** — un installateur ajoute loco à la configuration MCP de l'application, sur votre ordinateur.
-- **34 outils**, cochés un à un pour chaque jeton : lire, mettre à jour, lancer un script, ouvrir un terminal.
-- **Jamais plus de droits que vous** — un jeton reste dans les limites du compte qui l'a créé.
-- **Tout est noté** — chaque appel qui change quelque chose rejoint le journal, au nom du jeton.
+- **34 outils**, cochés un à un pour chaque clé : lire, mettre à jour, lancer un script, ouvrir un terminal — par MCP ou par l'API REST.
+- **Jamais plus de droits que vous** — une clé reste dans les limites du compte qui l'a créée, et chaque compte voit les siennes.
+- **Tout est noté** — chaque appel qui change quelque chose rejoint le journal, au nom de la clé.
 
 <br>
 
@@ -388,7 +388,7 @@ flowchart LR
 <img src="docs/media/icones/logiciels.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/logiciels.md">Logiciels Windows</a></b><br><sub>Catalogue, groupes, déploiements.</sub><br><br>
 <img src="docs/media/icones/distance.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/sessions-distantes.md">Sessions distantes</a></b><br><sub>Bureau, terminal, fichiers.</sub><br><br>
 <img src="docs/media/icones/comptes.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/comptes.md">Comptes, profils et SSO</a></b><br><sub>Droits, annuaires, apparence.</sub><br><br>
-<img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">Serveur MCP</a></b><br><sub>Brancher un assistant IA.</sub><br><br>
+<img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">MCP et API</a></b><br><sub>Brancher un assistant IA ou un script.</sub><br><br>
 <img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Appareils, applications, écran distant.</sub><br><br>
 <img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>Liaison SSH, mises à jour, sauvegardes.</sub><br><br>
 <img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/wazuh.md">Agent Wazuh</a></b><br><sub>Posé sur les postes, réglé pour votre manager.</sub><br><br>
