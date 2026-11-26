@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 2.206.0 — 2026-11-26
+
+- **Relier Proxmox et Home Assistant se fait dans Mon parc › Enrôlement.** Deux onglets, *Proxmox VE* et *Home Assistant*, à côté de Windows, Linux et Android, donnent les étapes de liaison et la confirmation de l'empreinte (certificat de Proxmox, clé d'hôte de Home Assistant). Pour Proxmox, une dernière étape liste les serveurs reliés par leur jeton mais pas encore par SSH (*Relier par SSH*), ce qu'il faut pour les voir dans Mon parc. *Sauvegardes* et la page *Home Assistant* gardent ce qui est déjà relié et renvoient à l'enrôlement pour en relier un nouveau ; le renouvellement d'un certificat ou d'une clé d'hôte se confirme toujours sur place.
+- **Mon parc : un Proxmox qui doit redémarrer se présente comme un poste.** Sans mise à jour à installer, il est *à jour* (pastille verte), avec *redémarrage nécessaire* en dessous, au lieu de « redémarrage requis » à la place de l'état ; la vue d'ensemble le compte de même.
+- **Administration › Configuration, remise en ordre.** La page est rangée par question : *Qui peut joindre loco* (postes du parc, ordinateurs qui ouvrent le portail, HTTP non chiffré), *Sortie vers Internet* (proxy d'entreprise, DNS pour joindre Microsoft), *Caches servis à vos postes* — une ligne par cache, avec son interrupteur, sa taille maximale et la place qu'il occupe —, puis *Envois vers le portail*. Chaque réglage dit à quoi il sert, en français, en anglais et en espagnol (les libellés restaient en français). Le nombre de sauvegardes conservées, déjà réglable dans *Sauvegardes*, n'y est plus en double ; *Voir aussi* mène aux réglages voisins (Sauvegardes, Fonctionnalités, Système). Un seul *Appliquer*, qui redémarre les services une fois.
+
 ## 2.205.0 — 2026-11-26
 
 - **« Serveur MCP » devient « MCP et API », avec des clés.** La page d'Administration › Accès s'appelle maintenant *MCP et API* : les mêmes clés servent à un LLM, par son client MCP (Claude Code, Codex, Cursor…), et à vos scripts ou outils de supervision, par l'API REST. On parle partout de *clés* plutôt que de *jetons* : page, installateurs Claude et Codex, autorisation d'une application, droit *Créer des clés MCP et API*, journal, Fonctionnalités et documentation.

@@ -14,7 +14,8 @@ il donne aussi les ressources du serveur (processeur, mémoire, disque système)
 
 ## Relier le système
 
-Sur la page du serveur, *Gérer aussi le système de ce Proxmox* :
+Sur la page du serveur, *Gérer aussi le système de ce Proxmox* (l'onglet **Proxmox VE** de **Mon parc › Enrôlement**
+y mène, *Relier par SSH*, pour chaque serveur relié par son jeton mais pas encore par SSH) :
 
 1. **Autoriser la clé de loco** : ouvrez le shell du nœud (interface de Proxmox › le nœud › *Shell*) et lancez la
    commande proposée, qui ajoute la clé publique de loco à `/root/.ssh/authorized_keys`. La clé privée ne quitte

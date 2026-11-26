@@ -830,6 +830,13 @@ def _fields():
     return name or host, host, port, username
 
 
+def _linked():
+    """Après une étape de liaison : retour à l'onglet Home Assistant de l'enrôlement s'il en vient, sinon à sa page."""
+    if request.form.get("next") == "enrollment":
+        return back("enrollment", _anchor="homeassistant")
+    return back("homeassistant")
+
+
 @app.route("/homeassistant/link", methods=["POST"])
 @login_required
 def homeassistant_link():
@@ -842,10 +849,10 @@ def homeassistant_link():
         kind, key = probe_host_key(host, port)
     except (ValueError, LinkError) as e:
         flash(str(e), "error")
-        return back("homeassistant")
+        return _linked()
     session["homeassistant_pending"] = {"name": name, "host": host, "port": port, "username": username,
                                         "type": kind, "key": key, "at": time.time(), "nonce": secrets.token_hex(8)}
-    return back("homeassistant")
+    return _linked()
 
 
 @app.route("/homeassistant/confirm", methods=["POST"])
@@ -857,7 +864,7 @@ def homeassistant_confirm():
     data = _pending()
     session.pop("homeassistant_pending", None)
     if request.form.get("cancel") == "1" or data is None:
-        return back("homeassistant")
+        return _linked()
     if not secrets.compare_digest(request.form.get("nonce", ""), data["nonce"]):
         abort(400)
     conn = db()
@@ -874,7 +881,7 @@ def homeassistant_confirm():
     conn.commit()
     error = refresh(host_id)
     flash(_("Home Assistant relié.") if not error else _("Instance enregistrée, mais la liaison échoue : %(e)s", e=error), "ok" if not error else "error")
-    return back("homeassistant")
+    return _linked()
 
 
 @app.route("/homeassistant/<int:host_id>/hostkey", methods=["POST"])

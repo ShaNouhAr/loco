@@ -59,7 +59,8 @@ Droit : *Sauvegarder Home Assistant*.
 
 ### Relier un serveur
 
-loco passe par l'API de Proxmox avec un **jeton** créé pour lui. Dans le shell d'un nœud :
+Dans **Mon parc › Enrôlement**, onglet **Proxmox VE** : loco passe par l'API de Proxmox avec un **jeton** créé pour
+lui. Dans le shell d'un nœud :
 
 ```sh
 pveum role add LocoBackup --privs "VM.Audit VM.Backup Datastore.Audit Datastore.AllocateSpace Sys.Audit"

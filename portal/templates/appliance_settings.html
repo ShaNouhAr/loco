@@ -1,10 +1,24 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Configuration") }}{% endblock %}
+{# Configuration du serveur loco (appliance), rangée par question : qui peut le joindre, par où il sort sur Internet,
+   quels caches il sert (et leur taille), ce qu'on peut lui envoyer. Un seul « Appliquer » : la réinstallation relance
+   les services une fois, quel que soit le nombre de réglages changés. #}
+{% macro cache_row(key, size_key, stat, title, text, always=false) -%}
+{% set on = always or conf[key] == '1' %}
+<div class="cache-row{{ ' off' if not on }}">
+  <div class="feature-text"><strong>{{ title }}</strong><small>{{ text }}</small></div>
+  <label class="f cache-size"><span>{{ _("Taille maximale") }}</span><input type="text" name="{{ size_key }}" value="{{ conf[size_key] }}" placeholder="{{ _('automatique') }}" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono" aria-label="{{ _('Taille maximale : %(name)s', name=title) }}"></label>
+  <span class="cache-used">{% if stats.get(stat) %}{{ _("%(used)s utilisés", used=stats[stat]|human) }}{% else %}<span class="faint">—</span>{% endif %}</span>
+  {% if always %}<span class="cache-always">{{ _("toujours actif") }}</span>
+  {% else %}<label class="cache-switch" title="{{ _('Servir ce cache') }}"><span class="switch"><input type="checkbox" name="{{ key }}" value="1" role="switch" aria-label="{{ _('Servir : %(name)s', name=title) }}" {{ 'checked' if on }}><i aria-hidden="true"></i></span></label>{% endif %}
+</div>
+{%- endmacro %}
+
 {% block content %}
 <div class="head">
   <div>
     <h1>{{ _("Configuration") }}</h1>
-    <p>{{ _("Réseaux autorisés, fonctions, caches et sauvegardes. Sur la console : <code>loco-config</code>.") }}</p>
+    <p>{{ _("Réglages du serveur loco lui-même : qui peut le joindre, par où il sort sur Internet et les caches qu'il sert à vos postes. Sur la console du serveur, les mêmes réglages : <code>loco-config</code>.") }}</p>
   </div>
 </div>
 
@@ -16,68 +30,80 @@
   {% endif %}
 
   <div class="cols w21">
-    <form class="panel appliance-form" method="post" action="{{ url_for('appliance_settings_post') }}" data-ajax data-confirm="{{ _('Appliquer les réglages ?') }}" data-confirm-text="{{ _('L\'installation est relancée avec les nouvelles valeurs : les services redémarrent quelques secondes.') }}" data-confirm-ok="{{ _('Appliquer') }}">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
+    <form class="stack appliance-form" method="post" action="{{ url_for('appliance_settings_post') }}" data-ajax data-confirm="{{ _('Appliquer les réglages ?') }}" data-confirm-text="{{ _('L\'installation est relancée avec les nouvelles valeurs : les services redémarrent quelques secondes.') }}" data-confirm-ok="{{ _('Appliquer') }}">
+      <section class="panel">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <div class="panel-h"><h2>{{ _("Qui peut joindre loco") }}</h2><div class="aside">{{ _("adresses ou réseaux, séparés par des espaces") }}</div></div>
+        <div class="panel-b stack-sm">
+          <label class="f"><span>{{ _("Postes du parc") }}</span><input type="text" name="ALLOW" value="{{ conf.ALLOW }}" required spellcheck="false" class="mono">
+            <span class="hint">{{ _("Les ordinateurs qui utilisent les dépôts, les caches et l'agent de loco. Exemple : 192.168.10.0/24 10.0.0.0/8.") }}</span></label>
+          <label class="f"><span>{{ _("Ordinateurs qui ouvrent ce portail") }}</span><input type="text" name="ADMIN_ALLOW" value="{{ conf.ADMIN_ALLOW }}" required spellcheck="false" class="mono">
+            <span class="hint">{{ _("Ce portail et ses métriques. Gardez-y votre adresse, sinon vous perdez l'accès : <span class=\"mono\">%(client_ip)s</span>.", client_ip=client_ip) }}</span></label>
+        </div>
+        <div class="feature-list cfg-list">
+          <label class="feature-row {{ 'off' if conf.HTTP_ENABLED != '1' }}">
+            <span class="feature-text"><strong>{{ _("HTTP non chiffré pour les postes") }}</strong><small>{{ _("Port 80, en plus du HTTPS : il sert à installer l'autorité de loco sur un poste, la première fois.") }}</small></span>
+            <span class="switch"><input type="checkbox" name="HTTP_ENABLED" value="1" role="switch" {{ 'checked' if conf.HTTP_ENABLED == '1' }}><i aria-hidden="true"></i></span>
+          </label>
+        </div>
+      </section>
 
-      <div class="panel-h"><h2>{{ _("Accès") }}</h2></div>
-      <div class="panel-b grid2">
-        <label class="f wide"><span>{{ settings.ALLOW[0] }}</span><input type="text" name="ALLOW" value="{{ conf.ALLOW }}" required spellcheck="false" class="mono">
-          <span class="hint">{{ _("Postes autorisés à utiliser les dépôts et les caches, séparés par des espaces (ex. 192.168.10.0/24 10.0.0.0/8).") }}</span></label>
-        <label class="f wide"><span>{{ settings.ADMIN_ALLOW[0] }}</span><input type="text" name="ADMIN_ALLOW" value="{{ conf.ADMIN_ALLOW }}" required spellcheck="false" class="mono">
-          <span class="hint">{{ _("Accès au portail et aux métriques. Doit inclure votre adresse : <span class=\"mono\">%(client_ip)s</span>.", client_ip=client_ip) }}</span></label>
-        <label class="f wide"><span>{{ settings.UPSTREAM_PROXY[0] }}</span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="{{ _('accès direct') }}" spellcheck="false" class="mono">
-          <span class="hint">{{ _("Proxy HTTP d'entreprise pour sortir sur Internet (dépôts officiels, téléchargements). Vide : accès direct.") }}</span></label>
-      </div>
-      <div class="feature-list cfg-list">
-        <label class="feature-row {{ 'off' if conf.HTTP_ENABLED != '1' }}">
-          <span class="feature-text"><strong>{{ settings.HTTP_ENABLED[0] }}</strong><small>{{ _("En plus du HTTPS (port 80), pour importer l'autorité de loco la première fois sur un poste.") }}</small></span>
-          <span class="switch"><input type="checkbox" name="HTTP_ENABLED" value="1" role="switch" {{ 'checked' if conf.HTTP_ENABLED == '1' }}><i aria-hidden="true"></i></span>
-        </label>
-      </div>
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Sortie vers Internet") }}</h2></div>
+        <div class="panel-b grid2">
+          <label class="f"><span>{{ _("Proxy d'entreprise") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="UPSTREAM_PROXY" value="{{ conf.UPSTREAM_PROXY }}" placeholder="{{ _('aucun : accès direct') }}" spellcheck="false" class="mono">
+            <span class="hint">{{ _("Par où loco télécharge les paquets et les mises à jour officielles. Vide : accès direct.") }}</span></label>
+          <label class="f"><span>{{ _("DNS pour joindre Microsoft") }}</span><input type="text" name="RESOLVERS" value="{{ conf.RESOLVERS }}" required spellcheck="false" class="mono">
+            <span class="hint">{{ _("Utilisés seulement par le cache Windows Update.") }}</span></label>
+        </div>
+      </section>
 
-      <div class="panel-h sub"><h2>{{ _("Fonctions") }}</h2></div>
-      <div class="feature-list cfg-list">
-        <label class="feature-row {{ 'off' if conf.WU_ENABLED != '1' }}">
-          <span class="feature-text"><strong>{{ settings.WU_ENABLED[0] }}</strong><small>{{ _("Mises à jour Windows téléchargées une fois puis servies en local.") }}</small></span>
-          <span class="switch"><input type="checkbox" name="WU_ENABLED" value="1" role="switch" {{ 'checked' if conf.WU_ENABLED == '1' }}><i aria-hidden="true"></i></span>
-        </label>
-        <label class="feature-row {{ 'off' if conf.RPM_ENABLED != '1' }}">
-          <span class="feature-text"><strong>{{ settings.RPM_ENABLED[0] }}</strong><small>{{ _("Cache et dépôts locaux RHEL, Rocky et AlmaLinux.") }}</small></span>
-          <span class="switch"><input type="checkbox" name="RPM_ENABLED" value="1" role="switch" {{ 'checked' if conf.RPM_ENABLED == '1' }}><i aria-hidden="true"></i></span>
-        </label>
-        <label class="feature-row {{ 'off' if conf.FLATPAK_ENABLED != '1' }}">
-          <span class="feature-text"><strong>{{ settings.FLATPAK_ENABLED[0] }}</strong><small>{{ _("Cache Flathub et applications Flatpak internes.") }}</small></span>
-          <span class="switch"><input type="checkbox" name="FLATPAK_ENABLED" value="1" role="switch" {{ 'checked' if conf.FLATPAK_ENABLED == '1' }}><i aria-hidden="true"></i></span>
-        </label>
-      </div>
-      <div class="panel-b">
-        <label class="f wide"><span>{{ settings.RESOLVERS[0] }}</span><input type="text" name="RESOLVERS" value="{{ conf.RESOLVERS }}" required spellcheck="false" class="mono">
-          <span class="hint">{{ _("Serveurs DNS que le cache Windows Update utilise pour joindre Microsoft.") }}</span></label>
-      </div>
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Caches servis à vos postes") }}</h2><div class="aside">{{ _("taille : 50g, 500m… ; vide : automatique") }}</div></div>
+        <div class="cache-list">
+          {{ cache_row('', 'APT_CACHE_SIZE', 'acng', _("Debian et Ubuntu"), _("Paquets des dépôts officiels (APT), téléchargés une fois puis servis aux postes."), always=true) }}
+          {{ cache_row('WU_ENABLED', 'WU_CACHE_SIZE', 'wucache', _("Windows Update"), _("Mises à jour Windows téléchargées une fois puis servies en local.")) }}
+          {{ cache_row('RPM_ENABLED', 'RPM_CACHE_SIZE', 'rpmcache', _("Red Hat, Rocky et AlmaLinux"), _("Cache et dépôts locaux de la famille Red Hat (RPM).")) }}
+          {{ cache_row('FLATPAK_ENABLED', 'FLATPAK_CACHE_SIZE', 'flatpakcache', _("Flatpak"), _("Cache Flathub et applications Flatpak internes.")) }}
+        </div>
+        <div class="panel-f"><span class="hint">{{ _("Couper un cache arrête son service et libère sa place. Pour seulement masquer une partie du portail : <a href=\"%(url)s\">Fonctionnalités</a>.", url=url_for('features')) }}</span></div>
+      </section>
 
-      <div class="panel-h sub"><h2>{{ _("Stockage") }}</h2></div>
-      <div class="panel-b grid2">
-        {% for key, stat in (('APT_CACHE_SIZE', 'acng'), ('WU_CACHE_SIZE', 'wucache'), ('RPM_CACHE_SIZE', 'rpmcache'), ('FLATPAK_CACHE_SIZE', 'flatpakcache')) %}
-        <label class="f"><span>{{ settings[key][0] }}</span><input type="text" name="{{ key }}" value="{{ conf[key] }}" placeholder="{{ _('automatique') }}" pattern="[0-9]+[kKmMgGtT]?" spellcheck="false" class="mono">
-          {% if stats.get(stat) %}<span class="hint">{{ _("utilisé : %(used)s", used=stats[stat]|human) }}</span>{% endif %}</label>
-        {% endfor %}
-        <label class="f"><span>{{ settings.MAX_UPLOAD[0] }}</span><input type="text" name="MAX_UPLOAD" value="{{ conf.MAX_UPLOAD }}" required pattern="[0-9]+[kKmMgG]?" spellcheck="false" class="mono"></label>
-        <label class="f"><span>{{ settings.BACKUP_KEEP[0] }}</span><input type="text" name="BACKUP_KEEP" value="{{ conf.BACKUP_KEEP }}" required pattern="[0-9]{1,3}" inputmode="numeric" class="mono"></label>
-      </div>
-      <div class="panel-f row-between"><span class="hint">{{ _("Tailles : 50g, 500m… Vide : automatique.") }}</span><button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>{{ _("Appliquer") }}</button></div>
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Envois vers le portail") }}</h2></div>
+        <div class="panel-b">
+          <label class="f field-md"><span>{{ _("Taille maximale d'un fichier envoyé") }}</span><input type="text" name="MAX_UPLOAD" value="{{ conf.MAX_UPLOAD }}" required pattern="[0-9]+[kKmMgG]?" spellcheck="false" class="mono">
+            <span class="hint">{{ _("Logiciels, images ISO, applications ou sauvegardes envoyés depuis le navigateur. Exemple : 8g.") }}</span></label>
+        </div>
+      </section>
+
+      <div class="panel"><div class="panel-f row-between">
+        <span class="hint">{{ _("Les services redémarrent quelques secondes, une seule fois.") }}</span>
+        <button class="btn primary" {{ 'disabled' if running or not agent }}><span class="spin"></span>{{ _("Appliquer") }}</button>
+      </div></div>
     </form>
 
-    <section class="panel">
-      <div class="panel-h"><h2>{{ _("Réseau") }}</h2><div class="aside">{{ _("lecture seule") }}</div></div>
-      <dl class="kv">
-        <dt>{{ _("Nom") }}</dt><dd class="mono">{{ network.hostname }}</dd>
-        <dt>{{ _("Adresses") }}</dt><dd class="mono">{% for a in network.addresses %}{{ a }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
-        <dt>{{ _("Configuration") }}</dt><dd>{{ network.mode or '—' }}</dd>
-        <dt>{{ _("Passerelle") }}</dt><dd class="mono">{{ network.gateway or '—' }}</dd>
-        <dt>DNS</dt><dd class="mono">{{ network.dns|join(' ') or '—' }}</dd>
-      </dl>
-      <div class="panel-f">{{ _("Adresse, nom et mot de passe root se changent sur la console du serveur : <code>setup-loco</code>. Changer l'adresse coupe cette page et impose de mettre à jour les postes.") }}</div>
-    </section>
+    <div class="stack">
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Réseau du serveur") }}</h2><div class="aside">{{ _("lecture seule") }}</div></div>
+        <dl class="kv">
+          <dt>{{ _("Nom") }}</dt><dd class="mono">{{ network.hostname }}</dd>
+          <dt>{{ _("Adresses") }}</dt><dd class="mono">{% for a in network.addresses %}{{ a }}{% if not loop.last %}<br>{% endif %}{% else %}—{% endfor %}</dd>
+          <dt>{{ _("Configuration") }}</dt><dd>{{ network.mode or '—' }}</dd>
+          <dt>{{ _("Passerelle") }}</dt><dd class="mono">{{ network.gateway or '—' }}</dd>
+          <dt>DNS</dt><dd class="mono">{{ network.dns|join(' ') or '—' }}</dd>
+        </dl>
+        <div class="panel-f">{{ _("Adresse, nom et mot de passe root se changent sur la console du serveur : <code>setup-loco</code>. Changer l'adresse coupe cette page et impose de mettre à jour les postes.") }}</div>
+      </section>
+      <section class="panel">
+        <div class="panel-h"><h2>{{ _("Voir aussi") }}</h2></div>
+        <div class="panel-b"><ul class="link-list">
+          <li><span>{{ _("Sauvegardes de loco et leur conservation") }}</span><a class="btn sm" href="{{ url_for('backups') }}">{{ _("Sauvegardes") }}</a></li>
+          <li><span>{{ _("Parties du portail affichées") }}</span><a class="btn sm" href="{{ url_for('features') }}">{{ _("Fonctionnalités") }}</a></li>
+          <li><span>{{ _("Certificat, port HTTPS, adresse du portail") }}</span><a class="btn sm" href="{{ url_for('system') }}">{{ _("Système") }}</a></li>
+        </ul></div>
+      </section>
+    </div>
   </div>
 </div>
 {% endblock %}

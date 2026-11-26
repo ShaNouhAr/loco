@@ -137,11 +137,29 @@ class TestLink(BackupTest):
         self.assertEqual(row["fingerprint"], "")
         self.assertEqual(self.pve.requests, [])               # poignée de main TLS seulement : aucun appel, aucun jeton
         self.assertGreaterEqual(self.pve.handshakes, 1)
-        html = self.page()
+        html = self.admin.c.get("/enrollment").get_data(as_text=True)    # une nouvelle liaison se confirme dans l'enrôlement
         self.assertIn(proxmox.pretty(self.pve.fingerprint), html)
+        self.assertNotIn(proxmox.pretty(self.pve.fingerprint), self.page())    # pas dans les sauvegardes
         self.assertIn("pve.lan", html)
         self.assertNotIn(fake_proxmox.SECRET, html)
         self.assertNotIn(fake_proxmox.SECRET, self.everything())   # scellé dès l'enregistrement
+
+    def test_linking_is_done_from_the_enrollment_page(self):
+        """Mon parc › Enrôlement, onglet Proxmox VE : chaque étape y ramène, puis propose la liaison SSH pour Mon parc."""
+        self.assertIn('href="/enrollment#proxmox"', self.page())          # Sauvegardes y renvoie
+        r = self.post("/backups/proxmox/link", {"address": f"127.0.0.1:{self.pve.port}", "token_id": fake_proxmox.TOKEN_ID,
+                                                "secret": fake_proxmox.SECRET, "name": "pve", "next": "enrollment"})
+        self.assertTrue(r.headers["Location"].endswith("/enrollment#proxmox"))
+        row = self.host()
+        enrollment = self.admin.c.get("/enrollment").get_data(as_text=True)
+        self.assertIn('data-panel="proxmox"', enrollment)
+        self.assertIn(proxmox.pretty(self.pve.fingerprint), enrollment)
+        r = self.post(f"/backups/proxmox/{row['id']}/confirm", {"fingerprint": json.loads(row["offered"])["fingerprint"], "next": "enrollment"})
+        self.assertTrue(r.headers["Location"].endswith("/enrollment#proxmox"))
+        self.idle()
+        enrollment = self.admin.c.get("/enrollment").get_data(as_text=True)
+        self.assertIn(f'/proxmox/{row["id"]}#ssh', enrollment)              # étape suivante : SSH, pour Mon parc
+        self.assertNotIn(proxmox.pretty(self.pve.fingerprint), enrollment)  # plus rien à confirmer
 
     def test_confirming_pins_the_certificate_and_reads_the_machines(self):
         row = self.link()
@@ -401,9 +419,9 @@ class HomeAssistantCopyTest(BackupTest):
         data["backups"].append({"slug": "c0ffee00", "name": "Sur le NAS de HA", "date": "2026-11-09T03:00:00+00:00", "type": "full",
                                 "size_bytes": 10, "location": "nas", "locations": ["nas"]})
         json.dump(data, open(os.path.join(self.state, "backups.json"), "w"))
-        self.post("/homeassistant/link", {"host": "192.168.43.80", "port": "22", "username": "root", "name": "Maison"})
-        nonce = self.admin.c.get("/homeassistant").get_data(as_text=True).split('name="nonce" value="')[1].split('"')[0]
-        self.post("/homeassistant/confirm", {"nonce": nonce})
+        self.post("/homeassistant/link", {"host": "192.168.43.80", "port": "22", "username": "root", "name": "Maison", "next": "enrollment"})
+        nonce = self.admin.c.get("/enrollment").get_data(as_text=True).split('name="nonce" value="')[1].split('"')[0]
+        self.post("/homeassistant/confirm", {"nonce": nonce, "next": "enrollment"})
         self.idle()
         with transaction() as conn:
             self.ha = conn.execute("SELECT * FROM homeassistant_hosts").fetchone()

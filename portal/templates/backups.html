@@ -11,9 +11,8 @@
 {% set ha_backup = show_ha and can('homeassistant.backup') %}
 {% set dest_ready = destination and destination.configured %}
 {% set dest_failed = dest_ready and destination.state.last_error and (destination.state.last_failed or '') > (destination.state.last_ok or '') %}
-{# Les étapes de liaison de Proxmox : d'office tant qu'aucun n'est relié, puis à la demande (« Relier un autre Proxmox »). #}
+{# Relier un Proxmox se fait dans Mon parc › Enrôlement (onglet Proxmox VE) ; ici, ses sauvegardes. #}
 {% set pve_linked = pve|selectattr('row.fingerprint')|list %}
-{% set pve_linking = pve_manage and pve|length < max_hosts and (not pve or request.args.get('relier')) %}
 
 {% macro job_state(j) -%}
 {% if j.state == 'running' %}<span class="busy-note"><span class="spin"></span>{{ _("En cours") }}</span>
@@ -65,7 +64,7 @@
     <h1>{{ _("Sauvegardes") }}</h1>
     <p>{{ _("Ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox, la configuration de vos équipements réseau —, où, et quand.") }}</p>
   </div>
-  {% if pve_manage and pve and pve|length < max_hosts and not pve_linking %}<div class="actions"><a class="btn" href="{{ url_for('backups', relier=1) }}#proxmox">{{ ui_icon('plus') }}<span>{{ _("Relier un autre Proxmox") }}</span></a></div>{% endif %}
+  {% if pve_manage and pve_linked and pve|length < max_hosts %}<div class="actions"><a class="btn" href="{{ url_for('enrollment') }}#proxmox">{{ ui_icon('plus') }}<span>{{ _("Relier un autre Proxmox") }}</span></a></div>{% endif %}
 </div>
 
 <div class="stack" data-poll="{{ url_for('backups') }}" data-poll-kind="reload" data-poll-every="5000" data-signature="{{ signature }}">
@@ -132,8 +131,9 @@
   <div class="tab-panel{{ ' on' if first.v }}" data-panel="proxmox"><div class="stack">{% set first.v = false %}
     {% for v in pve %}
     {% set p = v.row %}
-    {% if v.offered %}
-    {# Certificat relevé : le jeton n'est envoyé qu'une fois son empreinte confirmée. #}
+    {% if v.offered and p.fingerprint %}
+    {# Certificat relevé de nouveau (renouvelé) : le jeton n'est envoyé qu'une fois son empreinte confirmée. Une nouvelle
+       liaison se confirme dans Mon parc › Enrôlement. #}
     <section class="panel pve-confirm" id="confirmer-{{ p.id }}">
       <div class="panel-h"><h2>{{ _("Confirmer le certificat de %(name)s", name=p.name) }}</h2><div class="aside mono">{{ p.host }}:{{ p.port }}</div></div>
       <div class="panel-b stack-sm">
@@ -338,43 +338,14 @@
     {% endif %}
     {% endfor %}
 
-    {% if not pve and not pve_manage %}
-    <div class="panel"><div class="panel-b"><p class="empty">{{ _("Aucun Proxmox n'est encore relié.") }} {{ _("Un administrateur peut en relier un depuis cette page.") }}</p></div></div>
+    {% if not pve_linked %}
+    <div class="panel"><div class="empty empty-rich">
+      {{ ui_icon('server') }}<strong>{{ _("Aucun Proxmox n'est encore relié.") }}</strong>
+      <span>{{ _("Un serveur Proxmox VE se relie dans Mon parc › Enrôlement, avec un jeton d'API créé pour loco ; ses sauvegardes se règlent ensuite ici.") }}</span>
+      {% if pve_manage %}<a class="btn" href="{{ url_for('enrollment') }}#proxmox">{{ ui_icon('plus') }}<span>{{ _("Relier un Proxmox") }}</span></a>{% endif %}
+    </div></div>
     {% endif %}
 
-    {% if pve_linking %}
-    {% set ns = namespace(n=0) %}
-    <div class="section-h" id="relier">
-      <div><h2>{{ _("Relier un Proxmox") }}</h2><p>{{ _("loco passe par l'API de Proxmox avec un jeton créé pour lui, aux droits limités à la sauvegarde. Deux étapes, une seule fois.") }}</p></div>
-    </div>
-    <section class="panel">
-      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Créer le jeton dans Proxmox") }}</h2><div class="aside">{{ _("dans le shell d'un nœud") }}</div></div>
-      <div class="panel-b stack-sm">
-        <p class="muted">{{ _("Un rôle qui ne permet que de voir les machines et les stockages et de sauvegarder, un utilisateur pour loco, puis son jeton. La dernière commande affiche le secret du jeton, une seule fois : copiez-le.") }}</p>
-        {{ cmd('pve-role', 'pveum role add ' ~ role ~ ' --privs "' ~ privileges|join(' ') ~ '"', '#') }}
-        {{ cmd('pve-user', 'pveum user add loco@pve --comment loco', '#') }}
-        {{ cmd('pve-acl', 'pveum acl modify / --users loco@pve --roles ' ~ role, '#') }}
-        {{ cmd('pve-token', 'pveum user token add loco@pve loco --privsep 0', '#') }}
-        <p class="hint">{{ _("Pour déclarer un NAS depuis loco, ajoutez Datastore.Allocate à la liste des droits du rôle. Dans l'interface de Proxmox, les mêmes réglages se trouvent dans Centre de données › Permissions.") }}</p>
-      </div>
-    </section>
-    <section class="panel">
-      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Indiquer l'adresse et le jeton") }}</h2></div>
-      <div class="panel-b stack-sm">
-        <form method="post" action="{{ url_for('proxmox_link') }}" class="stack-sm">
-          <input type="hidden" name="csrf" value="{{ csrf }}">
-          <div class="rollout-fields">
-            <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="address" placeholder="192.168.1.10:8006" spellcheck="false" autocomplete="off" required maxlength="270"></label>
-            <label class="f"><span>{{ _("Nom dans loco") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="name" placeholder="pve" autocomplete="off" maxlength="60"></label>
-            <label class="f"><span>{{ _("Identifiant du jeton") }}</span><input type="text" name="token_id" value="loco@pve!loco" spellcheck="false" autocomplete="off" required maxlength="200" class="mono"></label>
-            <label class="f"><span>{{ _("Secret du jeton") }}</span><input type="password" name="secret" spellcheck="false" autocomplete="new-password" required maxlength="128" class="mono"></label>
-          </div>
-          <p class="hint">{{ _("Le secret est gardé chiffré par loco et n'est plus jamais affiché. À l'étape suivante, loco vous montre l'empreinte du certificat de Proxmox : le jeton ne part qu'après votre confirmation.") }}</p>
-          <div><button class="btn primary"><span class="spin"></span>{{ _("Relever le certificat") }}</button></div>
-        </form>
-      </div>
-    </section>
-    {% endif %}
   </div></div>
   {% endif %}
 

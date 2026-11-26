@@ -17,7 +17,7 @@ profil Administrateur peut le faire. L'entrée **Home Assistant** apparaît alor
 
 ## Relier une instance
 
-La page donne les trois étapes :
+Dans **Mon parc › Enrôlement**, onglet **Home Assistant** (avec le droit de relier des instances), trois étapes :
 
 1. **Un module SSH dans Home Assistant** — « Advanced SSH & Web Terminal » ou « Terminal & SSH », avec un
    port ouvert sur le réseau (onglet Configuration › Réseau du module).

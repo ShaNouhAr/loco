@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import cmd %}
 {% from "_nav_icons.html" import nav_icon %}
+{% from "_link_flows.html" import link_proxmox, link_homeassistant with context %}
 {% block title %}{{ _("Enrôlement") }}{% endblock %}
 {% macro step(ns, title, aside='') -%}
 {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ title }}</h2>{% if aside %}<div class="aside">{{ aside }}</div>{% endif %}</div>
@@ -79,11 +80,12 @@
 {% set winapps = can('windows.view') and feature('windows_apps') %}
 {% set tabs = [('windows', 'Windows', 'windows', key or wu or winapps), ('debian', _('Debian, Ubuntu'), 'linux', key or apt or flat),
                ('redhat', _('Rocky, AlmaLinux, RHEL'), 'linux', key or rpm or flat),
-               ('android', 'Android', 'android', key and feature('android'))]|selectattr(3)|list %}
+               ('android', 'Android', 'android', key and feature('android')),
+               ('proxmox', 'Proxmox VE', 'server', pve_link), ('homeassistant', 'Home Assistant', 'ha', ha_link)]|selectattr(3)|list %}
 <div class="head">
   <div>
     <h1>{{ _("Enrôlement") }}</h1>
-    <p>{{ _("Rattacher un poste à loco : cochez ce qu'il reçoit (agent de gestion, vos dépôts, cache), copiez la commande générée et lancez-la sur le poste.") }}</p>
+    <p>{{ _("Rattacher un poste à loco : cochez ce qu'il reçoit (agent de gestion, vos dépôts, cache), copiez la commande générée et lancez-la sur le poste.") }}{% if pve_link or ha_link %} {{ _("Un serveur Proxmox VE ou un Home Assistant, sans agent, se relie aussi d'ici.") }}{% endif %}</p>
   </div>
 </div>
 
@@ -240,6 +242,17 @@
     </section>
     {% endif %}
   </div>
+
+  {% if pve_link %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'proxmox' }}" data-panel="proxmox">
+    {{ link_proxmox(pve_link) }}
+  </div>
+  {% endif %}
+  {% if ha_link %}
+  <div class="tab-panel enroll-panel {{ 'on' if first == 'homeassistant' }}" data-panel="homeassistant">
+    {{ link_homeassistant(ha_link) }}
+  </div>
+  {% endif %}
 </div>
 {% if key and group %}<div class="hint enroll-foot">{{ _("Les fichiers et commandes de l'agent contiennent la clé d'inscription du groupe « %(name)s » : ne les partagez qu'avec les personnes qui installent ses postes.", name=group.name) }}{% if can('fleet.settings') %}
   <form method="post" action="{{ url_for('fleet_group_rotate_key', group_id=group.id) }}" class="inline-form" data-confirm="{{ _('Changer la clé du groupe %(name)s ?', name=group.name) }}" data-confirm-text="{{ _('Les MSI, paquets et commandes déjà distribués pour ce groupe n’inscriront plus de poste. Les postes déjà inscrits ne sont pas touchés.') }}" data-confirm-ok="{{ _('Changer la clé') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="linkbtn">{{ _("Changer la clé de ce groupe") }}</button></form>{% endif %}</div>

@@ -627,8 +627,8 @@ def state_of(row, info, running):
     n = len(info["updates"])
     if n:
         return "orange", _("%(n)s mise à jour", n=n) if n == 1 else _("%(n)s mises à jour", n=n)
-    if info["reboot_required"]:
-        return "orange", _("redémarrage requis")
+    # Redémarrage requis sans rien à installer : « à jour », la note « redémarrage nécessaire » le dit à part, comme
+    # pour un poste (Mon parc, vue d'ensemble).
     return "green", _("à jour")
 
 

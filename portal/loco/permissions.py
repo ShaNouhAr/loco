@@ -163,7 +163,8 @@ DEFAULTS = {
 # Plusieurs droits représentent des alternatives pour une même page de consultation.
 ENDPOINTS = {
     "index": "dashboard.view", "api_status": "dashboard.view", "api_network": "dashboard.view",
-    "enrollment": ("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view"),
+    "enrollment": ("fleet.enroll", "linux.view", "rpm.view", "flatpak.view", "windows.view", "wu.view",
+                   "proxmox.manage", "homeassistant.manage"),
     "agent_enroll_msi": "fleet.enroll", "agent_enroll_apk": "fleet.enroll",
     "linux": "linux.view", "linux_repository_create": "linux.create", "linux_upload": "linux.upload",
     "linux_copy": "linux.copy", "linux_delete": "linux.delete",

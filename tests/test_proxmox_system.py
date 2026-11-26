@@ -343,14 +343,18 @@ class TestFleet(ProxmoxSystemTest):
         self.assertEqual(self.jobs()[0]["action"], "update")
 
     def test_one_status_dot_per_row(self):
-        """Une seule pastille : le libellé d'état (« redémarrage requis ») n'en ajoute pas une seconde."""
+        """Comme un poste : « à jour », une seule pastille, et « redémarrage nécessaire » noté à part en dessous."""
         self.pve.sim = "Reading package lists...\n0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.\n"
         self.host()
         html = self.admin.c.get("/fleet").get_data(as_text=True)
         row = html[html.index('<tr class="ha-row px-row">'):]
         cell = row[row.index('data-label="Mises à jour"'):row.index('data-label="Ressources"')]
-        self.assertIn("<span>redémarrage requis</span>", cell)
+        self.assertIn('<span class="muted">à jour</span>', cell)
+        self.assertIn('class="reboot-note">', cell)
+        self.assertIn("redémarrage nécessaire", cell)
+        self.assertNotIn("redémarrage requis", cell)
         self.assertEqual(cell.count('class="st '), 1)
+        self.assertIn('class="st ok"', cell)                                           # vert, comme un poste à jour
 
     def test_selection_updates_and_reboots_like_any_device(self):
         row = self.host()

@@ -1,0 +1,151 @@
+{# Relier un serveur Proxmox VE ou un Home Assistant : étapes montrées dans Mon parc › Enrôlement (onglets Proxmox VE et
+   Home Assistant). Chaque formulaire ramène à son onglet (champ « next »). #}
+{% from "_macros.html" import cmd %}
+
+{% macro link_proxmox(link) -%}
+{% for v in link.pending %}
+{% set p = v.row %}
+    {# Certificat relevé : le jeton n'est envoyé qu'une fois son empreinte confirmée. #}
+    <section class="panel pve-confirm" id="confirmer-{{ p.id }}">
+      <div class="panel-h"><h2>{{ _("Confirmer le certificat de %(name)s", name=p.name) }}</h2><div class="aside mono">{{ p.host }}:{{ p.port }}</div></div>
+      <div class="panel-b stack-sm">
+        <p>{{ _("Voici l'empreinte du certificat que présente cette adresse. Comparez-la à celle de votre Proxmox avant de confirmer : loco n'enverra son jeton qu'à un serveur qui présente ce certificat-là.") }}</p>
+        <dl class="kv-grid">
+          <div class="kv-wide"><dt>{{ _("Empreinte SHA-256") }}</dt><dd class="mono break-any">{{ v.offered.pretty }}</dd></div>
+          {% if v.offered.subject %}<div><dt>{{ _("Nom du certificat") }}</dt><dd class="break-any">{{ v.offered.subject }}</dd></div>{% endif %}
+          {% if v.offered.issuer %}<div><dt>{{ _("Émis par") }}</dt><dd class="break-any">{{ v.offered.issuer }}</dd></div>{% endif %}
+          {% if v.offered.until %}<div><dt>{{ _("Valable jusqu'au") }}</dt><dd>{{ v.offered.until|date_fr }}</dd></div>{% endif %}
+        </dl>
+        {% if p.fingerprint %}<p class="hint">{{ _("Ce certificat est le même que celui déjà confirmé.") if v.offered.fingerprint == p.fingerprint else _("Ce certificat diffère de celui confirmé jusqu'ici. C'est attendu s'il a été renouvelé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+        <p class="hint">{{ _("Dans Proxmox : le nœud › Système › Certificats, colonne « Empreinte ». Ou, dans le shell du nœud :") }}</p>
+        {{ cmd('pve-fp-' ~ p.id, 'openssl x509 -noout -fingerprint -sha256 -in /etc/pve/local/pveproxy-ssl.pem 2>/dev/null || openssl x509 -noout -fingerprint -sha256 -in /etc/pve/local/pve-ssl.pem', '#') }}
+      </div>
+      <div class="panel-f row-between">
+        <form method="post" action="{{ url_for('proxmox_confirm', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment"><input type="hidden" name="cancel" value="1">
+          <button class="linkbtn">{{ _("Annuler") }}</button>
+        </form>
+        <form method="post" action="{{ url_for('proxmox_confirm', host_id=p.id) }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment"><input type="hidden" name="fingerprint" value="{{ v.offered.fingerprint }}">
+          <button class="btn primary"><span class="spin"></span>{{ _("L'empreinte est la bonne : confirmer") }}</button>
+        </form>
+      </div>
+    </section>
+{% endfor %}
+{% if link.full %}
+<p class="note">{{ _("Nombre maximal d'instances atteint.") }}</p>
+{% else %}
+    {% set ns = namespace(n=0) %}
+    <div class="section-h" id="relier-proxmox">
+      <div><h2>{{ _("Relier un Proxmox") }}</h2><p>{{ _("loco passe par l'API de Proxmox avec un jeton créé pour lui, aux droits limités à la sauvegarde. Deux étapes, une seule fois.") }}</p></div>
+    </div>
+    <section class="panel">
+      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Créer le jeton dans Proxmox") }}</h2><div class="aside">{{ _("dans le shell d'un nœud") }}</div></div>
+      <div class="panel-b stack-sm">
+        <p class="muted">{{ _("Un rôle qui ne permet que de voir les machines et les stockages et de sauvegarder, un utilisateur pour loco, puis son jeton. La dernière commande affiche le secret du jeton, une seule fois : copiez-le.") }}</p>
+        {{ cmd('pve-role', 'pveum role add ' ~ link.role ~ ' --privs "' ~ link.privileges|join(' ') ~ '"', '#') }}
+        {{ cmd('pve-user', 'pveum user add loco@pve --comment loco', '#') }}
+        {{ cmd('pve-acl', 'pveum acl modify / --users loco@pve --roles ' ~ link.role, '#') }}
+        {{ cmd('pve-token', 'pveum user token add loco@pve loco --privsep 0', '#') }}
+        <p class="hint">{{ _("Pour déclarer un NAS depuis loco, ajoutez Datastore.Allocate à la liste des droits du rôle. Dans l'interface de Proxmox, les mêmes réglages se trouvent dans Centre de données › Permissions.") }}</p>
+      </div>
+    </section>
+    <section class="panel">
+      {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Indiquer l'adresse et le jeton") }}</h2></div>
+      <div class="panel-b stack-sm">
+        <form method="post" action="{{ url_for('proxmox_link') }}" class="stack-sm">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment">
+          <div class="rollout-fields">
+            <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="address" placeholder="192.168.1.10:8006" spellcheck="false" autocomplete="off" required maxlength="270"></label>
+            <label class="f"><span>{{ _("Nom dans loco") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="name" placeholder="pve" autocomplete="off" maxlength="60"></label>
+            <label class="f"><span>{{ _("Identifiant du jeton") }}</span><input type="text" name="token_id" value="loco@pve!loco" spellcheck="false" autocomplete="off" required maxlength="200" class="mono"></label>
+            <label class="f"><span>{{ _("Secret du jeton") }}</span><input type="password" name="secret" spellcheck="false" autocomplete="new-password" required maxlength="128" class="mono"></label>
+          </div>
+          <p class="hint">{{ _("Le secret est gardé chiffré par loco et n'est plus jamais affiché. À l'étape suivante, loco vous montre l'empreinte du certificat de Proxmox : le jeton ne part qu'après votre confirmation.") }}</p>
+          <div><button class="btn primary"><span class="spin"></span>{{ _("Relever le certificat") }}</button></div>
+        </form>
+      </div>
+    </section>
+{% endif %}
+<section class="panel">
+  <div class="panel-h"><h2><span class="step-n">{{ 3 if not link.full else 1 }}</span>{{ _("Le voir dans Mon parc") }}</h2><div class="aside">{{ _("facultatif") }}</div></div>
+  <div class="panel-b stack-sm">
+    <p class="muted">{{ _("Relié par son jeton, Proxmox sert aux sauvegardes (Administration › Sauvegardes). Pour ses mises à jour, son redémarrage, son terminal et sa ligne dans Mon parc, reliez-le aussi par SSH, depuis sa page.") }}</p>
+    {% if link.without_ssh %}
+    <ul class="link-list">
+      {% for r in link.without_ssh %}<li><span><strong>{{ r.name }}</strong> <span class="mono muted">{{ r.host }}</span></span><a class="btn sm" href="{{ url_for('proxmox_system_host', host_id=r.id) }}#ssh">{{ _("Relier par SSH") }}</a></li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</section>
+{%- endmacro %}
+
+{% macro link_homeassistant(link) -%}
+{% if not link.ssh %}
+<div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas se relier à Home Assistant. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
+{% endif %}
+{% if link.pending %}
+{% set pending = link.pending %}
+{# Clé d'hôte relevée : rien n'est enregistré ni échangé tant qu'un administrateur ne l'a pas confirmée. #}
+<section class="panel hass-confirm" id="confirmer">
+  <div class="panel-h"><h2>{{ _("Confirmer la clé d'hôte de %(name)s", name=pending.name) }}</h2><div class="aside">{{ pending.username }}@{{ pending.host }}{% if pending.port != 22 %}:{{ pending.port }}{% endif %}</div></div>
+  <div class="panel-b stack-sm">
+    <p>{{ _("Voici l'empreinte de la clé que présente cette adresse. Comparez-la à celle de votre Home Assistant avant de confirmer : c'est ce qui garantit que loco parle bien à lui, et à lui seul.") }}</p>
+    <dl class="kv-grid">
+      <div><dt>{{ _("Empreinte (%(type)s)", type=pending.type) }}</dt><dd class="mono">{{ pending.fingerprint }}</dd></div>
+    </dl>
+    {% if pending.host_id %}<p class="hint">{{ _("Cette clé est la même que celle déjà confirmée.") if pending.same else _("Cette clé diffère de celle confirmée jusqu'ici. C'est attendu si le module SSH a été réinstallé ; sinon, ne confirmez pas.") }}</p>{% endif %}
+    <p class="hint">{{ _("Pour la lire sur Home Assistant, ouvrez le terminal de son module SSH (dans l'interface de Home Assistant) et lancez :") }}</p>
+    {{ cmd('hass-hostkey', 'for f in /etc/ssh/ssh_host_*_key.pub /data/ssh_host_*_key.pub; do [ -f "$f" ] && ssh-keygen -lf "$f"; done') }}
+  </div>
+  <div class="panel-f row-between">
+    <form method="post" action="{{ url_for('homeassistant_confirm') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment"><input type="hidden" name="cancel" value="1">
+      <button class="linkbtn">{{ _("Annuler") }}</button>
+    </form>
+    <form method="post" action="{{ url_for('homeassistant_confirm') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment"><input type="hidden" name="nonce" value="{{ pending.nonce }}">
+      <button class="btn primary"><span class="spin"></span>{{ _("L'empreinte est la bonne : confirmer") }}</button>
+    </form>
+  </div>
+</section>
+{% elif link.full %}
+<p class="note">{{ _("Nombre maximal d'instances atteint.") }}</p>
+{% else %}
+{% set ns = namespace(n=0) %}
+<div class="section-h" id="relier-homeassistant">
+  <div><h2>{{ _("Relier un Home Assistant") }}</h2><p>{{ _("loco n'a besoin d'aucun jeton : il entre par le module SSH de Home Assistant, avec sa propre clé. Trois étapes, une seule fois.") }}</p></div>
+</div>
+<div class="stack">
+<section class="panel">
+  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Installer un module SSH dans Home Assistant") }}</h2><div class="aside">{{ _("s'il n'y est pas déjà") }}</div></div>
+  <div class="panel-b">
+    <p class="muted">{{ _("Dans Home Assistant : Paramètres › Modules complémentaires (« Applications » dans les versions récentes) › Boutique, puis « Advanced SSH & Web Terminal » (ou « Terminal & SSH »). Le module doit écouter sur le réseau : donnez-lui un port dans son onglet Configuration › Réseau (22 par défaut).") }}</p>
+  </div>
+</section>
+<section class="panel">
+  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Autoriser la clé de loco") }}</h2><div class="aside">{{ _("clé publique : elle peut être montrée") }}</div></div>
+  <div class="panel-b stack-sm">
+    <p class="muted">{{ _("Dans la configuration du module, ajoutez cette ligne à « authorized_keys », enregistrez, puis redémarrez le module. La clé privée correspondante ne quitte jamais ce serveur.") }}</p>
+    <div class="cmd wrap"><code id="hass-public-key">{{ link.public_key }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
+  </div>
+</section>
+<section class="panel">
+  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Indiquer l'adresse de Home Assistant") }}</h2></div>
+  <div class="panel-b stack-sm">
+    <form method="post" action="{{ url_for('homeassistant_link') }}" class="stack-sm">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="enrollment">
+      <div class="rollout-fields">
+        <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="host" placeholder="homeassistant.local" spellcheck="false" autocomplete="off" required maxlength="253"></label>
+        <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="port" value="22" min="1" max="65535" required></label>
+        <label class="f"><span>{{ _("Utilisateur SSH") }}</span><input type="text" name="username" value="root" spellcheck="false" autocomplete="off" required maxlength="32"></label>
+        <label class="f"><span>{{ _("Nom dans loco") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="name" placeholder="{{ _('Maison') }}" autocomplete="off" maxlength="60"></label>
+      </div>
+      <p class="hint">{{ _("L'utilisateur est celui que vous avez choisi dans la configuration du module (« root » pour « Terminal & SSH »). À l'étape suivante, loco vous montre l'empreinte de la clé d'hôte de Home Assistant : rien n'est échangé avant que vous l'ayez confirmée.") }}</p>
+      <div><button class="btn primary"{% if not link.ssh %} disabled{% endif %}><span class="spin"></span>{{ _("Relever la clé d'hôte") }}</button></div>
+    </form>
+  </div>
+</section>
+</div>
+{% endif %}
+{%- endmacro %}

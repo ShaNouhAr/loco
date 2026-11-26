@@ -99,10 +99,10 @@ class HomeAssistantTest(unittest.TestCase):
         return (browser or self.admin).c.get("/homeassistant/%d" % row["id"]).get_data(as_text=True)
 
     def link(self, host="192.168.43.80", port="22", username="root", name="Maison"):
-        """Les deux étapes : adresse saisie, puis empreinte confirmée. Renvoie la ligne de l'instance."""
-        self.post("/homeassistant/link", {"host": host, "port": port, "username": username, "name": name})
-        nonce = self.page().split('name="nonce" value="')[1].split('"')[0]
-        self.post("/homeassistant/confirm", {"nonce": nonce})
+        """Les deux étapes, depuis Mon parc › Enrôlement : adresse saisie, puis empreinte confirmée. Renvoie la ligne."""
+        self.post("/homeassistant/link", {"host": host, "port": port, "username": username, "name": name, "next": "enrollment"})
+        nonce = self.admin.c.get("/enrollment").get_data(as_text=True).split('name="nonce" value="')[1].split('"')[0]
+        self.post("/homeassistant/confirm", {"nonce": nonce, "next": "enrollment"})
         return self.host()
 
     def host(self):
@@ -172,16 +172,17 @@ class TestKeys(HomeAssistantTest):
         with open(homeassistant.KEY_PATH) as f:
             private = f.read()
         self.assertIn("BEGIN OPENSSH PRIVATE KEY", private)
-        page = self.page()
+        page = self.admin.c.get("/enrollment").get_data(as_text=True)    # Mon parc › Enrôlement, onglet Home Assistant
         self.assertIn(first.split()[1], page)                       # la clé publique est montrée, à copier
         self.assertNotIn(private.splitlines()[1], page)
 
     def test_nothing_is_stored_before_the_host_key_is_confirmed(self):
         self.post("/homeassistant/link", {"host": "192.168.43.80", "port": "2222", "username": "hassio", "name": "Maison"})
         self.assertIsNone(self.host())
-        page = self.page()
+        page = self.admin.c.get("/enrollment").get_data(as_text=True)    # une nouvelle liaison se confirme dans l'enrôlement
         self.assertIn(fingerprint(fake.HOST_KEY), page)
         self.assertIn("hassio@192.168.43.80:2222", page)
+        self.assertIn("Mon parc › Enrôlement", self.page())         # la page Home Assistant y renvoie
         probe = self.calls()
         self.assertEqual(len(probe), 1)                              # un seul échange : le relevé de la clé d'hôte
         self.assertEqual(probe[0]["options"]["PreferredAuthentications"], "none")
@@ -190,7 +191,7 @@ class TestKeys(HomeAssistantTest):
         # Sans la preuve que la page de confirmation a été vue : refusé, et la demande est oubliée.
         self.assertEqual(self.post("/homeassistant/confirm", {"nonce": "0" * 16}).status_code, 400)
         self.assertIsNone(self.host())
-        self.assertNotIn(fingerprint(fake.HOST_KEY), self.page())
+        self.assertNotIn(fingerprint(fake.HOST_KEY), self.admin.c.get("/enrollment").get_data(as_text=True))
 
     def test_confirming_links_the_instance_with_that_key_only(self):
         row = self.link(port="2222", username="hassio")

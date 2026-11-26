@@ -568,6 +568,13 @@ def _offer(host, port):
     return json.dumps(dict(details, fingerprint=fingerprint)), fingerprint
 
 
+def _linked():
+    """Après une étape de liaison : retour à l'onglet Proxmox VE de l'enrôlement s'il en vient, sinon aux sauvegardes."""
+    if request.form.get("next") == "enrollment":
+        return back("enrollment", _anchor="proxmox")
+    return back("backups", _anchor="proxmox")
+
+
 @app.route("/backups/proxmox/link", methods=["POST"])
 @login_required
 def proxmox_link():
@@ -586,7 +593,7 @@ def proxmox_link():
         offered, _fingerprint = _offer(host, port)
     except (ValueError, ProxmoxError) as e:
         flash(str(e), "error")
-        return back("backups", _anchor="proxmox")
+        return _linked()
     # L'instance n'existe pour rien d'autre qu'une confirmation tant que l'empreinte n'est pas confirmée (vide = aucun
     # appel) ; une demande laissée sans suite est oubliée au bout d'un quart d'heure.
     conn.execute("DELETE FROM proxmox_hosts WHERE fingerprint='' AND offered_at<?", (time.time() - OFFER_TTL,))
@@ -594,7 +601,7 @@ def proxmox_link():
                  "VALUES (?,?,?,?,?,?,?,?,?)", (form.get("name", "").strip()[:60] or host, host, port, token_id, _seal(secret),
                                                 offered, time.time(), _stamp(), g.user["username"]))
     conn.commit()
-    return back("backups", _anchor="proxmox")
+    return _linked()
 
 
 @app.route("/backups/proxmox/<int:host_id>/confirm", methods=["POST"])
@@ -609,14 +616,14 @@ def proxmox_confirm(host_id):
         else:
             conn.execute("DELETE FROM proxmox_hosts WHERE id=?", (host_id,))
         conn.commit()
-        return back("backups", _anchor="proxmox")
+        return _linked()
     try:
         offered = json.loads(row["offered"]) if row["offered"] and time.time() - row["offered_at"] < OFFER_TTL else None
     except ValueError:
         offered = None
     if not offered or not hmac.compare_digest(request.form.get("fingerprint", ""), offered["fingerprint"]):
         flash(_("La demande a expiré : relevez de nouveau le certificat."), "error")
-        return back("backups", _anchor="proxmox")
+        return _linked()
     first = not row["fingerprint"]
     conn.execute("UPDATE proxmox_hosts SET fingerprint=?, offered='', offered_at=0, error='' WHERE id=?", (offered["fingerprint"], host_id))
     audit("proxmox.liaison" if first else "proxmox.certificat",
@@ -624,7 +631,7 @@ def proxmox_confirm(host_id):
     conn.commit()
     error = refresh(host_id)
     flash(_("Proxmox relié.") if not error else _("Instance enregistrée, mais la liaison échoue : %(e)s", e=error), "ok" if not error else "error")
-    return back("backups", _anchor="proxmox")
+    return _linked()
 
 
 @app.route("/backups/proxmox/<int:host_id>/certificate", methods=["POST"])

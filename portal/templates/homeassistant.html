@@ -3,8 +3,7 @@
 {% from "_nav_icons.html" import titled, ui_icon %}
 {% from "_macros.html" import cmd %}
 {% set manage = can('homeassistant.manage') %}
-{# Les étapes de liaison : d'office tant qu'aucune instance n'est reliée, puis à la demande (« Relier une autre instance »). #}
-{% set linking = manage and not pending and views|length < max_hosts and (not views or request.args.get('relier')) %}
+{# Relier une instance se fait dans Mon parc › Enrôlement (onglet Home Assistant) ; ici, ce qui est déjà relié. #}
 
 {# Une version et, s'il y en a une, celle qui attend ou la mise à jour en cours. #}
 
@@ -15,7 +14,7 @@
     <h1>Home Assistant</h1>
     <p>{{ _("Versions, mises à jour, sauvegardes, santé et terminal de votre Home Assistant, relié par SSH avec une clé propre à loco.") }}</p>
   </div>
-  {% if manage and views and views|length < max_hosts and not linking %}<div class="actions"><a class="btn" href="{{ url_for('homeassistant', relier=1) }}#relier">{{ ui_icon('plus') }}<span>{{ _("Relier une autre instance") }}</span></a></div>{% endif %}
+  {% if manage and views and views|length < max_hosts %}<div class="actions"><a class="btn" href="{{ url_for('enrollment') }}#homeassistant">{{ ui_icon('plus') }}<span>{{ _("Relier une autre instance") }}</span></a></div>{% endif %}
 </div>
 
 <div class="stack">
@@ -23,8 +22,10 @@
 <div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas se relier à Home Assistant. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
 {% endif %}
 
-{% if pending %}
-{# Clé d'hôte relevée : rien n'est enregistré ni échangé tant qu'un administrateur ne l'a pas confirmée. #}
+{% if pending and not pending.host_id %}
+<p class="note">{{ _("Une liaison de Home Assistant attend la confirmation de sa clé d'hôte, dans <a href=\"%(url)s\">Mon parc › Enrôlement</a>.", url=url_for('enrollment') ~ '#homeassistant') }}</p>
+{% elif pending %}
+{# Clé d'hôte relevée de nouveau (module SSH réinstallé) : rien n'est enregistré tant qu'un administrateur ne l'a pas confirmée. #}
 <section class="panel hass-confirm" id="confirmer">
   <div class="panel-h"><h2>{{ _("Confirmer la clé d'hôte de %(name)s", name=pending.name) }}</h2><div class="aside">{{ pending.username }}@{{ pending.host }}{% if pending.port != 22 %}:{{ pending.port }}{% endif %}</div></div>
   <div class="panel-b stack-sm">
@@ -72,48 +73,13 @@
   {% endfor %}
 </div>
 {% elif not pending %}
-<div class="panel"><div class="panel-b">
-  <p class="empty">{{ _("Aucun Home Assistant n'est encore relié.") }}{% if not manage %} {{ _("Un administrateur peut en relier un depuis cette page.") }}{% endif %}</p>
+<div class="panel"><div class="empty empty-rich">
+  {{ ui_icon('ha') }}<strong>{{ _("Aucun Home Assistant n'est encore relié.") }}</strong>
+  <span>{{ _("Un Home Assistant se relie dans Mon parc › Enrôlement, par son module SSH et une clé propre à loco ; il apparaît ensuite ici et dans Mon parc.") }}</span>
+  {% if manage %}<a class="btn" href="{{ url_for('enrollment') }}#homeassistant">{{ ui_icon('plus') }}<span>{{ _("Relier un Home Assistant") }}</span></a>{% endif %}
 </div></div>
 {% endif %}
 
-{% if linking %}
-{% set ns = namespace(n=0) %}
-<div class="section-h" id="relier">
-  <div><h2>{{ _("Relier un Home Assistant") }}</h2><p>{{ _("loco n'a besoin d'aucun jeton : il entre par le module SSH de Home Assistant, avec sa propre clé. Trois étapes, une seule fois.") }}</p></div>
-</div>
-<div class="stack">
-<section class="panel">
-  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Installer un module SSH dans Home Assistant") }}</h2><div class="aside">{{ _("s'il n'y est pas déjà") }}</div></div>
-  <div class="panel-b">
-    <p class="muted">{{ _("Dans Home Assistant : Paramètres › Modules complémentaires (« Applications » dans les versions récentes) › Boutique, puis « Advanced SSH & Web Terminal » (ou « Terminal & SSH »). Le module doit écouter sur le réseau : donnez-lui un port dans son onglet Configuration › Réseau (22 par défaut).") }}</p>
-  </div>
-</section>
-<section class="panel">
-  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Autoriser la clé de loco") }}</h2><div class="aside">{{ _("clé publique : elle peut être montrée") }}</div></div>
-  <div class="panel-b stack-sm">
-    <p class="muted">{{ _("Dans la configuration du module, ajoutez cette ligne à « authorized_keys », enregistrez, puis redémarrez le module. La clé privée correspondante ne quitte jamais ce serveur.") }}</p>
-    <div class="cmd wrap"><code id="hass-public-key">{{ public_key }}</code><button type="button" class="copy">{{ _("Copier") }}</button></div>
-  </div>
-</section>
-<section class="panel">
-  {% set ns.n = ns.n + 1 %}<div class="panel-h"><h2><span class="step-n">{{ ns.n }}</span>{{ _("Indiquer l'adresse de Home Assistant") }}</h2></div>
-  <div class="panel-b stack-sm">
-    <form method="post" action="{{ url_for('homeassistant_link') }}" class="stack-sm">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <div class="rollout-fields">
-        <label class="f"><span>{{ _("Adresse") }}</span><input type="text" name="host" placeholder="homeassistant.local" spellcheck="false" autocomplete="off" required maxlength="253"></label>
-        <label class="f"><span>{{ _("Port SSH") }}</span><input type="number" name="port" value="22" min="1" max="65535" required></label>
-        <label class="f"><span>{{ _("Utilisateur SSH") }}</span><input type="text" name="username" value="root" spellcheck="false" autocomplete="off" required maxlength="32"></label>
-        <label class="f"><span>{{ _("Nom dans loco") }} <i class="opt">{{ _("facultatif") }}</i></span><input type="text" name="name" placeholder="{{ _('Maison') }}" autocomplete="off" maxlength="60"></label>
-      </div>
-      <p class="hint">{{ _("L'utilisateur est celui que vous avez choisi dans la configuration du module (« root » pour « Terminal & SSH »). À l'étape suivante, loco vous montre l'empreinte de la clé d'hôte de Home Assistant : rien n'est échangé avant que vous l'ayez confirmée.") }}</p>
-      <div><button class="btn primary"{% if not ssh %} disabled{% endif %}><span class="spin"></span>{{ _("Relever la clé d'hôte") }}</button></div>
-    </form>
-  </div>
-</section>
-</div>
-{% endif %}
 </div>
 
 
