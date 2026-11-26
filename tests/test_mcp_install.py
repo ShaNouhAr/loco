@@ -59,6 +59,20 @@ class TestDownload(InstallTest):
         self.assertEqual(sorted(Client(token).names()), ["get_device", "list_devices"])
         self.assertIn("obtenu par l'installateur Claude", self.admin.c.get("/accounts/mcp").get_data(as_text=True).replace("&#39;", "'"))
 
+    def test_the_file_is_named_in_the_language_of_the_account(self):
+        with transaction() as conn:
+            before = conn.execute("SELECT lang FROM users WHERE username='admin'").fetchone()[0]
+            conn.execute("UPDATE users SET lang='en' WHERE username='admin'")
+
+        def restore():
+            with transaction() as conn:
+                conn.execute("UPDATE users SET lang=? WHERE username='admin'", (before,))
+        self.addCleanup(restore)
+        self.assertEqual(self.download(system="windows").headers["Content-Disposition"], 'attachment; filename="add-loco-to-claude.cmd"')
+        with transaction() as conn:
+            conn.execute("UPDATE users SET lang='es' WHERE username='admin'")
+        self.assertEqual(self.download(target="codex").headers["Content-Disposition"], 'attachment; filename="anadir-loco-a-codex.sh"')
+
     def test_each_system_gets_its_file(self):
         for system, name in (("windows", "ajouter-loco-a-codex.cmd"), ("macos", "ajouter-loco-a-codex.command"),
                              ("linux", "ajouter-loco-a-codex.sh")):

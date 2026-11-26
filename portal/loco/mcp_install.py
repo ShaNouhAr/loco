@@ -18,7 +18,7 @@ from flask import abort, current_app, g, render_template, request
 from . import app, config, mcp
 from .auth import audit, login_required, require
 from .db import db
-from .i18n import _
+from .i18n import _, locale
 from .util import counted
 
 APPS = {"claude": "Claude", "codex": "Codex"}
@@ -26,7 +26,13 @@ SYSTEMS = ("windows", "macos", "linux")
 CLIENT_PREFIX = "installateur:"
 URL_RE = re.compile(r"^https://[A-Za-z0-9.\[\]:-]+/mcp$")
 PEM_RE = re.compile(r"^-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----\n?$")
-FILES = {"windows": "ajouter-loco-a-{app}.cmd", "macos": "ajouter-loco-a-{app}.command", "linux": "ajouter-loco-a-{app}.sh"}
+# Nom du fichier téléchargé, dans la langue de la page (anglais à défaut).
+STEMS = {"en": "add-loco-to-{app}", "fr": "ajouter-loco-a-{app}", "es": "anadir-loco-a-{app}"}
+EXTENSIONS = {"windows": ".cmd", "macos": ".command", "linux": ".sh"}
+
+
+def file_name(system, app_key):
+    return STEMS.get(locale(), STEMS["en"]).format(app=app_key) + EXTENSIONS[system]
 
 
 def detect_system():
@@ -132,6 +138,6 @@ def mcp_installer():
           + (f", expire le {expires[:10]}" if expires else ""), commit=False)
     conn.commit()
     response = current_app.response_class(body.encode("utf-8"), mimetype="application/octet-stream")
-    response.headers["Content-Disposition"] = f'attachment; filename="{FILES[system].format(app=target)}"'
+    response.headers["Content-Disposition"] = f'attachment; filename="{file_name(system, target)}"'
     response.headers["Cache-Control"] = "no-store"
     return response

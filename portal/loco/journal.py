@@ -1,7 +1,7 @@
 """Journal d'audit : libellés lisibles, catégories et filtres (page Journal et export JSON)."""
 
 import datetime
-from .i18n import L_, _
+from .i18n import L_, _, locale
 
 # Catégories : clé -> (libellé, préfixes « x. » ou codes exacts, sous-codes compris). Une action appartient à la
 # première catégorie qui la reconnaît, dans cet ordre : les sessions distantes avant le parc, les connexions par annuaire
@@ -201,10 +201,22 @@ def day_label(stamp):
     day = datetime.date.fromisoformat(stamp[:10])
     delta = (datetime.date.today() - day).days
     if delta == 0:
-        return "Aujourd'hui"
+        return _("Aujourd'hui")
     if delta == 1:
-        return "Hier"
+        return _("Hier")
+    lang = locale()
+    year = f" {day.year}" if day.year != datetime.date.today().year else ""
+    if lang == "en":
+        days = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+        months = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+                  "November", "December")
+        return f"{days[day.weekday()]}, {months[day.month - 1]} {day.day}" + (f",{year}" if year else "")
+    if lang == "es":
+        days = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+        months = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+                  "noviembre", "diciembre")
+        return f"{days[day.weekday()].capitalize()} {day.day} de {months[day.month - 1]}" + (f" de{year}" if year else "")
     days = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
     months = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
               "novembre", "décembre")
-    return f"{days[day.weekday()].capitalize()} {day.day} {months[day.month - 1]}" + (f" {day.year}" if day.year != datetime.date.today().year else "")
+    return f"{days[day.weekday()].capitalize()} {day.day} {months[day.month - 1]}" + year

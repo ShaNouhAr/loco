@@ -7,7 +7,7 @@
 {% block title %}{{ group.name if group else _('Nouveau groupe') }}{% endblock %}
 {% block content %}
 {% include '_software_nav.html' if software else '_fleet_nav.html' %}
-<p class="small back-link"><a href="{{ url_for('software_groups' if software else 'fleet_groups') }}">{{ _("← Groupes de %(v)s", v='logiciels' if software else 'machines') }}</a></p>
+<p class="small back-link"><a href="{{ url_for('software_groups' if software else 'fleet_groups') }}">← {{ _("Groupes de logiciels") if software else _("Groupes de machines") }}</a></p>
 <div class="head">
   <div>
     <h1>{{ group.name if group else (_('Nouveau groupe de logiciels') if software else _('Nouveau groupe de machines')) }}</h1>

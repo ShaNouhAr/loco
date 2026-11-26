@@ -1,22 +1,24 @@
-# Installer loco
+**English** · [Français](fr/installation.md) · [Español](es/installation.md)
 
-Un serveur, cinq façons de l'installer. Le portail, les dépôts et les caches sont les mêmes partout ; seul le dépôt Flatpak local demande un serveur Linux.
+# Installing loco
 
-![Écran de connexion de loco](media/connexion.webp)
+One server, five ways to install it. The portal, the repositories and the caches are the same everywhere; only the local Flatpak repository needs a Linux server.
 
-## Choisir son installation
+![loco's sign-in screen](media/en/connexion.webp)
 
-| Serveur | Systèmes | Installation | Guide |
+## Choosing your installation
+
+| Server | Systems | Installation | Guide |
 |---|---|---|---|
-| **Linux natif** (recommandé) | Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04, Rocky Linux 8 / 9 / 10 | `sudo ./install.sh` | [docs/linux.md](linux.md) |
-| **Windows natif** | Windows 11, Windows Server 2022 / 2025 | `windows\install.ps1` | [docs/windows.md](windows.md) |
-| Conteneur LXC | Proxmox VE 7 / 8 / 9 | `linux/lxc/proxmox-lxc.sh` | [docs/linux.md](linux.md) |
-| Appliance ISO | Alpine Linux (BusyBox), BIOS/UEFI | `linux/iso/` (assistant, réponses et portail) | [docs/linux.md](linux.md) |
-| Docker | Docker Engine 26+ et Compose v2 | `linux/docker/` | [docs/linux.md](linux.md) |
+| **Native Linux** (recommended) | Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04, Rocky Linux 8 / 9 / 10 | `sudo ./install.sh` | [docs/linux.md](linux.md) |
+| **Native Windows** | Windows 11, Windows Server 2022 / 2025 | `windows\install.ps1` | [docs/windows.md](windows.md) |
+| LXC container | Proxmox VE 7 / 8 / 9 | `linux/lxc/proxmox-lxc.sh` | [docs/linux.md](linux.md) |
+| ISO appliance | Alpine Linux (BusyBox), BIOS/UEFI | `linux/iso/` (wizard, answers and portal) | [docs/linux.md](linux.md) |
+| Docker | Docker Engine 26+ and Compose v2 | `linux/docker/` | [docs/linux.md](linux.md) |
 
-## Serveur Linux
+## Linux server
 
-### Installation native (recommandée)
+### Native installation (recommended)
 
 ```bash
 git clone https://github.com/ShaNouhAr/loco.git
@@ -24,128 +26,128 @@ cd loco
 sudo ./install.sh
 ```
 
-Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04 et Rocky Linux 8 / 9 / 10 (validations serveur en amd64). L'installation affiche l'adresse de l'interface
-(`https://<ip>:8443`), l'empreinte de l'autorité de certification et le mot de passe initial du compte
-`admin` (à changer à la première connexion). Le script est relançable : il sert aussi à mettre à jour
-(`git pull && sudo ./install.sh`) et à reconfigurer.
+Debian 12 / 13, Ubuntu 22.04 / 24.04 / 26.04 and Rocky Linux 8 / 9 / 10 (server validations on amd64). The installation shows the interface's address
+(`https://<ip>:8443`), the fingerprint of the certificate authority and the initial password of the
+`admin` account (to change at the first sign-in). The script can be run again: it is also used to update
+(`git pull && sudo ./install.sh`) and to reconfigure.
 
-Sur Rocky Linux, la même commande détecte le système et utilise DNF avec EPEL et PowerTools (8) ou CRB (9/10). SELinux reste
-actif ; les contextes et les ports nécessaires sont configurés. Si firewalld tourne déjà, une règle de
-service dédiée est ajoutée ; les réseaux autorisés restent contrôlés par `--allow` et `--admin-allow`.
-Rocky 10 compile le cache APT depuis une version des sources Debian avec ses correctifs, vérifiée par
-SHA-256 (ce composant manque dans EPEL 10). Rocky 8 compile uniquement l’indexeur `apt-ftparchive`
-2.6.1 depuis les sources Debian vérifiées ; il utilise Python 3.11 pour le portail, dans un environnement
-isolé. Si nginx ne fournit pas le relais TLS requis, l’installateur sélectionne le flux nginx 1.24
-d’AppStream ; un nginx préexistant est mis à jour en conservant sa configuration et reste sur ce flux
-après désinstallation. La première installation prend donc plus de temps ; les relances réutilisent les outils compilés.
+On Rocky Linux, the same command detects the system and uses DNF with EPEL and PowerTools (8) or CRB (9/10). SELinux stays
+on; the contexts and ports needed are configured. If firewalld is already running, a dedicated
+service rule is added; the allowed networks stay controlled by `--allow` and `--admin-allow`.
+Rocky 10 builds the APT cache from a version of the Debian sources with its patches, checked by
+SHA-256 (this component is missing from EPEL 10). Rocky 8 only builds the `apt-ftparchive` indexer
+2.6.1 from the verified Debian sources; it uses Python 3.11 for the portal, in an isolated
+environment. If nginx does not provide the required TLS relay, the installer selects AppStream's nginx 1.24
+stream; a pre-existing nginx is updated while keeping its configuration and stays on that stream
+after uninstallation. The first installation therefore takes longer; re-runs reuse the built tools.
 
-Options principales (toutes : `sudo ./install.sh --help`) :
+Main options (all of them: `sudo ./install.sh --help`):
 
-| Option | Effet |
+| Option | Effect |
 |---|---|
-| `--allow "CIDR …"` | réseaux autorisés pour les postes (défaut : réseaux privés) |
-| `--admin-allow "CIDR …"` | réseaux autorisés pour l'interface (défaut : comme `--allow`) |
-| `--proxy http://hôte:port` | proxy d'entreprise pour sortir sur Internet |
-| `--no-http` | HTTPS seul (autorité déjà déployée sur les postes) |
-| `--no-wu`, `--no-flatpak`, `--no-rpm` | sans cache Windows Update, sans Flatpak, sans famille Red Hat |
-| `--wu-proxy-port P` | port du proxy-cache Windows Update (Squid, sans DNS ; 3128 par défaut) |
-| `--tls-cert F --tls-key F` | certificat d'entreprise au lieu de l'autorité locale |
-| `--backup-keep N` | sauvegardes quotidiennes gardées (défaut 3, 0 = aucune) |
+| `--allow "CIDR …"` | networks allowed for the devices (default: private networks) |
+| `--admin-allow "CIDR …"` | networks allowed for the interface (default: same as `--allow`) |
+| `--proxy http://host:port` | company proxy to go out to the Internet |
+| `--no-http` | HTTPS only (authority already deployed on the devices) |
+| `--no-wu`, `--no-flatpak`, `--no-rpm` | without the Windows Update cache, without Flatpak, without the Red Hat family |
+| `--wu-proxy-port P` | port of the Windows Update caching proxy (Squid, no DNS; 3128 by default) |
+| `--tls-cert F --tls-key F` | company certificate instead of the local authority |
+| `--backup-keep N` | daily backups kept (default 3, 0 = none) |
 
-### Conteneur LXC sur Proxmox VE
+### LXC container on Proxmox VE
 
-Sur n'importe quel hôte Proxmox VE 7, 8 ou 9, en root :
+On any Proxmox VE 7, 8 or 9 host, as root:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/lxc/proxmox-lxc.sh
-bash proxmox-lxc.sh                                   # DHCP, 100 Go, 2 processeurs, 2 Go de mémoire
+bash proxmox-lxc.sh                                   # DHCP, 100 GB, 2 processors, 2 GB of memory
 bash proxmox-lxc.sh --ip 192.168.10.20/24 --gw 192.168.10.1 --disk 300 -- --allow "192.168.10.0/24"
 ```
 
-Le script crée un conteneur Debian 13 non privilégié (Debian 12 sur Proxmox 7), choisit le stockage
-(`local-lvm`, `local-zfs`…) et le pont (`vmbr0`) disponibles, télécharge la dernière version publiée
-et y fait l'installation native ; les options après `--` sont celles d'`install.sh`. Il affiche ensuite
-l'adresse, l'empreinte de l'autorité et le mot de passe initial. Mise à jour :
-`bash proxmox-lxc.sh --ctid N --update`. Toutes les options : `bash proxmox-lxc.sh --help`.
+The script creates an unprivileged Debian 13 container (Debian 12 on Proxmox 7), chooses the available storage
+(`local-lvm`, `local-zfs`…) and bridge (`vmbr0`), downloads the latest published release
+and performs the native installation in it; the options after `--` are those of `install.sh`. It then shows
+the address, the authority's fingerprint and the initial password. Update:
+`bash proxmox-lxc.sh --ctid N --update`. All the options: `bash proxmox-lxc.sh --help`.
 
-### Avec Docker
+### With Docker
 
-Sans cloner le projet — l'image `ghcr.io/shanouhar/loco` est publiée avec chaque version :
+Without cloning the project — the `ghcr.io/shanouhar/loco` image is published with every release:
 
 ```bash
 mkdir loco && cd loco
 curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/.env.example -o .env   # facultatif : LOCO_HOST, LOCO_ALLOW, LOCO_PROXY, LOCO_WU…
+curl -fsSL https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/.env.example -o .env   # optional: LOCO_HOST, LOCO_ALLOW, LOCO_PROXY, LOCO_WU…
 docker compose up -d
-docker compose logs loco   # adresse, empreinte de l'autorité, mot de passe initial de « admin »
+docker compose logs loco   # address, authority fingerprint, initial password of "admin"
 ```
 
-Mise à jour : `docker compose pull && docker compose up -d`. Pour rester sur une version précise :
-`LOCO_IMAGE=ghcr.io/shanouhar/loco:2.165.0` dans `.env`.
+Update: `docker compose pull && docker compose up -d`. To stay on a specific version:
+`LOCO_IMAGE=ghcr.io/shanouhar/loco:2.165.0` in `.env`.
 
-Depuis les sources — l'image est construite sur place :
+From the sources — the image is built on site:
 
 ```bash
 git clone https://github.com/ShaNouhAr/loco.git
 cd loco/linux/docker
 cp .env.example .env
-sudo ./up.sh               # construit l'image, démarre loco et attend qu'il soit sain
+sudo ./up.sh               # builds the image, starts loco and waits until it is healthy
 ```
 
-Même portail, mêmes fonctions et même configuration que l'installation native : au démarrage, le
-conteneur applique les variables de `.env` avec `linux/install.sh --container`, puis `supervisord` lance nginx,
-apt-cacher-ng, le portail et les tâches périodiques. Le conteneur utilise le **réseau de l'hôte** (ports
-8443, 8088, 3142, et 80/443 pour Windows Update) : ne pas l'associer à une installation native sur la même
-machine. Les données sont dans des volumes Docker (`LOCO_DATA_DIR` : dossier de l'hôte pour les dépôts et
-caches). Depuis les sources, installation et mise à jour : `sudo ./up.sh` (dans `linux/docker`, après `git pull`).
+Same portal, same features and same configuration as the native installation: at startup, the
+container applies the `.env` variables with `linux/install.sh --container`, then `supervisord` starts nginx,
+apt-cacher-ng, the portal and the periodic tasks. The container uses the **host network** (ports
+8443, 8088, 3142, and 80/443 for Windows Update): do not combine it with a native installation on the same
+machine. The data is in Docker volumes (`LOCO_DATA_DIR`: host folder for the repositories and
+caches). From the sources, installation and update: `sudo ./up.sh` (in `linux/docker`, after `git pull`).
 
-L'installation native reste recommandée en production : elle confine chaque service avec systemd
-(détails dans [SECURITY.md](../SECURITY.md)). Docker Engine 26 ou plus récent avec Compose v2 (validé avec
-les paquets `docker.io` et `docker-compose` de Debian 13).
+The native installation remains recommended in production: it confines each service with systemd
+(details in [SECURITY.md](../SECURITY.md)). Docker Engine 26 or later with Compose v2 (validated with
+Debian 13's `docker.io` and `docker-compose` packages).
 
-Déploiement en entreprise (réseau, GPO, proxy, sauvegardes, supervision, LXC, Docker, dépannage) :
-**[guide Linux](linux.md)**.
+Company deployment (network, GPO, proxy, backups, monitoring, LXC, Docker, troubleshooting):
+**[Linux guide](linux.md)**.
 
 ### Administration
 
 ```bash
-sudo loco-user list | roles | add NOM [PROFIL] | set-role NOM PROFIL | passwd NOM   # comptes (accès perdu : passwd admin)
-sudo loco-backup create | list | restore ARCHIVE             # sauvegardes
-sudo /opt/loco/remove.sh [--purge]                           # désinstallation
+sudo loco-user list | roles | add NAME [PROFILE] | set-role NAME PROFILE | passwd NAME   # accounts (lost access: passwd admin)
+sudo loco-backup create | list | restore ARCHIVE             # backups
+sudo /opt/loco/remove.sh [--purge]                           # uninstallation
 ```
 
-Dans un conteneur LXC, depuis l'hôte Proxmox : `pct exec N -- loco-user list`, etc.
-Avec Docker, les mêmes commandes passent par le conteneur : `docker compose exec loco loco-user list`,
-`docker compose exec loco loco-backup create`. Désinstallation : `docker compose down`
-(ajouter `-v` pour effacer aussi les données).
+In an LXC container, from the Proxmox host: `pct exec N -- loco-user list`, etc.
+With Docker, the same commands go through the container: `docker compose exec loco loco-user list`,
+`docker compose exec loco loco-backup create`. Uninstallation: `docker compose down`
+(add `-v` to also erase the data).
 
 ### Architecture
 
-| Élément | Emplacement | Port |
+| Component | Location | Port |
 |---|---|---|
-| Portail (Flask + gunicorn, unité `loco-portal`, confinée) | `/opt/loco` | 8089, local |
-| Relais des sessions distantes (connexions persistantes, dans le processus du portail) | `/opt/loco/portal/loco/relay.py` | 8090, local |
-| nginx : interface et fichiers des postes (HTTPS) | `/etc/nginx/sites-available/loco-portal.conf` | 8443 |
-| nginx : amorçage HTTP (optionnel) | même fichier | 8088 |
-| nginx : cache Windows Update, relais HTTPS (SNI) | `loco-wucache.conf`, `modules-enabled/99-loco-stream.conf` | 80, 443 |
-| squid : proxy-cache Windows Update (sans DNS) | `/etc/squid/squid.conf`, cache `/srv/loco/wuproxy` | 3128 |
+| Portal (Flask + gunicorn, `loco-portal` unit, confined) | `/opt/loco` | 8089, local |
+| Remote sessions relay (persistent connections, inside the portal's process) | `/opt/loco/portal/loco/relay.py` | 8090, local |
+| nginx: interface and device files (HTTPS) | `/etc/nginx/sites-available/loco-portal.conf` | 8443 |
+| nginx: HTTP bootstrap (optional) | same file | 8088 |
+| nginx: Windows Update cache, HTTPS relay (SNI) | `loco-wucache.conf`, `modules-enabled/99-loco-stream.conf` | 80, 443 |
+| squid: Windows Update caching proxy (no DNS) | `/etc/squid/squid.conf`, cache `/srv/loco/wuproxy` | 3128 |
 | apt-cacher-ng | `/var/cache/apt-cacher-ng` | 3142 |
-| Données : dépôts, catalogue, caches | `/srv/loco` | — |
-| Base, clé GPG, statistiques | `/var/lib/loco` | — |
-| Configuration, autorité et certificats | `/etc/loco` | — |
+| Data: repositories, catalog, caches | `/srv/loco` | — |
+| Database, GPG key, statistics | `/var/lib/loco` | — |
+| Configuration, authority and certificates | `/etc/loco` | — |
 
-Sur Debian / Ubuntu, les dépendances viennent des dépôts officiels (`nginx`, `apt-cacher-ng`, `python3-flask`, `gunicorn`,
-`gnupg`, `flatpak`, `ostree`, `createrepo-c`, `rpm`) : les correctifs de sécurité arrivent avec `apt upgrade`, ou
-depuis le portail (**Administration → Mises à jour** : correctifs de sécurité, noyau, redémarrage).
-Sur Rocky, les paquets système sont suivis par `dnf upgrade` ; le runtime Python isolé et les composants
-compilés sont figés et mis à jour avec les versions de loco.
+On Debian / Ubuntu, the dependencies come from the official repositories (`nginx`, `apt-cacher-ng`, `python3-flask`, `gunicorn`,
+`gnupg`, `flatpak`, `ostree`, `createrepo-c`, `rpm`): security fixes arrive with `apt upgrade`, or
+from the portal (**Administration → Updates**: security fixes, kernel, restart).
+On Rocky, the system packages follow `dnf upgrade`; the isolated Python runtime and the built
+components are pinned and updated with loco's releases.
 
-## Serveur Windows
+## Windows server
 
 ### Installation
 
-Windows 11 Professionnel / Entreprise et Windows Server 2022 / 2025, en x64, avec PowerShell 5.1
-ou supérieur. Dans une console PowerShell **administrateur**, depuis les sources du projet :
+Windows 11 Pro / Enterprise and Windows Server 2022 / 2025, x64, with PowerShell 5.1
+or later. In an **administrator** PowerShell console, from the project's sources:
 
 ```powershell
 Invoke-WebRequest https://github.com/ShaNouhAr/loco/archive/refs/heads/main.zip -OutFile loco.zip
@@ -154,32 +156,32 @@ cd loco-main
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\install.ps1
 ```
 
-L'application tourne dans le service Windows `loco`, avec ses composants Windows natifs :
-Python et nginx ; les dépôts sont signés par le programme lui-même (OpenPGP). Aucune VM Linux, WSL,
-Hyper-V ou installation Docker n'est nécessaire.
-Relancer le même script met à jour le programme en conservant les comptes, les clés et les dépôts.
+The application runs in the `loco` Windows service, with its native Windows components:
+Python and nginx; the repositories are signed by the program itself (OpenPGP). No Linux VM, WSL,
+Hyper-V or Docker installation is needed.
+Running the same script again updates the program while keeping the accounts, the keys and the repositories.
 
-Les dépôts APT/RPM signés, les caches APT/RPM/Flathub, le catalogue Windows et Windows Update
-sont disponibles. Le **dépôt Flatpak local** reste réservé aux serveurs Linux. Pour un réseau important,
-consulter les limites du nginx Windows et le dimensionnement dans le [guide Windows](windows.md).
+Signed APT/RPM repositories, the APT/RPM/Flathub caches, the Windows catalog and Windows Update
+are available. The **local Flatpak repository** remains reserved for Linux servers. For a large network,
+see the limits of nginx for Windows and the sizing in the [Windows guide](windows.md).
 
 ### Administration
 
-Dans une console administrateur :
+In an administrator console:
 
 ```powershell
 $lr = "$env:ProgramFiles\loco\loco.cmd"
 & $lr user list ; & $lr user passwd admin ; & $lr backup create ; & $lr status
-powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\loco\windows\remove.ps1"   # -Purge : tout effacer
+powershell -ExecutionPolicy Bypass -File "$env:ProgramFiles\loco\windows\remove.ps1"   # -Purge: erase everything
 ```
 
 ### Architecture
 
-Service `loco` (compte `NT SERVICE\loco`) qui lance nginx et le portail
-(Waitress, 8089 en local, et son relais des sessions distantes sur le port voisin 8090) ; programme dans `%ProgramFiles%\loco`, données, configuration et journaux
-dans `%ProgramData%\loco`. Ports : 8443 (HTTPS), 8088 (amorçage HTTP), 3142 (cache APT), 80 et 443
-(Windows Update). Détails : [guide Windows](windows.md).
+`loco` service (account `NT SERVICE\loco`) that starts nginx and the portal
+(Waitress, 8089 locally, and its remote sessions relay on the neighboring port 8090); program in `%ProgramFiles%\loco`, data, configuration and logs
+in `%ProgramData%\loco`. Ports: 8443 (HTTPS), 8088 (HTTP bootstrap), 3142 (APT cache), 80 and 443
+(Windows Update). Details: [Windows guide](windows.md).
 
 ---
 
-[← Retour à la présentation](../README.md) · [Toute la documentation](README.md)
+[← Back to the overview](../README.md) · [All the documentation](README.md)

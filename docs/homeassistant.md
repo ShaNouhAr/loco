@@ -1,100 +1,106 @@
+**English** · [Français](fr/homeassistant.md) · [Español](es/homeassistant.md)
+
 # Home Assistant
 
-Suivre et entretenir votre Home Assistant depuis loco : versions du cœur, du système et du Supervisor,
-mises à jour (une à une ou toutes, avec sauvegarde avant), modules complémentaires, sauvegardes, état de
-santé, journal, redémarrages et terminal. C'est une fonctionnalité **facultative**, coupée par défaut.
+Follow and maintain your Home Assistant from loco: versions of the core, the operating system and the Supervisor,
+updates (one by one or all, with a backup first), add-ons, backups, health
+status, log, restarts and terminal. It is an **optional** feature, off by default.
 
-![Home Assistant dans loco : versions, mises à jour disponibles, modules et sauvegardes](media/home-assistant.webp)
+![Home Assistant in loco: versions, available updates, add-ons and backups](media/en/home-assistant.webp)
 
-loco ne demande **aucun jeton** à Home Assistant. Il y entre par son module SSH, avec une clé qui lui est
-propre, et pilote la commande `ha` — celle que vous utiliseriez vous-même dans ce terminal. Il faut donc une
-installation qui a un Supervisor (Home Assistant OS ou Supervised) et un module SSH.
+loco asks Home Assistant for **no token**. It comes in through its SSH add-on, with a key of its
+own, and drives the `ha` command — the one you would use yourself in that terminal. You therefore need an
+installation that has a Supervisor (Home Assistant OS or Supervised) and an SSH add-on.
 
-## Activer la fonctionnalité
+## Enabling the feature
 
-Dans **Administration › Fonctionnalités**, section *Facultatif*, activer **Home Assistant**. Tout compte au
-profil Administrateur peut le faire. L'entrée **Home Assistant** apparaît alors dans la barre du haut.
+In **Administration › Features**, *Optional* section, enable **Home Assistant**. Any account with the
+Administrator profile can do it. The **Home Assistant** entry then appears in the top bar.
 
-## Relier une instance
+## Linking an instance
 
-Dans **Mon parc › Enrôlement**, onglet **Home Assistant** (avec le droit de relier des instances), trois étapes :
+In **My fleet › Enrollment**, **Home Assistant** tab (with the right to link instances), three steps:
 
-1. **Un module SSH dans Home Assistant** — « Advanced SSH & Web Terminal » ou « Terminal & SSH », avec un
-   port ouvert sur le réseau (onglet Configuration › Réseau du module).
-2. **Autoriser la clé de loco** — copier la clé publique affichée dans `authorized_keys`, dans la
-   configuration du module, puis redémarrer le module. La clé privée est créée sur le serveur loco au premier
-   affichage de la page (`homeassistant/id_ed25519` dans le dossier d'état, lisible par le seul compte du
-   portail) et n'en sort jamais.
-3. **L'adresse** — nom ou adresse IP, port SSH, utilisateur du module (`root` pour « Terminal & SSH », celui
-   que vous avez choisi pour « Advanced SSH & Web Terminal »).
+1. **An SSH add-on in Home Assistant** — "Advanced SSH & Web Terminal" or "Terminal & SSH", with a
+   port open on the network (the add-on's Configuration › Network tab).
+2. **Authorize loco's key** — copy the public key shown into `authorized_keys`, in the
+   add-on's configuration, then restart the add-on. The private key is created on the loco server the first time
+   the page is shown (`homeassistant/id_ed25519` in the state folder, readable only by the portal's
+   account) and never leaves it.
+3. **The address** — name or IP address, SSH port, user of the add-on (`root` for "Terminal & SSH", the one
+   you chose for "Advanced SSH & Web Terminal").
 
-loco relève alors la **clé d'hôte** que présente cette adresse et en montre l'empreinte. Rien n'est
-enregistré ni échangé tant que vous ne l'avez pas confirmée ; pour la comparer, lancez dans le terminal du
-module (depuis l'interface de Home Assistant) la commande que la page propose. Ensuite, loco n'accepte que
-cette clé : si elle change (module réinstallé), la liaison s'arrête et **Plus › Relever de nouveau la clé
-d'hôte** redemande une confirmation.
+loco then reads the **host key** that this address presents and shows its fingerprint. Nothing is
+saved or exchanged until you have confirmed it; to compare it, run in the add-on's terminal
+(from the Home Assistant interface) the command the page suggests. Afterwards, loco only accepts
+that key: if it changes (add-on reinstalled), the link stops and **More › Read the host key
+again** asks for a new confirmation.
 
-Jusqu'à huit instances peuvent être reliées.
+Up to eight instances can be linked.
 
-## Ce que montre la page
+## What the page shows
 
-- **Tuiles** : Home Assistant (cœur), système, Supervisor, modules, stockage, sauvegardes — avec la version
-  qui attend quand il y en a une.
-- **Signalé par Home Assistant** : les problèmes que relève son Supervisor (pas de sauvegarde récente, disque
-  presque plein, installation dégradée ou non prise en charge…).
-- **Mises à jour disponibles** : chacune avec son bouton, et **Tout mettre à jour**, qui les enchaîne dans
-  l'ordre conseillé — le Supervisor, les modules, Home Assistant, puis le système (qui redémarre la machine).
-  La fenêtre de confirmation propose de **créer une sauvegarde avant** (cochée d'office ; elle vaut pour le
-  cœur et les modules).
-- **Activité** : les douze dernières tâches, leur état et leur sortie. Une tâche lancée se montre « en
-  cours » et ne se relance pas ; les tâches d'une instance passent une par une.
-- **Modules complémentaires** et **Sauvegardes** (les huit plus récentes). Pour copier ces sauvegardes vers
-  un NAS ou un stockage externe, à la demande ou planifié : [Sauvegardes](sauvegardes.md).
-- **Journal de Home Assistant** : ses 200 dernières lignes, lues à l'ouverture du volet.
+- **Tiles**: Home Assistant (core), operating system, Supervisor, add-ons, storage, backups — with the version
+  waiting when there is one.
+- **Reported by Home Assistant**: the problems its Supervisor raises (no recent backup, disk
+  almost full, degraded or unsupported installation…).
+- **Available updates**: each with its button, and **Update all**, which chains them in
+  the recommended order — the Supervisor, the add-ons, Home Assistant, then the operating system (which restarts the machine).
+  The confirmation window offers to **create a backup first** (ticked by default; it applies to the
+  core and the add-ons).
+- **Activity**: the last twelve tasks, their state and their output. A task that has started shows as "in
+  progress" and cannot be started again; an instance's tasks run one at a time.
+- **Add-ons** and **Backups** (the eight most recent). To copy these backups to
+  a NAS or an external storage, on demand or scheduled: [Backups](backups.md).
+- **Home Assistant log**: its last 200 lines, read when the panel opens.
 
-Le relevé est refait tout seul tant que la page est affichée (toutes les deux minutes) et après chaque tâche ;
-**Actualiser** le refait tout de suite. La vue d'ensemble signale dans « À traiter » une liaison en échec, une
-installation dégradée et les mises à jour disponibles.
+The reading is refreshed automatically while the page is displayed (every two minutes) and after each task;
+**Refresh** does it right away. The overview reports in "To handle" a failed link, a
+degraded installation and the available updates.
 
-Dans **Mon parc**, une instance est une ligne comme un poste : ressources de son hôte (disque ; mémoire et
-processeur sur Home Assistant OS), *Mettre à jour* sur sa ligne, case à cocher (*Mettre à jour*, *Redémarrer* le
-système), et elle est comprise dans *Tout mettre à jour* et la planification de tout le parc. Depuis Mon parc, ses
-mises à jour se font toujours avec une sauvegarde avant (cœur et modules), comme sa page le propose. Droits :
-*Mettre à jour Home Assistant* pour la mettre à jour, *Redémarrer Home Assistant* pour la redémarrer.
+In **My fleet**, an instance is a row like a device: resources of its host (disk; memory and
+processor on Home Assistant OS), *Update* on its row, a checkbox (*Update*, *Restart* the
+system), and it is included in *Update all* and the whole-fleet schedule. From My fleet, its
+updates are always done with a backup first (core and add-ons), as its page suggests. Rights:
+*Update Home Assistant* to update it, *Restart Home Assistant* to restart it.
 
 ## Actions
 
-| Action | Commande lancée sur Home Assistant |
+| Action | Command run on Home Assistant |
 |---|---|
-| Mettre à jour Home Assistant | `ha core update [--backup]` |
-| Mettre à jour le système | `ha os update` |
-| Mettre à jour le Supervisor | `ha supervisor update` |
-| Mettre à jour un module | `ha apps update <module> [--backup]` (`ha addons update` sur une commande `ha` plus ancienne) |
-| Sauvegarder | `ha backups new --name "loco AAAA-MM-JJ HH:MM"` (sauvegarde complète, gardée dans Home Assistant) |
-| Redémarrer › Home Assistant | `ha core restart` |
-| Redémarrer › Le système | `ha host reboot` |
+| Update Home Assistant | `ha core update [--backup]` |
+| Update the operating system | `ha os update` |
+| Update the Supervisor | `ha supervisor update` |
+| Update an add-on | `ha apps update <add-on> [--backup]` (`ha addons update` with an older `ha` command) |
+| Back up | `ha backups new --name "loco YYYY-MM-DD HH:MM"` (full backup, kept in Home Assistant) |
+| Restart › Home Assistant | `ha core restart` |
+| Restart › The system | `ha host reboot` |
 
-Quand le système redémarre (mise à jour du système, redémarrage demandé), la liaison tombe : loco attend son
-retour jusqu'à un quart d'heure, et la tâche n'est réussie que s'il répond de nouveau.
+When the system restarts (operating system update, requested restart), the link drops: loco waits for it to
+come back for up to a quarter of an hour, and the task only succeeds if it answers again.
 
 ## Terminal
 
-**Terminal** ouvre le shell du module SSH dans la page de session habituelle de loco (plein écran, nouvel
-onglet, taille du texte). La session est tenue par le serveur loco, journalisée, limitée à une heure et à
-deux par instance. Elle demande la fonctionnalité **Accès distant** et un serveur loco sous Linux.
+**Terminal** opens the SSH add-on's shell in loco's usual session page (full screen, new
+tab, text size). The session is held by the loco server, recorded in the audit log, limited to one hour and to
+two per instance. It needs the **Remote access** feature and a loco server on Linux.
 
-## Droits
+## Rights
 
-Le groupe **Home Assistant** des profils d'accès sépare : consulter, mettre à jour, sauvegarder, redémarrer,
-ouvrir un terminal, relier des instances. Aucun profil livré ne les reçoit, hormis Administrateur.
+The **Home Assistant** group of the access profiles separates: view, update, back up, restart,
+open a terminal, link instances. No shipped profile receives them, except Administrator.
 
-## Retirer une instance
+## Removing an instance
 
-**Plus › Retirer de loco** oublie l'instance et l'historique de ses tâches. Rien n'est changé dans Home
-Assistant : retirez-y la clé de loco de `authorized_keys` pour fermer l'accès.
+**More › Remove from loco** forgets the instance and the history of its tasks. Nothing is changed in Home
+Assistant: remove loco's key from `authorized_keys` there to close the access.
 
-## Limites
+## Limits
 
-- Installations sans Supervisor (Container, Core) : pas de commande `ha`, donc pas de liaison.
-- Les sauvegardes restent dans Home Assistant ; loco ne les copie pas et n'en restaure pas.
-- Le serveur loco doit avoir le client SSH (`ssh`) : présent sur l'appliance, installé avec loco ailleurs.
+- Installations without a Supervisor (Container, Core): no `ha` command, so no link.
+- loco copies the backups to an external destination if you set it up ([Backups](backups.md)), but does not restore them.
+- The loco server needs the SSH client (`ssh`): present on the appliance, installed with loco elsewhere.
+
+---
+
+[← Back to the overview](../README.md) · [All the documentation](README.md)

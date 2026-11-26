@@ -2,14 +2,14 @@
 {% from "_software_logo.html" import software_logo %}
 {% set software = kind == 'software' %}
 {% set editor = 'software_group_editor' if software else 'fleet_group_editor' %}
-{% block title %}{{ _("Groupes de %(v)s", v='logiciels' if software else 'machines') }}{% endblock %}
+{% block title %}{{ _("Groupes de logiciels") if software else _("Groupes de machines") }}{% endblock %}
 {% block content %}
 {% set can_manage = can('windows.groups' if software else 'fleet.groups') %}
 {% include '_software_nav.html' if software else '_fleet_nav.html' %}
 <div class="head">
   <div>
-    <h1>{{ _("Groupes de %(v)s", v='logiciels' if software else 'machines') }}</h1>
-    <p>{{ _("%(v)s Un %(v2)s peut appartenir à plusieurs groupes.", v=_('Ensembles de logiciels Windows à déployer en une fois : socle bureautique, outils d’un service…') if software else _('Appareils regroupés par équipe, site ou usage pour les mettre à jour ou leur déployer des logiciels ensemble.'), v2='logiciel' if software else 'appareil') }}</p>
+    <h1>{{ _("Groupes de logiciels") if software else _("Groupes de machines") }}</h1>
+    <p>{% if software %}{{ _("Ensembles de logiciels Windows à déployer en une fois : socle bureautique, outils d’un service…") }} {{ _("Un logiciel peut appartenir à plusieurs groupes.") }}{% else %}{{ _("Appareils regroupés par équipe, site ou usage pour les mettre à jour ou leur déployer des logiciels ensemble.") }} {{ _("Un appareil peut appartenir à plusieurs groupes.") }}{% endif %}</p>
   </div>
   {% if can('windows.groups' if software else 'fleet.groups') %}<div class="actions"><a class="btn primary" href="{{ url_for(editor, group_id=0) }}">{{ _("Créer un groupe") }}</a></div>{% endif %}
 </div>

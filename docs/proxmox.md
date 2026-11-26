@@ -1,78 +1,84 @@
-# Proxmox VE : système, mises à jour, terminal
+**English** · [Français](fr/proxmox.md) · [Español](es/proxmox.md)
 
-Un serveur Proxmox relié à loco pour ses [sauvegardes](sauvegardes.md#proxmox-ve) peut l'être aussi pour son
-**système** : il apparaît alors dans **Mon parc**, comme un Home Assistant, avec ses mises à jour, ses ressources
-et un bouton *Mettre à jour*, et il a sa propre page (le nom du serveur dans Mon parc, ou *Système et mises à jour*
-sur sa carte de la page Sauvegardes).
+# Proxmox VE: system, updates, terminal
 
-## Pourquoi une liaison SSH en plus du jeton
+A Proxmox server linked to loco for its [backups](backups.md#proxmox-ve) can also be linked for its
+**system**: it then appears in **My fleet**, like a Home Assistant, with its updates, its resources
+and an *Update* button, and it has its own page (the server's name in My fleet, or *System and updates*
+on its card in the Backups page).
 
-L'API de Proxmox sait dire quelles mises à jour attendent, mais **pas les installer** : le bouton *Upgrade* de son
-interface ouvre un shell réservé à `root@pam` connecté, refusé à tout jeton d'API. loco entre donc par **SSH**,
-avec une clé qui lui est propre — la même démarche que pour Home Assistant. Le jeton reste celui des sauvegardes ;
-il donne aussi les ressources du serveur (processeur, mémoire, disque système) montrées dans Mon parc.
+## Why an SSH link on top of the token
 
-## Relier le système
+The Proxmox API can tell which updates are waiting, but **cannot install them**: the *Upgrade* button of its
+interface opens a shell reserved for a signed-in `root@pam`, refused to any API token. loco therefore comes in over **SSH**,
+with a key of its own — the same approach as for Home Assistant. The token remains the one used for backups;
+it also provides the server's resources (processor, memory, system disk) shown in My fleet.
 
-Sur la page du serveur, *Gérer aussi le système de ce Proxmox* (l'onglet **Proxmox VE** de **Mon parc › Enrôlement**
-y mène, *Relier par SSH*, pour chaque serveur relié par son jeton mais pas encore par SSH) :
+## Linking the system
 
-1. **Autoriser la clé de loco** : ouvrez le shell du nœud (interface de Proxmox › le nœud › *Shell*) et lancez la
-   commande proposée, qui ajoute la clé publique de loco à `/root/.ssh/authorized_keys`. La clé privée ne quitte
-   jamais le serveur loco ; elle est distincte de celle de Home Assistant.
-2. **Relever la clé d'hôte** : d'ordinaire la même adresse que l'API, le port 22 et `root`. loco montre l'empreinte
-   de la clé d'hôte de Proxmox ; comparez-la à celle que donne, dans le shell du nœud,
-   `for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done`, puis confirmez. Rien n'est échangé avant.
+On the server's page, *Also manage the system of this Proxmox* (the **Proxmox VE** tab of **My fleet › Enrollment**
+leads there, *Link over SSH*, for each server linked by its token but not yet over SSH):
 
-*Retirer la liaison SSH* (menu *Plus*) arrête la gestion du système sans toucher aux sauvegardes ; retirez aussi la
-clé de loco de `authorized_keys`.
+1. **Authorize loco's key**: open the node's shell (Proxmox interface › the node › *Shell*) and run the
+   suggested command, which adds loco's public key to `/root/.ssh/authorized_keys`. The private key never leaves
+   the loco server; it is separate from the one used for Home Assistant.
+2. **Read the host key**: usually the same address as the API, port 22 and `root`. loco shows the fingerprint
+   of the Proxmox host key; compare it with the one given, in the node's shell, by
+   `for f in /etc/ssh/ssh_host_*_key.pub; do ssh-keygen -lf "$f"; done`, then confirm. Nothing is exchanged before.
 
-## Ce que montre la page
+*Remove the SSH link* (*More* menu) stops the system management without touching the backups; also remove
+loco's key from `authorized_keys`.
 
-- la version de Proxmox VE, le nœud, le **noyau** en marche — et *redémarrage requis* quand un noyau plus récent
-  est déjà installé ;
-- les **mises à jour** disponibles, celles de sécurité en tête, les nouveaux paquets et ceux qu'une mise à jour
-  retirerait, d'après la simulation de `apt-get dist-upgrade` (rien n'est changé pour la lire) ;
-- les machines, le processeur, la mémoire, le disque système et la durée d'allumage ;
-- l'**activité** : chaque tâche avec son journal, en direct pendant une mise à jour.
+## What the page shows
 
-Si loco tourne lui-même sur ce Proxmox, la page le dit (il se reconnaît à ses adresses MAC dans la configuration
-des machines).
+- the Proxmox VE version, the node, the running **kernel** — and *reboot required* when a newer kernel
+  is already installed;
+- the available **updates**, security ones first, the new packages and those an update
+  would remove, according to a simulation of `apt-get dist-upgrade` (nothing is changed to read it);
+- the machines, the processor, the memory, the system disk and the uptime;
+- the **activity**: each task with its log, live during an update.
 
-## Mettre à jour
+If loco itself runs on this Proxmox, the page says so (it recognizes itself by its MAC addresses in the configuration
+of the machines).
 
-*Mettre à jour* relit les dépôts puis installe tout avec `apt-get dist-upgrade` — ce que fait le bouton *Upgrade*
-de Proxmox ; jamais `apt-get upgrade`, que Proxmox déconseille. Les fichiers de configuration modifiés sur le
-serveur sont gardés. La mise à jour tourne **sur le serveur lui-même** (unité `systemd-run`, journal dans
-`/var/lib/loco-upgrade/`) : elle va au bout même si la liaison tombe ou si loco redémarre, et loco reprend son
-suivi. Les machines virtuelles continuent de tourner ; l'interface web de Proxmox peut se recharger.
+## Updating
 
-Cochez *Redémarrer le serveur ensuite* pour enchaîner un redémarrage — seulement si la mise à jour a réussi.
-loco refuse de lancer une mise à jour qui retirerait le paquet `proxmox-ve` (dépôts mal réglés).
+*Update* reads the repositories again then installs everything with `apt-get dist-upgrade` — what the *Upgrade* button
+of Proxmox does; never `apt-get upgrade`, which Proxmox advises against. Configuration files modified on the
+server are kept. The update runs **on the server itself** (a `systemd-run` unit, log in
+`/var/lib/loco-upgrade/`): it goes to the end even if the link drops or loco restarts, and loco picks up its
+tracking again. Virtual machines keep running; the Proxmox web interface may reload.
 
-*Rechercher les mises à jour* relit seulement les dépôts (`apt-get update`) ; Proxmox le fait aussi chaque jour.
+Tick *Restart the server afterwards* to chain a restart — only if the update succeeded.
+loco refuses to start an update that would remove the `proxmox-ve` package (badly set repositories).
 
-Dans Mon parc, le bouton de la ligne, la sélection, *Tout mettre à jour* et la planification de tout le parc lancent
-la même mise à jour. Un Proxmox **redémarre aussi depuis Mon parc** — sélection, *Mettre à jour puis redémarrer si
-nécessaire* (seulement si la mise à jour installe un noyau à charger), bouton *Redémarrer* de sa ligne quand un
-redémarrage est requis —, comme un poste, à une différence près : loco attend d'abord la fin des mises à jour en
-cours sur les postes du parc, une heure au plus, pour ne couper aucune installation dans une machine virtuelle. La
-tâche dit ce qu'elle attend (« En attente de la fin des mises à jour du parc : 2 postes en cours. »). Le bouton
-*Redémarrer* de sa page, lui, redémarre aussitôt.
+*Check for updates* only reads the repositories again (`apt-get update`); Proxmox also does it every day.
 
-## Redémarrer
+In My fleet, the row's button, the selection, *Update all* and the whole-fleet schedule start
+the same update. A Proxmox **also restarts from My fleet** — selection, *Update then restart if
+needed* (only if the update installs a kernel to load), *Restart* button on its row when a
+restart is required —, like a device, with one difference: loco first waits for the updates in
+progress on the fleet's devices to finish, one hour at most, so as not to cut any installation inside a virtual machine. The
+task says what it is waiting for ("Waiting for the fleet's updates to finish: 2 devices in progress."). The
+*Restart* button on its page, however, restarts at once.
 
-*Redémarrer* arrête toutes les machines virtuelles et les conteneurs du serveur le temps du redémarrage ; ceux
-réglés pour démarrer avec lui repartent ensuite. loco attend que le serveur réponde de nouveau, redémarré (autre
-identifiant de démarrage). Si loco tourne sur ce Proxmox, il s'arrête aussi quelques minutes et reprend le suivi à
-son retour.
+## Restarting
+
+*Restart* stops all the server's virtual machines and containers for the duration of the restart; those
+set to start with it come back afterwards. loco waits for the server to answer again, restarted (another
+boot identifier). If loco runs on this Proxmox, it also stops for a few minutes and resumes tracking when
+it comes back.
 
 ## Terminal
 
-*Terminal* ouvre un shell **root** sur le nœud, tenu par loco comme celui de Home Assistant (session journalisée).
+*Terminal* opens a **root** shell on the node, held by loco like the Home Assistant one (session recorded in the audit log).
 
-## Droits
+## Rights
 
-*Consulter Proxmox*, *Mettre à jour Proxmox* (rechercher et installer), *Redémarrer Proxmox*, *Ouvrir un terminal
-Proxmox*, *Relier des serveurs Proxmox* (aussi la liaison SSH). Aucun profil livré ne les donne, sauf
-Administrateur.
+*View Proxmox*, *Update Proxmox* (check and install), *Restart Proxmox*, *Open a Proxmox
+terminal*, *Link Proxmox servers* (also the SSH link). No shipped profile grants them, except
+Administrator.
+
+---
+
+[← Back to the overview](../README.md) · [All the documentation](README.md)

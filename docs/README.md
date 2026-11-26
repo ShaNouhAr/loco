@@ -1,32 +1,34 @@
-# Documentation de loco
+**English** · [Français](fr/README.md) · [Español](es/README.md)
 
-Par où commencer ? Par ce que vous voulez faire.
+# loco documentation
 
-| Vous voulez… | Lisez |
+Where to start? With what you want to do.
+
+| You want to… | Read |
 |---|---|
-| **Installer** un serveur | [Installer loco](installation.md) — puis [Linux en entreprise](linux.md) ou [Windows](windows.md) |
-| **Brancher** des postes aux dépôts et aux caches | [Brancher les postes](postes.md) |
-| **Gérer** les postes : inventaire, mises à jour, scripts | [Mon parc](parc.md) |
-| **Déployer** des logiciels Windows | [Logiciels Windows](logiciels.md) |
-| **Prendre la main** sur un poste | [Sessions distantes](sessions-distantes.md) |
-| **Donner des accès** : comptes, profils, annuaires, SSO | [Comptes, profils et SSO](comptes.md) |
-| **Faire tourner** loco : routine, sauvegardes, incidents | [Exploiter loco au quotidien](exploitation.md) |
-| **Sauvegarder** loco, Home Assistant et Proxmox vers un NAS | [Sauvegardes](sauvegardes.md) |
-| **Tracer** ce qui se passe | [Journal et syslog](journal.md) |
-| **Doubler** le serveur | [Haute disponibilité](haute-disponibilite.md) |
-| **Brancher un assistant IA** ou un **script / une supervision** | [MCP et API](mcp.md) |
-| Gérer des appareils **Android** | [Android](android.md) |
-| Suivre **Home Assistant** | [Home Assistant](homeassistant.md) |
-| Mettre à jour un **Proxmox VE** et ouvrir son terminal | [Proxmox VE](proxmox.md) |
-| Poser l'**agent Wazuh** sur les postes | [Agent Wazuh](wazuh.md) |
-| Gérer les **switchs** Cisco et Extreme et les **pare-feu** Stormshield (expérimental) | [Équipements réseau](reseau.md) |
-| **Partager des dossiers** sur le réseau (SMB), avec tailles limites et comptes | [Partages de fichiers](partages.md) |
-| **Contribuer** | [Développement](developpement.md) |
+| **Install** a server | [Installing loco](installation.md) — then [Linux in a company](linux.md) or [Windows](windows.md) |
+| **Connect** devices to the repositories and caches | [Connecting devices](connecting-devices.md) |
+| **Manage** devices: inventory, updates, scripts | [My fleet](fleet.md) |
+| **Deploy** Windows software | [Windows software](windows-software.md) |
+| **Take control** of a device | [Remote sessions](remote-sessions.md) |
+| **Grant access**: accounts, profiles, directories, SSO | [Accounts, profiles and SSO](accounts.md) |
+| **Run** loco: routine, backups, incidents | [Running loco day to day](operations.md) |
+| **Back up** loco, Home Assistant and Proxmox to a NAS | [Backups](backups.md) |
+| **Track** what happens | [Audit log and syslog](audit-log.md) |
+| **Double** the server | [High availability](high-availability.md) |
+| **Connect an AI assistant** or a **script / monitoring tool** | [MCP and API](mcp.md) |
+| Manage **Android** devices | [Android](android.md) |
+| Follow **Home Assistant** | [Home Assistant](homeassistant.md) |
+| Update a **Proxmox VE** server and open its terminal | [Proxmox VE](proxmox.md) |
+| Install the **Wazuh agent** on devices | [Wazuh agent](wazuh.md) |
+| Manage Cisco and Extreme **switches** and Stormshield **firewalls** (experimental) | [Network devices](network-devices.md) |
+| **Share folders** on the network (SMB), with size limits and accounts | [File shares](file-shares.md) |
+| **Contribute** | [Development](development.md) |
 
-À côté : [politique de sécurité](../SECURITY.md) · [changelog](../CHANGELOG.md) · [appliance ISO](../linux/iso/README.md).
+Also: [security policy](../SECURITY.md) · [changelog](../CHANGELOG.md) · [ISO appliance](../linux/iso/README.md).
 
-Les captures de cette documentation viennent d'une instance de démonstration : l'entreprise, ses postes et ses comptes sont inventés.
+The screenshots in this documentation come from a demo instance: the company, its devices and its accounts are made up.
 
 ---
 
-[← Retour à la présentation](../README.md)
+[← Back to the overview](../README.md)

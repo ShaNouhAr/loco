@@ -1274,6 +1274,7 @@ html.no-enter .usage-list .bar .fill { animation: none; }
 .filter > summary.chip { height: 32px; }
 .filter-k { color: var(--text-3); }
 .filter-k::after { content: " :"; }
+:lang(en) .filter-k::after, :lang(es) .filter-k::after { content: ":"; }   /* pas d'espace avant « : » hors du français */
 .chip.on .filter-k { color: color-mix(in srgb, var(--bg) 62%, transparent); }
 .filter .menu-list { min-width: 250px; max-height: min(420px, 70vh); overflow-y: auto; }
 .filter .menu-item .st { gap: 0; }

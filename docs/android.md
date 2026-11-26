@@ -1,426 +1,432 @@
-# Appareils Android
+**English** · [Français](fr/android.md) · [Español](es/android.md)
 
-Gérer vos propres appareils Android (téléphone, tablette) depuis loco : voir et piloter l'écran,
-parcourir les fichiers, ouvrir un terminal, et laisser un assistant IA faire la même chose à travers le
-MCP. L'inscription se fait **sans QR code** : on installe une application, on saisit l'adresse du serveur
-et une clé. C'est une fonctionnalité **expérimentale**, coupée par défaut.
+# Android devices
 
-![Fiche d'un téléphone Android dans Mon parc](media/android.webp)
+Manage your own Android devices (phone, tablet) from loco: see and drive the screen,
+browse the files, open a terminal, and let an AI assistant do the same through
+MCP. Enrollment works **without a QR code**: you install an app, enter the server's address
+and a key. It is an **experimental** feature, off by default.
 
-loco installe aussi des applications sur ces appareils : depuis des dépôts F-Droid vérifiés, ou en ouvrant
-leur fiche Google Play (voir [Applications](#applications)). Pas de mises à jour du système Android. Rien
-n'est capturé en dehors d'une session que vous ouvrez depuis le portail, et chaque capacité (écran, contrôle,
-fichiers, installations) s'active sur l'appareil, à la main.
+![An Android phone's page in My fleet](media/en/android.webp)
 
-## Activer la fonctionnalité
+loco also installs apps on these devices: from verified F-Droid repositories, or by opening
+their Google Play page (see [Applications](#applications)). No Android system updates. Nothing
+is captured outside a session you open from the portal, and each capability (screen, control,
+files, installs) is turned on on the device, by hand.
 
-Dans **Administration › Fonctionnalités**, section *Expérimental*, activer **Appareils Android**. Tout
-compte au profil Administrateur peut le faire. Tant qu'elle est coupée, l'onglet Android de
-l'enrôlement et le téléchargement de l'application n'existent pas.
+## Turning the feature on
 
-## Installer l'application
+In **Administration › Features**, *Experimental* section, turn on **Android devices**. Any
+account with the Administrator profile can do it. While it is off, the Android tab of
+the enrollment and the app download do not exist.
 
-Dans **Mon parc › Enrôlement**, onglet **Android** : télécharger l'APK et l'ouvrir sur l'appareil. Android
-demande d'autoriser l'installation depuis cette source ; aucun compte Google n'est nécessaire. On peut aussi
-ouvrir directement le lien de téléchargement depuis le navigateur de l'appareil (une adresse HTTP est
-proposée pour un premier branchement, avant d'avoir importé l'autorité de loco). L'application s'installe
-sous le nom **Agent loco** et demande Android 8 (API 26) ou plus récent.
+## Installing the app
 
-## Inscription automatique (APK prêt à inscrire)
+In **My fleet › Enrollment**, **Android** tab: download the APK and open it on the device. Android
+asks to allow installing from this source; no Google account is needed. You can also
+open the download link straight from the device's browser (an HTTP address is
+offered for a first connection, before loco's authority has been imported). The app installs
+under the name **Agent loco** and requires Android 8 (API 26) or later.
 
-L'APK proposé par l'enrôlement porte, gravées dans son **bloc de signature**, l'adresse du serveur, la clé
-d'inscription et l'empreinte de l'autorité de loco — exactement comme le MSI Windows préconfiguré. Ouverte
-sur l'appareil, l'application **s'inscrit toute seule** : elle récupère l'autorité du serveur, vérifie que
-son empreinte correspond à celle gravée, puis rejoint *Mon parc*, sans rien à saisir ni confirmer. Avec un
-groupe de machines choisi à l'enrôlement, l'appareil le rejoint.
+## Automatic enrollment (APK ready to enroll)
 
-La configuration est posée dans le bloc de signature, que les schémas de signature v2/v3 ne couvrent pas :
-**la signature de l'application reste valable** (aucune re-signature, aucune clé de signature sur le serveur)
-et l'application se met à jour normalement ensuite. L'APK contient la clé d'inscription : ne le partager
-qu'avec les personnes qui installent les appareils. Si l'empreinte reçue ne correspond pas à celle gravée
-(mauvaise adresse, interception…), l'inscription automatique est **refusée** et l'application repasse à la
-saisie manuelle.
+The APK offered by the enrollment carries, engraved in its **signing block**, the server's address, the enrollment
+key and the fingerprint of loco's authority — exactly like the preconfigured Windows MSI. Opened
+on the device, the app **enrolls on its own**: it fetches the server's authority, checks that
+its fingerprint matches the engraved one, then joins *My fleet*, with nothing to enter or confirm. With a
+device group chosen at enrollment, the device joins it.
 
-## Connecter l'appareil à la main
+The configuration is placed in the signing block, which the v2/v3 signature schemes do not cover:
+**the app's signature stays valid** (no re-signing, no signing key on the server)
+and the app updates normally afterwards. The APK contains the enrollment key: only share it
+with the people who set up the devices. If the fingerprint received does not match the engraved one
+(wrong address, interception…), automatic enrollment is **refused** and the app falls back to
+manual entry.
 
-Pour l'APK générique, replié sous *APK générique et saisie manuelle*, ouvrir l'application et saisir
-**l'adresse du serveur** et la **clé d'inscription** affichées sur la page d'enrôlement. L'application
-récupère l'autorité (CA) du serveur et affiche son **empreinte SHA-256** : la comparer à celle de la page
-d'enrôlement et ne confirmer que si elle correspond. Une fois confirmée, l'appareil rejoint *Mon parc* et
-garde le contact tout seul.
+## Connecting the device by hand
 
-Si le certificat du serveur est reconnu publiquement, l'application se connecte sans empreinte à confirmer.
+For the generic APK, folded under *Generic APK and manual entry*, open the app and enter
+**the server's address** and the **enrollment key** shown on the enrollment page. The app
+fetches the server's authority (CA) and shows its **SHA-256 fingerprint**: compare it with the one on the enrollment
+page and only confirm if it matches. Once confirmed, the device joins *My fleet* and
+keeps in touch on its own.
 
-## Ce que vous pouvez faire
+If the server's certificate is publicly trusted, the app connects with no fingerprint to confirm.
 
-Depuis la fiche de l'appareil, comme pour un poste :
+## What you can do
 
-- **Écran** — voir l'écran en direct et le piloter (toucher, faire défiler, clavier et souris). Les boutons
-  *Retour*, *Accueil*, *Applications récentes* et *Notifications* sont dans la barre d'outils ; un clic
-  droit fait *Retour*, un clic du milieu *Accueil*, la molette fait défiler.
-  Le doigt suit la souris en direct : maintenez le bouton pour un appui long, glissez pour faire défiler ou
-  déplacer, l'écran bouge pendant le geste. Ce qui bouge est transmis en JPEG, léger, puis l'image redevient
-  nette dès que l'écran se pose. Pour une image fluide, il faut le **partage d'écran** (voir plus bas) : le
-  contrôle à distance seul reste limité par Android à trois images par seconde environ.
-  **Appareil en veille ou verrouillé** (application 2.160 ou plus) : l'écran se rallume à l'ouverture de la
-  session, et de nouveau au premier clic ou à la première touche s'il s'est rendormi entre-temps. Vous arrivez sur
-  l'écran de verrouillage : **Déverrouiller**, dans la barre d'outils de la session, ouvre un pavé où tracer le
-  **schéma** (ou cliquer ses points dans l'ordre), ou des champs pour le **code PIN** et le **mot de passe** ;
-  l'application loco fait monter la saisie du code (demande officielle à Android, sinon balayage vers le haut) et
-  y entre le code. Vous pouvez aussi **taper le code sur votre clavier, puis Entrée** — pour un schéma, les numéros
-  de ses points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite). Android masque
-  l'écran de saisie du code dans l'image transmise : il s'affiche en noir, c'est normal, la saisie passe quand
-  même. Rien n'est contourné — il faut connaître le code, et les essais ratés comptent comme sur l'appareil.
-  L'application ne tape jamais le code donné par *Déverrouiller* ailleurs que dans la saisie du code : appareil
-  déjà déverrouillé, il est oublié (application 2.198 ou plus ; avant, le code est tapé comme au clavier).
-  **Retenir ce code** le garde pour vos prochaines sessions sur cet appareil, **pour vous seul** : *Déverrouiller*
-  propose alors « Schéma retenu pour vous seul » et déverrouille d'un clic ; *Oublier* l'efface, *Saisir un autre
-  code* en donne un autre. Le code est scellé sur le serveur avec sa clé et lié à votre compte et à l'appareil :
-  aucun autre utilisateur, administrateur compris, ne peut s'en servir, et il n'est jamais affiché — il n'est rendu
-  qu'à votre session d'écran, au moment de déverrouiller. Le journal note qu'un code a été retenu, utilisé ou
-  oublié, jamais le code lui-même. Il disparaît avec votre compte ou avec l'appareil, et se ressaisit après une
-  restauration sur un autre serveur (clé différente).
-  **Fermer la session verrouille le téléphone ou la tablette** (application 2.199 ou plus, Android 9 ou plus) :
-  dès la fin de la dernière session d'écran — fermée depuis le portail, par l'assistant IA ou par expiration —,
-  l'appareil se verrouille comme avec le bouton marche/arrêt, pour ne pas rester ouvert après le départ de la
-  personne qui le pilotait (application 2.201.1 ou plus ; avant, il attendait cinq secondes et une session rouverte
-  entre-temps l'en empêchait). Une session rouverte ensuite le trouve verrouillé : *Déverrouiller*. Rien tant que
-  loco pilote encore l'écran par adb ; un téléviseur n'est pas concerné. Le résultat est noté dans le journal
-  d'Android (étiquette `loco`). La grille du schéma est trouvée sur Android d'origine et sur OxygenOS / ColorOS
-  (OnePlus, Oppo, Realme), ainsi que sur les surcouches qui la nomment de façon semblable.
-- **Terminal** — un shell avec les droits de l'application (sans root). `cd` est conservé d'une commande à
-  l'autre ; les variables d'environnement, non.
-- **Fichiers** — parcourir, téléverser, télécharger, renommer et supprimer dans le stockage de l'appareil.
-- **Terminal adb** — un vrai terminal `adb shell`, avec les droits de l'utilisateur « shell » d'Android
-  (voir [Terminal adb](#terminal-adb)).
-- **Assistants IA (MCP)** — les mêmes actions (terminal, fichiers, écran) sont offertes aux assistants, dans
-  la limite des droits du jeton et du profil, ainsi que l'outil `adb_shell` pour le shell adb et `push_file` /
-  `pull_file` pour envoyer ou récupérer un fichier par adb (comme `adb push` / `adb pull`, contenu vérifié), y compris
-  directement depuis ou vers un autre poste du parc.
+From the device's page, as for a computer:
 
-## Toujours joignable
+- **Screen** — see the screen live and drive it (touch, scroll, keyboard and mouse). The
+  *Back*, *Home*, *Recent apps* and *Notifications* buttons are in the toolbar; a right
+  click does *Back*, a middle click *Home*, the wheel scrolls.
+  The finger follows the mouse live: hold the button for a long press, drag to scroll or
+  move, the screen moves during the gesture. What moves is sent as light JPEG, then the picture becomes
+  sharp again as soon as the screen settles. For a smooth picture, you need **screen sharing** (see below):
+  remote control alone stays limited by Android to about three frames per second.
+  **Device asleep or locked** (app 2.160 or later): the screen turns back on when the
+  session opens, and again at the first click or key press if it went back to sleep in the meantime. You land on
+  the lock screen: **Unlock**, in the session's toolbar, opens a pad to draw the
+  **pattern** (or click its dots in order), or fields for the **PIN** and the **password**;
+  the loco app brings up the code entry (official request to Android, otherwise a swipe up) and
+  enters the code there. You can also **type the code on your keyboard, then Enter** — for a pattern, the numbers
+  of its dots, counted as on a phone keypad (1 top left, 9 bottom right). Android hides
+  the code entry screen in the picture sent: it shows as black, that is normal, the input still
+  goes through. Nothing is bypassed — you need to know the code, and failed attempts count as on the device.
+  The app never types the code given by *Unlock* anywhere other than the code entry: if the device
+  is already unlocked, it is discarded (app 2.198 or later; before that, the code is typed as on the keyboard).
+  **Remember this code** keeps it for your next sessions on this device, **for you only**: *Unlock*
+  then offers "Pattern remembered for you only" and unlocks in one click; *Forget* erases it, *Enter another
+  code* gives a different one. The code is sealed on the server with its key and tied to your account and to the device:
+  no other user, administrator included, can use it, and it is never shown — it is only handed
+  to your screen session, at the moment of unlocking. The audit log notes that a code was remembered, used or
+  forgotten, never the code itself. It goes away with your account or with the device, and has to be entered again after a
+  restore on another server (different key).
+  **Closing the session locks the phone or tablet** (app 2.199 or later, Android 9 or later):
+  as soon as the last screen session ends — closed from the portal, by the AI assistant or by expiry —,
+  the device locks as with the power button, so it does not stay open after the
+  person driving it has left (app 2.201.1 or later; before that, it waited five seconds and a session reopened
+  in the meantime prevented it). A session reopened afterwards finds it locked: *Unlock*. Nothing happens while
+  loco is still driving the screen through adb; a TV is not concerned. The result is noted in Android's
+  log (`loco` tag). The pattern grid is found on stock Android and on OxygenOS / ColorOS
+  (OnePlus, Oppo, Realme), as well as on the skins that name it in a similar way.
+- **Terminal** — a shell with the app's rights (no root). `cd` is kept from one command to
+  the next; environment variables are not.
+- **Files** — browse, upload, download, rename and delete in the device's storage.
+- **adb terminal** — a real `adb shell` terminal, with the rights of Android's "shell" user
+  (see [adb terminal](#adb-terminal)).
+- **AI assistants (MCP)** — the same actions (terminal, files, screen) are offered to assistants, within
+  the rights of the key and the profile, as well as the `adb_shell` tool for the adb shell and `push_file` /
+  `pull_file` to send or fetch a file through adb (like `adb push` / `adb pull`, content checked), including
+  straight from or to another device of the fleet.
 
-L'application garde le contact écran éteint et appareil verrouillé (application 2.200 ou plus) :
+## Always reachable
 
-- **sur secteur**, elle tient le processeur éveillé — l'écran, lui, reste éteint — et le Wi-Fi hors de son économie
-  d'énergie : contacts, canal persistant et débogage sans fil continuent comme écran allumé, et une session s'ouvre
-  aussitôt ;
-- **sur batterie**, Android la réveille toutes les cinq minutes, même en veille profonde, pour un contact et pour
-  rouvrir le canal : une session peut attendre ce réveil ;
-- **Toujours joignable** (écran de l'application) la garde éveillée aussi sur batterie, au prix d'une consommation plus
-  forte.
+The app keeps in touch with the screen off and the device locked (app 2.200 or later):
 
-Il faut que l'**optimisation de la batterie** soit levée pour loco, sinon Android coupe aussi son réseau en veille :
-l'application la demande d'elle-même (une fois par version) et garde la ligne *Fonctionnement en arrière-plan* tant
-qu'elle ne l'est pas. Sur un appareil appairé en adb, loco la lève lui-même dès qu'elle revient (réglage remis à zéro,
-surcouche du constructeur). La fiche de l'appareil montre *Veille non levée* tant qu'elle ne l'est pas.
+- **on mains power**, it keeps the processor awake — the screen stays off — and Wi-Fi out of its power
+  saving: contacts, persistent channel and wireless debugging carry on as with the screen on, and a session opens
+  at once;
+- **on battery**, Android wakes it every five minutes, even in deep sleep, for a contact and to
+  reopen the channel: a session may wait for that wake-up;
+- **Always reachable** (app screen) keeps it awake on battery too, at the cost of higher
+  consumption.
 
-## Accorder les accès, sur l'appareil
+**Battery optimization** must be lifted for loco, otherwise Android also cuts its network during sleep:
+the app asks for it by itself (once per version) and keeps the *Background operation* line as long
+as it is not lifted. On a device paired over adb, loco lifts it itself as soon as it comes back (setting reset,
+manufacturer skin). The device's page shows *Sleep not lifted* as long as it is not.
 
-Chaque capacité s'active depuis l'application, sur l'appareil, et se voit :
+## Granting access, on the device
 
-- **Contrôle** : *Ouvrir les réglages d'accessibilité* pour autoriser loco à toucher, faire défiler, revenir
-  et écrire. **Une fois ce service activé, il n'y a plus rien à refaire sur l'appareil** : loco montre aussi
-  l'écran par lui à chaque session (Android 11 et plus), même après un redémarrage, sans rouvrir l'application.
-  Android limite cette lecture à trois images par seconde environ. Si Android répond « accès refusé » (Android 13
-  et plus, application installée depuis un fichier) : *Paramètres › Applications › Agent loco*, menu ⋮,
-  *Autoriser les paramètres restreints*, puis recommencez.
-- **Écran distant** : *Activer l'écran distant* lance le partage d'écran d'Android, plus fluide (Android affiche
-  son indicateur de partage tant qu'il est actif). Android le redemande après chaque redémarrage de
-  l'application ; ce bouton est donc facultatif dès que le contrôle est activé.
-- **Tout autoriser une seule fois, par adb** : appairez l'appareil avec loco (voir *Terminal adb* plus bas). loco
-  autorise alors lui-même le partage d'écran sans fenêtre d'accord, active le contrôle, lève le blocage des
-  paramètres restreints, et l'application rallume seule le débogage sans fil quand Android le coupe.
+Each capability is turned on from the app, on the device, and can be seen:
 
-Pendant toute session d'écran, l'appareil affiche la notification **« Contrôle à distance en cours »** : rien
-n'est montré en dehors d'une session ouverte depuis le portail.
+- **Control**: *Open accessibility settings* to allow loco to touch, scroll, go back
+  and type. **Once this service is on, there is nothing left to do on the device**: loco also shows
+  the screen through it at each session (Android 11 and later), even after a restart, without reopening the app.
+  Android limits this reading to about three frames per second. If Android answers "access denied" (Android 13
+  and later, app installed from a file): *Settings › Apps › Agent loco*, ⋮ menu,
+  *Allow restricted settings*, then try again.
+- **Remote screen**: *Turn on the remote screen* starts Android's screen sharing, smoother (Android shows
+  its sharing indicator while it is active). Android asks again after each restart of
+  the app; this button is therefore optional once control is on.
+- **Allow everything once, through adb**: pair the device with loco (see *adb terminal* below). loco
+  then grants screen sharing itself with no consent window, turns on control, lifts the block on
+  restricted settings, and the app turns wireless debugging back on by itself when Android turns it off.
 
-- **Fichiers** : *Autoriser l'accès aux fichiers* (accès à tous les fichiers).
-- **Installations** : *Autoriser les installations*, pour que loco installe les applications que vous
-  déployez. Android demande quand même votre confirmation pour chaque nouvelle application.
-- **Arrière-plan** : *Autoriser l'arrière-plan* pour que l'appareil ne mette pas loco en veille et ne coupe
-  pas le contact quand l'écran est éteint.
+During any screen session, the device shows the **"Remote control in progress"** notification: nothing
+is shown outside a session opened from the portal.
 
-L'application reste visible (notification permanente) et rien n'est lu ou envoyé en dehors d'une session
-ouverte depuis le portail.
+- **Files**: *Allow access to files* (access to all files).
+- **Installs**: *Allow installs*, so that loco installs the apps you
+  deploy. Android still asks for your confirmation for each new app.
+- **Background**: *Allow background* so that the device does not put loco to sleep and does not cut
+  the contact when the screen is off.
 
-## Réseaux de confiance
+The app stays visible (permanent notification) and nothing is read or sent outside a session
+opened from the portal.
 
-Dans l'application, le panneau **Réseaux de confiance** règle où l'appareil reste en contact avec loco. Ailleurs
-l'agent est **en pause** : aucun contact avec le serveur, les sessions ouvertes se ferment, le débogage sans fil n'est
-pas rallumé ; la notification de l'application dit pourquoi (« En pause · données mobiles »…), et il reprend seul dès
-que l'appareil retrouve un réseau approuvé.
+## Trusted networks
 
-| Mode | L'agent est actif… |
+In the app, the **Trusted networks** panel sets where the device stays in touch with loco. Elsewhere
+the agent is **paused**: no contact with the server, open sessions close, wireless debugging is not
+turned back on; the app's notification says why ("Paused · mobile data"…), and it resumes by itself as soon
+as the device is back on an approved network.
+
+| Mode | The agent is active… |
 |---|---|
-| **Partout** (par défaut) | sur tout réseau, données mobiles comprises |
-| **Hors données mobiles** | sur tout Wi-Fi ou réseau filaire, jamais sur le réseau mobile |
-| **Wi-Fi choisis seulement** | uniquement sur les Wi-Fi approuvés par leur nom |
+| **Everywhere** (default) | on any network, mobile data included |
+| **No mobile data** | on any Wi-Fi or wired network, never on the mobile network |
+| **Chosen Wi-Fi only** | only on the Wi-Fi networks approved by their name |
 
-Le mode **Wi-Fi choisis** demande l'autorisation de **localisation**, réglée sur « Toujours autoriser », et la
-localisation de l'appareil allumée : Android ne donne le nom d'un Wi-Fi qu'à cette condition (« toujours » parce
-que l'agent tourne en arrière-plan). loco **ne lit jamais la position** ; l'autorisation n'est demandée que si vous
-choisissez ce mode, et l'application vous guide pas à pas. Sans elle le nom du Wi-Fi est illisible et l'agent reste
-en pause : il n'est jamais actif par défaut sur un réseau qu'il ne sait pas nommer. Un Wi-Fi s'approuve d'un bouton
-quand l'appareil y est relié, ou par son nom ; la liste reste sur l'appareil.
+The **Chosen Wi-Fi** mode requires the **location** permission, set to "Allow all the time", and the
+device's location turned on: Android only gives the name of a Wi-Fi network on that condition ("all the time" because
+the agent runs in the background). loco **never reads the position**; the permission is only requested if you
+choose this mode, and the app guides you step by step. Without it the Wi-Fi name cannot be read and the agent stays
+paused: it is never active by default on a network it cannot name. A Wi-Fi network is approved with a button
+while the device is connected to it, or by its name; the list stays on the device.
 
-Côté portail, la fiche de l'appareil indique seulement le réglage (« actif hors données mobiles seulement »,
-« actif sur 2 Wi-Fi approuvés seulement ») : c'est ce qui explique qu'il apparaisse hors ligne par moments. Le
-réglage appartient à la personne qui tient l'appareil ; il ne se change pas depuis le portail.
+On the portal side, the device's page only shows the setting ("active off mobile data only",
+"active on 2 approved Wi-Fi networks only"): that explains why it appears offline at times. The
+setting belongs to the person who holds the device; it cannot be changed from the portal.
 
-## Terminal adb
+## adb terminal
 
-Le terminal de l'application a les droits de l'application loco. Le **terminal adb** est celui d'un
-ordinateur de développement : `adb shell`, avec les droits de l'utilisateur « shell » d'Android. On peut y
-lister, installer et désinstaller des applications (`pm`), lancer une activité (`am`), changer un réglage
-(`settings`), simuler un toucher ou une saisie (`input`), lire les journaux (`logcat`) ou l'état du système
-(`dumpsys`). C'est un vrai pseudo-terminal : `top` ou un éditeur fonctionnent.
+The app's terminal has the rights of the loco app. The **adb terminal** is the one of a
+development computer: `adb shell`, with the rights of Android's "shell" user. You can
+list, install and uninstall apps there (`pm`), start an activity (`am`), change a setting
+(`settings`), simulate a touch or an input (`input`), read the logs (`logcat`) or the system state
+(`dumpsys`). It is a real pseudo-terminal: `top` or an editor work.
 
-Le serveur loco s'y connecte lui-même, sur le réseau local : l'appareil doit être sur le même réseau que loco.
-L'application loco ne fait qu'indiquer à loco l'état du débogage et le port à utiliser.
+The loco server connects to it itself, over the local network: the device must be on the same network as loco.
+The loco app only tells loco the state of debugging and the port to use.
 
-### Prérequis sur le serveur
+### Requirements on the server
 
-loco utilise l'outil `adb` du serveur :
-- **Appliance :** inclus à partir de la 2.139.0.
-- **Debian, Ubuntu et Docker :** paquet `adb`, installé par loco s'il est disponible. Avec Debian 12 et
-  Ubuntu 22.04, il est trop ancien pour l'appairage sans fil : seul le port adb classique est utilisable.
-- **Rocky Linux :** paquet `android-tools` d'EPEL.
-- **Serveur loco Windows :** pas de terminal adb.
+loco uses the server's `adb` tool:
+- **Appliance:** included from 2.139.0.
+- **Debian, Ubuntu and Docker:** `adb` package, installed by loco if available. With Debian 12 and
+  Ubuntu 22.04, it is too old for wireless pairing: only the classic adb port can be used.
+- **Rocky Linux:** EPEL's `android-tools` package.
+- **Windows loco server:** no adb terminal.
 
-loco lance son propre serveur adb. Sa clé reste dans le dossier d'état de loco, lisible par lui seul, et il
-n'écoute sur aucun port réseau.
+loco starts its own adb server. Its key stays in loco's state folder, readable by loco alone, and it
+listens on no network port.
 
-### Appairer l'appareil (débogage sans fil, Android 11 et plus)
+### Pairing the device (wireless debugging, Android 11 and later)
 
-Sur la fiche de l'appareil, **Terminal adb** (ou *Plus › Débogage adb…*) ouvre la configuration :
+On the device's page, **adb terminal** (or *More › adb debugging…*) opens the configuration:
 
-1. **Options pour les développeurs** : dans *Paramètres › À propos*, touchez sept fois *Numéro de build*.
-2. *Options pour les développeurs › Débogage sans fil* : activez-le, sur le même réseau Wi-Fi que loco.
-3. *Associer l'appareil avec un code d'association* : saisissez dans loco le port et le code à six chiffres
-   affichés par l'appareil, puis **Appairer**.
+1. **Developer options**: in *Settings › About*, tap *Build number* seven times.
+2. *Developer options › Wireless debugging*: turn it on, on the same Wi-Fi network as loco.
+3. *Pair device with pairing code*: enter in loco the port and the six-digit code
+   shown by the device, then **Pair**.
 
-**Depuis l'appareil lui-même** (application 2.154.0 et plus) : dans l'application loco, le panneau *Image fluide à
-chaque session* fait la même chose sans passer par le portail. **Configurer** ouvre *Débogage sans fil* ; activez-le,
-touchez *Associer l'appareil avec un code d'association*, puis, sans fermer cette fenêtre, descendez le volet des
-notifications et tapez le code dans la notification de loco. L'application trouve seule le port d'association et
-transmet port et code à loco, qui appaire avec l'adresse de l'appareil — celle d'où vient la demande, jamais une
-autre. L'appareil doit donc être sur le même réseau que loco (pas derrière un routeur). L'appairage est inscrit au
-journal comme fait « depuis l'appareil ».
+**From the device itself** (app 2.154.0 and later): in the loco app, the *Smooth picture at
+every session* panel does the same without going through the portal. **Set up** opens *Wireless debugging*; turn it on,
+tap *Pair device with pairing code*, then, without closing that window, pull down the notification
+shade and type the code in loco's notification. The app finds the pairing port on its own and
+sends port and code to loco, which pairs with the device's address — the one the request comes from, never
+another. The device must therefore be on the same network as loco (not behind a router). The pairing is recorded in the
+audit log as done "from the device".
 
-Sans appairage, Android limite l'écran distant lu par le contrôle à distance à environ trois images par seconde ;
-une fois l'appareil appairé, loco autorise le partage d'écran de l'application une fois pour toutes, et chaque
-session s'ouvre avec une image fluide (une trentaine d'images par seconde mesurées sur un OnePlus 12).
+Without pairing, Android limits the remote screen read by remote control to about three frames per second;
+once the device is paired, loco grants the app's screen sharing once and for all, and each
+session opens with a smooth picture (about thirty frames per second measured on a OnePlus 12).
 
-L'appairage se fait une seule fois. Le port de connexion change à chaque activation du débogage sans fil :
-l'application loco le découvre sur l'appareil et l'indique à loco. Android coupe le débogage sans fil au
-redémarrage ou quand l'appareil change de réseau : l'application loco (2.145.0 et plus) le rallume seule, avec
-le droit que loco lui donne par adb à l'appairage. Sur un réseau Wi-Fi nouveau, Android demande encore de
-confirmer sur l'appareil.
+Pairing is done only once. The connection port changes each time wireless debugging is turned on:
+the loco app discovers it on the device and tells loco. Android turns wireless debugging off at
+restart or when the device changes network: the loco app (2.145.0 and later) turns it back on by itself, with
+the right loco gives it through adb at pairing. On a new Wi-Fi network, Android still asks for
+confirmation on the device.
 
-Au premier contact qui suit l'appairage, loco pose une fois pour toutes, par adb, ce qui évite tout geste
-ensuite : partage d'écran sans fenêtre d'accord, contrôle (accessibilité) activé, paramètres restreints levés,
-application dispensée de mise en veille. Le *Journal* le note (« parc.adb.autorisations »), et *Oublier* le
-débogage adb arrête de garder le débogage sans fil allumé.
+At the first contact after pairing, loco sets once and for all, through adb, what avoids any gesture
+afterwards: screen sharing with no consent window, control (accessibility) turned on, restricted settings lifted,
+app exempted from sleep. The *Audit log* notes it ("parc.adb.autorisations"), and *Forget* on
+adb debugging stops keeping wireless debugging on.
 
-### Port adb classique
+### Classic adb port
 
-Pour un appareil dont adb écoute déjà sur le réseau (`adb tcpip 5555` lancé depuis un ordinateur, Android TV,
-machine virtuelle), *Port adb classique* s'y connecte directement. La première fois, l'appareil demande
-d'autoriser le débogage depuis loco.
+For a device whose adb already listens on the network (`adb tcpip 5555` run from a computer, Android TV,
+virtual machine), *Classic adb port* connects to it directly. The first time, the device asks
+to allow debugging from loco.
 
-### Droits et traces
+### Rights and traces
 
-L'ouverture d'un terminal adb, l'appairage et les commandes des assistants sont réservés au droit **Ouvrir un
-terminal adb**, et inscrits au journal. Le code d'appairage n'est jamais écrit dans une commande ni dans le
-journal. **Oublier** retire l'appareil des appareils adb de loco ; retirez aussi loco de la liste des appareils
-associés, sur l'appareil.
+Opening an adb terminal, pairing and the assistants' commands are reserved to the **Open an
+adb terminal** right, and recorded in the audit log. The pairing code is never written in a command or in the
+audit log. **Forget** removes the device from loco's adb devices; also remove loco from the list of paired
+devices, on the device.
 
-## Déverrouiller l'écran à distance
+## Unlocking the screen remotely
 
-Le plus simple : **Déverrouiller** dans la session **Écran** (voir [plus haut](#ce-que-vous-pouvez-faire)), par
-l'application loco, sans adb. Une fois l'appareil appairé en adb, **Déverrouiller** existe aussi dans la barre de
-**Contrôler l'écran** : loco réveille l'écran et rejoue le **schéma**, le **PIN** ou le **mot de passe** que vous
-saisissez, par adb — sans passer par l'application. L'assistant IA dispose de l'outil `adb_unlock`.
+The simplest: **Unlock** in the **Screen** session (see [above](#what-you-can-do)), through
+the loco app, without adb. Once the device is paired over adb, **Unlock** also exists in the toolbar of
+**Control the screen**: loco wakes the screen and replays the **pattern**, the **PIN** or the **password** you
+enter, through adb — without going through the app. The AI assistant has the `adb_unlock` tool.
 
-L'écran de verrouillage d'Android est une **surface sécurisée** : ni `screencap` ni scrcpy ne peuvent
-l'afficher (image noire ou vide). Le déverrouillage se fait donc **à l'aveugle** : vous connaissez votre
-secret, vous le saisissez dans loco, et loco l'injecte.
+Android's lock screen is a **secure surface**: neither `screencap` nor scrcpy can
+show it (black or empty picture). Unlocking is therefore done **blind**: you know your
+secret, you enter it in loco, and loco injects it.
 
-- **Schéma** — vous le tracez sur un pavé 3×3 dans le portail. Une fois la saisie du code ouverte, loco cherche
-  la grille dans la description de l'écran que donne Android (`uiautomator`) : sur la plupart des appareils, dont
-  OxygenOS, il la trouve et trace le schéma exactement dessus, quelle que soit l'orientation. Sinon, les 9 points
-  sont **calculés** depuis la résolution de l'écran ; un **profil par constructeur** (Pixel/AOSP, Samsung, Xiaomi,
-  OnePlus, Vivo, Motorola…) sert de point de départ. Si le schéma ne passe pas, ouvrez **Calage de la grille** : choisissez
-  la marque, ou ajustez le centre et l'écart (en fractions de l'écran), puis testez — le réglage est mémorisé
-  pour cet appareil. L'injection est rejouée jusqu'à trois fois (un geste tactile n'est pas toujours capté du
-  premier coup), bien sous le seuil de blocage d'Android.
-- **PIN** et **mot de passe** — saisis et validés par les touches, **sans aucun calage** (aucune coordonnée).
+- **Pattern** — you draw it on a 3×3 pad in the portal. Once the code entry is open, loco looks for
+  the grid in the description of the screen Android gives (`uiautomator`): on most devices, including
+  OxygenOS, it finds it and draws the pattern exactly on it, whatever the orientation. Otherwise, the 9 dots
+  are **computed** from the screen's resolution; a **manufacturer profile** (Pixel/AOSP, Samsung, Xiaomi,
+  OnePlus, Vivo, Motorola…) serves as a starting point. If the pattern does not go through, open **Grid calibration**: choose
+  the brand, or adjust the center and the spacing (as fractions of the screen), then test — the setting is remembered
+  for this device. The injection is replayed up to three times (a touch gesture is not always caught the
+  first time), well under Android's lockout threshold.
+- **PIN** and **password** — typed and confirmed with the keys, **with no calibration** (no coordinates).
 
-Le secret saisi (schéma, code, mot de passe) n'est **jamais** écrit au journal. Le déverrouillage à distance
-relève du même droit **Ouvrir un terminal adb** : l'accès adb permet déjà d'injecter ces gestes.
+The secret entered (pattern, code, password) is **never** written to the audit log. Remote unlocking
+falls under the same **Open an adb terminal** right: adb access already allows injecting these gestures.
 
-**« l'appareil ne reconnaît plus loco »** : le port adb de l'appareil répond, mais il refuse la clé de loco
-(appairage oublié sur l'appareil, autorisations de débogage révoquées). Appairez-le de nouveau. Avant de le dire,
-loco vérifie que son propre serveur adb tourne bien avec sa clé : un autre programme du compte loco qui
-l'emprunte et le démarre le premier (au démarrage du serveur, par exemple) le lancerait avec une autre clé ; loco
-l'arrête alors et relance le sien. Un tel programme doit définir `HOME` sur le dossier de la clé de loco
-(`/var/lib/loco/adb` sur l'appliance).
+**"the device no longer recognizes loco"**: the device's adb port answers, but it refuses loco's key
+(pairing forgotten on the device, debugging authorizations revoked). Pair it again. Before saying so,
+loco checks that its own adb server is indeed running with its key: another program of the loco account that
+borrows it and starts it first (when the server boots, for example) would start it with another key; loco
+then stops it and starts its own again. Such a program must set `HOME` to the folder of loco's key
+(`/var/lib/loco/adb` on the appliance).
 
-## Contrôler l'écran à distance
+## Controlling the screen remotely
 
-Une fois l'appareil **déverrouillé**, **Contrôler l'écran** (sur sa fiche) diffuse son écran dans le navigateur et
-le pilote, par adb — **sans dialogue MediaProjection**.
+Once the device is **unlocked**, **Control the screen** (on its page) streams its screen to the browser and
+drives it, through adb — **with no MediaProjection dialog**.
 
-Le flux est **à basse latence** : loco lance *scrcpy-server* (vidéo seule, inclus dans loco, licence Apache 2.0) sur
-l'appareil et relaie le **H.264 brut** ; le navigateur le décode avec **WebCodecs** (décodage matériel, rien à
-transcoder sur le serveur). Si le navigateur n'a pas WebCodecs, ou si scrcpy échoue, loco **bascule automatiquement**
-sur un flux **MJPEG** (`adb screenrecord` converti par **ffmpeg**, nécessaire sur le serveur pour ce repli).
+The stream is **low latency**: loco starts *scrcpy-server* (video only, included in loco, Apache 2.0 license) on
+the device and relays the **raw H.264**; the browser decodes it with **WebCodecs** (hardware decoding, nothing to
+transcode on the server). If the browser does not have WebCodecs, or if scrcpy fails, loco **switches automatically**
+to an **MJPEG** stream (`adb screenrecord` converted by **ffmpeg**, needed on the server for this fallback).
 
-- **Cliquer** sur l'écran = toucher ; **glisser** = balayer. Les coordonnées sont des fractions de l'écran : cela
-  marche quelle que soit la résolution.
-- Barre d'outils : **Retour**, **Accueil**, **Applications récentes**, **Marche/veille**, et un champ pour **saisir
-  du texte**.
-- L'écran de **verrouillage** ne s'affiche pas (surface sécurisée) : déverrouillez d'abord (ci-dessus).
+- **Clicking** on the screen = touching; **dragging** = swiping. The coordinates are fractions of the screen: it
+  works whatever the resolution.
+- Toolbar: **Back**, **Home**, **Recent apps**, **Power/sleep**, and a field to **type
+  text**.
+- The **lock** screen is not shown (secure surface): unlock first (above).
 
-**Garde-fou visible** : tant que loco pilote l'écran, l'appareil affiche une notification **« Contrôle à distance en
-cours »** et contacte loco plus souvent, pour que l'indicateur apparaisse et disparaisse rapidement. L'agent reste
-visible et l'accès s'appuie sur le débogage sans fil que vous avez autorisé.
+**Visible safeguard**: as long as loco drives the screen, the device shows a **"Remote control in
+progress"** notification and contacts loco more often, so that the indicator appears and disappears quickly. The agent stays
+visible and the access relies on the wireless debugging you allowed.
 
 ## Applications
 
-Le menu **Android** du portail réunit trois pages : *Catalogue*, *Dépôts F-Droid* et *Sources*.
+The portal's **Android** menu gathers three pages: *Catalog*, *F-Droid repositories* and *Sources*.
 
-### Sources : les dépôts F-Droid
+### Sources: the F-Droid repositories
 
-loco lit l'index des dépôts F-Droid activés, chaque jour. **F-Droid** (des milliers d'applications libres,
-compilées par F-Droid depuis leur code source) et **IzzyOnDroid** (applications libres publiées par leurs
-développeurs) sont proposés d'office. Neuf dépôts d'éditeurs s'ajoutent en un clic depuis *Sources vérifiées
-par loco* : Guardian Project (Orbot), Bitwarden, Brave, Molly, Session, Threema Libre, KDE, NewPipe et microG.
-Leur clé a été contrôlée : celle qui signe l'index est identique à celle que publie l'éditeur.
+loco reads the index of the enabled F-Droid repositories every day. **F-Droid** (thousands of free apps,
+built by F-Droid from their source code) and **IzzyOnDroid** (free apps published by their
+developers) are offered from the start. Nine vendor repositories can be added in one click from *Sources verified
+by loco*: Guardian Project (Orbot), Bitwarden, Brave, Molly, Session, Threema Libre, KDE, NewPipe and microG.
+Their key has been checked: the one that signs the index is identical to the one the vendor publishes.
 
-Chaque index est signé. loco vérifie la signature avec la clé de la source, dont l'empreinte est enregistrée
-à l'ajout, puis l'empreinte SHA-256 de l'index complet. Il refuse aussi un index plus ancien que le dernier
-vérifié, pour qu'un dépôt compromis ou un intermédiaire ne puisse pas resservir d'anciennes versions.
+Each index is signed. loco checks the signature with the source's key, whose fingerprint is recorded
+when it is added, then the SHA-256 fingerprint of the whole index. It also refuses an index older than the last one
+verified, so that a compromised repository or an intermediary cannot serve old versions again.
 
-**Un autre dépôt F-Droid** s'ajoute par son adresse (`https://…/fdroid/repo`) : loco lit la clé qui signe son
-index et affiche son empreinte. Comparez-la à celle que publie l'éditeur, sur son site, avant de confirmer.
-Une source est une clé de confiance : n'ajoutez que des dépôts dont vous connaissez l'éditeur.
+**Another F-Droid repository** is added by its address (`https://…/fdroid/repo`): loco reads the key that signs its
+index and shows its fingerprint. Compare it with the one the vendor publishes, on its website, before confirming.
+A source is a trusted key: only add repositories whose vendor you know.
 
-Une source dont des applications sont au catalogue ne peut pas être retirée ; elle peut être désactivée.
+A source that has apps in the catalog cannot be removed; it can be disabled.
 
-### Catalogue
+### Catalog
 
-Dans *Dépôts F-Droid*, cherchez une application par son nom, ou parcourez la sélection *À découvrir* et les
-catégories, puis **Ajouter**. Une application présente dans plusieurs sources est proposée depuis la
-première, dans l'ordre de la page *Sources*. Sa fiche donne la version, l'Android minimum, les processeurs,
-la taille, la licence, la clé de signature, et les avertissements de F-Droid (publicité, pistage, service en
-ligne non libre…).
+In *F-Droid repositories*, look for an app by its name, or browse the *Discover* selection and the
+categories, then **Add**. An app present in several sources is offered from the
+first one, in the order of the *Sources* page. Its page gives the version, the minimum Android, the processors,
+the size, the license, the signing key, and F-Droid's warnings (ads, tracking, non-free online
+service…).
 
-Choisissez **une seule source par application** : chaque dépôt signe ses APK avec sa propre clé, et Android
-refuse de mettre à jour une application avec un APK signé par une autre clé.
+Choose **a single source per app**: each repository signs its APKs with its own key, and Android
+refuses to update an app with an APK signed by another key.
 
 ### Google Play
 
-Google ne permet à aucun outil tiers d'installer une application du Play Store, et loco ne télécharge rien
-depuis Google Play. Dans *Catalogue*, **Ajouter depuis Google Play** prend le lien de la page de
-l'application (`https://play.google.com/store/apps/details?id=…`) ou son nom de paquet. Au déploiement,
-l'appareil ouvre la fiche dans le Play Store et vous touchez **Installer**. Google Play se charge ensuite des
-mises à jour. Sur un appareil sans Play Store, la fiche s'ouvre dans la boutique installée ou, à défaut,
-dans le navigateur.
+Google does not allow any third-party tool to install an app from the Play Store, and loco downloads nothing
+from Google Play. In *Catalog*, **Add from Google Play** takes the link of the app's page
+(`https://play.google.com/store/apps/details?id=…`) or its package name. At deployment,
+the device opens the page in the Play Store and you tap **Install**. Google Play then takes care of the
+updates. On a device without the Play Store, the page opens in the installed store or, failing that,
+in the browser.
 
-### Déployer
+### Deploying
 
-Depuis le catalogue (**Déployer**), la fiche d'un appareil (*Plus › Installer des applications…*) ou
-*Mon parc › Déploiements* (*Nouveau déploiement › Applications Android*). Comme pour les autres
-déploiements, on choisit des appareils ou des groupes de machines, on vérifie la préparation, puis on
-confirme. Les vagues sont disponibles.
+From the catalog (**Deploy**), a device's page (*More › Install apps…*) or
+*My fleet › Deployments* (*New deployment › Android apps*). As for the other
+deployments, you choose devices or device groups, check the preparation, then
+confirm. Waves are available.
 
-Chaque appareil reçoit la version compatible avec son Android et son processeur. Une application déjà à jour
-est ignorée, sauf avec *Réinstaller même si la version est déjà présente*. L'appareil doit avoir
-l'application loco **2.139.0 ou plus récente**.
+Each device receives the version compatible with its Android and its processor. An app already up to date
+is skipped, except with *Reinstall even if this version is already there*. The device must have
+the loco app **2.139.0 or later**.
 
-### Sur l'appareil
+### On the device
 
-1. loco télécharge l'APK depuis la source et vérifie son empreinte SHA-256, inscrite dans l'index signé.
-2. L'application loco le récupère auprès de loco, vérifie à son tour l'empreinte, le nom de l'application et
-   sa clé de signature, puis le confie à Android.
-3. **Une première installation se confirme sur l'appareil** : Android affiche sa fenêtre *Installer*. Elle
-   s'ouvre directement si l'application loco est au premier plan ou si le contrôle (accessibilité) est actif ;
-   sinon, une notification *Installer … ?* l'ouvre. Vous pouvez aussi la toucher depuis l'écran distant.
-4. **Les mises à jour se font sans rien demander** sur Android 12 ou plus récent, pour les applications que
-   loco a lui-même installées. Une application installée par Google Play ou une autre boutique reste mise à
-   jour par celle-ci, et loco ne propose pas de la mettre à jour.
+1. loco downloads the APK from the source and checks its SHA-256 fingerprint, recorded in the signed index.
+2. The loco app fetches it from loco, checks in turn the fingerprint, the app's name and
+   its signing key, then hands it to Android.
+3. **A first installation is confirmed on the device**: Android shows its *Install* window. It
+   opens directly if the loco app is in the foreground or if control (accessibility) is active;
+   otherwise, an *Install …?* notification opens it. You can also tap it from the remote screen.
+4. **Updates happen without asking anything** on Android 12 or later, for the apps that
+   loco installed itself. An app installed by Google Play or another store stays updated
+   by that store, and loco does not offer to update it.
 
-Une installation non confirmée dans les six heures est notée en échec. Le déploiement montre le compte rendu
-de l'appareil (installée, refusée, incompatible…), et la fiche de l'appareil la version installée de chaque
-application du catalogue, la boutique qui l'a installée et la version disponible.
+An installation not confirmed within six hours is recorded as failed. The deployment shows the device's
+report (installed, refused, incompatible…), and the device's page the installed version of each
+catalog app, the store that installed it and the available version.
 
-### L'application loco elle-même
+### The loco app itself
 
-À partir de la 2.139.0, l'application loco **se met à jour seule** depuis loco quand le serveur passe à une
-version plus récente, hors session distante en cours. Après une mise à jour, l'écran distant est à
-réactiver : Android ne garde pas l'autorisation de capture. Elle **repart d'elle-même** après un redémarrage
-de l'appareil ou une mise à jour. La 2.138.0 ne savait pas se mettre à jour : installez la 2.139.0 une fois à
-la main, depuis l'enrôlement, par-dessus l'ancienne.
+From 2.139.0, the loco app **updates itself** from loco when the server moves to a
+newer version, outside an ongoing remote session. After an update, the remote screen has to be
+turned on again: Android does not keep the capture permission. It **starts again by itself** after a restart
+of the device or an update. 2.138.0 could not update itself: install 2.139.0 once by
+hand, from the enrollment, over the old one.
 
-**Sur un appareil appairé en adb** (loco 2.155.0 et plus), loco installe lui-même la mise à jour par adb, comme
-depuis un ordinateur : ni fenêtre de confirmation, ni analyse proposée par Play Protect sur l'appareil.
-L'application ne la tente pas elle-même pendant ce temps. Si l'installation par adb échoue (appareil hors du
-réseau, débogage sans fil coupé), l'application reprend la main au contact suivant et se met à jour seule, comme
-sur un appareil non appairé. Jamais pendant une session distante ouverte ; chaque installation est inscrite au
-journal (« Mise à jour de l'application par adb »).
+**On a device paired over adb** (loco 2.155.0 and later), loco installs the update itself through adb, as
+from a computer: no confirmation window, no scan offered by Play Protect on the device.
+The app does not try it itself in the meantime. If the installation through adb fails (device off the
+network, wireless debugging off), the app takes over at the next contact and updates itself, as
+on an unpaired device. Never during an open remote session; each installation is recorded in the
+audit log ("App update through adb").
 
-### Enregistrer l'application auprès de Google
+### Registering the app with Google
 
-Android exige peu à peu qu'une application installée hors du Play Store vienne d'un développeur enregistré
-auprès de Google (vérification des développeurs Android : quelques pays dès septembre 2026, le monde entier en
-2027). L'application loco est signée par la clé du projet : l'enregistrement se fait **une seule fois, par le
-détenteur de cette clé**, et vaut pour toutes les instances de loco — aucune n'a de compte Google à relier.
+Android is gradually requiring that an app installed outside the Play Store come from a developer registered
+with Google (Android developer verification: a few countries from September 2026, the whole world in
+2027). The loco app is signed by the project's key: registration is done **only once, by the
+holder of that key**, and applies to every loco instance — none has a Google account to link.
 
-1. Sur l'[Android Developer Console](https://developer.android.com/developer-verification/guides/android-developer-console),
-   créez le compte (distribution limitée ou complète) et faites-le vérifier.
-2. Dans *Packages*, enregistrez le nom de paquet `org.loco.agent` et l'empreinte SHA-256 du certificat de
-   signature : `95:68:93:B5:58:F2:E1:69:D7:27:88:C8:96:50:39:57:E4:03:80:2C:5C:56:4C:B1:A7:C0:E3:FF:0F:99:44:4B`.
-3. La console donne un jeton de preuve : enregistrez-le dans `adi-registration.properties`, **à côté de la clé de
-   signature** (dossier `LOCO_KEYSTORE_DIR`, par défaut `~/android-keystore`). `android/client/build.sh` l'embarque
-   alors dans l'APK de release (`assets/adi-registration.properties`) ; envoyez cet APK à la console pour prouver
-   la possession de la clé.
+1. On the [Android Developer Console](https://developer.android.com/developer-verification/guides/android-developer-console),
+   create the account (limited or full distribution) and have it verified.
+2. In *Packages*, register the package name `org.loco.agent` and the SHA-256 fingerprint of the signing
+   certificate: `95:68:93:B5:58:F2:E1:69:D7:27:88:C8:96:50:39:57:E4:03:80:2C:5C:56:4C:B1:A7:C0:E3:FF:0F:99:44:4B`.
+3. The console gives a proof token: save it in `adi-registration.properties`, **next to the signing
+   key** (`LOCO_KEYSTORE_DIR` folder, `~/android-keystore` by default). `android/client/build.sh` then embeds it
+   in the release APK (`assets/adi-registration.properties`); send that APK to the console to prove
+   you hold the key.
 
-La mise à jour peut aussi **s'installer depuis l'application**, sans attendre : dès que loco en propose une,
-l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton
-**Installer la mise à jour**. Ouvrir l'application interroge loco tout de suite. Si l'autorisation d'installer
-des applications manque, le bouton y conduit d'abord. Android ferme l'application pour la remplacer ; elle
-repart seule, une notification *Application mise à jour* le confirme, et l'écran se rouvre quand Android le
-permet. Ce qui a empêché l'installation (loco injoignable, refus sur l'appareil…) est écrit sous le bouton.
-En bas de l'écran, la ligne de version indique *à jour* ou la version disponible. Hors de ses réseaux de
-confiance, l'appareil ne contacte pas loco et le bouton n'est pas proposé.
+The update can also **be installed from the app**, without waiting: as soon as loco offers one,
+the app's screen shows *App update* with the available version and the
+**Install the update** button. Opening the app asks loco right away. If the permission to install
+apps is missing, the button leads there first. Android closes the app to replace it; it
+starts again by itself, an *App updated* notification confirms it, and the screen reopens when Android
+allows it. What prevented the installation (loco unreachable, refusal on the device…) is written under the button.
+At the bottom of the screen, the version line says *up to date* or the available version. Outside its trusted
+networks, the device does not contact loco and the button is not offered.
 
-## Retirer un appareil
+## Removing a device
 
-Dans l'application, *Se retirer de loco* : l'appareil est retiré du serveur et l'agent s'arrête. On peut
-l'inscrire à nouveau plus tard. Désinstaller l'application a le même effet côté appareil. Depuis le portail,
-*Retirer l'agent* (fiche de l'appareil) fait de même au prochain contact ; l'application reste installée.
+In the app, *Leave loco*: the device is removed from the server and the agent stops. You can
+enroll it again later. Uninstalling the app has the same effect on the device side. From the portal,
+*Remove the agent* (device page) does the same at the next contact; the app stays installed.
 
-## Limites
+## Limits
 
-- Pas de mises à jour du système Android. Pas d'installation depuis Google Play par loco : seulement la fiche
-  ouverte sur l'appareil.
-- Le terminal adb exige que l'appareil soit sur le réseau local de loco, et le débogage sans fil activé (coupé
-  par Android à chaque redémarrage).
-- Une première installation demande toujours une confirmation sur l'appareil : sans gestion d'entreprise
-  Android (Device Owner), Android ne permet pas d'installer sans elle.
-- **Vérification des développeurs de Google** : depuis le 30 septembre 2026 au Brésil, en Indonésie, à
-  Singapour et en Thaïlande, et partout en 2027, un appareil certifié n'installe plus une application dont le
-  développeur n'est pas enregistré auprès de Google. L'application loco, signée par votre clé, et les
-  applications signées par F-Droid sont concernées. Il faudra activer une fois, sur chaque appareil, le
-  « parcours avancé » de Google (mode développeur, redémarrage, puis un jour d'attente), ou enregistrer
-  l'application loco auprès de Google (compte gratuit à distribution limitée).
-- Le pilotage de l'écran passe par un service d'accessibilité ; certaines applications sensibles (banque…)
-  masquent leur contenu pendant la capture.
-- **OxygenOS / ColorOS** (OnePlus, Oppo, Realme) protègent le partage d'écran accordé une fois pour toutes par
-  l'appairage adb : les applications y restent noires, seules les barres du système s'affichent. L'application
-  loco (2.198 ou plus) le repère, arrête ce partage et montre l'écran par l'accessibilité, environ trois images par
-  seconde. Pour une image fluide sur ces appareils : **Contrôler l'écran**, par adb.
-- L'application est signée avec la clé de release de loco ; mettre à jour l'APK depuis la même source
-  conserve l'installation (une signature différente obligerait à désinstaller d'abord).
+- No Android system updates. No installation from Google Play by loco: only the page
+  opened on the device.
+- The adb terminal requires the device to be on loco's local network, and wireless debugging turned on (turned off
+  by Android at each restart).
+- A first installation always requires a confirmation on the device: without Android enterprise
+  management (Device Owner), Android does not allow installing without it.
+- **Google's developer verification**: since 30 September 2026 in Brazil, Indonesia,
+  Singapore and Thailand, and everywhere in 2027, a certified device no longer installs an app whose
+  developer is not registered with Google. The loco app, signed by your key, and the
+  apps signed by F-Droid are concerned. You will need to turn on once, on each device, Google's
+  "advanced flow" (developer mode, restart, then a day's wait), or register
+  the loco app with Google (free account with limited distribution).
+- Driving the screen goes through an accessibility service; some sensitive apps (banking…)
+  hide their content during capture.
+- **OxygenOS / ColorOS** (OnePlus, Oppo, Realme) protect the screen sharing granted once and for all by
+  adb pairing: apps stay black there, only the system bars show. The loco
+  app (2.198 or later) detects it, stops that sharing and shows the screen through accessibility, about three frames per
+  second. For a smooth picture on these devices: **Control the screen**, through adb.
+- The app is signed with loco's release key; updating the APK from the same source
+  keeps the installation (a different signature would require uninstalling first).
+
+---
+
+[← Back to the overview](../README.md) · [All the documentation](README.md)

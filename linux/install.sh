@@ -406,7 +406,9 @@ say "Copie du portail dans $PREFIX" "Copying the portal into $PREFIX" "Copia del
 rm -rf "$PREFIX.new"
 install -d "$PREFIX.new"
 cp -r "$ROOT/portal" "$SRC/bin" "$ROOT/conf" "$SRC/lib" "$SRC/remove.sh" "$PREFIX.new/"
-[ -f "$ROOT/CHANGELOG.md" ] && cp "$ROOT/CHANGELOG.md" "$PREFIX.new/"      # journal des versions, consultable depuis le portail
+for log in CHANGELOG.md CHANGELOG.fr.md CHANGELOG.es.md; do       # journal des versions (anglais, français, espagnol), lu par le portail
+    if [ -f "$ROOT/$log" ]; then cp "$ROOT/$log" "$PREFIX.new/"; fi
+done
 cp "$SRC/conf/"* "$PREFIX.new/conf/"    # unités systemd et réglages apt-cacher-ng, avec les gabarits nginx communs
 find "$PREFIX.new" -name __pycache__ -prune -exec rm -rf {} +
 chmod 755 "$PREFIX.new/bin/"* "$PREFIX.new/remove.sh"

@@ -1,80 +1,82 @@
 <div align="center">
 
-<a href="#tour"><img src="docs/media/hero.webp" width="100%" alt="loco — Tout votre parc. Sur votre serveur. Mises à jour, logiciels, prise en main à distance et dépôts locaux pour Windows, Linux et Android, sans rien confier à un tiers."></a>
+<a href="#tour"><img src="docs/media/en/hero.webp" width="100%" alt="loco — Your whole fleet. On your own server. Updates, software, remote control and local repositories for Windows, Linux and Android, without handing anything to a third party."></a>
 
 <br><br>
 
 [![Version](https://img.shields.io/github/v/release/ShaNouhAr/loco?sort=semver&label=version&color=5b8cff&style=flat-square)](https://github.com/ShaNouhAr/loco/releases)
-[![Licence MIT](https://img.shields.io/badge/licence-MIT-34d399?style=flat-square)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-1%E2%80%AF500+-a78bfa?style=flat-square)
-![Langues](https://img.shields.io/badge/langues-FR_·_EN_·_ES-fbbf5c?style=flat-square)
-![Auto-hébergé](https://img.shields.io/badge/100_%25-auto--hébergé-fb7185?style=flat-square)
+[![MIT License](https://img.shields.io/badge/license-MIT-34d399?style=flat-square)](LICENSE)
+![Tests](https://img.shields.io/badge/tests-2%2C000+-a78bfa?style=flat-square)
+![Languages](https://img.shields.io/badge/languages-EN_·_FR_·_ES-fbbf5c?style=flat-square)
+![Self-hosted](https://img.shields.io/badge/100_%25-self--hosted-fb7185?style=flat-square)
 
-**[Le tour en images](#tour)** &nbsp;·&nbsp; **[Installer](#installer)** &nbsp;·&nbsp; **[Comment ça marche](#fonctionnement)** &nbsp;·&nbsp; **[Documentation](#documentation)** &nbsp;·&nbsp; **[Nouveautés](CHANGELOG.md)**
+**English** &nbsp;·&nbsp; [Français](README.fr.md) &nbsp;·&nbsp; [Español](README.es.md)
+
+**[The tour](#tour)** &nbsp;·&nbsp; **[Install](#install)** &nbsp;·&nbsp; **[How it works](#how-it-works)** &nbsp;·&nbsp; **[Documentation](#documentation)** &nbsp;·&nbsp; **[What's new](CHANGELOG.md)**
 
 </div>
 
 <br>
 
-> **loco** est le serveur qu'on installe une fois et qui s'occupe du reste.
-> Il garde une copie des mises à jour, range vos logiciels, connaît chaque poste — et vous y emmène en un clic.
+> **loco** is the server you install once and that takes care of the rest.
+> It keeps a copy of the updates, organizes your software, knows every device — and takes you there in one click.
 >
-> Pas de cloud. Pas d'abonnement. Pas de télémétrie. Une machine virtuelle, un conteneur ou un vieux PC suffisent.
+> No cloud. No subscription. No telemetry. A virtual machine, a container or an old PC is enough.
 
 <br>
 
-## Ce que loco fait pour vous
+## What loco does for you
 
 <table>
 <tr>
 <td width="33%" valign="top">
 <img src="docs/media/icones/parc.svg" width="44" alt=""><br>
-<b>Un parc lisible d'un regard</b><br>
-Un voyant par poste, tout son inventaire sur sa fiche, et ce qui presse en haut de la page.
+<b>A fleet you read at a glance</b><br>
+One status light per device, its whole inventory on its page, and what is urgent at the top.
 </td>
 <td width="33%" valign="top">
 <img src="docs/media/icones/mises-a-jour.svg" width="44" alt=""><br>
-<b>Des mises à jour qu'on voit avancer</b><br>
-Windows Update, APT, DNF, Flatpak : un poste, un groupe ou tout le parc — paquet par paquet, en direct.
+<b>Updates you watch progress</b><br>
+Windows Update, APT, DNF, Flatpak: one device, a group or the whole fleet — package by package, live.
 </td>
 <td width="33%" valign="top">
 <img src="docs/media/icones/distance.svg" width="44" alt=""><br>
-<b>La main sur n'importe quel poste</b><br>
-Bureau, terminal et fichiers dans le navigateur. Aucun port à ouvrir, ni VNC, ni SSH.
+<b>Hands on any device</b><br>
+Desktop, terminal and files in the browser. No port to open, no VNC, no SSH.
 </td>
 </tr>
 <tr>
 <td valign="top">
 <img src="docs/media/icones/logiciels.svg" width="44" alt=""><br>
-<b>Vos logiciels en un clic</b><br>
-Le catalogue WinGet à portée de main, vos installeurs maison à côté. Déployés en silence, vérifiés par empreinte.
+<b>Your software in one click</b><br>
+The WinGet catalog at hand, your in-house installers next to it. Deployed silently, checked by fingerprint.
 </td>
 <td valign="top">
 <img src="docs/media/icones/depots.svg" width="44" alt=""><br>
-<b>Internet, une seule fois</b><br>
-Chaque mise à jour est téléchargée une fois, puis servie en local. Vos <code>.deb</code> et <code>.rpm</code> ont leurs dépôts signés.
+<b>The Internet, only once</b><br>
+Each update is downloaded once, then served locally. Your <code>.deb</code> and <code>.rpm</code> packages get their signed repositories.
 </td>
 <td valign="top">
 <img src="docs/media/icones/automatisation.svg" width="44" alt=""><br>
-<b>La routine tourne toute seule</b><br>
-Scripts, planifications, déploiements par vagues qui s'arrêtent d'eux-mêmes si quelque chose casse.
+<b>The routine runs by itself</b><br>
+Scripts, schedules, deployments in waves that stop on their own if something breaks.
 </td>
 </tr>
 <tr>
 <td valign="top">
 <img src="docs/media/icones/securite.svg" width="44" alt=""><br>
-<b>Chacun à sa place</b><br>
-75 droits, des profils limités à une partie du parc, SSO, double authentification, clés d'accès. Et un journal de tout.
+<b>Everyone in their place</b><br>
+94 rights, profiles limited to part of the fleet, SSO, two-factor authentication, passkeys. And an audit log of everything.
 </td>
 <td valign="top">
 <img src="docs/media/icones/ia.svg" width="44" alt=""><br>
-<b>Prêt pour vos assistants IA</b><br>
-Un serveur MCP intégré : Claude Code, Cursor ou VS Code consultent et pilotent loco, dans les limites que vous fixez.
+<b>Ready for your AI assistants</b><br>
+A built-in MCP server: Claude Code, Cursor or VS Code query and operate loco, within the limits you set.
 </td>
 <td valign="top">
 <img src="docs/media/icones/android.svg" width="44" alt=""><br>
-<b>Au-delà des PC</b><br>
-Téléphones et tablettes Android, Home Assistant, agent Wazuh : même portail, mêmes droits, même journal.
+<b>Beyond PCs</b><br>
+Android phones and tablets, Home Assistant, Wazuh agent: same portal, same rights, same audit log.
 </td>
 </tr>
 </table>
@@ -83,182 +85,182 @@ Téléphones et tablettes Android, Home Assistant, agent Wazuh : même portail, 
 
 <a id="tour"></a>
 
-## Le tour en images
+## The tour
 
-### <img src="docs/media/icones/parc.svg" width="26" align="top" alt=""> &nbsp;Mon parc
+### <img src="docs/media/icones/parc.svg" width="26" align="top" alt=""> &nbsp;My fleet
 
-**Du plus urgent au plus à jour.** Vert, tout va bien. Orange, des mises à jour attendent. Rouge, il est temps.
+**From the most urgent to the most up to date.** Green, all is well. Orange, updates are waiting. Red, it is time.
 
-<img src="docs/media/parc.webp" width="100%" alt="Mon parc : la liste des postes avec leur voyant, leurs mises à jour en attente, leurs correctifs de sécurité et la charge du processeur, de la mémoire et du disque">
+<img src="docs/media/en/parc.webp" width="100%" alt="My fleet: the list of devices with their status light, their pending updates, their security fixes and their processor, memory and disk load">
 
-- **Tout sur une ligne** — système, adresse, mises à jour, correctifs de sécurité, processeur, mémoire, disque.
-- **Tout en un geste** — cochez, puis mettez à jour, avec redémarrage si besoin, ou réveillez les postes éteints (Wake-on-LAN).
-- **Un poste qui bouge reste dans le parc** — autre adresse, autre site, VPN : il garde son identité.
-
-<p align="center">
-<img src="docs/media/poste.webp" width="49.4%" alt="Fiche d'un serveur Linux : supervision en direct, courbes du processeur, de la mémoire et du réseau sur 24 heures, occupation des disques">
-<img src="docs/media/poste-windows.webp" width="49.4%" alt="Fiche d'un poste Windows : mises à jour à cocher une par une, logiciels du catalogue à installer ou à mettre à jour">
-</p>
-<p align="center"><sub>← <b>Supervision</b> — en direct toutes les 2 secondes, puis sur 24 heures ou 7 jours.<br><b>Fiche d'un poste</b> — mises à jour à la carte, logiciels du catalogue, historique. →</sub></p>
-
-<br>
-
-### <img src="docs/media/icones/mises-a-jour.svg" width="26" align="top" alt=""> &nbsp;Mises à jour, en direct
-
-**Cliquez. Regardez.** L'étape, le paquet en cours, ce qui est fait, ce qui a échoué — sans recharger la page.
-
-<img src="docs/media/mises-a-jour.webp" width="100%" alt="Animation : trois postes Windows et Linux se mettent à jour en même temps, la barre de chacun avance et les paquets installés se cochent un par un">
-
-- **Rien ne se perd** — une action en attente n'expire pas : elle part quand le poste revient.
-- **Par vagues** — dix postes d'abord, les autres ensuite. Trop d'échecs ? Tout se met en pause et vous décidez.
-- **Une mise à jour douteuse ?** Bloquez-la, sur tout le parc ou sur un groupe. Plus personne ne l'installera par erreur.
-- **La nuit, c'est mieux** — une fois, chaque jour, chaque semaine ou chaque mois.
-
-<br>
-
-### <img src="docs/media/icones/distance.svg" width="26" align="top" alt=""> &nbsp;Prise en main à distance
-
-**L'agent appelle le serveur. Jamais l'inverse.** Pas de port entrant sur les postes, pas de serveur VNC, pas de compte SSH.
+- **Everything on one line** — system, address, updates, security fixes, processor, memory, disk.
+- **Everything in one move** — tick, then update, with a restart if needed, or wake up devices that are off (Wake-on-LAN).
+- **A device that moves stays in the fleet** — another address, another site, VPN: it keeps its identity.
 
 <p align="center">
-<img src="docs/media/bureau.webp" width="49.4%" alt="Bureau distant d'un poste Linux à deux écrans : la liste Écran montre l'écran 2, avec un plan technique ouvert">
-<img src="docs/media/terminal.webp" width="49.4%" alt="Terminal root d'un serveur Linux ouvert dans le navigateur">
+<img src="docs/media/en/poste.webp" width="49.4%" alt="Page of a Linux server: live monitoring, processor, memory and network curves over 24 hours, disk usage">
+<img src="docs/media/en/poste-windows.webp" width="49.4%" alt="Page of a Windows device: updates to tick one by one, catalog software to install or update">
 </p>
-<p align="center"><sub>← <b>Bureau</b> — deux écrans ? Choisissez lequel regarder.<br><b>Terminal</b> — un vrai shell root ou PowerShell SYSTEM. →</sub></p>
-
-- **Windows**, écran de connexion et fenêtre UAC compris. **Linux** sous X11, GNOME, KDE Plasma, Sway ou Hyprland.
-- **Ctrl+Alt+Suppr**, presse-papiers partagé, envoi d'un mot de passe caractère par caractère.
-- **Gestionnaire de fichiers** — glissez, déposez, modifiez un fichier texte sans quitter la page.
-- **Avec l'accord de la personne**, si vous le voulez : elle accepte ou refuse avant toute image.
+<p align="center"><sub>← <b>Monitoring</b> — live every 2 seconds, then over 24 hours or 7 days.<br><b>Device page</b> — updates à la carte, catalog software, history. →</sub></p>
 
 <br>
 
-### <img src="docs/media/icones/logiciels.svg" width="26" align="top" alt=""> &nbsp;Logiciels Windows
+### <img src="docs/media/icones/mises-a-jour.svg" width="26" align="top" alt=""> &nbsp;Updates, live
 
-**Cherchez, ajoutez, déployez.** loco télécharge l'installeur officiel, vérifie son empreinte et retient comment l'installer en silence.
+**Click. Watch.** The step, the package in progress, what is done, what failed — without reloading the page.
+
+<img src="docs/media/en/mises-a-jour.webp" width="100%" alt="Animation: three Windows and Linux devices update at the same time, each one's bar moves forward and installed packages are ticked one by one">
+
+- **Nothing gets lost** — a pending action does not expire: it goes out when the device comes back.
+- **In waves** — ten devices first, the others next. Too many failures? Everything pauses and you decide.
+- **A doubtful update?** Block it, on the whole fleet or on a group. Nobody will install it by mistake anymore.
+- **Night is better** — once, every day, every week or every month.
+
+<br>
+
+### <img src="docs/media/icones/distance.svg" width="26" align="top" alt=""> &nbsp;Remote control
+
+**The agent calls the server. Never the other way around.** No inbound port on the devices, no VNC server, no SSH account.
 
 <p align="center">
-<img src="docs/media/logiciels.webp" width="49.4%" alt="Centre de logiciels : le catalogue WinGet avec ses catégories et ses logos">
-<img src="docs/media/catalogue.webp" width="49.4%" alt="Catalogue local : version de chaque logiciel, nombre de postes équipés et postes à mettre à jour">
+<img src="docs/media/en/bureau.webp" width="49.4%" alt="Remote desktop of a Linux device with two screens: the Screen list shows screen 2, with a technical drawing open">
+<img src="docs/media/en/terminal.webp" width="49.4%" alt="Root terminal of a Linux server open in the browser">
 </p>
-<p align="center"><sub>← <b>Centre de logiciels</b> — le catalogue WinGet, rangé par catégories.<br><b>Catalogue local</b> — qui l'a, qui est en retard. →</sub></p>
+<p align="center"><sub>← <b>Desktop</b> — two screens? Choose which one to watch.<br><b>Terminal</b> — a real root shell or SYSTEM PowerShell. →</sub></p>
 
-- **Rien ne part avant votre feu vert** — l'aperçu montre les postes visés et ceux qui sont écartés.
-- **Des groupes de logiciels** — « Poste standard », « Bureau d'études » : un nouveau poste est prêt en une fois.
-- **Vos propres installeurs** — `exe`, `msi`, `msu` ou `ps1`, par lien ou par fichier.
+- **Windows**, sign-in screen and UAC window included. **Linux** on X11, GNOME, KDE Plasma, Sway or Hyprland.
+- **Ctrl+Alt+Del**, shared clipboard, typing a password character by character.
+- **File manager** — drag, drop, edit a text file without leaving the page.
+- **With the person's consent**, if you want: they accept or refuse before any image.
 
 <br>
 
-### <img src="docs/media/icones/depots.svg" width="26" align="top" alt=""> &nbsp;Caches et dépôts
+### <img src="docs/media/icones/logiciels.svg" width="26" align="top" alt=""> &nbsp;Windows software
 
-**Téléchargé une fois, servi à tous.** Votre lien Internet respire, vos postes se mettent à jour à la vitesse du réseau local.
+**Search, add, deploy.** loco downloads the official installer, checks its fingerprint and remembers how to install it silently.
 
-<img src="docs/media/windows-update.webp" width="100%" alt="Cache Windows Update : volume servi depuis le cache et volume pris sur Internet, jour par jour">
+<p align="center">
+<img src="docs/media/en/logiciels.webp" width="49.4%" alt="Software center: the WinGet catalog with its categories and logos">
+<img src="docs/media/en/catalogue.webp" width="49.4%" alt="Local catalog: version of each program, number of devices that have it and devices to update">
+</p>
+<p align="center"><sub>← <b>Software center</b> — the WinGet catalog, sorted by category.<br><b>Local catalog</b> — who has it, who is behind. →</sub></p>
 
-| Ce qui passe par loco | Comment |
+- **Nothing leaves before your go-ahead** — the preview shows the targeted devices and those left out.
+- **Software groups** — "Standard workstation", "Design office": a new device is ready in one go.
+- **Your own installers** — `exe`, `msi`, `msu` or `ps1`, by link or by file.
+
+<br>
+
+### <img src="docs/media/icones/depots.svg" width="26" align="top" alt=""> &nbsp;Caches and repositories
+
+**Downloaded once, served to all.** Your Internet link breathes, your devices update at the speed of the local network.
+
+<img src="docs/media/en/windows-update.webp" width="100%" alt="Windows Update cache: volume served from the cache and volume fetched from the Internet, day by day">
+
+| What goes through loco | How |
 |---|---|
-| **Windows Update** | par le DNS du réseau, ou par un proxy intégré — sans toucher au DNS |
-| **Debian, Ubuntu** | cache APT, et dépôts signés pour vos propres `.deb` |
-| **RHEL, Rocky, AlmaLinux** | cache des miroirs et d'EPEL, et dépôts RPM signés par version majeure |
-| **Flatpak** | cache Flathub, et dépôt local signé pour vos applications |
+| **Windows Update** | through the network's DNS, or through a built-in proxy — without touching the DNS |
+| **Debian, Ubuntu** | APT cache, and signed repositories for your own `.deb` |
+| **RHEL, Rocky, AlmaLinux** | cache of the mirrors and of EPEL, and RPM repositories signed per major version |
+| **Flatpak** | Flathub cache, and a signed local repository for your applications |
 
-Derrière un proxy d'entreprise ? Ça marche aussi.
+Behind a company proxy? That works too.
 
 <br>
 
-### <img src="docs/media/icones/automatisation.svg" width="26" align="top" alt=""> &nbsp;Scripts et planifications
+### <img src="docs/media/icones/automatisation.svg" width="26" align="top" alt=""> &nbsp;Scripts and schedules
 
-**Écrit une fois, relu, puis lancé partout.** PowerShell, shell ou Python, avec la sortie de chaque poste.
+**Written once, reviewed, then run everywhere.** PowerShell, shell or Python, with the output of each device.
 
 <p align="center">
-<img src="docs/media/scripts.webp" width="49.4%" alt="Bibliothèque de scripts avec leur système, leur version et leur dernière exécution">
-<img src="docs/media/planifications.webp" width="49.4%" alt="Planifications : mises à jour et scripts lancés chaque jour, chaque semaine ou chaque mois sur des groupes de machines">
+<img src="docs/media/en/scripts.webp" width="49.4%" alt="Script library with their system, their version and their last run">
+<img src="docs/media/en/planifications.webp" width="49.4%" alt="Schedules: updates and scripts run every day, every week or every month on groups of machines">
 </p>
-<p align="center"><sub>← <b>Scripts</b> — versionnés, figés par empreinte au moment de partir.<br><b>Planifications</b> — « chaque mardi à 21 h 30, les postes du siège ». →</sub></p>
+<p align="center"><sub>← <b>Scripts</b> — versioned, pinned by fingerprint when they go out.<br><b>Schedules</b> — "every Tuesday at 9:30 pm, the headquarters devices". →</sub></p>
 
 <br>
 
-### <img src="docs/media/icones/securite.svg" width="26" align="top" alt=""> &nbsp;Droits, SSO et journal
+### <img src="docs/media/icones/securite.svg" width="26" align="top" alt=""> &nbsp;Rights, SSO and audit log
 
-**Le bon accès, à la bonne personne, sur les bons postes.** Et la trace de chaque geste.
+**The right access, for the right person, on the right devices.** And a trace of every move.
 
 <p align="center">
-<img src="docs/media/profil.webp" width="49.4%" alt="Profil d'accès Support niveau 1 : limité à trois groupes de machines, douze droits accordés sur soixante-quinze">
-<img src="docs/media/journal.webp" width="49.4%" alt="Journal : chaque action avec son heure, son compte, son adresse et son détail">
+<img src="docs/media/en/profil.webp" width="49.4%" alt="Level 1 support access profile: limited to three groups of machines, twelve rights granted out of ninety-four">
+<img src="docs/media/en/journal.webp" width="49.4%" alt="Audit log: each action with its time, its account, its address and its details">
 </p>
-<p align="center"><sub>← <b>Profils</b> — des droits, et le périmètre où ils s'exercent.<br><b>Journal</b> — qui, quoi, quand, d'où. Exportable, ou envoyé en syslog. →</sub></p>
+<p align="center"><sub>← <b>Profiles</b> — rights, and the scope where they apply.<br><b>Audit log</b> — who, what, when, from where. Exportable, or sent over syslog. →</sub></p>
 
-- **Vos identités** — Active Directory, LDAP, RADIUS, OpenID Connect (Authentik, Keycloak, Entra ID…).
-- **Deux verrous valent mieux qu'un** — codes à usage unique (TOTP) et clés d'accès (passkeys).
-- **Personne n'entre par surprise** — un compte d'annuaire attend qu'on l'approuve.
-
-<br>
-
-### <img src="docs/media/icones/ia.svg" width="26" align="top" alt=""> &nbsp;Assistants IA
-
-**« Quels postes n'ont pas redémarré depuis un mois ? »** Demandez-le à votre assistant.
-
-<img src="docs/media/mcp.webp" width="100%" alt="MCP et API : clés, outils accordés à chacune, dernier appel et commande de connexion d'un assistant">
-
-- **Claude ou Codex en un clic** — un installateur ajoute loco à la configuration MCP de l'application, sur votre ordinateur.
-- **34 outils**, cochés un à un pour chaque clé : lire, mettre à jour, lancer un script, ouvrir un terminal — par MCP ou par l'API REST.
-- **Jamais plus de droits que vous** — une clé reste dans les limites du compte qui l'a créée, et chaque compte voit les siennes.
-- **Tout est noté** — chaque appel qui change quelque chose rejoint le journal, au nom de la clé.
+- **Your identities** — Active Directory, LDAP, RADIUS, OpenID Connect (Authentik, Keycloak, Entra ID…).
+- **Two locks are better than one** — one-time codes (TOTP) and passkeys.
+- **Nobody gets in by surprise** — a directory account waits to be approved.
 
 <br>
 
-### <img src="docs/media/icones/android.svg" width="26" align="top" alt=""> &nbsp;Android, Home Assistant et Wazuh
+### <img src="docs/media/icones/ia.svg" width="26" align="top" alt=""> &nbsp;AI assistants
 
-**Trois options, coupées par défaut.** À activer si elles vous parlent.
+**"Which devices have not restarted for a month?"** Ask your assistant.
+
+<img src="docs/media/en/mcp.webp" width="100%" alt="MCP and API: keys, tools granted to each, last call and the command to connect an assistant">
+
+- **Claude or Codex in one click** — an installer adds loco to the application's MCP configuration, on your computer.
+- **40 tools**, ticked one by one for each key: read, update, run a script, open a terminal — over MCP or the REST API.
+- **Never more rights than you** — a key stays within the limits of the account that created it, and each account sees its own.
+- **Everything is logged** — every call that changes something lands in the audit log, under the key's name.
+
+<br>
+
+### <img src="docs/media/icones/android.svg" width="26" align="top" alt=""> &nbsp;Android, Home Assistant and Wazuh
+
+**Three options, off by default.** Turn them on if they speak to you.
 
 <p align="center">
-<img src="docs/media/android.webp" width="49.4%" alt="Fiche d'un téléphone Android : applications installées, écran distant, terminal">
-<img src="docs/media/home-assistant.webp" width="49.4%" alt="Home Assistant : versions, mises à jour disponibles, modules complémentaires et sauvegardes">
+<img src="docs/media/en/android.webp" width="49.4%" alt="Page of an Android phone: installed applications, remote screen, terminal">
+<img src="docs/media/en/home-assistant.webp" width="49.4%" alt="Home Assistant: versions, available updates, add-ons and backups">
 </p>
-<p align="center"><sub>← <b>Android</b> <i>(expérimental)</i> — écran, terminal, fichiers et applications de vos propres appareils. Toujours visible, toujours consenti.<br><b>Home Assistant</b> <i>(facultatif)</i> — mises à jour, sauvegardes, santé et terminal, par SSH avec une clé propre à loco. →</sub></p>
+<p align="center"><sub>← <b>Android</b> <i>(experimental)</i> — screen, terminal, files and applications of your own devices. Always visible, always consented.<br><b>Home Assistant</b> <i>(optional)</i> — updates, backups, health and terminal, over SSH with a key of loco's own. →</sub></p>
 
-**Agent Wazuh** *(facultatif)* — vous avez un manager Wazuh ? loco pose son agent sur les postes que vous cochez, réglé pour votre manager, et montre sur chaque fiche s'il est connecté. Le paquet officiel est vérifié par loco puis remis aux postes, qui n'ont pas besoin d'Internet. Retirer l'agent d'un poste peut aussi effacer son entrée sur le manager. [En savoir plus](docs/wazuh.md).
-
-<br>
-
-### <img src="docs/media/icones/apparence.svg" width="26" align="top" alt=""> &nbsp;À votre image
-
-**Six thèmes, huit couleurs, quinze fonds.** Ou votre logo et vos couleurs, pour toute l'entreprise.
-
-<img src="docs/media/themes.webp" width="100%" alt="La même page dans les huit apparences livrées : Brume, Alpes, Forêt, Boréale, Océan, Désert, Clair et OLED">
+**Wazuh agent** *(optional)* — you have a Wazuh manager? loco installs its agent on the devices you tick, set up for your manager, and shows on each device page whether it is connected. The official package is checked by loco then handed to the devices, which do not need the Internet. Removing the agent from a device can also delete its entry on the manager. [Learn more](docs/wazuh.md).
 
 <br>
 
-### <img src="docs/media/icones/mobile.svg" width="26" align="top" alt=""> &nbsp;Dans la poche
+### <img src="docs/media/icones/apparence.svg" width="26" align="top" alt=""> &nbsp;Your look
 
-**Une alerte à 22 h ?** Le portail s'installe comme une application et tient dans une main.
+**Six themes, eight colors, fifteen backgrounds.** Or your logo and your colors, for the whole company.
 
-<img src="docs/media/mobile.webp" width="100%" alt="Le portail sur téléphone : vue d'ensemble, Mon parc, mises à jour en cours et fiche d'un poste">
+<img src="docs/media/en/themes.webp" width="100%" alt="The same page in the eight shipped looks: Mist, Alps, Forest, Boreal, Ocean, Desert, Light and OLED">
+
+<br>
+
+### <img src="docs/media/icones/mobile.svg" width="26" align="top" alt=""> &nbsp;In your pocket
+
+**An alert at 10 pm?** The portal installs like an app and fits in one hand.
+
+<img src="docs/media/en/mobile.webp" width="100%" alt="The portal on a phone: overview, My fleet, updates in progress and a device page">
 
 <br>
 
 <div align="center">
-<img src="docs/media/chiffres.webp" width="100%" alt="En chiffres : plus de 1 500 tests rejoués sur trois distributions à chaque version, 75 droits à combiner dans vos profils d'accès, 34 outils MCP pour vos assistants IA, 3 langues (français, anglais, espagnol), 0 télémétrie">
+<img src="docs/media/en/chiffres.webp" width="100%" alt="In figures: more than 2,000 tests replayed on three distributions for every release, 94 rights to combine in your access profiles, 40 MCP tools for your AI assistants, 3 languages (English, French, Spanish), 0 telemetry">
 </div>
 
 <br>
 
-<a id="installer"></a>
+<a id="install"></a>
 
-## Installer en cinq minutes
+## Install in five minutes
 
-Choisissez votre terrain. Le portail, les dépôts et les caches sont les mêmes partout.
+Choose your ground. The portal, the repositories and the caches are the same everywhere.
 
-| | Pour qui | Systèmes |
+| | For | Systems |
 |---|---|---|
-| <img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;**Linux natif** — recommandé | la production | Debian 12 / 13 · Ubuntu 22.04 / 24.04 / 26.04 · Rocky Linux 8 / 9 / 10 |
-| <img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;**Conteneur LXC** | un hôte Proxmox VE | Proxmox VE 7 / 8 / 9 |
-| <img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;**Appliance ISO** | une machine dédiée, même hors ligne | Alpine Linux, BIOS ou UEFI |
-| <img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;**Docker** | un essai rapide | Docker Engine 26+ et Compose v2 |
-| <img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;**Windows natif** | un parc sans Linux | Windows 11 · Windows Server 2022 / 2025 |
+| <img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;**Native Linux** — recommended | production | Debian 12 / 13 · Ubuntu 22.04 / 24.04 / 26.04 · Rocky Linux 8 / 9 / 10 |
+| <img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;**LXC container** | a Proxmox VE host | Proxmox VE 7 / 8 / 9 |
+| <img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;**ISO appliance** | a dedicated machine, even offline | Alpine Linux, BIOS or UEFI |
+| <img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;**Docker** | a quick try | Docker Engine 26+ and Compose v2 |
+| <img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;**Native Windows** | a fleet without Linux | Windows 11 · Windows Server 2022 / 2025 |
 
 <details open>
-<summary><img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;<b>Linux natif</b></summary>
+<summary><img src="docs/media/icones/linux.svg" width="20" align="top" alt=""> &nbsp;<b>Native Linux</b></summary>
 <br>
 
 ```bash
@@ -267,13 +269,13 @@ cd loco
 sudo ./install.sh
 ```
 
-L'installation affiche l'adresse du portail (`https://<ip>:8443`), l'empreinte de son autorité et le mot de passe initial du compte `admin`.
-Relancer la même commande met à jour.
+The installation shows the portal address (`https://<ip>:8443`), the fingerprint of its certificate authority and the initial password of the `admin` account.
+Running the same command again updates it.
 
 </details>
 
 <details>
-<summary><img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;<b>Conteneur LXC sur Proxmox VE</b></summary>
+<summary><img src="docs/media/icones/lxc.svg" width="20" align="top" alt=""> &nbsp;<b>LXC container on Proxmox VE</b></summary>
 <br>
 
 ```bash
@@ -281,16 +283,16 @@ curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/lxc/prox
 bash proxmox-lxc.sh
 ```
 
-Le script crée le conteneur, y installe la dernière version publiée et affiche l'adresse du portail.
+The script creates the container, installs the latest published release in it and shows the portal address.
 
 </details>
 
 <details>
-<summary><img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;<b>Appliance ISO</b></summary>
+<summary><img src="docs/media/icones/iso.svg" width="20" align="top" alt=""> &nbsp;<b>ISO appliance</b></summary>
 <br>
 
-Téléchargez l'ISO de la [dernière version](https://github.com/ShaNouhAr/loco/releases/latest), démarrez dessus et suivez l'assistant.
-Les paquets sont embarqués : l'installation se passe d'Internet. Détails : [guide de l'appliance](linux/iso/README.md).
+Download the ISO of the [latest release](https://github.com/ShaNouhAr/loco/releases/latest), boot it and follow the wizard.
+The packages are embedded: the installation does not need the Internet. Details: [appliance guide](linux/iso/README.md).
 
 </details>
 
@@ -298,24 +300,24 @@ Les paquets sont embarqués : l'installation se passe d'Internet. Détails : [gu
 <summary><img src="docs/media/icones/docker.svg" width="20" align="top" alt=""> &nbsp;<b>Docker</b></summary>
 <br>
 
-Un fichier suffit, sans cloner le projet :
+One file is enough, without cloning the project:
 
 ```bash
 mkdir loco && cd loco
 curl -fsSLO https://raw.githubusercontent.com/ShaNouhAr/loco/main/linux/docker/docker-compose.yml
 docker compose up -d
-docker compose logs loco    # adresse, empreinte de l'autorité, mot de passe initial
+docker compose logs loco    # address, authority fingerprint, initial password
 ```
 
-L'image `ghcr.io/shanouhar/loco` est publiée avec chaque version. Mettre à jour : `docker compose pull && docker compose up -d`.
+The `ghcr.io/shanouhar/loco` image is published with every release. To update: `docker compose pull && docker compose up -d`.
 
 </details>
 
 <details>
-<summary><img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;<b>Windows natif</b></summary>
+<summary><img src="docs/media/icones/windows.svg" width="20" align="top" alt=""> &nbsp;<b>Native Windows</b></summary>
 <br>
 
-Dans une console PowerShell **administrateur** :
+In an **administrator** PowerShell console:
 
 ```powershell
 Invoke-WebRequest https://github.com/ShaNouhAr/loco/archive/refs/heads/main.zip -OutFile loco.zip
@@ -324,47 +326,47 @@ cd loco-main
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\install.ps1
 ```
 
-Ni WSL, ni Hyper-V, ni Docker : loco tourne dans un service Windows.
+No WSL, no Hyper-V, no Docker: loco runs in a Windows service.
 
 </details>
 
-**Et ensuite ?**
+**And then?**
 
-1. Ouvrez `https://<ip>:8443` et changez le mot de passe d'`admin`.
-2. Allez dans **Mon parc › Enrôlement** : une commande à copier par poste — ou un MSI, un `.deb`, un `.rpm`.
-3. Regardez le parc se remplir.
+1. Open `https://<ip>:8443` and change the `admin` password.
+2. Go to **My fleet › Enrollment**: one command to copy per device — or an MSI, a `.deb`, an `.rpm`.
+3. Watch the fleet fill up.
 
-Toutes les options, le proxy d'entreprise, les certificats : **[Installer loco](docs/installation.md)**.
+All the options, the company proxy, the certificates: **[Installing loco](docs/installation.md)**.
 
 <br>
 
-<a id="fonctionnement"></a>
+<a id="how-it-works"></a>
 
-## Comment ça marche
+## How it works
 
 ```mermaid
 flowchart LR
-    vous(["Vous<br>un navigateur, un assistant IA"])
-    postes["Vos postes<br>Windows · Linux · Android"]
+    you(["You<br>a browser, an AI assistant"])
+    devices["Your devices<br>Windows · Linux · Android"]
     net(("Internet"))
 
-    subgraph serveur ["Le serveur loco, chez vous"]
+    subgraph server ["The loco server, at your place"]
         direction TB
-        portail["Portail<br>HTTPS"]
-        depots["Dépôts signés<br>et catalogue de logiciels"]
+        portal["Portal<br>HTTPS"]
+        repos["Signed repositories<br>and software catalog"]
         caches["Caches<br>Windows Update · APT · RPM · Flathub"]
     end
 
-    vous --> portail
-    postes -->|"l'agent appelle le serveur"| portail
-    postes -->|"logiciels, paquets maison"| depots
-    postes -->|"mises à jour"| caches
-    caches ==>|"une seule fois"| net
+    you --> portal
+    devices -->|"the agent calls the server"| portal
+    devices -->|"software, in-house packages"| repos
+    devices -->|"updates"| caches
+    caches ==>|"only once"| net
 ```
 
-- **Les postes appellent le serveur.** Jamais l'inverse : rien à ouvrir sur les postes, rien à exposer sur Internet.
-- **Tout est vérifié.** Dépôts signés, installeurs contrôlés par empreinte SHA-256, autorité du serveur épinglée par les agents.
-- **Rien ne sort.** Vos inventaires, vos journaux et vos clés restent sur votre serveur.
+- **The devices call the server.** Never the other way around: nothing to open on the devices, nothing to expose on the Internet.
+- **Everything is checked.** Signed repositories, installers verified by SHA-256 fingerprint, server authority pinned by the agents.
+- **Nothing leaves.** Your inventories, your logs and your keys stay on your server.
 
 <br>
 
@@ -375,62 +377,62 @@ flowchart LR
 <table>
 <tr>
 <td width="33%" valign="top">
-<h4>Mettre en place</h4>
-<img src="docs/media/icones/installation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/installation.md">Installer loco</a></b><br><sub>Les cinq installations et leurs options.</sub><br><br>
-<img src="docs/media/icones/linux.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/linux.md">Serveur Linux en entreprise</a></b><br><sub>Réseau, GPO, proxy, Docker, LXC, Rocky, ISO.</sub><br><br>
-<img src="docs/media/icones/windows.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/windows.md">Serveur Windows</a></b><br><sub>Installation, limites, dimensionnement.</sub><br><br>
-<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/postes.md">Brancher les postes</a></b><br><sub>Dépôts, caches, Windows Update.</sub><br><br>
-<img src="docs/media/icones/haute-disponibilite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/haute-disponibilite.md">Haute disponibilité</a></b><br><sub>Deux serveurs, une seule adresse.</sub><br><br>
+<h4>Set up</h4>
+<img src="docs/media/icones/installation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/installation.md">Installing loco</a></b><br><sub>The five installations and their options.</sub><br><br>
+<img src="docs/media/icones/linux.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/linux.md">Linux server in a company</a></b><br><sub>Network, GPO, proxy, Docker, LXC, Rocky, ISO.</sub><br><br>
+<img src="docs/media/icones/windows.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/windows.md">Windows server</a></b><br><sub>Installation, limits, sizing.</sub><br><br>
+<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/connecting-devices.md">Connecting devices</a></b><br><sub>Repositories, caches, Windows Update.</sub><br><br>
+<img src="docs/media/icones/haute-disponibilite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/high-availability.md">High availability</a></b><br><sub>Two servers, a single address.</sub><br><br>
 </td>
 <td width="33%" valign="top">
-<h4>Utiliser</h4>
-<img src="docs/media/icones/parc.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/parc.md">Mon parc</a></b><br><sub>Agent, mises à jour, vagues, blocages, scripts.</sub><br><br>
-<img src="docs/media/icones/logiciels.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/logiciels.md">Logiciels Windows</a></b><br><sub>Catalogue, groupes, déploiements.</sub><br><br>
-<img src="docs/media/icones/distance.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/sessions-distantes.md">Sessions distantes</a></b><br><sub>Bureau, terminal, fichiers.</sub><br><br>
-<img src="docs/media/icones/comptes.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/comptes.md">Comptes, profils et SSO</a></b><br><sub>Droits, annuaires, apparence.</sub><br><br>
-<img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">MCP et API</a></b><br><sub>Brancher un assistant IA ou un script.</sub><br><br>
-<img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Appareils, applications, écran distant.</sub><br><br>
-<img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>Liaison SSH, mises à jour, sauvegardes.</sub><br><br>
-<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/wazuh.md">Agent Wazuh</a></b><br><sub>Posé sur les postes, réglé pour votre manager.</sub><br><br>
-<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/partages.md">Partages de fichiers</a></b><br><sub>Dossiers SMB, tailles limites, comptes, gestionnaire de fichiers.</sub><br><br>
+<h4>Use</h4>
+<img src="docs/media/icones/parc.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/fleet.md">My fleet</a></b><br><sub>Agent, updates, waves, blocks, scripts.</sub><br><br>
+<img src="docs/media/icones/logiciels.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/windows-software.md">Windows software</a></b><br><sub>Catalog, groups, deployments.</sub><br><br>
+<img src="docs/media/icones/distance.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/remote-sessions.md">Remote sessions</a></b><br><sub>Desktop, terminal, files.</sub><br><br>
+<img src="docs/media/icones/comptes.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/accounts.md">Accounts, profiles and SSO</a></b><br><sub>Rights, directories, appearance.</sub><br><br>
+<img src="docs/media/icones/ia.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/mcp.md">MCP and API</a></b><br><sub>Connect an AI assistant or a script.</sub><br><br>
+<img src="docs/media/icones/android.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/android.md">Android</a></b><br><sub>Devices, applications, remote screen.</sub><br><br>
+<img src="docs/media/icones/home-assistant.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/homeassistant.md">Home Assistant</a></b><br><sub>SSH link, updates, backups.</sub><br><br>
+<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/wazuh.md">Wazuh agent</a></b><br><sub>Installed on the devices, set up for your manager.</sub><br><br>
+<img src="docs/media/icones/depots.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/file-shares.md">File shares</a></b><br><sub>SMB folders, size limits, accounts, file manager.</sub><br><br>
 </td>
 <td width="33%" valign="top">
-<h4>Faire tourner</h4>
-<img src="docs/media/icones/exploitation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/exploitation.md">Exploiter loco au quotidien</a></b><br><sub>Routine, sauvegardes, mises à jour, incidents.</sub><br><br>
-<img src="docs/media/icones/journal.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/journal.md">Journal et syslog</a></b><br><sub>Ce qui est tracé, où l'envoyer.</sub><br><br>
-<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="SECURITY.md">Sécurité</a></b><br><sub>Le modèle, ses limites, signaler une faille.</sub><br><br>
-<h4>Contribuer</h4>
-<img src="docs/media/icones/developpement.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/developpement.md">Développement</a></b><br><sub>Dépôt, tests, publication.</sub><br><br>
-<img src="docs/media/icones/serveur.svg" width="22" align="top" alt=""> &nbsp;<b><a href="CHANGELOG.md">Changelog</a></b><br><sub>Toutes les versions, une par une.</sub><br><br>
+<h4>Run</h4>
+<img src="docs/media/icones/exploitation.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/operations.md">Running loco day to day</a></b><br><sub>Routine, backups, updates, incidents.</sub><br><br>
+<img src="docs/media/icones/journal.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/audit-log.md">Audit log and syslog</a></b><br><sub>What is recorded, where to send it.</sub><br><br>
+<img src="docs/media/icones/securite.svg" width="22" align="top" alt=""> &nbsp;<b><a href="SECURITY.md">Security</a></b><br><sub>The model, its limits, reporting a vulnerability.</sub><br><br>
+<h4>Contribute</h4>
+<img src="docs/media/icones/developpement.svg" width="22" align="top" alt=""> &nbsp;<b><a href="docs/development.md">Development</a></b><br><sub>Repository, tests, releases.</sub><br><br>
+<img src="docs/media/icones/serveur.svg" width="22" align="top" alt=""> &nbsp;<b><a href="CHANGELOG.md">Changelog</a></b><br><sub>Every release, one by one.</sub><br><br>
 </td>
 </tr>
 </table>
 
 <br>
 
-## Sécurité, en bref
+## Security, in short
 
-- **Chez vous** — aucune télémétrie ; rien ne quitte le serveur sans que vous l'ayez décidé.
-- **Confiné** — le portail tourne sans privilèges ; un agent séparé revalide chaque opération d'administration.
-- **Signé et vérifié** — dépôts APT, RPM et Flatpak signés, installeurs contrôlés par SHA-256.
-- **Durci** — HTTPS, politique de contenu stricte, protection CSRF, blocage des tentatives de connexion, filtrage par réseau.
-- **Tracé** — connexions, échecs et modifications au journal, avec le compte et l'adresse.
+- **At your place** — no telemetry; nothing leaves the server unless you decided it.
+- **Confined** — the portal runs without privileges; a separate agent revalidates every administration operation.
+- **Signed and checked** — signed APT, RPM and Flatpak repositories, installers verified by SHA-256.
+- **Hardened** — HTTPS, strict content policy, CSRF protection, blocking of sign-in attempts, filtering by network.
+- **Recorded** — sign-ins, failures and changes in the audit log, with the account and the address.
 
-Le détail, et ce que loco ne protège pas : **[SECURITY.md](SECURITY.md)**.
+The details, and what loco does not protect: **[SECURITY.md](SECURITY.md)**.
 
 <br>
 
-## Licence
+## License
 
-[MIT](LICENSE). Polices IBM Plex, Outfit et JetBrains Mono sous licence SIL OFL 1.1 (`portal/static/fonts/`) ; photos des fonds d'écran créditées dans `portal/static/wallpapers/CREDITS.txt`.
+[MIT](LICENSE). IBM Plex, Outfit and JetBrains Mono fonts under the SIL OFL 1.1 license (`portal/static/fonts/`); wallpaper photos credited in `portal/static/wallpapers/CREDITS.txt`.
 
 <br>
 
 <div align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
-  <img src="docs/logo-light.svg" alt="Logo de loco" width="72">
+  <img src="docs/logo-light.svg" alt="loco logo" width="72">
 </picture>
 <br>
-<sub>Captures prises sur une instance de démonstration : l'entreprise, ses postes et ses comptes sont inventés.</sub>
+<sub>Screenshots taken on a demo instance: the company, its devices and its accounts are made up.</sub>
 </div>

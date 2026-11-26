@@ -452,18 +452,23 @@ def newer_sections(text, current):
     return "\n\n".join(kept)[:CHANGELOG_MAX]
 
 
-def release_changelog(release):
-    """Journal des versions publié avec la nouvelle version (CHANGELOG.md au tag), par la même API que la version
-    elle-même : pas de nouveau flux sortant. Chaîne vide si le dépôt n'en a pas ou s'il est injoignable."""
+# Traductions du journal des versions publiées à côté de CHANGELOG.md (anglais) : le portail montre la langue du compte.
+CHANGELOG_LANGS = ("fr", "es")
+
+
+def release_changelog(release, name="CHANGELOG.md"):
+    """Journal des versions publié avec la nouvelle version (CHANGELOG.md au tag, ou sa traduction CHANGELOG.fr.md…), par
+    la même API que la version elle-même : pas de nouveau flux sortant. Chaîne vide si le dépôt n'en a pas ou s'il est
+    injoignable."""
     src, tag = source(), release.get("tag") or "v" + release.get("version", "")
     if "://" in src:
         parts = urllib.parse.urlsplit(src)
         project = urllib.parse.quote(parts.path.strip("/"), safe="")
-        url = (f"https://{parts.netloc}/api/v4/projects/{project}/repository/files/CHANGELOG.md/raw"
+        url = (f"https://{parts.netloc}/api/v4/projects/{project}/repository/files/{name}/raw"
                f"?ref={urllib.parse.quote(tag, safe='')}")
         accept = "text/plain"
     else:
-        url = f"https://api.github.com/repos/{src}/contents/CHANGELOG.md?ref={urllib.parse.quote(tag, safe='')}"
+        url = f"https://api.github.com/repos/{src}/contents/{name}?ref={urllib.parse.quote(tag, safe='')}"
         accept = "application/vnd.github.raw+json"
     with _get(url, accept=accept) as r:
         return r.read(1_000_000).decode("utf-8", "replace")
@@ -520,6 +525,14 @@ def check(log=print):
         # Nouveautés de la version disponible, à lire avant d'installer : facultatif, sans erreur bloquante.
         try:
             latest["changelog"] = newer_sections(release_changelog(latest), values["current"])
+            # Traductions, quand la version publiée en a (absentes des versions plus anciennes : sans erreur).
+            translated = {}
+            for lang in CHANGELOG_LANGS:
+                try:
+                    translated[lang] = newer_sections(release_changelog(latest, f"CHANGELOG.{lang}.md"), values["current"])
+                except (OSError, ValueError):
+                    pass
+            latest["changelogs"] = {k: v for k, v in translated.items() if v}
         except (OSError, ValueError) as e:
             log(t(f"journal des versions de {latest['version']} indisponible : {e}",
                   f"changelog of {latest['version']} unavailable: {e}",

@@ -1,3 +1,5 @@
+**English** · [Français](README.fr.md) · [Español](README.es.md)
+
 Offline VT terminal dependencies, embedded into the served agent.
 pyte (LGPLv3) and wcwidth (MIT) are unmodified; see included licenses.
 font8x8 glyphs are public domain, doubled vertically to 8x16.

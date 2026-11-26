@@ -57,7 +57,7 @@
     <span class="toolbar-sep" aria-hidden="true"></span>
     <span class="remote-hold" role="group" aria-label="{{ _('Touches maintenues jusqu’au prochain clic') }}">
       <span class="small muted">{{ _("Maintenir") }}</span>
-      {% for key, label in [('ctrl', 'Ctrl'), ('alt', 'Alt'), ('shift', 'Maj'), ('super', 'Win' if win else 'Super')] %}
+      {% for key, label in [('ctrl', 'Ctrl'), ('alt', 'Alt'), ('shift', _('Maj')), ('super', 'Win' if win else 'Super')] %}
       <button type="button" class="keycap modifier" data-hold="{{ key }}" aria-pressed="false" title="{{ _('Reste enfoncée jusqu’au prochain clic') }}">{{ label }}</button>
       {% endfor %}
     </span>

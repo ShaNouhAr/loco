@@ -19,7 +19,7 @@ from flask import abort, flash, g, has_request_context, jsonify, redirect, rende
 from . import app, config
 from .auth import audit, login_required
 from .db import db
-from .i18n import L_, _
+from .i18n import L_, N_, _
 
 # Thèmes (clés data-theme, définies en CSS) et couleurs d'accent (clés data-accent).
 THEMES = ("oled", "dim", "light", "midnight", "sepia", "sapin")
@@ -31,15 +31,15 @@ WALLPAPERS = ("montagne", "foret", "desert", "dunes", "ocean", "aurore", "nuit",
 ALPHA_MIN, ALPHA_MAX = 55, 100          # opacité des panneaux, en %
 
 # Presets prêts à l'emploi : (clé, libellé, thème, accent, transparence, fond).
-PRESETS = (
-    ("oled", "OLED", "oled", "neutral", 100, ""),
-    ("clair", "Clair", "light", "neutral", 100, ""),
-    ("brume", "Brume", "dim", "neutral", 88, "w:brume"),
-    ("ocean", "Océan", "dim", "blue", 82, "g:ocean"),
-    ("alpes", "Alpes", "midnight", "blue", 90, "w:montagne"),
-    ("foret", "Forêt", "sapin", "green", 86, "w:foret"),
-    ("boreale", "Boréale", "oled", "teal", 80, "w:aurore"),
-    ("desert", "Désert", "sepia", "amber", 84, "w:dunes"),
+PRESETS = (                              # libellés marqués N_ : le panneau Apparence les traduit à l'affichage (_(label))
+    ("oled", N_("OLED"), "oled", "neutral", 100, ""),
+    ("clair", N_("Clair"), "light", "neutral", 100, ""),
+    ("brume", N_("Brume"), "dim", "neutral", 88, "w:brume"),
+    ("ocean", N_("Océan"), "dim", "blue", 82, "g:ocean"),
+    ("alpes", N_("Alpes"), "midnight", "blue", 90, "w:montagne"),
+    ("foret", N_("Forêt"), "sapin", "green", 86, "w:foret"),
+    ("boreale", N_("Boréale"), "oled", "teal", 80, "w:aurore"),
+    ("desert", N_("Désert"), "sepia", "amber", 84, "w:dunes"),
 )
 
 BG_DIR = os.path.join(config.STATE, "appearance")

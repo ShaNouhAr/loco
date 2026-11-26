@@ -1,166 +1,168 @@
-# Agent Wazuh
+**English** · [Français](fr/wazuh.md) · [Español](es/wazuh.md)
 
-**Facultatif** — à activer dans *Administration › Fonctionnalités › Facultatif*.
+# Wazuh agent
 
-Vous avez un manager [Wazuh](https://wazuh.com) et un parc déjà inscrit dans loco : loco pose l'agent Wazuh sur les
-postes que vous choisissez, réglé pour votre manager, et vous dit où il en est. Quand vous retirez l'agent d'un poste,
-loco peut aussi effacer son entrée sur le manager. Il ne remplace pas Wazuh et ne règle pas votre manager.
+**Optional** — to turn on in *Administration › Features › Optional*.
 
-**Sommaire** —
-[Régler](#régler) ·
-[Installer](#installer-sur-des-postes) ·
-[Suivre](#suivre-létat) ·
-[Retirer](#retirer) ·
-[Effacer l'entrée du manager](#effacer-lentrée-du-manager) ·
-[Ce qui se passe sur le poste](#ce-qui-se-passe-sur-le-poste) ·
-[Droits](#droits) ·
-[Si ça ne se connecte pas](#si-ça-ne-se-connecte-pas)
+You have a [Wazuh](https://wazuh.com) manager and a fleet already enrolled in loco: loco installs the Wazuh agent on the
+devices you choose, set up for your manager, and tells you where it stands. When you remove the agent from a device,
+loco can also delete its entry on the manager. It does not replace Wazuh and does not configure your manager.
+
+**Contents** —
+[Settings](#settings) ·
+[Install](#installing-on-devices) ·
+[Follow](#following-the-state) ·
+[Remove](#removing) ·
+[Delete the manager's entry](#deleting-the-managers-entry) ·
+[What happens on the device](#what-happens-on-the-device) ·
+[Rights](#rights) ·
+[If it does not connect](#if-it-does-not-connect)
 
 ---
 
-## Régler
+## Settings
 
-*Mon parc › Wazuh*, bloc **Réglages** :
+*My fleet › Wazuh*, **Settings** block:
 
-| Réglage | Ce que c'est |
+| Setting | What it is |
 |---|---|
-| **Adresse du manager** | le nom ou l'adresse IP de votre manager Wazuh, sans `https://` ni port |
-| **Version de l'agent** | à choisir dans la liste des versions publiées par Wazuh. **Elle ne doit pas dépasser celle du manager** : un manager 4.14.9 refuse un agent 4.14.10 |
-| **Groupe d'agents** *(optionnel)* | le groupe Wazuh où ranger les postes (`servers`, `docker`…). Il doit déjà exister sur le manager ; plusieurs groupes se séparent par des virgules |
-| **Mot de passe d'enrôlement** *(optionnel)* | celui du manager, s'il en exige un (`<use_password>yes</use_password>`, fichier `authd.pass`) |
+| **Manager address** | the name or IP address of your Wazuh manager, without `https://` or port |
+| **Agent version** | to choose from the list of versions published by Wazuh. **It must not be newer than the manager's**: a 4.14.9 manager refuses a 4.14.10 agent |
+| **Agent group** *(optional)* | the Wazuh group to put the devices in (`servers`, `docker`…). It must already exist on the manager; several groups are separated by commas |
+| **Enrollment password** *(optional)* | the manager's, if it requires one (`<use_password>yes</use_password>`, `authd.pass` file) |
 
-Le mot de passe est gardé chiffré. loco ne le réaffiche jamais et ne l'écrit pas au journal : seul le fait qu'il a
-changé y figure.
+The password is kept encrypted. loco never shows it again and does not write it to the audit log: only the fact that it
+changed appears there.
 
-Sans mot de passe dans loco (case *ne plus en envoyer*), une réinstallation retire du poste le fichier `authd.pass`
-posé auparavant : un manager qui n'attend pas de mot de passe refuse l'agent qui en envoie un.
+Without a password in loco (*stop sending one* box), a reinstallation removes from the device the `authd.pass` file
+placed earlier: a manager that does not expect a password refuses an agent that sends one.
 
-## Installer sur des postes
+## Installing on devices
 
-Deux chemins :
+Two ways:
 
-- **Un poste** — sur sa fiche, *Plus › Installer l'agent Wazuh* ; ou le bouton *Installer* de sa ligne, page Wazuh.
-- **Plusieurs** — page Wazuh : cochez les postes, ajustez au besoin le groupe d'agents, puis
-  *Installer sur les postes cochés*.
+- **One device** — on its page, *More › Install the Wazuh agent*; or the *Install* button on its row, Wazuh page.
+- **Several** — Wazuh page: tick the devices, adjust the agent group if needed, then
+  *Install on the ticked devices*.
 
-L'installation part au prochain contact du poste — en quelques secondes s'il est allumé, à son retour sinon.
-La première fois, loco télécharge d'abord le paquet : la commande attend qu'il soit prêt.
+The installation goes out at the device's next check-in — in a few seconds if it is on, when it comes back otherwise.
+The first time, loco first downloads the package: the command waits until it is ready.
 
-Systèmes pris en charge : **Windows**, **Debian et Ubuntu**, **RHEL, Rocky Linux et AlmaLinux** (x86-64 ; ARM 64 bits
-sous Linux). Android n'est pas concerné.
+Supported systems: **Windows**, **Debian and Ubuntu**, **RHEL, Rocky Linux and AlmaLinux** (x86-64; 64-bit ARM
+on Linux). Android is not concerned.
 
-> Les postes n'ont pas besoin d'Internet. loco télécharge une fois le paquet officiel (`deb`, `rpm` ou `msi`) sur
-> `packages.wazuh.com`, le contrôle avec l'empreinte SHA-512 que publie Wazuh, puis le remet aux postes par leur agent
-> loco, qui vérifie à son tour son empreinte.
+> Devices do not need the Internet. loco downloads the official package (`deb`, `rpm` or `msi`) once from
+> `packages.wazuh.com`, checks it against the SHA-512 fingerprint Wazuh publishes, then hands it to the devices through their loco
+> agent, which checks its fingerprint in turn.
 
-*Réappliquer* (poste déjà équipé) réinstalle l'agent avec les réglages actuels : utile après un changement de manager
-ou de mot de passe. *Mettre à jour* apparaît quand la version du poste est plus ancienne que celle réglée.
+*Apply again* (device already equipped) reinstalls the agent with the current settings: useful after a change of manager
+or password. *Update* appears when the device's version is older than the one set.
 
-## Suivre l'état
+## Following the state
 
-La page Wazuh et la fiche de chaque poste (onglet *Détails*) montrent ce que le poste remonte à chaque contact :
+The Wazuh page and each device's page (*Details* tab) show what the device reports at each check-in:
 
-| État | Ce que ça veut dire |
+| State | What it means |
 |---|---|
-| **Connecté** | l'agent tourne et échange avec le manager |
-| **En attente du manager** | installé et démarré, pas encore accepté — voir [plus bas](#si-ça-ne-se-connecte-pas) |
-| **Déconnecté** | le manager ne répond plus à ce poste |
-| **Arrêté** | le service de l'agent Wazuh ne tourne pas |
-| **Non installé** | pas d'agent Wazuh sur ce poste |
-| **Manager Wazuh** | ce poste est le manager lui-même : loco n'y pose ni n'y retire d'agent, et ne le compte pas parmi les postes à équiper |
-| **Inconnu** | l'agent loco du poste est antérieur à la 2.166.0 : il se met à jour seul, l'état suit |
+| **Connected** | the agent runs and talks with the manager |
+| **Waiting for the manager** | installed and started, not yet accepted — see [below](#if-it-does-not-connect) |
+| **Disconnected** | the manager no longer answers this device |
+| **Stopped** | the Wazuh agent service is not running |
+| **Not installed** | no Wazuh agent on this device |
+| **Wazuh manager** | this device is the manager itself: loco neither installs nor removes an agent there, and does not count it among the devices to equip |
+| **Unknown** | the device's loco agent is older than 2.166.0: it updates itself, the state follows |
 
-S'y ajoutent la version installée, le numéro et le nom de l'agent chez Wazuh, et une précision quand le poste est
-relié à un autre manager que celui réglé.
+They come with the installed version, the agent's number and name at Wazuh, and a note when the device is
+linked to another manager than the one set.
 
-## Retirer
+## Removing
 
-Fiche du poste, *Plus › Retirer l'agent Wazuh…*, ou *Retirer* sur sa ligne. L'agent est désinstallé du poste.
+Device page, *More › Remove the Wazuh agent…*, or *Remove* on its row. The agent is uninstalled from the device.
 
-Si loco a accès au manager (ci-dessous), il efface ensuite l'entrée du poste sur le manager, et le compte rendu du
-retrait, dans l'historique du poste, le dit : « Entrée 003 retirée du manager Wazuh. » Sinon, l'entrée reste sur le
-manager : supprimez-la là-bas si le poste ne doit plus y figurer.
+If loco has access to the manager (below), it then deletes the device's entry on the manager, and the removal
+report, in the device's history, says so: "Entry 003 removed from the Wazuh manager." Otherwise, the entry stays on the
+manager: delete it there if the device should no longer appear.
 
-## Effacer l'entrée du manager
+## Deleting the manager's entry
 
-*Mon parc › Wazuh*, bloc **Retrait des entrées du manager** — facultatif, à régler une fois.
+*My fleet › Wazuh*, **Removing manager entries** block — optional, to set up once.
 
-loco se connecte au manager en SSH, avec une clé qui lui est propre, et n'y lance qu'une commande :
-`manage_agents -r <numéro>`. Trois étapes :
+loco connects to the manager over SSH, with a key of its own, and runs only one command there:
+`manage_agents -r <number>`. Three steps:
 
-1. **Autoriser la clé de loco** — loco affiche une ligne à ajouter au fichier `~/.ssh/authorized_keys` du compte
-   choisi sur le manager (`root` en général, `manage_agents` demandant les droits d'administration) :
+1. **Authorize loco's key** — loco shows a line to add to the `~/.ssh/authorized_keys` file of the chosen
+   account on the manager (`root` in general, since `manage_agents` requires administration rights):
 
    ```
    restrict,command="/var/ossec/bin/manage_agents -r $(printf %s \"$SSH_ORIGINAL_COMMAND\" | tr -cd 0-9)" ssh-ed25519 AAAA… loco@…
    ```
 
-   Avec elle, la clé ne peut lancer que `manage_agents -r`, avec les seuls **chiffres** de ce qu'elle envoie : ni
-   shell, ni redirection, ni autre commande (`restrict` coupe aussi terminal et tunnels). La clé privée reste sur le
-   serveur loco.
-2. **Relever la clé d'hôte** — indiquez le compte et le port SSH ; loco relève la clé que présente le manager et en
-   montre l'empreinte. Comparez-la à celle du manager (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`), puis
-   confirmez : loco n'échangera qu'avec cette clé-là.
-3. **Essayer** — *Essayer l'accès* demande au manager de retirer un numéro qu'aucun agent ne porte : rien n'est retiré,
-   mais loco sait que l'accès fonctionne. Il prévient si la clé ouvre un shell complet (ligne sans `command=`).
+   With it, the key can only run `manage_agents -r`, with only the **digits** of what it sends: no
+   shell, no redirection, no other command (`restrict` also cuts the terminal and tunnels). The private key stays on the
+   loco server.
+2. **Read the host key** — give the account and the SSH port; loco reads the key the manager presents and
+   shows its fingerprint. Compare it with the manager's (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`), then
+   confirm: loco will only talk with that key.
+3. **Try** — *Try the access* asks the manager to remove a number that no agent has: nothing is removed,
+   but loco knows the access works. It warns if the key opens a full shell (line without `command=`).
 
-Ensuite, à chaque retrait réussi, loco efface l'entrée du poste. Par prudence, il ne le fait que si :
+Afterwards, at each successful removal, loco deletes the device's entry. To be safe, it only does it if:
 
-- le poste était relié au manager réglé (pas à un autre) ;
-- le poste dit l'agent bien désinstallé ;
-- le numéro de l'agent est connu — jamais `000`, le manager lui-même.
+- the device was linked to the manager that is set (not another one);
+- the device reports the agent as properly uninstalled;
+- the agent's number is known — never `000`, the manager itself.
 
-Changer l'adresse du manager dans les réglages oublie la clé d'hôte : elle se confirme de nouveau. *Retirer l'accès*
-coupe tout de suite ; retirez aussi la ligne d'`authorized_keys` sur le manager.
+Changing the manager's address in the settings forgets the host key: it is confirmed again. *Remove the access*
+cuts everything at once; also remove the line from `authorized_keys` on the manager.
 
-## Ce qui se passe sur le poste
+## What happens on the device
 
-L'agent loco, qui tourne en root (SYSTEM sous Windows) :
+The loco agent, which runs as root (SYSTEM on Windows):
 
-1. reçoit le paquet de loco et vérifie son empreinte SHA-256 ;
-2. l'installe avec le gestionnaire du système (`apt-get`, `dnf` ou `msiexec`), en donnant au paquet l'adresse du
-   manager et le groupe — les variables de déploiement prévues par Wazuh ;
-3. écrit le mot de passe d'enrôlement, s'il y en a un, dans le fichier que lit l'agent Wazuh :
-   `/var/ossec/etc/authd.pass` (`root:wazuh`, mode 640) sous Linux, `authd.pass` dans le dossier de l'agent sous
-   Windows (SYSTEM et administrateurs seulement) ;
-4. active et démarre le service (`wazuh-agent`, `WazuhSvc` sous Windows) ;
-5. attend une trentaine de secondes le premier échange avec le manager, puis rend compte.
+1. receives the package from loco and checks its SHA-256 fingerprint;
+2. installs it with the system's package manager (`apt-get`, `dnf` or `msiexec`), giving the package the address of the
+   manager and the group — the deployment variables provided by Wazuh;
+3. writes the enrollment password, if there is one, to the file the Wazuh agent reads:
+   `/var/ossec/etc/authd.pass` (`root:wazuh`, mode 640) on Linux, `authd.pass` in the agent's folder on
+   Windows (SYSTEM and administrators only);
+4. enables and starts the service (`wazuh-agent`, `WazuhSvc` on Windows);
+5. waits about thirty seconds for the first exchange with the manager, then reports.
 
-Le mot de passe n'est jamais passé en argument d'une commande ni écrit dans une sortie : il voyage dans la commande
-remise à l'agent loco, par son canal HTTPS, et loco ne le garde pas avec la commande.
+The password is never passed as a command argument nor written to an output: it travels in the command
+handed to the loco agent, through its HTTPS channel, and loco does not keep it with the command.
 
-Sur un poste déjà équipé, la mise à jour du paquet garde `ossec.conf` : loco y remplace seulement l'adresse du manager
-si elle a changé.
+On a device already equipped, the package update keeps `ossec.conf`: loco only replaces the manager's address there
+if it has changed.
 
-## Droits
+## Rights
 
-Trois droits, dans les profils d'accès :
+Three rights, in the access profiles:
 
-| Droit | Permet |
+| Right | Allows |
 |---|---|
-| **Consulter Wazuh** | voir la page et l'état des postes |
-| **Installer et retirer l'agent Wazuh** | poser l'agent, le mettre à jour, le retirer — sur les postes du parc de son profil |
-| **Régler Wazuh** | adresse du manager, mot de passe d'enrôlement, groupe et version, accès de loco au manager |
+| **View Wazuh** | seeing the page and the devices' state |
+| **Install and remove the Wazuh agent** | installing the agent, updating it, removing it — on the devices of their profile's fleet |
+| **Configure Wazuh** | manager address, enrollment password, group and version, loco's access to the manager |
 
-Le profil Administrateur les a tous ; les autres profils doivent les recevoir. Les droits sont revérifiés au moment où
-la commande part vers le poste.
+The Administrator profile has all of them; other profiles must receive them. Rights are checked again when
+the command goes out to the device.
 
-## Si ça ne se connecte pas
+## If it does not connect
 
-Le compte rendu de l'installation (historique du poste) le dit : « installé et démarré ; pas encore connecté ».
+The installation report (device history) says so: "installed and started; not connected yet".
 
-| À vérifier | Comment |
+| To check | How |
 |---|---|
-| Le poste joint-il le manager ? | ports **1514** (échanges) et **1515** (enrôlement) ouverts du poste vers le manager |
-| La version | l'agent ne doit pas être plus récent que le manager |
-| `Invalid password` | le mot de passe ne correspond pas à `/var/ossec/etc/authd.pass` du manager (espace ou saut de ligne en trop compris) |
-| `Invalid request for new agent` | le poste envoie un mot de passe alors que le manager n'en attend pas (`<use_password>no</use_password>`) : cochez *ne plus en envoyer*, puis *Réappliquer* |
-| Le groupe | il doit exister sur le manager (`/var/ossec/bin/agent_groups -l`) |
-| Un ancien agent du même nom | une entrée du même nom sur le manager peut bloquer l'enrôlement : la retirer, puis *Réappliquer* |
+| Does the device reach the manager? | ports **1514** (exchanges) and **1515** (enrollment) open from the device to the manager |
+| The version | the agent must not be newer than the manager |
+| `Invalid password` | the password does not match the manager's `/var/ossec/etc/authd.pass` (extra space or line break included) |
+| `Invalid request for new agent` | the device sends a password while the manager does not expect one (`<use_password>no</use_password>`): tick *stop sending one*, then *Apply again* |
+| The group | it must exist on the manager (`/var/ossec/bin/agent_groups -l`) |
+| An old agent with the same name | an entry with the same name on the manager can block enrollment: remove it, then *Apply again* |
 
-Sur le poste, le journal de l'agent Wazuh dit pourquoi : `/var/ossec/logs/ossec.log` (Linux),
+On the device, the Wazuh agent's log says why: `/var/ossec/logs/ossec.log` (Linux),
 `C:\Program Files (x86)\ossec-agent\ossec.log` (Windows).
 
 ---
 
-[← Retour à la présentation](../README.md) · [Toute la documentation](README.md)
+[← Back to the overview](../README.md) · [All the documentation](README.md)

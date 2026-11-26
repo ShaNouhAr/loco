@@ -1,0 +1,1781 @@
+[English](CHANGELOG.md) · **Français** · [Español](CHANGELOG.es.md)
+
+# Journal des versions
+
+## 2.206.0 — 2026-11-26
+
+- **Relier Proxmox et Home Assistant se fait dans Mon parc › Enrôlement.** Deux onglets, *Proxmox VE* et *Home Assistant*, à côté de Windows, Linux et Android, donnent les étapes de liaison et la confirmation de l'empreinte (certificat de Proxmox, clé d'hôte de Home Assistant). Pour Proxmox, une dernière étape liste les serveurs reliés par leur jeton mais pas encore par SSH (*Relier par SSH*), ce qu'il faut pour les voir dans Mon parc. *Sauvegardes* et la page *Home Assistant* gardent ce qui est déjà relié et renvoient à l'enrôlement pour en relier un nouveau ; le renouvellement d'un certificat ou d'une clé d'hôte se confirme toujours sur place.
+- **Mon parc : un Proxmox qui doit redémarrer se présente comme un poste.** Sans mise à jour à installer, il est *à jour* (pastille verte), avec *redémarrage nécessaire* en dessous, au lieu de « redémarrage requis » à la place de l'état ; la vue d'ensemble le compte de même.
+- **Administration › Configuration, remise en ordre.** La page est rangée par question : *Qui peut joindre loco* (postes du parc, ordinateurs qui ouvrent le portail, HTTP non chiffré), *Sortie vers Internet* (proxy d'entreprise, DNS pour joindre Microsoft), *Caches servis à vos postes* — une ligne par cache, avec son interrupteur, sa taille maximale et la place qu'il occupe —, puis *Envois vers le portail*. Chaque réglage dit à quoi il sert, en français, en anglais et en espagnol (les libellés restaient en français). Le nombre de sauvegardes conservées, déjà réglable dans *Sauvegardes*, n'y est plus en double ; *Voir aussi* mène aux réglages voisins (Sauvegardes, Fonctionnalités, Système). Un seul *Appliquer*, qui redémarre les services une fois.
+
+## 2.205.0 — 2026-11-26
+
+- **« Serveur MCP » devient « MCP et API », avec des clés.** La page d'Administration › Accès s'appelle maintenant *MCP et API* : les mêmes clés servent à un LLM, par son client MCP (Claude Code, Codex, Cursor…), et à vos scripts ou outils de supervision, par l'API REST. On parle partout de *clés* plutôt que de *jetons* : page, installateurs Claude et Codex, autorisation d'une application, droit *Créer des clés MCP et API*, journal, Fonctionnalités et documentation.
+- **Chaque compte voit ses clés.** La page montre d'abord *Vos clés*. Celles des autres comptes, qu'un administrateur peut révoquer sans changer leurs outils, sont dans un tableau à part, avec le compte qui les tient. Un compte qui n'a plus le droit d'en créer voit et révoque quand même les siennes : avant, elles continuaient de marcher sans qu'il puisse les voir.
+- **Corrigé : après une mise à jour du système, la page des mises à jour restait sur l'ancien état.** La page se rechargeait dès la fin de l'installation, avant que loco ait relu ce qui restait à mettre à jour : elle montrait encore les paquets tout juste installés et ne se rafraîchissait plus. L'opération ne s'annonce maintenant finie qu'après cette relecture — dernière étape de la barre : *Vérification de ce qui reste à mettre à jour* —, et la page se recharge aussi dès qu'une vérification se termine.
+
+## 2.204.0 — 2026-11-26
+
+- **Mon parc : se réserver un poste.** Sur la fiche d'un appareil, *Plus › Réserver ce poste…* le réserve avec un mot de passe : les autres comptes — même au profil Administrateur — doivent le saisir pour ouvrir son terminal, son bureau à distance (console comprise) et ses fichiers, pour le redémarrer (redémarrage, mise à jour suivie d'un redémarrage, mise à jour vers une nouvelle version du système), et sur Android pour son terminal adb, son écran et son déverrouillage. Saisi, il ouvre l'accès une demi-heure (*Refermer* le ferme plus tôt) ; cinq essais manqués bloquent un quart d'heure. Tout le reste leur reste ouvert selon leurs droits : inventaire, mises à jour sans redémarrage, déploiements, scripts, retrait de l'agent, oubli du poste. Les redémarrages groupés de Mon parc laissent de côté un poste réservé par un autre compte et les mises à jour groupées le mettent à jour sans le redémarrer (sauf mot de passe déjà saisi) ; une mise à jour par vagues ou une planification ne le redémarre que si son auteur en est le propriétaire. La fiche montre *Réservé par …*, Mon parc un cadenas près du nom ; seul le propriétaire change le mot de passe ou libère le poste. Réserver ou changer le mot de passe ferme les sessions déjà ouvertes par les autres ; réserver annule aussi les redémarrages qu'ils avaient demandés et qui n'étaient pas encore partis vers le poste. Les outils MCP et l'API des autres comptes sont refusés sur un poste réservé (seule une personne peut saisir le mot de passe). Mot de passe gardé haché, jamais affiché ; perdu, le poste s'oublie puis se réinscrit. Nouveau droit *Se réserver un appareil* ; tout est inscrit au journal.
+- **Corrigé : le message d'une action demandée sur un poste.** Il accordait tout au féminin (« Redémarrage demandée », « Inventaire demandée ») ; il dit maintenant « Redémarrage en attente sur … : lancement au prochain contact ».
+
+## 2.203.0 — 2026-11-25
+
+- **Partages de fichiers : ouvrir un partage dans loco, avec un vrai gestionnaire de fichiers.** *Ouvrir*, sur la carte d'un partage, l'affiche dans le navigateur : parcourir ses dossiers, téléverser des fichiers ou des dossiers entiers (bouton, ou glisser-déposer depuis l'ordinateur), télécharger un fichier, ou un dossier et une sélection en archive ZIP, aperçu des photos, des PDF, du son et des vidéos (avec les voisins du dossier, ← →), éditeur pour les fichiers texte, nouveau dossier ou fichier, renommer, copier, couper et coller — dans le partage ou vers un autre —, supprimer, propriétés (taille d'un dossier et de son contenu). Sélection de plusieurs éléments (cases, Maj et Ctrl + clic, barre du bas), tri par nom, taille ou date, filtre du dossier et recherche dans les sous-dossiers (sans casse ni accents), clic droit, raccourcis clavier (Suppr, F2, Ctrl+C/X/V, Ctrl+A, Entrée, Retour arrière…), dossiers précédent et suivant, espace disque façon TreeSize. Un nom déjà pris est soumis avant le moindre envoi ou collage : remplacer, garder les deux, ignorer, une fois pour toutes si l'on veut. La date de modification d'origine des fichiers envoyés est gardée ; un fichier modifié entre-temps par quelqu'un d'autre n'est pas écrasé depuis l'éditeur. La place occupée sur la taille limite est affichée : un envoi qui la dépasserait est refusé d'avance, et un partage plein ne peut plus que diminuer (supprimer, renommer, déplacer).
+- **Qui ouvre quoi : un nouveau droit, « Ouvrir les partages dans le navigateur ».** Avec *Gérer les partages de fichiers*, il ouvre tous les partages en lecture et écriture ; sinon, ceux de l'utilisateur Samba lié au compte loco, avec ses droits sur le réseau (lecture, ou lecture et écriture) — un utilisateur Samba désactivé n'ouvre plus rien. Un compte qui n'a que ce droit voit, dans *Partages de fichiers*, la liste de ses partages (place, adresse sur le réseau, *Ouvrir*) et rien de leur gestion. Les envois, créations, renommages, copies, déplacements et suppressions vont au journal.
+- **Sûreté des fichiers des partages.** Le portail ne touche jamais lui-même aux dossiers des partages : un service à part, lancé par l'agent root sous le compte propriétaire des partages (sans aucun droit root), fait chaque opération dans le dossier du partage — un chemin y est suivi un dossier après l'autre, sans jamais traverser un lien symbolique — et passe au portail le fichier déjà ouvert pour un envoi ou un téléchargement. Les fichiers créés depuis loco ont les mêmes propriétaire et droits que ceux posés par Samba. Les noms qu'un poste Windows ne pourrait pas ouvrir (`\ / : * ? " < > |`, point ou espace final, `CON`, `NUL`…) sont refusés. Une page HTML ou une image SVG d'un partage se télécharge, jamais elle ne s'exécute dans le navigateur.
+- **Un seul gestionnaire de fichiers, aussi pour les postes.** L'onglet *Fichiers* d'un appareil reçoit le même : sélection multiple, tri, filtre, aperçu des photos, PDF, son et vidéo (lus depuis le poste), clic droit, raccourcis, glisser-déposer de dossiers entiers, déplacement par glisser vers un dossier, conflits de noms demandés avant l'envoi. Les agents ne changent pas.
+- **Les couleurs du thème s'appliquent aux ressources.** Les jauges processeur, mémoire et disque de *Mon parc*, de la fiche d'un poste (disques), de Home Assistant, de Proxmox et des équipements réseau, et la courbe du processeur de la supervision, prennent les tons de la couleur d'accent choisie — adoucis vers le gris du thème, gris avec l'accent neutre ; un accent chaud (orange, ambre, rose) l'est davantage, pour qu'une jauge normale ne ressemble jamais à une alerte. L'orange (presque plein) et le rouge (plein) restent ceux des alertes ; la courbe de la mémoire garde une autre teinte.
+- **Corrigé : l'espace disque d'un poste Linux.** Le bouton *Espace disque : voir ce qui occupe le plus* du gestionnaire de fichiers n'apparaissait jamais pour les postes Linux (seulement Windows).
+- **Corrigé : les graduations du graphique en direct.** Sur la fiche d'un poste, les repères 100 %, 50 % et 0 % de l'axe du graphique *En direct* restaient en haut à gauche (style refusé par la politique de sécurité du portail).
+
+## 2.202.1 — 2026-11-25
+
+- **Agent Windows : une coupure de courant pendant sa mise à jour ne le fait plus disparaître.** L'installateur retirait l'ancienne version avant de poser la nouvelle : un PC éteint brutalement entre les deux restait sans agent — dossier vide, service introuvable — et sortait du parc jusqu'à une réinstallation à la main (arrivé à un poste le 25/11). La nouvelle version est maintenant posée en entier avant que l'ancienne soit retirée. Vérifié sur Windows 11 en coupant la machine à quatre moments de la mise à jour : l'agent repart chaque fois, avec l'ancienne ou la nouvelle version, et la mise à jour suivante passe. L'ancien ordre, coupé au même endroit, laissait bien le poste sans agent.
+- **Agent Windows : ses fichiers de réglages résistent aux coupures.** Ils sont écrits jusqu'au disque avant de remplacer les précédents (l'identité du poste en dépend), et le journal de la mise à jour est écrit ligne à ligne, lisible même après une coupure.
+- **Agent Windows : les anciens installeurs ne s'accumulent plus.** Chaque mise à jour en gardait une copie, des dizaines au fil des versions : seul celui de la version en marche reste.
+
+## 2.202.0 — 2026-11-25
+
+- **Mon parc : Home Assistant et Proxmox se comportent comme les autres appareils.** *Tout mettre à jour* et la planification de tout le parc les mettent à jour aussi (Home Assistant avec une sauvegarde avant), et le nombre du bouton les compte. Leurs lignes suivent les filtres (*État*, *Système* — avec *Home Assistant* et *Proxmox VE* —, *Situation*), la recherche et l'actualisation en direct ; elles comptent dans les nombres de la page et dans l'anneau de la vue d'ensemble, leurs tâches s'affichent dans le déroulé des *Mises à jour* et dans la pastille de navigation, et Ctrl K les trouve. Home Assistant montre les ressources de son hôte (disque ; mémoire et processeur sur Home Assistant OS) et se coche avec les droits de ses propres boutons (mettre à jour, redémarrer) au lieu de « gérer ». Ils ne sont membres d'aucun groupe : *Mettre à jour ce groupe* ne les touche pas.
+- **Proxmox redémarre depuis Mon parc, après les mises à jour du parc.** Avec une sélection, *Mettre à jour puis redémarrer si nécessaire* (seulement si la mise à jour installe un noyau à charger) ou le nouveau bouton *Redémarrer* de sa ligne quand c'est requis, comme un poste — sauf que loco attend d'abord la fin des mises à jour en cours sur les postes du parc, une heure au plus : l'hyperviseur arrête toutes ses machines avec lui, loco compris, et ne doit couper aucune installation. La tâche dit ce qu'elle attend.
+- **SSO : la photo de profil vient du fournisseur.** À la connexion par OpenID Connect (Authentik…), loco reprend la photo du compte chez le fournisseur (claim `picture`) : relue si elle change, au plus une fois par jour, retirée s'il n'en donne plus (avatar à initiales). Une image choisie dans *Mon compte* l'emporte, et *Reprendre la photo de mon compte …* revient à celle du fournisseur. L'image n'est demandée qu'au fournisseur lui-même (même confiance que la connexion) ou à une adresse publique (Gravatar) — jamais à une adresse interne ni par une redirection ; PNG, JPEG, GIF ou WebP, 2 Mo au plus. Vérifié avec un vrai Authentik 2026.8.6 : image servie par Authentik (certificat épinglé), Gravatar, retour aux initiales.
+- **Mon compte : changer de thème ne retire plus la photo de profil.** Enregistrer l'apparence (thème, couleur, fond, logo) réécrivait tous ses réglages : la photo de profil disparaissait, avec les encadrés masqués (« ne plus afficher »).
+
+## 2.201.1 — 2026-11-25
+
+- **Android : fermer la session d'écran verrouille vraiment la tablette ou le téléphone.** Le verrouillage attendait cinq secondes après la fin de la session, et une session rouverte entre-temps l'annulait : fermer la session puis la rouvrir aussitôt pour vérifier laissait l'appareil ouvert. Il se fait maintenant dès la fin de la dernière session d'écran ; une session rouverte ensuite trouve l'appareil verrouillé (*Déverrouiller*, dans la session). Jamais tant que loco pilote encore l'écran par adb. Le résultat est noté dans le journal d'Android (étiquette `loco`).
+
+## 2.201.0 — 2026-11-25
+
+- **Partages de fichiers : le port SMB est ouvert d'office sur le pare-feu du serveur.** Samba n'a besoin que du port 445/TCP (NetBIOS est coupé) : loco l'ouvre lui-même sur le pare-feu actif du serveur — ufw (Debian, Ubuntu, l'appliance) ou firewalld — pour les réseaux des postes, tant que les partages sont servis, et le referme quand on les coupe. Ses règles portent leur marque (`loco-samba`) et celles de l'administrateur ne sont jamais touchées ; un pare-feu allumé après coup reçoit la règle dans les dix minutes. La page des partages dit ce qu'il en est (*Pare-feu du serveur*).
+- **Partages de fichiers : l'adresse pour chaque système.** Le serveur et chaque partage montrent, à copier, `\\serveur\partage` pour Windows et `smb://serveur/partage` pour Linux et macOS.
+- **Partages de fichiers : couper une connexion.** L'onglet *Connexions* montre une ligne par connexion d'un poste — utilisateur, partages ouverts, poste, depuis quand — et *Couper* la termine : le processus de Samba qui la sert, celui que Samba désigne lui-même (loco n'en arrête jamais un autre), se ferme proprement. Le poste se reconnecte de lui-même tant que l'utilisateur garde ses droits ; la case *Désactiver aussi* l'en empêche. La coupure est inscrite au journal.
+- **Partages de fichiers : ce qu'on retire vaut aussi pour les connexions déjà ouvertes.** Samba n'applique sa configuration qu'aux connexions qui s'ouvrent : un utilisateur désactivé ou retiré, ou dont on retirait le droit sur un partage, gardait sa connexion ouverte — et pouvait encore y écrire — tant que son poste restait connecté ; un partage plein restait inscriptible pour les postes déjà connectés, un partage retiré restait ouvert. Désormais, à chaque changement, loco ferme aussitôt ce qui n'est plus permis : les connexions d'un utilisateur désactivé ou retiré, et le partage sur les connexions dont le droit a changé (retiré, passé en lecture seule, ou rendu) — le poste qui y a encore droit le rouvre de lui-même, avec ses nouveaux droits. Vérifié avec le vrai Samba 4.23 d'Alpine.
+- **Partages de fichiers : des boutons plutôt que des menus « ⋮ ».** Modifier, désactiver, retirer se font directement depuis la carte du partage et la ligne de l'utilisateur, sans menu à ouvrir.
+- **Menus « ⋮ » des tableaux (gestionnaire de fichiers, groupes, annuaires, Wazuh) : plus jamais rognés ni hors de l'écran.** Sur la dernière ligne d'un tableau, le menu était coupé par le tableau, qui gagnait une barre de défilement ; sur un téléphone, il sortait de l'écran par la gauche. Il s'ouvre maintenant par-dessus la page, sous son bouton ou au-dessus faute de place, toujours entier, et suit la page qui défile.
+
+## 2.200.0 — 2026-11-25
+
+- **Android : toujours joignable, écran éteint et appareil verrouillé.** Android endort le processeur quand plus rien ne le tient : les contacts de l'application cessaient et loco perdait l'appareil au bout d'environ une heure de veille. Désormais, sur secteur, l'application tient le processeur éveillé (l'écran reste éteint) et le Wi-Fi hors de son économie d'énergie : contacts, canal persistant et débogage sans fil continuent comme écran allumé. Sur batterie, Android la réveille toutes les cinq minutes, même en veille profonde, pour un contact et pour rouvrir le canal. Le réglage *Toujours joignable* de l'application la garde aussi éveillée sur batterie, au prix d'une consommation plus forte.
+- **Android : l'optimisation de la batterie est levée.** L'application la demande d'elle-même, une fois par version, tant qu'elle n'est pas levée — sinon Android coupe aussi son réseau en veille. Sur un appareil appairé en adb, loco la lève lui-même dès que l'application la signale revenue (liste blanche de la veille, activité en arrière-plan). La fiche de l'appareil montre *Veille non levée* tant qu'elle ne l'est pas.
+- **MCP sous Windows : `terminal_job` suit une tâche en cours.** Le lanceur détaché d'une tâche de fond garde sa sortie (`out.txt`) ouverte en écriture : la lecture, qui demandait l'exclusivité, échouait (« le processus ne peut pas accéder au fichier… ») au lieu de rendre un état, pendant la tâche et juste après. Sortie, code de sortie et numéro de processus sont maintenant lus en partage, et un fichier momentanément illisible ne coupe plus le suivi : la tâche garde toujours un état (en cours avec sa sortie partielle, terminée…). Vérifié sur Windows 11.
+
+## 2.199.0 — 2026-11-25
+
+- **MCP : une commande qui dépasse son délai est vraiment arrêtée.** Jusqu'ici, `terminal_run` rendait la main au délai et envoyait un Ctrl+C, que certains programmes ignorent (`cmd /c … .bat` demande alors « Terminer le programme de commandes (O/N) ? ») : le shell restait occupé et toutes les commandes suivantes expiraient. Désormais, au délai, le shell et tous les processus que la commande a lancés sont fermés (Windows, Linux, Android), et l'appel suivant ouvre un shell neuf. Un shell resté occupé est repéré au lieu de faire expirer la commande suivante : il est fermé, la commande part dans un shell neuf et la réponse le signale. `fresh` demande un shell neuf ; `reset` de `terminal_interact` reste la voie de secours du terminal interactif.
+- **MCP : commandes en arrière-plan.** `terminal_run` avec `background` lance une commande détachée du terminal — elle survit à la fermeture de la session — et rend un numéro de tâche ; le nouvel outil `terminal_job` en donne l'état, le code de sortie et la sortie, ou l'arrête avec tout ce qu'elle a lancé. Pour les compilations et installations longues.
+- **MCP : sortie plafonnée, jamais d'écho de la commande.** `terminal_run`, `adb_shell` et `terminal_job` rendent au plus `max_output` caractères (24 000 par défaut, sous la limite des clients MCP) en gardant le début et la fin. Un long script ne part plus en une seule ligne de terminal : sous Linux et dans le shell adb, l'écho et l'édition de ligne du shell réservé à l'assistant sont coupés et le script part par lignes courtes — une commande adb chargée de 15 Ko de base64 ne revient plus réaffichée dans une réponse de plus de 60 Ko.
+- **MCP : fichiers vers et depuis un appareil Android, par adb.** Nouveaux outils `push_file` et `pull_file`, comme `adb push` / `adb pull`, avec les droits de l'utilisateur *shell* d'Android (`/data/local/tmp`…) : le contenu passe dans le corps de la requête (jamais dans une ligne de commande) ou va directement d'un poste du parc à l'appareil, et inversement — un `.dex` construit sur un PC Windows part sur la tablette sans détour —, puis il est vérifié sur l'appareil (taille et SHA-256). Là où l'application loco n'a pas accès, `write_file` et `read_file` passent d'eux-mêmes par adb.
+- **MCP : `write_file` écrit en UTF-8 sans BOM, partout, et le dit.** Options `charset` (utf-8 par défaut, utf-8-bom, ascii strict, utf-16le-bom) et `newline` (lf, crlf) ; la documentation des outils recommande `write_file` plutôt que le terminal pour déposer du code (`Set-Content -Encoding UTF8` de PowerShell 5.1 ajoute un BOM qui fait échouer javac).
+- **MCP sous Windows : `exit 3` ne ferme plus la session.** Le code de sortie revient, la console reste ouverte ; une erreur PowerShell donne toujours le code 1.
+- **Jetons MCP existants** : ceux qui avaient `terminal_run` reçoivent `terminal_job`, ceux qui avaient `adb_shell` reçoivent `push_file` et `pull_file` (migration 61).
+- **Android : fermer la session d'écran verrouille le téléphone ou la tablette.** Quelques secondes après la fin de la dernière session d'écran, l'appareil se verrouille comme avec le bouton marche/arrêt (Android 9 et plus ; pas les téléviseurs). Une session rouverte aussitôt le trouve tel quel.
+- **Android : le terminal de l'application arrête aussi ce qu'une commande a lancé** (Ctrl+C, délai dépassé, fin de session), plus seulement son `sh`.
+
+## 2.198.1 — 2026-11-24
+
+- **Déverrouiller : le schéma se trace en diagonale.** Sur le pavé du portail, chaque point occupait toute sa case : un trait en diagonale accrochait les points voisins au passage. Le pavé se comporte maintenant comme la grille d'Android : un point n'est pris que si le pointeur passe près de son centre, un geste vif ne saute aucun point traversé, le trait suit le pointeur, et un point sauté sur une ligne droite (1 → 3, 1 → 9…) est pris au passage, comme Android le fait. Même pavé dans la session d'écran et dans *Contrôler l'écran*.
+
+## 2.198.0 — 2026-11-24
+
+- **Android : « Déverrouiller » passe dans la session d'écran.** Un bouton de la barre d'outils ouvre un pavé où tracer le schéma (ou cliquer ses points dans l'ordre), ou des champs pour le code PIN et le mot de passe ; l'application loco réveille l'appareil, fait monter la saisie du code et y entre le code. Le code n'est ni gardé ni journalisé, et l'application ne le tape jamais ailleurs que dans la saisie du code : sur un appareil déjà déverrouillé, il est simplement oublié. Le déverrouillage par adb quitte la fiche de l'appareil pour la barre de *Contrôler l'écran*.
+- **Retenir le code de déverrouillage, pour soi seul.** Une case garde le schéma (ou le code PIN, le mot de passe) pour les prochaines sessions sur cet appareil : *Déverrouiller* déverrouille alors d'un clic. Le code est scellé sur le serveur et lié au compte et à l'appareil ; personne d'autre, administrateur compris, ne peut s'en servir, il n'est jamais affiché, et le journal ne note que son enregistrement, son usage et son oubli (migration 60).
+- **OnePlus, Oppo, Realme (OxygenOS, ColorOS) : le schéma est reconnu.** La grille de ces surcouches porte un autre nom que celle d'Android d'origine : l'application ne la trouvait pas et le code tapé restait sans effet. Elle la trouve maintenant, comme celles des surcouches qui la nomment de façon semblable, et fait monter la saisie du code par la demande officielle à Android (le balayage vers le haut partait sur les notifications de l'écran de verrouillage). Vérifié sur une OnePlus Pad 3 (OxygenOS 16).
+- **Déverrouillage par adb : la grille est repérée sur l'écran.** Une fois la saisie du code ouverte, loco lit la position exacte de la grille dans la description de l'écran que donne Android, au lieu de la déduire de la marque : le schéma passe du premier coup sur une tablette OnePlus, dans n'importe quelle orientation. Le calcul par marque et le calage restent pour les appareils qui la taisent.
+- **OxygenOS / ColorOS : plus d'écran noir après le déverrouillage.** Ces surcouches masquent les applications dans le partage d'écran accordé une fois pour toutes par l'appairage adb ; seules les barres du système restaient visibles. L'application le repère, arrête ce partage et montre l'écran par l'accessibilité (environ trois images par seconde ; *Contrôler l'écran*, par adb, reste fluide).
+- **adb : « failed to connect » réparé.** Un autre programme du compte loco qui empruntait le serveur adb de loco pouvait le démarrer le premier, au démarrage du serveur, avec une autre clé : les appareils appairés refusaient alors loco. loco repère ce serveur et relance le sien avec sa clé. Un appareil qui ne reconnaît vraiment plus loco est dit tel quel (« appairez-le de nouveau ») au lieu d'un message d'adb.
+
+## 2.197.1 — 2026-11-24
+
+- **Fonctionnalités : la confirmation dit ce qui change.** En activant une fonctionnalité, la fenêtre de confirmation annonçait que « les utilisateurs perdent l'accès aux fonctionnalités désactivées », même quand rien n'était coupé. Elle dit maintenant ce qui est activé, ce qui est coupé — et ce qui l'est avec, par dépendance (couper *Mon parc* coupe aussi l'accès distant, les scripts…) —, ne parle des services réseau que si l'un d'eux change, et n'apparaît plus quand rien ne change.
+
+## 2.197.0 — 2026-11-24
+
+- **Partages de fichiers (facultatif) : le serveur loco partage des dossiers sur le réseau, en SMB, comme un NAS.** loco installe Samba depuis les dépôts du système et le règle lui-même : comptes seulement (ni invité ni anonyme), SMB 2 et plus récents sur le port 445, sans NetBIOS ni imprimantes, réseaux des postes de loco seulement. Chaque partage vit sur une **partition déjà en service**, choisie d'un clic — loco n'en formate ni n'en monte aucune —, dans un dossier qu'il crée lui-même d'après le nom du partage : aucun chemin à taper. Chaque partition s'affiche en barre (système et autres données, fichiers des partages, place réservée, place libre) et la taille limite se choisit au curseur, dessinée sur cette barre ; chaque partage a son anneau d'occupation. Sur l'appliance, Debian et Ubuntu ; à activer dans *Fonctionnalités*.
+- **Taille limite par partage** : les postes Windows voient le partage comme un disque de cette taille ; au-delà, il passe **en lecture seule** pour tout le monde, l'alerte apparaît dans *À traiter*, et l'écriture revient d'elle-même dès qu'on y a fait de la place.
+- **Utilisateurs Samba, tous réglés sur la page des partages** : un compte loco choisi dans la liste (son identifiant ; désactivé et retiré avec son compte), ou un utilisateur Samba seul, sans accès à loco (poste de numérisation, collègue, imprimante). L'administrateur choisit son mot de passe et ses droits partage par partage (lecture, ou lecture et écriture), depuis l'utilisateur ou depuis le partage ; on peut le désactiver sans perdre son mot de passe. Les mots de passe vont à Samba par son entrée standard, jamais dans les arguments, la base ni le journal de loco.
+- **Équipements réseau : relevés de fond et sauvegardes planifiées de nouveau faits.** Depuis la 2.193.0, la boucle de fond s'arrêtait sur une erreur silencieuse : les équipements n'étaient relevés qu'à l'ouverture de leur page, et les sauvegardes de configuration planifiées (chaque jour par défaut) ne se faisaient jamais.
+- **Serveur Debian ou Ubuntu : la purge et l'analyse des caches depuis le portail fonctionnent.** Le portail, confiné par systemd, ne pouvait pas déposer ces demandes pour l'agent d'administration (l'appliance n'était pas concernée).
+
+## 2.196.0 — 2026-11-24
+
+- **Vue d'ensemble, Mon parc et page Système plus rapides.** Sur un parc de 300 postes, la vue d'ensemble s'affiche en 25 ms au lieu de 190 (33 requêtes à la base au lieu de 334), l'état du serveur interrogé par les pages en direct en 4 ms au lieu de 130, la page *Système* en 15 ms au lieu de 93, et Mon parc avec son actualisation en direct fait 18 requêtes au lieu de 318. La charge du processeur est mesurée en arrière-plan (chaque affichage attendait 120 ms pour la mesurer) ; le certificat du portail, la liste des fuseaux horaires et les versions des services installés ne sont plus relus à chaque page ; le dernier résultat de chaque poste est lu en une seule fois ; la vue d'ensemble ne calcule plus que la couleur des postes, sans le détail de leurs raisons. Nouvel index pour les mises à jour en échec (migration 58).
+- **Feuilles de style et scripts compressés** par nginx sur l'appliance : la feuille de style passe de 210 Ko à 45 Ko transférés, le script du portail de 122 à 35 Ko — pages plus vives sur une liaison lente (VPN, téléphone).
+- **Code allégé** : chiffrement des secrets, sessions de terminal tenues par le serveur (Home Assistant, Proxmox, équipements réseau), clés d'hôte SSH connues, envoi de paquets aux dépôts Linux et lecture des recherches dans les catalogues regroupés chacun en un seul endroit ; code mort retiré, ainsi que 30 classes de style et 209 textes traduits qui ne servaient plus.
+
+## 2.195.0 — 2026-11-24
+
+- **Enrôlement : le nom DNS, puis l'IP.** Quand loco a un nom DNS — l'adresse du portail, ou à défaut le nom complet de son certificat d'entreprise —, la commande d'installation (Linux et Windows), le script Linux, les paquets .deb et .rpm, le MSI et l'APK préconfigurés essaient ce nom d'abord, puis l'IP du serveur. Un poste qui ne reconnaît pas le certificat du nom (autorité d'entreprise absente du poste ou du faisceau des agents) s'inscrit par l'IP, avec le certificat de loco, au lieu d'échouer. L'agent (Linux, Windows, Android) garde l'autre adresse en secours. La page *Enrôlement* montre les adresses et leur ordre ; `SERVER` du MSI et la valeur `Server` du registre (GPO) acceptent plusieurs adresses séparées par des virgules.
+
+## 2.194.0 — 2026-11-23
+
+- **Nouvelle police : Outfit**, à la place de Bricolage Grotesque, dans tout le portail et dans l'application Android. Formes rondes et géométriques, dessin épuré, et compacte : les colonnes de Mon parc et des tableaux restent lisibles. Livrée avec loco (aucun appel à un site extérieur), licence SIL OFL ; IBM Plex Mono reste la police des adresses, versions et commandes.
+
+## 2.193.0 — 2026-11-23
+
+- **Équipements réseau (expérimental) : switchs Cisco et Extreme, pare-feu Stormshield.** loco se relie sans agent à vos équipements, avec un compte de l'équipement : Cisco IOS / IOS-XE (Catalyst, routeurs), Cisco Small Business (CBS, SG), Extreme EXOS / Switch Engine, Extreme VOSS / Fabric Engine — en SSH et par la ligne de commande —, et Stormshield SNS par son API HTTPS (SSH pour le terminal). Le mot de passe est chiffré dans la base et remis à ssh sans passer par ses arguments ; la clé d'hôte SSH et le certificat du pare-feu ne sont acceptés qu'une fois leur empreinte confirmée. Les vieux équipements qui ne parlent que les algorithmes SSH d'avant 2015 (ssh-rsa, Diffie-Hellman groupe 14 en SHA-1, CBC) sont joints aussi. Une fonctionnalité expérimentale, à activer dans *Fonctionnalités*.
+- **État dans Mon parc et sur sa page** : modèle, numéro de série, version, ports actifs, processeur, mémoire, température, durée d'allumage — relevés toutes les quinze minutes ; injoignable, liaison en échec ou firmware plus récent disponible se voient d'un coup d'œil et dans *À traiter*.
+- **Sauvegarde de la configuration**, chaque jour par défaut (ou toutes les six heures, chaque semaine, à la demande), gardée **seulement quand elle change** — les horodatages qui bougent seuls ne comptent pas — avec l'historique, les **différences** ligne à ligne entre deux versions et le téléchargement. Fichiers chiffrés dans l'état de loco : ils font partie de sa propre sauvegarde. Le pare-feu Stormshield donne sa sauvegarde complète (.na). Un nouvel onglet *Réseau* dans *Sauvegardes* les réunit.
+- **Firmware** : déposez dans la bibliothèque de loco le fichier du constructeur (version lue dans son nom, empreinte SHA-256 affichée) ; loco signale les équipements de la même plateforme qui ont une version plus ancienne et l'installe, la configuration sauvegardée juste avant : Cisco IOS (copie scp, MD5 vérifié par le switch, démarrage réglé dessus ; mode INSTALL des Catalyst 9000), EXOS (partition de secours), VOSS (ajout, activation, puis validation après le redémarrage), Stormshield (envoi et activation par l'API). Redémarrage et retour suivis, nouvelle version constatée. Un Cisco Small Business ne charge un firmware qu'en TFTP : loco le signale, l'installation se fait depuis son interface web.
+- **Terminal** de l'équipement dans le navigateur (session journalisée, mot de passe remis par loco) et **redémarrage** suivi. Droits à part : consulter, sauvegarder et lire les configurations, installer un firmware, redémarrer, terminal, relier.
+- **Une seule pastille d'état** sur les lignes Proxmox et Home Assistant de Mon parc : le libellé (« redémarrage requis », « liaison en échec »…) en ajoutait une seconde. Une tâche en cours se signale dans la colonne des actions, comme pour un poste.
+- **Proxmox : noyau épinglé respecté.** Un noyau épinglé avec `proxmox-boot-tool kernel pin` est celui sur lequel le serveur redémarre : s'il tourne déjà, loco ne réclame plus de redémarrage (il le réclamait sans fin dès qu'un noyau plus récent était installé). La page du serveur signale l'épinglage.
+
+## 2.192.0 — 2026-11-22
+
+- **La carte graphique dans les caractéristiques du poste** (onglet *Détails*), sous Windows et sous Linux : nom, mémoire vidéo et version du pilote, pour chaque carte présente. Sous Windows, la mémoire vidéo est lue dans le registre — WMI la plafonne à 4 Go — et les adaptateurs d'affichage virtuels (bureau à distance, écrans virtuels) ne sont pas comptés ; sous Linux, les cartes sont celles du bus PCI, nommées par nvidia-smi, le pilote AMD ou lspci.
+- **Mettre à jour le pilote NVIDIA depuis loco (Windows).** loco compare le pilote de chaque carte NVIDIA au dernier pilote *Game Ready* publié par NVIDIA pour cette carte et cette version de Windows (service public de NVIDIA, relu en arrière-plan) : la fiche le montre dans l'onglet *Mises à jour* (section *Pilote graphique*) et dans *Caractéristiques*, avec un bouton *Mettre à jour le pilote*. L'agent télécharge l'installeur officiel depuis download.nvidia.com, refuse tout fichier qui ne serait pas signé par NVIDIA, l'installe sans fenêtre ni redémarrage, puis vérifie la version réellement en place. Jamais lancé par *Mettre à jour* ni *Tout mettre à jour* : seulement à la demande. Sous Linux, le pilote NVIDIA est un paquet du système, mis à jour avec lui.
+
+## 2.191.0 — 2026-11-22
+
+- **Les détails matériels aussi pour Windows.** La fiche d'un poste Windows montre maintenant la section *Caractéristiques* (onglet *Détails*), comme sous Linux : processeur, mémoire, disque système, version de Windows, virtualisation, démarrage, et la configuration matérielle — machine et numéro de série, carte mère, BIOS, barrettes de mémoire (emplacement, taille, type, vitesse, fabricant, référence) et disques physiques (modèle, taille, SSD ou disque mécanique). Relevé par l'agent Windows (lecture seule de WMI) au prochain inventaire, une fois l'agent à jour.
+- **Cœurs physiques et processeurs logiques distingués** : « 20 cœurs · 28 fils » pour un processeur à hyperthreading, au lieu de compter les processeurs logiques comme des cœurs (Linux et Windows).
+- **Type de disque inconnu** (disque d'une machine virtuelle sous Windows) affiché « — » au lieu de « disque mécanique ».
+- Le serveur MCP (`get_device`) donne aussi ces caractéristiques et la configuration matérielle, pour Linux et Windows.
+
+## 2.190.0 — 2026-11-22
+
+- **Proxmox dans Mon parc, comme Home Assistant : mises à jour, redémarrage et terminal.** Un serveur Proxmox relié pour ses sauvegardes peut l'être aussi par SSH, avec une clé propre à loco (clé d'hôte confirmée par son empreinte) — l'API de Proxmox ne sait pas installer de mises à jour. Il apparaît alors dans Mon parc avec ses mises à jour, ses ressources et un bouton *Mettre à jour*, et il a sa page : version, noyau (*redémarrage requis* quand un plus récent est installé), paquets à mettre à jour (sécurité en tête), machines, processeur, mémoire, disque, activité avec journal en direct, terminal root.
+- **Mise à jour sûre de l'hyperviseur.** `apt-get dist-upgrade` comme le bouton *Upgrade* de Proxmox (jamais `apt-get upgrade`), lancé sur le serveur lui-même : la mise à jour va au bout même si la liaison tombe ou si loco redémarre — y compris quand loco tourne sur ce Proxmox, ce que la page signale. Redémarrage ensuite en option, seulement si la mise à jour a réussi ; refus d'une mise à jour qui retirerait `proxmox-ve`. Un Proxmox ne se redémarre jamais par une sélection de Mon parc.
+- **Mon parc montre Home Assistant et Proxmox même sans aucun poste inscrit** (ils restaient cachés derrière « Aucun poste pour l'instant »).
+
+## 2.189.0 — 2026-11-20
+
+- **Sorties longues entièrement lisibles pour les assistants (MCP).** Quand une commande, un script ou le terminal distant produit une sortie plus longue que la limite, l'assistant reçoit désormais le **début** *et* la fin du texte (avec, au milieu, le compte des caractères omis) au lieu de la seule fin : le contexte et les erreurs, souvent en tête, ne sont plus perdus. S'applique au terminal (`terminal_run`), aux commandes et scripts (`get_script_run`, actions récentes d'un poste). La sortie reste signalée comme écourtée.
+
+## 2.188.0 — 2026-11-20
+
+- **Plus de détails matériels sur un poste Linux.** La section *Caractéristiques* (onglet *Détails*) montre maintenant la marque, le modèle et le numéro de série de la machine, la carte mère, le BIOS, les sockets et fils d'exécution du processeur, les barrettes de mémoire (emplacement, taille, type, vitesse, fabricant) et les disques (modèle, taille, SSD ou disque mécanique). *(Les postes Windows suivront.)*
+- **Icône de désinstallation plus claire.** Le bouton pour désinstaller un paquet ou une application utilise maintenant une corbeille.
+
+## 2.187.0 — 2026-11-19
+
+- **Contrôle facile d'un Android TV / Google TV.** Dans *Contrôler l'écran* d'un appareil Android, un pavé directionnel (↑ ← OK → ↓) permet de naviguer à la télécommande, et les flèches du clavier (avec Entrée = OK) font de même — indispensable sur un téléviseur, qui se pilote au pavé directionnel et non au toucher.
+- **Désinstaller un paquet ou un logiciel (Linux).** Sur un poste Linux, l'onglet *Paquets installés* permet de désinstaller un paquet installé volontairement, et l'onglet *Flatpak* une application Flatpak, sous confirmation. (Les dépendances système ne sont pas proposées à la désinstallation.)
+
+## 2.186.1 — 2026-11-19
+
+- **Correctif : page Wazuh.** La page *Wazuh* ne s'affichait plus (erreur interne) dès qu'un poste avait l'agent Wazuh installé. C'est corrigé.
+
+## 2.186.0 — 2026-11-19
+
+- **Analyse de l'espace disque (type TreeSize), à la demande.** Dans l'onglet *Fichiers* d'un poste, un bouton *Espace disque* bascule la vue pour montrer, dans le dossier affiché, chaque élément avec sa **taille réelle (contenu compris)** et une barre proportionnelle, du plus gros au plus petit. On clique un dossier pour descendre dedans, exactement comme pour naviguer. (Postes Windows et Linux, une fois l'agent à jour.)
+- **Menus d'actions plus nets.** Le bouton « trois points » des fichiers devient un petit menu discret et rond ; sur la page *Wazuh*, les actions *Réappliquer* et *Retirer* d'un poste sont désormais rangées dans ce même menu plutôt qu'affichées en liens collés.
+- **Finitions.** L'écran « Aucune planification » n'affiche plus qu'une seule icône.
+
+## 2.185.0 — 2026-11-19
+
+- **Mises à jour HACS : fonctionnent de nouveau avec Home Assistant 2026.11.** Depuis la version 2026.11, Home Assistant a remplacé HACS par un *Marketplace* intégré qui bloque les mises à jour tant qu'un avertissement n'a pas été accepté — une acceptation enregistrée séparément pour chaque utilisateur. Comme loco agit avec son propre accès, ses mises à jour échouaient (« erreur 500 »). loco accepte désormais cet avertissement pour lui-même avant d'installer, et la mise à jour aboutit. En cas d'autre souci, le message exact de Home Assistant est maintenant affiché à la place d'un « erreur 500 » opaque.
+- **Bouton « Mettre à jour » sur la ligne Home Assistant de Mon parc.** Quand une instance Home Assistant a des mises à jour disponibles, un bouton *Mettre à jour* apparaît directement sur sa ligne dans *Mon parc*, comme pour les autres postes.
+
+## 2.184.0 — 2026-11-19
+
+- **Mises à jour HACS (Home Assistant Community Store).** Sur la page d'une instance Home Assistant, loco liste maintenant les dépôts HACS installés (cartes, intégrations et thèmes de la communauté), signale ceux pour lesquels une mise à jour est disponible, et permet de les mettre à jour — individuellement, depuis la sélection de *Mon parc*, ou avec *Tout mettre à jour* — au même endroit que le cœur et les modules complémentaires.
+
+## 2.183.1 — 2026-11-19
+
+- **Correctif : fiche d'un poste avec carte graphique.** La page d'un poste dont la carte graphique ne communique pas sa température (ou son occupation) ne s'ouvrait plus (erreur interne). C'est corrigé.
+- **Bouton « Rafraîchir » mieux placé.** Le bouton qui rappelle l'agent pour refaire l'inventaire tout de suite est passé dans la barre d'actions, en haut de la fiche (il était mal placé et s'affichait en double sur la tuile Inventaire).
+
+## 2.183.0 — 2026-11-19
+
+- **Transferts de fichiers plus clairs, et annulables.** Dans l'onglet *Fichiers* d'un poste, chaque envoi ou téléchargement montre la taille transférée (Mo / Go), le pourcentage et le débit, et une croix permet de l'annuler en cours de route.
+
+## 2.182.0 — 2026-11-19
+
+- **Carte graphique dans la supervision.** Les postes équipés d'une carte graphique (NVIDIA, et AMD sous Linux) affichent son occupation, sa mémoire et sa température dans l'onglet *Supervision*, à côté du processeur et de la mémoire.
+- **Home Assistant dans la sélection de Mon parc.** On peut cocher les instances Home Assistant comme les autres postes et lancer leurs mises à jour disponibles, ou les redémarrer, depuis la barre de sélection.
+- **Rafraîchir un poste à la demande.** Un bouton sur la fiche d'un poste rappelle l'agent pour refaire l'inventaire tout de suite, sans attendre le prochain contact.
+- **Photo de profil.** Chaque compte peut ajouter une photo (dans *Mon compte › Apparence*), montrée dans la barre du haut à la place de son initiale.
+- **« Ne plus afficher » sur les encadrés d'information.** Les encadrés d'information orange ont désormais une croix pour ne plus les revoir ; ce choix est gardé pour votre compte.
+- **Barre de navigation : « Systèmes ».** Le menu qui regroupe Linux, Windows, Android et Home Assistant s'appelle maintenant *Systèmes*.
+
+## 2.181.0 — 2026-11-19
+
+- **Ressources de vos Home Assistant OS.** Sur la page d'une instance Home Assistant OS, loco affiche désormais la mémoire et le processeur en plus du stockage, relevés en direct.
+- **Batterie des appareils Android.** La fiche d'un téléphone ou d'une tablette affiche son niveau de batterie (et s'il est en charge) ; rien pour un appareil sans batterie (boîtier TV).
+- **Menus « Système » et « Administration » plus nets.** Ils s'affichent en une seule colonne avec un défilement discret quand ils sont longs, au lieu d'un pavé qui débordait.
+- **Icône Home Assistant accordée au reste.** Dans *Mon parc*, l'icône d'une instance reprend la couleur neutre des autres icônes d'appareil.
+- **Correctif : mise à jour d'un logiciel dans la session de l'utilisateur.** Quand un installeur doit tourner dans la session ouverte (comme iCUE), loco rapporte maintenant fidèlement le résultat réel au lieu d'un message trompeur. *(À noter : l'installeur de Corsair iCUE se termine parfois en erreur de son propre fait lors d'une mise à niveau ; c'est un défaut de cet installeur, pas de loco.)*
+
+## 2.180.0 — 2026-11-18
+
+- **Windows : les logiciels récalcitrants se mettent enfin à jour (repli à winget).** Trois cas où winget échouait sur un vrai parc sont désormais pris en charge, chacun par la bonne méthode, depuis les sources officielles des éditeurs :
+  - **HWiNFO** : le manifeste public de winget restait figé sur une version dont l'éditeur a retiré l'installeur (erreur 404). loco retrouve la version officielle courante et pose l'installeur de l'éditeur après avoir **vérifié sa signature numérique**.
+  - **Corsair iCUE** : son installeur se terminait brutalement lorsqu'il était lancé en arrière-plan. loco le relance dans la session de l'utilisateur connecté, où il aboutit.
+  - **Google Play Games** : il se met à jour tout seul (Google gère ses versions) et apparaissait pourtant sans fin comme « à mettre à jour ». loco applique la mise à jour puis cesse de la reproposer.
+- Rien de tout cela n'ajoute quoi que ce soit au catalogue de loco : ces logiciels restent simplement suivis.
+- **Barre de navigation plus équilibrée.** Les entrées sont centrées (fini l'impression de vide sur la droite) et *Vue d'ensemble* affiche de nouveau son nom à côté de l'icône. Les menus déroulants s'ouvrent et se ferment avec un court délai, plus agréables à parcourir.
+- **Home Assistant dans Mon parc, épuré.** La vraie icône « maison » de Home Assistant (accordée à la charte des autres icônes), seulement l'adresse de l'instance, et une ligne qui se comporte comme les autres postes.
+- **Petites finitions.** Les barres de stockage de la vue d'ensemble s'animent à l'affichage comme le reste du tableau de bord ; le texte d'accueil du terminal Home Assistant ne s'étire plus.
+
+## 2.179.0 — 2026-11-18
+
+- **Home Assistant : une page par instance.** Chaque instance a désormais sa propre page (versions, mises à jour, modules, sauvegardes, journal, terminal et actions) ; la page *Home Assistant* est devenue une liste claire d'instances qui y mènent.
+- **Vos Home Assistant dans Mon parc.** Les instances Home Assistant apparaissent comme des lignes de *Mon parc*, à côté des postes Windows, Linux et Android — avec leur état et les mises à jour disponibles ; un clic ouvre leur page.
+- **Menu « Système » revu.** Linux, Windows, Android et Home Assistant sont regroupés dans un seul menu *Système*, plus large et équilibré (sections Linux, Windows, Android, Home Assistant).
+- **Fiche d'un poste : respiration.** L'étiquette *Mises à jour · À jour* n'est plus collée au bloc des cartes.
+
+## 2.178.0 — 2026-11-18
+
+- **Windows : les logiciels installés « pour tout le monde » se mettent enfin à jour.** Certains logiciels (PdfCraft, PhotoCraft, WordCraft…) sont installés pour tous les utilisateurs ; leur installeur refusait alors la mise à jour lancée par loco (« already installed for everyone, pass ALLUSERS=1 », erreur MSI 1603 / `0x8A150049`). L'agent réessaie désormais en passant `ALLUSERS=1` à l'installeur, ce qui met bien à jour la copie commune — sans personne de connecté.
+- **Barre de navigation : un seul menu « Système ».** Linux, Windows et Android ne sont plus trois entrées séparées en haut : ils sont regroupés dans un menu **Système** (sections Linux, Windows, Android), comme le menu Administration. La barre est plus claire.
+
+## 2.177.0 — 2026-11-18
+
+- **Windows : les logiciels tiers se mettent à jour même ouverts, et un échec ne bloque plus la mise à jour.** Quand winget échoue à mettre à jour un logiciel hors catalogue parce qu'il est en cours d'utilisation (fichiers verrouillés, installeur MSI en échec `0x8A150049`), l'agent **ferme ce logiciel — sans confirmation — puis réessaie**. Si ça échoue quand même, la mise à jour du poste ne passe plus en échec pour autant : Windows Update et les logiciels du catalogue décident seuls du résultat ; le logiciel est simplement signalé et **reste proposé**, réessayé à la prochaine mise à jour. L'agent tournant en tant que service (compte SYSTEM), une mise à jour planifiée hors session met ces logiciels à jour sans personne de connecté.
+- **Mon parc : les compteurs de mises à jour deviennent des pastilles.** « N système », « N logiciels » et « N de sécurité » s'affichent en pastilles assorties à la charte (icône écran, paquet, bouclier), au lieu d'un simple texte.
+
+## 2.176.0 — 2026-11-18
+
+- **API REST (HTTP)** : les jetons du *Serveur MCP* ouvrent désormais une **API REST** — chaque outil devient une route HTTP ordinaire, pour un script, une supervision (Zabbix, Grafana, un cron) ou un autre programme, sans client MCP. Base `https://<serveur>:8443/api/v1`, en-tête `Authorization: Bearer …` ; mêmes jetons, mêmes droits, même parc et mêmes traces au journal (« · API « nom du jeton » ») que le serveur MCP. Les lectures sont des `GET` (postes, groupes, logiciels installés, catalogue, scripts et leurs exécutions, vue d'ensemble, état du serveur, journal), les actions des `POST` ou `DELETE` (inventaire, mise à jour, redémarrage, réveil, installation, annulation, lancer un script), mises en file comme pour le serveur MCP. La description **OpenAPI 3.1** est servie sans jeton sur `/api/v1/openapi.json`, et `GET /api/v1` liste les routes que le jeton peut appeler.
+- **Les ressources des machines depuis l'API** : `GET /api/v1/devices/{id}/resources` renvoie le dernier relevé d'un poste — processeur (pourcentage, cœurs, charge), mémoire et swap **en octets** (total, utilisé, disponible) et en pourcentage, chaque disque (point de montage, octets, pourcentage), débit réseau et temps depuis le démarrage ; `?history=1h|24h|7d` y ajoute la courbe. `GET /api/v1/resources?sort=memory` (ou `cpu`, `disk`) classe tout le parc par usage, pour repérer d'un coup les machines chargées.
+
+## 2.175.0 — 2026-11-18
+
+- **Windows : mises à jour des logiciels hors catalogue** : les logiciels installés que winget sait suivre (7-Zip, Notepad++, VLC, Remote Desktop Manager…) apparaissent dans l'onglet *Mises à jour* du poste, à côté des mises à jour Windows, avec la version installée et la nouvelle — sans les ajouter au catalogue de loco. On les coche une par une ou *Mettre à jour* les prend toutes (poste, tout le parc, planifications) ; l'agent les met à jour par winget, en silence, au compte SYSTEM. Ils comptent dans le voyant et dans Mon parc, et se bloquent comme une mise à jour Windows, par leur nom ou leur identifiant winget. Le relevé se fait par `winget export` sur le poste et la comparaison sur l'index winget de loco, renouvelé chaque jour. Sans winget sur le poste, la fiche le dit. Les logiciels installés pour un seul utilisateur ne sont pas vus.
+- **Sur un Windows en français, les logiciels publiés seulement en anglais se mettent à jour aussi** (Remote Desktop Manager, par exemple) : winget les jugeait « non applicables » faute d'installeur en français ; l'agent refait alors l'essai en acceptant l'installeur anglais. Ce que winget ne sait pas mettre à jour sur un poste est mis de côté, avec sa raison, tant que sa version ne change pas, et les composants que Windows ou leur éditeur tiennent à jour eux-mêmes (App Installer, Edge, WebView2, Teams, OneDrive, Terminal, bibliothèques du Store) ne sont jamais proposés.
+- **Mettre à jour la sélection** ne consulte plus Windows Update quand seuls des logiciels sont cochés.
+
+## 2.174.0 — 2026-11-18
+
+- **Apparence libre pour les administrateurs** : un compte au profil *Administrateur* n'est plus tenu par le cadre de l'entreprise (*Administration › Apparence*) — sa fenêtre *Apparence* propose tous les thèmes et presets, toutes les couleurs et tous les fonds, même quand l'entreprise en limite ou en impose. Les autres comptes et l'écran de connexion restent dans le cadre.
+- **Son propre logo** : dans la même fenêtre, un administrateur choisit le logo qu'il voit — celui de l'entreprise, celui de loco, ou une image à lui (PNG, JPEG, GIF, WebP ou SVG, 2 Mo au plus), dans l'en-tête et l'icône de l'onglet. Ce choix ne vaut que pour lui. Changer de logo recharge la page, fenêtre rouverte, sans perdre le thème qu'on venait d'essayer.
+
+## 2.173.1 — 2026-11-18
+
+- **Sauvegardes au même endroit** : l'onglet *Sauvegardes* de la page *Système* faisait doublon avec la nouvelle page *Sauvegardes* ; il la rejoint. Télécharger, restaurer ou supprimer une sauvegarde de loco, régler leur nombre et restaurer depuis un fichier se font désormais dans *Administration › Sauvegardes*, onglet *loco* ; la copie hors-site y est l'onglet *Destination*. La tuile « Dernière sauvegarde » de *Système*, les alertes de la vue d'ensemble (sauvegarde en retard, copie hors-site en échec) et les pages de la documentation mènent à la nouvelle page. Sur un serveur Windows, l'onglet *loco* montre les sauvegardes et les commandes, comme le faisait *Système*.
+- **Sauvegardes de loco sur téléphone** : chaque ligne écrasait le nom de l'archive (une lettre par ligne) et le choix d'un fichier à restaurer élargissait la page sur un petit écran ; le nom passe au-dessus des boutons et le champ se resserre.
+
+## 2.173.0 — 2026-11-18
+
+- **Page Sauvegardes** (*Administration › Serveur › Sauvegardes*) : ce qui est sauvegardé — loco lui-même, vos Home Assistant, vos machines Proxmox —, où, et quand, au même endroit. La destination externe (NAS monté, S3, SFTP) s'y règle aussi, et l'on choisit ce qui y part : les sauvegardes de loco (case *Copier aussi les sauvegardes de loco*, cochée par défaut), et les Home Assistant un à un.
+- **Proxmox VE** (fonctionnalité facultative) : un serveur Proxmox se relie par un **jeton d'API** créé pour loco, aux droits limités à la sauvegarde (les commandes `pveum` sont données). Le secret est gardé chiffré et n'est plus jamais affiché ; le certificat de Proxmox n'est jamais accepté d'office : son empreinte SHA-256 est montrée, à comparer à celle de Proxmox avant de confirmer, et le jeton ne part que vers ce certificat-là (un certificat renouvelé arrête tout jusqu'à une nouvelle confirmation). La page liste les machines virtuelles et les conteneurs avec leur dernière sauvegarde ; on coche, on choisit le stockage de Proxmox (disque, NAS déclaré dans Proxmox, Proxmox Backup Server) et le mode (instantané, suspension, arrêt), puis *Sauvegarder maintenant* ou *Planifier…* (une fois, chaque jour, chaque semaine, chaque mois ; les machines cochées, ou toutes y compris les futures). Chaque sauvegarde est suivie jusqu'au bout — même après un redémarrage de loco, Proxmox continuant la tâche —, avec son journal, et peut être annulée. La conservation d'une planification ne supprime que ses propres sauvegardes, jamais les autres ni les sauvegardes protégées. *Déclarer un NAS…* ajoute un partage NFS ou SMB comme stockage de Proxmox (le mot de passe est remis à Proxmox, loco ne le garde pas). Droits : consulter, sauvegarder, relier.
+- **Home Assistant : copie des sauvegardes vers la destination externe** : *Copier maintenant* (avec, si on le veut, une sauvegarde complète juste avant) ou planifiée ; la plus récente sauvegarde gardée dans Home Assistant est téléchargée par l'API du Supervisor — le jeton passe par l'entrée de curl, jamais en argument —, vérifiée à la taille près, chiffrée avec la phrase de passe de la destination s'il y en a une, puis déposée ; seules les dernières copies de chaque instance sont gardées (3 par défaut). Une sauvegarde déjà copiée ne repart pas.
+- **Copie externe** : un envoi S3 se fait désormais en flux (une sauvegarde de plusieurs gigaoctets ne passe plus en mémoire), un envoi SFTP n'est plus coupé au bout de trois minutes, et les copies de Home Assistant et celles de loco ne se suppriment jamais les unes les autres.
+
+## 2.172.3 — 2026-11-17
+
+- **Téléphone : la barre du haut ne dépasse plus** : avec Mon parc, Linux, Windows, Home Assistant ou Android et Administration, elle débordait de l'écran sur la plupart des téléphones (la page s'élargissait et se décalait). Elle se resserre désormais selon la place réelle — flèches, puis libellés des menus non ouverts — et chaque entrée garde son icône ; Administration retrouve la sienne quand son libellé ne tient plus.
+- **Plus rien ne dépasse sur un petit téléphone (320 à 360 px)** : les noms et identifiants longs sans espace (applications du catalogue, paquets Android, liens dans une description, commande dans un texte) sont coupés plutôt que d'élargir la page ; l'état de Windows Update, la case « réinstaller » d'un déploiement et les interrupteurs des alertes passent à la ligne.
+
+## 2.172.2 — 2026-11-17
+
+- **Enrôlement Windows sans importer l'autorité de loco** : la commande de la page *Enrôlement* échouait sur un poste neuf (« Impossible d'établir une relation de confiance pour le canal sécurisé SSL/TLS »), le certificat de loco n'étant pas encore reconnu. Elle reconnaît désormais ce certificat par son empreinte SHA-256, pour le script comme pour le téléchargement du MSI : elle fonctionne du premier coup, et tout autre certificat reste refusé. Un certificat déjà reconnu par le poste (autorité d'entreprise) passe comme avant. À lancer dans Windows PowerShell (pas PowerShell 7).
+- **Home Assistant : liaison qui échouait sur certains modules SSH** (« sh: /dev/fd/64: line 14: syntax error: unexpected "(" (expecting "}") ») : loco lançait ses commandes dans un shell de connexion, qui lit d'abord les profils du module ; un profil écrit pour bash ou zsh arrêtait `sh` avant toute commande. Les commandes passent maintenant par un shell simple, et le jeton du superviseur, dont la commande `ha` a besoin, est repris de l'environnement du module (sinon de son profil, lu sans être exécuté). Il n'apparaît jamais dans une commande.
+
+## 2.172.1 — 2026-11-17
+
+- **Pages suivies en direct, plus jamais sous les doigts** : la fiche d'un poste s'actualise désormais en place (en-tête, actions en cours, onglets *Mises à jour*, *Historique* et *Détails*) au lieu de se recharger toute entière chaque minute ; une fenêtre ou un menu ouverts, un texte sélectionné, une saisie, des cases cochées ou un journal déplié ne sont plus perdus — l'actualisation attend, et un journal ouvert le reste. Même règle pour le suivi des mises à jour, le déroulé d'un script et le détail d'un déploiement, qui se rechargent seulement quand personne n'y fait rien.
+- **Wazuh en direct** : la page *Wazuh* suit les installations, retraits et états remontés par les agents, sans recharger.
+- **Plus de page d'erreur en cours de route** : quand loco redémarre (une mise à jour) ou qu'une requête échoue, Mon parc et les autres pages suivies ne se rechargent plus sur une page d'erreur ; elles reprennent au relevé suivant. Une requête sans réponse n'arrête plus le suivi, et le retour sur l'onglet relance un relevé tout de suite.
+- Un menu qui ouvre une fenêtre se referme.
+
+## 2.172.0 — 2026-11-17
+
+- **Barre des postes cochés plus claire** (Mon parc) : « 2 postes sélectionnés » au lieu de « Sélection : 2 », puis *Réveiller*, *Redémarrer* et *Mettre à jour*. *Redémarrer* est nouveau : les postes cochés redémarrent une minute après leur prochain contact (droit de redémarrer ; ceux qui redémarrent déjà, qui changent de version du système ou les appareils Android sont laissés et comptés). La case isolée « Redémarrer si nécessaire » devient *Mettre à jour puis redémarrer si nécessaire* dans le menu *Plus*, avec *Activer le réveil à distance*.
+- **Accord avant le bureau distant, par groupe** : *Exiger l'accord* et *Ne plus l'exiger* quittent la barre de sélection ; on les règle désormais pour tous les postes d'un groupe, depuis le menu du groupe (*Groupes de machines*), et toujours poste par poste sur sa fiche.
+
+## 2.171.0 — 2026-11-17
+
+- **Mettre à jour vers une nouvelle version du système** : quand la version majeure suivante est publiée (Debian 13, Ubuntu 26.04 LTS, Fedora, nouvelle version de Windows proposée par Windows Update), loco l'affiche — « Mettre à jour vers Debian 13 (trixie) » sur la fiche du poste et dans Mon parc, filtre *Situation › Mise à jour vers une nouvelle version* — et la pose sur demande, redémarrage compris. Debian : version actuelle mise à jour, refus s'il reste des paquets retenus, dépôts passés à la nouvelle version avec copie des anciens fichiers (un dépôt tiers qui ne la publie pas encore est désactivé, pas supprimé), place disque vérifiée, dépôts remis comme avant si quelque chose manque, puis `upgrade` et `full-upgrade` sans question. Ubuntu : l'outil officiel `do-release-upgrade`, après un redémarrage si la version actuelle en demande un, puis le dépôt de loco remis pour la nouvelle version. Fedora : `dnf system-upgrade`, installation hors ligne au redémarrage, version vérifiée au retour. Sous Linux, la mise à jour tourne hors de l'agent, avec son avancement en direct et son journal sur le poste. Droits : mettre à jour et redémarrer.
+- **Windows : plus de nouvelle version de Windows par surprise** : une nouvelle version proposée par Windows Update (catégorie « Upgrades ») ne part plus avec *Mettre à jour* ni *Tout mettre à jour* ; elle s'affiche à part et ne s'installe que par son bouton.
+- **Redémarrer, à côté de Mettre à jour** : sur la fiche d'un poste, *Redémarrer* quitte le menu *Plus* et prend place à côté de *Mettre à jour*, avec son propre bouton calendrier.
+- **Redémarrages planifiés** : le calendrier ouvre *Planifier un redémarrage* — une fois, chaque jour, chaque semaine ou chaque mois, à l'heure du serveur. La page *Planifications* propose aussi *Redémarrer* pour des groupes ou tout le parc. Chaque poste redémarre une minute après avoir reçu la commande, et un message prévient la personne connectée. Droits : redémarrer les appareils, et pour un groupe ou tout le parc, le droit « tout le parc » en plus. Les appareils Android ne sont pas concernés.
+
+## 2.170.0 — 2026-11-17
+
+- **Certificat d'entreprise sans adresse IP** : la demande de certificat (*Système › Certificat*) ne contient plus que les noms DNS du serveur. Quand les agents joignent loco par une adresse IP, ils gardent le certificat de l'autorité loco, et celui de votre autorité est présenté à qui vient par nom (SNI) — navigateurs, Claude Code, Codex. Avant, l'IP des agents y figurait : une autorité qui restreint les adresses IP (contraintes de noms, par exemple une autorité intermédiaire limitée à `lab.local` et à des plages d'IP) faisait alors refuser toute la chaîne par les clients BoringSSL, dont Claude Code (« unsupported name constraint type »), même quand OpenSSL la validait.
+- **Le cas est signalé** : si le certificat d'entreprise en service contient une adresse IP alors qu'une autorité de la chaîne restreint les IP, la page Système le dit et indique la marche à suivre (nouvelle demande, signature, import). Le certificat d'entreprise servi par nom est aussi surveillé par l'alerte d'expiration.
+- Rien ne change pour un certificat qui couvre déjà l'adresse des agents, ni quand ils joignent loco par un nom.
+
+## 2.169.0 — 2026-11-17
+
+- **Claude et Codex : un installateur au lieu du message pré-rempli** : les tuiles Claude et Codex de la page *Serveur MCP* ouvrent une fenêtre — nom, durée et outils du jeton, système de l'ordinateur — puis téléchargent un installateur (Windows `.cmd`, macOS et Linux à lancer avec `sh`). Ouvert, il écrit la configuration MCP de l'application : `~/.claude.json` pour Claude Code (commande `claude` et onglet *Code* de l'application de bureau), `~/.codex/config.toml` pour Codex (application de bureau et commande `codex`), en gardant le reste du fichier et une copie de l'ancien. Il s'efface ensuite. Aucun lien ne permet d'ajouter un serveur MCP à ces applications, d'où l'installateur.
+- **Certificat de loco** : si le poste ne le reconnaît pas et que l'autorité de loco l'a signé, l'installateur montre son empreinte et propose de lui faire confiance (magasin de l'utilisateur sous Windows, trousseau sous macOS, réglage de Claude Code ou magasin du système sous Linux).
+- **Codex par adresse IP** : avec l'installateur, Codex se connecte aussi à un loco joint par une adresse IP. La connexion par loco (OAuth), toujours possible depuis un terminal, demande toujours un nom pour Codex.
+
+## 2.168.0 — 2026-11-16
+
+- **Ajouter loco à Claude ou à Codex en un clic** : la page *Serveur MCP* propose deux boutons, aux couleurs et logos de Claude et de Codex. Chacun ouvre l'application de bureau de l'ordinateur avec la demande d'ajout déjà écrite : envoyée, elle ajoute loco à la configuration **locale** de l'application, puis ouvre loco dans le navigateur pour autoriser l'accès. Aucun jeton à copier. Les commandes équivalentes pour un terminal (`claude mcp add … && claude mcp login loco`, `codex mcp add … && codex mcp login loco`) sont données dessous.
+- **Connexion par loco (OAuth 2.1)** : un client MCP peut désormais se connecter sans jeton préparé. Il découvre loco, s'enregistre seul, et la personne autorise dans loco, sur la page *Autoriser Claude Code* (ou Codex) : nom, durée et outils du jeton — la consultation est cochée d'office, jamais l'accès distant. Le jeton obtenu est un jeton MCP ordinaire, dans les limites du compte qui l'a autorisé, visible dans la liste (« obtenu par … ») et révocable. PKCE obligatoire, code renvoyé seulement à une application de l'ordinateur (boucle locale), jeton valable pour le seul serveur MCP de loco. Se déconnecter de Claude Code le retire aussi de loco.
+- **Codex demande un nom** : il refuse de se connecter par loco si loco est joint par une adresse IP privée. La page le signale ; déclarez un nom dans *Système › Réseau › Adresse du portail*.
+- Les jetons créés à la main et leur en-tête `Authorization` fonctionnent comme avant. Voir [docs/fr/mcp.md](docs/fr/mcp.md).
+
+## 2.167.0 — 2026-11-16
+
+- **Wazuh : retirer l'agent efface aussi son entrée sur le manager** : quand l'agent Wazuh est désinstallé d'un poste, loco retire son entrée du manager (`manage_agents -r`), puis l'écrit dans le compte rendu du retrait. Il lui faut un accès SSH au manager, à régler une fois sur la page Wazuh (bloc *Retrait des entrées du manager*) : loco donne une ligne à ajouter à `authorized_keys`, qui n'autorise sa clé qu'à cette seule commande, avec les seuls chiffres reçus — ni shell, ni autre commande ; la clé d'hôte du manager est montrée et confirmée avant tout échange, et un bouton *Essayer l'accès* vérifie le tout sans rien retirer. Sans cet accès, rien ne change : l'entrée reste sur le manager, et le compte rendu le dit.
+- **Prudence** : loco ne retire une entrée que si le poste était relié au manager réglé et qu'il dit l'agent bien désinstallé ; jamais l'entrée `000` (le manager lui-même).
+- **Le manager Wazuh inscrit comme poste est reconnu** : il apparaît en « Manager Wazuh » (au lieu de « Arrêté — le service de l'agent Wazuh ne tourne pas »), n'est pas compté parmi les postes à équiper, et loco n'y pose ni n'y retire d'agent. Arrive avec la mise à jour de l'agent loco du poste (2.167.0).
+
+## 2.166.1 — 2026-11-16
+
+- **Wazuh : enrôlement sans mot de passe après en avoir eu un** : quand le mot de passe d'enrôlement est retiré des réglages (*ne plus en envoyer*), *Réappliquer* retire aussi du poste le fichier `authd.pass` posé auparavant. Sans cela, l'agent Wazuh continuait d'envoyer l'ancien mot de passe, et un manager qui n'en attend pas le refusait en boucle (« Invalid request for new agent »).
+
+## 2.166.0 — 2026-11-16
+
+- **Agent Wazuh sur les postes (facultatif)** : à activer dans *Fonctionnalités › Facultatif*. Une page *Mon parc › Wazuh* règle l'adresse de votre manager, la version de l'agent (choisie parmi celles publiées par Wazuh), le groupe d'agents et, s'il en faut un, le mot de passe d'enrôlement ; puis pose l'agent Wazuh sur les postes cochés, ou sur un poste depuis sa fiche (*Plus › Installer l'agent Wazuh*). Windows, Debian, Ubuntu et famille Red Hat.
+- **Le paquet officiel, vérifié, sans Internet sur les postes** : loco télécharge une fois le paquet de Wazuh (deb, rpm ou msi), le contrôle avec l'empreinte SHA-512 publiée par Wazuh, puis le remet aux postes par leur agent loco, qui vérifie à son tour son empreinte avant de l'installer.
+- **L'état de chaque poste** : connecté, en attente du manager, déconnecté, arrêté ou non installé, avec la version, le numéro et le nom de l'agent chez Wazuh — sur la page Wazuh et sur la fiche du poste. Quand l'agent ne se connecte pas, le compte rendu reprend l'erreur de son journal (mot de passe refusé, nom déjà pris sur le manager…). *Réappliquer*, *Mettre à jour* et *Retirer* complètent le tout.
+- **Le mot de passe d'enrôlement reste secret** : gardé chiffré, jamais réaffiché ni écrit au journal ; sur le poste, il va dans le fichier que lit l'agent Wazuh (`authd.pass`, lisible des seuls administrateurs), jamais en argument d'une commande.
+- **Trois droits** dans les profils d'accès : consulter Wazuh, installer et retirer l'agent, régler Wazuh. Un compte limité à une partie du parc n'agit que sur elle.
+- Les agents loco se mettent à jour seuls en 2.166.0 pour remonter l'état de l'agent Wazuh ; une installation demandée avant attend leur mise à jour. Voir [docs/fr/wazuh.md](docs/fr/wazuh.md).
+
+## 2.165.0 — 2026-11-15
+
+- **Docker sans cloner le projet** : une image prête à l'emploi, `ghcr.io/shanouhar/loco`, est publiée avec chaque version. Il suffit de télécharger `linux/docker/docker-compose.yml` dans un dossier puis de lancer `docker compose up -d` ; les réglages vont dans un fichier `.env` à côté (modèle : `.env.example`). Mise à jour : `docker compose pull && docker compose up -d`. La variable `LOCO_IMAGE` choisit l'image, par exemple une version précise (`ghcr.io/shanouhar/loco:2.165.0`).
+- **Depuis les sources, rien ne change** : `sudo ./up.sh` construit toujours l'image sur place. La construction est décrite dans un fichier à part, `docker-compose.build.yml`, que `up.sh` ajoute à `docker-compose.yml`. Qui lançait `docker compose up -d --build` directement utilise maintenant `./up.sh`, ou `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build`.
+
+## 2.164.0 — 2026-11-15
+
+- **Reprise des installations d'avant la 2.0 retirée** : loco ne reprend plus une installation, une sauvegarde ni la configuration d'un poste qui datent d'avant la version 2.0, sous l'ancien nom du projet. Les installateurs Linux, Windows et Docker ne migrent plus une telle installation ; `loco-backup restore` et la page *Système* n'acceptent que les sauvegardes de loco ; les scripts des postes (APT, RPM, Flatpak) ne retirent plus les fichiers posés par ces anciennes versions, et l'ancienne adresse du dépôt Flatpak n'est plus servie. **Pour venir d'une installation aussi ancienne**, installer d'abord la 2.163.1, qui fait la reprise, puis mettre à jour.
+- **Un dépôt APT déjà publié garde son identité**, quelle qu'elle soit (`Origin` et `Label` de son fichier `Release`) : les postes déjà branchés continuent de se mettre à jour sans rien confirmer.
+- **Docker** : `up.sh` construit l'image, démarre loco et attend qu'il soit sain, sans autre étape.
+- **Documentation refaite** : README en images (tour du portail, animation des mises à jour en direct, schéma de fonctionnement), captures neuves prises sur une instance de démonstration, un guide par sujet dans `docs/` et un nouveau guide d'exploitation, [docs/fr/operations.md](docs/fr/operations.md) : routine, alertes, métriques, sauvegardes, mises à jour, certificats, accès perdus, incidents.
+
+## 2.163.1 — 2026-11-13
+
+- **Tailles plus lisibles** : une taille passe à l'unité supérieure dès mille — 999,9 Mo au plus, puis 0,98 Go, 1,00 Go… Un cache APT de 1021,9 Mo se lit désormais « 1,00 Go ». Partout où loco affiche une taille : tableau Stockage de la vue d'ensemble, caches, dépôts, sauvegardes, Home Assistant, et ce que le navigateur met à jour en direct.
+- En espagnol, les tailles mises à jour en direct par le navigateur s'affichent en « MB », comme le reste de la page (elles apparaissaient en unités françaises).
+
+## 2.163.0 — 2026-11-13
+
+- **Bureau distant : choisir l'écran sur KDE Plasma (Wayland)** : la liste *Écran* apparaît aussi sur un poste KDE Plasma à plusieurs écrans — *Tous les écrans*, ou un seul. Plasma partage alors son « Espace de travail complet » (première tuile de sa fenêtre *Partage d'écran*, l'accord demandé une fois sur le poste) : loco y découpe l'écran choisi. Un écran réglé à une autre échelle est pris en compte ; le choix est retenu par poste, comme ailleurs.
+- **KDE Plasma : la souris tombe où l'on clique d'un écran à l'autre** : Plasma retient le pointeur une centaine de pixels quand il passe d'un écran au voisin ; un clic fait juste après avoir changé d'écran arrivait à côté. Le pointeur se pose maintenant au bon endroit dès le premier mouvement.
+- **KDE Plasma : un seul écran partagé parmi plusieurs** : quand l'accord donné sur le poste portait sur un seul écran alors que le poste en a plusieurs, la souris agissait ailleurs que là où l'on cliquait. loco reconnaît désormais l'écran partagé et y place le pointeur. Dans ce cas, il n'y a pas de liste (un seul écran est visible) ; pour partager tout l'espace de travail, supprimer `~/.config/loco/portal-token` sur le poste : la session suivante redemande l'accord.
+- GNOME en Wayland montre toujours son écran principal. Ces changements arrivent avec la mise à jour de l'agent du poste (2.163.0).
+
+## 2.162.0 — 2026-11-13
+
+- **Bureau distant : choisir l'écran d'un poste qui en a plusieurs** : une liste *Écran* apparaît à côté de *Résolution* dès que le poste a plus d'un écran — *Tous les écrans* (côte à côte, comme jusqu'ici) ou un seul, désigné par son numéro, sa taille et la mention *principal*. L'image prend la taille de l'écran choisi ; la souris et le clavier restent justes. En plein écran, la liste suit les autres réglages dans le panneau de commandes.
+- **Le choix est retenu** : par poste, dans votre navigateur. La session suivante sur ce poste rouvre sur le même écran ; un écran débranché en cours de session rend la vue à tous les écrans.
+- **Windows** : les numéros sont ceux des paramètres d'affichage de Windows. Un écran montré seul est lu comme sur un poste à un écran (duplication DXGI, seulement quand l'image change), au lieu de la capture plus lente qu'imposaient plusieurs écrans. Le bureau distant compte désormais en pixels réels sur chaque écran, même réglés à des échelles différentes.
+- **Linux** : sur un bureau X11. GNOME en Wayland continue de montrer son écran principal, KDE Plasma en Wayland celui qui a été accordé sur le poste.
+- La liste arrive avec la mise à jour de l'agent du poste (2.162.0) ; un agent plus ancien montre tous les écrans, comme avant.
+
+## 2.161.0 — 2026-11-13
+
+- **Fonctionnalités facultatives** : la page *Fonctionnalités* gagne une section *Facultatif*, après *Expérimental*. Elle réunit ce qui est abouti mais ne concerne pas tout le monde ; comme l'expérimental, c'est coupé par défaut et tout compte au profil Administrateur l'active.
+- **Home Assistant** (facultatif) : une page *Home Assistant* suit et entretient votre installation. loco y entre par le module SSH de Home Assistant (« Advanced SSH & Web Terminal » ou « Terminal & SSH »), avec une clé qui lui est propre : aucun jeton de Home Assistant n'est demandé ni gardé, et la clé privée ne quitte pas le serveur. La page donne les trois étapes de la liaison et la clé publique à copier.
+- **La clé d'hôte se confirme** : avant tout échange, loco montre l'empreinte de la clé que présente l'adresse donnée ; rien n'est enregistré tant que vous ne l'avez pas confirmée. Si elle change ensuite (module réinstallé), la liaison s'arrête et redemande une confirmation.
+- **Ce que la page montre** : les versions de Home Assistant, du système et du Supervisor avec celle qui attend, les modules complémentaires et leur état, le stockage, les sauvegardes, ce que signale le Supervisor (pas de sauvegarde récente, disque presque plein, installation dégradée…) et, à la demande, les 200 dernières lignes du journal. Le relevé se refait tout seul tant que la page est affichée.
+- **Mises à jour** : une à une, ou *Tout mettre à jour*, qui les enchaîne dans l'ordre conseillé — le Supervisor, les modules, Home Assistant, puis le système. La fenêtre de confirmation propose de créer une sauvegarde avant (cochée d'office). Une mise à jour lancée se montre « en cours » et ne se relance pas ; l'activité garde les douze dernières tâches avec leur sortie.
+- **Sauvegarde et redémarrages** : *Sauvegarder* lance une sauvegarde complète, gardée dans Home Assistant ; *Redémarrer* relance Home Assistant ou toute la machine. Quand le système redémarre, loco attend son retour : la tâche n'est réussie que s'il répond de nouveau.
+- **Terminal** : le shell du module SSH s'ouvre dans la page de session de loco (plein écran, nouvel onglet), session journalisée. Il demande la fonctionnalité *Accès distant* et un serveur loco sous Linux.
+- **Droits et vue d'ensemble** : un groupe *Home Assistant* dans les profils d'accès sépare consulter, mettre à jour, sauvegarder, redémarrer, ouvrir un terminal et relier des instances ; seul le profil Administrateur les reçoit d'office. La vue d'ensemble signale dans « À traiter » une liaison en échec, une installation dégradée et les mises à jour disponibles.
+- **Côté serveur** : la liaison utilise le client SSH du serveur — déjà présent sur l'appliance, ajouté par l'installation ailleurs (sans jamais la bloquer). Les sessions distantes ouvertes au moment de la mise à jour sont fermées. Voir [docs/fr/homeassistant.md](docs/fr/homeassistant.md).
+
+## 2.160.0 — 2026-11-13
+
+- **Android : l'écran en veille se rallume quand on prend la main** : à l'ouverture d'une session d'écran, l'application rallume l'écran de l'appareil ; s'il se rendort pendant la session, le premier clic ou la première touche le rallume, comme un doigt sur un téléphone en veille. On arrive ainsi sur l'écran de verrouillage au lieu d'un écran éteint.
+- **Android : le code de l'appareil se tape au clavier** : appareil verrouillé, tapez son code sur votre clavier puis Entrée — code PIN ou mot de passe tels quels ; pour un schéma, les numéros de ses points, comptés comme sur un pavé de téléphone (1 en haut à gauche, 9 en bas à droite). Tapée depuis l'écran de verrouillage, la première touche fait monter la saisie du code. Rien n'est contourné : il faut connaître le code, et les essais ratés comptent comme sur l'appareil.
+- Android masque l'écran de saisie du code dans l'image transmise : il s'affiche en noir, la frappe passe quand même. Une note le rappelle sous la session, et la description du service d'accessibilité de l'application dit ce qu'elle fait désormais.
+- Ces nouveautés arrivent avec la mise à jour de l'application Android (2.160.0).
+
+## 2.159.0 — 2026-11-12
+
+- **Mon parc : des filtres en listes déroulantes** : les deux rangées de pastilles laissent place à une barre de listes — *État*, *Système*, *Situation* (hors ligne, redémarrage nécessaire) et *Groupe*. Chaque bouton dit le filtre et la valeur choisie, et se remplit quand un filtre est posé ; chaque ligne d'une liste donne son nombre de postes. Un lien *Effacer les filtres* apparaît dès qu'il y en a un. La recherche et les pages gardent les filtres choisis.
+- **Filtrer par distribution** : la liste *Système* propose la famille — Windows, Linux, Android — puis, en retrait, ses distributions présentes dans le parc, sans numéro de version : Windows 10, Windows 11, Windows Server 2025, Debian, Ubuntu, Rocky Linux… Debian 12 et Debian 13 comptent ensemble. Les appareils Android ont désormais leur propre ligne : ils ne sont plus comptés avec Linux.
+- **Appliance et Docker : l'arrêt du service n'attend plus les connexions des agents** : depuis les connexions persistantes (2.158.0), nginx attendait dix secondes que les agents rendent la leur avant d'être arrêté de force ; l'arrêt du service passait de trois à douze secondes, et pendant une mise à jour le service relancé entre-temps échouait jusqu'à quatre fois sur les cinq que le système tolère — au-delà, loco serait resté arrêté. nginx s'arrête maintenant tout de suite, et la mise à jour de l'appliance attend que l'ancien service ait vraiment fini avant de démarrer le nouveau. Les installations Debian, Ubuntu et Red Hat n'étaient pas concernées.
+
+## 2.158.1 — 2026-11-12
+
+- **Un redémarrage demandé ne se relance plus** : une fois le redémarrage pris par le poste, le bouton *Redémarrer* revenait pendant la minute ou plus qui précède l'arrêt, comme si rien n'avait été demandé — on pouvait en lancer un second. Le poste affiche maintenant « redémarrage en cours », avec un témoin qui tourne, jusqu'à son retour (cinq minutes au plus s'il ne revient pas) ; sur sa fiche, l'entrée *Redémarrer* du menu Plus est remplacée par « Redémarrage en cours » et la tuile Redémarrage le dit aussi.
+- **Une mise à jour en cours se voit, et ne se relance pas** : dans Mon parc, le bouton d'un poste laisse place à « mise à jour en attente » tant que le poste ne l'a pas prise, puis à « mise à jour en cours » avec un témoin qui tourne ; sur la fiche, le bouton *Mettre à jour* devient « Mise à jour en cours » et ne se clique plus, et les cases de sélection des paquets disparaissent le temps de la mise à jour.
+- **« Tout mettre à jour » ne recompte plus les postes déjà lancés** : le nombre entre parenthèses ne porte que sur les postes restants, et un bouton « Mises à jour en cours (n) » apparaît à côté, qui mène au déroulé. Quand tous les postes sont déjà lancés, il ne reste que lui.
+- Une seconde demande est refusée par le serveur avec « déjà en cours », même formulée autrement (avec ou sans redémarrage, par la sélection de postes, par « Tout mettre à jour »), et un double clic pendant l'envoi ne part plus deux fois.
+- Le réveil d'un poste s'affiche « réveil en cours » une fois envoyé, au lieu de « réveil en attente ».
+
+## 2.158.0 — 2026-11-12
+
+- **Sessions distantes en connexion persistante** : l'agent d'un poste et le navigateur gardent désormais une connexion ouverte avec loco (WebSocket, sur le port HTTPS habituel). Le serveur les prévient dès qu'une session est demandée, qu'une touche est frappée ou que le poste répond, au lieu d'attendre qu'ils viennent aux nouvelles. Terminal, bureau distant et onglet Fichiers en profitent. Mesuré sur un poste Debian : de la touche à son écho, 62 ms en médiane auparavant, 25 ms maintenant ; une session ouverte au repos ne produit plus aucune requête (une dizaine par seconde auparavant) ; un terminal s'ouvre en moins de 0,2 s, que la fiche du poste ait été ouverte ou non.
+- **Les actions partent tout de suite** : une mise à jour, un redémarrage ou un script demandé depuis le portail réveille aussitôt l'agent connecté, qui vient le chercher sans attendre son prochain contact.
+- **Rien à régler, et un repli permanent** : aucun port à ouvrir sur les postes ni sur le pare-feu. Si la connexion persistante n'est pas possible — agent pas encore à jour, équipement réseau qui la coupe, navigateur qui la refuse —, la session passe par des allers-retours HTTPS comme auparavant, sans coupure : on peut passer de l'un à l'autre en cours de session. Les droits, l'accord de l'utilisateur avant le bureau distant, les limites de sessions et le journal sont inchangés.
+- **Côté serveur** : le relais tourne dans le portail lui-même, sur le port local 8090 (voisin du 8089), et nginx lui transmet deux adresses avec les mêmes règles d'accès que le reste — `/agent/relay` pour les postes, `/fleet/session/…/ws` pour l'interface. La mise à jour refait cette configuration. Si le port 8090 est déjà pris par un autre programme, loco s'installe quand même et les sessions passent par HTTPS.
+- **Un onglet en arrière-plan ne perd plus sa session** : tant que le navigateur reste connecté, loco le sait présent, même si le navigateur ralentit les onglets qu'on ne regarde pas.
+- Agents Linux, Windows et Android : le canal persistant arrive avec leur mise à jour (automatique pour Linux et Windows). L'agent Windows n'a pas pu être essayé sur un vrai Windows avant cette version ; en cas de souci, il retombe de lui-même sur les allers-retours HTTPS.
+
+## 2.157.0 — 2026-11-12
+
+- **Un terminal s'ouvre tout de suite** : une session demandée attendait que l'agent du poste vienne aux nouvelles, ce qu'il ne faisait que toutes les cinq secondes au repos — d'où deux à cinq secondes d'attente à l'ouverture d'un terminal, d'un bureau distant ou de l'onglet Fichiers. Dès que la fiche d'un poste est ouverte, qu'une session tourne ou vient de se fermer, son agent vient désormais aux nouvelles plusieurs fois par seconde : la session s'ouvre en un quart de seconde environ. Mesuré sur un poste Debian : 3,9 s en médiane auparavant, 0,25 s maintenant.
+- **Même sans passer par la fiche** : un poste que personne ne regarde vient aux nouvelles toutes les secondes dans un parc de 25 postes au plus, puis de moins en moins souvent à mesure que le parc grandit, jusqu'aux cinq secondes d'avant — le serveur ne reçoit jamais plus de 25 de ces échanges par seconde, environ 2 ms chacun. Un appareil Android au repos garde son rythme de trois secondes, pour sa batterie.
+- **Android : le premier texte d'une session n'attend plus** : après une longue pause, il arrivait avec plus d'une seconde de retard.
+- Le suivi en direct de l'onglet Supervision garde son relevé toutes les deux secondes, quel que soit le rythme des échanges.
+- Les agents Linux et Windows se mettent à jour seuls ; d'ici là, ils gardent leur rythme de cinq secondes. L'application Android suit avec sa propre mise à jour.
+
+## 2.156.0 — 2026-11-12
+
+- **Mon parc et la vue d'ensemble se tiennent à jour sans se recharger** : quand l'état du parc change, seules les parties concernées de la page sont remplacées — plus de page qui clignote, le défilement reste où il est. Dans Mon parc, la ligne d'un poste dont l'état change s'éclaire un instant ; la fenêtre *Tout mettre à jour* suit le nombre affiché sur son bouton. Rien n'est remplacé tant qu'un menu ou une fenêtre est ouvert, ni pendant une sélection de postes. Si la page doit changer de forme (premier poste du parc, par exemple), elle se recharge comme avant.
+- **Vue d'ensemble plus visuelle** : le parc est un anneau coloré selon l'état des postes, avec leur nombre au centre. Le processeur et la mémoire du serveur ont, comme le réseau, une courbe des deux dernières minutes, tenue à jour toutes les deux secondes ; elle passe à l'orange puis au rouge à l'approche de la saturation.
+- **La couleur dit le niveau** : les jauges (disque du serveur, ressources d'un poste) sont vertes tant que tout va bien, orange puis rouges à leurs seuils. La couleur d'accent, elle, reste votre réglage.
+- **Des icônes pour se repérer** : sur les titres des panneaux et les tuiles de la vue d'ensemble, de Système, de la fiche d'un poste, des paquets Linux et de Windows Update.
+- **États vides plus lisibles** : une icône au-dessus de la phrase, partout où une liste est vide. Un cache Linux ou Windows Update vide dit quand il se remplira, au lieu d'un en-tête de tableau au-dessus de rien.
+- **Un peu de mouvement** : les panneaux entrent en douceur à l'arrivée sur une page, les onglets en fondu, les boutons s'enfoncent légèrement. Aucun mouvement lors d'un rechargement, ni quand le système demande de réduire les animations.
+
+## 2.155.0 — 2026-11-12
+
+- **Android : les mises à jour de l'application sans Play Protect, par adb** : sur un appareil appairé en adb et joignable, loco installe lui-même la nouvelle version de l'application, comme depuis un ordinateur — ni fenêtre de confirmation, ni analyse proposée par Play Protect sur l'appareil. Si l'installation par adb échoue (appareil hors du réseau, débogage sans fil coupé), l'application reprend la main et se met à jour seule, comme avant. Jamais pendant une session distante ouverte ; chaque installation est inscrite au journal.
+- **Préparer l'enregistrement de l'application auprès de Google** : Android exige peu à peu qu'une application installée hors du Play Store vienne d'un développeur enregistré. L'enregistrement se fait une fois, par le détenteur de la clé de signature de l'application, et vaut pour toutes les instances de loco. La construction de l'APK embarque désormais le jeton de preuve donné par l'Android Developer Console, s'il est posé à côté de la clé ; la documentation Android décrit la marche à suivre.
+- Les autorisations posées par adb après l'appairage ne le sont plus deux fois quand deux connexions arrivent en même temps.
+
+## 2.154.0 — 2026-11-11
+
+- **Android : une image fluide à chaque session, à configurer depuis le téléphone** : sans appairage adb, Android limite l'écran distant à environ trois images par seconde. Le nouveau panneau *Image fluide à chaque session* de l'application fait l'appairage sans passer par le portail : **Configurer** ouvre *Débogage sans fil* ; activez-le, touchez *Associer l'appareil avec un code d'association*, puis tapez le code à six chiffres dans la notification de loco, sans fermer cette fenêtre. L'application trouve seule le port et transmet le code à loco. Ensuite, chaque session s'ouvre avec une image fluide, sans fenêtre « Projeter » (une trentaine d'images par seconde mesurées sur un OnePlus 12).
+- **Un appairage limité à l'appareil lui-même** : loco n'appaire qu'avec l'adresse d'où vient la demande, déclarée par l'appareil, jamais une adresse choisie par l'appelant. L'appareil doit donc être sur le même réseau que loco. Le code n'apparaît dans aucune commande, et l'appairage est inscrit au journal comme fait « depuis l'appareil ».
+
+## 2.153.0 — 2026-11-11
+
+- **Une icône dit de quel type de poste il s'agit** : un petit écran devant le nom des ordinateurs (Debian, Ubuntu, Red Hat, Windows), et pour les appareils Android un téléphone, une tablette ou un téléviseur. On la voit dans Mon parc, dans le titre de la fiche d'un poste, dans le déroulé des mises à jour, dans les groupes de machines et dans le choix des postes d'un déploiement.
+- **Android : téléphone, tablette ou téléviseur, reconnu par l'application** : l'application annonce le type de l'appareil — téléviseur sous Android TV, tablette quand l'écran fait au moins 600 dp de large (le seuil d'Android), téléphone sinon. La fiche de l'appareil l'indique dans *Détails › Type d'appareil*. Un appareil dont l'application est plus ancienne est montré comme un téléphone, et sa fiche le précise, jusqu'à ce que l'application se mette à jour. Un téléphone pliable ouvert est vu comme une tablette.
+
+## 2.152.0 — 2026-11-11
+
+- **Mon parc bien plus rapide** : la page interroge le serveur toutes les deux secondes pour se tenir à jour, et chaque interrogation recalculait l'état de tous les postes. Le plus coûteux était la comparaison des logiciels installés sur chaque poste Windows avec le catalogue, refaite plusieurs fois par poste. Ce que la liste tire de l'inventaire d'un poste est maintenant gardé en mémoire et n'est recalculé que lorsque cet inventaire ou le catalogue change. Sur un parc simulé avec un catalogue de 30 logiciels : 5,5 ms au lieu de 528 ms pour 100 postes, 34 ms au lieu de 5 secondes pour 1 000 postes. La première interrogation après un redémarrage du portail reste plus longue (0,6 seconde pour 1 000 postes).
+- **La vue d'ensemble en profite aussi** : elle ne recharge plus l'inventaire complet de chaque poste pour compter les voyants.
+- **Un long historique d'actions ne ralentit plus la liste** : les actions en cours de tout le parc se lisent en une seule requête, et la dernière action terminée d'un poste se retrouve sans relire tout son historique.
+
+## 2.151.0 — 2026-11-11
+
+- **Après cette mise à jour, reconnectez-vous une fois** : les sessions ouvertes avant elle ne sont plus reconnues.
+- **Se déconnecter ferme vraiment la session** : le serveur connaît désormais chaque session du portail. Une fois déconnecté, un cookie copié auparavant ne vaut plus rien. Une session dure sept jours au plus, même utilisée sans arrêt ; elle expire toujours après huit heures d'inactivité, et changer son mot de passe ferme les autres sessions du compte.
+- **Double authentification : un code n'ouvre qu'une session** : un code déjà utilisé est refusé (« Ce code a déjà servi »), il faut attendre le suivant. Quelqu'un qui a vu le code être tapé ne peut plus le rejouer dans la minute.
+- **La clé d'inscription ne reste plus sur les postes** : les paquets `.deb` et `.rpm` de l'agent gardaient leur script d'installation, lisible par tous les utilisateurs du poste, avec la clé d'inscription dedans. Il n'est plus lisible que par root, et il est remplacé par une simple note dès que le poste est inscrit ; les postes déjà installés par un paquet sont nettoyés par leur agent à son prochain contact. Pendant l'inscription, la clé n'apparaît plus dans la liste des processus du poste.
+- **La clé d'inscription ne s'écrit plus dans le journal** : le journal d'accès du portail (nginx) ne garde plus les paramètres des adresses, donc plus le `?key=…` des commandes d'inscription.
+- **Assistants IA** : une commande écrite par l'assistant vise 25 postes au plus par appel, pour qu'une erreur de ciblage ne parte pas d'un coup sur tout le parc ; un script de la bibliothèque, écrit et enregistré par une personne, garde la limite de 500. Les consignes données à l'assistant précisent que ce qui revient d'un poste (sortie d'une commande, texte d'un écran, contenu d'un fichier) est une donnée, jamais une instruction à suivre.
+- **Sauvegardes** : `SECURITY.md` disait à tort qu'elles étaient en 0600. Elles sont en 0640 `root:loco` pour que le portail puisse les proposer au téléchargement et les envoyer hors site, et elles contiennent les clés privées du serveur et de l'autorité locale : une archive se protège comme le serveur lui-même.
+
+## 2.150.0 — 2026-11-11
+
+- **Bureau à distance : le pavé numérique fonctionne** : sur un poste Windows, les touches du pavé numérique tapaient des caractères sans rapport (des glyphes coréens). Chiffres, opérateurs, Entrée et touches de navigation du pavé arrivent maintenant comme les touches attendues. Sur Linux, le chiffre tapé est celui qui arrive, quel que soit l'état de Verr. num. sur le poste ; dans la console texte, où le pavé ne tapait rien, il fonctionne aussi. Sur Android, le pavé tape ses caractères.
+- **Android : plus de frappes perdues** : en tapant au clavier dans un champ d'un appareil Android, un caractère sur deux environ pouvait disparaître. Corrigé.
+- **« Adaptée à la fenêtre » dit quand le poste ne peut pas suivre** : certains postes n'offrent pas la résolution demandée — une machine virtuelle Windows avec la carte graphique de base n'en propose souvent qu'une seule. L'image est alors ajustée à la fenêtre, et la session l'indique désormais : *Le poste n'offre pas cette résolution*, avec en infobulle la taille demandée, celle que le poste a gardée, et le remède (une carte et un pilote graphiques complets, VirtIO-GPU ou QXL).
+
+## 2.149.1 — 2026-11-11
+
+- **Bureau à distance en plein écran : un panneau centré et lisible** : le panneau des commandes reste sur le bord gauche, mais au milieu de la hauteur de l'écran au lieu du coin supérieur. Plus rien n'y est coupé : l'état de la session a sa propre ligne et s'affiche en entier, et les listes *Résolution* et *Zoom* prennent toute la largeur.
+- **Quitter le plein écran se voit** : le bouton est écrit en toutes lettres, avec une icône « réduire », au lieu d'une icône seule. *Nouvel onglet* et *Fermer la session* restent en icônes à sa droite.
+
+## 2.149.0 — 2026-11-11
+
+- **Mettre à jour l'agent Android depuis l'application** : quand loco propose une version plus récente, l'écran de l'application affiche *Mise à jour de l'application* avec la version disponible et le bouton **Installer la mise à jour**. L'application se met toujours à jour seule ; ce bouton l'installe tout de suite, sans attendre. Ouvrir l'application interroge loco aussitôt.
+- **On sait où en est l'appareil** : en bas de l'écran, la ligne de version indique « à jour » ou la version disponible. Si l'autorisation d'installer des applications manque, le bouton y conduit d'abord ; et ce qui empêche une installation (loco injoignable, fichier inattendu, refus sur l'appareil) est écrit sous le bouton.
+- **Après l'installation** : Android ferme l'application pour la remplacer. Elle repart seule, une notification *Application mise à jour* le confirme, et son écran se rouvre quand Android le permet.
+- Hors de ses réseaux de confiance, l'appareil ne contacte pas loco : le bouton n'y est pas proposé.
+
+## 2.148.0 — 2026-11-10
+
+- **Bureau à distance Android bien plus rapide** : l'écran d'un appareil Android arrivait par à-coups, avec plus d'une seconde entre un clic et son effet. L'application refaisait une connexion sécurisée complète à chacun de ses échanges avec loco (une trentaine par seconde) : elle garde maintenant la connexion ouverte. Ce qui bouge à l'écran part en JPEG, deux fois plus léger, puis l'image redevient nette dès que l'écran se pose ; et l'application envoie les images sans attendre que le navigateur les redemande une à une, en se réglant sur ce qu'il a réellement affiché. Sur l'appareil d'essai : environ dix images par seconde au lieu d'une et demie, et un tiers de seconde entre un clic et l'image au lieu d'une seconde et demie.
+- **Le doigt suit la souris en direct** : glisser pour faire défiler ou déplacer agit pendant le geste, au lieu d'être rejoué une fois le bouton relâché ; maintenir le bouton fait un appui long.
+- **Pour une image fluide, le partage d'écran** : le contrôle à distance (accessibilité) seul reste limité par Android à trois images par seconde environ. Activez l'écran distant dans l'application, ou appairez l'appareil une fois par adb pour qu'il le reprenne seul.
+- L'assistant IA, qui ne lit pas le JPEG, reçoit toujours l'écran sans perte, comme avant.
+
+## 2.147.2 — 2026-11-10
+
+- **Bureau à distance : une page rangée** : hors plein écran, les réglages d'affichage, les boutons de la session et les commandes se partageaient trois rangées sans ordre. Le titre et l'état de la session sont maintenant à gauche, **Plein écran**, **Nouvel onglet** et **Fermer la session** à droite sur la même ligne. L'écran du poste tient dans un seul cadre : au-dessus, la barre des commandes envoyées au poste (Ctrl+Alt+Suppr, raccourcis, touches à maintenir, texte, presse-papiers) ; dessous, une barre d'état avec la résolution, le zoom et la note de session. La page tient dans la fenêtre, sans ascenseur.
+- **Barre du haut du portail** : entre 980 et 1060 pixels de large, elle débordait de la fenêtre quand le menu Android est affiché, ce qui faisait apparaître un ascenseur horizontal sur toutes les pages. Corrigé.
+
+## 2.147.1 — 2026-11-10
+
+- **Bureau à distance en plein écran : des commandes qui ne cachent plus le poste** : le panneau latéral occupait toute la hauteur de l'écran sur une large bande opaque. C'est maintenant un petit panneau flottant, quatre fois moins encombrant, **translucide** — on devine le bureau dessous, et il se densifie dès qu'on s'en sert. L'état de la session et les actions (quitter le plein écran, nouvel onglet, fermer la session) tiennent sur une ligne, en icônes avec leur nom en infobulle ; replié, il ne reste qu'une poignée discrète sur le bord.
+
+## 2.147.0 — 2026-11-10
+
+- **Réseaux de confiance sur Android** : dans l'application, un nouveau panneau règle où l'appareil reste en contact avec loco — **partout** (comme avant, par défaut), **hors données mobiles**, ou **seulement sur les Wi-Fi que vous approuvez par leur nom**. Ailleurs l'agent est en pause : aucun contact avec le serveur, les sessions s'arrêtent, le débogage sans fil n'est pas rallumé ; la notification dit pourquoi, et il reprend seul au retour sur un réseau approuvé. Un Wi-Fi s'approuve d'un bouton quand l'appareil y est relié, ou par son nom.
+- **Ce qu'Android exige pour le mode par nom de Wi-Fi** : l'autorisation de localisation réglée sur « Toujours autoriser », et la localisation de l'appareil allumée — Android ne donne le nom d'un Wi-Fi qu'à cette condition. loco ne lit jamais la position ; l'autorisation n'est demandée que si vous choisissez ce mode, et l'application guide pas à pas. Sans elle, l'agent reste en pause plutôt que d'être actif sur un réseau qu'il ne sait pas nommer.
+- **La fiche d'un appareil Android dit où il est actif** : « actif hors données mobiles seulement », « actif sur 2 Wi-Fi approuvés seulement »… On comprend ainsi pourquoi il apparaît hors ligne par moments. Le nom des Wi-Fi reste sur l'appareil, et le réglage ne se change que sur l'appareil.
+- **Mettre à jour l'agent depuis la fiche d'un poste** : quand l'agent d'un poste est plus ancien que le serveur, sa fiche l'indique (« agent à mettre à jour ») et le menu *Plus* propose **Mettre à jour l'agent**. L'agent est appelé tout de suite au lieu d'attendre son prochain contact, et l'action se suit comme les autres : réussie quand il annonce la nouvelle version, en échec au bout d'un quart d'heure avec l'endroit où regarder sur le poste. Elle fonctionne avec les agents déjà installés (Linux, Windows, Android).
+
+## 2.146.2 — 2026-11-10
+
+- **Une action ne reste plus « transmise à l'agent » sans jamais s'exécuter** : un redémarrage et une mise à jour demandés à la suite partaient dans la même réponse ; l'agent redémarrait le poste et abandonnait la mise à jour, qui restait « transmise » six heures avant d'échouer. Désormais, rien d'autre ne part avec un redémarrage (ni avec une mise à jour qui redémarre, ni avec le retrait de l'agent) : la suite attend le retour du poste, puis s'exécute.
+- **Les actions perdues repartent toutes seules** : quand un poste n'a jamais reçu ou jamais démarré une action (réponse perdue, poste éteint, agent relancé), loco la transmet de nouveau dès le contact suivant — trois fois au plus — au lieu de la déclarer en échec après six heures. Une action interrompue en cours de route (poste éteint pendant l'action) est signalée tout de suite, avec sa cause.
+- **Cache APT de l'appliance et du serveur Windows : sortie en HTTPS** : dans un réseau qui ne laisse plus sortir le HTTP, le cache ne joignait plus les dépôts. Il joint maintenant en HTTPS les dépôts connus pour y répondre (Debian, Ubuntu, PPA Launchpad, Zorin, Raspberry Pi), les autres en HTTP, et essaie l'autre voie quand la première ne répond pas ; le certificat du dépôt est vérifié.
+- **Plus de « Release file … is expired » à cause du cache** : quand un dépôt ne répondait plus, le cache resservait indéfiniment son ancien index ; une fois la date de validité passée (sept jours pour les mises à jour de Debian), tout l'inventaire du poste échouait et ses mises à jour étaient bloquées. Un index n'est plus jamais resservi périmé : le poste garde ses listes et met à jour le reste.
+- **Un dépôt en défaut ne bloque plus les autres** (agent Linux) : un index périmé ou un dépôt non signé parmi des dépôts lisibles n'empêche plus l'inventaire ni la mise à jour ; il est signalé à part. L'avertissement de la fiche du poste donne maintenant la cause de chaque dépôt inutilisable, et dit quand l'erreur vient du cache APT de loco plutôt que du poste.
+- **Mise à jour automatique de l'agent Linux** : après s'être mis à jour, l'agent lance aussitôt la nouvelle version. Il se retéléchargeait jusque-là à chaque contact tant que duraient les contacts rapprochés, en annonçant toujours l'ancienne version.
+
+## 2.146.1 — 2026-11-10
+
+- **Plus rien n'est réservé au compte « admin » de l'installation** : *Administration › Fonctionnalités* (activer ou couper des pans entiers de loco, partie expérimentale comprise) et le **Shell root** du serveur sont désormais ouverts à **tout compte actif au profil Administrateur**, quel que soit son nom ou son origine (local, annuaire, SSO). Les autres profils n'y ont toujours pas accès.
+- **Activation du shell root** : elle demande le mot de passe du compte connecté, et non plus celui du compte « admin ». Un compte d'annuaire ou SSO, qui n'a pas de mot de passe local, ne peut pas l'activer lui-même — la page le lui explique — mais l'utilise une fois activé par un compte local.
+
+## 2.146.0 — 2026-11-10
+
+- **Connexion par clé d'accès (passkey)** : un compte local peut désormais se connecter **sans mot de passe**, avec son téléphone, son ordinateur ou une clé de sécurité. La clé s'ajoute dans *Mon compte › Sécurité › Clés d'accès* (le mot de passe actuel est redemandé, dix clés au plus par compte), puis la page de connexion propose **Se connecter avec une clé d'accès**. L'appareil vérifie la personne à chaque usage (empreinte, visage ou code) : la clé vaut mot de passe et second facteur, et loco n'en garde que la partie publique. Le mot de passe reste utilisable, rien ne change pour qui n'ajoute pas de clé.
+- **Deux conditions, imposées par les navigateurs** : loco doit être ouvert par un **nom** — celui de *Système › Réseau › Adresse du portail*, jamais une adresse IP — et son **certificat** doit être reconnu par le navigateur (autorité de loco installée sur l'appareil, ou certificat de votre autorité). Ailleurs, *Mon compte* explique par quelle adresse ouvrir loco et la page de connexion ne propose pas le bouton.
+- **Appareil perdu** : la personne retire sa clé dans *Mon compte* ; un administrateur peut retirer celles d'un compte depuis *Comptes* (**Retirer les clés d'accès**) ou par `loco-user passkeys-reset NOM`, et réinitialiser un mot de passe retire aussi les clés du compte. Chaque ajout, retrait et connexion par clé est noté au journal. Les comptes d'annuaire et SSO gardent les règles de leur fournisseur.
+
+## 2.145.0 — 2026-11-10
+
+- **Écran distant Android sans repasser par l'application** : il suffisait jusqu'ici de redémarrer l'application loco, ou l'appareil, pour devoir y retourner toucher « Activer l'écran distant ». Désormais, **une seule autorisation suffit** : une fois le contrôle à distance (service d'accessibilité) activé sur l'appareil, loco montre l'écran à chaque session — après une mise à jour de l'application ou un redémarrage de l'appareil aussi — sans rien refaire. Android limite cette lecture à trois images par seconde environ ; le partage d'écran, plus fluide, reste proposé. Pendant toute session d'écran, l'appareil affiche la notification « Contrôle à distance en cours ».
+- **Tout autoriser en appairant l'appareil une fois** : quand un appareil Android est appairé avec loco par adb (*Plus › Débogage adb…*), loco lui donne lui-même, une fois pour toutes, ce qu'il faut pour un écran distant fluide et sans geste : partage d'écran sans fenêtre d'accord, contrôle activé, blocage des « paramètres restreints » levé, application dispensée de mise en veille. L'application rallume aussi seule le débogage sans fil quand Android le coupe (redémarrage, retour du Wi-Fi). Le *Journal* note ces autorisations ; *Oublier* le débogage adb y met fin.
+- **« Accès refusé » à l'activation du contrôle** : sur Android 13 et plus, Android bloque le service d'accessibilité d'une application installée depuis un fichier. L'application indique maintenant comment le permettre (*Paramètres › Applications › Agent loco*, menu ⋮, *Autoriser les paramètres restreints*).
+
+## 2.144.0 — 2026-11-10
+
+- **Contacts des agents bien plus légers** : le portail garde désormais sa base ouverte tant qu'il sert, au lieu de la ranger sur le disque à la fin de chaque requête. Un contact simple d'un agent coûte environ dix fois moins au serveur, et les sessions distantes en profitent aussi. Rien ne change pour ce qui engage : inscriptions, inventaires, commandes transmises, résultats, réglages et comptes sont toujours écrits sur le disque avant la réponse ; seules la présence et les mesures d'un contact simple — que l'agent renvoie de lui-même au contact suivant — y sont mises dans la seconde qui suit.
+- **Une action demandée part en quelques secondes** : quand une action attend un poste, loco le lui signale par le canal déjà ouvert pour l'accès distant, et l'agent (Linux et Windows) prend contact tout de suite au lieu d'attendre sa minuterie de deux minutes. Les contacts au repos ne sont pas multipliés pour autant.
+- **Une alerte qui ne part pas ne fige plus le portail** : l'e-mail ou le webhook d'une alerte est envoyé sans retenir la base. Un serveur de messagerie ou un webhook qui tarde à répondre ne bloque plus les contacts des agents ni les actions du portail pendant ce temps. L'ajout d'une source d'applications Android personnalisée relit lui aussi le dépôt sans retenir la base.
+- **Un poste ne peut plus être repris avec la seule clé d'inscription** : un agent qui se réinscrit (réinstallation, changement d'adresse du serveur) prouve qu'il détient le jeton du poste, sans le présenter, et garde sa fiche comme avant. Sans cette preuve, celui qui présente l'identifiant d'un poste déjà inscrit — disque restauré, clone, poste retiré, ou tentative d'en prendre la place — est inscrit comme un **nouveau poste** : la fiche et le jeton du poste d'origine restent intacts, et le *Journal* le note. Un appareil Android retiré depuis loco puis réinscrit réapparaît donc comme un nouvel appareil ; après un simple « Quitter » dans l'application, il retrouve sa fiche.
+- **Bureau distant KDE et GNOME en Wayland sans paquet à installer** : sur un poste Debian ou Ubuntu avec une session KDE Plasma ou GNOME en Wayland, l'agent installe lui-même, une fois, les composants dont le bureau distant a besoin. Le message « Composants manquants pour le bureau distant » n'apparaît plus à la prise en main.
+- **Paquets Linux : les postes du parc sont de nouveau comptés** : la page *Paquets Linux* affichait toujours 0 poste Linux dans le parc et 0 poste par version. Les compteurs sont justes, et ne comptent que le parc du compte connecté.
+- **Retour arrière d'une mise à jour plus sûr** : si l'installation d'une version échoue, le portail est arrêté avant que la base précédente soit remise en place, sur tous les systèmes (c'était déjà le cas sur l'appliance).
+
+## 2.143.0 — 2026-11-09
+
+- **Bureau distant sur KDE Plasma en Wayland** : le bureau distant des postes KDE sous Wayland fonctionne désormais, sans avoir à ouvrir une session X11. L'agent capture l'écran par le portail standard `xdg-desktop-portal` (ScreenCast, flux PipeWire) et injecte la saisie par périphérique d'entrée virtuel. La première ouverture demande un accord de partage d'écran sur le poste (fenêtre KDE « Partage d'écran ») ; en cochant « Autoriser la restauration pour les sessions futures », les ouvertures suivantes ne redemandent plus rien. (GNOME et les compositeurs wlroots comme Sway ou Hyprland étaient déjà pris en charge ; les autres compositeurs Wayland ne le sont toujours pas.)
+
+## 2.142.0 — 2026-11-09
+
+- **Contacts des agents plus réactifs** : quand une action est en attente sur un poste (ou qu'une vient de s'exécuter), l'agent Linux recontacte loco toutes les ~10 secondes au lieu d'attendre jusqu'à deux minutes, puis revient à sa cadence de repos (deux minutes) une fois le calme revenu. Les actions et leurs enchaînements (mise à jour puis redémarrage, actions successives) partent donc presque tout de suite quand vous travaillez sur un poste, sans alourdir les contacts au repos. L'agent Android, qui suivait déjà la cadence annoncée par loco, en profite aussi.
+- **Inventaire d'un poste Linux affiché dès l'inscription** : un poste Debian, Ubuntu ou RHEL qui s'inscrit montre **tout de suite** ses logiciels installés et ses caractéristiques (processeur, mémoire, disque…), sans attendre la fin du premier `apt-get update` ; le nombre de mises à jour s'affiche juste après. Auparavant, la fiche restait « inventaire en cours » jusqu'à la fin du scan réseau.
+
+## 2.141.0 — 2026-11-09
+
+- **Nom personnalisé d'un poste** : dans *Mon parc*, vous pouvez donner à un appareil un nom plus parlant que son nom d'hôte. Sur la fiche du poste, *Plus › Nom personnalisé…* ouvre une petite fenêtre ; le nom saisi s'affiche à la place du nom d'hôte dans la liste, la fiche et la recherche, **tout en gardant le nom d'hôte visible** juste en dessous. Laisser le champ vide revient au nom d'hôte. Nouveau droit **Nommer les appareils**, accordé d'office à l'Administrateur et à l'Opérateur.
+
+## 2.140.0 — 2026-11-09
+
+- **Bureau distant Wayland installable hors-ligne** : le paquet `.deb` de l'agent Linux **embarque désormais `grim`** (la capture d'écran des bureaux Wayland wlroots — Sway, Hyprland, Wayfire, river). Sur un poste **sans accès à un dépôt** qui fournit « grim », l'agent s'installe quand même et le bureau distant de ces compositeurs fonctionne. `grim` n'est plus une dépendance du paquet : l'agent utilise celui du système s'il est présent, sinon le binaire embarqué correspondant à son architecture (amd64 ou arm64).
+- **APK de l'agent Android toujours proposé à l'enrôlement** : dans *Mon parc › Enrôlement*, onglet *Android*, le bouton de téléchargement de l'APK préconfiguré est **toujours affiché**. Si l'APK de la version n'est pas encore présent sur le serveur — juste après une mise à jour —, il se **télécharge tout seul en arrière-plan** dès l'ouverture de la page, et le message d'attente disparaît dès qu'il est là.
+
+## 2.139.0 — 2026-11-06
+
+- **Applications Android** (fonctionnalité expérimentale *Appareils Android*) : un catalogue d'applications à installer sur vos appareils depuis loco, avec un nouveau menu *Android* (*Catalogue*, *Dépôts F-Droid*, *Sources*).
+  - **Dépôts F-Droid vérifiés** : F-Droid et IzzyOnDroid sont proposés d'office. Neuf autres dépôts d'éditeurs s'ajoutent en un clic : Guardian Project, Bitwarden, Brave, Molly, Session, Threema Libre, KDE, NewPipe et microG. Leur clé a été contrôlée : celle qui signe l'index est la même que celle que publie l'éditeur.
+  - **Un autre dépôt F-Droid** peut être ajouté à la main : loco lit sa clé et demande d'en confirmer l'empreinte avant de l'ajouter.
+  - **Chaque index est signé** : loco vérifie la signature avec la clé de la source et refuse un index plus ancien que le dernier vérifié. Les index sont relus chaque jour.
+  - **Recherche** par nom, sélection *À découvrir* et catégories. La fiche d'une application indique la version, l'Android minimum, les processeurs, la taille, la licence, la clé de signature, et les avertissements de F-Droid (publicité, pistage…).
+  - **Google Play** : Google ne permet à aucun outil tiers d'installer ses applications. Une application Play s'ajoute au catalogue par son lien ou son nom de paquet ; au déploiement, l'appareil ouvre sa fiche dans le Play Store et vous touchez *Installer*. Google Play se charge ensuite des mises à jour.
+  - **Déploiement** depuis le catalogue, la fiche d'un appareil (*Plus › Installer des applications…*) ou *Mon parc › Déploiements* (nouveau type *Applications Android*), avec groupes de machines et vagues comme pour les autres déploiements.
+  - **Installation** : chaque appareil reçoit la version compatible avec son Android et son processeur. loco télécharge l'APK depuis la source et vérifie son empreinte, inscrite dans l'index signé ; l'appareil la vérifie aussi, avec la clé de signature, avant de le confier à Android.
+  - **Confirmation** : une première installation se confirme sur l'appareil, dans la fenêtre *Installer* d'Android, ouverte par l'application loco ou par sa notification. Sur Android 12 ou plus récent, les mises à jour des applications que loco a installées se font sans rien demander.
+  - **Suivi** : la fiche d'un appareil montre, pour chaque application du catalogue, la version installée, la boutique qui l'a installée et la version disponible. Le catalogue indique les appareils à mettre à jour.
+  - **Nouveaux droits** : *Consulter les applications Android* et *Gérer les applications et les sources Android*. Installer reste le droit *Déployer un logiciel*.
+- **APK prêt à inscrire**, dans *Mon parc › Enrôlement*, onglet *Android* : comme le MSI Windows, l'adresse du serveur, la clé d'inscription et l'empreinte de l'autorité sont **gravées dans l'APK**. Ouverte sur l'appareil, l'application s'inscrit **toute seule**, sans rien saisir ni confirmer. Avec un groupe de machines, l'appareil le rejoint.
+  - La configuration est posée dans le *bloc de signature* de l'APK : **sa signature reste valable** (aucune re-signature), et l'application peut se mettre à jour comme avant. Si l'empreinte reçue ne correspond pas à celle gravée, l'inscription automatique est refusée et l'application repasse à la saisie manuelle.
+  - L'**APK générique** (adresse et clé à saisir à la main) reste proposé, replié sous *APK générique et saisie manuelle*.
+- **Application Android 2.139.0** : nouvelle carte *Installations*, pour autoriser loco à installer des applications ; l'application s'appelle désormais **« Agent loco »** (« loco Agent », « Agente loco »), pour la distinguer comme l'agent des autres systèmes.
+  - **Nouvelle présentation**, à l'image du portail : mêmes couleurs, même police (Bricolage Grotesque, et IBM Plex Mono pour les adresses, empreintes et versions), mêmes panneaux, boutons et pastilles d'état. L'apparence par défaut est *Brume* ; en mode sombre, l'application passe au thème « sombre doux ». L'écran d'inscription et la liste des accès sur l'appareil ont été refaits.
+  - Elle **se met à jour seule** depuis loco aux versions suivantes, hors session distante en cours ; après une mise à jour, l'écran distant est à réactiver.
+  - Elle **repart d'elle-même** après un redémarrage de l'appareil ou une mise à jour.
+  - **À installer une fois à la main** depuis l'enrôlement, par-dessus la 2.138.0 : la 2.138.0 ne savait pas se mettre à jour.
+- **Retirer l'agent** depuis la fiche d'un appareil Android le retire maintenant de loco ; l'application reste installée.
+- **Terminal adb** pour les appareils Android : un vrai terminal `adb shell`, avec les droits de l'utilisateur « shell » d'Android (`pm`, `am`, `settings`, `input`, `logcat`, `dumpsys`…), bien plus larges que ceux du terminal de l'application.
+  - **Ouvrir** : bouton *Terminal adb* sur la fiche de l'appareil, ou *Plus › Débogage adb…*.
+  - **Connexion** : loco se connecte lui-même à l'appareil, sur le réseau local, comme un ordinateur de développement.
+  - **Débogage sans fil** (Android 11 et plus) : on saisit dans loco le port et le code d'association affichés par l'appareil, une seule fois. L'application loco indique ensuite à loco le port de connexion, qui change à chaque activation.
+  - **Port adb classique** : connexion directe pour un appareil qui écoute déjà (5555).
+  - **Assistants IA** : nouvel outil MCP `adb_shell`.
+  - **Droits et sécurité** : nouveau droit *Ouvrir un terminal adb*. Sessions, appairages et commandes sont journalisés. loco garde sa propre clé adb et son serveur adb n'écoute sur aucun port réseau.
+  - **adb sur le serveur** : inclus dans l'appliance, installé par loco quand la distribution le fournit (paquet `adb`, ou `android-tools` sur Rocky avec EPEL). Pas de terminal adb sur un serveur Windows.
+- **Déverrouiller un appareil Android à distance** (bouton *Déverrouiller* sur la fiche d'un appareil appairé en adb, et outil pour assistants IA) : loco réveille l'écran et rejoue le **schéma**, le **PIN** ou le **mot de passe** que vous saisissez — par adb, sans toucher l'appareil.
+  - **Schéma** : vous le tracez sur un pavé 3×3 dans le portail. L'écran de verrouillage ne pouvant pas s'afficher (surface sécurisée d'Android), les 9 points sont calculés depuis la résolution ; un **profil par constructeur** (Pixel/AOSP, Samsung, Xiaomi, OnePlus…) sert de départ, et un **calage** par appareil l'ajuste si le schéma ne passe pas. **PIN** et **mot de passe** ne demandent aucun calage.
+  - **Assistants IA** : nouvel outil MCP `adb_unlock` (schéma, PIN ou mot de passe).
+  - **Sécurité** : droit *Ouvrir un terminal adb* requis (l'accès adb permettait déjà d'injecter ces gestes). Le secret saisi n'est jamais journalisé. S'appuie sur le débogage sans fil déjà autorisé sur l'appareil.
+- **Contrôler l'écran d'un appareil Android par adb** (bouton *Contrôler l'écran*, une fois l'appareil déverrouillé) : loco diffuse l'écran et injecte les gestes — cliquer pour toucher, glisser pour balayer, touches *Retour*, *Accueil*, *Récentes*, *Marche/veille*, et saisie de texte. **Sans dialogue MediaProjection.** L'écran de verrouillage, surface sécurisée, ne peut pas s'afficher (d'où le déverrouillage à l'aveugle ci-dessus).
+  - **Flux basse latence** : loco lance scrcpy-server (vidéo seule) sur l'appareil et relaie le **H.264 brut** ; le navigateur le décode avec **WebCodecs** (décodage matériel, rien à transcoder sur le serveur). **Repli automatique** sur un flux MJPEG (`screenrecord` + ffmpeg) pour les navigateurs sans WebCodecs ou si scrcpy échoue. scrcpy-server (Apache 2.0) est inclus ; ffmpeg n'est nécessaire que pour le repli MJPEG.
+  - **Garde-fou visible** : tant que loco pilote l'écran, l'appareil affiche une notification **« Contrôle à distance en cours »**, et contacte loco plus souvent pour la faire apparaître et disparaître vite.
+- **Le paquet `.deb` de l'agent Linux installe grim** : grim était seulement recommandé, il devient une dépendance. Le bureau distant d'un compositeur Wayland comme Sway ou Hyprland fonctionne donc dès l'installation, même avec `--no-install-recommends`. Pour un agent déjà en place, installez grim à la main au besoin.
+
+## 2.138.0 — 2026-11-06
+
+- **Appareils Android** (expérimental, coupé par défaut) : gérer vos propres téléphones et tablettes Android depuis loco, **sans QR code** à l'installation.
+  - **Activer** dans *Administration › Fonctionnalités*, section *Expérimental* : *Appareils Android*. Réservé au compte `admin` créé à l'installation.
+  - **Installer et connecter** : onglet *Android* de l'enrôlement, télécharger l'application (`loco-agent.apk`), saisir l'adresse du serveur et la clé d'inscription, puis confirmer l'empreinte de l'autorité. Aucun compte Google.
+  - **Écran, terminal, fichiers** comme pour un poste : voir et piloter l'écran (toucher, clavier, souris ; boutons *Retour*, *Accueil*, *Applications récentes*, *Notifications*), un terminal avec les droits de l'application (sans root), et le gestionnaire de fichiers. Les assistants IA (MCP) disposent des mêmes actions.
+  - **Avec votre accord, sur l'appareil** : l'application reste visible et chaque capacité (écran, contrôle, fichiers, arrière-plan) s'active à la main. Rien n'est capturé en dehors d'une session ouverte depuis le portail.
+  - **Pas de mises à jour système ni de catalogue de logiciels** sur Android. Détails : [docs/fr/android.md](docs/fr/android.md).
+
+## 2.137.1 — 2026-11-05
+
+- **Appliance : le proxy Windows Update repart après un redémarrage.** Son dossier dans `/run` n'était créé qu'à l'installation : à chaque redémarrage, le service restait en échec et le port 3128 fermé. Le cache par DNS et le reste du portail n'étaient pas concernés. La mise à jour suffit.
+- **Installation de l'appliance** : le test complet vérifie désormais tous les services au deuxième démarrage, et plus seulement le portail.
+
+## 2.137.0 — 2026-11-04
+
+- **Bloquer une mise à jour** : nouvel onglet *Blocages* dans Mon parc, ou *Bloquer* sur la ligne d'une mise à jour dans la fiche d'un poste. Un paquet (Linux) ou un KB ou un titre (Windows), avec « * » comme joker, sur tout le parc ou un groupe de machines, avec une raison.
+  - **Respecté partout** : fiche d'un poste, tout le parc, vagues, planifications, assistants IA. Un blocage posé après une demande s'applique tant que le poste ne l'a pas reçue. Un agent trop ancien pour le respecter reçoit la commande après sa mise à jour automatique.
+  - **Sur le poste** : Debian et Ubuntu retiennent le paquet (`apt-mark hold`), ce qui vaut aussi pour leurs mises à jour automatiques ; une retenue posée à la main n'est jamais touchée. Windows masque la mise à jour, sauf celles qu'il impose. Avec DNF, seules les mises à jour lancées par loco sont concernées.
+  - **Toujours visible** : une mise à jour bloquée n'est plus comptée comme en attente, mais reste signalée sur la fiche, et la page indique les postes où elle attend. Droit *Bloquer des mises à jour*, réservé par défaut aux administrateurs et aux profils qui couvrent tout le parc.
+  - Flatpak et logiciels du catalogue ne sont pas concernés.
+- **Accord de l'utilisateur avant le bureau distant**, désactivé par défaut. La personne devant le poste voit une fenêtre *Accepter / Refuser* avant que quoi que ce soit ne soit capturé.
+  - **Exigé sur un poste** : fiche du poste, onglet *Détails*, ou sélection dans Mon parc. Droit à part, *Régler l'accord avant le bureau distant* : un technicien qui ouvre le bureau ne peut pas le retirer. S'applique aussi aux assistants IA, que la fenêtre nomme comme tels.
+  - **Pour une seule session** : menu *Plus* de la fiche, *Bureau distant, avec l'accord de l'utilisateur*.
+  - **Sans réponse en une minute, ou sur un écran verrouillé, c'est un refus**, expliqué à l'administrateur. Si personne n'est connecté sur le poste, le bureau s'ouvre sans demande, et le journal l'indique. Le terminal et les fichiers ne sont pas concernés.
+  - **Un agent trop ancien ne s'ouvre pas sans accord** : la session est refusée jusqu'à sa mise à jour automatique.
+  - **Sous Linux**, la fenêtre utilise zenity ou kdialog, présents sur les bureaux courants. Sans l'un ni l'autre, le bureau est refusé avec cette explication.
+
+## 2.136.0 — 2026-11-03
+
+- **Nouvelle apparence par défaut** : thème *Sombre doux*, sans couleur d'accent, avec une photo de crêtes dans la brume (preset *Brume*). *Minuit* et *Alpes* restent disponibles.
+  - **Sur un serveur existant**, elle s'applique à l'écran de connexion et aux comptes sans apparence enregistrée, sauf si une apparence d'instance a été choisie. Les comptes qui ont enregistré la leur la gardent.
+- **L'écran de connexion peut avoir sa propre apparence** : dans *Apparence de l'instance*, il suit l'apparence par défaut ou reçoit la sienne. Depuis la fenêtre *Apparence*, *Appliquer à la connexion* lui donne celle que vous êtes en train d'essayer, sans toucher au défaut des comptes. Réservé au droit de configurer le serveur.
+- **Nouveau preset *Forêt*** avec un nouveau thème *Sapin*.
+- **Corrections** : dans la fenêtre *Apparence*, la croix de fermeture et la vignette *Aucun fond* étaient vides, et les libellés des presets pouvaient manquer de contraste.
+
+## 2.135.0 — 2026-11-03
+
+- **L'agent peut activer le réveil** : bouton *Activer le réveil* sur la fiche d'un poste et pour une sélection dans Mon parc, sur ses cartes Ethernet.
+  - **Sous Linux**, l'agent le réapplique à chaque contact : la plupart des cartes repassent en « désactivé » à chaque redémarrage. La configuration réseau du poste n'est pas modifiée, et la commande `ethtool` n'est pas nécessaire.
+  - **Sous Windows**, le réglage persiste. La carte peut redémarrer au moment du changement : quelques secondes de coupure, une seule tentative par jour en cas d'échec.
+  - **En cas de refus** du pilote ou du système, la fiche affiche l'erreur.
+  - *Ne plus l'activer* coupe le réveil et arrête de le maintenir. Le BIOS reste à régler à la main : l'agent n'y a pas accès. Rien n'est activé sans demande.
+
+## 2.134.0 — 2026-11-03
+
+- **Réveil à distance (Wake-on-LAN)** : bouton *Réveiller* sur un poste éteint, dans Mon parc et sur sa fiche, pour un poste ou une sélection. Aussi disponible par le serveur MCP (`wake_device`).
+  - **Proposé seulement quand il a une chance de marcher** : le poste a une carte Ethernet branchée à son dernier contact, le réveil n'y est pas désactivé, et quelque chose peut émettre sur son réseau. Jamais en Wi-Fi, où un poste éteint n'écoute plus.
+  - **Émis par le serveur** s'il est sur le même réseau, sinon par un poste allumé de ce réseau à son prochain contact, car un paquet de réveil ne traverse pas les routeurs. Un relais revenu trop tard ne réveille plus personne à l'improviste.
+  - **Résultat suivi** dans l'historique du poste : revenu en ligne, ou pas revenu après 10 minutes, avec ce qu'il faut vérifier.
+- **Cartes réseau sur la fiche d'un poste** : type (Ethernet, Wi-Fi), branchée ou non, adresse MAC, réseau et état du réveil. La fiche dit aussi pourquoi le réveil n'est pas disponible. Il faut un agent 2.134.0 ou plus récent.
+- **Nouveau droit *Réveiller les appareils***, accordé au profil Opérateur.
+
+## 2.133.0 — 2026-11-03
+
+- **Demande de certificat (CSR)** : la page demande le nom complet (FQDN), affiche les SAN demandés et prévient que l'autorité doit conserver l'IP si les agents l'utilisent. Un nom court comme `loco` n'est plus écarté sans le dire.
+- **Import d'un certificat d'entreprise** : la feuille seule est acceptée, avec l'intermédiaire en complément. Les trois erreurs sont distinctes et disent quoi corriger : intermédiaire manquant, SAN absent (avec la liste de ce que couvre le certificat) et mauvaise autorité.
+- **Lier un compte administrateur à son identité SSO** : *Mon compte › Connexion SSO*. Le lien se fait par un passage réel chez le fournisseur, depuis un compte déjà connecté. Rien n'est rapproché automatiquement par nom ou courriel.
+  - Le mot de passe et les droits ne changent pas, et la double authentification du compte reste exigée.
+  - Supprimer ou désactiver le fournisseur ne coupe pas le compte local.
+  - Une identité déjà liée à un autre compte actif est refusée. Une demande d'accès encore en attente pour cette identité est remplacée.
+- **Profil proposé d'après un groupe** : pour chaque fournisseur OpenID Connect, des lignes `groupe = profil`. Le profil est présélectionné à l'approbation d'une demande : rien n'est accordé sans approbation.
+
+## 2.132.0 — 2026-11-03
+
+- **Configurer Authentik depuis loco** : bouton dans *Annuaires et SSO*.
+  - **Avec un jeton API temporaire** : loco crée ou met à jour le fournisseur et l'application, sans doublon : client confidentiel, `authorization_code` seul, URL de retour stricte, portées `openid profile email`, signature RS256. Il récupère ensuite le client ID, le secret et l'émetteur, puis lance la vérification.
+  - **Le jeton** n'est ni stocké, ni journalisé, ni passé en argument de commande. Entre deux étapes, il reste chez le navigateur, chiffré et limité à dix minutes. Supprimez-le dans Authentik une fois terminé.
+  - **Certificat d'abord** : le jeton n'est envoyé qu'une fois le certificat d'Authentik reconnu, ou son autorité confirmée par son empreinte. Si le serveur n'envoie pas la racine, la page demande de la coller.
+  - **Application existante** : les changements sont montrés avant d'être appliqués. Le client ID et le secret ne changent pas. Une URL de retour n'est supprimée que si vous la cochez. Si Authentik a changé entre-temps, rien n'est appliqué.
+  - **Sans jeton** : un blueprint prêt à coller, plus les valeurs à saisir. Le secret reste généré par Authentik.
+
+## 2.131.0 — 2026-11-03
+
+- **Noms internes gérés depuis le portail** : *Système › Réseau › Noms internes*. Quand le DNS du serveur ne connaît pas un nom, comme l'adresse d'Authentik sur un réseau interne, indiquez son adresse IP, sans ouvrir de shell.
+  - **Proposé par le diagnostic** : quand « Vérifier la configuration » échoue sur le DNS, un champ permet d'ajouter le nom sur place, puis la vérification repart.
+  - **Conservé** : la liste est dans `/etc/loco`, donc sauvegardée et répliquée en haute disponibilité. Le bloc dédié de `/etc/hosts` est refait si le fichier est réécrit, par une mise à jour ou par `setup-loco`.
+  - **Rien d'autre ne change** : `RESOLVERS` et `resolv.conf`, utilisés par le cache Windows Update, ne sont pas touchés. Sous Docker et sur un serveur Windows, la page indique comment faire : `extra_hosts`, ou le fichier `hosts`.
+
+## 2.130.0 — 2026-11-03
+
+- **Bouton « Vérifier la configuration » pour les fournisseurs OpenID Connect**, dans *Annuaires et SSO*. Il part aussi tout seul à l'enregistrement. Sans connexion d'un utilisateur et sans créer de compte, il contrôle sept étapes depuis le serveur et donne pour chacune son état et sa correction : résolution du nom, connexion, certificat, découverte, clés de signature, client et secret, demande de connexion. Plus besoin de lire les journaux d'Authentik.
+  - **Certificat** : le message nomme l'intermédiaire ou la racine qui manque et donne l'empreinte à vérifier avant de la coller. Un nom non couvert, un certificat expiré ou un certificat épinglé qui a changé sont signalés séparément.
+  - **URL de retour non déclarée** : l'URL à déclarer est affichée, prête à copier.
+  - **Flux « code » non autorisé** : `invalid_request`, « The request is otherwise malformed », est enfin expliqué.
+  - **Mauvais secret** : détecté avec un faux code, sans obtenir de jeton. Authentik répondant `invalid_client` aussi quand l'URL de retour n'est pas déclarée, le secret n'est alors pas mis en cause.
+  - **Autres fournisseurs** : une réponse inconnue donne « non concluant », jamais « échec ». Aucun secret n'est affiché ni journalisé.
+- **Connexion refusée** : la page indique aux administrateurs où trouver la cause. Le détail reste réservé à ceux qui ont le droit de gérer le SSO.
+
+## 2.129.0 — 2026-11-03
+
+- **Adresse du portail séparée de celle des agents.** Nouveau réglage dans *Système › Réseau › Adresse du portail* : ouvrir loco par son nom (`https://loco.lab.local:8443`) ne demande plus de relancer l'installeur avec `--host`, qui changeait aussi l'adresse d'enrôlement. Les agents et l'enrôlement restent sur leur adresse. Sans réglage, rien ne change.
+  - **Modifiable sans réinstallation ni redémarrage**, depuis le portail ou avec `loco-config portal-url`, désormais présent sur tout serveur Linux. Le réglage survit aux mises à jour et l'agent root le revalide. Sous Docker : `LOCO_PORTAL_URL`. Sur un serveur Windows : `install.ps1 -PortalUrl`.
+  - **Le certificat doit couvrir l'adresse.** Sinon le changement est refusé. Pour un certificat de loco, une case ajoute le nom au certificat. Pour un certificat d'entreprise ou fourni à l'installation, le message indique quoi demander.
+  - **Connexion SSO** : le retour se fait toujours sur l'adresse du portail. Depuis une autre adresse, comme l'IP, le navigateur y est redirigé avant la pose du cookie. Le faux message « connexion expirée » disparaît, et un retour sur une mauvaise adresse dit quoi corriger. Aucune URL n'est construite à partir de l'en-tête Host.
+  - **URL de retour à redéclarer** : la page les liste pour chaque fournisseur et demande confirmation avant le changement.
+- **Haute disponibilité : renouveler le certificat garde les deux serveurs.** Le renouvellement depuis le portail retirait du certificat les adresses des deux serveurs de la grappe, pour ne garder que l'IP virtuelle.
+
+## 2.128.0 — 2026-11-03
+
+- **Déploiement par vagues.** Une mise à jour du parc ou d'un groupe, un déploiement de logiciels ou de paquets peuvent partir par vagues au lieu de toucher tous les postes d'un coup. On choisit le nombre de postes par vague, l'attente entre deux vagues, le nombre d'échecs qui met tout en pause, et éventuellement un groupe pilote pour commencer.
+  - **Une vague ne part que sur preuve** : au moins une réussite dans la précédente et moins d'échecs que le seuil. Sinon tout s'arrête : les postes suivants ne reçoivent rien, la vue d'ensemble le signale, une notification part, et c'est à vous de décider de lancer la vague suivante ou d'annuler le reste.
+  - **Un poste éteint ne bloque pas** : sa commande l'attend et il suivra à son retour. Les postes en ligne passent d'abord, car ils répondent vite. Si aucun poste d'une vague n'a répondu, rien ne part tout seul.
+  - **Au départ de chaque vague**, un poste retiré du parc, ou qui n'a plus rien à mettre à jour, est écarté.
+
+## 2.127.3 — 2026-11-03
+
+- **Commandes sans réponse** : une commande envoyée à un poste qui ne revient jamais passe maintenant en échec au bout de 6 h. Elle restait affichée indéfiniment, car seul un contact du poste pouvait la clore.
+- **Mon parc : filtres *Hors ligne* et *Redémarrage nécessaire*.** Ils apparaissent quand ils concernent au moins un poste, et ces deux lignes de la vue d'ensemble y mènent, avec le même décompte.
+- **Pluriels** : plus de « poste(s) » ni de « mise(s) » dans le portail, le journal, les agents et la console, en français, anglais et espagnol. Les résultats déjà enregistrés restent lisibles.
+- **Infobulle du voyant** : elle ne répète plus « à jour : à jour » ni « inventaire incomplet : inventaire incomplet ».
+- **Vue d'ensemble** : le processeur affiche une moyenne entre deux actualisations au lieu d'une mesure de 120 ms, très instable, un cache vide n'apparaît plus dans *Stockage* (« Cache APT 2 o »), et la charge s'écrit avec la même décimale dès le chargement.
+
+## 2.127.2 — 2026-11-03
+
+- **Dépôts en panne enfin détectés sur les postes Debian et Ubuntu.** `apt-get update` répond « succès » même quand aucun dépôt ne répond, donc l'agent ne voyait rien et une mise à jour pouvait se terminer en succès sans rien installer.
+  - **Aucun dépôt lisible** : le poste passe en *État inconnu* avec la cause, et une mise à jour s'arrête en échec au lieu de prétendre avoir réussi.
+  - **Un dépôt en panne parmi d'autres** (dépôt tiers abandonné, par exemple) : le voyant ne change pas et les mises à jour continuent, mais la fiche du poste signale que les mises à jour de ce dépôt ne sont pas comptées.
+
+## 2.127.1 — 2026-11-03
+
+- **Corrigé : après un changement d'IP du serveur, tous les dépôts d'un poste Linux tombaient.** L'agent rejoignait le nouveau serveur, mais le proxy APT (`01loco-proxy`) et les sources HTTP gardaient l'ancienne adresse : le poste ne lisait plus aucun dépôt, dépôts officiels compris. Les agents mettent maintenant à jour le proxy APT, les sources APT et RPM et les dépôts Flatpak, en HTTP comme en HTTPS, quand ils adoptent une nouvelle adresse. La note de la 2.125.0 sur le suivi d'une nouvelle IP était donc incomplète.
+- **Restent à reprendre à la main** : les postes qui avaient déjà changé d'adresse avant cette version, et ceux configurés par `setup.sh` sans agent : relancez `setup.sh` une fois.
+
+## 2.127.0 — 2026-11-03
+
+- **Mon parc est paginé**, par 50 postes, les plus urgents d'abord. La navigation n'apparaît qu'au-delà de 50 postes et garde les filtres.
+- **La recherche de postes porte sur tout le parc**, plus seulement sur la page affichée : nom, système, n'importe quelle adresse du poste, groupe, sans tenir compte des majuscules ni des accents. Elle survit au rafraîchissement et se partage par son adresse.
+- **La sélection de postes suit le changement de page.** La barre indique combien de postes sélectionnés sont hors de la page ; « Tout sélectionner » porte sur la page affichée.
+- **Corrigé : « Tout mettre à jour » annonçait un nombre faux quand un filtre était actif.** Le compteur suivait le filtre alors que l'action porte sur tout le groupe ou le parc : avec le filtre Windows, des postes Linux étaient aussi mis à jour. Le compteur indique maintenant ce qui sera vraiment fait.
+
+## 2.126.1 — 2026-11-03
+
+- **Mauvaise adresse affichée pour un poste qui a Docker.** Mon parc pouvait montrer l'adresse du pont Docker (`172.17.0.1`) au lieu de celle de la carte réseau. Le portail affiche maintenant d'abord l'adresse par laquelle il voit le poste, et les agents Linux et Windows classent en tête la carte de la route par défaut, les interfaces virtuelles en dernier (Docker, machines virtuelles, Hyper-V, WSL) et l'IPv4 avant l'IPv6. Toutes les adresses restent listées sur la fiche du poste.
+
+## 2.126.0 — 2026-11-02
+
+- **Vue d'ensemble refaite pour répondre d'abord à « est-ce que tout va bien, et que dois-je faire ? ».**
+  - **État général en tête** : « Aucun point à traiter » avec ce qui a été contrôlé, ou la liste de ce qui demande une action, le plus grave d'abord, avec un lien vers la page où agir. Services arrêtés, certificat, sauvegardes, syslog, disque, mises à jour de sécurité, mises à jour en échec : tout y apparaît, même si la notification correspondante est désactivée. La liste s'actualise seule et suit les droits et le parc de chaque compte. Un poste simplement éteint n'y figure pas.
+  - **Parc juste en dessous** : chaque état ouvre la liste filtrée, les états à zéro restent discrets, et les mises à jour en cours, redémarrages nécessaires et postes hors ligne sont indiqués.
+  - **Serveur sur une seule bande** : processeur, mémoire, disque et réseau. Le chiffre du disque et sa barre disent enfin la même chose, et la courbe réseau survit aux rechargements et aux allers-retours dans le portail.
+  - **Stockage en un seul tableau**, trié par taille, avec un lien vers chaque cache. Il remplace les tuiles de cache et « Disque des données », qui faisaient double emploi.
+  - **Retirés de la page** : les 8 tuiles, le tableau des services (le détail reste dans *Système*, un service arrêté remonte dans l'état général) et le second pourcentage Windows Update, qui pouvait contredire celui du graphique.
+- **Alertes** : les messages n'écrivent plus « mise(s) » ni « jour(s) » pour les mises à jour de sécurité, le certificat et les échecs de connexion.
+
+## 2.125.0 — 2026-11-02
+
+- **Changer le port de l'interface web** depuis *Système › Réseau*. Le nouveau port s'ouvre à côté de l'ancien : ni l'administrateur ni les postes ne sont coupés. Les agents apprennent le nouveau port à leur prochain contact, la page compte ceux qui le connaissent, et l'ancien port se ferme seulement depuis le nouveau, ce qui prouve qu'il est joignable, pare-feu compris. Les valeurs inutilisables sont refusées avant toute modification : port déjà pris, port réservé à loco, port que les navigateurs bloquent. Un échec rétablit la configuration précédente. Docker et serveur Windows : le port reste réglé à l'installation, la page l'explique.
+- **Les agents Linux suivent l'adresse du serveur jusque dans leurs dépôts.** Quand un agent adopte une nouvelle adresse, nouvelle IP comprise, il met à jour ses sources APT et RPM et ses dépôts Flatpak installés en HTTPS. Ils restaient jusqu'ici sur l'ancienne adresse.
+- **Haute disponibilité : le port n'est plus supposé être 8443.** Contrôle de santé et échanges entre serveurs utilisent le port configuré, et un secours peut rejoindre un principal sur un autre port (`adresse:port`). Le port se change hors haute disponibilité.
+
+## 2.124.2 — 2026-11-02
+
+- **Retirer un logiciel du catalogue local, directement depuis la liste.** Jusqu'ici, ce n'était possible que depuis le menu *Plus* de sa fiche. Un bouton *Retirer* apparaît sur chaque ligne et à côté de *Réessayer* quand le téléchargement a échoué, par exemple si un firewall bloque le site source. Cochez plusieurs logiciels pour les retirer d'un coup, y compris ceux en erreur, qui ne pouvaient pas être cochés jusqu'ici ; *Déployer*, *Créer un groupe* et la commande PowerShell restent limités aux logiciels prêts. Rien n'est désinstallé des postes.
+- **Barre de sélection du catalogue corrigée sur fond photo** : elle restait en partie visible sans sélection et se calait sur le bas de la page au lieu de celui de l'écran, hors de vue dans un long catalogue.
+
+## 2.124.1 — 2026-11-02
+
+- **Vue d'ensemble : les derniers ajouts sont cliquables.** Un logiciel Windows ouvre sa fiche ; un paquet APT, qui n'a pas de page à lui, ouvre son dépôt déjà filtré sur ce paquet. Toute la ligne est cliquable, comme dans Mon parc.
+
+## 2.124.0 — 2026-11-02
+
+- **Envoi des journaux vers un serveur syslog ou un SIEM** (*Administration › Envoi syslog*). Au choix : le **journal de loco**, les **journaux des postes**, ou les deux. Format RFC 5424, en TLS (recommandé, avec votre autorité de certification), TCP ou UDP, et un bouton pour envoyer un message de test.
+  - **Postes** : journald sous Linux, journaux d'événements sous Windows, au niveau minimal choisi, avec les événements de sécurité si vous le souhaitez, sur tout le parc ou des groupes de machines. Les postes passent par loco : aucune ouverture réseau vers le serveur syslog. Agents 2.124.0 et plus (mise à jour automatique).
+  - **Serveur syslog absent** : l'envoi reprend là où il s'était arrêté, sans rien stocker sur le serveur loco. Un événement peut arriver en double après une panne.
+  - **Suivi** : dernier envoi, dernier échec et état de chaque poste sur la page ; nouvelle règle d'alerte *Envoi syslog en échec* après 5 minutes.
+
+## 2.123.1 — 2026-11-02
+
+- **Page *Mon parc › Mises à jour* refaite** : une seule liste en colonnes alignées (poste, action, état, date, auteur), groupée en *En cours*, *En attente* et *Terminées*. Sur téléphone, chaque ligne s'empile.
+- **Les échecs apparaissent enfin sur cette page** : les mises à jour en échec n'y figuraient jamais (mauvais état dans la requête). Ils passent désormais en tête des terminées, avec les paquets concernés ou la ligne d'erreur, au lieu de la dernière ligne du journal.
+- **La liste des paquets s'affiche vraiment en direct** : elle n'apparaissait pas si la page avait été ouverte avant le premier paquet (fiche du poste et déroulé). Les listes dépliées ou repliées restent dans cet état quand la page se recharge.
+- **« En attente » dit la vérité** : un poste éteint n'affiche plus « moins de 2 min » mais *Poste hors ligne, vu le …, partira à son retour* ; une commande en cours ou transmise à un poste muet affiche *Sans réponse du poste*. Bouton *Annuler* directement sur la ligne, et la pastille de l'onglet ne compte plus les postes hors ligne ni les planifications à venir.
+- **Durées visibles sur la page** : une action en attente n'expire pas ; les terminées restent 24 heures (au lieu de 30 minutes, trop court pour suivre une vague), puis dans l'historique du poste.
+
+## 2.123.0 — 2026-11-02
+
+- **Avancement des mises à jour paquet par paquet, en direct.** Pendant une mise à jour, on voit désormais chaque paquet (ou chaque mise à jour Windows) défiler avec son issue : **installé** (✓), **en cours**, ou **en échec** (✗), plus un récapitulatif « X installé(s) · Y en échec · Z en cours ». Visible sur la fiche du poste et sur le déroulé *Mon parc › Mises à jour*, rafraîchi toutes les 2 s sans recharger.
+  - **APT** : dépaquetage → en cours, *Setting up* → installé, erreur dpkg → en échec. **DNF/YUM** et **Windows Update** : une entrée par mise à jour avec son résultat. **Flatpak** : une entrée globale.
+  - La liste reste consultable après coup dans l'historique du poste (à côté du journal), pour revoir ce qui a réussi ou échoué.
+
+## 2.122.0 — 2026-11-01
+
+- **Déroulé global des mises à jour du parc.** Nouvelle page *Mon parc › Mises à jour* : le suivi, en un seul endroit, de toutes les mises à jour du parc — **en cours** (avancement en direct, barre par poste, rafraîchie toutes les 2 s sans recharger), **en attente** du prochain contact, et **terminées récemment** (succès ou échec avec le motif). Chaque ligne mène à la fiche du poste.
+  - **Adapté aux droits** : chacun n'y voit que les postes de son parc (même périmètre que Mon parc) ; un onglet avec une **pastille** indique le nombre de mises à jour en cours ou en attente.
+  - *Mettre à jour tout le parc* amène directement sur ce déroulé pour suivre la vague lancée.
+
+## 2.121.1 — 2026-11-01
+
+- **Redémarrer depuis Mon parc reste sur la liste.** Le bouton *Redémarrer* d'un poste ne renvoie plus vers sa fiche : un message confirme que le redémarrage est demandé et la liste reste affichée. Tant que le redémarrage est en attente, la pastille passe de « redémarrage nécessaire » à « redémarrage en cours ».
+
+## 2.121.0 — 2026-11-01
+
+- **Haute disponibilité intégrée.** Deux serveurs loco, une seule *IP virtuelle* : le principal sert le portail, les dépôts et les agents ; le secours réplique tout en continu et prend l'IP automatiquement si le principal tombe (keepalived / VRRP). *Administration › Serveur › Haute disponibilité*.
+  - **Mise en place guidée** : sur le premier serveur, « Activer » demande une IP virtuelle libre et affiche un **code d'appairage** à usage unique ; sur un second serveur neuf (même version), « Rejoindre » avec l'adresse du principal et ce code copie toute la configuration et les dépôts, puis arme la bascule. loco règle lui-même son adresse sur l'IP virtuelle et étend son certificat à l'IP virtuelle et aux deux serveurs.
+  - **Réplication sûre** : configuration, base et dépôts sont transférés chiffrés (AES-256-GCM) entre les serveurs, authentifiés par un secret de grappe que le portail ne voit jamais (il n'en garde que l'empreinte). Les caches ne sont pas répliqués (ils se reconstruisent). Pendant une mise à jour, le contrôle de santé ne déclenche pas de bascule.
+  - **Supervision et bascule** : la page montre le rôle de chaque serveur, qui porte l'IP virtuelle, la fraîcheur de la réplication, l'état de keepalived et les derniers événements. *Basculer vers le secours* permet une bascule volontaire (maintenance planifiée) ; le secours est passif (en lecture) tant qu'il ne porte pas l'IP.
+  - Indisponible dans un conteneur Docker ; `keepalived` est inclus dans l'appliance et installé à la demande sur Debian/Ubuntu et Red Hat.
+
+## 2.120.2 — 2026-11-01
+
+- **Icône de redémarrage** : flèche circulaire (celle de « redémarrage nécessaire ») au lieu du symbole d'alimentation, qui évoquait un arrêt — bouton *Redémarrer* de Mon parc, bouton et bandeau de redémarrage du serveur.
+
+## 2.120.1 — 2026-10-31
+
+- **Mon parc sans ascenseur horizontal** : le tableau tient dans la largeur de la page, même avec de longs noms de système. Système affiché en version courte (« Windows Server 2025 Standard », « Debian 13 (trixie) », nom complet en infobulle), groupes sous le nom du poste, dernier contact sous l'adresse, bouton *Redémarrer* en icône ; sur un écran étroit, les barres de ressources se resserrent et les boutons passent l'un sous l'autre.
+
+## 2.120.0 — 2026-10-31
+
+- **Mises à jour d'un poste une par une, avec avancement en direct.** Sur la fiche d'un poste, l'onglet *Mises à jour* propose une case par mise à jour du système (paquet APT ou RPM, mise à jour Windows) et une ligne *Applications Flatpak* ; *Mettre à jour la sélection* n'applique que celles-ci, avec redémarrage facultatif. *Mettre à jour* fait toujours tout.
+  - **En direct** : la ligne de l'action montre l'étape (préparation, téléchargement, installation), le paquet ou la mise à jour en cours et une barre de progression, relues toutes les 2 s sans recharger la page ; dans le tableau, les éléments terminés sont cochés et celui en cours tourne. La fiche se recharge à la fin avec l'inventaire à jour, et pas pendant qu'on coche.
+  - **Agent Linux** : sortie d'apt (lignes d'état `APT::Status-Fd`) et de dnf lue au fil de l'eau ; une sélection passe par `apt-get install` (nouveaux paquets d'une mise à jour compris) en gardant leur marque « installé automatiquement », ou `dnf upgrade <paquets>`.
+  - **Agent Windows** : chaque mise à jour remonte son identifiant Windows Update ; installation une par une (pile de maintenance d'abord), avec l'étape remontée, et une mise à jour en échec n'empêche plus les suivantes.
+  - Choix une par une réservé aux agents 2.120.0 et plus (un ancien agent ferait tout) ; sélection limitée aux mises à jour annoncées par l'inventaire.
+  - **MCP** : `update_device` accepte `updates` (noms de paquets, titres, numéros KB ou identifiants) et `flatpak` ; `get_device` donne les identifiants et l'avancement des actions en cours.
+
+## 2.119.2 — 2026-10-31
+
+- **Fiche d'un poste** : une action en attente (mise à jour, inventaire, redémarrage…) s'affiche sur une ligne discrète — point de couleur, action, « au prochain contact », lien *Annuler* — au lieu d'un grand encadré d'alerte.
+
+## 2.119.1 — 2026-10-31
+
+- **Terminaux plus sobres** : sous le shell root et les terminaux des postes, les raccourcis (copier, coller, rechercher, taille du texte…) et la remarque sur la fermeture de la session tiennent dans un bloc « Raccourcis et aide » replié par défaut.
+- **Shell root** : le service écoute son socket dès sa création ; une connexion arrivée juste au démarrage n'est plus refusée.
+
+## 2.119.0 — 2026-10-30
+
+- **Apparence de l'instance** (*Administration → Apparence*, droit *Configurer le serveur*) : une entreprise adapte loco à sa charte sans retirer les thèmes livrés. À l'installation, tout reste proposé comme avant.
+  - **Identité** : logo (déplacé ici depuis la fenêtre Apparence personnelle), **couleur de l'entreprise** — proposée comme couleur d'accent, texte posé dessus en noir ou en blanc selon sa clarté — et **fond de l'entreprise**, image proposée dans les fonds et servie aussi à l'écran de connexion.
+  - **Apparence par défaut** : thème, couleur, fond et opacité des nouveaux comptes, de l'écran de connexion et de *Réinitialiser* (jusqu'ici fixée sur « Alpes »).
+  - **Choix laissés à chacun** : thèmes proposés (par exemple un clair et un sombre), couleur d'accent et fond **au choix ou imposés**. La fenêtre Apparence de chaque compte ne montre plus que ce qui est autorisé ; un réglage hors du cadre est remplacé à l'affichage par l'apparence par défaut, sans être effacé. *Réglages d'origine* rétablit tous les choix. Journal : catégorie Serveur.
+
+## 2.118.0 — 2026-10-30
+
+- **Enrôler un poste directement dans un groupe.** En haut de **Enrôlement**, *Inscrire les postes dans le groupe* bascule le MSI, les paquets .deb/.rpm, les commandes et la commande de déploiement en masse (GPO, Intune) sur la **clé du groupe** : le poste inscrit avec eux rejoint ce groupe (un poste déjà inscrit le rejoint aussi, sans quitter les siens). Aucun agent à mettre à jour — la clé de groupe (`g<id>-…`) prend la place de celle du serveur.
+  - Par défaut, aucun groupe ; *Enrôler des postes dans ce groupe* dans le menu ⋯ de chaque groupe ouvre la page sur lui.
+  - Un compte limité à une partie du parc n'inscrit que dans les groupes attribués à son profil, jamais sans groupe (le poste sortirait de son parc) : son premier groupe est présélectionné, et un profil limité sans groupe ne reçoit plus la clé du serveur.
+  - *Changer la clé de ce groupe* (droit *Configurer le parc*) rend caducs ses fichiers et commandes déjà distribués ; supprimer le groupe aussi. Journal : inscription avec son groupe, « Nouvelle clé d'inscription d'un groupe ».
+
+## 2.117.0 — 2026-10-30
+
+- **Profils limités à une partie du parc.** Dans **Profils d'accès**, un profil couvre **tout le parc** (par défaut, et toujours pour les profils intégrés) ou des **groupes de machines et postes choisis** — par exemple « Techniciens bâtiment B ». Les postes ajoutés plus tard à ces groupes y entrent d'eux-mêmes ; la liste des profils montre le parc de chacun.
+  - Les comptes du profil ne voient et ne visent que ces postes : Mon parc, fiche (introuvable sinon), recherche, vue d'ensemble, groupes réduits à leurs postes, mises à jour groupées, déploiements, scripts et historique, planifications, sessions distantes — et les **jetons MCP**, qui suivent le parc du compte créateur.
+  - Une planification applique à chaque occurrence le parc de son auteur ; un profil limité ne peut pas viser « Tout le parc ».
+  - Gérer les groupes de machines et configurer le parc restent réservés aux profils qui couvrent tout le parc (les groupes définissent le parc des autres) ; un gérant limité ne crée ou n'attribue que des profils inclus dans son propre parc.
+  - Changer le parc d'un profil reconnecte ses comptes ; une session distante dont le poste sort du parc se ferme. Journal : « profils.parc ».
+
+## 2.116.0 — 2026-10-30
+
+- **Serveur MCP : page refaite et vocabulaire précis.** « Assistants IA » devient **Serveur MCP** (onglet, fonctionnalité, droit **Créer des jetons MCP**, journal), et un « accès » devient un **jeton** : la page dit ce que c'est — un LLM pilote loco par MCP depuis son client (Claude Code, Cursor, VS Code…), avec un jeton qui n'ouvre que les outils activés.
+  - **Jetons** en premier : nombre d'outils et d'actions, répartition par domaine (« Parc 5 · Accès distant 3 »), dernier appel avec le client et l'adresse, expiration avec l'année.
+  - **Connecter un client MCP** : adresse, en-tête d'authentification et commande Claude Code, avec un emplacement `<jeton>` — ou le vrai jeton juste après sa création ; le fichier JSON (Cursor, VS Code) est replié.
+  - **Fenêtre du jeton** sur deux colonnes, moitié moins haute : chaque outil montre son nom MCP (`list_devices`, `terminal_run`…), le repère **action** ou **sensible**, et la raison s'il est grisé.
+
+## 2.115.0 — 2026-10-30
+
+- **Assistants IA : accès distant plus rapide et plus complet.**
+  - **Ouverture des sessions plus rapide** : un poste visé par l'assistant (fiche, action…) est préchauffé une minute et ouvre ensuite sa session en moins de 2 s au lieu de 5 ; une session PowerShell neuve est prête en ~2 s (sonde envoyée à intervalle court) ; les sessions de l'assistant restent ouvertes 5 minutes entre deux appels (2 pour le bureau), donc les appels suivants partent aussitôt.
+  - **Captures d'écran légères** : l'image est gardée en mémoire et, après la première capture, seules les zones modifiées transitent — une action qui ouvre un menu ne renvoie que ce menu (Zorin GNOME : 0,2 à 0,5 s par capture suivante). Les postes Windows envoient désormais leur écran compressé sans perte (au lieu de pixels bruts) et répondent aussitôt quand rien n'a bougé, au lieu de laisser le serveur attendre près d'une seconde, une fois leur agent à jour.
+  - **Saisie fidèle sous Linux** : l'agent tape chaque caractère avec la touche et le niveau de la disposition réelle du poste (lue dans la session GNOME, le serveur X ou le système) : `<`, `>`, `@`, `€`, les majuscules et les lettres accentuées par touche morte (`ê`) passent en AZERTY sous GNOME Wayland, X11 et wlroots. Sous Windows, la saisie de texte part d'un bloc.
+  - **Terminal interactif** (nouvelle autorisation) : l'assistant tape, appuie sur des touches (`{enter}`, `{ctrl+c}`, `{esc}`, flèches…) et lit l'écran du terminal (120 × 40) — vim, top, invites oui/non, PowerShell ; la session garde son état d'un appel à l'autre.
+  - **Scripts plus longs** dans le terminal : jusqu'à 64 Ko, délai jusqu'à 5 minutes.
+  - **Une personne passe avant l'assistant** : quand la limite de sessions d'un poste est atteinte (deux par type, quatre pour un poste Windows), ouvrir une session depuis l'interface ferme d'abord les sessions inactives de l'assistant. Si son terminal interactif a été fermé entre deux appels, sa saisie suivante n'est pas tapée dans le shell neuf : il en est prévenu.
+- **Console texte des postes Linux sans affichage** : ouvrir vim ne la ferme plus (une séquence de terminal privée, `ESC [ ? 4 m`, faisait planter l'émulateur d'écran).
+- **Agents** : une session distante restée silencieuse espace ses relevés (25 ms → 0,1 s → 0,25 s), au lieu d'interroger le serveur des dizaines de fois par seconde ; l'agent Windows réserve le JPEG aux navigateurs (noVNC) et envoie du Tight sans perte aux autres clients.
+
+## 2.114.0 — 2026-10-30
+
+- **Assistants IA : terminal, fichiers et bureau des postes, en direct.** Onze nouvelles autorisations dans **Assistants IA**, groupe « Accès distant », chacune à cocher séparément :
+  - **Commandes dans le terminal** : l'assistant lance une commande dans le bash root (Linux) ou le PowerShell SYSTEM (Windows) du poste et lit sa sortie et son code de sortie en quelques secondes, sans attendre le prochain contact de l'agent ; au-delà du délai choisi, la commande est interrompue.
+  - **Fichiers** : parcourir, lire (texte ou base64), écrire (remplacement atomique), organiser (dossier, copie, déplacement, renommage, droits) et supprimer, avec une autorisation distincte pour la lecture, l'écriture, l'organisation et la suppression.
+  - **Bureau** : capture d'écran renvoyée en image à l'assistant, qui voit l'écran (bureau Windows, GNOME en Wayland, écran de verrouillage, console texte d'un poste sans affichage, zoom sur une zone), puis clic, saisie, touches et raccourcis (Ctrl+Alt+Suppr compris) et molette, chaque action renvoyant une nouvelle capture.
+- Mêmes sessions que l'interface (relais de l'agent, droits « Ouvrir un terminal distant », « Gérer les fichiers du poste », « Ouvrir le bureau noVNC » du compte créateur) : une session par accès et par poste, réutilisée d'un appel à l'autre et fermée après une minute sans appel, ou dès que l'accès est révoqué ou modifié. Commandes, écritures, suppressions et actions sur le bureau entrent au journal (sans le texte saisi).
+- Validé sur le labo avec Claude Code : capture et description du bureau GNOME Wayland de Zorin OS, PowerShell sur Windows Server 2025 et Windows 11, fichiers sur Windows et Linux, Ctrl+Alt+Suppr sur l'écran de verrouillage Windows.
+
+## 2.113.0 — 2026-10-30
+
+- **Assistants IA (MCP) : connectez Claude Code, Cursor, VS Code… à loco.** Nouvelle page **Administration → Assistants IA** : créez un **accès** dont les autorisations se cochent **une à une** — lister et consulter les postes, rechercher un logiciel installé, demander un inventaire, mettre à jour un ou plusieurs postes, redémarrer, installer un logiciel du catalogue, annuler une action en attente, lire et lancer les scripts de la bibliothèque, faire exécuter des commandes écrites par l'assistant, état du serveur, journal. L'assistant pilote alors loco en langage naturel (« quels postes ont des mises à jour de sécurité ? », « lance uptime sur ce serveur »).
+- **Jamais plus que son créateur.** Un accès est rattaché au compte qui le crée : à chaque appel, il ne peut que ce qui est coché **et** encore permis par le profil de ce compte. Compte désactivé, supprimé ou à finaliser, accès expiré ou révoqué : refus immédiat. Les actions suivent le même chemin que l'interface et entrent au journal avec le nom de l'accès ; une commande écrite par l'assistant est conservée telle quelle dans l'historique des scripts.
+- **Simple à brancher.** Le jeton n'est montré qu'une fois (loco n'en garde qu'une empreinte), avec la commande `claude mcp add` et la configuration JSON prêtes à copier ; expiration au choix ; dernière utilisation visible (date, adresse, client). Serveur MCP sur `https://<serveur>:8443/mcp` (HTTP « Streamable HTTP »), compatible avec les deux générations du protocole : poignée de main `initialize` (2025-03-26 à 2025-11-25) et 2026-07-28. Validé avec les SDK officiels Python 1.x et 2.x et avec Claude Code sur la démo.
+- Nouveau droit **Connecter des assistants IA** (administrateurs par défaut) ; fonction désactivable dans **Fonctionnalités**.
+
+## 2.112.0 — 2026-10-30
+
+- **Connexion avec Authentik (et tout fournisseur OpenID Connect).** Dans **Annuaires et SSO**, deux nouveaux types : **Authentik** et **Autre OpenID Connect** (Keycloak, Zitadel, Authelia, Microsoft Entra ID…). La page de connexion affiche alors un bouton **« Se connecter avec Authentik »** : mot de passe, double authentification et règles d'accès restent gérés par Authentik. Comme pour LDAP et RADIUS, la première connexion d'une personne crée une **demande d'accès** à approuver dans **Comptes** ; aucun compte local n'est rapproché par son nom ou son courriel, et désactiver le fournisseur ferme aussitôt les sessions de ses comptes.
+- **Mise en place guidée.** Le formulaire affiche l'**URL de redirection** à déclarer dans Authentik (bouton *Copier*) et accepte l'émetteur comme l'adresse de configuration complète. Le **certificat auto-signé d'Authentik** se colle tel quel : loco l'**épingle** (son nom « * » ne permet pas de vérifier l'adresse) ; une autorité de votre réseau se colle de la même façon. **Tester** fait une vraie connexion chez le fournisseur et affiche l'identité reçue (identifiant proposé, nom, courriel, groupes) sans rien créer, y compris avant l'activation ; en cas de refus, le détail renvoyé par le fournisseur et les réglages à vérifier sont affichés.
+- **Sécurité.** Flux « code » avec **PKCE** (S256), `state` et `nonce` liés au navigateur par un cookie chiffré ; jeton d'identité vérifié (signature RSA, ECDSA ou EdDSA par les clés publiées, ou **HS256 avec le secret client** quand le fournisseur Authentik n'a pas de clé de signature ; émetteur, audience, expiration) ; contrôle de l'émetteur au retour (RFC 9207) ; aucun jeton conservé ; secret client chiffré comme les autres secrets d'annuaire. Validé de bout en bout avec **Authentik 2026.8** (clé RS256 et HS256, certificat auto-signé épinglé).
+- Vue d'ensemble : la part « Système et autres » du disque est maintenant traduite en anglais et en espagnol.
+
+## 2.111.1 — 2026-10-30
+
+- **Bureau distant GNOME Wayland sur un poste verrouillé.** GNOME refuse le bureau à distance tant que la session est verrouillée (« Session creation inhibited ») — or c'est le cas habituel quand personne n'est devant le poste. L'agent **déverrouille la session le temps de la prise en main, puis la re-verrouille automatiquement à la fin** (onglet fermé, session close) : un poste verrouillé n'est jamais laissé ouvert, et un poste non verrouillé n'est pas verrouillé. Pendant la session, l'écran local affiche le bureau avec l'indicateur de partage de GNOME. Si l'écran se verrouille en cours de route (inactivité, verrouillage local), la session distante se ferme avec un message clair ; il suffit de la rouvrir.
+
+## 2.111.0 — 2026-10-30
+
+- **Bureau distant GNOME en Wayland, pour de bon (Zorin OS, Ubuntu…).** La capture par l'API « capture d'écran » de GNOME Shell (2.110) est refusée par GNOME 46 (« Screenshot is not allowed »). L'agent passe désormais par **l'API du bureau à distance intégré de GNOME** (sessions RemoteDesktop + ScreenCast de Mutter) : image en direct par PipeWire (~25 i/s), clavier et souris injectés par la même session — **aucune configuration, aucune fenêtre de consentement, aucun redémarrage**. Validé sur un **Zorin OS 18.1 fraîchement installé** (GNOME 46, Wayland) : tout le nécessaire y est présent d'origine. Pendant la session, GNOME affiche son indicateur de partage d'écran ; la personne devant le poste peut l'arrêter d'un clic, la session distante se ferme alors avec un message. Pour cette session, l'agent quitte root et agit en tant qu'utilisateur connecté. Écran principal seulement.
+- **Clavier fidèle sur les bureaux Wayland (AZERTY, touches mortes, AltGr).** Le serveur de bureau distant gère l'extension « touches physiques » de noVNC, comme la console Proxmox : la disposition du poste s'applique telle quelle — `<` `>`, `ê` par la touche morte, `@` `€` par AltGr… Les sessions X11 gardent leur comportement.
+- Compositeurs *wlroots* (Sway, Hyprland…) : capture par grim inchangée, avec désormais les touches physiques. La voie « capture GNOME Shell » de la 2.110 est retirée.
+
+## 2.110.0 — 2026-10-30
+
+- **Bureau distant sur GNOME Wayland (Zorin OS, Ubuntu…).** Un bureau GNOME en session Wayland n'expose pas la capture d'écran libre (*wlr-screencopy*) qu'utilise grim : le bureau distant échouait avec « le compositeur ne gère pas wlr-screencopy ». L'agent bascule désormais sur **l'API de capture d'écran de GNOME Shell** (via D-Bus, au nom de l'utilisateur de la session) — le bureau distant fonctionne donc sur GNOME Wayland **sans changer de session ni redémarrer le poste**. Le clavier et la souris passaient déjà par un périphérique d'entrée virtuel indépendant du compositeur. C'est plus lent qu'une session X11 ou qu'un compositeur *wlroots* (quelques images par seconde) et dépend d'une version de GNOME exposant encore cette API ; sinon, le message invite à ouvrir une session X11 (Xorg).
+
+## 2.109.0 — 2026-10-30
+
+- **Ignorer un certificat HTTPS refusé sur le site source d'un logiciel.** Quand le téléchargement d'un installeur échoue avec « Certificat HTTPS invalide sur le site source » (certificat expiré ou mal configuré côté éditeur), la fiche du logiciel propose maintenant de **l'ignorer et réessayer**, et le panneau *Installeur* garde un réglage « Certificat du site source : vérifié / ignoré » que l'on peut rétablir à tout moment. L'option n'apparaît que lorsque loco connaît l'**empreinte SHA-256** du fichier (catalogue WinGet) : l'intégrité reste vérifiée — tout fichier altéré est refusé —, seule la validation du certificat de transport est levée.
+
+## 2.108.0 — 2026-10-30
+
+- **Inventaire des postes Debian/Ubuntu plus robuste.** Quand un autre outil APT occupait le poste au moment de l'inventaire — mises à jour automatiques, tâche `apt-daily`, ou la toute fin de l'installation de l'agent —, `apt-get update` échouait avec « E: Unable to lock directory /var/lib/apt/lists/ » et le poste restait affiché **« inventaire incomplet »** pendant des heures. L'agent **patiente désormais que le verrou se libère** (et refait l'inventaire au prochain contact si nécessaire) au lieu de signaler un échec.
+- **Distributions dérivées d'Ubuntu/Debian reconnues automatiquement.** La configuration du dépôt loco détecte maintenant les dérivées (Zorin OS, Linux Mint, Pop!_OS, elementary…) via leur base (`ID_LIKE`) et retient le nom de version d'origine (p. ex. Zorin OS 18 → Ubuntu *noble*), au lieu d'afficher « Distribution non reconnue » et de se replier sur le cache APT seul.
+
+## 2.107.0 — 2026-10-30
+
+- **Bureau distant : prise en charge de Wayland.** La prise de contrôle à distance d'un poste Linux ne fonctionnait que sur une session **X11** (message « Bureau Wayland non pris en charge ; une session X11 est nécessaire. »). Elle gère désormais aussi **Wayland** sur les compositeurs de type *wlroots* (Sway, Hyprland, Wayfire, river…) : l'écran est capturé avec **grim** et le clavier et la souris sont rejoués par un **périphérique d'entrée virtuel** (`/dev/uinput`), indépendant du compositeur. Sur Debian/Ubuntu, `grim` est proposé automatiquement à l'installation de l'agent (dépendance recommandée).
+- **Message clair sur GNOME/KDE.** Ces bureaux Wayland n'autorisent pas la capture d'écran sans portail de consentement : l'agent l'indique désormais explicitement et invite à ouvrir une session X11, au lieu d'un refus générique.
+
+## 2.106.0 — 2026-10-29
+
+- **Centre de logiciels plus soigné.** Les cartes de logiciels sont refaites dans le style du reste de l'interface : icône plus grande, nom en évidence, version lisible, ombre douce et effet au survol — fini l'identifiant technique WinGet affiché à nu sur la carte (il reste sur la fiche du logiciel).
+- **Icônes plus rapides et plus malignes.** Le cache navigateur des icônes passe à une semaine (les visites et changements de page suivants sont instantanés), et à l'ouverture d'une page du centre, loco **précharge en arrière-plan** les icônes visibles pour qu'elles soient prêtes au lieu d'être téléchargées à la demande.
+- **Correction :** la carte « Certificat HTTPS » de la page Système ouvre bien l'onglet **Certificat** (elle ouvrait l'onglet Réseau).
+
+## 2.105.0 — 2026-10-29
+
+- **Windows Update : inventaire plus robuste (agent).** Quand un poste refuse la recherche des pilotes via Windows Update — erreur `0x80240032` (critère invalide), vue sur certaines builds de Windows 11 ou quand les pilotes sont désactivés par stratégie — l'agent **retombe automatiquement sur les mises à jour logicielles seules** au lieu de signaler « inventaire incomplet ». Les logiciels sont inventoriés et installés normalement ; les pilotes restent détectés quand le poste l'autorise.
+
+## 2.104.0 — 2026-10-29
+
+- **Deux corrections de style.** Le sélecteur de système de la page *Paquets Linux* (Debian/Ubuntu ↔ Rocky/RHEL) ne s'étale plus en pleine largeur à moitié vide : il redevient un bouton à deux segments compact (une règle de la page *Annuaires* l'écrasait par erreur ; le sélecteur à quatre choix des annuaires est préservé). Et la flèche des listes déroulantes (`select`) devient un **chevron** net au lieu d'un petit triangle.
+
+## 2.103.0 — 2026-10-29
+
+- **Application web installable (PWA).** loco peut maintenant s'**installer** comme une application (sur le bureau ou l'écran d'accueil mobile) : manifeste d'application, icônes (dont icône « maskable »), ouverture en fenêtre autonome. Un **service worker** met en cache la coque de l'interface (chargements plus rapides) et affiche une **page « hors ligne »** soignée si le serveur est injoignable. L'installation nécessite un accès HTTPS de confiance (certificat loco accepté).
+
+## 2.102.0 — 2026-10-29
+
+- **Fond d'écran : le contenu est posé sur une « feuille ».** Avec un fond d'écran, le contenu de la page (titres, descriptions, statistiques, cartes) ne flotte plus à nu sur la photo : il repose sur une surface, et le fond d'écran devient un **cadre** propre autour et derrière la barre de navigation. Beaucoup plus net et lisible. Les thèmes **sans fond** (clair, sombre uni…) gardent le contenu directement sur le fond uni, épuré. La page de connexion garde sa carte centrale.
+
+## 2.101.0 — 2026-10-29
+
+- **Cartes et surfaces épurées (style plus « pro »).** Inspiré d'un design de tableau de bord soigné : ombres plus douces, coins un peu plus arrondis, plus d'air dans les cartes et entre elles, hiérarchie plus nette. Les ombres sont **harmonisées sur tous les thèmes** pour qu'un changement de thème reste agréable partout (clair, OLED, sombre doux, minuit, sépia). Le fond d'écran reste le défaut ; l'interface est juste plus calme et mieux posée.
+
+## 2.100.0 — 2026-10-29
+
+- **Interface plus « posée » sur le fond d'écran.** Les panneaux sont rendus un peu plus opaques et la photo de fond est davantage estompée : l'interface ressort nettement au lieu de donner une impression de « verre qui flotte », tout en gardant l'ambiance du fond. La transparence par défaut passe de 80 à 90 % (toujours réglable dans *Apparence*).
+
+## 2.99.0 — 2026-10-29
+
+- **Écran de connexion cohérent avec l'apparence par défaut.** La page de connexion (et les autres écrans hors session) reprennent désormais le **thème, la couleur, la transparence et le fond** par défaut de l'instance — carte en **verre dépoli** comprise. Avant, un ancien réglage mémorisé dans le navigateur pouvait les afficher dans un tout autre thème (p. ex. noir + accent vert, carte opaque) par-dessus le fond. Le petit sélecteur de thème hors session, devenu inutile (l'apparence se règle dans le compte), est retiré.
+
+## 2.98.0 — 2026-10-29
+
+- **En-tête « flottant ».** La barre de navigation ne s'étale plus sur toute la largeur en haut : ses éléments sont réunis dans un bloc **arrondi**, détaché des bords, posé au-dessus du contenu (et du fond d'écran). Plus léger, plus moderne.
+- **Lisibilité sur les fonds photo.** Le texte posé directement sur le fond (en-têtes de page, statistiques, pied de connexion) reçoit un léger halo de la couleur du thème pour rester net sur une photo — dans tous les thèmes, clairs comme sombres. La page de connexion affiche elle aussi le fond d'écran, avec sa carte centrale opaque.
+- **Correction :** choisir « Aucun fond » dans *Apparence* enlève bien le fond d'écran (il revenait par erreur au fond par défaut depuis 2.97.0).
+
+## 2.97.0 — 2026-10-29
+
+- **Apparence par défaut plus accueillante.** À l'installation, loco adopte le preset **« Alpes »** (thème bleu nuit, accent bleu, photo de montagne en fond, panneaux en verre dépoli) au lieu du noir uni. Chaque utilisateur reste libre de changer thème, couleur, transparence et fond, ou de revenir à un thème sobre, depuis *Apparence*.
+- Captures d'écran du dépôt refaites dans ce nouveau style.
+
+## 2.96.0 — 2026-10-29
+
+- **Logo personnalisable (global).** Dans *Apparence*, une section **Logo** réservée aux administrateurs permet de remplacer le logo loco par celui de son organisation — **pour tout le monde** : en-tête, page de connexion et favicon. Image (PNG, JPEG, GIF, WebP) ou **SVG**, 2 Mo maximum ; retour au logo loco d'un clic. Quand un logo est défini, le mot « loco » s'efface pour laisser la marque choisie.
+- Contrairement au thème, à la couleur et au fond (propres à chaque compte), le logo est **global** à l'instance. Le SVG est servi en image (aucun script ne peut s'exécuter) et son envoi est réservé au droit « Configurer le serveur ».
+
+## 2.95.0 — 2026-10-29
+
+- **Fonds d'écran photo (nature) 4K.** La fenêtre *Apparence* propose huit vrais fonds photo haute définition — **Montagne, Forêt, Désert, Dunes, Océan, Aurore, Nuit étoilée, Hiver** — en plus des unis et dégradés, désormais rangés dans une section à part. Trois presets photo (Alpes, Boréale, Désert) les mettent en avant.
+- **Lisibilité garantie dans tous les thèmes.** Un voile adapté à la couleur du thème et des panneaux en verre dépoli font que n'importe quelle combinaison reste lisible : thème **clair** sur une montagne, thème sombre sur un ciel étoilé, sépia sur un paysage d'hiver — le texte ressort toujours. Choisir une photo abaisse automatiquement la transparence si les panneaux étaient opaques, pour qu'on voie le fond tout de suite.
+- Photos sous licence Unsplash (usage libre) — crédits dans `static/wallpapers/CREDITS.txt`.
+
+## 2.94.0 — 2026-10-29
+
+- **Apparence personnalisable.** Nouvelle fenêtre *Apparence* (menu du compte → « Apparence… ») pour se composer un portail à son goût, **enregistré sur le compte** (on retrouve son réglage sur n'importe quel navigateur) :
+  - **5 thèmes** : OLED, Sombre doux, Clair, et deux nouveaux — **Minuit** (bleu nuit) et **Sépia** (papier chaud).
+  - **8 couleurs d'accent** (ajout de **sarcelle** et **ambre**).
+  - **Transparence des panneaux** réglable : les cartes deviennent translucides et laissent voir le fond.
+  - **Fonds d'écran** : six dégradés fournis (Aurore, Océan, Forêt, Crépuscule, Rose, Ardoise) ou **votre propre image** à importer (PNG, JPEG, GIF, WebP, 8 Mo max).
+  - **6 presets** prêts à l'emploi (OLED, Clair, Océan, Forêt, Crépuscule, Rose) qui règlent thème, accent, transparence et fond d'un clic.
+  - Tout s'applique **en direct** et **sans clignotement** au chargement (le thème est rendu côté serveur). Hors session, le choix reste mémorisé dans le navigateur.
+
+## 2.93.0 — 2026-10-29
+
+- **Windows Update : section « Diriger les postes » désencombrée.** Les deux méthodes (DNS, proxy via l'agent) tiennent en deux colonnes courtes et équilibrées ; le détail des conditions et la commande manuelle PowerShell passent dans un dépliant « Réglage manuel et dépannage du proxy » — fini le pavé de texte et la commande qui débordait.
+
+## 2.92.0 — 2026-10-29
+
+- **Réglages du parc et Configuration, plus aboutis.** *Réglages du parc* : l'adresse actuelle du serveur passe dans un encart avec son état juste à côté, et le champ de nouvelle adresse est clairement étiqueté. *Configuration* (appliance) : les menus « activé / désactivé » deviennent des **interrupteurs** (Accès HTTP, Cache Windows Update, Red Hat, Flatpak), chacun avec une courte description ; et chaque limite de cache affiche son **usage réel** en dessous.
+
+## 2.91.0 — 2026-10-29
+
+- **Composeur d'enrôlement plus sobre.** Les cases du composeur passent en **interrupteurs** (comme la page Fonctionnalités) : une liste encadrée, un libellé et sa description à gauche, l'interrupteur à droite, la ligne grisée quand elle est éteinte. L'option « première installation » est mise à part. La commande générée est inchangée.
+
+## 2.90.0 — 2026-10-29
+
+- **Composeur d'enrôlement.** La page *Enrôlement* devient un sélecteur : on **coche ce que le poste reçoit** — **Gestion (agent)**, **Dépôt loco**, **Cache des mises à jour** (et, côté Windows, **Rediriger Windows Update**), avec une case **Tout** — et la **commande à lancer se génère en direct**, par système (Windows, Debian/Ubuntu, Red Hat). Le téléchargement du paquet pour un poste hors ligne et le déploiement en masse (GPO, Intune) restent dans « Autres méthodes ».
+- **Dépôts Debian/Ubuntu par défaut.** loco crée désormais d'office les dépôts **Debian 12 et 13, Ubuntu 22.04 et 24.04** (comme el8/el9/el10 côté Red Hat) : plus besoin de les créer à la main avant de brancher un poste Debian. La section *Vos dépôts* est revue — le bouton « Ajouter des paquets » passe dans l'en-tête du dépôt choisi.
+- **Cache : noms plus parlants dès la mise à jour, repli plus pratique.** Les libellés « Mise à jour Windows », « Métadonnées du dépôt »… apparaissent maintenant tout de suite après une mise à jour de loco (l'agent reconstruit l'index du cache à son démarrage), sans attendre une analyse manuelle. Et quand la liste complète est dépliée, elle reste à hauteur limitée : plus besoin de descendre jusqu'en bas pour la replier.
+
+## 2.89.0 — 2026-10-28
+
+- **Liste du cache plus lisible.** Dans les pages **Windows Update** et **Paquets Linux**, la liste des fichiers en cache n'affiche plus que les **5 plus récents** — le reste se déplie (et se replie) d'un clic — et chaque ligne indique **à quoi le fichier correspond** (« Mise à jour Windows », « Définitions Microsoft Defender », « Microsoft Edge », « Métadonnées du dépôt »…), avec le nom de fichier juste en dessous. Les paquets .deb et .rpm gardent leur nom tel quel, déjà parlant.
+
+## 2.88.0 — 2026-10-28
+
+- **Voir et vider les caches.** Les pages **Windows Update** et **Paquets Linux** listent maintenant ce qui est réellement en cache — chaque fichier (mise à jour Windows, paquet Debian ou Ubuntu, miroir Red Hat ou EPEL) avec son origine, sa taille et sa date de mise en cache — et permettent de **supprimer un élément** ou de **vider tout le cache** d'un clic. Les tranches d'un même fichier (Windows Update) sont regroupées en un seul objet ; un fichier supprimé repart simplement de son serveur d'origine à la prochaine demande d'un poste, rien n'est perdu.
+  - La liste se filtre, se rafraîchit en direct et reste bornée aux objets les plus récents sur un gros cache. L'analyse et la purge passent par l'agent (le contenu des caches n'est lisible que par lui) ; côté APT, le cache nginx de l'appliance comme apt-cacher-ng d'un serveur Debian sont pris en charge.
+- **Pages revues.** Présentation plus sobre : un résumé factuel (taille du cache, part servie localement, 14 derniers jours) remplace les grandes vignettes, et le contenu du cache prend la place centrale.
+
+## 2.87.0 — 2026-10-28
+
+- **Mon parc : redémarrer depuis la liste.** Quand un poste attend un redémarrage, un bouton **Redémarrer** apparaît dans la liste, à l'endroit même de *Mettre à jour*. Si le poste a aussi des mises à jour en attente, les deux boutons cohabitent côte à côte. Le redémarrage est confirmé avant l'envoi et prévient la personne connectée.
+
+## 2.86.0 — 2026-10-28
+
+- **Écran de connexion repensé.** Une barre légère (loco, le serveur, la langue et le thème) et une carte centrée, plus aérée : titre et phrase d'accueil, champs plus confortables, et une mention **SSO** claire quand des annuaires d'entreprise sont actifs. Les erreurs (mot de passe incorrect, trop de tentatives) s'affichent dans la carte, une seule fois. Même présentation pour la double authentification (avec un lien pour changer de compte) et le choix du mot de passe à la première connexion.
+
+## 2.85.0 — 2026-10-28
+
+- **Annuaires et SSO, plus simples.** La page (renommée *Annuaires et SSO*) liste les annuaires dans un tableau : type, serveur, nombre de comptes, **interrupteur Actif / Inactif** (désactiver ferme les sessions de ses comptes), Tester et Modifier, ordre d'essai dans le menu. Les demandes d'accès en attente sont signalées avec un lien vers Comptes.
+  - Ajout guidé par type : **Active Directory** (le domaine suffit ; contrôleur et compte de service facultatifs), **FreeIPA** (domaine et serveur ; comptes sous `cn=users,cn=accounts`, autorité FreeIPA indiquée), autre annuaire LDAP ou RADIUS. Les réglages techniques passent dans « Options avancées ». Le serveur accepte un port (`dc1:3269`, catalogue global en SSL).
+  - L'écran de connexion parle de connexion SSO avec le compte d'entreprise.
+
+## 2.84.0 — 2026-10-28
+
+- **Autorité de certification au choix.** Nouvel onglet *Système › Certificat* avec un interrupteur **Autorité loco / Autorité d'entreprise** : le certificat du portail peut être signé par l'autorité de votre entreprise (AD CS, PKI interne…), à laquelle les postes du domaine font déjà confiance, et revenir à l'autorité loco à tout moment.
+  - Mise en place guidée en quatre étapes : **importer l'autorité** (.cer, .crt, .pem ou chaîne .p7b) ; **obtenir le certificat** du serveur, soit par une **demande (CSR) générée par loco** — la clé privée ne quitte jamais le serveur, commande `certreq` pour AD CS fournie — soit avec un certificat et sa clé (PEM ou PFX) ; **diffuser la confiance** aux postes, avec le nombre de postes prêts ; **basculer**.
+  - **Sans coupure pour le parc** : les agents (2.84 et plus) reçoivent un faisceau « autorité loco + autorité d'entreprise » par leur canal déjà sécurisé et le confirment ; la bascule prévient si des postes ne l'ont pas encore. L'autorité loco reste reconnue : le retour est toujours sûr.
+  - Chaque certificat est vérifié avant d'être servi (clé assortie, adresse des agents couverte, chaîne signée par votre autorité) ; nginx est rechargé, ou l'ancien certificat est rétabli. Une mise à jour de loco garde le certificat d'entreprise tant qu'il est valable.
+- **Mises à jour : listes plus courtes.** Le journal des versions et la liste des opérations n'affichent plus que les **5 plus récents** ; le reste se déplie (et se replie) d'un clic. Seule la version la plus récente est ouverte ; une opération choisie plus ancienne déplie sa liste d'elle-même.
+
+## 2.82.0 — 2026-10-28
+
+- **Page Mises à jour repensée.** Tout ce qui compte est visible d'un coup d'œil, en haut de page :
+  - Une carte **loco** (version installée → disponible, date de publication, versions d'écart, « Au programme » avec les nouveautés, bouton **Installer**) et une carte **Système** (paquets, correctifs de sécurité, noyau, encart **À corriger en priorité** trié par gravité, boutons **Installer les correctifs** et **Tout mettre à jour**).
+  - Un **bandeau de redémarrage** compact avec son bouton, quand un nouveau noyau ou des services l'exigent.
+  - Les **nouveautés de la version disponible** se lisent avant d'installer : à chaque vérification, loco récupère le journal des versions publié avec elle (même API GitHub ou GitLab, aucun nouveau flux sortant).
+  - **Journal des versions en frise** : nouveautés et version installée repérées, une ligne de résumé par version, l'historique ancien replié.
+  - **Opérations** : la liste et le journal de l'opération choisie côte à côte, sans codes de couleur parasites.
+  - La **source des mises à jour**, réglage rare, passe en bas de page, repliée.
+
+## 2.81.0 — 2026-10-28
+
+- **Scripts de base prêts à l'emploi.** Deux nouveaux scripts Windows arrivent dans la bibliothèque, à côté du pilote NVIDIA : **Réparer Windows (DISM + SFC)** (répare l'image avec `DISM /RestoreHealth` puis vérifie les fichiers système avec `SFC /scannow`, sortie nettoyée) et **Nettoyer les fichiers temporaires** (dossiers Temp, cache de Windows Update et corbeille, avec l'espace libéré). Modifiables et supprimables comme n'importe quel script.
+
+## 2.80.0 — 2026-10-28
+
+- **Journal des versions dans le portail.** La page *Administration → Mises à jour* affiche désormais un panneau **Journal des versions** : ce qui change à chaque version de loco, hors ligne, sans passer par GitHub. La version installée et celle disponible sont repérées.
+
+## 2.79.0 — 2026-10-28
+
+- **Pilote NVIDIA en un clic.** Un script prêt à l'emploi arrive dans la bibliothèque *Scripts* : il détecte le GPU NVIDIA du poste, récupère le dernier pilote **Game Ready (DCH)** directement chez NVIDIA, le compare à la version installée et l'installe en silencieux. À lancer sur les postes Windows, maintenant ou sur une planification. Modifiable et supprimable comme n'importe quel script.
+
+## 2.78.0 — 2026-10-28
+
+- **Détection des pilotes dans Windows Update.** L'inventaire ne regardait que les mises à jour logicielles : les pilotes (carte graphique NVIDIA/AMD, chipset…) distribués par Windows Update n'apparaissaient jamais. Ils sont maintenant détectés, affichés avec une étiquette **pilote** sur la fiche du poste, et installés en même temps que les autres mises à jour.
+
+## 2.77.0 — 2026-10-28
+
+- **Scripts Python.** En plus de PowerShell (Windows) et shell (Linux), la bibliothèque accepte des scripts **Python compatibles avec tout système** : l'agent les exécute avec l'interpréteur Python du poste (Windows comme Linux), en SYSTEM ou root. Nouvelle pastille de filtre et étiquette dédiées.
+
+## 2.76.0 — 2026-10-28
+
+- **Geler Windows Update sur tout un groupe.** Le menu « ⋯ » d'un groupe de machines propose de **bloquer** ou de **rendre** les mises à jour Windows pour tous ses membres Windows en une fois.
+
+## 2.75.0 — 2026-10-28
+
+- **Geler les mises à jour Windows par poste.** Sur la page d'un poste Windows, un interrupteur (décoché par défaut) empêche Windows d'installer ses mises à jour tout seul : c'est vous qui les lancez depuis loco. L'agent applique la consigne au prochain contact et la retire si vous décochez.
+
+## 2.74.1 — 2026-10-27
+
+- **Mon compte, plus lisible.** En-tête en étiquettes compactes (profil, type de compte, dernière connexion, création) avec un seul format de date. Onglet Sécurité : champs de largeur raisonnable et règles du mot de passe affichées à côté, en liste de vérification ; encart « Bon à savoir » plus discret ; double authentification avec son explication et son bouton sur une même ligne.
+
+## 2.74.0 — 2026-10-27
+
+- **Création de compte repensée.** La page Comptes affiche la liste en pleine largeur et un bouton **Nouveau compte** en haut (le doublon « Profils d'accès » disparaît, l'onglet reste). La création se fait dans une fenêtre en trois parties : l'identifiant avec sa règle affichée ; le **profil d'accès en cartes**, chacune avec ce qu'elle permet (seuls les profils que vous pouvez attribuer sont proposés) ; le mot de passe (saisi, généré au dé ou laissé vide) et le choix de le faire changer à la première connexion. Si la création est refusée (identifiant pris, mot de passe trop faible), la fenêtre se rouvre avec la saisie.
+
+## 2.73.3 — 2026-10-27
+
+- **Mon parc : « redémarrage nécessaire » à sa place.** L'information n'est plus une pastille qui passait à la ligne selon la place disponible, décalée sous le décompte : c'est désormais une ligne d'état discrète (icône et texte orangés), toujours sous le nombre de mises à jour, alignée avec lui. Le décompte et la pastille « sécurité » ne se coupent plus.
+
+## 2.73.2 — 2026-10-27
+
+- **Mon parc : en-tête allégé.** La case « Redémarrer si nécessaire » ne flotte plus entre les boutons : « Tout mettre à jour » (ou « Mettre à jour ce groupe ») ouvre une fenêtre qui récapitule l'opération et propose l'interrupteur **Redémarrer les postes si nécessaire**, seulement pour ceux dont une mise à jour l'exige.
+
+## 2.73.1 — 2026-10-27
+
+- **Groupes de machines et de logiciels : renommer et supprimer depuis la liste.** Chaque ligne a un menu « ⋯ » avec *Modifier les membres*, *Renommer…* (seul le nom change : membres, description et déploiements conservés ; un nom déjà pris est refusé) et *Supprimer…* (avec confirmation ; les appareils, logiciels et déploiements restent). Réservé aux comptes qui peuvent gérer les groupes.
+
+## 2.73.0 — 2026-10-27
+
+- **Nouvelle police : Bricolage Grotesque** à la place d'IBM Plex Sans. Plus de caractère dans les titres et les grands chiffres, tout en restant sobre et lisible en petit grâce à sa taille optique variable. Chiffres de largeur fixe pour les tableaux, et couverture complète du français et de l'espagnol (y compris « — » et « ’ », qui s'affichaient auparavant dans une autre police). IBM Plex Mono reste pour les adresses et le code.
+- **Barre d'avancement des opérations du serveur** (*Administration → Mises à jour*) : pendant une opération, une carte en haut de la page montre l'étape en cours, le pourcentage et le temps écoulé.
+  - **Mise à jour de loco** : téléchargement, vérification de l'empreinte, puis chacune des étapes de l'installeur (ports, paquets, copie du portail, certificat, nginx, services…).
+  - **Mises à jour du système** : « paquet n sur N » d'après apk, dnf ou APT.
+  - Autres opérations : barre animée.
+  - Quand le portail redémarre en fin d'installation, la carte l'indique et la page se reconnecte d'elle-même.
+
+## 2.72.0 — 2026-10-27
+
+- **Shells plus agréables, comme un vrai terminal** (shell d'un poste et shell root du serveur) :
+  - **Presse-papiers** : sélectionner copie ; clic droit copie la sélection ou colle s'il n'y en a pas ; **Ctrl+Maj+C / Ctrl+Maj+V** et Maj+Inser ; **Ctrl+C avec une sélection copie** (sans interrompre la commande), sans sélection il part au shell comme d'habitude.
+  - **Liens cliquables** : Ctrl+clic (⌘+clic) ouvre l'adresse dans un nouvel onglet.
+  - **Recherche dans l'historique** : Ctrl+Maj+F, Entrée / Maj+Entrée pour naviguer, résultats surlignés, Échap pour fermer.
+  - **Taille du texte au clavier** : Ctrl + / Ctrl − / Ctrl 0, en plus des boutons A− / A+.
+  - **Plein écran** : le clavier est verrouillé (navigateurs Chromium) pour que Ctrl+W, Ctrl+T… aillent au shell au lieu de fermer l'onglet.
+  - **Rendu** : affichage WebGL (texte net, défilement immédiat, cadres et tableaux continus), police **JetBrains Mono** embarquée (flèches, tirets, symboles et cadres dans la même police, chargée avant l'ouverture pour des colonnes justes), largeur Unicode 11 (emojis et symboles larges alignés), contraste minimal garanti, historique de 10 000 lignes. Repli automatique sur l'ancien rendu si le navigateur n'a pas WebGL.
+  - Un rappel des raccourcis s'affiche sous le terminal.
+
+## 2.71.1 — 2026-10-27
+
+- **Mise à jour automatique des agents Windows rétablie** : depuis la 2.39, le serveur annonçait aux postes l'empreinte du MSI d'origine alors qu'il leur sert le MSI « générique » (emplacements d'inscription vidés). L'agent Windows refusait donc chaque mise à jour (« empreinte du MSI incorrecte » dans son journal, toutes les 2 minutes) et restait sur sa version d'installation. L'empreinte annoncée est désormais celle du fichier réellement servi : les postes Windows se mettent à jour d'eux-mêmes et reçoivent la supervision de la 2.71.
+
+## 2.71.0 — 2026-10-27
+
+*Les versions 2.70.0 et 2.70.1 n'ont pas été publiées séparément (un test échouait sur Rocky 8) : leur contenu, décrit plus bas, est livré avec la 2.71.0.*
+
+- **Supervision des postes** : chaque agent (Linux et Windows) joint à son contact, toutes les 2 minutes, un relevé : processeur et débit réseau en moyenne depuis le contact précédent, mémoire, swap ou fichier d'échange, chaque disque local avec son point de montage, charge (Linux) et durée depuis le démarrage. loco garde le dernier relevé et 7 jours d'historique.
+  - **Fiche du poste → onglet Supervision** : valeurs actuelles (seuils signalés), courbes *Processeur et mémoire* et *Réseau* sur 24 h ou 7 jours (interrompues quand le poste était éteint, infobulle au survol), tableau des disques avec leur occupation. Un poste hors contact garde son dernier relevé, grisé.
+  - **Mon parc → colonne Ressources** : mini-jauges processeur, mémoire et disque le plus rempli, en couleur d'état au-delà des seuils.
+  - **Alertes** : trois nouvelles règles réglables pour les postes : disque presque plein, mémoire saturée et processeur saturé (moyenne sur 15 minutes, jamais sur un simple pic).
+  - **En direct** : tant que l'onglet Supervision est ouvert et visible, l'agent envoie un relevé **toutes les 2 secondes** (processeur, mémoire, réseau) par le canal qu'il garde déjà ouvert avec le serveur. Une courbe des 3 dernières minutes défile, les valeurs se mettent à jour et un témoin « en direct » s'allume. Dès que l'onglet est quitté ou la fenêtre cachée, plus rien n'est demandé : aucune charge supplémentaire le reste du temps.
+  - Les agents se mettent à jour automatiquement ; la supervision apparaît dès leur premier contact en 2.71.
+
+## 2.70.1 — 2026-10-27
+
+- **NTP : serveur saisi qui ne répond pas, signalé clairement** : quand aucun des serveurs saisis n'est utilisé, *Système → Heure et matériel* l'affiche (« Le serveur saisi ne répond pas : 192.168.100.23 ») et précise d'où vient l'heure (serveurs de secours de la distribution, avec leur adresse), au lieu d'un simple « synchronisée ». La pastille devient « synchronisée par les serveurs de secours ». Une indication donne la piste côté serveur NTP : accepter les clients du réseau (chrony : `allow`) et autoriser UDP 123 en entrée. Le tableau des sources montre aussi le nom saisi (par exemple pool.ntp.org) sous l'adresse.
+- **« Utiliser uniquement ces serveurs »** : nouvelle option pour que les serveurs saisis soient les seules sources. Avec chrony, loco commente lui-même les sources de la distribution dans chrony.conf (pool, server, sourcedir), de façon réversible : décocher les rétablit à l'identique. Avec timesyncd, les serveurs de secours intégrés sont désactivés. Sans serveur saisi, l'option est ignorée, pour ne jamais laisser le serveur sans source.
+
+## 2.70.0 — 2026-10-27
+
+- **Certificat HTTPS : renouveler et importer depuis le portail** (*Système → Réseau et certificats*).
+  - **Renouveler** : nouveau certificat signé par l'autorité loco (825 jours, adresse et noms actuels du serveur). nginx est testé avant d'être rechargé, et l'ancien certificat est rétabli en cas d'échec. Les postes qui font confiance à l'autorité ne voient aucune différence.
+  - **Importer un certificat pour un nom DNS** (autorité d'entreprise, Let's Encrypt…) : chaîne PEM et clé, vérifiées (clé correspondante, validité, noms DNS). Il n'est servi qu'aux navigateurs qui ouvrent le portail par l'un de ses noms (SNI) ; les agents du parc, qui épinglent l'autorité loco, gardent le certificat loco sur l'adresse du serveur. Un certificat qui couvrirait cette adresse est refusé, puisque les agents perdraient la connexion. Le certificat importé peut être remplacé ou retiré, et son bloc nginx est régénéré à chaque mise à jour.
+
+## 2.69.3 — 2026-10-27
+
+- **Création de compte : mot de passe au choix** : le formulaire *Nouveau compte* propose un champ **Mot de passe**. On peut en saisir un, cliquer sur le **dé** pour en générer un aléatoire (lisible, sans caractères ambigus, affiché en clair et sélectionné ; chaque clic en propose un autre), ou laisser vide pour qu'il soit généré à la création. Une ligne d'aide vérifie en direct la règle (12 caractères minimum, sans le nom du compte). Un interrupteur **« À changer à la première connexion »** (activé par défaut) laisse le choix d'imposer ou non le changement. Après la création, l'encart **Identifiants à transmettre** affiche le compte et son mot de passe avec un bouton Copier. Un appel scripté qui n'envoie pas l'interrupteur garde le changement obligatoire.
+
+## 2.69.2 — 2026-10-27
+
+- **Téléchargements refusés « Certificat HTTPS invalide » (GIMP, SumatraPDF…)** : la vraie cause était l'horloge du serveur en retard. Un certificat émis après la date du serveur paraît « pas encore valide » : avec une horloge au 3 octobre, 7-Zip passe mais SumatraPDF et GIMP, dont les certificats sont plus récents, échouent. Le message désigne désormais l'horloge, avec la date du serveur, et renvoie vers *Système → Heure et matériel*.
+- **NTP sur l'appliance Alpine 3.24** : son chrony.conf lit le dossier `conf.d` en tête puis désactive le port de commande (`cmdport 0`) plus bas ; le réglage de loco déposé dans `conf.d` était donc écrasé et l'état de l'heure restait illisible. loco s'inclut maintenant en fin de chrony.conf (et retire l'ancien fichier), ce qui rétablit la lecture de l'état et l'écart d'horloge dans le portail.
+
+## 2.69.1 — 2026-10-27
+
+- **Groupes de machines et de logiciels** : après l'enregistrement d'un groupe (création ou modification), on revient à la liste des groupes, positionné sur le groupe enregistré et surligné, au lieu de rester dans l'éditeur.
+
+## 2.69.0 — 2026-10-27
+
+- **Flux sortants à autoriser sur le pare-feu** : *Système → Réseau et certificats* liste désormais, sous les ports entrants, les destinations Internet que le serveur doit joindre **en sortie**, avec ports et protocoles : résolveurs DNS, serveurs NTP réglés, dépôts du système du serveur, source des mises à jour de loco (GitHub ou GitLab), miroirs Linux réellement vus dans le cache apt-cacher-ng, dépôts RPM et Flathub, domaines Windows Update, winget et hôtes des installeurs du catalogue Windows, et, s'ils sont configurés, serveur SMTP, webhook d'alertes et sauvegarde hors site (S3 ou SFTP). Tout est tiré de la configuration et des fonctionnalités actives ; un bouton copie la liste au format « une destination par ligne » pour l'équipe réseau.
+
+## 2.68.0 — 2026-10-27
+
+- **Heure du serveur, refonte NTP** : l'état de l'heure affiché était souvent faux. Il est désormais mesuré par l'agent root (le portail, non privilégié, ne peut pas interroger chrony) et le bloc *Système → Heure et matériel* a été repensé : pastille d'état claire (synchronisée / en cours / désactivée / gérée par l'hôte), résumé (heure locale, fuseau, **source en usage, strate, écart**) et tableau par serveur (en usage / joignable / injoignable…). La synchronisation NTP accepte **plusieurs serveurs** (IP v4/v6 ou noms, séparés par des espaces), prioritaires sur ceux de la distribution, et le réglage réseau passe avant le fuseau horaire. Sur l'appliance (chrony avec `cmdport 0`), le port de commande local est réactivé automatiquement pour que l'état redevienne lisible ; prise en charge de timesyncd (Debian/Ubuntu) et de chrony (Red Hat, Alpine), avec « include » pour les distributions sans *confdir* (Rocky, AlmaLinux) et persistance du choix au redémarrage sur l'appliance (OpenRC).
+
+## 2.67.0 — 2026-10-27
+
+- **Shell root : le terminal directement** : une fois le shell activé (et le serveur redémarré), *Administration → Shell root*, l'icône de la barre et Ctrl+K ouvrent directement le terminal root, sans page intermédiaire. Un bouton **« Désactiver le shell root »** bien visible sur le terminal ferme tous les shells et coupe l'accès (confirmation demandée) ; on revient alors à la mise en service. La page d'étapes ne sert plus que tant que le shell n'est pas actif. Le shell ne démarre qu'au premier échange du terminal (protégé contre le CSRF), jamais au simple affichage de la page.
+
+## 2.66.0 — 2026-10-26
+
+Cette version publie aussi le contenu de 2.64.0 et 2.65.0 (page Shell root dédiée, passe d'ergonomie et de design), non publiées séparément.
+
+- **Intégration continue plus rapide et plus sobre, simple à reprendre** : chaque push ne lance plus que les vérifications rapides (lint, tests unitaires, syntaxe PowerShell — ~3 min, sans machine virtuelle). Les tests d'intégration complets (VM Linux, Docker, ISO, serveurs Windows) tournent quand un push touche les installeurs, les agents ou l'ISO, et toujours avant une publication : pousser un tag `vX.Y.Z` vérifie, teste et publie en un seul run (ISO et agent Windows publiés = ceux testés). Plus de bridage du parallélisme, QEMU installé sans paquets graphiques (43 paquets au lieu de 298), plus de lancement hebdomadaire automatique. Un fork fonctionne sans secret ni serveur : voir *Intégration continue et publication* dans le README.
+
+## 2.65.0 — 2026-10-26
+
+Passe d'ergonomie et de design sur tout le portail, pour se repérer plus vite.
+
+- **Barre du haut désencombrée** : cinq entrées (Vue d'ensemble, Mon parc, Linux, Windows, Administration). La langue, l'apparence, le compte et la déconnexion sont réunis dans un **menu compte** (avatar). Plus rien ne déborde, même en 1280 px.
+- **Administration rangée par sections** : le menu présente *Accès* (comptes, profils, annuaires), *Serveur* (système, mises à jour, configuration, fonctionnalités, shell root) et *Suivi* (journal, alertes). Les onglets ne montrent plus que ceux de la section en cours.
+- **Enrôlement rejoint Mon parc**, en onglet à côté des appareils, des groupes et des déploiements.
+- **Système en onglets** : *État* (services, emplacements, versions), *Sauvegardes*, *Réseau et certificats*, *Heure et matériel*. Les indicateurs du haut mènent à l'onglet correspondant, et les actions ramènent sur le bon onglet. Le panneau QEMU n'apparaît que s'il s'applique.
+- **Vue d'ensemble** : les indicateurs des caches et ceux du serveur forment deux rangées distinctes.
+- **Journal et opérations lisibles** : libellés pour la double authentification, les planifications, les sauvegardes, le shell root et les alertes, au lieu des codes techniques ; résumé lisible des paramètres des opérations du serveur.
+- **Corrections** : la barre de sélection de *Mon parc* restait affichée sans sélection ; espacements dans *Mon compte* ; espaces manquants dans *Enrôlement* et *Windows Update* ; option « Redémarrer si nécessaire » allégée.
+
+## 2.64.0 — 2026-10-26
+
+- **Shell root mieux intégré** : il a désormais sa propre page dans le menu *Administration* (et donc dans la recherche Ctrl+K), avec son état en sous-titre (désactivé, redémarrage requis, actif). La page guide la mise en service en trois étapes — activer, redémarrer, ouvrir — et le terminal s'ouvre dans la même page. Quand le shell est actif, une icône terminal dans la barre du haut y donne accès en un clic. Le panneau a quitté la page *Système*.
+
+## 2.63.0 — 2026-10-26
+
+- **Shell root du serveur dans le navigateur** (*Système → Shell root du serveur*) : un terminal root sur le serveur loco lui-même (installation Linux ou appliance), réservé au compte « admin » de l'installation. **Désactivé par défaut** ; l'activation demande le mot de passe du compte admin et **ne prend effet qu'après un redémarrage du serveur** (bouton de redémarrage proposé). La désactivation est immédiate et ferme les shells ouverts. Chaque activation, ouverture et fermeture est journalisée. Le terminal est servi par l'agent root via un socket local réservé au portail.
+
+## 2.62.0 — 2026-10-26
+
+- **`ufw` présent aussi sur les appliances existantes** : en 2.59 le paquet `ufw` n'était ajouté qu'à l'image ISO (nouvelles installations). Il est désormais aussi dans la liste de paquets appliquée par `install.sh`, donc une appliance déjà installée reçoit `ufw` à sa prochaine mise à jour de loco. Toujours installé sans être activé ni configuré.
+- **Message d'accueil (MOTD) de l'appliance** : la connexion à l'appliance (console et SSH) affiche désormais une bannière loco soignée — logo, version, système, adresse du portail et rappel des commandes console — régénérée à chaque démarrage.
+
+## 2.61.0 — 2026-10-26
+
+- **État NTP correct sur l'appliance Alpine** : *Système → heure du serveur* lisait l'état de synchronisation uniquement via `timedatectl`, absent sur l'appliance Alpine — le bandeau affichait donc toujours « synchronisation NTP désactivée », même quand chrony était actif et synchronisé. L'état (activé / synchronisé / en cours) est désormais lu depuis chrony quand `timedatectl` n'existe pas. À utiliser avec le correctif de 2.60 (rechargement de chrony par `rc-service`).
+
+## 2.60.0 — 2026-10-26
+
+- **Synchronisation NTP corrigée sur l'appliance Alpine** : le réglage du serveur NTP depuis *Système → heure du serveur* rechargeait le service via `systemctl`, absent sur l'appliance Alpine (OpenRC) — le nouveau serveur n'était donc pris en compte qu'au redémarrage. Le service est désormais rechargé avec `rc-service` quand `systemctl` n'existe pas. Validé de bout en bout contre un serveur NTP conteneurisé. Couvert par des tests (Debian → `systemctl`, Alpine → `rc-service`, conteneur → ignoré).
+
+## 2.59.0 — 2026-10-26
+
+- **`ufw` présent dans l'appliance (ISO)** : le pare-feu `ufw` est désormais installé dans l'image Alpine, mais **ni activé ni configuré** — il n'applique aucune règle et ne filtre rien par défaut. Il est simplement disponible si vous souhaitez poser des règles vous-même plus tard (`ufw enable`, `ufw allow …`).
+
+## 2.58.0 — 2026-10-26
+
+- **Ports réseau dans Système** : une nouvelle section *Administration → Système* récapitule les ports à ouvrir **en entrée** sur le pare-feu pour que l'applicatif fonctionne — interface et agents en HTTPS (8443), amorçage HTTP des postes, cache de paquets Linux (3142), cache Windows Update (80/443) et proxy Windows Update (3128). La liste s'adapte à la configuration et aux fonctionnalités activées, précise le public concerné (administration, postes Linux, postes Windows) et rappelle que le port interne de l'application reste en local.
+
+## 2.57.0 — 2026-10-26
+
+- **QR de double authentification fiable partout** : le code QR d'enrôlement s'affiche désormais même sans le paquet système `python3-qrcode` (appliance, installations minimales) grâce à un générateur QR embarqué sans dépendance. La page d'enrôlement liste aussi les **applications compatibles** (Microsoft Authenticator, Google Authenticator, Authy, 1Password, Bitwarden — toute application TOTP convient).
+
+## 2.56.0 — 2026-10-25
+
+- **Déploiement de paquets Linux** : la section *Déploiements* propose désormais, à côté des logiciels Windows, un store des paquets `.deb` et `.rpm` publiés dans loco. On choisit des paquets, on cible des postes ou des groupes Linux, on prévisualise puis on confirme ; chaque poste n'installe que les paquets compatibles avec son système (`.deb` → Debian/Ubuntu, `.rpm` → Red Hat), depuis le dépôt loco déjà configuré. L'avancement est suivi poste par poste comme pour Windows. Nouvelle action d'agent `install-package` (droit *Déployer un logiciel*).
+
+## 2.55.0 — 2026-10-25
+
+- **Pastille « redémarrage nécessaire »** dans *Mon parc* : l'ancien texte d'avertissement devient une pastille ambrée avec icône, alignée proprement avec les compteurs de mises à jour et la pastille de sécurité.
+
+## 2.54.0 — 2026-10-25
+
+- **Double authentification (TOTP)** pour les comptes locaux : depuis *Mon compte → Sécurité*, on l'active en scannant un QR (ou en saisissant la clé) avec une application d'authentification, puis un code à 6 chiffres est demandé à chaque connexion. Des **codes de secours** à usage unique permettent de se connecter en cas de perte du téléphone. Un administrateur peut retirer la 2FA d'un compte (droit *Réinitialiser les mots de passe*), et `loco-user mfa-reset NOM` la retire depuis la console en dernier recours. Le secret est chiffré au repos et les codes de secours sont hachés.
+
+## 2.53.0 — 2026-10-24
+
+- **Robustesse des tâches de fond** : les évaluations périodiques (alertes, copie hors-site) n'agissent plus que sur un seul processus à la fois grâce à un bail en base, pour éviter tout doublon si le serveur tourne avec plusieurs workers. Reprise automatique si le processus meneur s'arrête.
+- **CI plus rapide** : les tests unitaires du portail s'exécutent désormais hors machine virtuelle, en quelques minutes, et conditionnent les tests VM plus longs.
+
+## 2.52.0 — 2026-10-24
+
+- **Sélection de postes et mise à jour groupée** (*Mon parc*) : cocher des postes dans la liste (case « tout sélectionner » dans l'en-tête) fait apparaître une barre discrète en haut du tableau avec le nombre sélectionné et un bouton **Mettre à jour les sélectionnés** (option *Redémarrer si nécessaire*). Le rafraîchissement automatique se met en pause pendant la sélection. Réservé au droit *Mettre à jour un poste*.
+
+## 2.51.0 — 2026-10-24
+
+- **Sauvegarde hors-site** (*Système → Sauvegardes*) : copie automatique de la dernière sauvegarde quotidienne vers un stockage externe — **S3-compatible** (cloud AWS/Backblaze/Wasabi/OVH/Scaleway/R2 ou MinIO on-prem), **SFTP** (clé SSH), ou **dossier / point de montage** (2ᵉ disque, support externe, partage SMB/NFS monté). Chiffrement AES-256 optionnel avant envoi, bouton **Tester**, secrets chiffrés au repos. La rétention suit le réglage « Sauvegardes conservées ». Une alerte « Copie hors-site en échec » prévient en cas de problème.
+- **Unités sur les seuils d'alerte** (*Alertes → Règles*) : chaque seuil affiche son unité (jours, %, échecs / 24 h, mises à jour, postes).
+- **Panneau Sauvegardes revu** : liste plus régulière (actions toujours alignées à droite) et copie hors-site intégrée au même panneau.
+
+## 2.50.0 — 2026-10-23
+
+- **Alertes et notifications** (*Administration → Alertes*) : être prévenu par **e-mail (SMTP)** ou **webhook** (Slack, Teams, Discord ou relais maison, avec signature HMAC) quand l'état du serveur ou du parc le demande. Règles activables avec seuils — service arrêté, certificat HTTPS qui expire, sauvegarde en retard, disque plein, échecs de connexion, mises à jour de sécurité en attente, postes hors contact — et une gravité minimale par canal. Bouton **Tester**, secrets chiffrés au repos, évaluation côté serveur toutes les minutes sans répétition, avec réémission en cas d'échec. Nouveau droit *Configurer les alertes* et interrupteur de fonctionnalité dédié.
+
+## 2.49.0 — 2026-10-23
+
+- **Sauvegardes repensées** (page *Système*) : liste plus compacte (date et taille sur une ligne, nom de fichier en dessous), actions groupées avec une icône de suppression, et une zone de réglages claire pour la rétention et la restauration depuis un fichier.
+- **Message Windows Update corrigé** : l'avertissement « aucun poste n'est encore passé par loco » ne s'affiche plus dès qu'il n'y a pas eu de requête récente ; il n'apparaît que lorsque le cache n'a réellement rien servi (aucun trafic sur 14 jours et cache vide).
+- **README retravaillé** : en-tête, badges, sommaire et sections détaillées repliables, pour une lecture plus agréable.
+
+## 2.48.0 — 2026-10-23
+
+- **Supprimer une sauvegarde** (page *Système › Sauvegardes*) : un bouton *Supprimer* sur chaque sauvegarde, avec une confirmation avant suppression définitive. Effectué par l'agent root. Réservé au droit *Configurer le serveur*.
+- **Message Windows Update à jour** : quand aucun poste n'est encore passé par le cache, le message explique désormais que les postes Windows enrôlés sont dirigés automatiquement vers le cache (par proxy, activé par défaut) et renvoie à la section « Diriger les postes vers le cache » pour les postes non gérés, au lieu de ne parler que de la redirection DNS.
+
+## 2.47.0 — 2026-10-23
+
+- **Restaurer depuis un fichier téléversé** (page *Système › Sauvegardes*) : on peut envoyer une archive `.tar.gz` (une sauvegarde gardée ailleurs, ou venant d'un autre serveur) pour la restaurer. Le fichier est **vérifié avant toute écriture** — c'est bien une sauvegarde loco/local-repo (présence de la base et de la configuration, chemins sûrs, pas de `..` ni de lien symbolique, `.tar.gz` lisible) — côté portail puis une seconde fois par l'agent root avant d'appliquer.
+- **Rétention des sauvegardes configurable** : un champ *Sauvegardes conservées* (1 à 60) écrit `BACKUP_KEEP` et supprime aussitôt les plus anciennes au-delà de la limite. Réservé au droit *Configurer le serveur*.
+
+## 2.46.0 — 2026-10-23
+
+- **Télécharger et restaurer les sauvegardes** (page *Système*) : chaque sauvegarde a un bouton **Télécharger** (pour la garder ailleurs) et un bouton **Restaurer** en un clic. La restauration passe par l'agent root — arrêt du portail, remise en place de la base, des comptes, des clés et des dépôts, régénération des services, puis redémarrage ; la configuration propre au serveur (adresse, ports, réseaux) est conservée, et un repli automatique rétablit l'état précédent en cas d'échec. La commande reste disponible pour restaurer sur un autre serveur. Réservé au droit *Configurer le serveur*.
+- **Logos des logiciels dans « Derniers ajouts »** (Vue d'ensemble) : chaque logiciel récemment ajouté montre son logo (icône réelle pour les apps WinGet, sinon une pastille avec l'initiale), comme dans le Centre de logiciels.
+- **Avertissement du Journal fermable** : la bannière « N échec(s) de connexion ces dernières 24 heures » a une croix pour la fermer ; elle reste masquée tant qu'aucun nouvel échec ne survient.
+
+## 2.45.0 — 2026-10-23
+
+- **Trouver ses machines dans la recherche (Ctrl+K)** : la palette de recherche de la barre de navigation liste désormais les **postes du parc** en plus des pages. On tape un nom de machine, une adresse IP ou un système, et on ouvre sa fiche d'un *Entrée*. Réservé aux profils qui ont accès au parc (droit *Voir le parc*).
+
+## 2.44.0 — 2026-10-23
+
+- **Brancher un hôte Proxmox VE sur le cache** : nouvelle section sur la page *Paquets*, à côté de « Brancher un poste Linux ». Une seule commande sur l'hôte Proxmox branche ses dépôts sur loco, au choix **sans abonnement** (gratuit, mis en cache) — recommandé — ou **entreprise** (abonnement requis, en direct HTTPS). Debian et le dépôt sans-abonnement passent par le cache ; `--trust-ca` pour le premier branchement, `--remove` pour revenir en arrière.
+- **Les dépôts Proxmox sont remplacés, jamais dupliqués** : le script repère le dépôt Proxmox VE où qu'il soit — fichiers `.sources` (deb822, Proxmox 9) comme anciens `.list` dans `sources.list.d` et `sources.list` — le retire et écrit un unique `loco-proxmox.sources` avec la variante choisie. Les dépôts Debian et Ceph ne sont pas touchés.
+
+## 2.43.0 — 2026-10-23
+
+- **Carte « Agent invité QEMU » visible sur l'appliance** : l'appliance tourne sous Alpine (sans systemd), où la détection de VM échouait, donc le bouton d'installation restait caché. loco reconnaît maintenant une VM QEMU/KVM par son fabricant DMI. La carte (page *Système*) est désormais toujours présente, avec un message clair selon le serveur : installer sur une VM QEMU, « horloge/virtualisation gérée par l'hôte » dans un conteneur, « non applicable » sur un serveur physique.
+
+## 2.42.0 — 2026-10-23
+
+- **Heure du serveur, NTP dans les conteneurs** : sur un serveur conteneurisé (LXC), la carte *Système › Heure du serveur* indique désormais que l'horloge vient de l'hôte (la synchronisation NTP se règle sur l'hôte) au lieu d'un interrupteur sans effet ; sur une vraie VM ou un serveur physique, le réglage du serveur NTP amont fonctionne normalement.
+- **Agent invité QEMU pré-installé sur l'appliance** : l'ISO installe et active désormais `qemu-guest-agent` d'office (l'appliance tourne toujours en VM Proxmox/QEMU) — arrêt propre, adresses IP dans Proxmox et sauvegardes cohérentes marchent dès l'installation. Sur les autres serveurs, la carte *Système › Agent invité QEMU* permet toujours de l'installer en un clic.
+
+## 2.41.0 — 2026-10-23
+
+- **Heure du serveur** (page *Système*) : choisir le **fuseau horaire** du serveur et, si on le souhaite, **synchroniser l'horloge sur un serveur NTP** amont (le serveur devient client NTP, il n'en héberge pas). Appliqué par l'agent — `timedatectl` pour le fuseau, `systemd-timesyncd` (Debian/Ubuntu) ou `chrony` (Red Hat) pour le NTP.
+- **Agent invité QEMU** (page *Système*) : quand loco tourne dans une VM Proxmox/QEMU, une carte affiche l'état de `qemu-guest-agent` et permet de l'**installer en un clic** (arrêt propre, adresses IP dans Proxmox, gel des fichiers pour des sauvegardes cohérentes). Masquée sur les conteneurs et le matériel physique.
+
+## 2.40.0 — 2026-10-22
+
+- **Page *Réglages du parc* plus claire** : la carte de l'adresse du serveur affiche l'adresse actuelle avec une pastille de confirmation (« 3/3 agents l'ont confirmée ») et replie le mode d'emploi dans un « Comment changer l'adresse sans perdre les postes ? » en trois étapes ; une adresse annoncée en attente de bascule a son propre encart. Le seuil des pastilles gagne une légende de couleurs (à jour · 1 à N · N ou plus), et la clé d'inscription affiche un aperçu masqué.
+
+## 2.39.0 — 2026-10-22
+
+- **MSI Windows prêt à l'emploi** : « Télécharger le MSI » depuis la page *Enrôlement* donne désormais un installeur tout prêt — un **double-clic installe le service ET inscrit le poste**, sans aucune commande, comme le paquet `.deb` sous Linux. Le portail grave l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité dans le MSI au téléchargement. La commande PowerShell et le déploiement en masse (GPO) restent disponibles sous « Autres méthodes » (MSI générique, sans inscription).
+- **Mises à jour depuis GitLab** : loco peut tirer ses versions d'un **projet GitLab** (y compris un GitLab interne), pas seulement de GitHub. Dans *Mises à jour › Source des mises à jour*, indiquez `owner/repo` (GitHub) ou l'URL d'un projet GitLab. Section retravaillée, plus lisible.
+- **Compteur de mises à jour de sécurité** du parc : au lieu d'un « dont N sécurité » en rouge, une **pastille bouclier** discrète, sur la liste du parc et la fiche de chaque poste.
+
+## 2.38.0 — 2026-10-22
+
+- **Vue d'ensemble plus lisible** : les tuiles (caches, Processeur, Mémoire, Disque) s'enroulent au lieu d'être tassées sur une seule ligne, donc plus de valeurs coupées. La tuile **Mémoire** montre désormais un **pourcentage** d'utilisation (comme le Processeur) avec « utilisée sur totale » en dessous, au lieu d'un nombre d'octets tronqué.
+- **Terminal des postes Linux comme un vrai terminal** : la session ouvre une **invite colorée** par défaut (`utilisateur@poste : chemin`) quand le poste n'en a pas, pour une vraie allure de terminal dès l'ouverture. Le `.bashrc` du poste reste prioritaire : s'il définit déjà une invite colorée (ou un `PROMPT_COMMAND`), c'est la sienne qui s'affiche.
+
+## 2.37.0 — 2026-10-22
+
+- **Processeur et mémoire du serveur dans la vue d'ensemble** : deux tuiles, à côté de « Disque », montrent la charge du serveur sur lequel tourne loco — **Processeur** (pourcentage d'utilisation, charge sur 1 min et nombre de cœurs) et **Mémoire** (utilisée sur totale), avec une jauge (orange puis rouge quand ça se remplit). Les valeurs s'actualisent en direct comme le reste de la page. Lues sur le serveur (`/proc`) ; masquées si indisponibles.
+
+## 2.36.0 — 2026-10-22
+
+- **Terminal des postes repensé** (shell Linux comme PowerShell Windows, même affichage) : vraie palette ANSI 16 couleurs lisible, accordée au thème choisi (OLED, sombre, clair — fond blanc et couleurs adaptées en thème clair) ; le curseur et la sélection reprennent votre couleur d'accent et se mettent à jour en direct quand vous changez de thème ou d'accent. Police à chasse fixe moderne, interligne plus aéré et défilement doux pour les longues sorties, fond accordé à la surface (plus de liseré autour de la marge) et ascenseur fin et discret. Les boutons **A− / A+** règlent la taille du texte, mémorisée dans le navigateur.
+
+## 2.35.0 — 2026-10-22
+
+- **Page Mises à jour entièrement traduite** : l'agent d'administration (`locoadmin`) renvoie désormais un état structuré (codes) que le portail met en mots dans la langue de chaque personne — résumé, raisons de redémarrage, erreurs. Les journaux d'opération (vérification, mise à jour, redémarrage) suivent la langue du serveur (français, espagnol ou anglais selon sa locale), en anglais par défaut.
+
+- **Adresses (URL) des pages en anglais**, identiques quelle que soit la langue choisie, pour une navigation uniforme : `/fleet`, `/accounts`, `/log`, `/system/updates`, `/enrollment`… (avant `/parc`, `/comptes`, `/journal`, `/systeme/mises-a-jour`, `/enrolement`). Les liens internes suivent automatiquement ; les adresses servies aux postes (dépôts, agents, scripts d'installation) ne changent pas.
+
+- **Mise à jour de loco plus simple**, depuis la page *Mises à jour* : le bouton d'installation de la version publiée vaut désormais pour **tout serveur Linux** (systemd), et plus seulement pour l'appliance Alpine — l'archive est vérifiée (SHA-256) puis installée, avec retour automatique à la version précédente en cas d'échec. Une section **Dépôt GitHub** permet de pointer les mises à jour vers un autre dépôt « owner/repo » (par exemple votre fork) et de revérifier ; le choix est gardé dans `loco.conf` (et conservé d'une mise à jour à l'autre). Réglable aussi à l'installation avec `--github-repo owner/repo`.
+
+- **Sélecteur de langue dédié** : une icône globe, en haut à droite et sur l'écran de connexion, ouvre un menu *Français / English / Español* accessible depuis n'importe quelle page. Le choix de langue sort du menu *Apparence* (palette) pour devenir une action d'un seul clic.
+
+- **Mise à niveau depuis une ancienne version** : les motifs de redémarrage et erreurs déjà en cache restent lisibles sur la page Mises à jour et en console, jusqu'à la prochaine vérification par l'agent.
+
+
+## 2.34.0 — 2026-10-21
+
+- **Portail multilingue (français, anglais, espagnol)** : chaque personne choisit **Français**, **English** ou **Español** dans le menu *Apparence* (icône palette, en haut à droite, aussi sur l'écran de connexion) ; le choix est gardé dans son compte. Sans choix, le portail suit la langue du navigateur. Tout est traduit : pages, fenêtres, confirmations, messages après une action et erreurs, libellés (droits, journal, états, récurrences, profils intégrés), gestionnaire de fichiers, console à distance, recherche Ctrl+K. Dates, tailles (Go/GB, virgule ou point décimal) et nombres suivent la langue ; les récurrences des planifications sont rédigées dans l'ordre de chaque langue (« Every Tuesday and Thursday at 02:00 », « Cada martes y jueves a las 02:00 »).
+- **Scripts des postes multilingues** : les commandes servies aux postes (configuration APT `setup.sh`, RPM `rpm-setup.sh`, Flatpak, installation de logiciels Windows `install.ps1`, zones DNS, agents Linux et Windows) écrivent leurs messages dans la langue du poste — français, espagnol ou anglais selon le système (`LANG` sous Linux, langue d'affichage de Windows). Le serveur place les trois versions dans le script ; la commande affichée dans le portail ne change pas.
+- **Agents multilingues** : l'agent Linux (`loco-client`) et l'agent Windows (service, infobulle et fenêtre du compagnon de bureau, console et fichiers à distance) s'expriment dans la langue du poste (français, espagnol ou anglais) : état affiché, journal, messages renvoyés au portail (résultats d'action), messages de redémarrage.
+- **Serveur en trois langues** : l'installateur (`install.sh`, `remove.sh`), la console de l'appliance (`setup-loco`, installateur de l'ISO, bannière de connexion) et les outils d'administration (`loco-user`, `loco-fleet`, `loco-backup`…) suivent la langue du serveur (`LANG`).
+- Le français reste la langue de référence : les textes du code servent de clés, l'anglais est dans `portal/i18n/en.json` et l'espagnol dans `portal/i18n/es.json`. Un test refuse tout texte affiché sans sa traduction anglaise **et** espagnole, avec les mêmes valeurs à insérer.
+
+## 2.33.0 — 2026-10-21
+
+- **Paquets Linux plus clairs** : la page est en deux parties. **Brancher un poste Linux**, en trois étapes valables pour toutes les familles : le système du poste (Debian, Ubuntu ou Rocky, AlmaLinux, RHEL), ce que loco lui fournit (cache et vos dépôts, vos dépôts seulement, cache seulement, ou retirer loco), avec les options EPEL et « le poste n'a pas encore l'autorité de loco » en cases à cocher ; la commande à copier se compose seule. Puis **Vos dépôts** : la barre des versions, l'ajout de paquets au dépôt affiché et la liste. En tête, les tailles des deux caches, vos paquets et les postes Linux du parc. Cas particuliers (distributions dérivées, `wget`, clés, miroirs) regroupés.
+- **Scripts** : compteurs (bibliothèque, postes en attente, exécutions avec échecs) ; bibliothèque filtrable (recherche, Windows / Linux) ; historique des 100 dernières exécutions avec filtres (en cours, avec échecs, réussies) et état de chaque exécution. **Vider la file** annule tous les envois pas encore reçus par les postes (planifiés compris), **Tout vider** supprime l'historique des exécutions terminées (celles en cours sont gardées), et chaque exécution terminée se retire de l'historique (aussi depuis sa page, qui propose en plus « Relancer… »). Le Journal garde la trace de ces nettoyages.
+
+## 2.32.0 — 2026-10-21
+
+- **Ajouter / modifier un logiciel Windows** : fenêtre réorganisée en étapes (installeur, puis nom et version), le type est **détecté** depuis le lien ou le fichier, et les réglages rarement utiles (type, arguments silencieux, nom dans Windows) sont repliés dans « Options d'installation », avec leur résumé. Pour un `.exe` sans arguments silencieux, les options s'ouvrent seules avec un avertissement (sinon l'installation attend un clic sur chaque poste).
+- **Toutes les fenêtres** : titre et boutons restent visibles, seul le contenu défile ; fermeture par une croix ; un seul anneau de focus sur les champs (fini le double contour).
+- **Paquets Linux : APT et RPM sur une seule page** (*Linux › Paquets*, qui remplace « Paquets APT » et « Paquets RPM ») : une barre réunit tous les dépôts, groupés par famille (Debian, Ubuntu · Red Hat), avec leur nombre de paquets ; un clic change de version au lieu d'une liste et d'un bouton « Afficher ». Le reste suit la famille choisie : cache (APT ou miroirs Red Hat), commande de branchement (`apt` ou `dnf`, option EPEL), ajout de `.deb` ou de `.rpm`. « + Nouveau dépôt » crée un dépôt Debian, Ubuntu ou Red Hat depuis la même fenêtre. Les adresses `/linux` et `/rpm`, les scripts des postes et les droits distincts APT / RPM ne changent pas.
+- Liste des paquets en pleine largeur, avec la **description** de chaque paquet, sa date d'ajout et des actions en icônes (télécharger, copier vers un autre dépôt, supprimer) ; nombre de **postes du parc** sur la version affichée ; état vide explicatif ; options de branchement et miroirs regroupés.
+
+## 2.31.0 — 2026-10-21
+
+Interface plus moderne et plus rapide à parcourir, dans les trois thèmes :
+
+- **Profondeur** : la page a un fond légèrement teinté et le contenu est posé sur des cartes blanches (ou anthracite) aux coins plus arrondis, avec une ombre douce ; les indicateurs deviennent des tuiles séparées. Titres, marges et tableaux plus aérés.
+- **Navigation** : l'élément actif de l'en-tête est une pastille (son icône prend la couleur d'accent) ; les sous-menus (Mon parc, Administration, Logiciels) forment une barre où la page en cours ressort comme une carte ; onglets des fiches en pastilles ; filtres en pastilles arrondies, le filtre actif en plein.
+- **Aller à une page (Ctrl+K)** : bouton loupe dans l'en-tête ; une fenêtre de recherche liste toutes les pages accessibles (y compris Groupes, Déploiements, Scripts, Planifications, Centre de logiciels…) et s'ouvre en tapant quelques lettres, flèches et Entrée. **« / »** place le curseur dans la recherche de la page (parc, catalogue, journal…).
+- **Lignes cliquables** : dans les listes du parc, des scripts, des déploiements et des groupes, un clic n'importe où sur la ligne ouvre l'élément (Ctrl+clic : nouvel onglet) ; boutons, cases et liens de la ligne gardent leur action.
+- Boutons, champs et menus un peu plus grands et plus arrondis, fenêtres de dialogue au fond flouté, écran de connexion sur un dégradé discret.
+
+## 2.30.0 — 2026-10-21
+
+- **Mises à jour du système du serveur depuis le portail**, sur toutes les installations Linux (Debian, Ubuntu, Rocky Linux, et l'appliance Alpine qui l'avait déjà) : *Administration → Mises à jour* liste les paquets en attente (noyau, OpenSSL, Squid, nginx, Python, glibc…), avec les **correctifs de sécurité en tête** (dépôt `-security` de Debian/Ubuntu, avis de sécurité DNF avec leur gravité sur Rocky) et les paquets importants repérés (« noyau », « service loco », « socle »). Filtres et recherche dans la liste.
+- **Installer les correctifs de sécurité** seuls ou **tout mettre à jour** ; les fichiers de configuration posés par loco sont conservés, et les services de loco qui utilisent encore d'anciennes bibliothèques (portail, nginx, Squid, apt-cacher-ng) sont relancés automatiquement. Le journal de chaque opération s'affiche en direct.
+- **Redémarrage** : la page indique pourquoi il est nécessaire (nouveau noyau installé, demande d'un paquet, bibliothèques remplacées encore chargées par le système) et les services qui utilisent d'anciennes bibliothèques ; bouton *Redémarrer le serveur*. Dans un conteneur LXC, le noyau est signalé comme géré par l'hôte.
+- Vérification automatique chaque jour et au redémarrage. En console : `loco-update status|check|security|system|reboot`. Les opérations passent par un agent root séparé (`loco-agent`, service systemd désormais installé partout) qui revalide chaque demande : le portail reste sans privilèges.
+
+## 2.29.2 — 2026-10-21
+
+Passe de sécurité et de fiabilité :
+
+- **Proxy Windows Update jamais envoyé sans Squid** : sur une installation `--no-wu` ou un serveur loco sous Windows (pas de proxy-cache), la fonctionnalité « Proxy Windows Update », active par défaut depuis 2.26, poussait quand même le proxy aux postes Windows, dont les mises à jour échouaient. Le portail sait désormais si Squid est installé ; sinon la fonctionnalité est coupée, la page *Windows Update* l'indique et la commande manuelle n'est plus proposée.
+- **Agent Windows : le proxy est réellement retiré quand loco ne répond plus** (annoncé en 2.25 mais absent) : après trois contacts manqués d'affilée (environ 6 min), ou si loco refuse le poste, le proxy WinHTTP posé par loco est retiré et Windows Update repasse en direct ; il est reposé au premier contact réussi.
+- **Squid durci** : le proxy refuse de relayer vers le serveur lui-même (127.0.0.0/8, ::1) et vers le lien local (169.254.0.0/16, fe80::/10), pour qu'un poste ne puisse pas atteindre par rebond les services internes de loco.
+- **Gestionnaire de fichiers** : les champs renvoyés par l'agent (type, droits, dates) sont validés et échappés avant affichage, pour qu'un poste compromis ne puisse rien injecter dans la page (déjà bloqué par la politique de sécurité du contenu, désormais aussi à la source).
+- **Planifications** : la personne qui modifie ou reprend une planification en devient responsable (ses droits sont revérifiés à l'envoi aux postes, son nom figure au journal), au lieu de l'auteur d'origine.
+
+## 2.29.1 — 2026-10-21
+
+- Gestionnaire de fichiers : le fil d'Ariane ne double plus le « / » de la racine (« / root » au lieu de « / / root »), et un dossier qui ne contient que des fichiers cachés n'est plus annoncé « vide » : le nombre d'éléments cachés est indiqué, avec un lien pour les afficher.
+
+## 2.29.0 — 2026-10-21
+
+- **Planifications repensées, et récurrentes** : nouvel onglet *Mon parc → Planifications* (liste avec action, cibles, récurrence en clair, prochaine et dernière exécution, état ; modifier, mettre en pause, reprendre, supprimer). Mises à jour et scripts se planifient **une fois, chaque jour, chaque semaine** (jours au choix) **ou chaque mois** (jour fixe ou dernier jour du mois), sur tout le parc, des groupes (membres résolus à chaque exécution) ou des appareils. Un composant « Quand » commun (choix segmenté, jours en pastilles, résumé en clair avec la prochaine exécution) remplace les champs date/heure. En contexte : bouton calendrier à côté de *Mettre à jour* sur la fiche d'un poste et *Planifier…* à côté de *Tout mettre à jour* (fenêtre de planification), choix « Maintenant / Planifier » à l'exécution d'un script ; la fiche d'un poste affiche les planifications qui le concernent.
+- Une planification due devient une action au prochain contact des agents ; les occurrences manquées ne s'accumulent pas. Un script modifié depuis sa planification la met en pause (reprise avec la version actuelle, à la demande). Les droits de l'action planifiée sont exigés à la création et revérifiés à l'envoi. Les planifications ponctuelles de la 2.24 (champ date/heure) sont remplacées par ce système.
+
+## 2.28.0 — 2026-10-20
+
+- **Icônes œil / œil barré** pour afficher ou masquer : sur tous les champs de mot de passe (connexion, premier mot de passe, compte, annuaires), et à la place de la case « Fichiers cachés » du gestionnaire de fichiers.
+- **Windows Update, dernières requêtes** : seuls les postes Windows sont nommés (un poste Debian partageant l'adresse n'apparaît plus). Derrière un NAT, quand plusieurs postes Windows ont la même adresse vue par loco, tous sont nommés (« pc-a ou pc-b ») avec la mention « adresse partagée (NAT) », au lieu d'en choisir un au hasard.
+- Gestionnaire de fichiers : la barre d'outils ne touche plus les bords du panneau.
+
+## 2.27.0 — 2026-10-20
+
+- **Nouveau logo de l'application** (bâtiment, main et souris) : vectorisé (SVG), fond transparent, il prend la couleur du thème (clair, sombre doux, OLED) et suit la couleur d'accent choisie. Il remplace le carré dans la barre de navigation et apparaît en grand sur les écrans de connexion et de premier mot de passe. L'icône de l'onglet du navigateur utilise le même logo et s'adapte au mode clair ou sombre du navigateur.
+
+## 2.26.0 — 2026-10-20
+
+- **Proxy Windows Update activé par défaut**, et réglable dans *Administration › Fonctionnalités* (« Proxy Windows Update (sans DNS) »). Les postes Windows gérés sont dirigés vers le cache par leur proxy WinHTTP dès l'installation, sans aucune redirection DNS ; couper la fonctionnalité fait retirer le proxy par les agents. La page *Windows Update* montre l'état au lieu d'un interrupteur dédié.
+- **Gestionnaire de fichiers** : correction du bouton vide (« Coller ») qui apparaissait dans la barre, et démarrage à la **racine du disque système (`C:\`)** sous Windows (toujours `/root` sous Linux, l'agent agissant en root/SYSTEM avec tous les droits).
+
+## 2.25.0 — 2026-10-20
+
+- **Cache Windows Update par proxy, sans DNS** : loco embarque un proxy-cache (Squid) atteint par le réglage **proxy WinHTTP** des postes Windows. Nouvelle alternative à la redirection DNS : sur la page *Windows Update*, un interrupteur « Diriger les postes gérés » fait régler par l'agent loco le proxy WinHTTP de chaque poste Windows vers loco (par poste, réversible, l'agent le retire s'il n'arrive plus à joindre loco ou au retrait de l'agent) ; aucune zone DNS à éditer. Le proxy met en cache les mêmes fichiers immuables (HTTP) et relaie le HTTPS sans le déchiffrer — même couverture que la voie DNS. La commande manuelle (`netsh winhttp set proxy …`) est aussi proposée sur les pages *Windows Update* et *Enrôlement*. Le service est installé avec le cache Windows Update (option `--wu-proxy-port`, 3128 par défaut) sur Debian/Ubuntu, Rocky/AlmaLinux, Alpine, l'ISO et le conteneur, et apparaît dans la page *Système*. Validé en réel : Windows Update d'un poste passe par le proxy (recherche et téléchargement), fichier WU mis en cache (MISS puis HIT), et installation complète de loco amenant Squid actif.
+
+## 2.24.0 — 2026-10-20
+
+- **Planification ponctuelle des mises à jour et des scripts** : choisir une date et une heure (heure du serveur) au lieu de « au prochain contact ». La commande reste en attente et n'est transmise à l'agent qu'à partir de l'instant choisi. Disponible pour *Mettre à jour* (un poste depuis sa fiche, via « Planifier une mise à jour »), *Tout mettre à jour* (parc ou groupe) et l'exécution d'un script (page d'exécution). Une action planifiée en attente peut être **annulée** avant d'être transmise (bouton *Annuler* sur la fiche du poste, *Annuler les postes en attente* pour un script). La fiche du poste et le suivi d'exécution affichent l'instant planifié. Champ laissé vide = comportement actuel (dès le prochain contact).
+
+## 2.23.0 — 2026-10-20
+
+- **Gestionnaire de fichiers du poste** (onglet *Fichiers* de la fiche d'un appareil) : parcourir l'arborescence, téléverser (bouton ou glisser-déposer), télécharger, créer un dossier, renommer, copier, déplacer, supprimer, modifier un fichier texte dans l'éditeur intégré, et ajuster les droits (octal) sous Linux. Fil d'Ariane, raccourcis vers la racine et le dossier personnel, affichage optionnel des fichiers cachés et progression par transfert. Comme les terminaux et le bureau, tout passe par le relais HTTPS — l'agent exécute chaque opération en root (SYSTEM sous Windows) et le serveur ne se connecte jamais au poste ; aucune adresse ni aucun jeton de poste n'arrive au navigateur. Nouveau droit *Gérer les fichiers du poste* (réservé à l'administrateur par défaut), agent 2.23 minimum ; le rafraîchissement automatique de la fiche est suspendu tant que l'onglet est ouvert, pour ne pas interrompre un transfert ou une édition.
+
+## 2.22.0 — 2026-10-20
+
+- **Paquet « agent et dépôts »** (page Enrôlement, Debian/Ubuntu et Rocky/AlmaLinux/RHEL) : le même paquet `loco-client` confie l'autorité de loco au système, branche le poste sur le cache et le dépôt local de sa version — le cache seul si ce dépôt n'existe pas encore — puis installe l'agent. C'est désormais le choix recommandé ; « agent seul » reste proposé. Sa version est un cran au-dessus (`+depots`, `1.depots`) : passer de l'agent seul au paquet complet est une mise à jour qui conserve l'inscription du poste, et désinstaller le paquet complet retire aussi la configuration des dépôts (dépôts du système rétablis sur Red Hat). Les scripts de dépôts gagnent l'option `--from-package` (aucun appel à APT ni à DNF, occupés par l'installation). Validé par des installations, mises à jour et désinstallations réelles sur Debian 13 et Rocky Linux 9.
+- **Paquets de l'agent servis aussi en HTTP** (port d'amorçage), comme le script : les commandes « autorité pas encore importée » de la page Enrôlement fonctionnent.
+- **Agent Red Hat** : l'inventaire (`dnf check-update`, `updateinfo`) accepte l'import de la clé d'un dépôt signé ajouté depuis ; sans terminal, dnf refusait et signalait à tort une « mauvaise signature » jusqu'à ce que quelqu'un lance dnf à la main.
+- **Comptes : origine de la dernière connexion** — sous la date, l'adresse depuis laquelle le compte s'est connecté en dernier (vue par loco), et un lien vers l'historique de ses connexions dans le Journal. L'adresse est enregistrée à chaque connexion ; pour les comptes existants, elle est reprise du journal (`loco-user list` l'affiche aussi). La liste des comptes passe à la ligne au lieu de rogner les actions.
+- **Page Système repensée** : bilan en tête (services actifs, jours de validité du certificat, disque, dernière sauvegarde avec alerte si la sauvegarde quotidienne manque, version), service arrêté et certificat absent signalés en haut de page ; panneaux appariés (services et sauvegardes, certificat et autorité, emplacements et versions) ; bouton de téléchargement de l'autorité et commandes d'import par système, Rocky / AlmaLinux / RHEL compris.
+
+## 2.21.0 — 2026-10-20
+
+- **Page Enrôlement** (barre de navigation) : tout ce qui rattache un poste à loco, un onglet par système (Windows ; Debian, Ubuntu ; Rocky, AlmaLinux, RHEL), en étapes numérotées — installer l'agent, configurer les dépôts et caches (APT, DNF, Flatpak), Windows Update et logiciels du catalogue sous Windows. Elle remplace le bloc « Brancher un poste » de la vue d'ensemble et la fenêtre « Ajouter un poste » de Mon parc (dont le bouton mène désormais à la page). Chaque section suit les droits et fonctionnalités du compte ; la clé d'inscription reste réservée au droit d'inscription.
+- **Paquets .deb et .rpm de l'agent**, produits par loco pour ce serveur (adresse, autorité épinglée et clé d'inscription incluses) : `sudo apt install ./loco-client_<version>_all.deb` ou `sudo dnf install ./loco-client-<version>-1.noarch.rpm` inscrit le poste aussitôt, et désinstaller le paquet retire l'agent. Le paquet ne contient que le script d'installation (l'agent se met ensuite à jour seul). Validés avec dpkg-deb, rpm 4.14 et 4.16 (empreintes d'en-tête et de charge utile), puis par une installation et une désinstallation réelles sur Debian 13 et Rocky Linux 9.
+
+## 2.20.1 — 2026-10-20
+
+- **Disponibilité et mises à jour distinctes dans Mon parc** : près du nom du poste, une pastille verte indique un contact de l’agent dans les six dernières minutes (trois cycles habituels) et une rouge l’absence de contact récent. Le voyant du volume de mises à jour se trouve désormais dans la colonne *Mises à jour*. La fiche reprend la disponibilité près du nom et le bilan des mises à jour près des compteurs. Le passage hors ligne est pris en compte par le rafraîchissement automatique, même sans nouvelle activité du poste.
+- Les échanges du relais distant et les résultats d’actions maintiennent aussi le poste en ligne pendant une longue opération. L’horodatage est enregistré au plus une fois par cycle de contact pour éviter une écriture à chaque image noVNC.
+
+## 2.20.0 — 2026-10-20
+
+- **Réseau en direct sur la vue d'ensemble** : débits entrant et sortant du serveur, relevés toutes les 2 secondes sur l'interface de la route par défaut (à défaut, les interfaces physiques), avec le pic et la courbe des 2 dernières minutes (échelle commune aux deux sens, valeur d'un instant au survol). Le débit est calculé dans le navigateur entre deux relevés des compteurs : rien n'est mesuré ni conservé quand la page n'est pas affichée. Linux (`/proc/net/dev`) et serveur Windows natif (compteurs 64 bits de l'API `GetIfEntry2`, vérifiés en CI contre `Get-NetAdapterStatistics`).
+- **Icônes de retour dans la barre de navigation**.
+- Captures du README mises à jour.
+
+## 2.19.0 — 2026-10-20
+
+- **Interface repensée, sobre et cohérente** : un vrai système de design remplace les ajouts successifs — échelle typographique resserrée (12 à 24 px), espacements sur une grille de 4 px, rayons 6 px (commandes) et 8 px (panneaux), une seule ombre pour les éléments flottants. Police à chasse fixe réservée au code (commandes, chemins, adresses, versions, empreintes) : noms de postes, dates, comptes, compteurs et valeurs des indicateurs passent en police normale. Libellés des indicateurs en minuscules au lieu de capitales espacées, liens non soulignés hors du texte courant, navigation principale sans icônes sur grand écran, en-tête translucide.
+- **Vue d'ensemble** : état du parc en barre segmentée avec la liste des états (au lieu de l'anneau), occupation du disque en lignes avec des barres d'une seule teinte (au lieu de la barre arc-en-ciel), graphique Windows Update en deux tons d'un même bleu (palette vérifiée pour le contraste et le daltonisme). « Activité récente », qui listait en fait les ajouts au catalogue, devient « Derniers ajouts ».
+- **États nommés partout pareil** : À jour, Mises à jour en attente, À traiter, État inconnu — sur la vue d'ensemble, Mon parc, la fiche d'un poste et les groupes.
+- **Ergonomie** : liste du parc en cartes sur mobile (plus de défilement horizontal) ; option « Redémarrer si nécessaire » présentée comme un bouton ; filtres et recherche des paquets sur une seule barre ; zones de dépôt de fichiers en français avec un bouton « Parcourir… » au lieu du champ natif ; chevrons discrets à la place des triangles natifs ; confirmation en bouton principal, rouge seulement pour les actions destructrices (supprimer, retirer, redémarrer…) ; filtres sélectionnés marqués sans aplat d'accent ; pastilles d'état teintées ; en-têtes de colonnes numériques alignés.
+
+## 2.18.0 — 2026-10-20
+
+- **Paquets installés des postes Linux** (*Mon parc › fiche du poste*) : l'agent Linux remonte maintenant les paquets installés (nom, version, architecture, taille), les applications Flatpak et les caractéristiques du poste (processeur, mémoire, disque, noyau, architecture, virtualisation, démarrage). Un onglet *Paquets installés* les liste, avec une recherche et des filtres (tous, installés volontairement, à mettre à jour — la version candidate est alors montrée en vis-à-vis) ; un onglet *Flatpak* et un bloc *Caractéristiques* dans *Détails* complètent la fiche. L'inventaire détaillé est rangé dans une table à part, pour que la liste du parc reste légère. Debian/Ubuntu (`dpkg-query`/`apt-mark`) et Red Hat (`rpm`/`dnf repoquery`) ; relevé au rythme habituel de l'inventaire et refait une fois après la mise à jour de l'agent.
+- **Les déploiements vivent dans Mon parc** : un déploiement est une action sur les appareils (cibles, avancement poste par poste), comme les scripts. L'onglet *Déploiements* de Mon parc reste désormais dans Mon parc (sous-menu du parc, entrée « Mon parc » active) au lieu de basculer vers Windows. *Windows › Logiciels* garde le catalogue local, le centre de logiciels et les groupes de logiciels ; leurs boutons *Déployer* ouvrent la préparation dans Mon parc. Nouvelles adresses `/parc/deploiements…` ; les anciennes (`/windows-apps/deploiements…`, `/windows-apps/deployer`) redirigent, paramètres compris.
+- L'entrée « Mon parc » est aussi active sur les pages Scripts.
+
+## 2.17.1 — 2026-10-20
+
+- **Résolution du poste toujours rétablie à la fermeture de la console** (agent Windows) : en 2.17.0, quand le navigateur fermait la session pendant qu'une demande d'image attendait un changement d'écran, le compagnon de bureau ne voyait pas la fermeture du canal ; il était arrêté de force au bout de 5 secondes, sans rétablir la résolution d'origine (le poste restait par exemple en 848 × 480). Le canal fermé est maintenant constaté aussitôt : le compagnon se termine proprement et rend la résolution initiale. Vérifié sur une suite de sessions avec changements de résolution, plein écran et zoom.
+
+## 2.17.0 — 2026-10-20
+
+- **Console noVNC plus réactive** (agent Windows 2.17) : l'écran est lu par **duplication DXGI** — seulement quand il change, avec les zones modifiées — au lieu d'une capture GDI complète à chaque image (≈ 180 ms sur une machine virtuelle). Le compagnon garde la demande d'image tant que rien ne bouge et y répond dès le premier changement, sans retarder la saisie ; plus aucun échange ni calcul sur un bureau immobile (≈ 1 % d'un cœur contre ≈ 35 %). GDI prend le relais sur le bureau sécurisé, avec plusieurs écrans ou un pilote sans duplication, et la duplication est rouverte aussitôt après un changement de mode. Tampons réutilisés, au plus ~30 images par seconde. Mesuré sur la VM de démonstration : saisie → image modifiée de 257 à ~135 ms (pire cas 641 → ~250 ms), image complète de 310 à ~85 ms.
+- **Relais plus court** : l'agent repart dès qu'une image est prête (en un seul échange) et, session ouverte, relance toutes les 12 ms (aller-retour pur du relais 48 → 33 ms) ; les transactions du relais, éphémères, ne forcent plus d'écriture disque à chaque requête (coût par requête 5,4 → 2,1 ms), le reste de loco gardant sa durabilité complète ; décodage base64 plus rapide dans le navigateur, interrogation espacée après une seconde de calme.
+- **Plus d'ascenseurs en résolution adaptée** (y compris en sortant du plein écran) : l'image est toujours ajustée à la fenêtre, et le zoom y agrandit l'interface du poste sans défiler. En résolution du poste, le zoom agrandit l'image, avec des ascenseurs fins. Réglages d'affichage mémorisés par navigateur ; « Ajuster » par défaut.
+- **Curseur unique et net** : sur les machines dont le pilote n'a pas de curseur matériel (VM, adaptateur de base), Windows dessine le curseur dans l'image ; l'agent le reconnaît et le navigateur n'affiche plus qu'un point de repère au lieu d'une seconde flèche décalée. Le curseur suit l'échelle du bureau affiché (zoom, ajustement).
+- **Console repensée** : pastille d'état avec la latence vers le serveur (reprise dans le rail en plein écran), superposition de connexion puis de fin de session avec « Nouvelle session » en un clic, boutons à icônes, touches maintenues façon touches de clavier, libellés réduits aux icônes sur fenêtre étroite. En plein écran, un clic sur le bureau replie le rail de commandes.
+- **Presse-papiers** : option d'envoi automatique du presse-papiers local au poste à chaque clic sur le bureau (autorisation du navigateur demandée une fois).
+- Un arrêt anormal du compagnon de bureau est tracé dans le journal de l'agent ; une capture en échec retombe sur GDI au lieu de fermer la session.
+
+## 2.16.0 — 2026-10-19
+
+- **Console noVNC — plein écran repensé (bureau)** : l'image du poste occupe **tout l'écran**, sans en-tête. Les commandes (résolution, zoom, Ctrl+Alt+Suppr, raccourcis, touches maintenues, envoi de texte, presse-papiers, nouvel onglet, fermeture) passent dans un **rail latéral gauche rétractable** ; une poignée au bord de l'écran le déploie ou le replie.
+- **Curseur du poste corrigé en plein écran** : le curseur logiciel de secours de noVNC (utilisé notamment sur les postes tactiles) était rendu hors de l'élément plein écran — donc **invisible en plein écran** et **décalé au retour**. Il est maintenant replacé dans la console le temps du plein écran, puis rétabli : curseur visible et aligné dans les deux cas.
+- Le plein écran est piloté par une classe posée au changement d'état (indépendant du moteur) ; le plein écran du terminal est inchangé.
+
+## 2.15.0 — 2026-10-19
+
+- **Console noVNC — affichage repensé** : deux menus indépendants façon RDP. *Résolution* (Adaptée à la fenêtre, qui change la résolution Windows pour suivre la fenêtre en pixels physiques, ou Résolution du poste, qui garde et rétablit celle d'origine) et *Zoom* (Ajuster, ou 50/75/100/125/150/200 % avec défilement ; le pointeur reste juste à tout zoom car l'échelle propre de noVNC est pilotée). La résolution et le pourcentage obtenus restent affichés. Le bureau se centre, se défile dans les deux sens et remplit proprement la fenêtre sans bandes noires inutiles.
+- **Compression JPEG adaptative du bureau** (agent Windows 2.15) : les zones complexes (photos, dégradés, fonds d'écran) sont envoyées en JPEG (sous-encodage Tight standard, décodé par noVNC), tandis que le texte, les aplats et les icônes restent **sans perte** (Tight zlib). Beaucoup moins de bande passante et un bureau plus fluide, sans perte visible sur l'interface. Repli automatique sur le zlib sans perte si l'encodeur n'est pas disponible.
+- **Presse-papiers texte partagé** (agent Windows 2.15) : panneau *Presse-papiers* de la console. Le texte copié sur le poste s'affiche dans le navigateur (et, si celui-ci l'autorise, est recopié dans le presse-papiers local) ; *Envoyer au poste* place un texte dans le presse-papiers du poste pour l'y coller (Ctrl+V). Accents conservés (Latin-1), fins de ligne normalisées, taille bornée. Uniquement sur le bureau utilisateur, jamais sur le bureau sécurisé ; rien n'est conservé par loco.
+
+## 2.14.0 — 2026-10-19
+
+- **Annuaires LDAP et RADIUS à la place d'OpenID Connect** (*Administration › Annuaires*) : connexion depuis le formulaire habituel de loco avec un compte **LDAP** (Active Directory, OpenLDAP, 389 DS, FreeIPA ; LDAPS ou StartTLS obligatoire, autorité PEM facultative, recherche par compte de service ou liaison directe, filtres échappés selon la RFC 4515, mot de passe vide refusé) ou **RADIUS** (PAP, secret partagé, attribut Message-Authenticator envoyé et exigé dans les réponses contre BlastRADIUS). Annuaires ordonnés, bouton **Tester** sans création de compte, secrets chiffrés et jamais réaffichés. Chaque nouvelle identité attend une **approbation manuelle** dans *Comptes* ; aucun rapprochement avec un compte local. Modifier ou désactiver un annuaire ferme les sessions de ses comptes, le supprimer les désactive. Fonctionnalité désactivable. Les comptes locaux restent toujours disponibles.
+- **OpenID Connect retiré** : les fournisseurs existants sont désactivés à la mise à jour et leurs transactions effacées ; les comptes concernés sont conservés sans accès et signalés dans *Comptes*, où **Mot de passe local** les convertit en comptes locaux. La bibliothèque PyJWT embarquée est supprimée. Droits renommés : « Gérer les annuaires », « Approuver les comptes d'annuaire ».
+- **Centre de logiciels** : le « Store WinGet » est renommé « Centre de logiciels » dans toute l'interface (adresses et droits inchangés).
+- **Profil « Opérateur »** : le profil intégré « Technicien du parc » est renommé, y compris sur les installations existantes (sauf si un profil personnalisé porte déjà ce nom).
+- **Apparence** : menu dans l'en-tête et onglet de *Mon compte* ; nouveau thème **Sombre doux** (anthracite) à côté d'OLED et Clair, et **couleur d'accent** au choix (neutre, bleu, vert, violet, orange, rose) pour les boutons principaux, sélections, onglets, focus et la navigation active. Textes secondaires plus contrastés (WCAG AA) en clair et en OLED.
+- **Scripts** (*Mon parc › Scripts*) : bibliothèque de scripts PowerShell (Windows) et shell (Linux) avec description, versions (une nouvelle à chaque changement de contenu) et auteur ; exécution sur des appareils ou groupes de machines (seuls les postes compatibles et actifs sont retenus), contenu figé et vérifié par son empreinte SHA-256 sur le poste, exécution en SYSTEM ou root avec un délai de 30 minutes ; suivi par exécution (réussis, en attente, échecs, sortie standard et erreurs, code de retour) et annulation des postes en attente. Droits distincts : consulter, gérer, exécuter (sensible, réservé par défaut aux administrateurs et revérifié avant l'envoi à l'agent). La version relue doit être celle exécutée. Fonctionnalité désactivable. Agents Windows et Linux 2.14.0 requis.
+- **Avancement des déploiements en direct** : l'agent Windows remonte l'étape en cours de chaque installation (téléchargement de l'installeur avec pourcentage, vérification de l'empreinte, installation, logiciel n/total ; mises à jour Windows pour l'action Mettre à jour), au plus une fois par seconde. La page du déploiement affiche pour chaque poste une barre de progression et l'étape (« Téléchargement de 7-Zip · 45 % · logiciel 1/3 »), rafraîchies toutes les 3 secondes ; la fiche du poste reprend l'étape dans ses actions en attente. Les étapes invalides sont ignorées ; les anciens agents gardent l'affichage par états.
+- **Fonctionnalités activables** (*Administration › Fonctionnalités*, réservé au compte local « admin » de l'installation, même pour les autres administrateurs) : Paquets APT, Paquets RPM, Flatpak, Cache Windows Update, Mon parc et agents, Logiciels Windows, Accès distant, Scripts, Annuaires. Une fonctionnalité désactivée disparaît de la navigation, des boutons et de la vue d'ensemble ; ses pages et API sont refusées avec un message explicite, ses droits deviennent inopérants, les agents reçoivent « réessayer plus tard » (503) quand le parc est coupé et les installations attendent la réactivation des logiciels Windows. Les dépendances sont appliquées (l'accès distant suit le parc). Sur l'appliance, les caches Windows Update, RPM et Flatpak sont aussi arrêtés ou relancés ; ailleurs, les services réseau restent démarrés (indiqué sur la page). Chaque changement est journalisé et les données sont conservées.
+- **Panneau de commandes de la console noVNC** : Ctrl+Alt+Suppr, raccourcis (menu Démarrer, Exécuter, Explorateur, Afficher le bureau, Verrouiller, Gestionnaire des tâches, Alt+Tab, Alt+F4, Échap, Impr. écran, menu contextuel), touches Ctrl/Alt/Maj/Win maintenues jusqu'au prochain clic, et **Envoyer du texte** tapé caractère par caractère quelle que soit la disposition du clavier du poste (mots de passe, commandes ; rien n'est conservé).
+- **Ctrl+Alt+Suppr réel sous Windows** : Windows n'accepte la séquence sécurisée que d'un service. Le compagnon de bureau la signale au service loco-client par un événement réservé à SYSTEM ; le service l'envoie (SendSAS) uniquement si une session de bureau à distance est ouverte, en autorisant la stratégie SoftwareSASGeneration le temps de l'appel puis en rétablissant sa valeur. L'écran « Sécurité Windows » s'affiche et se pilote dans la console. Touches Impr. écran, Menu et Pause ajoutées à l'agent Windows.
+- **Mon compte repensé** : en-tête avec initiale, profil, type de compte et dates ; onglets Sécurité (règles du mot de passe vérifiées en direct, bouton Afficher), Apparence (aperçu des thèmes), Mes droits (regroupés par domaine avec leur nombre) et Activité récente (dix dernières actions du compte, lien vers son journal). Un lien direct vers un onglet (`/compte#apparence`) fonctionne aussi sans recharger la page.
+
+## 2.13.4 — 2026-10-19
+
+- Lien direct du MSI de l'agent : si le serveur ne peut pas encore fournir le MSI de sa version (GitHub momentanément injoignable…), il répond 503 avec la raison et « Réessayez dans un instant », et l'inscrit dans son journal, au lieu d'un 404 sans explication.
+- Le MSI récupéré depuis la publication est écrit sous un nom temporaire unique avant d'être mis en place : deux téléchargements simultanés ne peuvent plus se gêner.
+
+## 2.13.3 — 2026-10-19
+
+- **MSI de l'agent Windows en téléchargement direct** dans la fenêtre *Ajouter un poste*, juste après les commandes : bouton « Télécharger le MSI » (version et empreinte SHA-256 affichées), liens directs à ouvrir depuis le navigateur du poste (HTTPS et, s'il est activé, HTTP sans avertissement de certificat), puis la commande `msiexec` prête à copier qui installe et inscrit le poste avec l'adresse de loco, la clé d'inscription et l'empreinte de l'autorité. Un simple double-clic sur le MSI installe le service sans l'inscrire : c'est indiqué.
+
+## 2.13.2 — 2026-10-19
+
+- **Le bureau à distance remplit la fenêtre** : en mode automatique, l'agent Windows choisit parmi les résolutions du pilote celle qui remplit le mieux la zone d'affichage (rapport d'image conservé), puis la plus proche de 100 %. Une fenêtre très large obtient par exemple 2560 × 1080 (21:9) au lieu de 1280 × 720 avec de grandes bandes noires.
+- La taille demandée est calculée en pixels de l'écran et non en pixels CSS : avec un affichage mis à l'échelle (150 % sur un portable, par exemple), le bureau n'est plus réduit d'autant, et un pixel du bureau correspond à un pixel affiché. Le pourcentage indiqué à côté de la résolution suit la même règle (100 % = net).
+
+## 2.13.1 — 2026-10-19
+
+- **Résolution dynamique Windows corrigée** : le mode automatique change réellement la résolution du bureau Windows à mesure que la fenêtre est agrandie ou réduite, y compris en plein écran. L’agent utilise les résolutions acceptées par le pilote graphique ; la résolution initiale est restaurée à la fermeture. Les demandes pendant l’UAC sont appliquées au retour sur le bureau normal. Les postes multi-moniteurs et les sessions concurrentes conservent un ajustement de l’affichage sans reconfigurer les écrans.
+- La taille demandée suit toute la surface disponible, sans rester limitée à la résolution ou au rapport d’image de départ. Si le pilote impose une taille différente, le navigateur ajuste le bureau entier à la fenêtre, en conservant son rapport d’image.
+- **Machines virtuelles** : le pilote d’affichage de base de Windows (adaptateur VGA standard d’une VM sans pilote graphique, dont Proxmox par défaut) ne propose qu’une seule résolution et refuse tout changement ; l’image est alors ajustée à la fenêtre par le navigateur. Pour un vrai redimensionnement, utiliser un adaptateur VirtIO-GPU avec son pilote (virtio-win) ou le pilote du GPU physique.
+- Le service laisse jusqu’à cinq secondes au compagnon de bureau pour rétablir la résolution d’origine à la fermeture de la session.
+
+## 2.13.0 — 2026-10-19
+
+- **Console noVNC adaptative** : résolution du flux ajustée à la fenêtre, au plein écran et à l’onglet dédié, avec conservation du rapport d’image et limitation à la source pour le bureau Windows, et retour au flux natif. Protocole RFB ExtendedDesktopSize borné ; repli sur l’ajustement local avec les anciens agents et les bureaux X11. L’écran physique du poste n’est pas reconfiguré.
+- Les demandes d’image consécutives sont regroupées pour éviter une file de rafraîchissements pendant les redimensionnements et transitions UAC ; une demande de rafraîchissement complet reste prioritaire.
+- **Console texte Linux** : redimensionnement réel du PTY, du nombre de colonnes/lignes et du rendu, y compris pour les dimensions qui ne sont pas des multiples de la taille des glyphes.
+- **UAC Windows** : compagnon graphique SYSTEM dans la session interactive et suivi du bureau d’entrée, y compris le bureau sécurisé. Les transitions de capture et les saisies momentanément bloquées ne font plus tomber la connexion. Canal local restreint à SYSTEM et vérification du PID conservée ; le tray reste non privilégié.
+- **Éditeur de profils d’accès** : catégories en navigation, recherche sans accents, filtres des droits accordés/actions sensibles, compteurs par domaine, sélection des droits visibles avec état partiel, indication des dépendances ajustées et barre d’enregistrement persistante. Profils protégés et limites de délégation conservés.
+
+## 2.12.1 — 2026-10-19
+
+- **Agents Windows mis à jour après le serveur** : le serveur ne proposait la nouvelle version de l'agent Windows que si son MSI avait déjà été téléchargé depuis le portail (bouton d'installation ou lien de déploiement). Sans cette action, les postes Windows restaient sur leur ancienne version. Désormais, dès qu'un agent Windows plus ancien que le serveur se présente, le serveur récupère le MSI de sa version sur GitHub (vérifié par SHA256SUMS) en arrière-plan, au plus une tentative toutes les dix minutes, et le propose au contact suivant.
+- Test du journal rendu indépendant de la seconde à laquelle il s'exécute.
+
+## 2.12.0 — 2026-10-19
+
+- **Journal repensé** : événements groupés par jour (aujourd'hui, hier, puis la date), heure seule, actions en clair avec leur catégorie au lieu des codes techniques (le code reste en infobulle et dans l'export). Échecs signalés par une pastille rouge et résumés en tête de page sur les dernières 24 heures.
+- **Filtres côté serveur** sur tout le journal (et plus seulement les 500 derniers événements) : période (aujourd'hui, 7 jours, 30 jours, tout ou dates au choix), catégorie avec son nombre d'événements, compte, échecs seulement, recherche ; pages de 100 événements (« Plus anciens »). Un clic sur un compte filtre ses événements. Sur mobile, le détail passe sous l'action.
+- **Export et conservation dans des fenêtres** ouvertes depuis l'en-tête : l'export reprend la vue filtrée (ou une période, ou tout) et ajoute le libellé de chaque action et les filtres appliqués au fichier JSON.
+- **Windows Update repensé** : indicateurs sur 14 jours (servi par le cache et part du trafic, pris sur Internet), taille du cache et état du service, dernière requête et nombre de postes ; graphique quotidien des 14 derniers jours ; alerte si aucun poste n'est encore passé par loco ou si le cache est arrêté.
+- Domaines redirigés en liste compacte, modifiables dans une fenêtre ; explication du fonctionnement repliée.
+- Dernières requêtes : nom du poste du parc à la place de son adresse (droit *Consulter les appareils*), source « cache » ou « Internet ».
+- **Catalogue local repensé** : pastilles des points à traiter avec leur nombre (mises à jour à déployer sur le parc, arguments silencieux manquants, erreurs, téléchargements en cours) ; colonnes réduites à l'essentiel (logiciel, version, postes équipés et en retard avec un lien « déployer », taille, état). Type et origine passent sous le nom ; « Réessayer » sur un téléchargement en échec et « Renseigner » sur un installeur sans arguments, directement dans la liste.
+- **Fiche d'un logiciel** : en-tête avec Modifier, Déployer et un menu Plus (fiche du store, retélécharger, supprimer) ; indicateurs (état de l'installeur, postes équipés, postes à mettre à jour, groupes) ; liste des postes avec leur version et « Déployer la mise à jour ». Après une modification depuis la fiche, on y revient.
+- **Store WinGet repensé** : cartes compactes (quatre par ligne sur grand écran) entièrement cliquables vers la fiche ; bouton **Ajouter** directement sur chaque carte, qui reste sur la recherche ou la catégorie en cours pour en ajouter d'autres ; état « dans loco », « téléchargement » ou « erreur » pour les logiciels déjà ajoutés. Recherche et catégories en pastilles regroupées en tête ; liens en double vers le catalogue local retirés.
+- **Fiche du store** : éditeur, version et identifiant sous le nom ; actions regroupées dans l'en-tête (Ajouter à loco ou Voir dans le catalogue local, Déployer) ; description et détails d'installation (installeur, arguments, empreinte) côte à côte ; avertissement quand le store propose une version plus récente que celle du catalogue local.
+- **Groupes de logiciels et de machines repensés** : liste compacte avec la description, un aperçu des membres (icônes des logiciels, noms des appareils) et leur état résumé (logiciels prêts ou en erreur ; appareils à jour, en attente, nombreuses mises à jour) ; « Déployer » et, pour les machines, « Voir dans Mon parc » sur chaque ligne.
+- **Éditeur de groupe** : membres affichés en premier avec un compteur en direct, filtre « membres seulement » et recherche ; icône, version et état de chaque logiciel, système et voyant de chaque appareil ; barre Enregistrer toujours visible en bas ; suppression du groupe dans le menu Plus. En lecture seule, seuls les membres sont listés.
+- Les champs côte à côte (groupes, profils, configuration de l'appliance) sont de nouveau alignés.
+- **Déploiements repensés** : liste avec pastilles par état (en cours, à confirmer, avec erreurs, terminés), logiciels nommés et barre d'avancement par déploiement (réussis, en attente, échecs). Le suivi d'un déploiement montre quatre indicateurs, la barre d'avancement et les postes en premier, avec le journal d'un échec déplié d'office ; les empreintes passent en infobulle. Confirmer, Abandonner et Annuler sont dans l'en-tête, et un déploiement non confirmable dit pourquoi (autre connexion, installeur pas prêt, droit manquant).
+- **Préparation d'un déploiement** : sélections affichées en premier (avec les icônes des logiciels), compteurs en direct, appareils compatibles avant les autres, et barre « Vérifier avant de déployer » toujours visible avec le nom et l'option de réinstallation.
+- Les listes actualisées en direct échappent aussi les guillemets des noms de fichiers demandés par les postes.
+
+## 2.11.0 — 2026-10-19
+
+- **Mon parc repensé** : postes classés du plus urgent au plus à jour ; adresse réelle du poste (et « via » l'adresse vue par loco quand un NAT les sépare) ; mises à jour en compact (système, logiciels, dont sécurité) ; redémarrage signalé ; groupes en étiquettes cliquables ; dernier contact en clair ; action en attente affichée à la place du bouton.
+- **Filtres immédiats** : pastilles d'état avec leur nombre (tous, nombreuses mises à jour, en attente, état inconnu, à jour), Windows / Linux, groupe appliqué dès son choix, recherche ; « Tout mettre à jour » et « Déployer » suivent le groupe affiché.
+- **Ajouter un poste** dans une fenêtre (commandes Windows et Linux, déploiement GPO) au lieu d'un panneau en bas de page.
+- **Onglet Réglages** du parc : adresse du serveur annoncée aux agents, seuil des pastilles et clé d'inscription.
+
+## 2.10.1 — 2026-10-19
+
+- **Fiche d'un appareil repensée** : en-tête avec le nom, une pastille d'état courte (à jour, mises à jour en attente, nombreuses mises à jour, sans contact récent…), l'explication détaillée, le système, l'adresse du poste, le dernier contact en clair (« il y a 2 min ») et la version de l'agent ; groupes en étiquettes.
+- Actions regroupées à droite : terminal et bureau à distance, **Mettre à jour** en bouton principal, et un menu **Plus** (mise à jour avec redémarrage, inventaire, déploiement, redémarrage, puis le retrait de l'agent, séparé et en rouge).
+- Quatre indicateurs (mises à jour système dont sécurité, logiciels ou Flatpak, redémarrage, inventaire) et des **onglets** Mises à jour, Logiciels installés (avec filtre), Historique et Détails ; l'onglet choisi est conservé lors de l'actualisation automatique.
+- Détails techniques séparés : adresses du poste, adresse vue par loco (NAT signalé), adresses du serveur connues de l'agent, identifiant et groupes.
+
+## 2.10.0 — 2026-10-18
+
+- **Graphiques dans la vue d'ensemble**, tracés en SVG par le serveur (aucune bibliothèque ni script, thèmes OLED et clair, infobulles au survol) :
+  - **Windows Update sur 14 jours** : volume servi par le cache et volume téléchargé sur Internet, jour par jour, avec la part économisée. Historique reconstitué depuis les journaux nginx tournants (`.1`, `.2.gz`, `.AAAAMMJJ`), journal courant lu de façon incrémentale ;
+  - **État du parc** : anneau vert, orange, rouge, gris (droit *Consulter les appareils*) ;
+  - **Disque des données** : part de chaque cache (APT, Windows Update, RPM, Flathub), des dépôts et logiciels locaux, du reste et de l'espace libre.
+
+## 2.9.0 — 2026-10-18
+
+- **Changement d'adresse du serveur sans perdre les agents** : la future adresse (IP ou nom DNS) s'annonce dans *Mon parc › Adresse du serveur pour les agents* ou avec `loco-fleet announce https://hôte:port`. Chaque agent la reçoit à son contact suivant ; la page et `loco-fleet servers` indiquent combien de postes sont prévenus.
+- Après le changement, un agent qui ne joint plus l'ancienne adresse essaie celles qu'il connaît et adopte la première qui répond avec un certificat de l'autorité loco épinglée : une adresse annoncée ne peut pas détourner les postes vers un autre serveur. Les réponses HTTP du serveur (jeton refusé…) ne déclenchent jamais de bascule.
+- `setup-loco` (appliance) annonce la nouvelle adresse fixe et attend que les postes soient prévenus avant d'appliquer le réseau ; en DHCP, il prévient que les agents ne pourront pas suivre.
+- Agents Windows et Linux 2.9.0 : liste des adresses mémorisée et déclarée au serveur, affichée par `loco-client status`.
+
+## 2.8.0 — 2026-10-18
+
+- **Gestion des logiciels unifiée** : catalogue local, store WinGet, groupes de logiciels et suivi des déploiements dans les mêmes onglets. Déploiement depuis une fiche du store, du catalogue ou d'un appareil ; import WinGet partagé et empreinte vérifiée conservée lors des nouvelles tentatives.
+- **Groupes de logiciels et de machines** : appartenances multiples, création et modification des membres ; filtre du parc et mise à jour limitée au groupe affiché. Suppression d'un groupe sans supprimer ses logiciels, appareils ou déploiements.
+- **Déploiements préparés et confirmés** : combinaison de logiciels, lots, postes et groupes, déduplication, exclusions Windows/Linux explicites, sélection et versions figées. Conservation des installeurs confirmés même après modification ou suppression du catalogue ; sauvegarde compatible avec ces versions.
+- **Suivi par poste** : commandes en attente pour les agents hors ligne, journaux et résultats, annulation des seules commandes non transmises. Versions déjà installées et installations identiques déjà en attente ignorées ; réinstallation explicite possible.
+- **Droits distincts** : gestion des deux types de groupes, consultation des déploiements et déploiement sur plusieurs postes. Le déploiement collectif exige un droit réservé aux administrateurs par défaut, vérifié à nouveau avant transmission aux agents.
+
+## 2.7.0 — 2026-10-18
+
+- **Navigation** : Mon parc se trouve immédiatement après Vue d'ensemble.
+- **Linux sans bureau** : la console noVNC rend un vrai terminal PTY et ses couleurs ANSI dans le flux RFB de l'agent, sans X11 ni connexion à Proxmox. Le repli exige aussi le droit Terminal distant ; un bureau Wayland ne déclenche pas de shell implicite. Console dédiée, taille réelle et plein écran restent disponibles.
+- **Connexions SSO** : plusieurs fournisseurs, modèles Microsoft Entra ID, Google, GitHub, GitLab, Keycloak, Authentik, Okta, Auth0, Authelia, ZITADEL, Dex, Cognito, AD FS et OIDC générique. GitHub utilise OAuth 2 ; les autres utilisent OpenID Connect.
+- **Approbation obligatoire** : un nouveau compte SSO n'a aucun droit ni session avant validation administrative et attribution explicite d'un profil. Les identités ne sont jamais rapprochées automatiquement par courriel. Les secrets sont chiffrés ; modifier, désactiver ou supprimer un fournisseur révoque ses sessions. La connexion locale est conservée.
+
+## 2.6.1 — 2026-10-18
+
+- **Vrai curseur dans le bureau distant** : les agents Windows et Linux envoient la forme du curseur du poste (flèche, texte, main, attente, redimensionnement…) avec sa transparence et son point chaud ; le navigateur l'affiche comme un curseur natif, sans décalage ni latence. Curseurs clairs ou à inversion bordés pour rester lisibles sur tous les fonds ; le point ne sert plus que de secours.
+- **Journal** : export JSON d'une période ou du journal entier, export lui-même journalisé ; conservation configurable (7 jours à 2 ans ou sans limite), **30 jours par défaut**, avec rotation automatique. Nouveaux droits *Exporter le journal* (profil Auditeur) et *Configurer la conservation du journal* ; les profils intégrés suivent les nouveaux droits.
+- Fiche d'un poste : boutons d'accès distant alignés et icône « nouvel onglet » centrée ; même correction pour les autres rangées de boutons.
+
+## 2.6.0 — 2026-10-17
+
+- **Console dans un onglet dédié** : terminal et noVNC sans la navigation du portail, barre d’outils compacte et surface disponible pour le poste ; plein écran, retour vers sa fiche et fermeture explicite.
+- **Bureau natif et net** : capture Windows sans réduction imposée à 1920 × 1080, compression Tight sans perte sur Windows et X11, affichage ajusté sans agrandissement artificiel ou taille réelle 1:1 avec défilement et indication de résolution.
+- **Fluidité** : rectangles modifiés au lieu d’images complètes, regroupement des paquets, envoi immédiat des saisies et des flux en attente, connexion HTTPS persistante Linux, suppression des attentes TCP inutiles sous Windows. Files bornées et acquittements conservés, reprise sans rejeu quand le récepteur ralentit.
+
+## 2.5.0 — 2026-10-16
+
+- **Profils d’accès granulaires** : 46 permissions par action, profils personnalisés réutilisables et modèles Administrateur, Lecture seule, Technicien du parc, Gestionnaire des dépôts et Auditeur. Duplication des modèles, attribution par compte et consultation de ses propres droits.
+- Droits distincts pour inventaire, mises à jour individuelles ou globales, installation, redémarrage, retrait de l’agent, terminal et noVNC. Consultation et gestion des dépôts, du store, du serveur, des comptes, des profils et du journal séparées.
+- Contrôle côté serveur de chaque route privée et navigation adaptée. Délégation limitée aux droits détenus, profils intégrés et accès propre protégés, dernier administrateur actif préservé lors de modifications concurrentes.
+- Révocation des connexions et sessions distantes après changement de droits ; annulation des commandes encore en attente et vérification des droits avant leur transmission à l’agent. Audit détaillé des permissions accordées et retirées.
+- Migration préservant les comptes et mots de passe existants. CLI `loco-user roles` et `loco-user set-role`. Formulaire de connexion immédiatement utilisable après révocation d’une session ; correction de l’envoi des actions du parc depuis le navigateur.
+
+## 2.4.0 — 2026-10-16
+
+- **Accès distant via l’agent** : terminal interactif PTY Linux et PowerShell ConPTY natif Windows, avec redimensionnement, arrêt à la fermeture et relais HTTPS sortant. Aucun accès aux consoles Proxmox.
+- **Bureau noVNC** : clavier et souris sur une session Windows ouverte ou un bureau X11 Linux, sans serveur VNC à installer ni port entrant à ouvrir. Compagnon Windows inclus dans le MSI ; bibliothèques du navigateur servies localement.
+- **Fenêtres de session** : plein écran avec barre d’outils et sortie explicite, et ouverture dans un nouvel onglet depuis la fiche du poste ou une session en cours.
+- Accès réservé aux administrateurs, sessions liées à leur connexion, révocation et délais d’expiration, flux acquittés sans rejeu, files temporaires exclues des sauvegardes. Audit des ouvertures et fermetures sans contenu des sessions.
+
+## 2.3.0 — 2026-10-16
+
+- Store logiciels Windows alimenté par le catalogue communautaire Microsoft WinGet : catégories, recherche paginée, fiches, logos vérifiés et mis en cache, import d'installeurs vérifiés dans loco ; consultation du dernier index valide hors ligne.
+- Agent Windows : icône de notification par session, pastille verte / orange / rouge et détails en lecture seule. L'utilisateur ne peut lancer aucune mise à jour depuis l'icône ; les jetons restent privés et le service publie uniquement l'état du poste.
+- Même comptage dans Mon parc et sur Windows : vert aucune mise à jour, orange de 1 à 9, rouge dès 10 ; seuil rouge configurable. Un état indisponible reste gris. Installation, démarrage de session et retrait du compagnon gérés par le MSI.
+
+## 2.2.0 — 2026-10-16
+
+- **Mon parc** : agent `loco-client` pour Windows (service .NET Framework, installeur MSI déployable par GPO) et Linux
+  (Debian, Ubuntu, Rocky Linux, AlmaLinux, RHEL ; systemd). Voyant vert / orange / rouge par poste, adresse IP,
+  mises à jour en attente (dont sécurité), logiciels installés et historique des actions.
+- Mise à jour d'un poste ou de tout le parc en un clic (Windows Update, APT, DNF, Flatpak, logiciels du catalogue),
+  redémarrage facultatif, installation d'un logiciel du catalogue, inventaire, redémarrage et retrait de l'agent.
+- Identité du poste indépendante de son adresse IP : un changement d'adresse ne le détache pas ; seul le retrait
+  poussé depuis loco désinstalle l'agent. Autorité HTTPS épinglée, jetons hachés, liste d'actions fermée.
+- Logiciels Windows : détection des versions installées sur le parc ; recherche et import depuis le catalogue winget
+  (installeur officiel vérifié par SHA-256, options silencieuses et nom de détection), et nouvelles versions winget.
+- Mise à jour automatique des agents ; MSI construit sous Linux (Mono, msitools) par la CI et publié avec la version.
+
+## 2.1.3 — 2026-10-16
+
+- Installation ISO et `setup-loco` : choix entre SSH avec le mot de passe root, SSH par clé publique, ou SSH désactivé. Le mode mot de passe ne demande aucune clé publique.
+- Réponses automatiques : `SSH_MODE=password`, `key` ou `off` ; les anciens fichiers utilisant uniquement `SSH_KEY` restent compatibles.
+- Configuration SSH commune à l'installation et à la console ; mots de passe vides refusés, mode par clé sans authentification par mot de passe, tests de connexions SSH réelles.
+
+## 2.1.2 — 2026-10-16
+
+- Portail : une requête HTTP reçue sur le port HTTPS redirige automatiquement vers HTTPS au lieu d'afficher « 400 Bad Request » ; l'hôte, le port, le chemin et les paramètres sont conservés.
+- Configuration commune Linux, Alpine/ISO, Docker et Windows ; vérification de la redirection par des requêtes réelles GET, HEAD et POST dans les tests d'installation.
+
+## 2.1.1 — 2026-10-16
+
+- ISO : console de connexion fixée sur tty1 pour empêcher le getty de voler le clavier et l’écran de l’assistant sur tty7.
+- Échap et Accueil reviennent au menu sans ouvrir de shell ; la console de dépannage est explicite et `exit` ramène à l’assistant.
+- Annulation de la sélection des fonctions respectée ; test du clavier, des annulations et de la console dans une VM.
+
+## 2.1.0 — 2026-10-15
+
+- Appliance ISO Alpine 3.24 / BusyBox : assistant visuel, installation automatique par réponses, BIOS et UEFI, paquets embarqués et premier démarrage configuré.
+- Administration graphique et CLI : configuration des accès, fonctions et caches, mises à jour de loco et du système, journaux en direct ; `setup-loco`, `loco-config` et `loco-update`.
+- Agent OpenRC séparé du portail sans privilèges ; demandes revalidées, opérations sérialisées et retour arrière de loco / configuration / base en cas d’échec.
+- Alpine devient une plateforme de l’installateur Linux commun, avec cache APT nginx partagé avec Windows, signatures et lecteurs de paquets Python, sauvegardes et désinstallation.
+- CI Alpine native et ISO : archives vérifiées, retour arrière provoqué, installations BIOS / UEFI et redémarrages sans média ; publication des sources, ISO validée et SHA256SUMS.
+
+## 2.0.0 — 2026-10-15
+
+- Renommage complet en **loco** : dépôt GitHub, portail, modules Python, services, compte système, commandes, chemins et configurations des postes.
+- Migration des serveurs Linux et Windows existants à la relance de l'installateur, avec sauvegarde préalable et conservation des comptes, UID Linux, certificats, clés, dépôts et caches.
+- Les dépôts APT existants gardent leur Origin/Label signé pour que les anciens postes continuent leurs mises à jour sans confirmation manuelle ; les nouveaux dépôts portent loco.
+- Mise à jour des postes APT/RPM au prochain setup, migration des origines Flatpak ; anciennes sauvegardes Linux et Windows restaurables.
+- `linux/docker/up.sh` reprend les variables LR_ et copie les volumes historiques vers le projet loco ; les volumes d'origine sont conservés et l'ancien conteneur redémarre si la migration échoue.
+- CI : migrations depuis local-repo 1.9.0 sur Debian, Ubuntu, Rocky, Docker et Windows Server 2022/2025.
+
+## 1.9.0 — 2026-10-15
+
+- **Organisation du projet par système**, dans une seule branche : `linux/` (installateur, administration,
+  Docker, conteneur LXC Proxmox), `windows/` (installateur et service Windows), `portal/` et `conf/` communs,
+  `docs/linux.md` et `docs/windows.md`. `sudo ./install.sh` reste valable (raccourci vers `linux/install.sh`),
+  ainsi que les mises à jour des installations existantes ; l'arborescence installée ne change pas.
+- Docker : `cd linux/docker && docker compose up -d --build` ; nom de projet fixe, volumes conservés.
+- Conteneur LXC : `linux/lxc/proxmox-lxc.sh`.
+- README : choix de l'installation, puis une partie Serveur Linux et une partie Serveur Windows.
+
+## 1.8.0 — 2026-10-15
+
+- Serveur natif Windows 11 Professionnel / Entreprise et Windows Server 2022 / 2025 : service Windows, Python embarqué, nginx et Waitress, sans Linux ni Hyper-V. Signatures OpenPGP des dépôts
+  (clé RSA 4096) produites en Python : pas de GnuPG à installer, aucune modification du `PATH`.
+- Installateur PowerShell relançable, composants vérifiés par SHA-256, compte de service virtuel, ACL et règles du pare-feu limitées aux réseaux autorisés.
+- Dépôts APT et RPM indexés et signés sous Windows avec des lecteurs Python, comparés aux outils natifs Linux ; lecture des métadonnées sans charger tout le paquet en mémoire.
+- Cache APT nginx, caches RPM/Flathub/Windows Update et catalogue Windows ; le dépôt Flatpak local reste réservé à Linux.
+- Administration, sauvegardes SQLite, restauration avec arrêt du service, renouvellement HTTPS et désinstallation avec conservation des données ou purge explicite.
+- Tests automatiques des serveurs Windows Server 2022 et 2025, imports de paquets gzip/xz/zstd, signatures, cache et cycle de maintenance.
+
+## 1.7.0 — 2026-10-14
+
+- Installation native du serveur sur Rocky Linux 8, avec le même `install.sh` et les mêmes fonctions que Rocky 9/10.
+- Python 3.11 isolé, dépôt PowerTools et indexeur APT 2.6.1 compilé depuis les sources Debian avec contrôle SHA-256 ; aucun remplacement du Python système.
+- Sélection du flux nginx 1.24 AppStream sur Rocky 8 si le nginx présent ne fournit pas `stream_ssl_preread`, nécessaire au relais Windows Update.
+- Sauvegardes SQLite exécutées avec le runtime de l’application sur Rocky 8, compatible avec la copie en ligne de la base.
+- Génération de l’autorité HTTPS compatible OpenSSL 1.1, sans extensions dupliquées, et vérification du certificat serveur par cette autorité.
+- Désinstallation de l’indexeur privé et restauration du dépôt PowerTools si l’installateur l’avait activé.
+- Test complet Rocky 8 ajouté à la CI, avec SELinux et firewalld actifs.
+
+## 1.6.0 — 2026-10-14
+
+- Installation native du serveur complet sur Rocky Linux 9 et 10 avec le même `install.sh` : DNF, EPEL/CRB, nginx, cache APT, dépôts APT/RPM, Flatpak et Windows Update.
+- SELinux conservé actif, service firewalld dédié si le pare-feu tourne, filtrage du cache APT par nginx avec backend en boucle locale.
+- Rocky 10 : cache APT compilé depuis les sources Debian 3.7.5-1.3 avec correctifs et empreintes figées.
+- Désinstallation adaptée à DNF, restauration des réglages SELinux, du pare-feu et de nginx ajoutés par l’application.
+- Tests du serveur dans des VM Rocky 9/10, ajoutés à la CI ; installation compatible avec une umask restrictive.
+
+## 1.5.1 — 2026-10-14
+
+- Vue d'ensemble, *Brancher un poste* : un onglet par type de poste (Debian / Ubuntu ; Rocky Linux,
+  AlmaLinux, RHEL ; Flatpak ; Windows), chacun avec sa commande, le premier branchement et le lien vers
+  ses options. Windows précise que Windows Update passe par le DNS, sans rien installer sur le poste.
+- Onglets sur une seule ligne, défilants sur petit écran.
+
+## 1.5.0 — 2026-10-14
+
+- Mot de passe temporaire (première connexion, réinitialisation) : page dédiée, sans la navigation du
+  portail, avec déconnexion possible ; aucune autre page n'est accessible avant le changement.
+- Thème : OLED par défaut, bascule vers le thème clair par une icône discrète (lune) dans la barre de
+  navigation et sur les écrans de connexion ; choix mémorisé par le navigateur.
+
+## 1.4.0 — 2026-10-14
+
+- **Conteneur LXC Proxmox VE** : `lxc/proxmox-lxc.sh`, à lancer sur n'importe quel hôte Proxmox VE 7, 8 ou 9,
+  crée un conteneur Debian non privilégié (stockage, pont et modèle choisis selon l'hôte, IP fixe ou DHCP,
+  VLAN) et y fait l'installation native ; options d'`install.sh` transmises après `--` ; mise à jour par
+  `--update`, version fixée par `--version`, copie locale par `--source`.
+
+## 1.3.0 — 2026-10-14
+
+- **Déploiement Docker** (`docker compose up -d --build`), en plus de l'installation native qui reste
+  recommandée : image Debian 13, configuration par variables (`.env.example`) appliquée à chaque démarrage
+  par `install.sh --container`, services lancés par `supervisord`, tâches périodiques (statistiques,
+  rechargement nginx, rotation des journaux, sauvegarde quotidienne) par `local-repo-cron`.
+- Conteneur sans capacités superflues, `no-new-privileges`, comptes de service à identifiants fixes,
+  contrôle de santé, volumes pour les données, la configuration et les sauvegardes.
+- Le portail reconnaît le mode conteneur : état des services, commandes d'aide et restauration adaptées.
+- Validation dans une VM Debian 13 jetable (`tests/vm-docker-e2e.sh`).
+
+## 1.2.0 — 2026-10-13
+
+- **Famille Red Hat** : cache des miroirs Rocky Linux, AlmaLinux et EPEL (paquets et métadonnées à nom
+  unique gardés 6 mois, certificats des miroirs vérifiés) ; dépôts RPM locaux par version majeure
+  (`el8`, `el9`, `el10`, ajout d'une future version depuis le portail), métadonnées signées, refus des
+  paquets d'une autre version ou d'un contenu différent pour un même nom/version.
+- Script `rpm/setup.sh` : détection du poste, dépôt local, dépôts officiels et EPEL via le cache avec leurs
+  clés GPG, `--epel`, `--trust-ca`, `--no-cache`, `--no-local`, `--remove` (rétablissement exact des dépôts).
+- RHEL : dépôt local et EPEL via ce serveur ; dépôts Red Hat (abonnement) en accès direct.
+- Options `--no-rpm` et `--rpm-cache-size` ; sauvegarde, statistiques, `/metrics` et désinstallation
+  couvrent les dépôts RPM.
+- Tests réels (`rpmbuild`, `createrepo_c`, signatures) et validation de postes Rocky Linux / AlmaLinux 8, 9
+  et 10 dans des VM, ajoutée à la CI.
+
+## 1.1.0 — 2026-10-13
+
+- Dépôts APT isolés par distribution et nom de version, création depuis le portail ou `local-repo-apt`.
+- Détection automatique des postes Debian / Ubuntu, sources deb822 ; options `--cache-only`,
+  `--distribution`, `--suite`, `--legacy`. Une version absente ne remplace pas la configuration du poste.
+- Dépôt historique conservé, copie explicite de paquets entre dépôts ; publication sans remplacement
+  d'un paquet/version par un contenu différent ; métadonnées signées préparées avant publication.
+- Sauvegarde et restauration de tous les dépôts, migration du registre des versions.
+- Corrections de compatibilité : HTTPS APT en accès direct, connexions sortantes du cache conservées,
+  nettoyage du cache des postes lors d'un changement de dépôt ; prise en charge du canal de contrôle
+  des nouvelles versions de Gunicorn et délais bornés pour vérifier le démarrage.
+- Tests d'isolation et de signatures, test de migration depuis 1.0.0 ; matrice de VM Debian 12/13 et
+  Ubuntu 22.04/24.04/26.04, images officielles vérifiées, contrôles hebdomadaires actifs dans la CI.
+- Navigation Linux / Windows avec icônes et menus au survol, au clavier et au toucher ; icônes du compte.
+
+## 1.0.0 — 2026-10-13
+
+Première version destinée à un usage en entreprise.
+
+### Ajouté
+- **Flatpak** : cache Flathub (objets immuables gardés 6 mois, signatures Flathub vérifiées par les postes)
+  et dépôt Flatpak local signé, alimenté par envoi de paquets `.flatpak` ; script `flatpak/setup.sh`.
+- **Comptes nommés** (administrateur, lecture seule), mot de passe temporaire à changer, blocage après échecs,
+  expiration des sessions, journal d'audit, gestion en ligne de commande (`local-repo-user`).
+- **HTTPS partout** : postes clients en HTTPS par défaut, scripts suivant le protocole utilisé,
+  `setup.sh --trust-ca` pour l'amorçage, `--no-http` pour fermer le port HTTP.
+- **Réseaux autorisés** (`--allow`, `--admin-allow`) appliqués par nginx, apt-cacher-ng et systemd.
+- **Proxy d'entreprise** (`--proxy`) pour apt-cacher-ng et les téléchargements du portail.
+- **Sauvegardes** quotidiennes avec rotation, restauration sur le même serveur ou un nouveau
+  (`local-repo-backup`).
+- **Supervision** : `/metrics` (Prometheus) et `/healthz`.
+- Page **Administration** (comptes, journal, système, sauvegardes).
+- Tests unitaires, test de bout en bout (`tests/e2e.sh`) et intégration continue GitHub.
+- Guide d'exploitation (`docs/EXPLOITATION.md`) et politique de sécurité (`SECURITY.md`).
+
+### Modifié
+- Politique de contenu stricte (CSP) : plus aucun script ni style en ligne.
+- Unité systemd du portail confinée ; mots de passe d'apt-cacher-ng pour sa maintenance.
+- Portail réorganisé en paquet Python ; base SQLite en WAL avec migrations versionnées.
+- Interface : navigation regroupée, sélecteur de thème dans *Mon compte*.
+
+### Sécurité
+- Le compte unique des versions précédentes devient le compte `admin` (même mot de passe) ;
+  le fichier `/etc/local-repo/admin-password` est supprimé.
+
+## 0.3 — 2026-10-13
+- Interface en HTTPS (autorité locale), refonte visuelle sobre (IBM Plex, thèmes clair et OLED).
+
+## 0.2 — 2026-10-13
+- Cache Windows Update limité aux domaines de la liste, fichiers immuables seuls en cache,
+  corrections issues des tests (Debian 12/13, Ubuntu 24.04, Windows 11).
+
+## 0.1 — 2026-10-12
+- Première version : apt-cacher-ng et dépôt APT local, cache Windows Update, catalogue de logiciels Windows,
+  portail web, `install.sh` et `remove.sh`.

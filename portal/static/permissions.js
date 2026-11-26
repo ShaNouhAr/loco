@@ -45,7 +45,7 @@ const tr = window.t || ((s, v) => Object.keys(v || {}).reduce((o, k) => o.split(
       const eligible = shown.filter(box => !box.disabled);
       const count = all.filter(box => box.checked).length;
       group.hidden = shown.length === 0;
-      group.querySelector('[data-permission-count]').textContent = `${count} / ${all.length} accordés`;
+      group.querySelector('[data-permission-count]').textContent = tr('%(count)s / %(total)s accordés', { count, total: all.length });
       const nav = form.querySelector(`[data-permission-nav="${group.dataset.permissionGroup}"]`);
       nav.hidden = group.hidden;
       nav.querySelector('[data-permission-nav-count]').textContent = `${count}/${all.length}`;
@@ -60,8 +60,10 @@ const tr = window.t || ((s, v) => Object.keys(v || {}).reduce((o, k) => o.split(
       }
     }
     form.querySelector('[data-permission-empty]').hidden = visible > 0;
-    form.querySelector('[data-permission-total]').textContent = `${selected} / ${boxes.size} droits accordés · ${sensitive} sensibles`;
-    form.querySelector('[data-permission-summary]').textContent = `${selected} droit${selected === 1 ? " accordé" : "s accordés"}${modified ? ` · ${modified} modifications` : ''}`;
+    form.querySelector('[data-permission-total]').textContent = tr('%(selected)s / %(total)s droits accordés · %(sensitive)s sensibles', { selected, total: boxes.size, sensitive });
+    form.querySelector('[data-permission-summary]').textContent =
+      (selected === 1 ? tr('%(selected)s droit accordé', { selected }) : tr('%(selected)s droits accordés', { selected }))
+      + (modified ? ' · ' + (modified === 1 ? tr('%(n)s modification', { n: modified }) : tr('%(n)s modifications', { n: modified })) : '');
   }
   form.addEventListener('change', event => {
     const target = event.target;

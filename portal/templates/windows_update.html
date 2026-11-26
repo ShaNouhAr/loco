@@ -23,8 +23,8 @@
     <div class="panel-b">
       <dl class="kv-grid wu-kv">
         <div><dt>{{ _("Taille du cache") }}</dt><dd class="dd-lg" data-bind="cache_size" data-fmt="bytes">{{ wu.cache_size|human }}</dd></div>
-        <div><dt>{{ _("Servi depuis le cache") }} <span class="faint">· 14 j</span></dt><dd><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> <span class="faint">(<span data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</span>)</span></dd></div>
-        <div><dt>{{ _("Pris sur Internet") }} <span class="faint">· 14 j</span></dt><dd data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</dd></div>
+        <div><dt>{{ _("Servi depuis le cache") }} <span class="faint">· {{ _("14 j") }}</span></dt><dd><span data-bind="period.ratio" data-fmt="pct">{{ wu.period.ratio }} %</span> <span class="faint">(<span data-bind="period.hit" data-fmt="bytes">{{ wu.period.hit|human }}</span>)</span></dd></div>
+        <div><dt>{{ _("Pris sur Internet") }} <span class="faint">· {{ _("14 j") }}</span></dt><dd data-bind="period.miss" data-fmt="bytes">{{ wu.period.miss|human }}</dd></div>
         <div><dt>{{ _("Dernière requête") }}</dt><dd class="small" data-bind="last_text">{{ wu.last_text or _('aucune') }}</dd></div>
       </dl>
       {% if chart.hit or chart.miss %}

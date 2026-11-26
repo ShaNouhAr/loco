@@ -11,7 +11,7 @@ import subprocess
 from flask import abort, flash, g, render_template, request
 
 from . import app, config
-from .i18n import L_, _
+from .i18n import L_, _, locale
 from .auth import audit, login_required, require
 from .system import _alpine_release
 from .util import back
@@ -227,7 +227,7 @@ def job_progress(job, log_text):
     return out
 
 
-_CHANGELOG = {"mtime": None, "entries": []}
+_CHANGELOG = {}                 # chemin -> (date de modification, entrées) : un journal par langue
 _VERSION_RE = re.compile(r"^##\s+(\S+)\s*(?:[—-]\s*(.+))?$")
 
 
@@ -275,19 +275,31 @@ def parse_changelog(text):
     return entries
 
 
+def changelog_path(lang=None):
+    """Journal livré dans la langue de la page : CHANGELOG.fr.md, CHANGELOG.es.md, sinon CHANGELOG.md (anglais)."""
+    lang = lang or locale()
+    if lang != "en":
+        translated = config.CHANGELOG_PATH[:-len(".md")] + f".{lang}.md"
+        if os.path.exists(translated):
+            return translated
+    return config.CHANGELOG_PATH
+
+
 def changelog(limit=40):
-    """Journal livré avec la version installée (CHANGELOG.md), relu seulement si le fichier change."""
+    """Journal livré avec la version installée, dans la langue de la page, relu seulement si le fichier change."""
+    path = changelog_path()
     try:
-        mtime = os.path.getmtime(config.CHANGELOG_PATH)
+        mtime = os.path.getmtime(path)
     except OSError:
         return []
-    if _CHANGELOG["mtime"] != mtime:
+    cached = _CHANGELOG.get(path)
+    if cached is None or cached[0] != mtime:
         try:
-            with open(config.CHANGELOG_PATH, encoding="utf-8") as f:
-                _CHANGELOG.update(mtime=mtime, entries=parse_changelog(f.read())[:limit])
+            with open(path, encoding="utf-8") as f:
+                cached = _CHANGELOG[path] = (mtime, parse_changelog(f.read())[:limit])
         except OSError:
-            pass
-    return _CHANGELOG["entries"]
+            return cached[1] if cached else []
+    return cached[1]
 
 
 def timeline(latest, installed):
@@ -295,7 +307,9 @@ def timeline(latest, installed):
     État de chaque entrée : « new » (entre l'installée et la disponible), « current » (installée) ou « old »."""
     top = _vkey(latest.get("version")) if latest else ()
     here, seen, out = _vkey(installed), set(), []
-    for e in parse_changelog(latest.get("changelog") or "") + changelog():
+    # Nouveautés de la version disponible : dans la langue de la page si l'agent les a rapportées, sinon en anglais.
+    news = (latest.get("changelogs") or {}).get(locale()) or latest.get("changelog") or ""
+    for e in parse_changelog(news) + changelog():
         if e["version"] in seen:
             continue
         seen.add(e["version"])

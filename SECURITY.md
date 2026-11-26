@@ -1,51 +1,53 @@
-# Sécurité
+**English** · [Français](SECURITY.fr.md) · [Español](SECURITY.es.md)
 
-## Signaler une vulnérabilité
+# Security
 
-Ouvrez un avis privé sur GitHub (onglet *Security › Report a vulnerability*) plutôt qu'une issue publique.
-Merci d'indiquer la version (`loco` en bas de la page de connexion), la distribution et les étapes
-pour reproduire.
+## Reporting a vulnerability
 
-## Modèle de menace
+Open a private advisory on GitHub (*Security › Report a vulnerability* tab) rather than a public issue.
+Please give the version (`loco` at the bottom of the sign-in page), the distribution and the steps
+to reproduce.
 
-loco est conçu pour un **réseau d'entreprise interne**. Il n'est pas prévu pour être exposé sur Internet.
+## Threat model
 
-| Élément | Mesures |
+loco is designed for an **internal enterprise network**. It is not meant to be exposed on the Internet.
+
+| Component | Measures |
 |---|---|
-| Interface d'administration | HTTPS uniquement (TLS 1.2+), comptes nommés avec rôles, mots de passe hachés (scrypt, ou PBKDF2 avec les versions de Werkzeug des distributions plus anciennes), politique de longueur, changement imposé des mots de passe temporaires, blocage après échecs (par compte et par adresse), double authentification TOTP avec codes de secours (un code n'ouvre qu'une session : il ne se rejoue pas), clés d'accès WebAuthn (vérification de la personne par l'appareil exigée, défis à usage unique gardés par le serveur, origine et identité liées à l'adresse du portail, compteur de signatures contrôlé, seule la clé publique est conservée), connexion possible par annuaire (LDAP, RADIUS) ou SSO OpenID Connect, sessions connues du serveur (seule l'empreinte de leur identifiant est gardée) : fermées par la déconnexion — un cookie copié avant ne vaut plus rien —, après 8 h d'inactivité, au bout de 7 jours dans tous les cas, et au changement de mot de passe, jeton CSRF, cookie `Secure`/`HttpOnly`/`SameSite=Strict`, en-têtes CSP stricte (aucun script ni style en ligne), `X-Frame-Options: DENY`, `nosniff`, réseaux autorisés dédiés (`--admin-allow`), journal d'audit |
-| Dépôts APT locaux | Index signés GPG (RSA 4096), clé générée sur le serveur ; paquets et index isolés par distribution/version ; noms de dépôts validés ; un même paquet/version ne peut pas être remplacé par un contenu différent |
-| Dépôts RPM locaux | `repomd.xml` signé GPG et vérifié par dnf (`repo_gpgcheck=1`) ; il contient l'empreinte SHA-256 de chaque paquet |
-| Cache RPM (Rocky Linux, AlmaLinux, EPEL) | Certificats des miroirs vérifiés ; paquets vérifiés par les postes avec les clés GPG de leur distribution (`gpgcheck=1`) |
-| Dépôt Flatpak local | Commits et résumé signés GPG ; Flathub reste vérifié avec sa propre clé |
-| Logiciels Windows | SHA-256 de chaque installeur vérifié par le script avant exécution ; commandes recommandées en HTTPS |
-| Cache Windows Update | Ne relaie que les domaines de sa liste (HTTP et SNI) ; HTTPS relayé sans déchiffrement ; seuls les fichiers immuables sont mis en cache |
-| apt-cacher-ng | Clients filtrés (tcpwrappers sur Debian/Ubuntu ; relais TCP nginx avec ACL et backend en boucle locale sur Rocky), pages de maintenance protégées par mot de passe |
-| Portail (processus) | Utilisateur dédié sans shell, unité systemd confinée (système en lecture seule, aucune capacité, appels système filtrés, `systemd-analyze security` ≈ 1,5) ; nginx seul exposé |
-| Secrets | Mots de passe du portail hachés ; identifiants de maintenance apt-cacher-ng dans des fichiers à accès restreint (0600 pour le secret, 0640 root/apt-cacher-ng pour sa configuration) ; clés privées en 0600 ; sauvegardes en 0640 `root:loco`, pour que le portail puisse en proposer le téléchargement et l'envoi hors site : une archive contient la base, les clés privées du serveur et celle de l'autorité locale, et se protège donc comme le serveur lui-même ; clé d'inscription des postes : jamais écrite dans le journal d'accès, et retirée du poste une fois celui-ci inscrit (paquets `.deb`/`.rpm`, registre Windows) |
+| Administration interface | HTTPS only (TLS 1.2+), named accounts with roles, hashed passwords (scrypt, or PBKDF2 with the Werkzeug versions of older distributions), length policy, forced change of temporary passwords, lockout after failures (per account and per address), TOTP two-factor authentication with backup codes (a code only opens one session: it cannot be replayed), WebAuthn passkeys (user verification by the device required, single-use challenges kept by the server, origin and identity tied to the portal's address, signature counter checked, only the public key is kept), sign-in possible through a directory (LDAP, RADIUS) or OpenID Connect SSO, sessions known to the server (only the fingerprint of their identifier is kept): closed by signing out — a cookie copied before is worth nothing any more —, after 8 h of inactivity, after 7 days in any case, and when the password changes, CSRF token, `Secure`/`HttpOnly`/`SameSite=Strict` cookie, strict CSP headers (no inline script or style), `X-Frame-Options: DENY`, `nosniff`, dedicated allowed networks (`--admin-allow`), audit log |
+| Local APT repositories | GPG-signed indexes (RSA 4096), key generated on the server; packages and indexes isolated by distribution/version; repository names validated; a given package/version cannot be replaced by a different content |
+| Local RPM repositories | `repomd.xml` GPG-signed and checked by dnf (`repo_gpgcheck=1`); it contains the SHA-256 fingerprint of each package |
+| RPM cache (Rocky Linux, AlmaLinux, EPEL) | Mirrors' certificates checked; packages checked by the devices with their distribution's GPG keys (`gpgcheck=1`) |
+| Local Flatpak repository | GPG-signed commits and summary; Flathub stays verified with its own key |
+| Windows software | SHA-256 of each installer checked by the script before running; recommended commands over HTTPS |
+| Windows Update cache | Only relays the domains of its list (HTTP and SNI); HTTPS relayed without decryption; only immutable files are cached |
+| apt-cacher-ng | Clients filtered (tcpwrappers on Debian/Ubuntu; nginx TCP relay with ACL and loopback backend on Rocky), maintenance pages protected by a password |
+| Portal (process) | Dedicated user without a shell, confined systemd unit (read-only system, no capabilities, filtered system calls, `systemd-analyze security` ≈ 1.5); only nginx exposed |
+| Secrets | Portal passwords hashed; apt-cacher-ng maintenance credentials in restricted-access files (0600 for the secret, 0640 root/apt-cacher-ng for its configuration); private keys in 0600; backups in 0640 `root:loco`, so that the portal can offer them for download and send them off-site: an archive contains the database, the server's private keys and the local authority's, and must therefore be protected like the server itself; devices' enrollment key: never written to the access log, and removed from the device once it is enrolled (`.deb`/`.rpm` packages, Windows registry) |
 
-## Limites connues
+## Known limits
 
-- Les `.rpm` des dépôts locaux ne sont pas re-signés un par un : leur intégrité repose sur les
-  métadonnées signées (`repo_gpgcheck=1`), et non sur une signature par paquet (`gpgcheck=0`).
-- Les dépôts RHEL (abonnement Red Hat) ne passent pas par le cache.
-- Déploiement Docker : les processus gardent leurs comptes dédiés et le conteneur n'a que les capacités
-  utiles, mais le confinement systemd du portail n'y est pas disponible ; l'installation native est plus
-  cloisonnée. Le conteneur utilise le réseau de l'hôte.
+- The `.rpm` files of the local repositories are not re-signed one by one: their integrity relies on the
+  signed metadata (`repo_gpgcheck=1`), not on a per-package signature (`gpgcheck=0`).
+- The RHEL repositories (Red Hat subscription) do not go through the cache.
+- Docker deployment: the processes keep their dedicated accounts and the container only has the useful
+  capabilities, but the portal's systemd confinement is not available there; the native installation is more
+  compartmentalized. The container uses the host's network.
 
-- Le port HTTP d'amorçage (8088) sert scripts et installeurs sans chiffrement : un attaquant sur le réseau
-  pourrait modifier un script. Déployez l'autorité de certification puis utilisez `--no-http`.
-- `setup.sh --trust-ca` fait confiance à l'autorité reçue au premier contact (comparer l'empreinte affichée).
-- La double authentification de loco ne s'applique qu'à la connexion par mot de passe local. Une connexion par annuaire ou
-  par SSO suit les règles de l'annuaire ou du fournisseur d'identité.
-- Une clé d'accès (passkey) remplace le mot de passe et le second facteur : la vérification de la personne est faite par
-  l'appareil (empreinte, visage, code), pas par loco. Aucune attestation du fabricant n'est demandée : loco ne restreint
-  pas les modèles d'appareils ni les gestionnaires de mots de passe qui synchronisent les clés. Ajouter une clé demande le
-  mot de passe du compte ; qui connaît ce mot de passe (et le second facteur) peut donc en ajouter une : le journal note
-  chaque ajout, retrait et connexion par clé.
-- Les postes accèdent aux dépôts sans authentification ; la restriction se fait par réseau (`--allow`).
-- Envoi syslog : en TCP et en UDP, les journaux circulent en clair ; préférez TLS. Le contenu des journaux des postes reste déclaratif
-  (un poste compromis peut écrire ce qu'il veut dans ses propres lignes) : loco impose le nom d'hôte et retire les retours à la ligne et
-  les caractères de contrôle, pour qu'un poste ne puisse ni se faire passer pour un autre ni forger une ligne. Pas de certificat client (mTLS).
-- L'isolation APT évite de mélanger les dépôts ; elle ne prouve pas qu'un `.deb` est compatible avec
-  sa destination. L'administrateur doit valider les dépendances et l'origine des paquets avant l'import
-  ou la copie. Le dépôt historique et `setup.sh --legacy` restent partagés pour la transition.
+- The HTTP bootstrap port (8088) serves scripts and installers without encryption: an attacker on the network
+  could modify a script. Deploy the certificate authority, then use `--no-http`.
+- `setup.sh --trust-ca` trusts the authority received at the first contact (compare the fingerprint shown).
+- loco's two-factor authentication only applies to sign-in with a local password. A sign-in through a directory or
+  through SSO follows the rules of the directory or the identity provider.
+- A passkey replaces the password and the second factor: the person is verified by
+  the device (fingerprint, face, code), not by loco. No manufacturer attestation is requested: loco does not restrict
+  the device models or the password managers that sync passkeys. Adding a passkey requires the
+  account's password; whoever knows this password (and the second factor) can therefore add one: the audit log records
+  each addition, removal and sign-in with a passkey.
+- The devices access the repositories without authentication; the restriction is by network (`--allow`).
+- Syslog forwarding: over TCP and UDP, the logs travel in clear text; prefer TLS. The content of the devices' logs stays declarative
+  (a compromised device can write what it wants in its own lines): loco enforces the hostname and removes line breaks and
+  control characters, so that a device can neither pass itself off as another nor forge a line. No client certificate (mTLS).
+- APT isolation avoids mixing repositories; it does not prove that a `.deb` is compatible with
+  its destination. The administrator must validate the dependencies and the origin of the packages before importing
+  or copying them. The legacy repository and `setup.sh --legacy` stay shared for the transition.

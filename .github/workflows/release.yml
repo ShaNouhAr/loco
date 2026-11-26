@@ -1,8 +1,7 @@
 name: Release
-# Publication d'une version : pousser un tag « vX.Y.Z » (git tag -a v1.2.3 -m v1.2.3 && git push origin v1.2.3) ;
-# pour retenter, « Re-run » sur ce run dans l'onglet Actions. Rien n'est publié sans les vérifications et l'intégration complètes de ce même run ;
-# l'ISO de l'appliance et l'agent Windows publiés sont ceux qui viennent d'être testés. Seul le jeton fourni par
-# GitHub (GITHUB_TOKEN) est utilisé : un fork publie ses propres versions sans autre réglage.
+# Push a vX.Y.Z tag to publish a release. Use Re-run in Actions to retry.
+# A release uses the appliance ISO and Windows agent tested in the same run.
+# Forks can publish their own releases using GITHUB_TOKEN.
 on:
   push:
     tags: ['v*.*.*']
@@ -16,11 +15,11 @@ jobs:
   checks:
     uses: ./.github/workflows/ci.yml
   integration:
-    # Les VM ne démarrent qu'une fois les vérifications rapides passées : un test cassé se voit en quelques minutes, pas 30.
+    # Start the integration VMs after the quick checks pass.
     needs: checks
     uses: ./.github/workflows/integration.yml
   publish:
-    name: Publication
+    name: Publish
     needs: [checks, integration]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -39,19 +38,31 @@ jobs:
         with:
           name: loco-client-msi
           path: /tmp/loco-release-msi
-      - name: Vérifier le tag et rassembler les sources, l'ISO, l'agent Windows et les empreintes
+      - name: Verify the tag and collect the release artifacts
         run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag invalide : $RELEASE_TAG"; exit 1; }
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid tag: $RELEASE_TAG"; exit 1; }
           revision=$(git rev-parse "$RELEASE_TAG^{commit}")
-          test "$revision" = "$(git rev-parse HEAD)" || { echo "Le run ne correspond pas au tag $RELEASE_TAG"; exit 1; }
+          test "$revision" = "$(git rev-parse HEAD)" || { echo "The run does not match tag $RELEASE_TAG"; exit 1; }
           version=${RELEASE_TAG#v}
-          git show "$revision:portal/loco/config.py" | grep -qx "VERSION = \"$version\"" || { echo "VERSION de portal/loco/config.py différente de $version"; exit 1; }
+          git show "$revision:portal/loco/config.py" | grep -qx "VERSION = \"$version\"" || { echo "VERSION in portal/loco/config.py does not match $version"; exit 1; }
           mkdir -p dist
           cp /tmp/loco-release-iso/alpine-build/loco-v3.24-x86_64.iso "dist/loco-$version-x86_64.iso"
           cp /tmp/loco-release-msi/loco-client.msi "dist/loco-client-$version.msi"
           git archive --format=tar.gz --prefix="loco-$version/" "$revision" > "dist/loco-$version.tar.gz"
           (cd dist && sha256sum loco-* > SHA256SUMS)
-      - name: Publier
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$RELEASE_TAG" --verify-tag --title "loco ${RELEASE_TAG#v}" --generate-notes dist/*
+        run: |
+          version=${RELEASE_TAG#v}
+          notes=$(mktemp)
+          awk -v version="$version" '
+            /^## / {
+              if (found) exit
+              found = ($2 == version)
+              next
+            }
+            found && (written || NF) { print; written = 1 }
+            END { if (!written) exit 1 }
+          ' CHANGELOG.md > "$notes" || { echo "Missing English release notes for $version"; exit 1; }
+          gh release create "$RELEASE_TAG" --verify-tag --title "loco $version" --notes-file "$notes" dist/*

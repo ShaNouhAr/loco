@@ -507,8 +507,8 @@ class TestPages(TempAgent):
         patch = mock.patch.object(config, "CHANGELOG_PATH", shipped)
         patch.start()
         self.addCleanup(patch.stop)
-        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
-        appliance._CHANGELOG["mtime"] = None
+        self.addCleanup(appliance._CHANGELOG.clear)
+        appliance._CHANGELOG.clear()
         with open(locoadmin.STATUS, "w") as f:
             json.dump({"checked": "2026-10-15 09:00:00", "latest": {"version": "9.1.0", "url": "", "published": "2026-11-02T10:00:00Z",
                                                                   "changelog": news}, "packages": [], "errors": []}, f)
@@ -522,6 +522,31 @@ class TestPages(TempAgent):
         self.assertIn('class="tl-item is-current"', html)                     # la version installée, depuis le journal livré
         self.assertIn("Aucune mise à jour en attente.", html)                 # système à jour
 
+    def test_the_changelog_is_shown_in_the_language_of_the_page(self):
+        """CHANGELOG.md en anglais, CHANGELOG.fr.md / .es.md traduits : chaque compte lit sa langue (anglais à défaut)."""
+        shipped = os.path.join(self.work.name, "CHANGELOG.md")
+        for name, text in (("CHANGELOG.md", "Current release."), ("CHANGELOG.fr.md", "Version actuelle.")):
+            with open(os.path.join(self.work.name, name), "w", encoding="utf-8") as f:
+                f.write(f"# Changelog\n\n## {config.VERSION} — 2026-10-01\n\n- **{text}** x\n")
+        patch = mock.patch.object(config, "CHANGELOG_PATH", shipped)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.addCleanup(appliance._CHANGELOG.clear)
+        news = {"version": "9.1.0", "url": "", "published": "", "changelog": "## 9.1.0 — 2026-11-02\n\n- **Big news.** a\n",
+                "changelogs": {"fr": "## 9.1.0 — 2026-11-02\n\n- **Grande nouveauté.** a\n"}}
+        with open(locoadmin.STATUS, "w") as f:
+            json.dump({"checked": "2026-10-15 09:00:00", "latest": news, "packages": [], "errors": []}, f)
+        french = self.b.c.get("/system/updates").get_data(as_text=True)
+        self.assertIn("Version actuelle.", french)
+        self.assertIn("Grande nouveauté.", french)
+        self.assertNotIn("Big news.", french)
+        english = self.b.c.get("/system/updates", headers={"Accept-Language": "en"}).get_data(as_text=True)
+        self.assertIn("Current release.", english)
+        self.assertIn("Big news.", english)
+        with mock.patch.object(config, "VERSION", config.VERSION):                 # pas de CHANGELOG.es.md : l'anglais
+            spanish = self.b.c.get("/system/updates", headers={"Accept-Language": "es"}).get_data(as_text=True)
+        self.assertIn("Current release.", spanish)
+
     def test_long_lists_show_five_and_fold_the_rest(self):
         shipped = os.path.join(self.work.name, "CHANGELOG.md")
         with open(shipped, "w", encoding="utf-8") as f:
@@ -529,8 +554,8 @@ class TestPages(TempAgent):
         patch = mock.patch.object(config, "CHANGELOG_PATH", shipped)
         patch.start()
         self.addCleanup(patch.stop)
-        self.addCleanup(appliance._CHANGELOG.update, mtime=None, entries=[])
-        appliance._CHANGELOG["mtime"] = None
+        self.addCleanup(appliance._CHANGELOG.clear)
+        appliance._CHANGELOG.clear()
         jobs = [{"id": f"20261028-0{n}0000-abcdef", "action": "check", "state": "success", "started": f"2026-10-28 0{n}:00:00"}
                 for n in range(8)]
         with open(locoadmin.STATUS, "w") as f:
@@ -683,13 +708,26 @@ class TestReleaseChangelog(TempAgent):
         return locoadmin.read_status()
 
     def test_check_keeps_the_news_of_the_available_version(self):
-        status = self.check(lambda release: self.TEXT)
+        status = self.check(lambda release, name="CHANGELOG.md": self.TEXT)
         self.assertIn("## 2.3.0", status["latest"]["changelog"])
         self.assertNotIn("## 2.1.0", status["latest"]["changelog"])
         self.assertEqual(status["errors"], [])
 
+    def test_check_also_keeps_the_translations_the_release_has(self):
+        def changelog(release, name="CHANGELOG.md"):
+            if name == "CHANGELOG.fr.md":
+                return "## 2.3.0 — 2026-11-02\n\n- **Nouveauté.** a\n\n## 2.1.0\n\n- vieux\n"
+            if name == "CHANGELOG.es.md":
+                raise OSError("404")                        # version publiée sans traduction espagnole : sans erreur
+            return self.TEXT
+        status = self.check(changelog)
+        self.assertEqual(sorted(status["latest"]["changelogs"]), ["fr"])
+        self.assertIn("Nouveauté.", status["latest"]["changelogs"]["fr"])
+        self.assertNotIn("vieux", status["latest"]["changelogs"]["fr"])     # seulement ce qui est plus récent
+        self.assertEqual(status["errors"], [])
+
     def test_unreachable_changelog_does_not_fail_the_check(self):
-        def broken(release):
+        def broken(release, name="CHANGELOG.md"):
             raise OSError("introuvable")
         status = self.check(broken)
         self.assertEqual(status["latest"]["version"], "2.3.0")
