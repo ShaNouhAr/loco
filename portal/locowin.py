@@ -301,10 +301,11 @@ def render_nginx(cfg):
         "pid logs/nginx.pid;", "events {", "    worker_connections 1000;", "}",
     ]
     if cfg.get("wu", True):
-        files["loco-stream.conf"] = tpl("nginx-stream.conf")
+        files["loco-stream.conf"] = tpl("nginx-stream.conf").replace("stream {\n", "stream {\n    map_hash_bucket_size 128;\n", 1)
         main.append("include loco-stream.conf;")
     main += [
-        "http {", f"    include \"{_slash(os.path.join(cfg['program_dir'], 'nginx', 'conf', 'mime.types'))}\";",
+        # The Windows nginx build can default to 32-byte buckets, too small for the upstream host names.
+        "http {", "    map_hash_bucket_size 128;", f"    include \"{_slash(os.path.join(cfg['program_dir'], 'nginx', 'conf', 'mime.types'))}\";",
         "    default_type application/octet-stream;", "    server_tokens off;", "    access_log off;",
         "    client_body_temp_path temp/client_body;", "    proxy_temp_path temp/proxy;",
         "    fastcgi_temp_path temp/fastcgi;", "    uwsgi_temp_path temp/uwsgi;", "    scgi_temp_path temp/scgi;",

@@ -12,6 +12,8 @@ on:
       - 'conf/**'
       - 'portal/agents/**'
       - 'portal/locoadmin.py'
+      - 'portal/locosamba.py'
+      - 'portal/locowin.py'
       - 'portal/templates/*.sh'
       - 'tests/*.sh'
       - 'tests/*.ps1'
