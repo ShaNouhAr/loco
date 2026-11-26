@@ -19,7 +19,7 @@ TMP = tempfile.mkdtemp(prefix="lr-test-")
 for sub in ("data", "state", "etc"):
     os.makedirs(os.path.join(TMP, sub), exist_ok=True)
 os.environ.update(LOCO_DATA=os.path.join(TMP, "data"), LOCO_STATE=os.path.join(TMP, "state"), LOCO_ETC=os.path.join(TMP, "etc"),
-                  LOCO_SECURE_COOKIE="0", LOCO_ADMIN_URL="https://repo.test:8443", LOCO_PUBLIC_URL="http://repo.test:8088",
+                  LOCO_BACKUP_DIR=os.path.join(TMP, "backups"), LOCO_SECURE_COOKIE="0", LOCO_ADMIN_URL="https://repo.test:8443", LOCO_PUBLIC_URL="http://repo.test:8088",
                   LOCO_HOST="repo.test", LOCO_WU_LOG=os.path.join(TMP, "wu.log"))
 sys.path.insert(0, os.path.join(ROOT, "portal"))
 

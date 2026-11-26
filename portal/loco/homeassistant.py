@@ -999,11 +999,11 @@ def homeassistant_update():
     items = _update_items(info, target) if info else []
     if not items:
         flash(_("Aucune mise à jour à lancer : actualisez l'état de Home Assistant."), "error")
-        return back("homeassistant")
+        return back("homeassistant_host", host_id=row["id"])
     count = _launch(row, items, request.form.get("backup") == "1")
     flash(_("Mise à jour lancée.") if count == 1 else _("%(n)s mises à jour lancées, l'une après l'autre.", n=count) if count
           else _("Cette mise à jour est déjà en cours."), "ok" if count else "error")
-    return back("homeassistant")
+    return back("homeassistant_host", host_id=row["id"])
 
 
 @app.route("/homeassistant/<int:host_id>/fleet-update", methods=["POST"])

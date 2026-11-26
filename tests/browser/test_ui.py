@@ -1257,7 +1257,7 @@ class TestAndroidAppsDesktop(AndroidAppsPages):
     def test_pages_fit_on_a_computer(self):
         self.check_pages()
         self.page.goto("/android/apps")
-        expect(self.page.locator(".nav a.on")).to_have_text("Android")
+        expect(self.page.locator('#nav-system a[href="/android/apps"]')).to_have_attribute("aria-current", "page")
         self.page.locator("[data-open='#add-play']").click()
         expect(self.page.locator("#add-play")).to_be_visible()
 
@@ -1331,15 +1331,19 @@ class HomeAssistantPages(BrowserTest):
 class TestHomeAssistantDesktop(HomeAssistantPages):
     def test_linking_shows_the_fingerprint_before_anything_else(self):
         self.page.goto("/homeassistant")
-        expect(self.page.locator(".nav a.on")).to_have_attribute("aria-label", "Home Assistant")
+        expect(self.page.locator('#nav-system a[href="/homeassistant"]')).to_have_attribute("aria-current", "page")
+        self.page.locator('a[href$="/enrollment#homeassistant"]').first.click()
         expect(self.page.locator("#hass-public-key")).to_contain_text("ssh-ed25519 AAAA")
         self.page.fill("[name=host]", "192.168.43.80")
         self.page.fill("[name=name]", "Maison")
         self.page.click("form[action$='/homeassistant/link'] button")
         digest = base64.b64encode(hashlib.sha256(base64.b64decode(self.fake.HOST_KEY)).digest()).decode().rstrip("=")
         expect(self.page.locator(".hass-confirm dd.mono")).to_have_text("SHA256:" + digest)
-        expect(self.page.locator(".hass-host")).to_have_count(0)                     # rien n'est relié avant la confirmation
+        with transaction() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM homeassistant_hosts").fetchone()[0], 0)
         self.page.click(".hass-confirm button.primary")
+        self.page.goto("/homeassistant")
+        self.page.get_by_role("link", name="Maison").click()
         host = self.page.locator(".hass-host")
         expect(host.locator(".metric").nth(0)).to_contain_text("2026.11.2 disponible")
         expect(host.locator(".metric").nth(2)).to_contain_text("à jour")             # le Supervisor n'a rien à proposer
@@ -1349,9 +1353,9 @@ class TestHomeAssistantDesktop(HomeAssistantPages):
         self.assertLessEqual(self.bar(), 0, "la barre du haut déborde")
 
     def test_an_update_is_confirmed_followed_in_place_and_not_offered_twice(self):
-        self.linked()
+        host_id = self.linked()
         (Path(self.folder) / "state" / "slow").write_text("2")
-        self.page.goto("/homeassistant")
+        self.page.goto(f"/homeassistant/{host_id}")
         host = self.page.locator(".hass-host")
         host.locator("tr", has_text="Home Assistant Core").locator("button").click()
         dialog = self.page.locator("#hass-update")
@@ -1371,19 +1375,19 @@ class TestHomeAssistantDesktop(HomeAssistantPages):
         self.assertEqual(self.ran(), ["core update --backup --no-progress"])
 
     def test_the_log_opens_on_demand(self):
-        self.linked()
-        self.page.goto("/homeassistant")
+        host_id = self.linked()
+        self.page.goto(f"/homeassistant/{host_id}")
         self.page.locator(".hass-log > summary").click()
         expect(self.page.locator("[data-hass-log-text]")).to_contain_text("Home Assistant initialized")
 
     def test_the_terminal_is_a_real_shell_under_its_own_entry(self):
-        self.linked()
-        self.page.goto("/homeassistant")
+        host_id = self.linked()
+        self.page.goto(f"/homeassistant/{host_id}")
         self.page.locator(".hass-actions form[action$='/shell'] button").first.click()
         self.page.wait_for_url(re.compile(r"/fleet/session/"))
         expect(self.page.locator("#remote-status")).to_contain_text("Connecté")
         expect(self.page.locator("#remote-status")).to_contain_text("terminal de Home Assistant")
-        expect(self.page.locator(".nav a.on")).to_have_attribute("aria-label", "Home Assistant")
+        expect(self.page.locator('#nav-system a[href="/homeassistant"]')).to_have_attribute("aria-current", "page")
         expect(self.page.locator(".head a").first).to_have_attribute("href", "/homeassistant")
         self.page.locator("#remote-screen textarea").focus()
         self.page.keyboard.type("ha core restart\n")
@@ -1399,12 +1403,12 @@ class TestHomeAssistantPhone(HomeAssistantPages):
     viewport = PHONE
 
     def test_the_page_fits_on_a_phone_even_with_every_entry_in_the_bar(self):
-        self.linked()
-        for path in ("/homeassistant", "/homeassistant?relier=1", "/"):
+        host_id = self.linked()
+        for path in ("/homeassistant", f"/homeassistant/{host_id}", "/"):
             self.page.goto(path)
             self.assertLessEqual(self.overflow(), 0, path)
             self.assertLessEqual(self.bar(), 0, f"{path} : la barre du haut déborde")
-        self.page.goto("/homeassistant")
+        self.page.goto(f"/homeassistant/{host_id}")
         self.page.locator(".hass-actions details.menu > summary").first.click()
         expect(self.page.locator(".hass-actions details.menu[open] .menu-list").first).to_be_visible()
         self.assertLessEqual(self.overflow(), 0, "menu ouvert")
@@ -1720,6 +1724,7 @@ class BackupsPages(BrowserTest):
             pve_id = conn.execute("INSERT INTO proxmox_hosts (name, host, port, token_id, secret, fingerprint, created_at, created_by) "
                                   "VALUES ('pve', '127.0.0.1', ?, ?, ?, ?, ?, 'admin')",
                                   (self.pve.port, fake_proxmox.TOKEN_ID, secret, self.pve.fingerprint, stamp())).lastrowid
+        self.addCleanup(self.restore)
         self.assertEqual(homeassistant.refresh(hass_id), "")
         self.assertEqual(proxmox.refresh(pve_id), "")
         self.backups = backups
@@ -1728,7 +1733,6 @@ class BackupsPages(BrowserTest):
         archive = Path(config.BACKUP_DIR) / "loco-serveur-de-demonstration-20261118-035657.tar.gz"
         archive.write_bytes(b"\x1f\x8b" + b"0" * 2048)
         self.addCleanup(archive.unlink)
-        self.addCleanup(self.restore)
 
     def restore(self):
         from loco import features, offsite

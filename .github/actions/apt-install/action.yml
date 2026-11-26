@@ -15,7 +15,7 @@ runs:
       env:
         PACKAGES: ${{ inputs.packages }}
       # ImageOS et ImageVersion sont fournis par les runners GitHub : une nouvelle image renouvelle le cache.
-      run: echo "key=apt-${ImageOS:-ubuntu}-${ImageVersion:-0}-$(printf '%s' "$PACKAGES" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      run: echo "key=apt-v2-${ImageOS:-ubuntu}-${ImageVersion:-0}-$(printf '%s' "$PACKAGES" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
     - id: cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -28,12 +28,12 @@ runs:
       run: |
         debs="$HOME/.cache/loco-apt"
         if [ "$HIT" = true ] && compgen -G "$debs/*.deb" >/dev/null; then
-          if sudo dpkg -i "$debs"/*.deb >/dev/null; then
+          if sudo apt-get install -y -q --no-download --no-install-recommends "$debs"/*.deb; then
             echo "Installé depuis le cache GitHub Actions : $(find "$debs" -name '*.deb' | wc -l) paquet(s), sans miroir."
             exit 0
           fi
           echo "Cache inutilisable : installation depuis le miroir."
-          sudo dpkg --configure -a || true
+          sudo rm -rf "$debs"
         fi
         mkdir -p "$debs/partial"
         sudo apt-get update -q -o Acquire::Retries=5 -o APT::Update::Error-Mode=any

@@ -334,19 +334,29 @@ class TestChanges(ServiceTest):
         self.assertEqual(os.listdir(staging), [reply["token"] + ".part"])          # en cours : gardé
 
 
-class TestSocket(ServiceTest):
-    def serve(self, allowed):
-        path = os.path.join(self.work, "files.sock")
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(path)
-        server.listen(8)
-        self.addCleanup(server.close)
-        threading.Thread(target=locosamba.files_serve, args=(server.fileno(), allowed, self.files), daemon=True).start()
-        return path
+def serve_files(test, allowed):
+    path = os.path.join(test.work, "files.sock")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    test.addCleanup(server.close)
+    server.bind(path)
+    server.listen(16)
+    worker = threading.Thread(target=locosamba.files_serve,
+                              args=(server.dup().detach(), allowed, test.files), daemon=True)
+    worker.start()
 
+    def stop():
+        server.shutdown(socket.SHUT_RDWR)
+        worker.join(timeout=5)
+        test.assertFalse(worker.is_alive())
+
+    test.addCleanup(stop)
+    return path
+
+
+class TestSocket(ServiceTest):
     def test_the_portal_receives_the_open_file(self):
         self.put("notes.txt", b"bonjour")
-        path = self.serve({os.getuid()})
+        path = serve_files(self, {os.getuid()})
         reply, fds = locosamba.files_call({"op": "open", "share": "Documents", "path": "notes.txt"}, path=path)
         self.assertTrue(reply["ok"])
         self.assertEqual(os.read(fds[0], 100), b"bonjour")
@@ -355,7 +365,7 @@ class TestSocket(ServiceTest):
         self.assertEqual((reply["entries"][0]["name"], fds), ("notes.txt", []))
 
     def test_only_the_portal_account_is_heard(self):
-        path = self.serve({os.getuid() + 12345})
+        path = serve_files(self, {os.getuid() + 12345})
         with self.assertRaises((OSError, ValueError)):
             locosamba.files_call({"op": "list", "share": "Documents", "path": ""}, path=path, timeout=5)
 
@@ -396,12 +406,7 @@ class FilesPortalTest(PortalTest):
         self.root = os.path.join(self.work, "documents")
         os.mkdir(self.root)
         self.files = locosamba.ShareFiles(self.status_path)
-        sock_path = os.path.join(self.work, "files.sock")
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(sock_path)
-        server.listen(16)
-        self.addCleanup(server.close)
-        threading.Thread(target=locosamba.files_serve, args=(server.fileno(), {os.getuid()}, self.files), daemon=True).start()
+        sock_path = serve_files(self, {os.getuid()})
         patch = mock.patch.object(locosamba, "FILES_SOCK", sock_path)
         patch.start()
         self.addCleanup(patch.stop)

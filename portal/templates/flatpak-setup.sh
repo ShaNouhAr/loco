@@ -27,7 +27,7 @@ fi
 if ! command -v flatpak >/dev/null 2>&1; then
     apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q flatpak
 fi
-if command -v curl >/dev/null 2>&1; then GET="curl -fsSL"; else GET="wget -qO-"; fi
+if command -v curl >/dev/null 2>&1; then GET="curl -fsSL --retry 4 --retry-delay 2 --connect-timeout 10 --max-time 30"; else GET="wget -qO-"; fi
 TMP=$(mktemp --suffix=.flatpakrepo)
 trap 'rm -f "$TMP"' EXIT
 

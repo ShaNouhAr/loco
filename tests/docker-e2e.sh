@@ -82,7 +82,8 @@ dc down
 dc up -d
 healthy
 [ "$(curl -fsS "http://$HOST:8088/ca.crt" | sha256sum | cut -d' ' -f1)" = "$CA_BEFORE" ] || fail "autorité HTTPS régénérée"
-if dc logs loco | grep -Eq "Compte initial|Initial account"; then fail "nouveau compte initial après recréation"; fi
+dc logs loco > "$work/recreated.log"
+if grep -Eq "Compte initial|Initial account" "$work/recreated.log"; then fail "nouveau compte initial après recréation"; fi
 python3 tests/e2e_portal.py https://127.0.0.1:8443 "$PW" "$work/lr-e2e.deb" linux "$ID/$VERSION_CODENAME"
 sudo apt-get update -q >/dev/null
 sudo apt-get install -y -q --reinstall lr-e2e >/dev/null
@@ -133,7 +134,8 @@ done
 [ "$(sudo docker inspect -f '{{.State.Health.Status}}' "$(ac ps -q loco)")" = healthy ] || { ac logs --tail 80 loco >&2; fail "fichier Compose seul : loco ne devient pas sain"; }
 [ "$(sudo docker inspect -f '{{.Config.Image}}' "$(ac ps -q loco)")" = loco:latest ] || fail "fichier Compose seul : image inattendue"
 curl -fsk --max-time 8 https://127.0.0.1:8443/healthz | grep -qx ok || fail "fichier Compose seul : portail muet"
-ac logs loco | grep -Eq "Compte initial|Initial account" || fail "fichier Compose seul : compte initial absent du journal"
+ac logs loco > "$work/standalone.log"
+grep -Eq "Compte initial|Initial account" "$work/standalone.log" || fail "fichier Compose seul : compte initial absent du journal"
 ac down -v
 if ss -Hltn | grep -qE ':(8443|8088|3142) '; then fail "ports encore ouverts"; fi
 echo 'Test Docker de bout en bout réussi.'

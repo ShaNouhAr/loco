@@ -15,12 +15,10 @@ Module hors du paquet loco : chargé à la demande par locoadmin (mode isolé) e
 
 import contextlib
 import errno
-import grp
 import hashlib
 import ipaddress
 import json
 import os
-import pwd
 import re
 import secrets
 import shlex
@@ -36,6 +34,11 @@ import time
 import unicodedata
 import uuid
 import zipfile
+
+# The portal also imports this module on Windows, where the Samba worker is unavailable.
+if os.name == "posix":
+    import grp
+    import pwd
 
 AGENT_DIR = "/var/lib/loco-agent"
 REQUESTS = os.path.join(AGENT_DIR, "samba")            # demandes du portail (0730 root:loco)
@@ -1966,11 +1969,11 @@ def files_serve(listen_fd, allowed=None, files=None):
         with contextlib.suppress(KeyError):
             allowed.add(pwd.getpwnam(PORTAL_USER).pw_uid)
     parent = os.getppid()
+    stopped = threading.Event()
 
     def watch():
         tidied = 0.0
-        while True:
-            time.sleep(2)
+        while not stopped.wait(2):
             if os.getppid() != parent:                            # agent arrêté ou relancé : ce service s'en va aussi
                 os._exit(0)
             if time.time() - tidied > 3600:
@@ -1982,7 +1985,11 @@ def files_serve(listen_fd, allowed=None, files=None):
     while True:
         try:
             conn, _addr = server.accept()
-        except OSError:
+        except OSError as error:
+            if error.errno in (errno.EBADF, errno.EINVAL):
+                stopped.set()
+                server.close()
+                return
             time.sleep(0.2)
             continue
         if not slots.acquire(blocking=False):
