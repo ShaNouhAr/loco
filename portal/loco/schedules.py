@@ -106,9 +106,23 @@ def when_text(when):
 
 
 def result_text(text):
-    """Résultat d'une exécution, enregistré en français, dans la langue de la page."""
-    m = re.fullmatch(r"(\d+) postes?(?:\(s\))?", text or "")      # « poste(s) » : résultats déjà enregistrés
-    return n_("%(num)s poste", "%(num)s postes", int(m.group(1))) if m else _(text) if text else ""
+    """Résultat d'une exécution, enregistré en français, dans la langue de la page : « 3 postes », « 3 postes · 1 réservé
+    sans redémarrage » (poste réservé par un autre compte : mis à jour sans redémarrer, ou pas redémarré)."""
+    m = re.fullmatch(r"(?:(\d+) postes?(?:\(s\))?)?(?:(?:^| · )(\d+) réservés? sans redémarrage)?", text or "")  # « poste(s) » : anciens
+    if not text or m is None or not (m.group(1) or m.group(2)):
+        return _(text) if text else ""
+    parts = [n_("%(num)s poste", "%(num)s postes", int(m.group(1)))] if m.group(1) else []
+    if m.group(2):
+        parts.append(n_("%(num)s réservé sans redémarrage", "%(num)s réservés sans redémarrage", int(m.group(2))))
+    return " · ".join(parts)
+
+
+def _outcome(added, kept, devices):
+    """Résultat enregistré (en français) d'une mise à jour ou d'un redémarrage planifié."""
+    if added or kept:
+        return " · ".join(t for t in (counted(added, "poste") if added else "",
+                                      f"{counted(kept, 'réservé')} sans redémarrage" if kept else "") if t)
+    return N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné")
 
 
 def describe(s):
@@ -309,11 +323,27 @@ def _check_targets(targets):
         raise ValueError(_('Choisissez au moins un appareil ou un groupe.'))
 
 
+def _check_reserved(conn, action, params, targets):
+    """Redémarrage planifié d'un poste nommé et réservé par un autre compte : refusé (le mot de passe ne vaut que dans
+    le navigateur, pas à l'heure dite). Dans un groupe ou tout le parc, ce poste est seulement mis de côté à l'exécution."""
+    from . import reservations
+    if not reservations.reboots(action, params) or not targets.get("devices"):
+        return
+    marks = ",".join("?" * len(targets["devices"]))
+    row = conn.execute("SELECT d.hostname, d.label, u.username FROM device_reservations r JOIN devices d ON d.id=r.device_id "
+                       f"JOIN users u ON u.id=r.user_id WHERE r.device_id IN ({marks}) AND r.user_id!=? LIMIT 1",
+                       (*targets["devices"], g.user["id"])).fetchone()
+    if row is not None:
+        raise ValueError(_("%(name)s est réservé par %(owner)s : son redémarrage ne se planifie que depuis ce compte.",
+                           name=row["label"] or row["hostname"], owner=row["username"]))
+
+
 def create(conn, action, params, targets, form):
     """Nouvelle planification depuis un formulaire (champs « Quand ») ; renvoie son identifiant."""
     targets = dict(targets, role=targets.get("role", g.user["role"]))
     _require(action, params, targets)
     _check_targets(targets)
+    _check_reserved(conn, action, params, targets)
     fields = parse(form)
     now, user = fleet._now(), g.user["username"]
     sched_id = conn.execute(
@@ -340,7 +370,7 @@ def _extras(conn, s, reboot):
 
 def materialize(conn):
     """Transforme les planifications dues en commandes d'agent et les fait passer à l'occurrence suivante."""
-    from . import scripts
+    from . import reservations, scripts
     now = datetime.datetime.now()
     due = conn.execute("SELECT * FROM schedules WHERE enabled=1 AND next_run!='' AND next_run<=?",
                        (now.strftime(FMT),)).fetchall()
@@ -351,21 +381,28 @@ def materialize(conn):
         if claim.rowcount != 1:
             continue                                # déjà traitée par une requête concurrente
         params, devices, ref = _params(s), resolve(conn, s), None
+        # Poste réservé par un autre compte que l'auteur : mis à jour sans redémarrer, ou pas redémarré du tout.
+        mine = lambda dev: reservations.may_reboot(dev, s["created_by"])     # noqa: E731
         if s["action"] == "update":
-            added = sum(1 for dev in devices
-                        if fleet.queue(dev, "update", {"reboot": bool(params.get("reboot"))}, user=s["created_by"],
-                                       run_after=s["next_run"]))
+            reboot, added, kept = bool(params.get("reboot")), 0, 0
+            for dev in devices:
+                if fleet.queue(dev, "update", {"reboot": reboot}, user=s["created_by"], run_after=s["next_run"]):
+                    added += 1
+                    kept += reboot and not mine(dev)
             # Tout le parc : Home Assistant et Proxmox aussi, comme « Tout mettre à jour », selon les droits de l'auteur.
-            added += _extras(conn, s, bool(params.get("reboot"))) if _targets(s).get("all") else 0
+            added += _extras(conn, s, reboot) if _targets(s).get("all") else 0
             # Résultat gardé en français dans la base, traduit à l'affichage (result_text).
-            result = (counted(added, "poste") if added else
-                      N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
+            result = _outcome(added, kept, devices)
         elif s["action"] == "reboot":
-            # Android ne redémarre pas sur commande de loco.
-            added = sum(1 for dev in devices if dev["os_family"] != "android"
-                        and fleet.queue(dev, "reboot", {}, user=s["created_by"], run_after=s["next_run"]))
-            result = (counted(added, "poste") if added else
-                      N_("Déjà en attente sur les postes") if devices else N_("Aucun poste actif concerné"))
+            added, kept = 0, 0
+            for dev in devices:
+                if dev["os_family"] == "android":             # Android ne redémarre pas sur commande de loco
+                    continue
+                if not mine(dev):
+                    kept += 1
+                elif fleet.queue(dev, "reboot", {}, user=s["created_by"], run_after=s["next_run"]):
+                    added += 1
+            result = _outcome(added, kept, devices)
         else:
             script = conn.execute("SELECT * FROM scripts WHERE id=?", (params.get("script_id"),)).fetchone()
             if script is None or script["version"] != params.get("version"):
@@ -472,6 +509,7 @@ def schedule_save(sched_id):
             _require(old["action"], _params(old), _targets(old))
             _require(action, params, targets)
             _check_targets(targets)
+            _check_reserved(conn, action, params, targets)
             fields = parse(request.form)
             conn.execute("UPDATE schedules SET name=?, action=?, params=?, targets=?, recurrence=?, at_time=?, "
                          "start_date=?, weekdays=?, monthday=?, next_run=?, enabled=1, created_by=?, updated_at=? WHERE id=?",

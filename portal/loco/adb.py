@@ -688,6 +688,41 @@ def _device(dev_id):
     return dev
 
 
+def _held(dev, stream=False):
+    """Écran, saisie et déverrouillage par adb (prise en main) : refus si l'appareil est réservé à un autre compte dont le
+    mot de passe n'a pas été saisi (None sinon)."""
+    from . import reservations
+    row = reservations.guard(dev, "desktop")
+    if row is None:
+        return None
+    if stream:
+        audit("parc.reservation.refus", f"{dev['hostname']} (réservé par {row['owner']}) : écran adb sans mot de passe")
+        return Response(reservations.message(row), status=403, mimetype="text/plain")
+    return reservations.refuse(dev, row, "desktop")
+
+
+def _watched(frames, dev_id):
+    """Flux de l'écran déjà ouvert : il s'arrête si un autre compte réserve l'appareil (ou change son mot de passe). Le
+    compte est relevé ici, dans la requête : le flux, lui, s'écrit après elle."""
+    from . import reservations
+    user_id, since = g.user["id"], time.time()
+
+    def checked():
+        last = time.time()
+        try:
+            for item in frames:
+                if time.time() - last > 3:
+                    last = time.time()
+                    if not reservations.stream_allowed(dev_id, user_id, since):
+                        return
+                yield item
+        finally:
+            stop = getattr(frames, "close", None)   # ffmpeg ou scrcpy arrêtés avec le flux
+            if stop:
+                stop()
+    return checked()
+
+
 def _host(dev, value):
     host = (value or "").strip() or report(dev).get("ip") or fleet_address(dev)
     if not HOST_RE.match(host):
@@ -864,6 +899,9 @@ def fleet_adb_lockstate(dev_id):
 def fleet_adb_unlock(dev_id):
     """Réveille et déverrouille : method = pattern (séquence « 1,4,5,9 »), pin ou password. Le secret n'est pas journalisé."""
     dev = _device(dev_id)
+    held = _held(dev)
+    if held is not None:
+        return held
     try:
         serial = ensure(dev)
     except ValueError as e:
@@ -885,6 +923,9 @@ def fleet_adb_unlock(dev_id):
 def fleet_adb_calibrate(dev_id):
     """Enregistre (ou réinitialise) le calage de la grille de schéma de l'appareil."""
     dev = _device(dev_id)
+    held = _held(dev)
+    if held is not None:
+        return held
     if link(dev) is None:
         return {"error": _("Configurez d'abord le débogage adb de cet appareil.")}, 409
     if request.form.get("reset"):
@@ -1223,6 +1264,9 @@ def under_control(dev_id):
 def fleet_adb_screen(dev_id):
     """Flux MJPEG de l'écran déverrouillé (multipart). Un seul <img> dans le navigateur le lit en direct."""
     dev = _device(dev_id)
+    held = _held(dev, stream=True)
+    if held is not None:
+        return held
     try:
         serial = ensure(dev)
     except ValueError as e:
@@ -1232,10 +1276,15 @@ def fleet_adb_screen(dev_id):
                         status=503, mimetype="text/plain")
     audit("parc.adb.ecran", dev["hostname"])
 
+    frames = _watched(screen_frames(serial), dev["id"])      # compte relevé ici, pendant la requête
+
     def stream():
-        for jpg in screen_frames(serial):
-            mark_control(dev["id"])
-            yield b"--loco\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n" % len(jpg) + jpg + b"\r\n"
+        try:
+            for jpg in frames:
+                mark_control(dev["id"])
+                yield b"--loco\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n" % len(jpg) + jpg + b"\r\n"
+        finally:
+            frames.close()
 
     return Response(stream(), mimetype="multipart/x-mixed-replace; boundary=loco",
                     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
@@ -1246,6 +1295,9 @@ def fleet_adb_screen(dev_id):
 def fleet_adb_input(dev_id):
     """Geste injecté sur l'écran déverrouillé : tap/swipe (coordonnées en fractions de l'écran), touche, ou texte."""
     dev = _device(dev_id)
+    held = _held(dev)
+    if held is not None:
+        return held
     try:
         serial = ensure(dev)
     except ValueError as e:
@@ -1356,6 +1408,9 @@ def fleet_adb_stream(dev_id):
     """Flux H.264 (scrcpy) de l'écran déverrouillé, décodé par WebCodecs. Chaque unité d'accès est préfixée de
     [1 octet keyframe][4 octets longueur]. Repli pour les navigateurs sans WebCodecs : le flux MJPEG /adb/screen."""
     dev = _device(dev_id)
+    held = _held(dev, stream=True)
+    if held is not None:
+        return held
     try:
         serial = ensure(dev)
     except ValueError as e:
@@ -1364,10 +1419,15 @@ def fleet_adb_stream(dev_id):
         return Response(_("scrcpy-server est absent du serveur loco."), status=503, mimetype="text/plain")
     audit("parc.adb.ecran", dev["hostname"])
 
+    units = _watched(scrcpy_stream(serial), dev["id"])       # compte relevé ici, pendant la requête
+
     def stream():
-        for keyframe, au in scrcpy_stream(serial):
-            mark_control(dev["id"])
-            yield struct.pack(">BI", 1 if keyframe else 0, len(au)) + au
+        try:
+            for keyframe, au in units:
+                mark_control(dev["id"])
+                yield struct.pack(">BI", 1 if keyframe else 0, len(au)) + au
+        finally:
+            units.close()
 
     return Response(stream(), mimetype="application/octet-stream",
                     headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})

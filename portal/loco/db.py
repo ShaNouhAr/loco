@@ -1040,6 +1040,25 @@ MIGRATIONS = [
      WHERE json_valid(tools) AND EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'adb_shell')
        AND NOT EXISTS (SELECT 1 FROM json_each(mcp_tokens.tools) WHERE value = 'pull_file');
     """,
+    # 62 : postes réservés. Un compte se réserve un appareil et choisit un mot de passe (gardé haché) : les autres comptes
+    # doivent le saisir pour ouvrir son terminal, son bureau ou ses fichiers. La réservation disparaît avec l'appareil
+    # ou avec le compte qui la tient ; changed_at invalide les accès déjà ouverts quand le mot de passe change. Les
+    # essais manqués (par compte et par appareil) bornent les tentatives.
+    """
+    CREATE TABLE device_reservations (
+        device_id INTEGER PRIMARY KEY REFERENCES devices(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT '',
+        changed_at REAL NOT NULL DEFAULT 0
+    );
+    CREATE TABLE device_unlock_failures (
+        at REAL NOT NULL,
+        user_id INTEGER NOT NULL,
+        device_id INTEGER NOT NULL
+    );
+    CREATE INDEX device_unlock_failures_key ON device_unlock_failures(user_id, device_id, at);
+    """,
 ]
 
 

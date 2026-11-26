@@ -194,7 +194,7 @@
           <tr>
             {% if can_select %}<td class="select-col" data-label="{{ _('Sélectionner') }}"><label class="row-select-label"><input type="checkbox" data-select data-id="{{ d.id }}" aria-label="{{ _('Sélectionner %(host)s', host=devname) }}"></label></td>{% endif %}
             <td><span class="nowrap"><span class="st {{ 'ok' if r.presence.online else 'err' }} device-availability" role="img" aria-label="{{ r.presence.label }}" title="{{ _('%(label)s · %(detail)s · dernier contact : %(seen)s', label=r.presence.label, detail=r.presence.detail, seen=r.seen) }}"></span>
-              {{ device_icon(d) }}<a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ devname }}</a></span>
+              {{ device_icon(d) }}<a href="{{ url_for('fleet_device', dev_id=d.id) }}" class="host nowrap">{{ devname }}</a>{% if r.reserved_by %}<span class="reserve-mark" role="img" aria-label="{{ _('Réservé par %(owner)s', owner=r.reserved_by) }}" title="{{ _('Réservé par %(owner)s : terminal, bureau à distance, fichiers et redémarrage sous le mot de passe de la réservation', owner=r.reserved_by) }}">{{ ui_icon('lock') }}</span>{% endif %}</span>
               {% if d.label and d.hostname and d.label != d.hostname %}<span class="sub mono" title="{{ _('Nom d’hôte') }}">{{ d.hostname }}</span>{% endif %}
               <span class="sub" title="{{ d.os_name }}">{{ r.os_short }}</span>
               {% if r.groups %}<span class="fleet-groups">{% for g in r.groups %}<a class="tag" href="{{ url_for('fleet', group=g.id) }}">{{ g.name }}</a>{% endfor %}</span>{% endif %}</td>

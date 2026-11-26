@@ -48,7 +48,7 @@ if not SECRETS.get("secret_key"):
     app.logger.warning("clé de session absente de %s : clé provisoire, les sessions ne survivront pas au redémarrage",
                        config.SECRETS_PATH)
 
-STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "relay-link.js", "permissions.js", "files.js", "adb_unlock.js", "adb_screen.js", "pattern-pad.js", "passkeys.js", "logo.svg")
+STATIC_FILES = ("style.css", "app.js", "theme.js", "remote.js", "remote-sizing.js", "relay-link.js", "permissions.js", "files.js", "reserve.js", "adb_unlock.js", "adb_screen.js", "pattern-pad.js", "passkeys.js", "logo.svg")
 ASSET_V = str(int(max(os.path.getmtime(os.path.join(app.static_folder, f)) for f in STATIC_FILES)))
 
 # Politique de contenu stricte : aucun script ni style en ligne.
@@ -174,12 +174,12 @@ from . import db as _db  # noqa: E402
 app.teardown_appcontext(_db.close_db)
 
 # Les modules déclarent leurs routes sur `app` (structure « grande application » de Flask).
-from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, proxmox_system, network, backups, api, samba, sharefiles, unlock_codes  # noqa: E402
+from . import auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote, directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp, mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh, proxmox, proxmox_system, network, backups, api, samba, sharefiles, reservations, unlock_codes  # noqa: E402
 
 ROUTE_MODULES = (auth, dashboard, linux, wupdate, winapps, flatpak, rpmrepo, clients, system, appliance, fleet, winget, remote,
                  directories, authentik_setup, groups, deployments, features, scripts, enrollment, schedules, alerts, offsite, servershell, caches, appearance, pwa, oidc, mcp,
                  mcp_remote, mcp_oauth, mcp_install, ha, logforward, update_blocks, android_apps, adb, passkeys, homeassistant, wazuh,
-                 proxmox, proxmox_system, network, backups, api, samba, sharefiles, unlock_codes)
+                 proxmox, proxmox_system, network, backups, api, samba, sharefiles, reservations, unlock_codes)
 
 
 def startup():

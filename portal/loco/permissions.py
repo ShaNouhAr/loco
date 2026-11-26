@@ -33,6 +33,7 @@ GROUPS = [
         ("remote.consent", L_("Régler l'accord avant le bureau distant"), L_("Exiger ou non que la personne devant le poste accepte chaque ouverture du bureau distant."), ("fleet.view",), True),
         ("remote.adb", L_("Ouvrir un terminal adb"), L_("Shell adb d'un appareil Android (utilisateur « shell » d'Android : applications, réglages, journaux) et son appairage."), ("fleet.view",), True),
         ("remote.files", L_("Gérer les fichiers du poste"), L_("Parcourir, téléverser, modifier et supprimer les fichiers du poste (accès complet, en root ou SYSTEM)."), ("fleet.view",), True),
+        ("fleet.reserve", L_("Se réserver un appareil"), L_("Se réserver un appareil avec un mot de passe : les autres comptes doivent le saisir pour ouvrir son terminal, son bureau à distance ou ses fichiers, ou pour le redémarrer. Le reste (mises à jour sans redémarrage, scripts, retrait de l'agent…) leur reste ouvert selon leurs droits."), ("fleet.view",), True),
     ]),
     (L_("Paquets APT"), [
         ("linux.view", L_("Consulter les dépôts APT"), L_("Paquets et commandes de branchement."), (), False),
@@ -250,6 +251,8 @@ ENDPOINTS = {
     "share_files_job_cancel": "samba.files", "share_files_upload": "samba.files", "share_files_upload_chunk": "samba.files",
     "share_files_upload_done": "samba.files", "share_files_upload_cancel": "samba.files",
     "fleet_remote_consent": "remote.consent", "fleet_group_remote_consent": "remote.consent",
+    "fleet_reserve": "fleet.reserve", "fleet_reserve_release": "fleet.view", "fleet_reservation_lock": "fleet.view",
+    "fleet_reservation_unlock": ("remote.terminal", "remote.desktop", "remote.files", "remote.adb", "fleet.reboot"),
     "system": "system.view", "system_time": "system.configure", "system_qemu_agent": "system.configure",
     "system_backup_download": "system.configure", "system_restore": "system.configure",
     "system_restore_upload": "system.configure", "system_backup_retention": "system.configure",

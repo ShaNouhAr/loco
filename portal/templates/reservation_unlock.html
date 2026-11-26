@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{# Ouverture d'un accès protégé (terminal, bureau, terminal adb) d'un poste réservé par un autre compte : le mot de passe
+   d'abord ; une fois l'accès ouvert, la même ouverture est rejouée (même formulaire). #}
+{% from "_nav_icons.html" import ui_icon %}
+{% block title %}{{ _("Poste réservé") }} · {{ dev.label or dev.hostname }}{% endblock %}
+{% block content %}
+{% set devname = dev.label or dev.hostname or dev.uid[:8] %}
+<section class="panel reserve-gate">
+  <div class="empty empty-rich">
+    {{ ui_icon('lock') }}
+    <strong>{{ _("%(name)s est réservé par %(owner)s", name=devname, owner=owner) }}</strong>
+    <span>{{ _("Son terminal, son bureau à distance, ses fichiers et son redémarrage demandent le mot de passe de la réservation. Une fois saisi, l'accès reste ouvert une demi-heure.") }}</span>
+    <form method="post" action="{{ url_for('fleet_reservation_unlock', dev_id=dev.id) }}" class="reserve-gate-form" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for key, value in keep.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <label class="f"><span>{{ _("Mot de passe du poste") }}</span><input type="password" name="password" required maxlength="256" autocomplete="off" autofocus></label>
+      {% if error %}<p class="err-text small">{{ error }}</p>{% endif %}
+      <div class="row-actions"><a class="btn" href="{{ url_for('fleet_device', dev_id=dev.id) }}">{{ _("Retour au poste") }}</a><button class="btn primary">{{ _("Ouvrir l'accès") }}</button></div>
+    </form>
+  </div>
+</section>
+{% endblock %}

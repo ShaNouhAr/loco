@@ -287,6 +287,10 @@ def remote_open(dev_id):
     if kind not in ("terminal", "desktop", "files", "adb") or dev["state"] != "active":
         abort(400)
     require("remote." + kind)
+    from . import reservations
+    held = reservations.guard(dev, kind)            # poste réservé par un autre compte : son mot de passe d'abord
+    if held is not None:
+        return reservations.refuse(dev, held, kind)
     serial = ""
     if kind == "adb":
         # Terminal adb : loco se connecte lui-même à l'appareil (réseau local) ; l'application loco n'y prend pas part.

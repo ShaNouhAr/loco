@@ -34,7 +34,8 @@ from .auth import audit, can
 from .util import counted
 from .db import db
 from .i18n import L_
-from .mcp import DEVICE, ToolError, _active, _device, _via, tool
+from .mcp import DEVICE, ToolError, _active, _via, tool
+from .mcp import _device as _any_device
 
 TERMINAL_COLS, TERMINAL_ROWS = 300, 200
 TTY_COLS, TTY_ROWS = 120, 40
@@ -68,6 +69,18 @@ _STATE = {}                             # session -> état gardé (écran RFB, �
 
 class ChannelError(ToolError):
     """Session interrompue ou flux incohérent : la session est fermée, l'appel suivant en rouvre une."""
+
+
+def _device(value):
+    """Appareil d'un outil distant (terminal, fichiers, bureau, adb) : refusé s'il est réservé à un autre compte — son
+    mot de passe ne se saisit que dans le portail, par une personne."""
+    dev = _any_device(value)
+    row = db().execute("SELECT u.username FROM device_reservations r JOIN users u ON u.id=r.user_id "
+                       "WHERE r.device_id=? AND r.user_id!=?", (dev["id"], g.user["id"])).fetchone()
+    if row is not None:
+        raise ToolError(f"{dev['hostname']} is reserved by {row['username']}: its terminal, desktop and files need the "
+                        "owner's password, which only a person can enter in the loco portal. This access cannot open them.")
+    return dev
 
 
 def owner(role=""):

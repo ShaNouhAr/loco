@@ -23,7 +23,7 @@ import time
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
 
-from . import app, config, features, fleet, groups, journal, permissions, scope, scripts, update_blocks, wake
+from . import app, config, features, fleet, groups, journal, permissions, reservations, scope, scripts, update_blocks, wake
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
@@ -532,6 +532,7 @@ def _update(args):
     reboot = args.get("reboot", False)
     if reboot and not can("fleet.reboot"):
         raise ToolError("This access may not reboot devices: call again without reboot.")
+    _may_reboot(dev, reboot, " Call again with reboot=false to update it without restarting.")
     params = {"reboot": reboot}
     if args.get("updates") or args.get("flatpak") or args.get("software"):
         try:
@@ -556,7 +557,7 @@ def _update_many(args):
     reboot = args.get("reboot", False)
     if reboot and not can("fleet.reboot"):
         raise ToolError("This access may not reboot devices: call again without reboot.")
-    queued, skipped = [], []
+    queued, skipped, kept = [], [], []
     for dev in _targets(args):
         if dev["state"] != "active":
             skipped.append({"hostname": dev["hostname"], "reason": "agent being removed"})
@@ -564,12 +565,20 @@ def _update_many(args):
             skipped.append({"hostname": dev["hostname"], "reason": "nothing to update"})
         elif fleet.queue(dev, "update", {"reboot": reboot}):
             queued.append(dev["hostname"])
+            if reboot and not reservations.may_reboot(dev):
+                kept.append(dev["hostname"])
         else:
             skipped.append({"hostname": dev["hostname"], "reason": "an identical update is already waiting"})
     db().commit()
     if queued:
-        audit("parc.mise-a-jour-selection", f"{counted(len(queued), 'poste')}{', avec redémarrage' if reboot else ''}{_via()}")
-    return {"queued": queued, "skipped": skipped}
+        audit("parc.mise-a-jour-selection", f"{counted(len(queued), 'poste')}{', avec redémarrage' if reboot else ''}"
+                                            f"{fleet._kept_text(len(kept))}{_via()}")
+    result = {"queued": queued, "skipped": skipped}
+    if kept:
+        result["updated_without_reboot"] = kept                 # réservés par un autre compte
+        result["note"] = ("Devices in updated_without_reboot are reserved by another account: they are updated but not "
+                          "restarted (only a person can enter the reservation password, in the loco portal).")
+    return result
 
 
 @tool("reboot_device", "fleet", "Reboot a device", L_("Redémarrer un poste"),
@@ -579,7 +588,16 @@ def _update_many(args):
 def _reboot(args):
     dev = _device(args["device"])
     _active(dev)
+    _may_reboot(dev)
     return _queued(dev, "reboot", fleet.queue(dev, "reboot"))
+
+
+def _may_reboot(dev, reboot=True, hint=""):
+    """Poste réservé par un autre compte : un accès ne le redémarre pas (seule une personne saisit le mot de passe)."""
+    if reboot and not reservations.may_reboot(dev):
+        owner = reservations.get(dev["id"])["owner"]
+        raise ToolError(f"{dev['hostname']} is reserved by {owner}: restarting it needs the reservation password, which only a "
+                        f"person can enter in the loco portal.{hint}")
 
 
 @tool("wake_device", "fleet", "Wake a device", L_("Réveiller un poste"),

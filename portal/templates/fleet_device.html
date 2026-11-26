@@ -9,7 +9,7 @@
 {# busy : l'action est déjà lancée sur ce poste — le bouton le dit (témoin, libellé) et ne se clique plus. #}
 {% macro action(name, label, cls='', confirm=None, text='', ok='', reboot=False, busy='', fields=none) -%}
 {% if busy %}<button type="button" class="{{ cls or 'menu-item' }} loading" disabled><span class="spin"></span>{{ busy }}</button>{% else %}
-<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
+<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax{% if name in ('reboot', 'os-upgrade') or reboot %} data-protected{% endif %}{% if confirm %} data-confirm="{{ confirm }}" data-confirm-text="{{ text }}" data-confirm-ok="{{ ok }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="{{ name }}">{% if reboot %}<input type="hidden" name="reboot" value="1">{% endif %}{% for k, v in (fields or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
   <button class="{{ cls or 'menu-item' }}"><span class="spin"></span>{{ label }}</button>
 </form>
@@ -40,6 +40,7 @@
       {% if agent_outdated and active %}<span class="tag" title="{{ _('Ce serveur est en %(v)s : l’agent se met à jour seul à son prochain contact, ou tout de suite par Plus › Mettre à jour l’agent.', v=server_version) }}">{{ _("agent à mettre à jour") }}</span>{% endif %}
       {% if net_policy %}<span class="tag" title="{{ _('Réglé sur l’appareil, dans l’application : ailleurs il est en pause et loco ne le voit plus.') }}">{{ net_policy }}</span>{% endif %}
       {% if dev.remote_consent %}<span class="tag">{{ _("accord exigé pour le bureau") }}</span>{% endif %}
+      {% if reservation %}<span class="tag reserve-tag" title="{{ _('Les autres comptes doivent saisir votre mot de passe pour ouvrir le terminal, le bureau à distance et les fichiers de ce poste, ou pour le redémarrer.') if reservation.mine else _('Son terminal, son bureau à distance, ses fichiers et son redémarrage demandent le mot de passe choisi par %(owner)s ; le reste se fait comme d’habitude.', owner=reservation.owner) }}">{{ ui_icon('lock') }}{% if reservation.mine %}{{ _("Réservé pour vous") }}{% else %}{{ _("Réservé par %(owner)s", owner=reservation.owner) }}{% endif %}</span>{% endif %}
     </p>
     {% if memberships %}<p class="device-groups">{% for group in memberships %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a>{% endfor %}</p>{% endif %}
   </div>
@@ -48,7 +49,7 @@
     {% if active and can_any('remote.terminal', 'remote.desktop') %}
     {% for kind, label in [('terminal', 'Terminal'), ('desktop', _('Écran') if android else (_('Bureau') if windows else _('Console')))] %}
     {% if can('remote.' ~ kind) %}
-    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split" rel="noopener">
+    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split" rel="noopener" data-protected>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
       <button class="btn" {% if not remote_ready %}disabled title="{{ _('Agent 2.4.0 requis') }}"{% else %}title="{{ _('%(v)s, session journalisée', v=_('PowerShell (SYSTEM)') if windows and kind == 'terminal' else (_('Session noVNC') if kind == 'desktop' else (_("Shell de l'application, sans root") if android else _('Shell root')))) }}"{% endif %}>{{ label }}</button>
       <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('%(label)s dans un nouvel onglet', label=label) }}" title="{{ _('Ouvrir dans un nouvel onglet') }}" {% if not remote_ready %}disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
@@ -58,28 +59,34 @@
     {% endif %}
     {% if active and adb_view %}
     {% if adb_view.configured and adb_view.state in ('ready', 'idle') %}
-    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split">
+    <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" class="split" data-protected>
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="adb">
       <button class="btn" title="{{ _('Shell adb (utilisateur shell d’Android), session journalisée') }}">{{ _("Terminal adb") }}</button>
       <button class="btn icon" formtarget="_blank" name="view" value="console" aria-label="{{ _('Terminal adb dans un nouvel onglet') }}" title="{{ _('Ouvrir dans un nouvel onglet') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
     </form>
-    <button type="button" class="btn" data-open="#adb-screen" title="{{ _('Voir et piloter l’écran déverrouillé, par adb') }}">{{ _("Contrôler l'écran") }}</button>
+    <button type="button" class="btn" data-open="#adb-screen" data-protected-open title="{{ _('Voir et piloter l’écran déverrouillé, par adb') }}">{{ _("Contrôler l'écran") }}</button>
     {% else %}
     <button type="button" class="btn" data-open="#adb-setup" title="{{ adb_view.text|capitalize }}">{{ _("Terminal adb") }}</button>
     {% endif %}
     {% endif %}
     {% if active and wake_offer.ok and not presence.online and can('fleet.wake') %}{{ action('wake', _('Réveiller'), 'btn primary') }}{% endif %}
     {% if active and can('fleet.update') and not android %}<div class="split-action">{{ action('update', _('Mettre à jour'), 'btn primary' if needs_update else 'btn', busy=(_('Mise à jour en attente') if updating == 'queued' else _('Mise à jour en cours')) if updating else '') }}<button type="button" class="btn icon" data-open="#plan-update" title="{{ _('Planifier une mise à jour') }}" aria-label="{{ _('Planifier une mise à jour') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
-    {% if active and can('fleet.reboot') and not android %}<div class="split-action">{% if upgrading %}<button type="button" class="btn" disabled title="{{ _('Le poste redémarre de lui-même à la fin de la mise à jour vers la nouvelle version.') }}">{{ _("Redémarrer") }}</button>{% else %}{{ action('reboot', _('Redémarrer'), 'btn', confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}<button type="button" class="btn icon" data-open="#plan-reboot" title="{{ _('Planifier un redémarrage') }}" aria-label="{{ _('Planifier un redémarrage') }}">{{ plan_icon('calendar') }}</button></div>{% endif %}
+    {% if active and can('fleet.reboot') and not android %}<div class="split-action">{% if upgrading %}<button type="button" class="btn" disabled title="{{ _('Le poste redémarre de lui-même à la fin de la mise à jour vers la nouvelle version.') }}">{{ _("Redémarrer") }}</button>{% else %}{{ action('reboot', _('Redémarrer'), 'btn', confirm=_('Redémarrer %(name)s ?', name=devname), text=_('Le poste redémarre une minute après le prochain contact ; un message prévient la personne connectée.'), ok=_('Redémarrer'), busy=_('Redémarrage en cours') if rebooting else '') }}{% endif %}{% if not (reservation and not reservation.mine) %}<button type="button" class="btn icon" data-open="#plan-reboot" title="{{ _('Planifier un redémarrage') }}" aria-label="{{ _('Planifier un redémarrage') }}">{{ plan_icon('calendar') }}</button>{% endif %}</div>{% endif %}
     {% if active and can('fleet.scan') and not android %}<form method="post" action="{{ url_for('fleet_action', dev_id=dev.id) }}" data-ajax><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="scan"><button class="btn icon" title="{{ _('Rafraîchir : appeler l’agent pour refaire l’inventaire maintenant') }}" aria-label="{{ _('Rafraîchir l’inventaire') }}"><span class="spin"></span>{{ ui_icon('refresh') }}</button></form>{% endif %}
-    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename') or (wazuh and can('wazuh.install') and not wazuh.w.server) %}
+    {% if can_any('fleet.update', 'fleet.scan', 'fleet.reboot', 'fleet.remove', 'fleet.install', 'remote.desktop', 'fleet.rename', 'fleet.reserve') or (reservation and reservation.mine) or (wazuh and can('wazuh.install') and not wazuh.w.server) %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>
       <div class="menu-list" role="menu">
         {% if can('fleet.rename') %}<button type="button" class="menu-item" data-open="#rename">{{ _("Nom personnalisé…") }}</button>{% endif %}
+        {% if reservation and reservation.mine %}
+        <button type="button" class="menu-item" data-open="#reserve">{{ _("Changer le mot de passe de la réservation…") }}</button>
+        <form method="post" action="{{ url_for('fleet_reserve_release', dev_id=dev.id) }}" data-confirm="{{ _('Libérer %(name)s ?', name=devname) }}" data-confirm-text="{{ _('Les autres comptes pourront de nouveau ouvrir son terminal, son bureau à distance et ses fichiers, et le redémarrer, sans mot de passe.') }}" data-confirm-ok="{{ _('Libérer') }}">
+          <input type="hidden" name="csrf" value="{{ csrf }}"><button class="menu-item">{{ _("Libérer ce poste…") }}</button>
+        </form>
+        {% elif not reservation and can('fleet.reserve') %}<button type="button" class="menu-item" data-open="#reserve">{{ _("Réserver ce poste…") }}</button>{% endif %}
         {% if active %}
         {% if can('remote.desktop') and consent_ready and not dev.remote_consent %}
-        <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}">
+        <form method="post" action="{{ url_for('remote_open', dev_id=dev.id) }}" data-protected>
           <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="desktop"><input type="hidden" name="consent" value="1">
           <button class="menu-item">{{ _("Bureau distant, avec l'accord de l'utilisateur") }}</button>
         </form>
@@ -112,6 +119,18 @@
 
 <div class="stack" data-poll="{{ url_for('fleet_device', dev_id=dev.id) }}" data-poll-kind="reload" data-poll-every="10000" data-signature="{{ signature }}">
   <div class="refresh-contents" data-refresh="summary">
+  {% if reservation and not reservation.mine %}
+  <div class="note reserve-note">
+    {{ ui_icon('lock') }}
+    {% if reservation.locked %}
+    <span>{{ _("Réservé par %(owner)s : son terminal, son bureau à distance, ses fichiers et son redémarrage demandent le mot de passe de la réservation. Le reste se fait comme d'habitude.", owner=reservation.owner) }}</span>
+    {% if can_any('remote.terminal', 'remote.desktop', 'remote.files', 'remote.adb', 'fleet.reboot') %}<button type="button" class="btn sm" data-open="#device-unlock">{{ _("Saisir le mot de passe") }}</button>{% endif %}
+    {% else %}
+    <span>{{ _("Réservé par %(owner)s · accès ouvert par le mot de passe jusqu'à %(time)s.", owner=reservation.owner, time=reservation.until_text) }}</span>
+    <form method="post" action="{{ url_for('fleet_reservation_lock', dev_id=dev.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn sm ghost">{{ _("Refermer") }}</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if pending %}<div class="pending-list" data-progress="{{ url_for('fleet_device_progress', dev_id=dev.id) }}">{% for c in pending %}
     {% set live = progress_view(c.progress) if c.state == 'running' else none %}
     <div class="pending-item" data-cmd="{{ c.id }}"><span class="st {{ 'ok' if c.state == 'running' else 'warn' }}"></span><span><strong>{{ action_label(c) }}</strong> ·
@@ -749,8 +768,8 @@
   <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Fermer") }}</button></div>
 </dialog>
 {% endif %}
-{% if active and can('fleet.reboot') and not android %}{{ schedule_dialog('plan-reboot', _('Planifier un redémarrage'), 'reboot', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), intro=_('Redémarrage de %(name)s : il a lieu une minute après la remise de la commande au poste ; un message prévient la personne connectée.', name=devname)) }}{% endif %}
-{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot'), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).', name=devname)) }}{% endif %}
+{% if active and can('fleet.reboot') and not android and not (reservation and not reservation.mine) %}{{ schedule_dialog('plan-reboot', _('Planifier un redémarrage'), 'reboot', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), intro=_('Redémarrage de %(name)s : il a lieu une minute après la remise de la commande au poste ; un message prévient la personne connectée.', name=devname)) }}{% endif %}
+{% if active and can('fleet.update') and not android %}{{ schedule_dialog('plan-update', _('Planifier une mise à jour'), 'update', [('target', 'selection'), ('device', dev.id)], url_for('fleet_device', dev_id=dev.id), reboot=can('fleet.reboot') and not (reservation and not reservation.mine), intro=_('Mise à jour de %(name)s : système, Flatpak et logiciels installés (catalogue de loco, et winget sous Windows).', name=devname)) }}{% endif %}
 {% if can('fleet.rename') %}
 <dialog id="rename" class="app-dialog">
   <div class="dlg-h">
@@ -767,8 +786,45 @@
   </form>
 </dialog>
 {% endif %}
+{% if (reservation and reservation.mine) or (not reservation and can('fleet.reserve')) %}
+<dialog id="reserve" class="app-dialog">
+  <div class="dlg-h">
+    <div><h2>{{ _("Changer le mot de passe de la réservation") if reservation else _("Réserver ce poste") }}</h2>
+      <p>{{ _("Les autres comptes devront saisir ce mot de passe pour ouvrir le terminal, le bureau à distance et les fichiers de %(name)s, ou pour le redémarrer — et, sur Android, le terminal adb et l'écran. Le reste (mises à jour sans redémarrage, scripts, retrait de l'agent…) leur reste ouvert selon leurs droits. Les outils MCP et l'API des autres comptes sont refusés.", name=devname) }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <form method="post" action="{{ url_for('fleet_reserve', dev_id=dev.id) }}" autocomplete="off">
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>{{ _("Mot de passe") }}</span><input type="password" name="password" required minlength="{{ min_password }}" maxlength="256" autocomplete="new-password"></label>
+      <label class="f"><span>{{ _("Confirmer le mot de passe") }}</span><input type="password" name="confirm" required minlength="{{ min_password }}" maxlength="256" autocomplete="new-password"></label>
+      <p class="hint">{{ _("Gardé haché, loco ne pourra jamais l'afficher. Changer le mot de passe referme les accès déjà ouverts par l'ancien, et les sessions des autres comptes sur ce poste se ferment. Mot de passe perdu : un administrateur peut oublier le poste puis le réinscrire, sans réservation.") }}</p>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary">{{ _("Changer le mot de passe") if reservation else _("Réserver") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% if reservation and not reservation.mine and can_any('remote.terminal', 'remote.desktop', 'remote.files', 'remote.adb', 'fleet.reboot') %}
+<div id="reservation-state" data-locked="{{ 1 if reservation.locked else 0 }}" hidden></div>
+<dialog id="device-unlock" class="app-dialog">
+  <div class="dlg-h">
+    <div><h2>{{ _("Mot de passe de %(owner)s", owner=reservation.owner) }}</h2>
+      <p>{{ _("%(name)s est réservé par %(owner)s : saisissez le mot de passe de la réservation pour ouvrir son terminal, son bureau à distance et ses fichiers, ou le redémarrer, pendant une demi-heure.", name=devname, owner=reservation.owner) }}</p></div>
+    <button type="button" class="dlg-x" data-close aria-label="{{ _('Fermer') }}" title="{{ _('Fermer (Échap)') }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <form method="post" action="{{ url_for('fleet_reservation_unlock', dev_id=dev.id) }}" autocomplete="off" data-unlock-form>
+    <div class="dlg-b dlg-stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="f"><span>{{ _("Mot de passe du poste") }}</span><input type="password" name="password" required maxlength="256" autocomplete="off"></label>
+      <p class="err-text small" data-unlock-error hidden></p>
+    </div>
+    <div class="dlg-f"><button type="button" class="btn" data-close>{{ _("Annuler") }}</button><button class="btn primary">{{ _("Ouvrir l'accès") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}
 {% block scripts %}
+{% if reservation and not reservation.mine %}<script src="{{ url_for('static', filename='reserve.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% if files_ready and dev.state == 'active' %}<script type="module" src="{{ url_for('static', filename='files.js') }}?v={{ asset_v }}"></script>{% endif %}
 {% if adb_view and adb_view.configured %}<script src="{{ url_for('static', filename='pattern-pad.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='adb_unlock.js') }}?v={{ asset_v }}"></script>{% endif %}

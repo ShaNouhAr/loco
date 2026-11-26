@@ -41,6 +41,41 @@ Le **panneau de commandes** de la console noVNC envoie **Ctrl+Alt+Suppr** et les
 
 Le journal conserve les ouvertures et fermetures, sans enregistrer les frappes ni le contenu des écrans. Les files de transfert sont bornées, acquittées puis effacées ; elles sont exclues des sauvegardes avec les sessions actives.
 
+## Poste réservé
+
+Un compte qui a le droit **Se réserver un appareil** (le profil Administrateur l’a) peut, depuis *Plus › Réserver ce
+poste…* sur la fiche d’un appareil, le réserver avec un mot de passe qu’il choisit. Les **autres comptes** — même au
+profil Administrateur — doivent alors saisir ce mot de passe pour ouvrir son **terminal**, son **bureau à distance**
+(console comprise) et ses **fichiers**, pour le **redémarrer** (redémarrage, mise à jour suivie d’un redémarrage, mise
+à jour vers une nouvelle version du système), et sur Android pour son **terminal adb**, son **écran** et son
+**déverrouillage**.
+Une fois saisi, l’accès reste ouvert **une demi-heure**, pour ce compte et dans ce navigateur (*Refermer* le ferme
+plus tôt) ; cinq essais manqués bloquent ce compte un quart d’heure sur ce poste. **Tout le reste leur reste ouvert**,
+selon leurs droits : inventaire, mises à jour sans redémarrage, déploiements, scripts, retrait de l’agent, oubli du
+poste.
+
+- Depuis la liste de Mon parc, *Redémarrer* laisse de côté les postes qu’un autre compte a réservés, et *Mettre à jour
+  puis redémarrer* ou *Tout mettre à jour* les met à jour sans les redémarrer — sauf ceux dont le mot de passe est déjà
+  saisi. Une mise à jour par vagues ne les redémarre jamais. Une planification ne redémarre un poste réservé que si son auteur en est le propriétaire : on ne
+  peut pas planifier le redémarrage d’un poste réservé par un autre compte, et celle d’un groupe ou de tout le parc
+  le laisse de côté — son résultat le dit (*1 réservé sans redémarrage*). Le mot de passe saisi dans le navigateur ne
+  vaut que pour ce qu’on y fait soi-même, jamais pour une planification ou une vague qui part plus tard.
+- La fiche montre *Réservé par …* (ou *Réservé pour vous*), et Mon parc un cadenas près du nom. Le propriétaire change
+  le mot de passe ou libère le poste depuis *Plus* ; personne d’autre ne le peut.
+- Réserver un poste, ou changer son mot de passe, **ferme les sessions déjà ouvertes** par les autres comptes sur ce
+  poste, et referme les accès ouverts avec l’ancien mot de passe. Réserver annule aussi les redémarrages qu’ils avaient
+  demandés et qui ne sont pas encore partis vers le poste (une mise à jour en attente reste, sans redémarrage).
+- Les **outils MCP et l’API** des autres comptes sont refusés sur un poste réservé : seule une personne peut saisir le
+  mot de passe, dans le portail. Ceux du propriétaire fonctionnent comme avant.
+- Le mot de passe n’est gardé que haché : loco ne peut jamais l’afficher. **Mot de passe perdu** : un administrateur
+  oublie le poste, puis le réinscrit, sans réservation. La réservation disparaît aussi si le compte qui la tient est
+  supprimé.
+- Chaque réservation, changement, libération, saisie réussie ou manquée est inscrite au journal.
+
+La réservation protège l’accès direct au poste, pas le contrôle d’un administrateur : un script ou un déploiement,
+qui restent permis, s’exécutent en root (SYSTEM sous Windows), et redémarrer l’hyperviseur Proxmox qui l’héberge
+arrête aussi le poste, avec ses autres machines.
+
 ---
 
 [← Retour à la présentation](../README.md) · [Toute la documentation](README.md)

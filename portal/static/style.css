@@ -1953,6 +1953,20 @@ dialog.files-preview { width: min(1120px, calc(100vw - 32px)); height: min(88vh,
 .files-preview-nav:hover:not(:disabled) { color: var(--text); background: var(--bg-2); }
 .files-preview-nav:disabled { opacity: .3; cursor: default; }
 .files-preview-wait { padding: 24px; text-align: center; }
+/* Postes réservés : étiquette de la fiche, bandeau des autres comptes, cadenas de Mon parc, page du mot de passe. */
+.reserve-tag { gap: 5px; }
+.reserve-tag svg { width: 12px; height: 12px; }
+.reserve-note { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.reserve-note > svg { flex: none; width: 16px; height: 16px; color: var(--text-3); }
+.reserve-note > span { flex: 1 1 320px; min-width: 0; }
+.reserve-note form { margin: 0; }
+.reserve-mark { display: inline-flex; margin-left: 6px; color: var(--text-3); vertical-align: -2px; }
+.reserve-mark svg { width: 13px; height: 13px; }
+.reserve-gate { max-width: 560px; margin: 0 auto; }
+.reserve-gate-form { display: grid; gap: 12px; width: min(360px, 100%); margin-top: 8px; text-align: left; }
+.reserve-gate-form .row-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.reserve-gate-form a.btn, .reserve-gate-form a.btn:hover { text-decoration: none; }
+
 /* Page d'un partage ouvert dans le navigateur. */
 .files-head { align-items: flex-end; }
 .files-head-t { min-width: 0; }

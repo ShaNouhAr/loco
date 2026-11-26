@@ -858,6 +858,9 @@ def _assign_waves(conn, entries, rollout):
 
 
 def _new_command(conn, dev, action, params, user):
+    from . import reservations
+    if action == "update" and params.get("reboot") and not reservations.may_reboot(dev, user):
+        params = dict(params, reboot=False)                 # poste réservé par un autre compte : sans redémarrage
     return conn.execute('INSERT INTO device_commands(device_id,action,params,created_at,created_by) VALUES (?,?,?,?,?)',
                         (dev['id'], action, json.dumps(params, sort_keys=True), fleet._now(), user)).lastrowid
 

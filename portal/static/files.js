@@ -238,6 +238,10 @@ function relayBackend() {
     async start() {
       const body = new URLSearchParams({ csrf, kind: 'files' });
       const response = await fetch(root.dataset.sessionUrl, { method: 'POST', body, credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (response.status === 403) {
+        const refusal = await response.json().catch(() => null);
+        if (refusal && refusal.code === 'reserved') throw Object.assign(new Error(refusal.error), { code: 'reserved' });
+      }
       if (!response.ok) throw new Error(response.status === 409 ? tr('Agent trop ancien ou trop de sessions ouvertes.') : tr('Ouverture refusée (%(status)s).', { status: response.status }));
       const d = await response.json();
       io = d.io; running = true; failures = 0;
@@ -1563,7 +1567,15 @@ async function start() {
     const info = await backend.start();
     renderRoots(info.roots);
     await navigate(info.home, { history: false });
-  } catch (e) { setStatus(e.message, 'err'); }
+  } catch (e) {
+    if (e.code !== 'reserved') { setStatus(e.message, 'err'); return; }
+    // Poste réservé par un autre compte : son mot de passe (fenêtre de la fiche), puis la session s'ouvre.
+    setStatus('');
+    emptyEl.classList.remove('hidden');
+    emptyEl.innerHTML = esc(e.message) + ' <button type="button" class="btn sm" data-reserved-unlock>' + esc(tr('Saisir le mot de passe')) + '</button>';
+    emptyEl.querySelector('[data-reserved-unlock]').addEventListener('click', () => document.dispatchEvent(new CustomEvent('loco:unlock')));
+    document.addEventListener('loco:unlocked', () => { start.done = false; emptyEl.classList.add('hidden'); start(); }, { once: true });
+  }
 }
 if (backend.lazy) {
   // Fiche du poste : la session s'ouvre à la première visite de l'onglet Fichiers (app.js bascule la classe « on »).

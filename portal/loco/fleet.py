@@ -633,6 +633,12 @@ def _active_window(conn, dev, commands):
 def queue(dev, action, params=None, user=None, run_after=""):
     """Ajoute une action (sans doublon d'une action identique déjà en attente) ; renvoie True si ajoutée.
     run_after non vide = commande transmise seulement à partir de cet instant (planification ponctuelle)."""
+    from . import reservations
+    if reservations.reboots(action, params) and not reservations.may_reboot(dev, user):
+        # Poste réservé par un autre compte : jamais redémarré sans le mot de passe ; une mise à jour se fait sans.
+        if action != "update":
+            return False
+        params = dict(params, reboot=False)
     params = json.dumps(params or {}, sort_keys=True)
     for c in pending(dev["id"]):
         if c["action"] == action and c["params"] == params and c["run_after"] == run_after:
@@ -2383,10 +2389,12 @@ def fleet():
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
     rows = _enrich(rows, names)
-    from . import monitoring
+    from . import monitoring, reservations
     senders = wake.context() if can("fleet.wake") else {}
+    held = reservations.owners()
     for r in rows:
         r["mon"] = monitoring.latest(r["d"])
+        r["reserved_by"] = held.get(r["d"]["id"])
         # Proposé seulement si le poste est éteint, branché en Ethernet, et si quelque chose peut émettre sur son réseau.
         r["wake"] = (can("fleet.wake") and r["d"]["state"] == "active" and not is_online(r["d"]) and wake.offer(r["d"], senders)["ok"])
     from .auth import scope_summary
@@ -2548,7 +2556,9 @@ def fleet_device(dev_id):
     if dev["os_family"] == "android" and features.enabled("android") and features.enabled("remote") and can("remote.adb"):
         from . import adb
         adb_view = adb.view(dev)
-    return render_template("fleet_device.html", android_view=android_view, adb_view=adb_view, address=main_address(dev), mon=mon, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
+    from . import reservations
+    return render_template("fleet_device.html", android_view=android_view, adb_view=adb_view, address=main_address(dev), mon=mon,
+                           reservation=reservations.view(dev), min_password=config.MIN_PASSWORD, device_groups=groups.listing("device"), memberships=groups.memberships("device", dev_id), dev=dev, inv=inv, color=color, reason=reason, history=history,
                            wake_offer=wake.offer(dev, wake.context()), net=wake.info(dev), wake_controls=wake.controls(dev),
                            remote_ready=version_key(dev["agent_version"]) >= (2, 4),
                            consent_ready=version_key(dev["agent_version"]) >= CONSENT_VERSION,
@@ -2662,6 +2672,12 @@ def fleet_action(dev_id):
         params["reboot"] = request.form.get("reboot") == "1"
         if request.form.get("scope") == "selection":
             params["only"] = update_selection(dev, request.form)
+    from . import reservations
+    if reservations.reboots(action, params) and not reservations.may_reboot(dev):
+        row = reservations.get(dev_id)
+        audit("parc.reservation.refus", f"{dev['hostname']} (réservé par {row['owner']}) : {action} sans mot de passe")
+        flash(reservations.reboot_message(row), "error")
+        return _back_to_origin(dev_id)
     if action == "install-app":
         slug = request.form.get("slug", "")
         if not config.SLUG_RE.match(slug) or dev["os_family"] != "windows" or not db().execute(
@@ -2700,7 +2716,7 @@ def fleet_action(dev_id):
     if queue(dev, action, params):
         db().commit()
         audit(f"parc.{action}", f"{dev['hostname']}{' : ' + (params.get('slug') or params.get('label')) if params.get('slug') or params.get('label') else ''}")
-        flash(_('%(ACTIONS)s demandée sur %(dev)s : exécutée au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
+        flash(_('%(ACTIONS)s en attente sur %(dev)s : lancement au prochain contact (moins de %(v)s min).', ACTIONS=ACTIONS[action], dev=dev['hostname'], v=CHECKIN // 60), "ok")
     else:
         flash(_('Action déjà en attente sur ce poste.'), "error")
     return _back_to_origin(dev_id)
@@ -2718,6 +2734,12 @@ def _queue_os_upgrade(dev):
         return _back_to_origin(dev["id"])
     params = {"reboot": True, "kind": offer["kind"], "version": offer["version"], "name": offer["name"],
               **({"id": offer["id"]} if offer.get("id") else {})}
+    from . import reservations
+    if not reservations.may_reboot(dev):
+        row = reservations.get(dev["id"])
+        audit("parc.reservation.refus", f"{dev['hostname']} (réservé par {row['owner']}) : os-upgrade sans mot de passe")
+        flash(reservations.reboot_message(row), "error")
+        return _back_to_origin(dev["id"])
     if queue(dev, "os-upgrade", params):
         db().commit()
         audit("parc.os-upgrade", f"{dev['hostname']} : {dev['os_name'] or '?'} → {offer['name']}")
@@ -2790,6 +2812,7 @@ def fleet_update_all():
     reboot = request.form.get("reboot") == "1"
     if reboot:
         require("fleet.reboot")
+    from . import reservations
     if request.form.get("mode") == "waves":
         from .deployments import start_update_rollout
         devices = [r["d"] for r in _rows(apps) if r["needs_update"] and not r["updating"]
@@ -2804,19 +2827,24 @@ def fleet_update_all():
             flash(str(e), "error")
             return back("fleet", **({"group": group_id} if group_id else {}))
         db().commit()
+        # Les vagues partent plus tard : un poste réservé par un autre compte n'y redémarre jamais (mot de passe ou non).
+        _report_reserved(sum(1 for d in devices if not reservations.may_reboot(d, g.user["username"])) if reboot else 0)
         if member_ids is None:
             _extras_to_update(reboot=reboot)              # Home Assistant et Proxmox : avec la première vague
         return back("deployment_detail", deployment_id=deployment_id)
-    count = 0
+    count, kept = 0, 0
+    blocked = reservations.blocked_ids() if reboot else set()
     for r in _rows(apps):
         if member_ids is not None and r["d"]["id"] not in member_ids:
             continue
         if r["needs_update"] and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
+            kept += r["d"]["id"] in blocked
     db().commit()
+    _report_reserved(kept)
     if member_ids is None:                                # un groupe ne contient que des postes
         count += _extras_to_update(reboot=reboot)
-    audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}")
+    audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}{_kept_text(kept)}")
     flash((n_('Mise à jour demandée sur %(num)s poste.', 'Mise à jour demandée sur %(num)s postes.', count) if count else _('Aucun poste à mettre à jour.')), "ok")
     # S'il y a quelque chose à suivre, aller au déroulé des mises à jour ; sinon rester sur la liste.
     return back("fleet_updates") if count else back("fleet", **({"group": group_id} if group_id else {}))
@@ -2929,14 +2957,18 @@ def fleet_update_selected():
     if reboot:
         require("fleet.reboot")
     rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
-    count = 0
+    count, kept = 0, 0
+    from . import reservations
+    blocked = reservations.blocked_ids() if reboot else set()
     for dev_id in ids:
         r = rows.get(dev_id)
         if r and r["d"]["state"] == "active" and not r["updating"] and queue(r["d"], "update", {"reboot": reboot}):
             count += 1
+            kept += dev_id in blocked
+    _report_reserved(kept)
     ha_count = _ha_bulk(ha_ids, "update") + _px_bulk(px_ids, "update", reboot)
     db().commit()
-    audit("parc.mise-a-jour-selection", f"{counted(count + ha_count, 'poste')}{', avec redémarrage' if reboot else ''}")
+    audit("parc.mise-a-jour-selection", f"{counted(count + ha_count, 'poste')}{', avec redémarrage' if reboot else ''}{_kept_text(kept)}")
     return {"ok": True, "count": count + ha_count}
 
 
@@ -2952,25 +2984,46 @@ def fleet_reboot_selected():
     ids, ha_ids, px_ids = _split_selection(raw)
     rows = {r["d"]["id"]: r for r in _rows() if r["d"]["id"] in ids}
     count = 0
+    from . import reservations
+    blocked = reservations.blocked_ids()
+    held = sum(1 for dev_id in ids if dev_id in blocked and dev_id in rows)
     for dev_id in ids:
         r = rows.get(dev_id)
-        if (r and r["d"]["state"] == "active" and r["d"]["os_family"] != "android" and not r["rebooting"] and not r["upgrading"]
-                and queue(r["d"], "reboot", {})):
+        if (r and dev_id not in blocked and r["d"]["state"] == "active" and r["d"]["os_family"] != "android"
+                and not r["rebooting"] and not r["upgrading"] and queue(r["d"], "reboot", {})):
             count += 1
+    if held:
+        flash(n_("%(num)s poste réservé par un autre compte n'est pas redémarré : son mot de passe se saisit sur sa fiche.",
+                 "%(num)s postes réservés par d'autres comptes ne sont pas redémarrés : leur mot de passe se saisit sur leur fiche.",
+                 held), "error")
     count += _ha_bulk(ha_ids, "reboot") + _px_bulk(px_ids, "reboot")
     db().commit()
     total = len(ids) + len(ha_ids) + len(px_ids)
-    audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(total, 'sélectionné')}")
+    note = f" ; réservés par d'autres comptes : {held}" if held else ""
+    audit("parc.redemarrage-selection", f"{counted(count, 'poste')} sur {counted(total, 'sélectionné')}{note}")
     if count:
         flash(n_("Redémarrage demandé sur %(num)s poste : il redémarre une minute après son prochain contact.",
                  "Redémarrage demandé sur %(num)s postes : chacun redémarre une minute après son prochain contact.", count), "ok")
-    if total > count:
+    if total > count + held:                              # les postes réservés ont leur propre message
         flash(n_("%(num)s poste laissé tel quel : redémarrage déjà en cours, mise à jour de version en cours, appareil Android ou poste retiré.",
                  "%(num)s postes laissés tels quels : redémarrage déjà en cours, mise à jour de version en cours, appareils Android ou postes retirés.",
-                 total - count), "error")
+                 total - count - held), "error")
     if px_ids and can("proxmox.restart"):
         flash(_("Proxmox redémarre dès que les mises à jour en cours sur les postes du parc sont finies (une heure au plus), avec toutes ses machines."), "ok")
     return {"ok": True, "count": count, "skipped": total - count}
+
+
+def _kept_text(kept):
+    """Fin du message du journal : postes réservés par d'autres comptes, mis à jour sans redémarrer."""
+    return f", dont {counted(kept, 'réservé')} sans redémarrage" if kept else ""
+
+
+def _report_reserved(kept):
+    """Mise à jour avec redémarrage : les postes réservés par d'autres comptes sont mis à jour sans redémarrer."""
+    if kept:
+        flash(n_("%(num)s poste réservé par un autre compte est mis à jour sans redémarrer : son redémarrage demande le mot de passe de sa réservation.",
+                 "%(num)s postes réservés par d'autres comptes sont mis à jour sans redémarrer : leur redémarrage demande le mot de passe de leur réservation.",
+                 kept), "error")
 
 
 def _report_wake(result):
