@@ -147,7 +147,7 @@ token = re.search(r'name="csrf" value="([^"]+)"', html)[1]
 with op.open(base+'/login', urllib.parse.urlencode(dict(csrf=token, username='admin', password=sys.argv[1])).encode()) as r:
     assert r.geturl().rstrip('/') == base
 assert 'Mises à jour' in get('/system/updates')
-assert 'Réseaux autorisés' in get('/system/configuration')
+assert 'name="ALLOW"' in get('/system/configuration')      # le champ du formulaire, pas une phrase qui peut changer
 print('Authentification et pages Configuration / Mises à jour : OK')
 PY
     ca=$(access 'sha256sum /etc/loco/tls/ca.crt')
