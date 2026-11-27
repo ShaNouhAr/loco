@@ -2,6 +2,12 @@
 
 # Registro de cambios
 
+## 2.211.1 — 2026-11-28
+
+- **Volver a inscribir un equipo Windows olvidado.** Si el nuevo instalador proporciona una clave de inscripción y el servidor rechaza el token anterior, el agente se inscribe de nuevo con un token nuevo.
+- **Los instaladores MCP admiten autoridades de certificación internas.** Si el portal usa un certificado empresarial, el instalador ofrece la raíz verificada para el nombre del portal y muestra su huella SHA-256 antes de añadirla.
+- **Las actualizaciones de Windows esperan si Windows Installer está ocupado.** El agente espera y vuelve a intentar las actualizaciones de WinGet tras el error MSI 1618. Si el bloqueo persiste, indica el motivo y deja el programa pendiente para la próxima actualización.
+
 ## 2.211.0 — 2026-11-28
 
 - **Volver a inscribir un equipo Windows olvidado.** Si el nuevo instalador proporciona una clave de inscripción y el servidor rechaza el token anterior, el agente se inscribe de nuevo con un token nuevo.

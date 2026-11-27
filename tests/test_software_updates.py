@@ -243,7 +243,7 @@ class TestWindowsAgentSource(unittest.TestCase):
 
     def test_what_winget_cannot_update_is_set_aside_until_its_version_changes(self):
         self.assertIn("result == 0x8A150014 || result == 0x8A15002B", self.src)
-        self.assertIn('RunCapture(winget, arguments + " --locale en-US"', self.src)     # installeur anglais sur un Windows français
+        self.assertIn('RunWingetUpgrade(winget, arguments + " --locale en-US"', self.src)     # installeur anglais sur un Windows français
         self.assertIn('Path.Combine(Root, "winget-skip.json")', self.src)
         self.assertIn("if (!lastExport.TryGetValue(pid, out now) || now != skip[pid]) skip.Remove(pid);", self.src)
 

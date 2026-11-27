@@ -2,6 +2,12 @@
 
 # Changelog
 
+## 2.211.1 — 2026-11-28
+
+- **Re-enroll a forgotten Windows device.** If a fresh installer provides an enrollment key and the server rejects the old token, the agent enrolls again with a new token.
+- **MCP installers support internal certificate authorities.** When the portal uses an enterprise certificate, the installer offers the verified root for the portal’s name and shows its SHA-256 fingerprint before adding it.
+- **Windows software updates retry when Windows Installer is busy.** The agent waits and retries WinGet updates after MSI error 1618. If the conflict persists, it reports the reason and leaves the software eligible for the next update.
+
 ## 2.211.0 — 2026-11-28
 
 - **Re-enroll a forgotten Windows device.** If a fresh installer provides an enrollment key and the server rejects the old token, the agent enrolls again with a new token.
