@@ -8,12 +8,36 @@
 <div class="head">
   <div>
     <h1>{{ _("Exécuter %(name)s", name=script.name) }}</h1>
-    <p><span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · exécuté en", version=script.version) }} <strong>{{ priv }}</strong> {{ _("au prochain contact de chaque agent.") }}</p>
+    {% if proxmox_mode %}<p>{{ _("Exécution sur les hôtes Proxmox via la liaison SSH de loco.") }}</p>{% else %}
+    <p><span class="tag">{{ platforms[script.platform] }}</span> {{ _("· version %(version)s · exécuté en", version=script.version) }} <strong>{{ priv }}</strong> {{ _("au prochain contact de chaque agent.") }}</p>{% endif %}
   </div>
+  {% if proxmox_available %}<div class="actions">
+    {% if proxmox_mode %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id) }}">{{ _("Postes") }}</a>
+    {% else %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id, target='proxmox') }}">{{ _("Exécuter sur Proxmox…") }}</a>{% endif %}
+  </div>{% endif %}
 </div>
-<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-alt-when="when:schedule" data-confirm-alt="{{ _('Planifier %(name)s ?', name=script.name) }}" data-confirm-text-alt="{{ _('Le script s’exécutera avec les pleins pouvoirs (%(v)s) à chaque occurrence, dans sa version %(version)s : s’il est modifié ensuite, la planification se met en pause.', v=priv, version=script.version) }}" data-confirm-ok-alt="{{ _('Planifier') }}" data-confirm="{{ _('Exécuter %(name)s sur les postes choisis ?', name=script.name) }}" data-confirm-text="{{ _('Le script s’exécute avec les pleins pouvoirs (%(v)s) sur chaque poste. Vérifiez son contenu avant de continuer.', v=priv) }}" data-confirm-ok="{{ _('Exécuter') }}">
+<form method="post" action="{{ url_for('script_run_start', script_id=script.id) }}" class="stack" data-alt-when="when:schedule" data-confirm-alt="{{ _('Planifier %(name)s ?', name=script.name) }}" data-confirm-text-alt="{{ _('Le script s’exécutera avec les pleins pouvoirs (%(v)s) à chaque occurrence, dans sa version %(version)s : s’il est modifié ensuite, la planification se met en pause.', v=priv, version=script.version) }}" data-confirm-ok-alt="{{ _('Planifier') }}" data-confirm="{{ _('Exécuter %(name)s sur Proxmox ?', name=script.name) if proxmox_mode else _('Exécuter %(name)s sur les postes choisis ?', name=script.name) }}" data-confirm-text="{{ _('Le script utilise les droits du compte SSH de chaque serveur. Vérifiez son contenu avant de continuer.') if proxmox_mode else _('Le script s’exécute avec les pleins pouvoirs (%(v)s) sur chaque poste. Vérifiez son contenu avant de continuer.', v=priv) }}" data-confirm-ok="{{ _('Exécuter') }}">
   <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ script.version }}">
+  {% if proxmox_mode %}<input type="hidden" name="target" value="proxmox"><input type="hidden" name="when" value="now">{% endif %}
   <div class="cols">
+    {% if proxmox_mode %}
+    <section class="panel">
+      <div class="panel-h"><h2>Proxmox VE</h2></div>
+      <div class="panel-b stack-sm">
+        {% if host_groups %}
+        <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>
+          <div class="selection-list short">{% for group in host_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}"><span><strong>{{ group.name }}</strong><small>{{ group.members }} · Proxmox VE</small></span></label>{% endfor %}</div>
+        </div>
+        {% endif %}
+        <div><h3 class="pick-title">{{ _("Serveurs Proxmox") }}</h3>
+          <div class="selection-list">
+            {% for h in hosts %}<label class="selection-item"><input type="checkbox" name="proxmox_host" value="{{ h.id }}"><span>{{ h.name }}</span></label>
+            {% else %}<p class="small muted pad">{{ _("Aucun serveur Proxmox relié par SSH.") }}</p>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </section>
+    {% else %}
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Postes") }}</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=device], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
@@ -30,11 +54,18 @@
         </div>
       </div>
     </section>
+    {% endif %}
     <section class="panel">
       <div class="panel-h"><h2>{{ _("Contenu exécuté") }}</h2><div class="aside">{{ _("version %(version)s", version=script.version) }}</div></div>
       <pre class="script-preview">{{ script.content }}</pre>
     </section>
   </div>
+  {% if proxmox_mode %}
+  <section class="panel sticky-actions"><div class="panel-b row-between">
+    <span>{{ _("Sortie et code de retour de chaque poste sur la page de suivi.") }}</span>
+    <button class="btn primary" {{ 'disabled' if not hosts }}><span class="spin"></span>{{ _("Exécuter") }}</button>
+  </div></section>
+  {% else %}
   <section class="panel" data-show-for="when:schedule">
     <div class="panel-h"><h2>{{ _("Quand") }}</h2><div class="aside">{{ _("groupes résolus à chaque exécution") }}</div></div>
     <div class="panel-b">{{ planner({'recurrence': 'once'}) }}</div>
@@ -47,5 +78,6 @@
     <div class="row"><span class="muted compose-note" data-show-for="when:now">{{ _("Sortie et code de retour de chaque poste sur la page de suivi.") }}</span>
       <button class="btn primary" data-alt="{{ _('Planifier') }}"><span class="spin"></span><span data-label>{{ _("Exécuter") }}</span></button></div>
   </div></section>
+{% endif %}
 </form>
 {% endblock %}

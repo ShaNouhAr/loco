@@ -13,5 +13,6 @@
 </div>
 <div class="stack" data-poll="{{ url_for('homeassistant_host', host_id=v.row.id) }}" data-poll-kind="reload" data-poll-every="4000" data-signature="{{ signature }}">
 {% include "_ha_host.html" %}
+{% include "_host_groups.html" %}
 </div>
 {% endblock %}

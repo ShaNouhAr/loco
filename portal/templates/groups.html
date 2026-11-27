@@ -34,7 +34,10 @@
               {% endif %}
               {% if o.members|length > (6 if software else 4) %}<span class="faint small">+{{ o.members|length - (6 if software else 4) }}</span>{% endif %}
             </div>
-            {% else %}<span class="faint">{{ _("vide") }}</span>{% endif %}
+            {% elif not o.hosts %}<span class="faint">{{ _("vide") }}</span>{% endif %}
+            {% if o.hosts %}<div class="member-strip">
+              {% for h in o.hosts %}<span class="tag" title="{{ h.label }}">{{ h.name }}</span>{% endfor %}
+            </div>{% endif %}
           </td>
           <td class="hide-sm nowrap">
             {% if not o.members %}—

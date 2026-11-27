@@ -10,7 +10,7 @@ import uuid
 from unittest import mock
 
 import test_portal as fixture
-from loco import auth, features, homeassistant, permissions, proxmox_system
+from loco import auth, features, homeassistant, permissions, proxmox_system, scripts
 from loco.db import transaction
 
 PASSWORD = "Proxmox-Systeme-2026"
@@ -148,6 +148,81 @@ class ProxmoxSystemTest(unittest.TestCase):
         browser = fixture.Browser()
         self.assertEqual(browser.login("px-" + name, PASSWORD).status_code, 302)
         return browser
+
+    def test_scripts_on_group_use_confirmed_ssh_and_record_exit_code(self):
+        host = self.host()
+        unlinked = self.host(ssh=False)
+        group = self.admin.post("/fleet/groups/save", {
+            "name": "Script targets", "host_sections": "proxmox", "proxmox": [host["id"], unlinked["id"]],
+        }, page="/fleet/groups/new")
+        gid = int(group.headers["Location"].split("#group-")[1])
+        self.addCleanup(self.delete_group, gid)
+        saved = self.admin.post("/fleet/scripts/save", {
+            "name": "Proxmox diagnostic", "platform": "linux", "content": "printf 'diagnostic\n'\nexit 7",
+        }, page="/fleet/scripts/new")
+        sid = int(saved.headers["Location"].rsplit("/", 1)[1])
+        self.addCleanup(self.delete_script, sid)
+        path = f"/fleet/scripts/{sid}/run"
+        form = {"target": "proxmox", "when": "now", "version": "1", "device_group": gid, "proxmox_host": host["id"]}
+        runner = self.member("device-script-runner", ["scripts.run", "proxmox.view"])
+        self.assertEqual(runner.post(path, form, page=path).status_code, 403)
+        self.assertIn("Script targets", self.admin.c.get(path + "?target=proxmox").get_data(as_text=True))
+        result = self.admin.post(path, form, page=path + "?target=proxmox")
+        self.assertEqual(result.status_code, 302)
+        run_path = result.headers["Location"]
+        self.assertEqual(runner.c.get(run_path).status_code, 404)
+        with mock.patch.object(proxmox_system, "run", return_value=(7, "diagnostic")) as ssh:
+            with transaction() as conn:
+                conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)", (features.SETTING, '["scripts"]'))
+            try:
+                self.assertFalse(scripts.run_next_proxmox())
+                ssh.assert_not_called()
+            finally:
+                with transaction() as conn:
+                    conn.execute("DELETE FROM settings WHERE key=?", (features.SETTING,))
+            self.assertTrue(scripts.run_next_proxmox())
+            self.assertFalse(scripts.run_next_proxmox())
+            ssh.assert_called_once()
+            self.assertEqual(ssh.call_args.args[0]["id"], host["id"])
+            self.assertEqual(ssh.call_args.args[1], "printf 'diagnostic\n'\nexit 7")
+            self.assertTrue(ssh.call_args.kwargs["stdin_script"])
+        page = self.admin.c.get(run_path).get_data(as_text=True)
+        self.assertIn("diagnostic</pre>", page)
+        self.assertIn("code 7", page)
+
+    def test_groups_include_proxmox_and_homeassistant(self):
+        host = self.host()
+        with transaction() as conn:
+            conn.execute("UPDATE proxmox_hosts SET name='Grouped Proxmox VE' WHERE id=?", (host["id"],))
+            conn.execute("UPDATE settings SET value='[\"proxmox\",\"homeassistant\"]' WHERE key=?", (features.OPTIONAL_SETTING,))
+            ha_id = conn.execute("INSERT INTO homeassistant_hosts (name, host, username, created_at) "
+                                 "VALUES ('Grouped Home Assistant', '192.0.2.11', 'root', '')").lastrowid
+        self.addCleanup(self.delete_homeassistant, ha_id)
+        group = self.admin.post("/fleet/groups/save", {"name": "Integrated hosts"}, page="/fleet/groups/new")
+        gid = int(group.headers["Location"].split("#group-")[1])
+        self.addCleanup(self.delete_group, gid)
+        for kind, host_id in (("proxmox", host["id"]), ("homeassistant", ha_id)):
+            path = f"/{kind}/{host_id}"
+            result = self.admin.post(f"/fleet/groups/hosts/{kind}/{host_id}", {"groups": gid}, page=path)
+            self.assertEqual(result.status_code, 302)
+            self.assertIn("Integrated hosts", self.admin.c.get(path).get_data(as_text=True))
+        for path in (f"/fleet/groups/{gid}", f"/fleet?group={gid}", "/fleet/groups"):
+            page = self.admin.c.get(path).get_data(as_text=True)
+            self.assertIn("Grouped Home Assistant", page)
+            self.assertIn("Grouped Proxmox VE", page)
+
+    def delete_group(self, gid):
+        with transaction() as conn:
+            conn.execute("DELETE FROM device_groups WHERE id=?", (gid,))
+
+    def delete_script(self, sid):
+        with transaction() as conn:
+            conn.execute("DELETE FROM script_runs WHERE script_id=?", (sid,))
+            conn.execute("DELETE FROM scripts WHERE id=?", (sid,))
+
+    def delete_homeassistant(self, host_id):
+        with transaction() as conn:
+            conn.execute("DELETE FROM homeassistant_hosts WHERE id=?", (host_id,))
 
 
 class TestSummary(unittest.TestCase):

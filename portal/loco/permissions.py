@@ -181,6 +181,7 @@ ENDPOINTS = {
     "software_group_attach": "windows.groups", "store_group_attach": "windows.groups",
     "fleet_groups": "fleet.view", "fleet_group_editor": "fleet.view",
     "fleet_group_save": "fleet.groups", "fleet_group_delete": "fleet.groups", "fleet_group_rename": "fleet.groups", "fleet_group_membership": "fleet.groups",
+    "fleet_host_group_membership": "fleet.groups",
     "deployments": ("deployments.view", "fleet.install"), "deployment_detail": ("deployments.view", "fleet.install"),
     "deployment_compose": "fleet.install", "deployment_preview": "fleet.install",
     "deployment_compose_linux": "fleet.install", "deployment_preview_linux": "fleet.install",

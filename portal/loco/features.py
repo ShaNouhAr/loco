@@ -54,7 +54,7 @@ MODULES = {"loco.linux": ("apt",), "loco.rpmrepo": ("rpm",), "loco.flatpak": ("f
 ENDPOINTS = {"linux_setup": ("apt",), "linux_proxmox": ("apt",), "linux_repository_source": ("apt",), "rpm_setup": ("rpm",),
              "flatpak_setup": ("flatpak",), "flatpak_repo_file": ("flatpak",), "windows_install_script": ("windows_apps",),
              "fleet_groups": ("fleet",), "fleet_group_editor": ("fleet",), "fleet_group_save": ("fleet",),
-             "fleet_group_delete": ("fleet",), "fleet_group_membership": ("fleet",),
+             "fleet_group_delete": ("fleet",), "fleet_group_membership": ("fleet",), "fleet_host_group_membership": ("fleet",),
              "fleet_remote_consent": ("fleet",), "fleet_group_remote_consent": ("fleet",),
              "update_blocks": ("fleet",), "update_block_add": ("fleet",), "update_block_remove": ("fleet",),
              "software_groups": ("windows_apps",), "software_group_editor": ("windows_apps",),

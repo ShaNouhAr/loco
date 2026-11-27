@@ -2,6 +2,11 @@
 
 # Registro de cambios
 
+## 2.208.0 — 2026-11-27
+
+- **Ejecutar scripts de shell en Proxmox VE.** En *Mi parque › Scripts*, abra un script de shell para Linux y elija *Ejecutar en Proxmox*. Seleccione servidores enlazados mediante SSH o grupos de equipos. El historial muestra la salida y el código de retorno de cada servidor.
+- **Agrupar servidores Proxmox y Home Assistant.** Asigne los servidores a uno o más grupos desde su ficha o desde el editor del grupo y búsquelos por grupo en *Mi parque*.
+
 ## 2.207.0 — 2026-11-26
 
 - **La documentación en inglés, francés y español.** El README, las guías de `docs/`, la política de seguridad, la guía de la appliance y este registro de cambios existen ahora en inglés — el idioma por defecto en GitHub — y en francés y español. Una barra al principio de cada página cambia de idioma con un clic y lleva a la misma página en el otro idioma. Las capturas, el banner y la animación de las actualizaciones en directo se toman del portal en cada idioma.

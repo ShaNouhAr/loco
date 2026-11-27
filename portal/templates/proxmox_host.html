@@ -28,6 +28,7 @@
   </div>
 </div>
 <div class="stack" data-poll="{{ url_for('proxmox_system_host', host_id=p.id) }}" data-poll-kind="reload" data-poll-every="4000" data-signature="{{ signature }}">
+{% include "_host_groups.html" %}
 {% if not ssh %}
 <div class="note err"><p>{{ _("Le client SSH (commande ssh) n'est pas installé sur ce serveur : loco ne peut pas gérer le système de Proxmox. Installez le paquet openssh-client, puis rechargez cette page.") }}</p></div>
 {% endif %}

@@ -5778,5 +5778,16 @@
  "%(selected)s / %(total)s droits accordés · %(sensitive)s sensibles": "%(selected)s / %(total)s permisos concedidos · %(sensitive)s sensibles",
  "%(selected)s droit accordé": "%(selected)s permiso concedido",
  "%(n)s modification": "%(n)s cambio",
- "%(n)s modifications": "%(n)s cambios"
+ "%(n)s modifications": "%(n)s cambios",
+ "Exécution sur les hôtes Proxmox via la liaison SSH de loco.": "Ejecución en los servidores Proxmox mediante la conexión SSH de loco.",
+ "Exécuter sur Proxmox…": "Ejecutar en Proxmox…",
+ "Exécuter %(name)s sur Proxmox ?": "¿Ejecutar %(name)s en Proxmox?",
+ "Le script utilise les droits du compte SSH de chaque serveur. Vérifiez son contenu avant de continuer.": "El script usa los permisos de la cuenta SSH de cada servidor. Revise su contenido antes de continuar.",
+ "Serveurs Proxmox": "Servidores Proxmox",
+ "Aucun serveur Proxmox relié par SSH.": "Ningún servidor Proxmox enlazado mediante SSH.",
+ "Lancement par SSH": "Ejecución mediante SSH",
+ "La liaison SSH de Proxmox a changé. Rechargez la page.": "La conexión SSH de Proxmox ha cambiado. Vuelva a cargar la página.",
+ "Choisissez au moins un serveur Proxmox relié par SSH.": "Seleccione al menos un servidor Proxmox enlazado mediante SSH.",
+ "Envois en attente annulés.": "Ejecuciones pendientes canceladas.",
+ "Suivi SSH interrompu. Vérifiez le résultat sur le serveur.": "Se interrumpió el seguimiento por SSH. Compruebe el resultado en el servidor."
 }

@@ -793,7 +793,9 @@ def homeassistant_host(host_id):
     signature = _signature([v])
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": signature}
-    return render_template("homeassistant_host.html", v=v, signature=signature, ssh=bool(ssh_binary()),
+    from . import groups
+    return render_template("homeassistant_host.html", v=v, host_groups=groups.host_choices("homeassistant", host_id),
+                           host_kind="homeassistant", signature=signature, ssh=bool(ssh_binary()),
                            actions=ACTIONS, issues=ISSUES, terminal=terminal_ready())
 
 

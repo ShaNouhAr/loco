@@ -1059,6 +1059,24 @@ MIGRATIONS = [
     );
     CREATE INDEX device_unlock_failures_key ON device_unlock_failures(user_id, device_id, at);
     """,
+    # 63 : groupes d'hôtes intégrés et exécutions de scripts sur Proxmox.
+    """
+    CREATE TABLE proxmox_group_members (
+        group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+        host_id INTEGER NOT NULL REFERENCES proxmox_hosts(id) ON DELETE CASCADE,
+        PRIMARY KEY (group_id, host_id)
+    );
+    CREATE TABLE homeassistant_group_members (
+        group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+        host_id INTEGER NOT NULL REFERENCES homeassistant_hosts(id) ON DELETE CASCADE,
+        PRIMARY KEY (group_id, host_id)
+    );
+    ALTER TABLE script_run_targets ADD COLUMN proxmox_id INTEGER REFERENCES proxmox_hosts(id) ON DELETE SET NULL;
+    ALTER TABLE script_run_targets ADD COLUMN ssh_identity TEXT NOT NULL DEFAULT '';
+    ALTER TABLE script_run_targets ADD COLUMN ssh_exit_code INTEGER;
+    ALTER TABLE script_run_targets ADD COLUMN ssh_started REAL NOT NULL DEFAULT 0;
+    CREATE INDEX script_run_targets_ssh_pending ON script_run_targets(last_state, id) WHERE ssh_identity!='';
+    """,
 ]
 
 

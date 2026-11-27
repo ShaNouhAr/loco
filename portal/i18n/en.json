@@ -5778,5 +5778,16 @@
  "%(selected)s / %(total)s droits accordés · %(sensitive)s sensibles": "%(selected)s / %(total)s rights granted · %(sensitive)s sensitive",
  "%(selected)s droit accordé": "%(selected)s right granted",
  "%(n)s modification": "%(n)s change",
- "%(n)s modifications": "%(n)s changes"
+ "%(n)s modifications": "%(n)s changes",
+ "Exécution sur les hôtes Proxmox via la liaison SSH de loco.": "Run on Proxmox hosts over loco’s SSH connection.",
+ "Exécuter sur Proxmox…": "Run on Proxmox…",
+ "Exécuter %(name)s sur Proxmox ?": "Run %(name)s on Proxmox?",
+ "Le script utilise les droits du compte SSH de chaque serveur. Vérifiez son contenu avant de continuer.": "The script runs with the permissions of each server’s SSH account. Review its contents before continuing.",
+ "Serveurs Proxmox": "Proxmox servers",
+ "Aucun serveur Proxmox relié par SSH.": "No Proxmox servers linked over SSH.",
+ "Lancement par SSH": "Runs over SSH",
+ "La liaison SSH de Proxmox a changé. Rechargez la page.": "The Proxmox SSH connection has changed. Reload the page.",
+ "Choisissez au moins un serveur Proxmox relié par SSH.": "Select at least one Proxmox server linked over SSH.",
+ "Envois en attente annulés.": "Pending runs cancelled.",
+ "Suivi SSH interrompu. Vérifiez le résultat sur le serveur.": "SSH tracking was interrupted. Check the result on the server."
 }

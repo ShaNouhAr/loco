@@ -1,0 +1,22 @@
+{% if host_groups or can('fleet.groups') %}
+<section class="panel" id="host-groups">
+  <div class="panel-h"><h2>{{ _("Groupes de machines") }}</h2></div>
+  {% if can('fleet.groups') and host_groups %}
+  <form class="panel-b stack-sm" method="post" action="{{ url_for('fleet_host_group_membership', kind=host_kind, host_id=v.row.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="selection-list short">
+      {% for group in host_groups %}
+      <label class="selection-item"><input type="checkbox" name="groups" value="{{ group.id }}" {{ 'checked' if group.selected }}><span>{{ group.name }}</span></label>
+      {% endfor %}
+    </div>
+    <div><button class="btn primary">{{ _("Enregistrer") }}</button></div>
+  </form>
+  {% else %}
+  <div class="panel-b">
+    {% for group in host_groups if group.selected %}<a class="tag" href="{{ url_for('fleet_group_editor', group_id=group.id) }}">{{ group.name }}</a>
+    {% else %}<span class="muted">{{ _("Aucun groupe") }}</span>{% endfor %}
+    {% if can('fleet.groups') %}<a class="btn sm" href="{{ url_for('fleet_group_editor', group_id=0) }}">{{ _("Créer un groupe") }}</a>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endif %}

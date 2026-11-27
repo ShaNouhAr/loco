@@ -13,6 +13,7 @@
   {% if script %}
   <div class="actions">
     {% if can('scripts.run') %}<a class="btn primary" href="{{ url_for('script_compose', script_id=script.id) }}">{{ _("Exécuter sur des postes") }}</a>{% endif %}
+    {% if can('scripts.run') and proxmox_available %}<a class="btn" href="{{ url_for('script_compose', script_id=script.id, target='proxmox') }}">{{ _("Exécuter sur Proxmox…") }}</a>{% endif %}
     {% if editable %}
     <details class="menu">
       <summary class="btn" aria-label="{{ _('Autres actions') }}">{{ _("Plus") }}</summary>

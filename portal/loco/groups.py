@@ -6,9 +6,32 @@ from flask import abort, flash, g, render_template, request
 
 from . import app, fleet, scope, update_blocks
 from .i18n import _
-from .auth import audit, lock_access, login_required, require
+from .auth import audit, can, lock_access, login_required, require
 from .db import db
 from .util import back, counted
+
+HOST_TYPES = {"proxmox": ("Proxmox", "proxmox_system_host"), "homeassistant": ("Home Assistant", "homeassistant_host")}
+
+
+def host_choices(kind, host_id):
+    if not can("fleet.view") or not scope.whole():
+        return []
+    return db().execute(
+        f"SELECT g.id, g.name, m.host_id IS NOT NULL AS selected FROM device_groups g "
+        f"LEFT JOIN {kind}_group_members m ON m.group_id=g.id AND m.host_id=? "
+        "ORDER BY g.name COLLATE NOCASE", (host_id,)
+    ).fetchall()
+
+
+def _group_hosts(group_id):
+    return [
+        {"kind": kind, "label": label, "endpoint": endpoint, "editable": can("fleet.groups"),
+         "rows": db().execute(
+             f"SELECT h.id, h.name, m.host_id IS NOT NULL AS selected FROM {kind}_hosts h "
+             f"LEFT JOIN {kind}_group_members m ON m.host_id=h.id AND m.group_id=? "
+             "ORDER BY h.name COLLATE NOCASE", (group_id,)).fetchall()}
+        for kind, (label, endpoint) in HOST_TYPES.items() if scope.whole() and can(kind + ".view")
+    ]
 
 
 def identifiers(values, limit=500):
@@ -23,14 +46,18 @@ def identifiers(values, limit=500):
     return selected
 
 
-def listing(kind):
+def listing(kind, *, include_hosts=False):
     """Groupes et nombre de membres ; pour un profil limité à une partie du parc, les groupes qu'il a reçus ou qui
     contiennent de ses postes, comptés sur ses seuls postes."""
     table, members, column, entities = (("software_groups", "software_group_members", "app_id", "win_apps") if kind == "software"
                                        else ("device_groups", "device_group_members", "device_id", "devices"))
     where = "" if kind == "software" else " AND e.state!='removed'" + scope.sql("e.id")
+    host_counts = ""
+    if include_hosts and kind == "device" and scope.whole():
+        host_counts = "".join(f" + (SELECT COUNT(*) FROM {host_kind}_group_members WHERE group_id=g.id)"
+                              for host_kind in HOST_TYPES if can(host_kind + ".view"))
     rows = db().execute(f"SELECT g.*,(SELECT COUNT(*) FROM {members} m JOIN {entities} e ON e.id=m.{column} "
-                        f"WHERE m.group_id=g.id{where}) AS members FROM {table} g ORDER BY g.name COLLATE NOCASE").fetchall()
+                        f"WHERE m.group_id=g.id{where}){host_counts} AS members FROM {table} g ORDER BY g.name COLLATE NOCASE").fetchall()
     if kind == "software" or scope.whole():
         return rows
     _whole, declared, _devices = scope.declared(db(), g.user["role"])
@@ -82,6 +109,12 @@ def _overview(kind):
             if r["os_family"] == "windows":
                 g["windows"] += 1
                 g["wu_blocked"] += 1 if r["block_windows_update"] else 0
+        for kind, (label, _endpoint) in HOST_TYPES.items():
+            if scope.whole() and can(kind + ".view"):
+                for r in db().execute(f"SELECT m.group_id, h.name FROM {kind}_group_members m "
+                                      f"JOIN {kind}_hosts h ON h.id=m.host_id ORDER BY h.name COLLATE NOCASE"):
+                    g = out.setdefault(r["group_id"], {"members": [], "states": {}})
+                    g.setdefault("hosts", []).append({"name": r["name"], "label": label})
     return out
 
 
@@ -103,7 +136,7 @@ def _editor(kind, group_id):
         items = [{"row": r, **_device_state(r, apps)} for r in rows]
     items.sort(key=lambda i: i["row"]["id"] not in selected)      # membres d'abord, ordre alphabétique conservé
     return render_template("group_editor.html", kind=kind, group=group, items=items, selected=selected,
-                           families=fleet.FAMILIES)
+                           families=fleet.FAMILIES, host_sections=[] if software else _group_hosts(group_id))
 
 
 def _save(kind, group_id):
@@ -137,8 +170,22 @@ def _save(kind, group_id):
         else:
             conn.execute(f"INSERT INTO {member_table} (group_id,{column}) VALUES (?,?)", (group_id, entity_id))
     if not software:
+        submitted = request.form.getlist("host_sections")
+        for host_kind in HOST_TYPES:
+            if host_kind not in submitted:
+                continue
+            require(host_kind + ".view")
+            hosts = identifiers(request.form.getlist(host_kind))
+            if not set(hosts) <= {r[0] for r in conn.execute(f"SELECT id FROM {host_kind}_hosts")}:
+                abort(400, _('Un membre a été supprimé : rechargez la page.'))
+            conn.execute(f"DELETE FROM {host_kind}_group_members WHERE group_id=?", (group_id,))
+            conn.executemany(f"INSERT INTO {host_kind}_group_members VALUES (?,?)", [(group_id, hid) for hid in hosts])
         update_blocks.recount_grouped(conn)
-    audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {counted(len(selected), 'membre')}", commit=False)
+    total = len(selected)
+    if not software:
+        total += sum(conn.execute(f"SELECT COUNT(*) FROM {host_kind}_group_members WHERE group_id=?", (group_id,)).fetchone()[0]
+                     for host_kind in HOST_TYPES)
+    audit("groupes.logiciels" if software else "groupes.machines", f"{name} : {counted(total, 'membre')}", commit=False)
     conn.commit()
     flash(_('Groupe enregistré. Les déploiements déjà confirmés conservent leurs cibles et leurs logiciels.'), "ok")
     # Retour à la liste, sur le groupe enregistré (surligné), plutôt que de rester dans l'éditeur.
@@ -271,6 +318,26 @@ def fleet_group_membership(dev_id):
     audit("groupes.appartenance", f"{dev['hostname']} : {counted(len(selected), 'groupe')}", commit=False)
     conn.commit()
     return back("fleet_device", dev_id=dev_id)
+
+
+@app.route("/fleet/groups/hosts/<kind>/<int:host_id>", methods=["POST"])
+@login_required
+def fleet_host_group_membership(kind, host_id):
+    if kind not in HOST_TYPES:
+        abort(404)
+    conn = lock_access("fleet.groups")
+    require(kind + ".view")
+    row = conn.execute(f"SELECT name FROM {kind}_hosts WHERE id=?", (host_id,)).fetchone()
+    if row is None:
+        abort(404)
+    selected = identifiers(request.form.getlist("groups"))
+    if not set(selected) <= {r[0] for r in conn.execute("SELECT id FROM device_groups")}:
+        abort(400)
+    conn.execute(f"DELETE FROM {kind}_group_members WHERE host_id=?", (host_id,))
+    conn.executemany(f"INSERT INTO {kind}_group_members VALUES (?,?)", [(gid, host_id) for gid in selected])
+    audit("groupes.appartenance", f"{HOST_TYPES[kind][0]} · {row['name']} : {counted(len(selected), 'groupe')}", commit=False)
+    conn.commit()
+    return back(HOST_TYPES[kind][1], host_id=host_id, _anchor="host-groups")
 
 
 @app.route("/windows-apps/<slug>/group", methods=["POST"])

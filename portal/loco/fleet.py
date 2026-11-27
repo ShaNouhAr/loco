@@ -2326,19 +2326,25 @@ def fleet():
         selected_group = groups._group("device", group_id)
         member_ids = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         rows = [r for r in rows if r["d"]["id"] in member_ids]
-    # Home Assistant, Proxmox, équipements réseau : jamais dans un groupe (ils n'en sont membres d'aucun).
-    others = ({"ha": [], "px": [], "nd": []} if selected_group else
-              {"ha": _ha_fleet_rows(), "px": _px_fleet_rows(), "nd": _net_fleet_rows()})
+    others = {"ha": [], "px": [], "nd": []}
+    if not selected_group:
+        others = {"ha": _ha_fleet_rows(), "px": _px_fleet_rows(), "nd": _net_fleet_rows()}
+    elif scope.whole():
+        for key, kind, load in (("ha", "homeassistant", _ha_fleet_rows), ("px", "proxmox", _px_fleet_rows)):
+            hosts = {r[0] for r in db().execute(f"SELECT host_id FROM {kind}_group_members WHERE group_id=?", (group_id,))}
+            if hosts:
+                others[key] = [row for row in load() if row["id"] in hosts]
     devices_total = len(rows)
     managed = {"ha": bool(others["ha"]), "px": bool(others["px"])}     # avant les filtres : pour les textes des fenêtres
     # Ce que « Tout mettre à jour » fera vraiment : tout le groupe ou le parc, quels que soient les filtres affichés —
     # sans les postes dont la mise à jour est déjà demandée, comptés à part (« en cours ») ; Home Assistant et Proxmox
     # compris, chacun selon son droit.
     to_update_devices = sum(1 for r in rows if r["needs_update"] and not r["updating"])
-    to_update = to_update_devices + (
+    to_update = to_update_devices + (0 if selected_group else
         sum(1 for x in others["ha"] if x["updates"] and not x["busy"] and can("homeassistant.update"))
         + sum(1 for x in others["px"] if x["updates"] and x["ssh"] and not x["busy"] and not x["blocked"] and can("proxmox.update")))
-    updating = sum(1 for r in rows if r["updating"]) + sum(1 for k in ("ha", "px") for x in others[k] if x["busy"])
+    updating = sum(1 for r in rows if r["updating"]) + (0 if selected_group else
+               sum(1 for k in ("ha", "px") for x in others[k] if x["busy"]))
     names = _group_names()
     query = request.args.get("q", "").strip()[:100]
     rows = _search(rows, query, names)
@@ -2399,7 +2405,7 @@ def fleet():
         r["wake"] = (can("fleet.wake") and r["d"]["state"] == "active" and not is_online(r["d"]) and wake.offer(r["d"], senders)["ok"])
     from .auth import scope_summary
     limit = None if scope.whole() else scope_summary(db(), *scope.declared(db(), g.user["role"]))
-    return render_template("fleet.html", device_groups=groups.listing("device"), selected_group=selected_group, rows=rows,
+    return render_template("fleet.html", device_groups=groups.listing("device", include_hosts=True), selected_group=selected_group, rows=rows,
                            fleet_limit=limit, query=query, page=page, pages=pages, shown=shown, view=view, extras=extras,
                            counts=counts, systems=systems, total=total, state=state, system=system, dist_key=dist,
                            signature=signature, families=FAMILIES, actions=ACTIONS, to_update=to_update, updating=updating,
@@ -2842,7 +2848,7 @@ def fleet_update_all():
             kept += r["d"]["id"] in blocked
     db().commit()
     _report_reserved(kept)
-    if member_ids is None:                                # un groupe ne contient que des postes
+    if member_ids is None:
         count += _extras_to_update(reboot=reboot)
     audit("parc.tout-mettre-a-jour", f"{counted(count, 'poste')}{', avec redémarrage' if reboot else ''}{_kept_text(kept)}")
     flash((n_('Mise à jour demandée sur %(num)s poste.', 'Mise à jour demandée sur %(num)s postes.', count) if count else _('Aucun poste à mettre à jour.')), "ok")

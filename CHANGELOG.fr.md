@@ -2,6 +2,11 @@
 
 # Journal des versions
 
+## 2.208.0 — 2026-11-27
+
+- **Exécuter des scripts shell sur Proxmox VE.** Dans *Mon parc › Scripts*, ouvrez un script shell Linux et choisissez *Exécuter sur Proxmox*. Sélectionnez des serveurs reliés par SSH ou des groupes de machines. L’historique affiche la sortie et le code de retour de chaque serveur.
+- **Regrouper Proxmox et Home Assistant.** Ajoutez les hôtes à un ou plusieurs groupes de machines depuis leur fiche ou l’éditeur du groupe et retrouvez-les en filtrant *Mon parc*.
+
 ## 2.207.0 — 2026-11-26
 
 - **La documentation en anglais, en français et en espagnol.** Le README, les guides de `docs/`, la politique de sécurité, le guide de l'appliance et ce journal des versions existent maintenant en anglais — la langue par défaut sur GitHub — ainsi qu'en français et en espagnol. Une barre en tête de chaque page change de langue d'un clic et mène à la même page dans l'autre langue. Les captures, la bannière et l'animation des mises à jour en direct sont prises sur le portail dans chaque langue.

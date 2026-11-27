@@ -32,6 +32,7 @@ KEY_DIR = os.path.join(config.STATE, "proxmox")
 KEY_PATH = os.path.join(KEY_DIR, "id_ed25519")
 LinkError = homeassistant.LinkError
 UNREACHED = homeassistant.UNREACHED
+SCRIPT_TIMEOUT = 1800
 MAC_RE = re.compile(r"^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$")
 BOOT_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 KERNEL_PKG = re.compile(r"^(?:proxmox|pve)-kernel-|^proxmox-default-kernel$")
@@ -121,17 +122,21 @@ def _argv(row, known, remote, tty=False):
             + (["-tt"] if tty else ["-T"]) + ["--", host] + ([remote] if remote else []))
 
 
-def run(row, script, timeout=QUICK):
+def run(row, script, timeout=QUICK, *, stdin_script=False):
     """Lance un script sur Proxmox par SSH : (code de sortie, sortie et erreurs mêlées). 255 : ssh lui-même a échoué."""
     if not homeassistant.ssh_binary():
         raise LinkError(_("Le client SSH (commande ssh) n'est pas installé sur ce serveur."))
     if not row["host_key"]:
         raise LinkError(_("La clé d'hôte de Proxmox n'a pas encore été confirmée."))
     public_key()
+    # SSH transporte le contenu par stdin, même pour les scripts qui dépassent la taille d'une commande.
+    remote = (f"bash -c 'timeout --kill-after=5s {SCRIPT_TIMEOUT}s bash -s 2>&1 | tail -c 12000; exit ${{PIPESTATUS[0]}}'"
+              if stdin_script else "sh -c " + shlex.quote(script))
+    source = {"input": script.encode()} if stdin_script else {"stdin": subprocess.DEVNULL}
     with homeassistant.KnownHosts(KEY_DIR, ssh_host(row), row["ssh_port"], row["host_key"]) as known:
         try:
-            done = subprocess.run(_argv(row, known, "sh -c " + shlex.quote(script)), stdin=subprocess.DEVNULL,
-                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+            done = subprocess.run(_argv(row, known, remote), **source, stdout=subprocess.PIPE,
+                                  stderr=subprocess.STDOUT, timeout=timeout)
         except subprocess.TimeoutExpired as e:
             raise LinkError(_("Proxmox n'a pas répondu dans le délai (%(n)s s).", n=timeout)) from e
         except OSError as e:
@@ -759,7 +764,9 @@ def proxmox_system_host(host_id):
     sig = signature(v)
     if request.headers.get("X-Requested-With") == "fetch":
         return {"signature": sig}
-    return render_template("proxmox_host.html", v=v, signature=sig, ssh=bool(homeassistant.ssh_binary()), actions=ACTIONS,
+    from . import groups
+    return render_template("proxmox_host.html", v=v, host_groups=groups.host_choices("proxmox", host_id),
+                           host_kind="proxmox", signature=sig, ssh=bool(homeassistant.ssh_binary()), actions=ACTIONS,
                            terminal=homeassistant.terminal_ready(), pending=_pending(host_id),
                            public_key=public_key() if can("proxmox.manage") and not row["host_key"] else "",
                            authorized=authorized_line() if can("proxmox.manage") and not row["host_key"] else "")

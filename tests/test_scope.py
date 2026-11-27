@@ -158,7 +158,7 @@ class TestRestrictedAccount(ScopeTest):
         self.assertNotIn("Comptabilité", tech.c.get("/fleet/groups").get_data(as_text=True))
 
     def test_scripts_target_and_show_only_the_fleet(self):
-        _role, tech = self.technician()
+        role, tech = self.technician()
         with transaction() as conn:
             sid = conn.execute("INSERT INTO scripts (name, platform, content, created_at, updated_at) "
                                "VALUES ('Nettoyage', 'linux', 'true', '', '')").lastrowid
@@ -184,6 +184,11 @@ class TestRestrictedAccount(ScopeTest):
                          (hidden, self.ids["compta"], "pc-compta"))
         self.assertEqual(tech.c.get(f"/fleet/scripts/runs/{hidden}").status_code, 404)
         self.assertNotIn(f"/fleet/scripts/runs/{hidden}\"", tech.c.get("/fleet/scripts").get_data(as_text=True))
+        with transaction() as conn:
+            conn.execute("DELETE FROM access_role_groups WHERE role_id=?", (role,))
+            conn.execute("DELETE FROM access_role_devices WHERE role_id=?", (role,))
+        self.assertEqual(tech.c.get(f"/fleet/scripts/runs/{other}").status_code, 404)
+        self.assertNotIn(f"/fleet/scripts/runs/{other}\"", tech.c.get("/fleet/scripts").get_data(as_text=True))
 
     def test_schedules_keep_the_author_fleet(self):
         _role, tech = self.technician()

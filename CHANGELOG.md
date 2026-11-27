@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 2.208.0 — 2026-11-27
+
+- **Run shell scripts on Proxmox VE.** From *My fleet › Scripts*, open a Linux shell script and choose *Run on Proxmox*. Select individual servers linked over SSH or machine groups. The run history shows each server’s output and exit code.
+- **Group Proxmox and Home Assistant hosts.** Assign them to one or more machine groups from their own pages or the group editor and find them by group in *My fleet*.
+
 ## 2.207.0 — 2026-11-26
 
 - **The documentation in English, French and Spanish.** The README, the guides in `docs/`, the security policy, the appliance guide and this changelog now exist in English — the default on GitHub — and in French and Spanish. A bar at the top of each page switches language in one click and leads to the same page in the other language. The screenshots, the banner and the animation of the live updates are taken from the portal in each language.

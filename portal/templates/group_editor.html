@@ -71,12 +71,30 @@
         </tbody>
       </table>
     </div>
-    {% if editable %}
-    <div class="panel-f sticky-actions row-between">
+  </section>
+  {% for section in host_sections %}
+  {% if section.rows and (section.editable or section.rows|selectattr('selected')|list) %}
+  <section class="panel">
+    <div class="panel-h"><h2>{{ section.label }}</h2></div>
+    <div class="panel-b selection-list">
+      {% if section.editable %}<input type="hidden" name="host_sections" value="{{ section.kind }}">{% endif %}
+      {% for h in section.rows if section.editable or h.selected %}
+      <div class="selection-item">
+        {% if section.editable %}<input type="checkbox" name="{{ section.kind }}" value="{{ h.id }}" {{ 'checked' if h.selected }} aria-label="{{ h.name }}">{% endif %}
+        <a href="{{ url_for(section.endpoint, host_id=h.id) }}">{{ h.name }}</a>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  {% endfor %}
+  {% if editable %}
+  <section class="panel sticky-actions">
+    <div class="panel-b row-between">
       <span>{{ _("Les déploiements déjà confirmés gardent leur sélection d'origine.") }}</span>
       <span class="row"><a class="btn" href="{{ url_for('software_groups' if software else 'fleet_groups') }}">{{ _("Annuler") }}</a><button class="btn primary"><span class="spin"></span>{{ _('Enregistrer') if group else _('Créer le groupe') }}</button></span>
     </div>
-    {% endif %}
   </section>
+  {% endif %}
 </form>
 {% endblock %}
