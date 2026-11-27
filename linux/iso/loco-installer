@@ -185,10 +185,45 @@ problems() {
 }
 
 # Réseaux autorisés par défaut : le sous-réseau du serveur, sinon les plages privées.
-default_networks() {
+local_network() {
     cidr=$ADDRESS
     if [ "$NETWORK" = dhcp ]; then cidr=$(appliance_current_cidr "$INTERFACE"); fi
-    if [ -n "$cidr" ]; then appliance_networks "$cidr"; else echo "10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"; fi
+    [ -n "$cidr" ] && appliance_networks "$cidr"
+}
+
+PRIVATE_IPV4="10.0.0.0/8 172.16.0.0/12 192.168.0.0/16"
+default_networks() { local_network || printf '%s\n' "$PRIVATE_IPV4"; }
+
+network_input() {
+    initial=$2
+    while :; do
+        initial=$(ask --title "$1" --inputbox "$(t "Saisissez des adresses IP ou des réseaux CIDR, séparés par des espaces, virgules ou points-virgules.\nExemple : 192.168.1.0/24, 10.10.20.45" "Enter IP addresses or CIDR networks, separated by spaces, commas or semicolons.\nExample: 192.168.1.0/24, 10.10.20.45" "Introduzca direcciones IP o redes CIDR, separadas por espacios, comas o puntos y coma.\nEjemplo: 192.168.1.0/24, 10.10.20.45")${3:+\n\n$3}" 13 76 "$initial") || return 1
+        if [ -n "$3" ] && [ -z "$(printf '%s' "$initial" | tr -d '[:space:]')" ]; then return 0; fi
+        normalized=$(appliance_networks "$(printf '%s' "$initial" | tr ',;' '  ')") && { printf '%s\n' "$normalized"; return 0; }
+        msg "$(t Accès Access Acceso)" "$(t 'Adresse ou réseau invalide. Pour un sous-réseau, indiquez son préfixe (ex. /24).' 'Invalid address or network. For a subnet, include its prefix (e.g. /24).' 'Dirección o red no válida. Para una subred, indique su prefijo (p. ej., /24).')"
+    done
+}
+
+choose_networks() {
+    title=$(t 'Réseaux autorisés' 'Allowed networks' 'Redes autorizadas')
+    subnet=$(local_network) || subnet=""
+    set --
+    if [ -n "$subnet" ]; then
+        set -- local "$(t "Réseau du serveur ($subnet)" "Server subnet ($subnet)" "Subred del servidor ($subnet)")"
+    fi
+    access=$(ask --title "$title" --no-tags --menu "$(t "Quels réseaux peuvent accéder à loco ?\nChoisissez Réseaux privés si votre navigateur est sur un autre réseau privé. Les règles peuvent être ajustées dans Administration > Configuration." "Which networks can access loco?\nChoose Private networks if your browser is on another private network. You can adjust the rules in Administration > Configuration." "¿Qué redes pueden acceder a loco?\nElija Redes privadas si su navegador está en otra red privada. Puede ajustar las reglas en Administración > Configuración.")" 16 76 3 \
+        "$@" private "$(t 'Réseaux privés IPv4 (10.x, 172.16–31.x, 192.168.x)' 'Private IPv4 networks (10.x, 172.16–31.x, 192.168.x)' 'Redes privadas IPv4 (10.x, 172.16–31.x, 192.168.x)')" \
+        custom "$(t 'Personnaliser les réseaux' 'Customize networks' 'Personalizar redes')") || return 1
+    case "$access" in
+        local) ALLOW=$subnet ADMIN_ALLOW="" ;;
+        private) ALLOW=$PRIVATE_IPV4 ADMIN_ALLOW="" ;;
+        custom)
+            clients=$(network_input "$(t 'Postes clients' 'Client machines' 'Equipos cliente')" "${ALLOW:-$subnet}" "") || return 1
+            admin=$(network_input "$(t 'Interface web' 'Web interface' 'Interfaz web')" "$ADMIN_ALLOW" \
+                "$(t 'Laissez vide pour utiliser les mêmes réseaux que les postes.' 'Leave blank to use the same networks as the client machines.' 'Déjelo vacío para usar las mismas redes que los equipos.')") || return 1
+            ALLOW=$clients ADMIN_ALLOW=$admin
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------- assistant
@@ -287,15 +322,7 @@ EOF
         else ADMIN_PASSWORD=$p1; break; fi
     done
 
-    ALLOW=${ALLOW:-$(default_networks)}
-    while :; do
-        values=$(ask --title "$(t Accès Access)" --form "$(t 'Réseaux autorisés, séparés par des espaces :' 'Allowed networks, space-separated:' 'Redes autorizadas, separadas por espacios:')" 10 72 2 \
-            "$(t 'Postes clients' 'Client machines' 'Equipos cliente')" 1 1 "$ALLOW" 1 18 50 0 \
-            "$(t 'Interface web' 'Web interface' 'Interfaz web')" 2 1 "${ADMIN_ALLOW:-$ALLOW}" 2 18 50 0) || return 1
-        ALLOW=$(appliance_networks "$(printf '%s\n' "$values" | sed -n 1p)") \
-            && ADMIN_ALLOW=$(appliance_networks "$(printf '%s\n' "$values" | sed -n 2p)") && break
-        msg "$(t Accès Access)" "$(t 'Réseau invalide (forme 192.168.1.0/24).' 'Invalid network (form 192.168.1.0/24).' 'Red no válida (forma 192.168.1.0/24).')"
-    done
+    choose_networks || return 1
 
     on() { case " $FEATURES " in *" $1 "*) echo on ;; *) echo off ;; esac; }
     values=$(ask --title "$(t Fonctions Features)" --separate-output --checklist "$(t 'Fonctions activées (modifiables ensuite dans le portail) :' 'Enabled features (changeable later in the portal):' 'Funciones activadas (modificables luego en el portal):')" 14 74 5 \

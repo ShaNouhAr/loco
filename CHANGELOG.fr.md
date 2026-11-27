@@ -2,6 +2,10 @@
 
 # Journal des versions
 
+## 2.210.0 — 2026-11-27
+
+- **Accès réseau simplifié dans l’installateur ISO.** Choisissez le sous-réseau détecté, les réseaux privés IPv4 ou une liste personnalisée. Le portail peut reprendre la liste des postes. La saisie accepte les adresses IP et les CIDR séparés par des espaces, des virgules ou des points-virgules. Le guide de l’ISO explique comment rétablir l’accès depuis la console en cas de 403.
+
 ## 2.209.0 — 2026-11-27
 
 - **Proxmox et Home Assistant dans l’éditeur de groupes de machines.** Les hôtes apparaissent avec les postes du parc, avec leur icône, leur adresse, leur système et leur état. Le même tableau permet de chercher par adresse, de filtrer les membres et de voir leur nombre total.

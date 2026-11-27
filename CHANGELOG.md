@@ -2,6 +2,10 @@
 
 # Changelog
 
+## 2.210.0 — 2026-11-27
+
+- **Simpler network access in the ISO installer.** Use the detected server subnet, private IPv4 networks, or a custom list. A custom web list can inherit the client networks, and IP addresses and CIDRs can be separated by spaces, commas or semicolons. The ISO guide explains how to recover from an HTTP 403 from the server console.
+
 ## 2.209.0 — 2026-11-27
 
 - **Proxmox and Home Assistant in the machine group editor.** Hosts appear alongside managed computers, with their own icon, address, system and status. Search by address, filter to group members only, and see the total membership in the same table.

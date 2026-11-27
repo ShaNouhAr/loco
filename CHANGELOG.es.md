@@ -2,6 +2,10 @@
 
 # Registro de cambios
 
+## 2.210.0 — 2026-11-27
+
+- **Acceso de red más sencillo en el instalador ISO.** Elija la subred detectada, las redes privadas IPv4 o una lista personalizada. El portal puede usar la misma lista que los equipos. Se aceptan direcciones IP y CIDR separados por espacios, comas o puntos y coma. La guía de la ISO explica cómo recuperar el acceso desde la consola en caso de un error 403.
+
 ## 2.209.0 — 2026-11-27
 
 - **Proxmox y Home Assistant en el editor de grupos de equipos.** Los servidores aparecen junto a los equipos gestionados, con su icono, dirección, sistema y estado. En la misma tabla se puede buscar por dirección, filtrar por miembros y ver el total de miembros del grupo.

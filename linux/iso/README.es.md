@@ -20,10 +20,18 @@ sha256sum --ignore-missing -c SHA256SUMS
    consola 7 (Alt+F7). `loco-installer` permite volver a lanzarlo desde Alt+F1.
 2. Elija el teclado, el disco (**borrado por completo**), el nombre, la tarjeta de red,
    DHCP o dirección fija, la zona horaria y las contraseñas de root y admin.
-3. Elija las redes autorizadas y las funciones: HTTP de los clientes,
+3. Elija la subred del servidor, las redes privadas IPv4 para acceder desde
+   varias subredes privadas o redes personalizadas. En el modo personalizado,
+   el portal puede usar la lista de los equipos o una lista independiente.
+   A continuación, elija las funciones: HTTP de los clientes,
    Windows Update, RPM, Flatpak. SSH está desactivado por defecto; al activarlo,
    elija **Contraseña root** (sin clave necesaria) o **Solo clave pública**.
 4. Revise el resumen, instale, retire el medio y reinicie.
+
+Si nginx devuelve **403 Forbidden** al abrir el portal, compruebe la dirección
+de origen del navegador. En la consola root del servidor, ejecute
+`loco-config show` y añada la dirección o subred a la lista web existente,
+por ejemplo `loco-config set 'ADMIN_ALLOW=192.168.1.0/24 10.10.20.45/32'`.
 
 El primer arranque termina la configuración de loco, y luego la consola muestra
 la dirección del portal y la huella SHA-256 de su autoridad HTTPS. Compare esta

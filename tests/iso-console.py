@@ -108,8 +108,8 @@ class ConsoleVM:
         self.wait_screen('Portail', 'Portal')
         self.text('console-portal-123\n')
         self.text('console-portal-123\n')
-        self.wait_screen('Postes clients', 'Client machines', 'Equipos cliente')
-        self.key('tab')
+        self.wait_screen('Réseaux autorisés', 'Allowed networks', 'Redes autorizadas')
+        self.wait_screen('Réseau du serveur', 'Server subnet', 'Subred del servidor')
         self.key('ret')
         self.wait_screen('Fonctions', 'Features', 'Funciones')
 

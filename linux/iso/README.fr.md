@@ -20,10 +20,18 @@ sha256sum --ignore-missing -c SHA256SUMS
    console 7 (Alt+F7). `loco-installer` permet de le relancer depuis Alt+F1.
 2. Choisir le clavier, le disque **entièrement effacé**, le nom, la carte réseau,
    DHCP ou adresse fixe, le fuseau et les mots de passe root et admin.
-3. Choisir les réseaux autorisés et les fonctions : HTTP des clients,
+3. Choisir le sous-réseau du serveur, les réseaux privés IPv4 pour accéder
+   depuis plusieurs sous-réseaux privés, ou des réseaux personnalisés. En mode
+   personnalisé, le portail peut reprendre la liste des postes ou avoir sa propre
+   liste. Choisir ensuite les fonctions : HTTP des clients,
    Windows Update, RPM, Flatpak. SSH est désactivé par défaut ; en l'activant,
    choisir **Mot de passe root** (aucune clé nécessaire) ou **Clé publique uniquement**.
 4. Vérifier le récapitulatif, installer, retirer le média et redémarrer.
+
+Si nginx renvoie **403 Forbidden** à l’ouverture du portail, vérifiez l’adresse
+source du navigateur. Depuis la console root du serveur, lancez
+`loco-config show` puis ajoutez cette adresse ou ce sous-réseau à la liste web
+existante, par exemple `loco-config set 'ADMIN_ALLOW=192.168.1.0/24 10.10.20.45/32'`.
 
 Le premier démarrage termine la configuration de loco, puis la console affiche
 l'adresse du portail et l'empreinte SHA-256 de son autorité HTTPS. Comparer cette

@@ -20,10 +20,17 @@ sha256sum --ignore-missing -c SHA256SUMS
    console 7 (Alt+F7). `loco-installer` starts it again from Alt+F1.
 2. Choose the keyboard, the disk (**entirely erased**), the name, the network card,
    DHCP or a static address, the time zone and the root and admin passwords.
-3. Choose the allowed networks and the features: client HTTP,
+3. Choose the server subnet, private IPv4 networks for access across private
+   subnets, or custom networks. In custom mode the web portal can use the same
+   list as the clients or a separate list. Then choose the features: client HTTP,
    Windows Update, RPM, Flatpak. SSH is disabled by default; when enabling it,
    choose **Root password** (no key needed) or **Public key only**.
 4. Check the summary, install, remove the media and restart.
+
+If nginx returns **403 Forbidden** when you open the portal, check the
+browser's source address. From the server's root console, run
+`loco-config show` and add the browser's address or subnet to the existing web
+list, for example `loco-config set 'ADMIN_ALLOW=192.168.1.0/24 10.10.20.45/32'`.
 
 The first boot finishes loco's configuration, then the console shows
 the portal's address and the SHA-256 fingerprint of its HTTPS authority. Compare this
