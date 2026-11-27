@@ -2852,6 +2852,8 @@
  "Système et autres": "System and other",
  "Accès MCP révoqué": "MCP access revoked",
  "Lister les postes": "List devices",
+ "Lister les serveurs Proxmox": "List Proxmox hosts",
+ "Consulter l'adresse, la version et l'état des serveurs Proxmox du parc.": "View the address, version and status of the fleet's Proxmox hosts.",
  "Postes équipés de l'agent : état, mises à jour en attente, présence et groupes.": "Devices running the agent: status, pending updates, presence and groups.",
  "Consulter un poste": "View a device",
  "Fiche d'un poste : système, mises à jour en attente, logiciels du catalogue, supervision, actions récentes.": "A device's sheet: system, pending updates, catalog software, monitoring, recent actions.",

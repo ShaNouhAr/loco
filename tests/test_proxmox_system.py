@@ -10,6 +10,7 @@ import uuid
 from unittest import mock
 
 import test_portal as fixture
+from test_mcp import Client, create
 from loco import auth, features, homeassistant, permissions, proxmox_system, scripts
 from loco.db import transaction
 
@@ -134,6 +135,25 @@ class ProxmoxSystemTest(unittest.TestCase):
         with transaction() as conn:
             return conn.execute("SELECT * FROM proxmox_system_jobs ORDER BY id").fetchall()
 
+    def test_mcp_lists_proxmox_with_explicit_tool_grant(self):
+        host = self.host()
+        tool = "list_proxmox_hosts"
+        token, _ = create(self.admin, "Proxmox inventory", [tool])
+        self.addCleanup(self.delete_mcp_inventory_token)
+        client = Client(token)
+        self.assertIn(tool, client.names())
+        rows = client.data(tool)["hosts"]
+        self.assertEqual([(r["id"], r["address"], r["ssh_linked"], r["online"]) for r in rows],
+                         [(f"px-{host['id']}", "192.0.2.10", True, True)])
+        with transaction() as conn:
+            conn.execute("DELETE FROM settings WHERE key=?", (features.OPTIONAL_SETTING,))
+        self.assertNotIn(tool, client.names())
+        self.assertTrue(client.call(tool)["isError"])
+
+    def delete_mcp_inventory_token(self):
+        with transaction() as conn:
+            conn.execute("DELETE FROM mcp_tokens WHERE name='Proxmox inventory'")
+
     def page(self, host_id, browser=None):
         return (browser or self.admin).c.get(f"/proxmox/{host_id}").get_data(as_text=True)
 
@@ -166,7 +186,9 @@ class ProxmoxSystemTest(unittest.TestCase):
         form = {"target": "proxmox", "when": "now", "version": "1", "device_group": gid, "proxmox_host": host["id"]}
         runner = self.member("device-script-runner", ["scripts.run", "proxmox.view"])
         self.assertEqual(runner.post(path, form, page=path).status_code, 403)
-        self.assertIn("Script targets", self.admin.c.get(path + "?target=proxmox").get_data(as_text=True))
+        composer = self.admin.c.get(path + "?target=proxmox").get_data(as_text=True)
+        self.assertIn("Script targets", composer)
+        self.assertIn('data-search="pve 192.0.2.10 Proxmox VE', composer)
         result = self.admin.post(path, form, page=path + "?target=proxmox")
         self.assertEqual(result.status_code, 302)
         run_path = result.headers["Location"]
@@ -210,6 +232,14 @@ class ProxmoxSystemTest(unittest.TestCase):
             page = self.admin.c.get(path).get_data(as_text=True)
             self.assertIn("Grouped Home Assistant", page)
             self.assertIn("Grouped Proxmox VE", page)
+        editor = self.admin.c.get(f"/fleet/groups/{gid}").get_data(as_text=True)
+        table = editor.split('<tbody id="group-members">', 1)[1].split("</tbody>", 1)[0]
+        self.assertIn('>2</span> dans le groupe', editor)
+        self.assertRegex(table, rf'name="proxmox" value="{host["id"]}" +checked')
+        self.assertRegex(table, rf'name="homeassistant" value="{ha_id}" +checked')
+        for address in ("192.0.2.10", "192.0.2.11"):
+            self.assertIn(f'<span class="sub mono">{address}</span>', table)
+        self.assertEqual(table.count('class="device-icon ha-fleet-icon"'), 2)
 
     def delete_group(self, gid):
         with transaction() as conn:

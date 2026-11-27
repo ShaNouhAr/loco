@@ -2852,6 +2852,8 @@
  "Système et autres": "Sistema y otros",
  "Accès MCP révoqué": "Acceso MCP revocado",
  "Lister les postes": "Listar los equipos",
+ "Lister les serveurs Proxmox": "Listar los servidores Proxmox",
+ "Consulter l'adresse, la version et l'état des serveurs Proxmox du parc.": "Consultar la dirección, la versión y el estado de los servidores Proxmox del parque.",
  "Postes équipés de l'agent : état, mises à jour en attente, présence et groupes.": "Equipos con el agente: estado, actualizaciones pendientes, presencia y grupos.",
  "Consulter un poste": "Consultar un equipo",
  "Fiche d'un poste : système, mises à jour en attente, logiciels du catalogue, supervision, actions récentes.": "Ficha de un equipo: sistema, actualizaciones pendientes, software del catálogo, supervisión, acciones recientes.",

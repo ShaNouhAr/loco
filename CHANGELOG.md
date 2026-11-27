@@ -2,6 +2,12 @@
 
 # Changelog
 
+## 2.209.0 — 2026-11-27
+
+- **Proxmox and Home Assistant in the machine group editor.** Hosts appear alongside managed computers, with their own icon, address, system and status. Search by address, filter to group members only, and see the total membership in the same table.
+- **More detail when choosing Proxmox script targets.** The picker shows each server’s icon, address and version.
+- **List Proxmox hosts from MCP.** The read-only `list_proxmox_hosts` tool reports addresses, versions and SSH link status. Enable it on a key whose account can view Proxmox and access the whole fleet.
+
 ## 2.208.0 — 2026-11-27
 
 - **Run shell scripts on Proxmox VE.** From *My fleet › Scripts*, open a Linux shell script and choose *Run on Proxmox*. Select individual servers linked over SSH or machine groups. The run history shows each server’s output and exit code.

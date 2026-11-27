@@ -2,6 +2,12 @@
 
 # Registro de cambios
 
+## 2.209.0 — 2026-11-27
+
+- **Proxmox y Home Assistant en el editor de grupos de equipos.** Los servidores aparecen junto a los equipos gestionados, con su icono, dirección, sistema y estado. En la misma tabla se puede buscar por dirección, filtrar por miembros y ver el total de miembros del grupo.
+- **Más información al elegir destinos para scripts de Proxmox.** El selector muestra el icono, la dirección y la versión de cada servidor.
+- **Consultar servidores Proxmox desde MCP.** La herramienta de solo lectura `list_proxmox_hosts` muestra la dirección, la versión y el estado del enlace SSH. Actívela en una clave de una cuenta con permiso para consultar Proxmox y acceso a todo el parque.
+
 ## 2.208.0 — 2026-11-27
 
 - **Ejecutar scripts de shell en Proxmox VE.** En *Mi parque › Scripts*, abra un script de shell para Linux y elija *Ejecutar en Proxmox*. Seleccione servidores enlazados mediante SSH o grupos de equipos. El historial muestra la salida y el código de retorno de cada servidor.

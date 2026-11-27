@@ -667,13 +667,14 @@ def signature(v):
                                       v["row"]["error"], [(j["id"], j["state"], len(j["output"] or "")) for j in v["jobs"]]]).encode()).hexdigest()[:16]
 
 
-def fleet_rows():
+def fleet_rows(*, include_pending=False):
     """Serveurs Proxmox montrés comme des lignes de Mon parc (fonctionnalité active, compte qui peut les consulter)."""
     from . import features
     if not features.enabled("proxmox") or not can("proxmox.view"):
         return []
     out = []
-    for row in db().execute("SELECT * FROM proxmox_hosts WHERE fingerprint!='' OR host_key!='' ORDER BY name COLLATE NOCASE, id").fetchall():
+    linked = "" if include_pending else " WHERE fingerprint!='' OR host_key!=''"
+    for row in db().execute("SELECT * FROM proxmox_hosts" + linked + " ORDER BY name COLLATE NOCASE, id").fetchall():
         now = time.time()
         if row["host_key"] and now - (row["sys_checked"] or 0) > OVERVIEW_STALE:
             refresh_soon(row["id"])

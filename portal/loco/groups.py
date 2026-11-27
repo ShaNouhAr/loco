@@ -24,14 +24,27 @@ def host_choices(kind, host_id):
 
 
 def _group_hosts(group_id):
-    return [
-        {"kind": kind, "label": label, "endpoint": endpoint, "editable": can("fleet.groups"),
-         "rows": db().execute(
-             f"SELECT h.id, h.name, m.host_id IS NOT NULL AS selected FROM {kind}_hosts h "
-             f"LEFT JOIN {kind}_group_members m ON m.host_id=h.id AND m.group_id=? "
-             "ORDER BY h.name COLLATE NOCASE", (group_id,)).fetchall()}
-        for kind, (label, endpoint) in HOST_TYPES.items() if scope.whole() and can(kind + ".view")
-    ]
+    if not scope.whole():
+        return []
+    from . import homeassistant, proxmox_system
+
+    items = []
+    for kind, hosts, icon in (
+        ("proxmox", proxmox_system.fleet_rows(include_pending=True), "server"),
+        ("homeassistant", homeassistant.fleet_rows(), "ha"),
+    ):
+        if not hosts:
+            continue
+        selected = {r[0] for r in db().execute(
+            f"SELECT host_id FROM {kind}_group_members WHERE group_id=?", (group_id,))}
+        label, endpoint = HOST_TYPES[kind]
+        for host in hosts:
+            system = " ".join(filter(None, ("Proxmox VE", host["version"]))) if kind == "proxmox" else host["system"] or label
+            items.append({"row": host, "kind": kind, "icon": icon, "endpoint": endpoint,
+                          "system": system,
+                          "name": host["name"], "selected": host["id"] in selected,
+                          "color": host["color"], "label": host["label"]})
+    return items
 
 
 def identifiers(values, limit=500):
@@ -127,16 +140,19 @@ def _editor(kind, group_id):
         if not group_id:
             wanted = set(request.args.getlist("app"))
             selected = {r["id"] for r in rows if r["slug"] in wanted}
-        items = [{"row": r} for r in rows]
+        items = [{"row": r, "selected": r["id"] in selected, "name": r["name"]} for r in rows]
     else:
         rows = db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
                             + " ORDER BY hostname COLLATE NOCASE").fetchall()           # consultation limitée au parc
         selected = {r[0] for r in db().execute("SELECT device_id FROM device_group_members WHERE group_id=?", (group_id,))}
         apps = fleet.catalog()
-        items = [{"row": r, **_device_state(r, apps)} for r in rows]
-    items.sort(key=lambda i: i["row"]["id"] not in selected)      # membres d'abord, ordre alphabétique conservé
+        items = [{"row": r, "selected": r["id"] in selected, "name": r["hostname"] or r["uid"][:8],
+                  **_device_state(r, apps)} for r in rows]
+        items.extend(_group_hosts(group_id))
+    items.sort(key=lambda i: (not i["selected"], i["name"].casefold()))
     return render_template("group_editor.html", kind=kind, group=group, items=items, selected=selected,
-                           families=fleet.FAMILIES, host_sections=[] if software else _group_hosts(group_id))
+                           member_count=sum(i["selected"] for i in items), families=fleet.FAMILIES,
+                           host_kinds=sorted({i["kind"] for i in items if "kind" in i}))
 
 
 def _save(kind, group_id):

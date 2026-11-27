@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% from "_software_logo.html" import software_logo %}
-{% from "_nav_icons.html" import device_icon %}
+{% from "_nav_icons.html" import device_icon, nav_icon %}
 {% set software = kind == 'software' %}
 {% set editable = can('windows.groups' if software else 'fleet.groups') %}
 {% set can_deploy = group and selected and can('fleet.install') and (software or can('fleet.bulk_install')) %}
@@ -34,6 +34,7 @@
 <form method="post" action="{{ url_for('software_group_save' if software else 'fleet_group_save', group_id=group.id if group else 0) }}" class="stack">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   {% if editable %}
+  {% for host_kind in host_kinds %}<input type="hidden" name="host_sections" value="{{ host_kind }}">{% endfor %}
   <section class="panel"><div class="panel-b grid2">
     <label class="f"><span>{{ _("Nom du groupe") }}</span><input type="text" name="name" required maxlength="80" value="{{ group.name if group else '' }}" placeholder="{{ _('Socle bureautique') if software else _('Comptabilité') }}"></label>
     <label class="f"><span>{{ _("Description") }}</span><input type="text" name="description" maxlength="500" value="{{ group.description if group else '' }}" placeholder="{{ _('facultatif') }}"></label>
@@ -42,7 +43,7 @@
 
   <section class="panel">
     <div class="panel-h">
-      <h2>{{ _('Logiciels') if software else _('Appareils') }} <span class="h-count"><span data-checked-count="#group-members input[name=members]">{{ selected|length }}</span> {{ _("dans le groupe") }}{% if editable %} {{ _("sur %(items)s", items=items|length) }}{% endif %}</span></h2>
+      <h2>{{ _('Logiciels') if software else _('Appareils') }} <span class="h-count"><span{% if editable %} data-checked-count="#group-members input[type=checkbox]"{% endif %}>{{ member_count }}</span> {{ _("dans le groupe") }}{% if editable %} {{ _("sur %(items)s", items=items|length) }}{% endif %}</span></h2>
       {% if items %}<div class="aside row">
         {% if editable %}<label class="small muted nowrap"><input type="checkbox" data-only-checked="#group-members"> {{ _("membres seulement") }}</label>{% endif %}
         <input class="search-sm" type="search" placeholder="{{ _('Rechercher') }}" data-filter="#group-members tr" aria-label="{{ _('Rechercher') }}">
@@ -52,16 +53,21 @@
       <table class="group-members-table">
         <thead><tr>{% if editable %}<th class="chk"></th>{% endif %}<th>{{ _('Logiciel') if software else _('Appareil') }}</th><th>{{ 'Version' if software else _('Système') }}</th><th>{{ _("État") }}</th></tr></thead>
         <tbody id="group-members">
-        {% for i in items if editable or i.row.id in selected %}{% set r = i.row %}{% set picked = r.id in selected %}
-          <tr class="{{ 'picked' if picked }}" data-search="{{ r.name if software else (r.hostname ~ ' ' ~ r.os_name) }}">
-            {% if editable %}<td class="chk"><input type="checkbox" name="members" value="{{ r.id }}" {{ 'checked' if picked }} aria-label="{{ r.name if software else r.hostname }}"></td>{% endif %}
+        {% for i in items if editable or i.selected %}{% set r = i.row %}{% set picked = i.selected %}
+          <tr class="{{ 'picked' if picked }}" data-search="{{ i.name }}{% if i.kind %} {{ r.address }} {{ i.system }}{% elif not software %} {{ r.ip }} {{ r.os_name }}{% endif %}">
+            {% if editable %}<td class="chk"><input type="checkbox" name="{{ i.kind or 'members' }}" value="{{ r.id }}" {{ 'checked' if picked }} aria-label="{{ i.name }}"></td>{% endif %}
             {% if software %}
             <td><div class="store-card-top">{{ software_logo(r.winget_id, r.name, 'small') }}<div><a href="{{ url_for('software_detail', slug=r.slug) }}">{{ r.name }}</a><span class="sub sans">{{ r.kind }} · {{ 'WinGet' if r.winget_id else _('ajouté manuellement') }}</span></div></div></td>
             <td class="mono nowrap">{{ r.version or '—' }}</td>
             <td class="nowrap">{% if r.status == 'ready' %}<span class="st ok">{{ _("prêt") }}</span>{% elif r.status == 'error' %}<span class="st err">{{ _("erreur") }}</span>{% else %}<span class="st warn">{{ _("téléchargement") }}</span>{% endif %}</td>
             {% else %}
+            {% if i.kind %}
+            <td><span class="device-icon ha-fleet-icon">{{ nav_icon(i.icon) }}</span><a href="{{ url_for(i.endpoint, host_id=r.id) }}">{{ i.name }}</a><span class="sub mono">{{ r.address }}</span></td>
+            <td>{{ i.system }}</td>
+            {% else %}
             <td>{{ device_icon(r) }}<a href="{{ url_for('fleet_device', dev_id=r.id) }}" >{{ r.hostname or r.uid[:8] }}</a><span class="sub mono">{{ r.ip }}</span></td>
             <td>{{ r.os_name or families.get(r.os_family, '') }}</td>
+            {% endif %}
             <td class="nowrap"><span class="st {{ {'green': 'ok', 'orange': 'warn', 'red': 'err'}.get(i.color, '') }}" title="{{ i.reason }}">{{ i.label }}</span></td>
             {% endif %}
           </tr>
@@ -71,30 +77,12 @@
         </tbody>
       </table>
     </div>
-  </section>
-  {% for section in host_sections %}
-  {% if section.rows and (section.editable or section.rows|selectattr('selected')|list) %}
-  <section class="panel">
-    <div class="panel-h"><h2>{{ section.label }}</h2></div>
-    <div class="panel-b selection-list">
-      {% if section.editable %}<input type="hidden" name="host_sections" value="{{ section.kind }}">{% endif %}
-      {% for h in section.rows if section.editable or h.selected %}
-      <div class="selection-item">
-        {% if section.editable %}<input type="checkbox" name="{{ section.kind }}" value="{{ h.id }}" {{ 'checked' if h.selected }} aria-label="{{ h.name }}">{% endif %}
-        <a href="{{ url_for(section.endpoint, host_id=h.id) }}">{{ h.name }}</a>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-  {% endfor %}
-  {% if editable %}
-  <section class="panel sticky-actions">
-    <div class="panel-b row-between">
+    {% if editable %}
+    <div class="panel-f sticky-actions row-between">
       <span>{{ _("Les déploiements déjà confirmés gardent leur sélection d'origine.") }}</span>
       <span class="row"><a class="btn" href="{{ url_for('software_groups' if software else 'fleet_groups') }}">{{ _("Annuler") }}</a><button class="btn primary"><span class="spin"></span>{{ _('Enregistrer') if group else _('Créer le groupe') }}</button></span>
     </div>
+    {% endif %}
   </section>
-  {% endif %}
 </form>
 {% endblock %}

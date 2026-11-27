@@ -2,6 +2,12 @@
 
 # Journal des versions
 
+## 2.209.0 — 2026-11-27
+
+- **Proxmox et Home Assistant dans l’éditeur de groupes de machines.** Les hôtes apparaissent avec les postes du parc, avec leur icône, leur adresse, leur système et leur état. Le même tableau permet de chercher par adresse, de filtrer les membres et de voir leur nombre total.
+- **Des cibles de scripts Proxmox plus faciles à identifier.** Le sélecteur affiche l’icône, l’adresse et la version de chaque serveur.
+- **Consulter les hôtes Proxmox dans le MCP.** L’outil en lecture seule `list_proxmox_hosts` indique leur adresse, leur version et l’état de leur liaison SSH. Activez-le sur une clé dont le compte peut consulter Proxmox et accéder à l’ensemble du parc.
+
 ## 2.208.0 — 2026-11-27
 
 - **Exécuter des scripts shell sur Proxmox VE.** Dans *Mon parc › Scripts*, ouvrez un script shell Linux et choisissez *Exécuter sur Proxmox*. Sélectionnez des serveurs reliés par SSH ou des groupes de machines. L’historique affiche la sortie et le code de retour de chaque serveur.

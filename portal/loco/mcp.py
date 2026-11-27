@@ -23,7 +23,7 @@ import time
 from flask import abort, current_app, flash, g, render_template, request
 from werkzeug.exceptions import HTTPException
 
-from . import app, config, features, fleet, groups, journal, permissions, reservations, scope, scripts, update_blocks, wake
+from . import app, config, features, fleet, groups, journal, permissions, proxmox_system, reservations, scope, scripts, update_blocks, wake
 from .auth import audit, can, can_manage_user, login_required, require
 from .db import db
 from .i18n import L_, _, locale
@@ -266,6 +266,19 @@ def _queued(dev, action, added, detail=""):
 
 
 # --------------------------------------------------------------------------- outils : parc
+
+@tool("list_proxmox_hosts", "fleet", "List Proxmox hosts", L_("Lister les serveurs Proxmox"),
+      L_("Consulter l'adresse, la version et l'état des serveurs Proxmox du parc."), ("proxmox.view",),
+      "List configured Proxmox hosts with their address, version, SSH link and latest status from the fleet. "
+      "Requires access to the entire fleet.")
+def _list_proxmox_hosts(_args):
+    hosts = proxmox_system.fleet_rows() if scope.whole() else []
+    return {"hosts": [{"id": f"px-{host['id']}", "name": host["name"], "address": host["address"],
+                       "node": host["node"], "version": host["version"], "ssh_linked": host["ssh"],
+                       "online": host["online"], "status": STATUS[host["color"]], "status_label": host["label"],
+                       "pending_updates": host["updates"], "reboot_required": host["reboot_required"]}
+                      for host in hosts]}
+
 
 @tool("list_devices", "fleet", "List devices", L_("Lister les postes"),
       L_("Postes équipés de l'agent : état, mises à jour en attente, présence et groupes."), ("fleet.view",),

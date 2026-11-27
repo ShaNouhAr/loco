@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _("Exécuter %(name)s", name=script.name) }}{% endblock %}
+{% from "_nav_icons.html" import device_icon, nav_icon %}
 {% from "_schedule.html" import planner, icon as plan_icon with context %}
 {% block content %}
 {% include '_fleet_nav.html' %}
@@ -22,16 +23,16 @@
   <div class="cols">
     {% if proxmox_mode %}
     <section class="panel">
-      <div class="panel-h"><h2>Proxmox VE</h2></div>
+      <div class="panel-h"><h2>Proxmox VE</h2><div class="aside"><span>{{ _("Sélection :") }} <span data-checked-count="input[name=proxmox_host], input[name=device_group]">0</span></span></div></div>
       <div class="panel-b stack-sm">
         {% if host_groups %}
         <div><h3 class="pick-title">{{ _("Groupes de machines") }}</h3>
           <div class="selection-list short">{% for group in host_groups %}<label class="selection-item"><input type="checkbox" name="device_group" value="{{ group.id }}"><span><strong>{{ group.name }}</strong><small>{{ group.members }} · Proxmox VE</small></span></label>{% endfor %}</div>
         </div>
         {% endif %}
-        <div><h3 class="pick-title">{{ _("Serveurs Proxmox") }}</h3>
-          <div class="selection-list">
-            {% for h in hosts %}<label class="selection-item"><input type="checkbox" name="proxmox_host" value="{{ h.id }}"><span>{{ h.name }}</span></label>
+        <div><div class="row-between"><h3 class="pick-title">{{ _("Serveurs Proxmox") }}</h3>{% if hosts %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#script-hosts .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
+          <div class="selection-list" id="script-hosts">
+            {% for h in hosts %}<label class="selection-item" data-search="{{ h.name }} {{ h.address }} Proxmox VE {{ h.version }}"><input type="checkbox" name="proxmox_host" value="{{ h.id }}"><span><strong><span class="device-icon ha-fleet-icon">{{ nav_icon('server') }}</span>{{ h.name }}</strong><small>{{ h.address }} · Proxmox VE{% if h.version %} {{ h.version }}{% endif %}</small></span></label>
             {% else %}<p class="small muted pad">{{ _("Aucun serveur Proxmox relié par SSH.") }}</p>{% endfor %}
           </div>
         </div>
@@ -48,7 +49,7 @@
         {% endif %}
         <div><div class="row-between"><h3 class="pick-title">{{ _("Appareils %(v)s", v='Windows' if script.platform == 'windows' else _('tous systèmes') if script.platform == 'python' else 'Linux') }}</h3>{% if devices %}<input type="search" class="search-sm" placeholder="{{ _('Rechercher') }}" data-filter="#script-devices .selection-item" aria-label="{{ _('Rechercher un appareil') }}">{% endif %}</div>
           <div class="selection-list" id="script-devices">
-            {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong>{{ d.hostname or d.uid[:8] }}</strong><small>{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">{{ _("Aucun appareil compatible actif.") }}</p>{% endfor %}
+            {% for d in devices %}<label class="selection-item" data-search="{{ d.hostname }} {{ d.ip }} {{ d.os_name }}"><input type="checkbox" name="device" value="{{ d.id }}" {{ 'checked' if d.id in selected }}><span><strong>{{ device_icon(d) }}{{ d.hostname or d.uid[:8] }}</strong><small>{% if d.ip %}{{ d.ip }} · {% endif %}{{ d.os_name }}</small></span></label>{% else %}<p class="small muted pad">{{ _("Aucun appareil compatible actif.") }}</p>{% endfor %}
           </div>
           {% if incompatible %}<p class="hint">{{ _("%(incompatible)s autre%(v)s appareil%(v)s (autre système ou agent en retrait) non proposé%(v)s.", incompatible=incompatible, v='s' if incompatible > 1) }}</p>{% endif %}
         </div>

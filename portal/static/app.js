@@ -1467,7 +1467,7 @@
     $$("[data-checked-count]").forEach(function (el) {
       el.textContent = $$(el.dataset.checkedCount).filter(function (c) { return c.checked; }).length;
     });
-    $$("tr input[name=members]").forEach(function (c) { c.closest("tr").classList.toggle("picked", c.checked); });
+    $$("#group-members input[type=checkbox]").forEach(function (c) { c.closest("tr").classList.toggle("picked", c.checked); });
   }
   document.addEventListener("change", function (e) {
     if (e.target.matches("input[type=checkbox], input[type=radio]")) syncPicked();

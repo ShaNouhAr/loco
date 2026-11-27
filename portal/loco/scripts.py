@@ -240,7 +240,10 @@ def script_compose(script_id):
         abort(403)
     devices = [] if proxmox_mode else db().execute("SELECT * FROM devices WHERE state!='removed'" + scope.sql()
                                                   + " ORDER BY hostname COLLATE NOCASE").fetchall()
-    hosts = db().execute("SELECT id, name FROM proxmox_hosts WHERE host_key!='' ORDER BY name COLLATE NOCASE").fetchall() if proxmox_mode else []
+    hosts = []
+    if proxmox_mode:
+        from . import proxmox_system
+        hosts = [host for host in proxmox_system.fleet_rows() if host["ssh"]]
     host_groups = db().execute(
         "SELECT g.id, g.name, COUNT(*) AS members FROM device_groups g "
         "JOIN proxmox_group_members m ON m.group_id=g.id JOIN proxmox_hosts h ON h.id=m.host_id "
