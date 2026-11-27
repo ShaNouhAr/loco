@@ -177,6 +177,24 @@ class TestLinuxInstaller(InstallTest):
 
 
 class TestAuthority(InstallTest):
+    def test_enterprise_installer_embeds_only_the_root_that_signed_the_portal_chain(self):
+        from pathlib import Path
+        from test_sso_check import INTERMEDIATE, OTHER_ROOT, ROOT, issue, pem
+
+        with tempfile.TemporaryDirectory() as folder:
+            tls = Path(folder)
+            leaf = issue("loco.example.test", INTERMEDIATE, sans=("loco.example.test",))[0]
+            (tls / "mode").write_text("enterprise\n")
+            (tls / "enterprise.crt").write_text(pem(leaf, INTERMEDIATE[0]))
+            (tls / "enterprise-ca.pem").write_text(pem(OTHER_ROOT[0], ROOT[0]))
+            with mock.patch.object(config, "TLS_DIR", folder), \
+                    mock.patch.object(config, "portal_url", return_value="https://loco.example.test:8443"):
+                installer = self.download(system="windows").get_data(as_text=True)
+                self.assertEqual(mcp_install._authority_pem("https://unrelated.example.test:8443/mcp"), ("", ""))
+            self.assertIn(pem(ROOT[0]).replace("\n", "\r\n"), installer)
+            self.assertNotIn(pem(OTHER_ROOT[0]).replace("\n", "\r\n"), installer)
+            self.assertNotIn(pem(INTERMEDIATE[0]).replace("\n", "\r\n"), installer)
+
     def test_the_authority_of_loco_travels_with_the_installer_when_it_signed_the_certificate(self):
         from cryptography import x509
         from cryptography.hazmat.primitives import hashes, serialization

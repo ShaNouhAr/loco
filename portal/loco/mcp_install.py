@@ -10,9 +10,13 @@ s'efface après usage.
 import datetime
 import hashlib
 import json
+import os
 import re
 import secrets
+from urllib.parse import urlsplit
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from flask import abort, current_app, g, render_template, request
 
 from . import app, config, mcp
@@ -62,12 +66,39 @@ def sh(value):
     return "'" + str(value).replace("'", "'\\''") + "'"
 
 
-def _authority_pem():
-    """(PEM, empreinte) de l'autorité de loco quand c'est elle qui a signé le certificat du portail ; sinon ("", "")."""
+def _authority_pem(endpoint):
+    """Autorité racine du certificat servi au nom du portail, avec son empreinte."""
+    import locoadmin
+
+    try:
+        with open(os.path.join(config.TLS_DIR, "mode"), encoding="ascii") as f:
+            enterprise = f.read().strip() == "enterprise"
+    except (OSError, UnicodeError):
+        enterprise = False
+    if enterprise:
+        try:
+            with open(os.path.join(config.TLS_DIR, "enterprise.crt"), encoding="ascii") as f:
+                leaf, *intermediates = locoadmin._pem_blocks(f.read())
+            if not locoadmin._covers_host(leaf, urlsplit(endpoint).hostname):
+                return "", ""
+            with open(os.path.join(config.TLS_DIR, "enterprise-ca.pem"), encoding="ascii") as f:
+                authorities = locoadmin._pem_blocks(f.read())
+            for pem in authorities:
+                cert = x509.load_pem_x509_certificate(pem.encode("ascii"))
+                if not cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
+                    continue
+                if not locoadmin._self_signed(pem):
+                    continue
+                problem, _ = locoadmin.chain_problem(leaf, intermediates + authorities, [pem])
+                if not problem:
+                    return pem + "\n", cert.fingerprint(hashes.SHA256()).hex(":").upper()
+        except (OSError, ValueError, x509.ExtensionNotFound):
+            pass
+        return "", ""
+
     found = mcp._authority()
     if not found:
         return "", ""
-    import os
     try:
         with open(os.path.join(config.TLS_DIR, "ca.crt"), encoding="ascii") as f:
             text = f.read()
@@ -127,8 +158,9 @@ def mcp_installer():
         abort(400, str(e))
     secret = mcp.PREFIX + secrets.token_urlsafe(32)
     expires = (datetime.datetime.now() + datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S") if days else ""
-    pem, fingerprint = _authority_pem()
-    body = render_installer(system, target, mcp._endpoint_url(), secret, pem, fingerprint)
+    endpoint = mcp._endpoint_url()
+    pem, fingerprint = _authority_pem(endpoint)
+    body = render_installer(system, target, endpoint, secret, pem, fingerprint)
     conn = db()
     conn.execute("INSERT INTO mcp_tokens (user_id, name, token_hash, hint, tools, created_at, expires_at, client_id) "
                  "VALUES (?,?,?,?,?,?,?,?)", (g.user["id"], name, hashlib.sha256(secret.encode()).hexdigest(),

@@ -107,15 +107,14 @@ try {
     Write-Host ('  ' + $CaSha)
     $answer = Read-Host $Text.ask
     if ($answer -match '^\s*(|o|oui|y|yes|s|si)\s*$') {
-      $cer = Join-Path ([IO.Path]::GetTempPath()) 'loco-ca.cer'
+      $cer = Join-Path ([IO.Path]::GetTempPath()) ('loco-ca-' + [Guid]::NewGuid() + '.cer')
       [IO.File]::WriteAllText($cer, $CaPem)
       try { Import-Certificate -FilePath $cer -CertStoreLocation Cert:\CurrentUser\Root | Out-Null } finally { Remove-Item -LiteralPath $cer -Force }
-      Write-Host $Text.trusted
       $state = Test-Loco
-    } else {
-      Write-Host $Text.skipped
+      if ($state -eq 'ok') { Write-Host $Text.trusted }
     }
   }
+  if ($state -eq 'trust') { Write-Host $Text.skipped }
   if ($state -eq 'down') { Write-Host $Text.down }
   if ($App -eq 'claude') { Set-Claude; $done = $Text.done_claude } else { Set-Codex; $done = $Text.done_codex }
   Write-Host ''

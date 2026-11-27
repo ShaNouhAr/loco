@@ -438,9 +438,11 @@ namespace Loco
 
         // ------------------------------------------------------------ inscription
 
-        static string Setting(string name)
+        const string InstallerSettings = @"SOFTWARE\loco\Client";
+
+        static string Setting(string name, bool installerOnly = false)
         {
-            foreach (var key in new[] { @"SOFTWARE\Policies\loco\Client", @"SOFTWARE\loco\Client" })
+            foreach (var key in installerOnly ? new[] { InstallerSettings } : new[] { @"SOFTWARE\Policies\loco\Client", InstallerSettings })
             {
                 using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(key))
                 {
@@ -466,12 +468,12 @@ namespace Loco
             File.Move(tmp, CaPath);
         }
 
-        static Dictionary<string, object> Enroll(Dictionary<string, object> conf)
+        static Dictionary<string, object> Enroll(Dictionary<string, object> conf, bool installerOnly = false)
         {
-            string key = Setting("Key"), pin = Setting("CaSha256");
+            string key = Setting("Key", installerOnly), pin = Setting("CaSha256", installerOnly);
             // Server : une adresse, ou plusieurs séparées par des virgules, essayées dans l'ordre (nom DNS du portail, puis
             // IP). Un nom peut présenter le certificat d'une autorité d'entreprise absente du faisceau ; l'IP, celui de loco.
-            var servers = Setting("Server").Split(',').Select(u => u.Trim().TrimEnd('/')).Where(u => ServerPattern.IsMatch(u)).Distinct().Take(4).ToList();
+            var servers = Setting("Server", installerOnly).Split(',').Select(u => u.Trim().TrimEnd('/')).Where(u => ServerPattern.IsMatch(u)).Distinct().Take(4).ToList();
             if (servers.Count == 0 || key == "") return null;
             SecureRoot();
             string uid = Str(conf, "uid");
@@ -510,14 +512,19 @@ namespace Loco
             SaveJson(ConfigPath, conf);
             SaveJson(StatePath, new Dictionary<string, object> { { "last_scan", 0 }, { "scan_hours", 6 }, { "rescan", true } });
             Log(Lang.T("poste inscrit auprès de ", "machine enrolled with ", "equipo inscrito en ") + server);
-            // La clé d'inscription n'est plus utile : retirée du registre (lisible par les utilisateurs du poste).
+            ClearInstallerKey();
+            return conf;
+        }
+
+        static void ClearInstallerKey()
+        {
+            // Ne conserver aucune clé locale une fois que le serveur accepte l'identité du poste.
             try
             {
-                using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(@"SOFTWARE\loco\Client", true))
+                using (var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(InstallerSettings, true))
                     if (k != null && k.GetValue("Key") != null) k.DeleteValue("Key");
             }
             catch (Exception) { }
-            return conf;
         }
 
         // ------------------------------------------------------------ poste
@@ -1690,6 +1697,27 @@ namespace Loco
             }
         }
 
+        static bool MsiBusy(int code)
+        {
+            uint result = unchecked((uint)code);
+            return result == 1618 || result == 0x80070652 || result == 0x8A150102;
+        }
+
+        static int RunWingetUpgrade(string winget, string arguments, string libraries, List<string> lines, out string output)
+        {
+            int code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+            for (int attempt = 0; attempt < 3 && MsiBusy(code); attempt++)
+            {
+                if (attempt == 0)
+                    lines.Add(Lang.T("  Une installation MSI est en cours, nouvelle tentative après attente.",
+                                     "  Another MSI installation is in progress, waiting before retrying.",
+                                     "  Hay otra instalación MSI en curso, se espera antes de reintentar."));
+                Thread.Sleep(15000 * (attempt + 1));
+                code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+            }
+            return code;
+        }
+
         // Logiciels hors catalogue choisis dans loco : mis à jour un à un par winget, en silence, au compte SYSTEM.
         // Codes de winget : 0x8A150014 (introuvable pour la mise à jour) et 0x8A15002B (rien d'applicable) : mis de côté,
         // sans échec ; 0x8A15010D (déjà installé) ; 0x8A150109 et 0x8A15010B : installé, un redémarrage termine l'installation.
@@ -1729,7 +1757,7 @@ namespace Loco
 
                 string output;
                 string arguments = "upgrade --id \"" + pid + "\" --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity";
-                int code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+                int code = RunWingetUpgrade(winget, arguments, libraries, lines, out output);
                 uint result = unchecked((uint)code);
                 if (result == 0x8A15002B)
                 {
@@ -1738,7 +1766,7 @@ namespace Loco
                     // trouve rien d'applicable. Un second essai les accepte ; un logiciel publié dans la langue du poste a, lui,
                     // déjà été mis à jour au premier.
                     string again;
-                    int retry = RunCapture(winget, arguments + " --locale en-US", InstallerTimeout, out again, libraries);
+                    int retry = RunWingetUpgrade(winget, arguments + " --locale en-US", libraries, lines, out again);
                     if (unchecked((uint)retry) != 0x8A15002B) { code = retry; output = again; result = unchecked((uint)retry); }
                 }
                 if (result == 0x8A150014 || result == 0x8A15002B || result == 0x80190194)
@@ -1748,17 +1776,18 @@ namespace Loco
                     SetAside(pid, WingetMessage(output, code), lines, markPkg);
                     continue;
                 }
-                if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
+                if (!MsiBusy(code) && !(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
                 {
                     // Le logiciel est installé « pour tout le monde » (ALLUSERS=1) mais winget lance l'installeur pour le profil
                     // par défaut : le MSI refuse (1603, « already installed for everyone, pass ALLUSERS=1 to msiexec »). On réessaie
                     // en passant ALLUSERS=1 à l'installeur (--custom), ce qui met bien à jour la copie « pour tout le monde ».
                     string again;
-                    int retry = RunCapture(winget, arguments + " --custom ALLUSERS=1", InstallerTimeout, out again, libraries);
+                    int retry = RunWingetUpgrade(winget, arguments + " --custom ALLUSERS=1", libraries, lines, out again);
                     uint r = unchecked((uint)retry);
-                    if (r == 0 || r == 0x8A15010D || r == 0x8A150109 || r == 0x8A15010B) { code = retry; output = again; result = r; arguments += " --custom ALLUSERS=1"; }
+                    if (r == 0 || r == 0x8A15010D || r == 0x8A150109 || r == 0x8A15010B || MsiBusy(retry))
+                    { code = retry; output = again; result = r; }
                 }
-                if (!(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
+                if (!MsiBusy(code) && !(code == 0 || result == 0x8A15010D || result == 0x8A150109 || result == 0x8A15010B))
                 {
                     // L'installeur a échoué, le plus souvent parce que le logiciel était ouvert (fichiers verrouillés). On ferme
                     // ses processus SANS confirmation et on réessaie une fois ; l'agent est en SYSTEM, aucune session ouverte requise.
@@ -1766,7 +1795,7 @@ namespace Loco
                     if (closed > 0)
                     {
                         lines.Add(Lang.T("  logiciel fermé (" + closed + " processus), nouvel essai", "  software closed (" + closed + " processes), retrying", "  programa cerrado (" + closed + " procesos), reintentando"));
-                        code = RunCapture(winget, arguments, InstallerTimeout, out output, libraries);
+                        code = RunWingetUpgrade(winget, arguments, libraries, lines, out output);
                         result = unchecked((uint)code);
                     }
                 }
@@ -1818,7 +1847,11 @@ namespace Loco
                 {
                     // Même après fermeture, winget n'a pas réussi : signalé à part, non abandonné (réessayé à la prochaine mise à jour,
                     // par exemple planifiée hors session). Un logiciel hors catalogue ne fait pas échouer toute la mise à jour.
-                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + WingetMessage(output, code)
+                    string reason = MsiBusy(code)
+                        ? Lang.T("Windows Installer est encore occupé (MSI 1618)", "Windows Installer is still busy (MSI 1618)",
+                                 "Windows Installer sigue ocupado (MSI 1618)")
+                        : WingetMessage(output, code);
+                    lines.Add(Lang.T("ÉCHEC : ", "FAILED: ", "FALLO: ") + pid + " : " + reason
                         + Lang.T(" (réessayé à la prochaine mise à jour)", " (will be retried at the next update)", " (se reintentará en la próxima actualización)"));
                     if (markPkg != null) markPkg(pid, "failed");
                     continue;
@@ -2438,12 +2471,36 @@ namespace Loco
                     rescan = false;
                 }
                 Dictionary<string, object> answer;
-                try { answer = Checkin(conf, data); firstRun = false; unreachable = 0; PublishIndicator(answer); }
+                try
+                {
+                    answer = Checkin(conf, data);
+                    if (firstRun) ClearInstallerKey();
+                    firstRun = false;
+                    unreachable = 0;
+                    PublishIndicator(answer);
+                }
                 catch (LocoHttpException e)
                 {
                     DesktopIndicator.Unavailable(Lang.T("Contact avec loco refusé", "Contact with loco refused", "Contacto con loco rechazado"));
                     if (e.Status == 401)
                     {
+                        // Un MSI d'enrôlement peut avoir été installé sur un service encore présent.
+                        // Seule une clé locale fournie par l'installateur autorise ce nouvel enrôlement.
+                        if (Setting("Key", true) != "")
+                        {
+                            try
+                            {
+                                if (Enroll(conf, true) != null)
+                                {
+                                    DesktopIndicator.Unavailable(Lang.T("Inscription du poste en cours", "Machine enrollment in progress", "Inscripción del equipo en curso"));
+                                    return true;
+                                }
+                            }
+                            catch (Exception enrollment)
+                            {
+                                Log(Lang.T("réinscription impossible : ", "re-enrollment failed: ", "no se pudo volver a inscribir: ") + enrollment.Message);
+                            }
+                        }
                         Log(Lang.T("jeton refusé par le serveur (poste retiré du parc ?) : réinstallez l'agent pour le réinscrire", "token refused by the server (machine removed from the fleet?): reinstall the agent to re-enroll it", "token rechazado por el servidor (¿equipo retirado del parque?): reinstale el agente para volver a inscribirlo"));
                         ClearWuProxy(Lang.T("poste refusé par loco", "machine refused by loco", "equipo rechazado por loco"));
                     }

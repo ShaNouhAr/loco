@@ -2,6 +2,12 @@
 
 # Registro de cambios
 
+## 2.211.0 — 2026-11-28
+
+- **Volver a inscribir un equipo Windows olvidado.** Si el nuevo instalador proporciona una clave de inscripción y el servidor rechaza el token anterior, el agente se inscribe de nuevo con un token nuevo.
+- **Los instaladores MCP admiten autoridades de certificación internas.** Si el portal usa un certificado empresarial, el instalador ofrece la raíz verificada para el nombre del portal y muestra su huella SHA-256 antes de añadirla.
+- **Las actualizaciones de Windows esperan si Windows Installer está ocupado.** El agente espera y vuelve a intentar las actualizaciones de WinGet tras el error MSI 1618. Si el bloqueo persiste, indica el motivo y deja el programa pendiente para la próxima actualización.
+
 ## 2.210.0 — 2026-11-27
 
 - **Acceso de red más sencillo en el instalador ISO.** Elija la subred detectada, las redes privadas IPv4 o una lista personalizada. El portal puede usar la misma lista que los equipos. Se aceptan direcciones IP y CIDR separados por espacios, comas o puntos y coma. La guía de la ISO explica cómo recuperar el acceso desde la consola en caso de un error 403.

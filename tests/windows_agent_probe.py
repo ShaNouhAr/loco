@@ -371,6 +371,18 @@ installed = powershell("Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\C
 assert installed.stdout.strip() == '1', 'plusieurs MSI loco-client après réinstallation'
 print('Réinstallation de la même version : service actif, identité conservée, un seul MSI')
 
+# Oublier révoque le jeton, même si le service et son fichier d'identité restent sur le poste.
+post(f'/fleet/{dev}/action', {'csrf': csrf(get(f'/fleet/{dev}')), 'action': 'forget'})
+assert device_id() is None, 'poste oublié encore visible'
+assert (client_root / 'client.json').read_bytes() == identity, 'le fichier local doit encore contenir l’ancien jeton'
+enroll_msi = Path(os.environ['TEMP'], 'loco-enroll.msi')
+enroll_msi.write_bytes(opener.open(base + '/agent/windows/enroll.msi', timeout=90).read())
+result = subprocess.run(['msiexec.exe', '/i', str(enroll_msi), '/qn', '/norestart'], timeout=180)
+assert result.returncode in (0, 3010), f'Réenrôlement MSI après oubli : {result.returncode}'
+dev = wait('réenrôlement après oubli du poste', lambda: device_id() if (client_root / 'client.json').read_bytes() != identity else None, 300)
+assert json.loads((client_root / 'client.json').read_bytes())['token'] != json.loads(identity)['token']
+print('Réenrôlement par MSI après oubli : nouveau jeton et poste visible')
+
 url, html = post(f'/fleet/{dev}/action', {'csrf': csrf(get(f'/fleet/{dev}')), 'action': 'uninstall'})
 wait('retrait de l\'agent', lambda: powershell('if (Get-Service loco-client -ErrorAction SilentlyContinue) { 1 } else { 0 }').stdout.strip() == '0', 600)
 assert hostname not in re.findall(r'class="[^"]*\bhost\b[^"]*">([^<]+)<', get('/fleet')), 'poste encore dans le parc'

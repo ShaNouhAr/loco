@@ -2,6 +2,12 @@
 
 # Journal des versions
 
+## 2.211.0 — 2026-11-28
+
+- **Réenrôlement Windows après avoir oublié un poste.** Si le nouveau MSI fournit une clé d’enrôlement et que le serveur refuse l’ancien jeton, l’agent se réinscrit avec un nouveau jeton.
+- **Les installateurs MCP prennent en charge les autorités internes.** Quand le portail utilise un certificat d’entreprise, l’installateur propose la racine vérifiée pour le nom du portail et affiche son empreinte SHA-256 avant de l’ajouter.
+- **Les mises à jour Windows patientent si Windows Installer est occupé.** L’agent attend et relance WinGet après une erreur MSI 1618. Si le verrou persiste, il en indique la raison et conserve le logiciel pour la prochaine mise à jour.
+
 ## 2.210.0 — 2026-11-27
 
 - **Accès réseau simplifié dans l’installateur ISO.** Choisissez le sous-réseau détecté, les réseaux privés IPv4 ou une liste personnalisée. Le portail peut reprendre la liste des postes. La saisie accepte les adresses IP et les CIDR séparés par des espaces, des virgules ou des points-virgules. Le guide de l’ISO explique comment rétablir l’accès depuis la console en cas de 403.
