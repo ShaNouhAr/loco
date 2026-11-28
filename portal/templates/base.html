@@ -27,7 +27,7 @@
 {% from '_nav_icons.html' import nav_icon, language_menu, language_choices, appearance_dialog with context %}
 <header class="top">
   <div class="top-in">
-    <a class="brand" href="{{ url_for('index') }}">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span>{{ host }}</span></a>
+    <a class="brand" href="{{ url_for('index') }}" aria-label="loco">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}</a>
     {% set android_nav = feature('android') and can('android.view') %}
     {% set homeassistant_nav = feature('homeassistant') and can('homeassistant.view') %}
     {% set network_nav = feature('network') and can('network.view') %}

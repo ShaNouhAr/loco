@@ -13,7 +13,7 @@
           <optgroup label="{{ _('Photos') }}">{% for key, label in wallpaper_labels.items() %}<option value="w:{{ key }}"{{ ' selected' if look.bg == 'w:' ~ key }}>{{ label }}</option>{% endfor %}</optgroup>
           <optgroup label="{{ _('Dégradés') }}">{% for key, label in gradient_labels.items() %}<option value="g:{{ key }}"{{ ' selected' if look.bg == 'g:' ~ key }}>{{ label }}</option>{% endfor %}</optgroup>
         </select></label>
-        <label class="f"><span>{{ _("Opacité des panneaux (%%)") }}</span><input type="number" name="{{ prefix }}_alpha" min="55" max="100" step="1" value="{{ look.alpha }}"></label>
+        <label class="f"><span>{{ _("Opacité des panneaux (%%)") }}</span><input type="number" name="{{ prefix }}_alpha" min="{{ appearance_catalog.alpha_min }}" max="100" step="1" value="{{ look.alpha }}"></label>
 {% endmacro %}
 <div class="head">
   <div>

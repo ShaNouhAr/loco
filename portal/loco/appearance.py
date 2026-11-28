@@ -28,7 +28,7 @@ ACCENTS = ("neutral", "blue", "green", "violet", "orange", "pink", "teal", "ambe
 GRADIENTS = ("aurora", "ocean", "forest", "dusk", "rose", "slate")
 # Fonds photo fournis (fichiers portal/static/wallpapers/<nom>.jpg + <nom>-thumb.jpg) : clé « w:<nom> ».
 WALLPAPERS = ("montagne", "foret", "desert", "dunes", "ocean", "aurore", "nuit", "hiver", "brume")
-ALPHA_MIN, ALPHA_MAX = 55, 100          # opacité des panneaux, en %
+ALPHA_MIN, ALPHA_MAX = 0, 100           # opacité des panneaux, en %
 
 # Presets prêts à l'emploi : (clé, libellé, thème, accent, transparence, fond).
 PRESETS = (                              # libellés marqués N_ : le panneau Apparence les traduit à l'affichage (_(label))

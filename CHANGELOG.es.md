@@ -2,6 +2,11 @@
 
 # Registro de cambios
 
+## 2.211.4 — 2026-11-28
+
+- La dirección IP del servidor se oculta junto al logotipo en el encabezado y en la página de inicio de sesión.
+- La opacidad de los paneles puede bajarse al 0 % en los ajustes de apariencia personales y de la instancia.
+
 ## 2.211.3 — 2026-11-28
 
 - **Los fallos al actualizar programas en Windows aparecen en el historial.** Si WinGet sigue fallando tras los reintentos o falla el instalador alternativo, la acción queda marcada como fallida y el programa puede actualizarse más adelante.

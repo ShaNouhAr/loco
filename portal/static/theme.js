@@ -13,7 +13,7 @@
     if (nav && nav.type === "reload") root.classList.add("no-enter");
   } catch (e) { /* mesure indisponible : animation d'entrée conservée */ }
   var n = parseInt(root.getAttribute("data-alpha"), 10);
-  if (n >= 55 && n < 100) root.style.setProperty("--surface-alpha", (n / 100).toFixed(2));
+  if (n >= 0 && n < 100) root.style.setProperty("--surface-alpha", (n / 100).toFixed(2));
   // Couleur de l'entreprise (accent « brand ») et texte lisible dessus, choisis par l'administration de l'instance.
   var brand = root.getAttribute("data-brand"), fg = root.getAttribute("data-brand-fg");
   if (/^#[0-9a-f]{6}$/i.test(brand || "")) {

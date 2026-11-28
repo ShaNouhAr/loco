@@ -6,7 +6,7 @@
 {% from '_nav_icons.html' import language_menu with context %}
 <main class="auth">
   <div class="auth-top">
-    <span class="auth-brand">{{ logo() }}{% if not custom_logo %}<b>loco</b>{% endif %}<span class="mono">{{ host }}</span></span>
+    <span class="auth-brand">{{ logo(label='loco' if custom_logo else '') }}{% if not custom_logo %}<b>loco</b>{% endif %}</span>
     <div class="auth-prefs">{{ language_menu() }}</div>
   </div>
   <div class="auth-main">

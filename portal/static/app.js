@@ -147,16 +147,19 @@
     var root = document.documentElement;
     var ap = $("#appearance-dialog");
     var isUser = function () { return root.dataset.appearance === "user"; };
-    var alphaPct = function (a) { return Math.max(0, Math.min(100, (a - 55) / 45 * 100)); };
+    function readAlpha(value) {
+      var alpha = parseInt(value, 10);
+      return alpha >= 0 && alpha <= 100 ? alpha : 100;
+    }
 
     function applyAlpha(a) {
-      a = parseInt(a, 10) || 100;
-      if (a >= 55 && a < 100) { root.dataset.alpha = a; root.style.setProperty("--surface-alpha", (a / 100).toFixed(2)); }
+      a = readAlpha(a);
+      if (a < 100) { root.dataset.alpha = a; root.style.setProperty("--surface-alpha", (a / 100).toFixed(2)); }
       else { delete root.dataset.alpha; root.style.removeProperty("--surface-alpha"); }
     }
     function current() {
       return { theme: root.dataset.theme || "oled", accent: root.dataset.accent || "neutral",
-               alpha: parseInt(root.dataset.alpha, 10) || 100, bg: root.dataset.bg || "" };
+               alpha: readAlpha(root.dataset.alpha), bg: root.dataset.bg || "" };
     }
     function setBg(v) { if (v) root.dataset.bg = v; else delete root.dataset.bg; }
 
@@ -167,11 +170,11 @@
       $$("[data-set-bg]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.setBg === c.bg); });
       $$("[data-preset]").forEach(function (b) {
         b.setAttribute("aria-checked", b.dataset.theme === c.theme && b.dataset.accent === c.accent &&
-          (parseInt(b.dataset.alpha, 10) || 100) === c.alpha && (b.dataset.bg || "") === c.bg);
+          readAlpha(b.dataset.alpha) === c.alpha && (b.dataset.bg || "") === c.bg);
       });
       if (ap) {
         var range = ap.querySelector("[data-set-alpha]");
-        if (range) { range.value = c.alpha; range.style.setProperty("--range-pct", alphaPct(c.alpha).toFixed(0) + "%"); }
+        if (range) { range.value = c.alpha; range.style.setProperty("--range-pct", c.alpha + "%"); }
         var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = c.alpha + " %";
       }
       syncLogin();
@@ -259,7 +262,7 @@
         if ((nb.indexOf("w:") === 0 || nb === "u" || nb === "c") && current().alpha === 100) patch.alpha = 85;
         apply(patch);
       }
-      else if (el.hasAttribute("data-preset")) apply({ theme: el.dataset.theme, accent: el.dataset.accent, alpha: parseInt(el.dataset.alpha, 10) || 100, bg: el.dataset.bg || "" });
+      else if (el.hasAttribute("data-preset")) apply({ theme: el.dataset.theme, accent: el.dataset.accent, alpha: readAlpha(el.dataset.alpha), bg: el.dataset.bg || "" });
       else if (el.hasAttribute("data-reset")) {
         var def = { theme: "oled", accent: "neutral", alpha: 100, bg: "" };
         try { if (ap && ap.dataset.default) def = JSON.parse(ap.dataset.default); } catch (e) { /* défaut de repli */ }
@@ -273,7 +276,7 @@
       if (range) range.addEventListener("input", function () {
         applyAlpha(this.value);
         var lbl = ap.querySelector("[data-alpha-val]"); if (lbl) lbl.textContent = this.value + " %";
-        this.style.setProperty("--range-pct", alphaPct(this.value).toFixed(0) + "%");
+        this.style.setProperty("--range-pct", this.value + "%");
         persist();
       });
       var applyLogin = ap.querySelector("[data-apply-login]");

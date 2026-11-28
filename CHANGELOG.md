@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 2.211.4 — 2026-11-28
+
+- The server IP address is hidden next to the logo in the header and on the sign-in page.
+- Panel opacity can be set to 0% in personal and instance appearance settings.
+
 ## 2.211.3 — 2026-11-28
 
 - **Windows software update failures appear in history.** If WinGet still fails after its retries or a fallback installer fails, the action is marked as failed and the software remains eligible for a later update.

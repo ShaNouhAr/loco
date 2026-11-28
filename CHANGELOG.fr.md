@@ -2,6 +2,11 @@
 
 # Journal des versions
 
+## 2.211.4 — 2026-11-28
+
+- L’adresse IP du serveur est masquée à côté du logo dans l’en-tête et sur la page de connexion.
+- L’opacité des panneaux peut descendre à 0 % dans les réglages d’apparence personnels et de l’instance.
+
 ## 2.211.3 — 2026-11-28
 
 - **Les échecs de mise à jour des logiciels Windows apparaissent dans l’historique.** Si WinGet échoue après ses relances ou si l’installeur de secours échoue, l’action est marquée comme échouée et le logiciel reste proposé lors d’une prochaine mise à jour.

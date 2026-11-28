@@ -38,7 +38,8 @@ class AppearanceModelTest(unittest.TestCase):
         self.assertEqual((a["theme"], a["accent"], a["bg"]), (d["theme"], d["accent"], d["bg"]))
 
     def test_parse_clamps_alpha(self):
-        self.assertEqual(appearance.parse({"alpha": "5"})["alpha"], appearance.ALPHA_MIN)
+        self.assertEqual(appearance.parse({"alpha": "-5"})["alpha"], appearance.ALPHA_MIN)
+        self.assertEqual(appearance.parse({"alpha": "0"})["alpha"], 0)
         self.assertEqual(appearance.parse({"alpha": "200"})["alpha"], appearance.ALPHA_MAX)
         self.assertEqual(appearance.parse({"alpha": "abc"})["alpha"], appearance.default()["alpha"])
 
@@ -81,11 +82,11 @@ class AppearanceRouteTest(unittest.TestCase):
             os.unlink(f)
 
     def test_save_and_render(self):
-        r = self.b.post("/account/appearance", {"theme": "sepia", "accent": "amber", "alpha": "70", "bg": "g:rose"})
+        r = self.b.post("/account/appearance", {"theme": "sepia", "accent": "amber", "alpha": "0", "bg": "g:rose"})
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.get_json(), {"theme": "sepia", "accent": "amber", "alpha": 70, "bg": "g:rose"})
+        self.assertEqual(r.get_json(), {"theme": "sepia", "accent": "amber", "alpha": 0, "bg": "g:rose"})
         html = self.b.c.get("/").get_data(as_text=True)
-        for frag in ('data-theme="sepia"', 'data-accent="amber"', 'data-alpha="70"', 'data-bg="g:rose"', 'data-appearance="user"'):
+        for frag in ('data-theme="sepia"', 'data-accent="amber"', 'data-alpha="0"', 'data-bg="g:rose"', 'data-appearance="user"'):
             self.assertIn(frag, html)
 
     def test_bg_u_without_file_falls_back(self):
