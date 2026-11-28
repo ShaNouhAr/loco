@@ -2,6 +2,10 @@
 
 # Changelog
 
+## 2.211.2 — 2026-11-28
+
+- **Windows Update inventory retries an interrupted search.** The agent retries once after error `0x80072EFE`. If the error persists, the portal and agent log show the error code and point to the WinHTTP proxy and update source.
+
 ## 2.211.1 — 2026-11-28
 
 - **Re-enroll a forgotten Windows device.** If a fresh installer provides an enrollment key and the server rejects the old token, the agent enrolls again with a new token.

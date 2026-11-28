@@ -961,6 +961,7 @@ namespace Loco
         // « Driver » avec 0x80240032 (WU_E_INVALID_CRITERIA). On retombe alors sur les logiciels seuls, pour inventorier
         // et poser quand même les mises à jour logicielles au lieu de ne rien remonter.
         const string UpdateCriteriaSoftware = "IsInstalled=0 and IsHidden=0 and Type='Software'";
+        const int UpdateConnectionAborted = unchecked((int)0x80072EFE);
 
         static dynamic SearchUpdates(dynamic searcher)
         {
@@ -1110,7 +1111,13 @@ namespace Loco
             try
             {
                 dynamic searcher = NewSession().CreateUpdateSearcher();
-                dynamic result = SearchUpdates(searcher);
+                dynamic result;
+                try { result = SearchUpdates(searcher); }
+                catch (Exception e) when (e.HResult == UpdateConnectionAborted)
+                {
+                    Thread.Sleep(3000);
+                    result = SearchUpdates(searcher);
+                }
                 foreach (dynamic u in result.Updates)
                 {
                     if (IsUpgrade(u) && !IsBlocked(u))
@@ -1124,7 +1131,16 @@ namespace Loco
                 }
                 AddHiddenUpdates(searcher, updates);
             }
-            catch (Exception e) { error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ") + e.Message; }
+            catch (Exception e)
+            {
+                error = Lang.T("Windows Update : ", "Windows Update: ", "Windows Update: ");
+                error += e.HResult == UpdateConnectionAborted
+                    ? Lang.T("connexion interrompue (0x80072EFE). Vérifiez le proxy WinHTTP et l’accès à la source de mises à jour depuis le poste.",
+                             "connection interrupted (0x80072EFE). Check the WinHTTP proxy and access to the update source from this device.",
+                             "conexión interrumpida (0x80072EFE). Compruebe el proxy WinHTTP y el acceso al origen de actualizaciones desde este equipo.")
+                    : e.Message;
+                Log(error);
+            }
             var inv = new Dictionary<string, object> { { "updates", updates }, { "apps", InstalledApps() },
                 { "reboot_required", RebootRequired() }, { "error", error } };
             if (release != null) inv["release"] = release;

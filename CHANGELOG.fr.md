@@ -2,6 +2,10 @@
 
 # Journal des versions
 
+## 2.211.2 — 2026-11-28
+
+- **Nouvelle tentative après une recherche Windows Update interrompue.** L’agent relance une fois la recherche après l’erreur `0x80072EFE`. Si elle persiste, le portail et le journal de l’agent affichent le code et indiquent de vérifier le proxy WinHTTP et la source des mises à jour.
+
 ## 2.211.1 — 2026-11-28
 
 - **Réenrôlement Windows après avoir oublié un poste.** Si le nouveau MSI fournit une clé d’enrôlement et que le serveur refuse l’ancien jeton, l’agent se réinscrit avec un nouveau jeton.
