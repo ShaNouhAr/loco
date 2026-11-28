@@ -2453,8 +2453,8 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 /* Calque de fond plein écran, derrière tout le contenu. Vide (aucun fond) = la page montre --canvas. */
 .bg-layer { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
 [data-bg^="g:"] .bg-layer { background-image: var(--grad); background-size: cover; background-position: center; }
-[data-bg="u"] .bg-layer { background-image: url("/appearance/background.img"); background-size: cover; background-position: center; }
-[data-bg="c"] .bg-layer { background-image: url("/appearance/company.img"); background-size: cover; background-position: center; }
+[data-bg="u"] .bg-layer { background-image: var(--bg-personal-image, url("/appearance/background.img")); background-size: cover; background-position: center; }
+[data-bg="c"] .bg-layer { background-image: var(--bg-company-image, url("/appearance/company.img")); background-size: cover; background-position: center; }
 /* Voile le fond importé vers la couleur du thème pour garder le texte lisible. */
 [data-bg="g:aurora"] { --grad: var(--g-aurora); } [data-bg="g:ocean"] { --grad: var(--g-ocean); }
 [data-bg="g:forest"] { --grad: var(--g-forest); } [data-bg="g:dusk"] { --grad: var(--g-dusk); }
@@ -2491,8 +2491,8 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 /* Vignette : un mini-portail rendu avec les variables du thème/accent/fond cible (l'attribut data-* re-scope les variables). */
 .ap-preview { position: relative; width: 100%; aspect-ratio: 16 / 10; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); background: var(--canvas); background-size: cover; background-position: center; }
 .ap-preview[data-bg^="g:"] { background-image: var(--grad); }
-.ap-preview[data-bg="u"] { background-image: url("/appearance/background.img"); }
-.ap-preview[data-bg="c"], .ap-bg-company { background-image: url("/appearance/company.img"); background-size: cover; background-position: center; }
+.ap-preview[data-bg="u"] { background-image: var(--bg-personal-image, url("/appearance/background.img")); }
+.ap-preview[data-bg="c"], .ap-bg-company { background-image: var(--bg-company-image, url("/appearance/company.img")); background-size: cover; background-position: center; }
 .ap-preview::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 24%; background: var(--bg); border-bottom: 1px solid var(--line); }
 .ap-preview i { position: absolute; left: 10%; top: 38%; right: 10%; bottom: 14%; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); }
 .ap-preview::after { content: ""; position: absolute; right: 8%; top: 7%; width: 10%; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
@@ -2514,7 +2514,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .ap-bg.bg-g-aurora { background-image: var(--g-aurora); } .ap-bg.bg-g-ocean { background-image: var(--g-ocean); }
 .ap-bg.bg-g-forest { background-image: var(--g-forest); } .ap-bg.bg-g-dusk { background-image: var(--g-dusk); }
 .ap-bg.bg-g-rose { background-image: var(--g-rose); } .ap-bg.bg-g-slate { background-image: var(--g-slate); }
-.ap-bg-mine { background-image: url("/appearance/background.img"); }
+.ap-bg-mine { background-image: var(--bg-personal-image, url("/appearance/background.img")); }
 .ap-bg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .ap-bg-actions .btn { cursor: pointer; }
 .ap-bg-actions label.btn input[type=file] { display: none; }
@@ -2586,7 +2586,7 @@ dialog.dir-dialog { width: min(680px, calc(100vw - 32px)); }
 .wp-aurore { background-image: url("wallpapers/aurore-thumb.jpg"); }
 .wp-nuit { background-image: url("wallpapers/nuit-thumb.jpg"); }
 .wp-hiver { background-image: url("wallpapers/hiver-thumb.jpg"); }
-.ap-bg-mine.ap-photo { background-image: url("/appearance/background.img"); }
+.ap-bg-mine.ap-photo { background-image: var(--bg-personal-image, url("/appearance/background.img")); }
 
 /* Logo personnalisé (image) : contraint à la hauteur de marque, largeur bornée pour ne pas pousser l'en-tête. */
 img.brand-logo { width: auto; max-width: 168px; object-fit: contain; }

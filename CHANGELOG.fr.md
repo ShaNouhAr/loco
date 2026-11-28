@@ -2,6 +2,11 @@
 
 # Journal des versions
 
+## 2.211.3 — 2026-11-28
+
+- **Les échecs de mise à jour des logiciels Windows apparaissent dans l’historique.** Si WinGet échoue après ses relances ou si l’installeur de secours échoue, l’action est marquée comme échouée et le logiciel reste proposé lors d’une prochaine mise à jour.
+- **Moins de clignotements du fond d’écran au rafraîchissement.** Le portail précharge le fond actif et met les images importées en cache jusqu’à leur remplacement.
+
 ## 2.211.2 — 2026-11-28
 
 - **Nouvelle tentative après une recherche Windows Update interrompue.** L’agent relance une fois la recherche après l’erreur `0x80072EFE`. Si elle persiste, le portail et le journal de l’agent affichent le code et indiquent de vérifier le proxy WinHTTP et la source des mises à jour.

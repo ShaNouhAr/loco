@@ -2,6 +2,11 @@
 
 # Changelog
 
+## 2.211.3 — 2026-11-28
+
+- **Windows software update failures appear in history.** If WinGet still fails after its retries or a fallback installer fails, the action is marked as failed and the software remains eligible for a later update.
+- **Less wallpaper flicker on page refresh.** The portal preloads the active wallpaper and caches uploaded images by version so it can reuse them until they change.
+
 ## 2.211.2 — 2026-11-28
 
 - **Windows Update inventory retries an interrupted search.** The agent retries once after error `0x80072EFE`. If the error persists, the portal and agent log show the error code and point to the WinHTTP proxy and update source.

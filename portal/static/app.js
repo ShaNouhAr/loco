@@ -234,16 +234,11 @@
       $$("[data-bg-mine]").forEach(function (b) { b.classList.toggle("hidden", !show); });
       $$("[data-bg-remove]").forEach(function (b) { b.classList.toggle("hidden", !show); });
     }
-    function bust() {
-      var u = "url(\"/appearance/background.img?t=" + Date.now() + "\")";
-      $$(".bg-layer, .ap-bg-mine").forEach(function (el) { el.style.backgroundImage = u; });
-      var prev = ap && ap.querySelector('.ap-preview[data-bg="u"]'); if (prev) prev.style.backgroundImage = u;
-    }
     function removeBg() {
       var fd = new FormData(); fd.append("csrf", ap ? ap.dataset.csrf : "");
       fetch("/account/appearance/background/remove", { method: "POST", body: fd, credentials: "same-origin" }).catch(function () {});
       mine(false);
-      $$(".bg-layer, .ap-bg-mine").forEach(function (el) { el.style.backgroundImage = ""; });
+      root.style.removeProperty("--bg-personal-image");
       if (current().bg === "u") apply({ bg: "" }); else sync();
     }
 
@@ -303,7 +298,8 @@
               if (msg) { msg.classList.add("err"); msg.textContent = res.j.error === "trop-grand" ? t("Image trop lourde (8 Mo maximum).") : t("Format d'image non reconnu (PNG, JPEG, GIF ou WebP)."); }
               return;
             }
-            bust(); mine(true);
+            root.style.setProperty("--bg-personal-image", "url(" + JSON.stringify(res.j.background_url) + ")");
+            mine(true);
             apply({ bg: "u", alpha: current().alpha === 100 ? 85 : current().alpha });
             if (msg) msg.textContent = "";
           })

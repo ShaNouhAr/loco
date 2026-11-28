@@ -1,9 +1,11 @@
 /* Transparence des panneaux et couleur de l'entreprise, appliquées avant l'affichage (chargé en bloquant dans <head>).
    Le thème, l'accent et le fond sont rendus côté serveur en attributs data-* sur <html> — défaut de l'instance
    pour un visiteur, apparence du compte pour un utilisateur connecté — et appliqués par la CSS. Ici, on ne pose
-   que la variable de transparence (que la CSS ne peut pas dériver seule d'un attribut). */
+   que les variables dérivées des attributs. */
 (function () {
   var root = document.documentElement;
+  if (root.dataset.bgPersonalUrl) root.style.setProperty("--bg-personal-image", "url(" + JSON.stringify(root.dataset.bgPersonalUrl) + ")");
+  if (root.dataset.bgCompanyUrl) root.style.setProperty("--bg-company-image", "url(" + JSON.stringify(root.dataset.bgCompanyUrl) + ")");
   // Page rechargée (bouton du navigateur, ou actualisation d'une page qui se recharge seule) : les blocs n'entrent pas
   // de nouveau en glissant, seule une vraie navigation les anime.
   try {

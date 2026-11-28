@@ -1767,7 +1767,7 @@ namespace Loco
                 object descObj;
                 if (fallback != null && fallback.TryGetValue(pid, out descObj) && descObj is Dictionary<string, object>)
                 {
-                    DirectInstall(pid, (Dictionary<string, object>)descObj, lines, markPkg);
+                    if (!DirectInstall(pid, (Dictionary<string, object>)descObj, lines, markPkg)) ok = false;
                     continue;
                 }
 
@@ -1861,8 +1861,8 @@ namespace Loco
                 }
                 else
                 {
-                    // Même après fermeture, winget n'a pas réussi : signalé à part, non abandonné (réessayé à la prochaine mise à jour,
-                    // par exemple planifiée hors session). Un logiciel hors catalogue ne fait pas échouer toute la mise à jour.
+                    // Le logiciel reste éligible à la prochaine mise à jour, mais celle-ci doit signaler son échec.
+                    ok = false;
                     string reason = MsiBusy(code)
                         ? Lang.T("Windows Installer est encore occupé (MSI 1618)", "Windows Installer is still busy (MSI 1618)",
                                  "Windows Installer sigue ocupado (MSI 1618)")
@@ -2638,7 +2638,7 @@ namespace Loco
                         object software, softwareFallback;
                         cmd.TryGetValue("software", out software);
                         cmd.TryGetValue("software_fallback", out softwareFallback);
-                        if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);   // au mieux : ne fait pas échouer la commande
+                        if (action == "update" && !UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg)) ok = false;
                         var inv = Inventory();
                         lastScan = now;
                         bool reboot = Convert.ToBoolean(cmd.ContainsKey("reboot") ? cmd["reboot"] : false) && (bool)inv["reboot_required"] && ok;

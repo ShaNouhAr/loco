@@ -139,6 +139,7 @@ def inject_globals():
         "langs": i18n.LANGS,
         "js_i18n": i18n.js_catalog(),
         "appearance": appearance.for_user(user),
+        "background_urls": appearance.background_urls(user),
         "has_bg": appearance.has_background(user),
         "custom_logo": appearance.logo_for(user),
         "company_logo": appearance.logo_info(),

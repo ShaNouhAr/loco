@@ -240,6 +240,41 @@ def has_background(user):
     return bool(user) and _bg_file(user["id"]) is not None
 
 
+def _background_revision(path):
+    try:
+        stat = os.stat(path)
+    except (FileNotFoundError, TypeError):
+        return None
+    return f"{os.path.basename(path)}-{stat.st_mtime_ns:x}-{stat.st_size:x}"
+
+
+def _background_url(endpoint, path):
+    revision = _background_revision(path)
+    return url_for(endpoint, v=revision) if revision else None
+
+
+def background_urls(user):
+    return {
+        "u": _background_url("appearance_background", _bg_file(user["id"])) if user else None,
+        "c": _background_url("appearance_company", company_file()),
+    }
+
+
+def _send_background(path, private=False):
+    revision = _background_revision(path)
+    requested = request.args.get("v")
+    if revision is None or (requested is not None and requested != revision):
+        abort(404)
+    resp = send_file(path, max_age=0)
+    resp.headers["Cache-Control"] = (
+        ("private" if private else "public") + ", max-age=604800, immutable"
+        if requested else ("private, no-cache" if private else "no-cache")
+    )
+    if private:
+        resp.vary.add("Cookie")
+    return resp
+
+
 @app.route("/account/appearance", methods=["POST"])
 @login_required
 def account_appearance():
@@ -282,7 +317,7 @@ def account_appearance_background():
     db().execute("UPDATE users SET appearance=? WHERE id=?", (json.dumps(_with_kept(appear, g.user["appearance"])), g.user["id"]))
     db().commit()
     audit("compte.fond", f"{len(blob)} o")
-    return jsonify(appear)
+    return jsonify({**appear, "background_url": _background_url("appearance_background", path)})
 
 
 @app.route("/account/appearance/background/remove", methods=["POST"])
@@ -301,12 +336,7 @@ def account_appearance_background_delete():
 @app.route("/appearance/background.img")
 @login_required
 def appearance_background():
-    path = _bg_file(g.user["id"])
-    if not path:
-        abort(404)
-    resp = send_file(path, max_age=0)
-    resp.headers["Cache-Control"] = "private, no-cache"
-    return resp
+    return _send_background(_bg_file(g.user["id"]), private=True)
 
 
 # --- logo global de l'instance (admin « system.configure »), visible par tout le monde ---
@@ -679,11 +709,7 @@ def company_file():
 
 @app.route("/appearance/company.img")
 def appearance_company():
-    path = company_file()
-    if not path:
-        abort(404)
-    resp = send_file(path, max_age=0)
-    resp.headers["Cache-Control"] = "no-cache"           # revalidé : un nouveau fond s'affiche aussitôt
+    resp = _send_background(company_file())
     resp.headers["X-Content-Type-Options"] = "nosniff"
     return resp
 

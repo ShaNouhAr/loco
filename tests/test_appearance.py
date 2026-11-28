@@ -99,10 +99,25 @@ class AppearanceRouteTest(unittest.TestCase):
                           content_type="multipart/form-data")
         self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
         self.assertEqual(r.get_json()["bg"], "u")
+        wallpaper = r.get_json()["background_url"]
+        page = self.b.c.get("/").get_data(as_text=True)
+        self.assertIn(f'data-bg-personal-url="{wallpaper}"', page)
+        self.assertIn(f'rel="preload" as="image" href="{wallpaper}"', page)
+        with self.b.c.get(wallpaper) as cached:
+            self.assertEqual(cached.get_data(), PNG)
+            self.assertTrue(cached.cache_control.private)
+            self.assertTrue(cached.cache_control.immutable)
+            self.assertIn("Cookie", cached.vary)
         img = self.b.c.get("/appearance/background.img")
         self.assertEqual(img.status_code, 200)
         self.assertEqual(img.get_data(), PNG)
         img.close()
+        with self.b.c.post("/account/appearance/background",
+                           data={"csrf": tok, "background": (io.BytesIO(PNG + b"new"), "wall.png")},
+                           content_type="multipart/form-data") as replaced:
+            self.assertEqual(replaced.status_code, 200)
+            self.assertNotEqual(replaced.get_json()["background_url"], wallpaper)
+        self.assertEqual(self.b.c.get(wallpaper).status_code, 404)
         rem = self.b.post("/account/appearance/background/remove", {})
         self.assertEqual(rem.get_json()["bg"], "")
         gone = self.b.c.get("/appearance/background.img")

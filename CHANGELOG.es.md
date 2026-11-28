@@ -2,6 +2,11 @@
 
 # Registro de cambios
 
+## 2.211.3 — 2026-11-28
+
+- **Los fallos al actualizar programas en Windows aparecen en el historial.** Si WinGet sigue fallando tras los reintentos o falla el instalador alternativo, la acción queda marcada como fallida y el programa puede actualizarse más adelante.
+- **Menos parpadeos del fondo al recargar la página.** El portal precarga el fondo activo y guarda las imágenes subidas en caché hasta que se reemplazan.
+
 ## 2.211.2 — 2026-11-28
 
 - **Nuevo intento tras una búsqueda interrumpida de Windows Update.** El agente repite la búsqueda una vez tras el error `0x80072EFE`. Si persiste, el portal y el registro del agente muestran el código e indican que se comprueben el proxy WinHTTP y el origen de las actualizaciones.

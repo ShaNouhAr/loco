@@ -238,7 +238,6 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn('"upgrade --id \\"" + pid + "\\" --exact --source winget --silent --accept-package-agreements', self.src)
         self.assertIn('new Regex(@"^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$")', self.src)
         self.assertIn("result == 0x8A15002B", self.src)
-        self.assertIn('if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);', self.src)   # un échec logiciel ne fait pas échouer la commande
         self.assertIn("if (!selection && !InstallCatalogApps(", self.src)
 
     def test_what_winget_cannot_update_is_set_aside_until_its_version_changes(self):
@@ -247,11 +246,10 @@ class TestWindowsAgentSource(unittest.TestCase):
         self.assertIn('Path.Combine(Root, "winget-skip.json")', self.src)
         self.assertIn("if (!lastExport.TryGetValue(pid, out now) || now != skip[pid]) skip.Remove(pid);", self.src)
 
-    def test_a_software_failure_does_not_fail_the_update_and_closes_the_app(self):
-        # Un logiciel winget hors catalogue qui échoue (installeur MSI en échec 0x8A150049, souvent parce qu'il est ouvert)
-        # ne fait pas échouer toute la mise à jour et n'est PAS abandonné. L'agent ferme ses processus sans confirmation,
-        # réessaie une fois, et sinon le signale (réessayé plus tard). Rien n'est mis de côté pour un échec d'installeur.
-        self.assertIn('if (action == "update") UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg);', self.src)
+    def test_a_software_failure_is_reported_and_remains_eligible_for_retry(self):
+        self.assertIn('if (action == "update" && !UpgradeSoftware(software, softwareFallback as Dictionary<string, object>, lines, progress, markPkg)) ok = false;', self.src)
+        self.assertIn('if (!DirectInstall(pid, (Dictionary<string, object>)descObj, lines, markPkg)) ok = false;', self.src)
+        self.assertIn('ok = false;\n                    string reason = MsiBusy(code)', self.src)
         self.assertIn("static string InstallDir(string wingetId, string winget, string libraries)", self.src)
         self.assertIn("static int CloseApp(string dir)", self.src)
         self.assertIn("QueryFullProcessImageName", self.src)

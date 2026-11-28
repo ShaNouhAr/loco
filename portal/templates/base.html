@@ -1,9 +1,14 @@
 {% from "_logo.html" import logo with context %}<!doctype html>
-<html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if brand %} data-brand="{{ brand.color }}" data-brand-fg="{{ brand.fg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
+<html lang="{{ lang }}" data-theme="{{ appearance.theme }}" data-accent="{{ appearance.accent }}"{% if appearance.alpha != 100 %} data-alpha="{{ appearance.alpha }}"{% endif %}{% if appearance.bg %} data-bg="{{ appearance.bg }}"{% endif %}{% if background_urls.u %} data-bg-personal-url="{{ background_urls.u }}"{% endif %}{% if background_urls.c %} data-bg-company-url="{{ background_urls.c }}"{% endif %}{% if brand %} data-brand="{{ brand.color }}" data-brand-fg="{{ brand.fg }}"{% endif %}{% if current_user %} data-appearance="user"{% endif %}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{% endblock %} {{ _("· loco") }}</title>
+  {% set active_bg_url = background_urls.get(appearance.bg) %}
+  {% if appearance.bg.startswith('w:') %}
+    {% set active_bg_url = url_for('static', filename='wallpapers/' ~ appearance.bg[2:] ~ '.jpg') %}
+  {% endif %}
+  {% if active_bg_url %}<link rel="preload" as="image" href="{{ active_bg_url }}">{% endif %}
   <script src="{{ url_for('static', filename='theme.js') }}?v={{ asset_v }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v }}">
   <link rel="icon"{% if custom_logo %} href="{{ custom_logo.url }}"{% else %} type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v={{ asset_v }}"{% endif %}>
